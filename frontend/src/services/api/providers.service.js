@@ -365,6 +365,19 @@ export const providersService = {
     } catch (error) {
       throw handleProviderErrors(error);
     }
+  },
+
+  /**
+   * Get providers by employer ID
+   * GET /api/v1/providers/by-employer/{employerId}
+   */
+  getByEmployer: async (employerId) => {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/by-employer/${employerId}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
   }
 };
 

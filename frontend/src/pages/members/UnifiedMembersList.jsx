@@ -70,7 +70,7 @@ import {
 import { useSnackbar } from 'notistack';
 
 import MainCard from 'components/MainCard';
-import { ModernPageHeader, MemberAvatar, SoftDeleteToggle } from 'components/tba';
+import { ModernPageHeader, MemberAvatar, SoftDeleteToggle, ActionConfirmDialog } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
 import DataExportWizard from 'components/tba/DataExportWizard';
@@ -707,20 +707,16 @@ const UnifiedMembersList = () => {
       />
 
       {/* Confirmation Dialog */}
-      <Dialog open={confirmDialog.open} onClose={closeDialog}>
-        <DialogTitle>{confirmDialog.title}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{confirmDialog.content}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeDialog} color="inherit">
-            {confirmDialog.cancelText}
-          </Button>
-          <Button onClick={confirmDialog.onConfirm} color={confirmDialog.severity === 'error' ? 'error' : 'primary'} autoFocus>
-            {confirmDialog.confirmText}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ActionConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.content}
+        confirmColor={confirmDialog.severity === 'error' ? 'error' : 'primary'}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        onClose={closeDialog}
+      />
     </Box>
   );
 };

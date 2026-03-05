@@ -451,6 +451,21 @@ const menuItem = [
               color: 'primary',
               size: 'small'
             }
+          },
+          {
+            id: 'claims-batches',
+            title: 'نظام الدفعات (Batches)',
+            titleEn: 'Claims Batch System',
+            type: 'item',
+            url: '/claims/batches',
+            icon: FolderIcon,
+            resource: 'claims',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'primary',
+              size: 'small'
+            }
           }
         ]
       }

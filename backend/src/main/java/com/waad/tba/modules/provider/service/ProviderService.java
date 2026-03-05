@@ -250,5 +250,20 @@ public class ProviderService {
                 .filter(id -> id > 0)
                 .collect(Collectors.toList());
     }
+
+    /**
+     * Get all providers allowed for a specific employer.
+     * Used by Claims Batch System to show potential providers for their monthly claims.
+     * 
+     * @param employerId Employer ID
+     * @return List of providers
+     */
+    @Transactional(readOnly = true)
+    public List<ProviderViewDto> getProvidersByEmployer(Long employerId) {
+        log.debug("[PROVIDER] Fetching providers for employer: {}", employerId);
+        return providerRepository.findByAllowedEmployer(employerId).stream()
+                .map(providerMapper::toViewDto)
+                .collect(Collectors.toList());
+    }
 }
 

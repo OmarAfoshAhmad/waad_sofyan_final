@@ -1,4 +1,5 @@
 import axiosClient from 'utils/axios';
+import ExcelJS from 'exceljs';
 
 /**
  * ============================================================================
@@ -660,6 +661,63 @@ export const getEmployerCount = async () => {
   }
 };
 
+/**
+ * Export employers to Excel based on generic logic
+ *
+ * @param {Object} params - Filter parameters
+ * @returns {Promise<Blob>} Excel file blob
+ */
+export const exportEmployers = async (params = {}) => {
+  try {
+    const defaultParams = { page: 0, size: 10000, includeArchived: params.showArchived || false };
+    const res = await axiosClient.get(BASE_URL, { params: defaultParams });
+    const content = res.data?.data?.content || [];
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('جهات العمل');
+
+    worksheet.columns = [
+      { header: 'الرمز', key: 'code', width: 15 },
+      { header: 'جهة العمل', key: 'name', width: 30 },
+      { header: 'البريد الإلكتروني', key: 'email', width: 30 },
+      { header: 'رقم الهاتف', key: 'phone', width: 20 },
+      { header: 'العنوان', key: 'address', width: 30 },
+      { header: 'الحالة', key: 'active', width: 15 }
+    ];
+
+    // Right to left layout for Arabic
+    worksheet.views = [
+      { rightToLeft: true }
+    ];
+
+    content.forEach(emp => {
+      const matchSearch = !params.searchTerm ||
+        (emp.name && emp.name.includes(params.searchTerm)) ||
+        (emp.code && emp.code.includes(params.searchTerm));
+
+      if (matchSearch) {
+        let activeStatus = emp.active ? 'نشط' : 'غير نشط';
+        if (emp.archived) activeStatus = 'محذوف';
+
+        worksheet.addRow({
+          code: emp.code || '-',
+          name: emp.name || emp.nameAr || '-',
+          email: emp.email || '-',
+          phone: emp.phone || '-',
+          address: emp.address || '-',
+          active: activeStatus
+        });
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  } catch (error) {
+    console.error('Error exporting employers:', error);
+    throw error;
+  }
+};
+
 // ============================================================================
 // DEFAULT EXPORT
 // ============================================================================
@@ -679,6 +737,7 @@ const employersService = {
   // Additional Operations
   getEmployerSelectors,
   getEmployerCount,
+  exportEmployers,
 
   // Normalization Utilities (exported for advanced usage)
   normalizeEmployerRequest,

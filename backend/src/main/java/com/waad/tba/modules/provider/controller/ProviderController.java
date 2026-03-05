@@ -513,4 +513,19 @@ public class ProviderController {
         providerService.updateAllowedEmployers(id, employerIds);
         return ResponseEntity.ok(ApiResponse.success("Allowed employers updated successfully", null));
     }
+
+    /**
+     * Get all providers allowed for a specific employer.
+     * Use case: Claims Batch System (Card view).
+     * 
+     * GET /api/v1/providers/by-employer/{employerId}
+     */
+    @GetMapping("/by-employer/{employerId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY')")
+    public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getProvidersByEmployer(
+            @PathVariable Long employerId) {
+        log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", employerId);
+        List<ProviderViewDto> providers = providerService.getProvidersByEmployer(employerId);
+        return ResponseEntity.ok(ApiResponse.success(providers));
+    }
 }

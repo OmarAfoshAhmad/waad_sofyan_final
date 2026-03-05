@@ -78,4 +78,15 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
         * Fetch multiple providers by IDs
         */
        List<Provider> findByIdIn(@Param("ids") java.util.Collection<Long> ids);
+
+       /**
+        * Find all active providers allowed for a specific employer
+        * 1. Providers with allowAllEmployers = true
+        * 2. Providers explicitly linked via provider_allowed_employers table
+        */
+       @Query("SELECT DISTINCT p FROM Provider p " +
+              "LEFT JOIN p.allowedEmployers pae " +
+              "WHERE p.active = true " +
+              "AND (p.allowAllEmployers = true OR (pae.employer.id = :employerId AND pae.active = true))")
+       List<Provider> findByAllowedEmployer(@Param("employerId") Long employerId);
 }

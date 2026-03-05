@@ -39,6 +39,9 @@ const EmployerView = Loadable(lazy(() => import('pages/employers/EmployerView'))
 const ClaimsReviewList = Loadable(lazy(() => import('pages/claims/ClaimsReviewList')));
 const ClaimViewMedicalReview = Loadable(lazy(() => import('pages/claims/ClaimViewMedicalReview')));
 const BacklogClaims = Loadable(lazy(() => import('pages/claims/BacklogClaims')));
+const ClaimBatchManagement = Loadable(lazy(() => import('pages/claims/batches/ClaimBatchManagement')));
+const ClaimBatchEntry = Loadable(lazy(() => import('pages/claims/batches/ClaimBatchEntry')));
+const ClaimBatchDetail = Loadable(lazy(() => import('pages/claims/batches/ClaimBatchDetail')));
 
 // ==============================|| LAZY LOADING - PROVIDERS ||============================== //
 
@@ -371,6 +374,30 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <BacklogClaims />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'batches',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <ClaimBatchManagement />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'batches/entry',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <ClaimBatchEntry />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'batches/detail',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <ClaimBatchDetail />
             </PermissionGuard>
           )
         }

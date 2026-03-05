@@ -25,11 +25,11 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 // Project Components
 import MainCard from 'components/MainCard';
 import { UnifiedMedicalTable } from 'components/common';
-import { ModernPageHeader, SoftDeleteToggle } from 'components/tba';
+import { ModernPageHeader, SoftDeleteToggle, DataExportWizard, ActionConfirmDialog } from 'components/tba';
 import PermissionGuard from 'components/PermissionGuard';
 
 // Services
-import { getEmployers, archiveEmployer, restoreEmployer } from 'services/api/employers.service';
+import { getEmployers, archiveEmployer, restoreEmployer, exportEmployers } from 'services/api/employers.service';
 import { openSnackbar } from 'api/snackbar';
 
 // ============================================================================
@@ -55,6 +55,8 @@ const EmployersList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ active: '' });
   const [showArchived, setShowArchived] = useState(false);
+  const [exportWizardOpen, setExportWizardOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, confirmColor: 'primary' });
 
   const handleResetFilters = () => {
     setFilters({ active: '' });
@@ -85,35 +87,49 @@ const EmployersList = () => {
   );
 
   const handleArchive = useCallback(
-    async (id, name) => {
-      const confirmMessage = `هل أنت متأكد من أرشفة الشريك "${name}"؟\n\nملاحظة: الأرشفة لا تحذف البيانات، بل تخفيها من القوائم مع الحفاظ على جميع العلاقات.`;
-      if (!window.confirm(confirmMessage)) return;
-
-      try {
-        await archiveEmployer(id);
-        openSnackbar({ message: 'تم أرشفة الشريك بنجاح', variant: 'success' });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        console.error('[Employers] Archive failed:', err);
-        openSnackbar({ message: err.message || 'فشل أرشفة الشريك', variant: 'error' });
-      }
+    (id, name) => {
+      setConfirmDialog({
+        open: true,
+        title: 'تأكيد الحذف',
+        message: `هل أنت متأكد من حذف جهة العمل "${name}"؟\n\nملاحظة: الحذف لا يمسح البيانات نهائياً، بل يخفيها من القوائم مع الحفاظ على جميع العلاقات.`,
+        confirmColor: 'error',
+        onConfirm: async () => {
+          try {
+            await archiveEmployer(id);
+            openSnackbar({ message: 'تم حذف جهة العمل بنجاح', variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Employers] Archive failed:', err);
+            openSnackbar({ message: err.message || 'فشل حذف جهة العمل', variant: 'error' });
+          } finally {
+            setConfirmDialog(prev => ({ ...prev, open: false }));
+          }
+        }
+      });
     },
     [queryClient]
   );
 
   const handleRestore = useCallback(
-    async (id, name) => {
-      const confirmMessage = `هل تريد استعادة الشريك "${name}" من الأرشيف؟`;
-      if (!window.confirm(confirmMessage)) return;
-
-      try {
-        await restoreEmployer(id);
-        openSnackbar({ message: 'تم استعادة الشريك بنجاح', variant: 'success' });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        console.error('[Employers] Restore failed:', err);
-        openSnackbar({ message: 'فشل استعادة الشريك', variant: 'error' });
-      }
+    (id, name) => {
+      setConfirmDialog({
+        open: true,
+        title: 'استعادة السجل',
+        message: `هل تريد استعادة جهة العمل "${name}" من سجل المحذوفات؟`,
+        confirmColor: 'success',
+        onConfirm: async () => {
+          try {
+            await restoreEmployer(id);
+            openSnackbar({ message: 'تم استعادة جهة العمل بنجاح', variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Employers] Restore failed:', err);
+            openSnackbar({ message: 'فشل استعادة جهة العمل', variant: 'error' });
+          } finally {
+            setConfirmDialog(prev => ({ ...prev, open: false }));
+          }
+        }
+      });
     },
     [queryClient]
   );
@@ -277,7 +293,7 @@ const EmployersList = () => {
   // ========================================
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 } }}>
       <PermissionGuard resource="employers" action="view">
         <ModernPageHeader
           title="جهات العمل"
@@ -288,7 +304,7 @@ const EmployersList = () => {
             <Stack direction="row" spacing={1.5}>
               <Button
                 variant="outlined"
-                onClick={() => openSnackbar({ message: 'جاري العمل على خاصية التصدير', variant: 'info' })}
+                onClick={() => setExportWizardOpen(true)}
                 startIcon={<FileDownloadIcon />}
                 sx={{
                   minWidth: '130px',
@@ -417,6 +433,32 @@ const EmployersList = () => {
           tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
         />
       </Box>
+
+      {/* Export Wizard */}
+      <DataExportWizard
+        open={exportWizardOpen}
+        onClose={() => setExportWizardOpen(false)}
+        onExport={async () => {
+          return await exportEmployers({
+            searchTerm,
+            status: filters.active,
+            showArchived
+          });
+        }}
+        title="تصدير جهات العمل"
+        fileName={`TBA_Employers_${new Date().toISOString().split('T')[0]}.xlsx`}
+        params={{ searchTerm, status: filters.active, deleted: showArchived }}
+      />
+
+      {/* Action Confirmation Dialog */}
+      <ActionConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmColor={confirmDialog.confirmColor}
+        onConfirm={confirmDialog.onConfirm}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };
