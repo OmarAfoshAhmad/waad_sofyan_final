@@ -238,6 +238,7 @@ const UnifiedMedicalTable = ({
                         active={isActive}
                         direction={isActive ? sortDirection : 'asc'}
                         onClick={() => handleSortRequest(column.id)}
+                        IconComponent={() => null} // Hides the default sort arrow entirely per user request
                         sx={{
                           color: headerText,
                           '&:hover': {
@@ -245,13 +246,7 @@ const UnifiedMedicalTable = ({
                             opacity: 0.8
                           },
                           '&.Mui-active': {
-                            color: headerText,
-                            '& .MuiTableSortLabel-icon': {
-                              color: headerText
-                            }
-                          },
-                          '& .MuiTableSortLabel-icon': {
-                            opacity: 0.5
+                            color: headerText
                           }
                         }}
                       >

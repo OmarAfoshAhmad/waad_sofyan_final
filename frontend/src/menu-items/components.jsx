@@ -53,6 +53,7 @@ export const filterMenuItemsByRole = (items, role) => {
 
   const isAllowed = (resource) => {
     if (!resource) return true; // group headers without resource → always visible
+    if (resource.startsWith('__hidden_')) return false; // Explicitly hidden items
     if (allowedResources.includes('*')) return true; // SUPER_ADMIN wildcard
     return allowedResources.includes(resource);
   };
@@ -139,13 +140,13 @@ const menuItem = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'group-members',
-    title: 'المؤمن عليهم',
+    title: 'المستفيدين',
     titleEn: 'Insured',
     type: 'group',
     children: [
       {
         id: 'members-list',
-        title: 'قائمة المؤمن عليهم',
+        title: 'قائمة المستفيدين',
         titleEn: 'Insured List',
         type: 'item',
         url: '/members',
@@ -270,13 +271,13 @@ const menuItem = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'group-employers',
-    title: 'الشركاء (جهات العمل)',
-    titleEn: 'Employers (Partners)',
+    title: 'جهات العمل',
+    titleEn: 'Employers',
     type: 'group',
     children: [
       {
         id: 'employers',
-        title: 'إدارة الشركاء',
+        title: 'إدارة جهات العمل',
         titleEn: 'Employers Management',
         type: 'collapse',
         icon: BusinessIcon,
@@ -285,7 +286,7 @@ const menuItem = [
         children: [
           {
             id: 'employers-list',
-            title: 'قائمة الشركاء',
+            title: 'قائمة جهات العمل',
             titleEn: 'Employers List',
             type: 'item',
             url: '/employers',
@@ -648,7 +649,7 @@ const menuItem = [
           },
           {
             id: 'beneficiaries-report',
-            title: 'تقارير المؤمن عليهم',
+            title: 'تقارير المستفيدين',
             titleEn: 'Insured Reports',
             type: 'item',
             url: '/reports/beneficiaries',

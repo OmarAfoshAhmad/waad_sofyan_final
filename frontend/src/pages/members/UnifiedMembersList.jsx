@@ -70,7 +70,7 @@ import {
 import { useSnackbar } from 'notistack';
 
 import MainCard from 'components/MainCard';
-import { ModernPageHeader, MemberAvatar } from 'components/tba';
+import { ModernPageHeader, MemberAvatar, SoftDeleteToggle } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog';
 import DataExportWizard from 'components/tba/DataExportWizard';
@@ -480,7 +480,7 @@ const UnifiedMembersList = () => {
   // RENDER
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <Box sx={{ height: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
       {/* Page Header */}
       <ModernPageHeader
         title="قائمة المستفيدين"
@@ -540,21 +540,7 @@ const UnifiedMembersList = () => {
             </Button>
 
             {/* Deleted Members Toggle */}
-            <Button
-              variant={showDeleted ? 'contained' : 'outlined'}
-              startIcon={showDeleted ? <VisibilityIcon /> : <DeleteIcon />}
-              onClick={() => setShowDeleted(!showDeleted)}
-              color={showDeleted ? 'error' : 'inherit'}
-              sx={{
-                minWidth: '155px',
-                ...(showDeleted && {
-                  bgcolor: '#d32f2f',
-                  '&:hover': { bgcolor: '#b71c1c' }
-                })
-              }}
-            >
-              {showDeleted ? 'عرض النشطة' : 'سجل المحذوفات'}
-            </Button>
+            <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted(!showDeleted)} />
 
 
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/members/add')}>
@@ -697,14 +683,9 @@ const UnifiedMembersList = () => {
         getRowKey={(member) => member.id}
         emptyMessage={showDeleted ? 'لا توجد مستفيدين محذوفين' : 'لا توجد مستفيدين'}
         loadingMessage="جارِ التحميل..."
-        sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1, '& .MuiTableSortLabel-icon': { display: 'none !important' } }}
+        sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
         tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
       />
-
-      {/* Footer Title */}
-      <Box sx={{ textAlign: 'center', py: 1, color: 'text.secondary', fontSize: '12px' }}>
-        Designed & Developed by TBA WAAD Team - 2026
-      </Box>
 
       {/* Import Dialog */}
       <MembersBulkUploadDialog open={importDialogOpen} onClose={handleCloseImportDialog} />

@@ -476,14 +476,37 @@ export default function SidebarLayout() {
               width: '100%',
               minWidth: 0,
               height: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
-              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
               backgroundColor: (theme) => (theme.palette.mode === 'dark' ? 'background.default' : alpha(theme.palette.grey[100], 0.5))
             }}
           >
-            <Box sx={{ width: '100%', maxWidth: '1600px', mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 1.5 } }}>
-              <PageErrorBoundary pageName="Dashboard Content">
-                <Outlet />
-              </PageErrorBoundary>
+            {/* Scrollable Content Container */}
+            <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ width: '100%', maxWidth: '1600px', mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 1.5 }, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <PageErrorBoundary pageName="Dashboard Content">
+                  <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <Outlet />
+                  </Box>
+                </PageErrorBoundary>
+              </Box>
+            </Box>
+
+            {/* Uniform System Footer (Always Visible) */}
+            <Box
+              sx={{
+                textAlign: 'center',
+                py: 0.5,
+                color: 'text.secondary',
+                fontSize: '12px',
+                flexShrink: 0,
+                bgcolor: 'background.paper',
+                borderTop: 1,
+                borderColor: 'divider',
+                width: '100%'
+              }}
+            >
+              Designed & Developed by TBA WAAD Team - 2026
             </Box>
           </Box>
         </MainContent>

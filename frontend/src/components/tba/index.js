@@ -8,6 +8,7 @@ export { default as ModernPageHeader } from './ModernPageHeader';
 export { default as ModernEmptyState } from './ModernEmptyState';
 export { default as ModernStatCard } from './ModernStatCard';
 export { default as ModernQuickActions } from './ModernQuickActions';
+export { default as SoftDeleteToggle } from './SoftDeleteToggle';
 
 // Member Components
 export { default as MemberAvatar } from './MemberAvatar';

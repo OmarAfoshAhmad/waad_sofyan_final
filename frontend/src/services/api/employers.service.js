@@ -103,11 +103,17 @@ export const normalizeEmployerRequest = (frontendDto) => {
 
   // Extract optional fields
   const active = frontendDto.active !== undefined ? frontendDto.active : true;
+  const email = frontendDto.email || null;
+  const phone = frontendDto.phone || null;
+  const address = frontendDto.address || null;
 
   // Build normalized payload
   const normalized = {
     name, // Backend expects 'name'
-    active
+    active,
+    email,
+    phone,
+    address
   };
 
   // Only include code if provided (otherwise backend auto-generates)
@@ -175,6 +181,9 @@ export const normalizeEmployerResponse = (backendDto) => {
     name: backendDto.name,
     active: backendDto.active,
     archived: backendDto.archived,
+    email: backendDto.email,
+    phone: backendDto.phone,
+    address: backendDto.address,
     createdAt: backendDto.createdAt,
     updatedAt: backendDto.updatedAt
   };

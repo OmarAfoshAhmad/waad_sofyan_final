@@ -3,29 +3,30 @@
  * Pattern: UnifiedPageHeader → MainCard → GenericDataTable
  */
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-// MUI Components
-import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography, TextField, InputAdornment, MenuItem } from '@mui/material';
 
 // MUI Icons - Always as Component, NEVER as JSX
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
-import ArchiveIcon from '@mui/icons-material/Archive';
-import RestoreIcon from '@mui/icons-material/Restore';
+import DeleteIcon from '@mui/icons-material/Delete';
+import UndoIcon from '@mui/icons-material/Undo';
 import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 // Project Components
 import MainCard from 'components/MainCard';
-import UnifiedPageHeader from 'components/UnifiedPageHeader';
-import GenericDataTable from 'components/GenericDataTable';
-import TableErrorBoundary from 'components/TableErrorBoundary';
+import { UnifiedMedicalTable } from 'components/common';
+import { ModernPageHeader, SoftDeleteToggle } from 'components/tba';
 import PermissionGuard from 'components/PermissionGuard';
-import useTableState from 'hooks/useTableState';
 
 // Services
 import { getEmployers, archiveEmployer, restoreEmployer } from 'services/api/employers.service';
@@ -46,11 +47,20 @@ const EmployersList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const tableState = useTableState({
-    initialPageSize: 10,
-    defaultSort: { field: 'id', direction: 'desc' },
-    initialFilters: {}
-  });
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState('code');
+  const [sortDirection, setSortDirection] = useState('asc');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({ active: '' });
+  const [showArchived, setShowArchived] = useState(false);
+
+  const handleResetFilters = () => {
+    setFilters({ active: '' });
+    setSearchTerm('');
+    setPage(0);
+  };
 
   // ========================================
   // NAVIGATION HANDLERS
@@ -109,7 +119,7 @@ const EmployersList = () => {
   );
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: [QUERY_KEY, tableState.page, tableState.pageSize],
+    queryKey: [QUERY_KEY],
     queryFn: async () => {
       const result = await getEmployers();
       if (Array.isArray(result)) {
@@ -120,155 +130,293 @@ const EmployersList = () => {
     keepPreviousData: true
   });
 
+  // Calculate processed data (sorting + pagination + filtering)
+  const processedData = useMemo(() => {
+    let rawData = [...(data?.content || [])];
+
+    // Search Filtering
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      rawData = rawData.filter(
+        (item) =>
+          item.name?.toLowerCase().includes(lowerSearch) ||
+          item.code?.toLowerCase().includes(lowerSearch) ||
+          item.email?.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    // Archived Filtering
+    rawData = rawData.filter((item) => (showArchived ? item.archived === true : item.archived !== true));
+
+    // Active Status Filtering
+    if (filters.active !== '') {
+      rawData = rawData.filter((item) => {
+        if (filters.active === 'active') return item.active === true;
+        if (filters.active === 'inactive') return item.active === false;
+        return true;
+      });
+    }
+
+    // Sorting
+    if (sortBy) {
+      rawData.sort((a, b) => {
+        let valA = a[sortBy] || '';
+        let valB = b[sortBy] || '';
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    const totalFiltered = rawData.length;
+
+    // Pagination
+    const startIndex = page * rowsPerPage;
+    return {
+      content: rawData.slice(startIndex, startIndex + rowsPerPage),
+      totalCount: totalFiltered
+    };
+  }, [data, page, rowsPerPage, sortBy, sortDirection, searchTerm, filters]);
+
   // ========================================
   // COLUMN DEFINITIONS
   // ========================================
 
   const columns = useMemo(
     () => [
-      {
-        accessorKey: 'code',
-        header: 'الرمز',
-        enableSorting: true,
-        enableColumnFilter: true,
-        minWidth: 100,
-        align: 'center',
-        meta: { filterType: 'text' },
-        cell: ({ row }) => <Chip label={row.original?.code || '-'} size="small" variant="outlined" color="primary" />
-      },
-      {
-        accessorKey: 'name',
-        header: 'اسم الشريك',
-        enableSorting: true,
-        enableColumnFilter: true,
-        minWidth: 250,
-        align: 'right',
-        meta: { filterType: 'text' },
-        cell: ({ row }) => (
+      { id: 'code', label: 'الرمز', minWidth: 100, align: 'center', sortable: true },
+      { id: 'name', label: 'جهة العمل', minWidth: 250, align: 'right', sortable: true },
+      { id: 'email', label: 'البريد الإلكتروني', minWidth: 200, align: 'right', sortable: true },
+      { id: 'phone', label: 'رقم الهاتف', minWidth: 150, align: 'right', sortable: true },
+      { id: 'address', label: 'العنوان', minWidth: 200, align: 'right', sortable: true },
+      { id: 'active', label: 'الحالة', minWidth: 100, align: 'center', sortable: true },
+      { id: 'actions', label: 'الإجراءات', minWidth: 130, align: 'center', sortable: false }
+    ],
+    []
+  );
+
+  const renderCell = (row, column) => {
+    switch (column.id) {
+      case 'code':
+        return <Chip label={row.code || '-'} size="small" variant="outlined" color="primary" />;
+      case 'name':
+        return (
           <Stack direction="row" spacing={1} alignItems="center">
             <Typography variant="body2" fontWeight={500}>
-              {row.original?.name || '-'}
+              {row.name || '-'}
             </Typography>
-            {row.original?.archived && <Chip label="مؤرشف" size="small" color="warning" variant="outlined" />}
+            {row.archived && <Chip label="محذوف" size="small" color="error" variant="outlined" />}
           </Stack>
-        )
-      },
-      {
-        accessorKey: 'active',
-        header: 'الحالة',
-        enableSorting: true,
-        enableColumnFilter: false,
-        minWidth: 100,
-        align: 'center',
-        cell: ({ row }) => (
+        );
+      case 'email':
+        return <Typography variant="body2" color="text.secondary">{row.email || '-'}</Typography>;
+      case 'phone':
+        return <Typography variant="body2" color="text.secondary" dir="ltr" sx={{ textAlign: 'right' }}>{row.phone || '-'}</Typography>;
+      case 'address':
+        return <Typography variant="body2" color="text.secondary">{row.address || '-'}</Typography>;
+      case 'active':
+        return (
           <Chip
-            label={row.original?.active ? 'نشط' : 'غير نشط'}
-            color={row.original?.active ? 'success' : 'default'}
+            label={row.active ? 'نشط' : 'غير نشط'}
+            color={row.active ? 'success' : 'error'}
             size="small"
-            variant="light"
           />
-        )
-      },
-
-      {
-        id: 'actions',
-        header: 'الإجراءات',
-        enableSorting: false,
-        enableColumnFilter: false,
-        minWidth: 130,
-        align: 'center',
-        cell: ({ row }) => (
+        );
+      case 'actions':
+        return (
           <Stack direction="row" spacing={0.5} justifyContent="center">
             <Tooltip title="عرض">
-              <IconButton size="small" color="primary" onClick={() => handleNavigateView(row.original?.id)}>
+              <IconButton size="small" color="primary" onClick={() => handleNavigateView(row.id)}>
                 <VisibilityIcon fontSize="small" />
               </IconButton>
             </Tooltip>
-
             <PermissionGuard resource="employers" action="update">
               <Tooltip title="تعديل">
-                <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.original?.id)}>
+                <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </PermissionGuard>
-
-            {row.original?.archived ? (
-              <Tooltip title="استعادة من الأرشيف">
+            {row.archived ? (
+              <Tooltip title="استعادة">
                 <PermissionGuard resource="employers" action="delete">
                   <IconButton
                     size="small"
                     color="success"
-                    onClick={() => handleRestore(row.original?.id, row.original?.name || row.original?.code)}
+                    onClick={() => handleRestore(row.id, row.name || row.code)}
                   >
-                    <RestoreIcon fontSize="small" />
+                    <UndoIcon fontSize="small" />
                   </IconButton>
                 </PermissionGuard>
               </Tooltip>
             ) : (
-              <Tooltip title="أرشفة">
+              <Tooltip title="حذف">
                 <PermissionGuard resource="employers" action="delete">
                   <IconButton
                     size="small"
-                    color="warning"
-                    onClick={() => handleArchive(row.original?.id, row.original?.name || row.original?.code)}
+                    color="error"
+                    onClick={() => handleArchive(row.id, row.name || row.code)}
                   >
-                    <ArchiveIcon fontSize="small" />
+                    <DeleteIcon fontSize="small" />
                   </IconButton>
                 </PermissionGuard>
               </Tooltip>
             )}
           </Stack>
-        )
-      }
-    ],
-    [handleNavigateView, handleNavigateEdit, handleArchive, handleRestore]
-  );
+        );
+      default:
+        return row[column.id];
+    }
+  };
 
   // ========================================
   // MAIN RENDER
   // ========================================
 
   return (
-    <Box>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
       <PermissionGuard resource="employers" action="view">
-        <UnifiedPageHeader
-          title="الشركاء"
-          subtitle="إدارة الشركاء ومعلوماتهم"
+        <ModernPageHeader
+          title="جهات العمل"
+          subtitle="إدارة جهات العمل ومعلوماتهم"
           icon={BusinessCenterIcon}
-          breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'الشركاء' }]}
-          showAddButton={true}
-          addButtonLabel="إضافة شريك"
-          onAddClick={handleNavigateAdd}
-          addResource="employers"
-          addAction="create"
-          additionalActions={
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => refetch()}>
-              تحديث
-            </Button>
+          breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'جهات العمل' }]}
+          actions={
+            <Stack direction="row" spacing={1.5}>
+              <Button
+                variant="outlined"
+                onClick={() => openSnackbar({ message: 'جاري العمل على خاصية التصدير', variant: 'info' })}
+                startIcon={<FileDownloadIcon />}
+                sx={{
+                  minWidth: '130px',
+                  color: '#1b5e20',
+                  borderColor: '#1b5e20',
+                  '&:hover': {
+                    backgroundColor: '#1b5e2010',
+                    borderColor: '#1b5e20'
+                  }
+                }}
+              >
+                تصدير لإكسل
+              </Button>
+
+              <SoftDeleteToggle showDeleted={showArchived} onToggle={() => setShowArchived(!showArchived)} />
+
+              <PermissionGuard resource="employers" action="create">
+                <Button variant="contained" startIcon={<AddIcon />} onClick={handleNavigateAdd}>
+                  إضافة جهة عمل
+                </Button>
+              </PermissionGuard>
+            </Stack>
           }
         />
       </PermissionGuard>
-      <MainCard>
-        <TableErrorBoundary>
-          <GenericDataTable
-            columns={columns}
-            data={data?.content || []}
-            totalCount={data?.totalElements || 0}
-            isLoading={isLoading}
-            tableState={tableState}
-            enableFiltering={true}
-            enableSorting={true}
-            enablePagination={true}
-            stickyHeader={true}
-            minHeight={400}
-            maxHeight="calc(100vh - 300px)"
-            onRowClick={(row) => handleNavigateView(row.id)}
-            emptyMessage="لا توجد شركاء"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-          />
-        </TableErrorBoundary>
-      </MainCard>
+
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <MainCard sx={{ mb: 1, flexShrink: 0 }}>
+          {/* FILTERS AND SEARCH ROW */}
+          <Box>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+              {/* Refresh */}
+              <Tooltip title="تحديث">
+                <IconButton onClick={() => refetch()} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}>
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
+
+              {/* Total Count */}
+              <Chip
+                icon={<BusinessCenterIcon fontSize="small" />}
+                label={`${processedData.totalCount} جهة عمل`}
+                variant="outlined"
+                color="primary"
+                sx={{ height: 40, borderRadius: 1, fontWeight: 'bold', fontSize: '14px', px: 1 }}
+              />
+
+              {/* Search Input */}
+              <TextField
+                sx={{ flexGrow: 1, minWidth: { md: '200px' } }}
+                size="small"
+                placeholder="بحث بالاسم، الرمز، أو البريد الإلكتروني..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(0);
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => {
+                        setSearchTerm('');
+                        setPage(0);
+                      }}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  sx: { height: 40 }
+                }}
+              />
+
+              {/* Status Filter */}
+              <TextField
+                select
+                size="small"
+                label="الحالة"
+                value={filters.active}
+                onChange={(e) => {
+                  setFilters((prev) => ({ ...prev, active: e.target.value }));
+                  setPage(0);
+                }}
+                sx={{ minWidth: 110, bgcolor: 'background.paper' }}
+                InputProps={{ sx: { height: 40 } }}
+                InputLabelProps={{ shrink: true }}
+              >
+                <MenuItem value="">
+                  <em>الكل</em>
+                </MenuItem>
+                <MenuItem value="active">نشط</MenuItem>
+                <MenuItem value="inactive">غير نشط</MenuItem>
+              </TextField>
+
+              {/* Reset Button */}
+              <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: 120, height: 40 }}>
+                إعادة ضبط
+              </Button>
+            </Stack>
+          </Box>
+        </MainCard>
+
+        <UnifiedMedicalTable
+          columns={columns}
+          data={processedData.content}
+          totalCount={processedData.totalCount}
+          loading={isLoading}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={setPage}
+          onRowsPerPageChange={setRowsPerPage}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={(col, dir) => {
+            setSortBy(col);
+            setSortDirection(dir);
+          }}
+          renderCell={renderCell}
+          emptyMessage="لا توجد جهات عمل مسجلة"
+          getRowKey={(row) => row.id}
+          sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
+          tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
+        />
+      </Box>
     </Box>
   );
 };

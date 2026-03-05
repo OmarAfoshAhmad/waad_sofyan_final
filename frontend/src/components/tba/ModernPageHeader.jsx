@@ -90,19 +90,19 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
       )} */}
 
       {/* Title and Actions Row */}
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1, minHeight: 40 }}>
         {/* Title Section */}
         <Stack direction="row" alignItems="center" spacing={1.5}>
           {renderIcon()}
           <Box>
             <Stack direction="row" alignItems="center" spacing={1.5}>
-              <Typography variant="h3" component="h1" sx={{ fontWeight: 600 }}>
+              <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
                 {title}
               </Typography>
               {statusChip && <Chip label={statusChip.label} color={statusChip.color || 'primary'} size="small" sx={{ height: 24 }} />}
             </Stack>
             {subtitle && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                 {subtitle}
               </Typography>
             )}
@@ -111,7 +111,7 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
 
         {/* Actions Section */}
         {actions && (
-          <Stack direction="row" spacing={1.5}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
             {actions}
           </Stack>
         )}
