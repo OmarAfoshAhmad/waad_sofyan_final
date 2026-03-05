@@ -521,3 +521,59 @@ export const getMyContractServices = async (params = {}) => {
   const response = await axiosClient.get(`${PROVIDER_PORTAL_URL}/my-contract/services`, { params });
   return unwrap(response);
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get all contracted services for a specific provider.
+ * Logic: Get active contract -> Get its pricing items.
+ */
+export const getAllContractedServices = async (providerId) => {
+  try {
+    const activeContract = await getActiveContractByProvider(providerId);
+    if (!activeContract) return [];
+
+    // Get all pricing items (setting a large size to get all at once for dropdowns)
+    const response = await getContractPricingItems(activeContract.id, { size: 1000 });
+    return response?.content || [];
+  } catch (error) {
+    console.error('Error fetching contracted services:', error);
+    return [];
+  }
+};
+
+const providerContractsService = {
+  getProviderContracts,
+  searchProviderContracts,
+  getProviderContractStats,
+  getExpiringContracts,
+  getContractsByStatus,
+  getProviderContractById,
+  getProviderContractByCode,
+  getContractsByProvider,
+  getActiveContractByProvider,
+  createProviderContract,
+  updateProviderContract,
+  deleteProviderContract,
+  activateContract,
+  suspendContract,
+  terminateContract,
+  getContractPricingItems,
+  searchContractPricingItems,
+  getContractPricingStats,
+  getPricingItemById,
+  addPricingItem,
+  addBulkPricingItems,
+  updatePricingItem,
+  deletePricingItem,
+  deleteAllPricingItems,
+  downloadPricingTemplate,
+  uploadContractPricingExcel,
+  getMyActiveContract,
+  getMyContractServices,
+  getAllContractedServices
+};
+
+export default providerContractsService;
