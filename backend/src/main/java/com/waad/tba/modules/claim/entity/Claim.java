@@ -137,6 +137,10 @@ public class Claim {
     @Column(name = "approved_amount", precision = 15, scale = 2)
     private BigDecimal approvedAmount;
 
+    @Column(name = "refused_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal refusedAmount = BigDecimal.ZERO;
+
     @Column(name = "difference_amount", precision = 15, scale = 2)
     private BigDecimal differenceAmount;
 
@@ -414,9 +418,26 @@ public class Claim {
                     .map(ClaimLine::getTotalPrice)
                     .filter(java.util.Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            // Calculate refused amount from rejected lines (Phase: Partial Rejection)
+            refusedAmount = lines.stream()
+                    .filter(line -> Boolean.TRUE.equals(line.getRejected()))
+                    .map(ClaimLine::getTotalPrice)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        } else {
+            requestedAmount = requestedAmount != null ? requestedAmount : BigDecimal.ZERO;
+            refusedAmount = (status == ClaimStatus.REJECTED) ? requestedAmount : BigDecimal.ZERO;
         }
         
-        // Calculate difference amount
+        // If entire claim is REJECTED, refusedAmount = requestedAmount
+        if (status == ClaimStatus.REJECTED) {
+            refusedAmount = requestedAmount;
+            approvedAmount = BigDecimal.ZERO;
+            patientCoPay = BigDecimal.ZERO;
+        }
+        
+        // Calculate difference amount (Requested - Approved)
         if (requestedAmount != null && approvedAmount != null) {
             differenceAmount = requestedAmount.subtract(approvedAmount);
         } else {

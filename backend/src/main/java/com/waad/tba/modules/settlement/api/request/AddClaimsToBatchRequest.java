@@ -43,7 +43,7 @@ public class AddClaimsToBatchRequest {
     @Schema(
         description = "List of claim IDs to add to the batch",
         example = "[789, 790, 791]",
-        required = true,
+        requiredMode = Schema.RequiredMode.REQUIRED,
         minLength = 1
     )
     private List<Long> claimIds;

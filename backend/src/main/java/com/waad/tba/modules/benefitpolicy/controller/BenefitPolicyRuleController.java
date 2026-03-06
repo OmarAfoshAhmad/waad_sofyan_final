@@ -152,6 +152,19 @@ public class BenefitPolicyRuleController {
         return ResponseEntity.ok(ApiResponse.success("Coverage check complete", result));
     }
 
+    @GetMapping("/coverage/service/{serviceId}/usage")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
+    @Operation(summary = "Check service usage against policy limits for a member")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkServiceUsage(
+            @PathVariable Long policyId,
+            @PathVariable Long serviceId,
+            @RequestParam Long memberId,
+            @RequestParam(required = false) Integer year) {
+        
+        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, memberId, year);
+        return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CREATE ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════════

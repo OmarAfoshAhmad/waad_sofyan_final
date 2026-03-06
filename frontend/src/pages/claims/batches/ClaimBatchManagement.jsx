@@ -49,9 +49,10 @@ import { useNavigate } from 'react-router-dom';
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 
-// Services
 import employersService from 'services/api/employers.service';
 import providersService from 'services/api/providers.service';
+import providerContractsService from 'services/api/provider-contracts.service';
+import claimsService from 'services/api/claims.service';
 
 // ===========================================
 // CONSTANTS
@@ -108,12 +109,27 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
         [selectedEmployer, provider, filterMonth, filterYear]
     );
 
-    // Stats (Mock for now - pending integration with batch stats API)
+    // Fetch actual stats using Claims Service Financial Summary endpoint
+    const { data: summaryData } = useQuery({
+        queryKey: ['batch-stats', selectedEmployer?.id, provider?.id, filterMonth, filterYear],
+        queryFn: () => {
+            if (!selectedEmployer?.id || !provider?.id || !filterMonth || !filterYear) return null;
+            return claimsService.getFinancialSummary({
+                employerId: selectedEmployer.id,
+                providerId: provider.id,
+                dateFrom: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
+                dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-31`
+            });
+        },
+        enabled: !!selectedEmployer?.id && !!provider?.id
+    });
+
+    // Map fetched stats or default to 0
     const stats = {
-        requestsCount: 0,
-        amount: 0,
-        covered: 0,
-        refused: 0
+        requestsCount: summaryData?.claimsCount || 0,
+        amount: summaryData?.totalClaimsAmount || 0,
+        covered: summaryData?.totalApprovedAmount || 0,
+        refused: summaryData?.totalRefusedAmount || 0
     };
 
     return (
@@ -145,11 +161,11 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
 
                 {/* 1. Header Row (Month | Code) */}
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                    <Typography variant="body2" sx={{ color: '#888', fontWeight: 600 }}>
+                    <Typography variant="caption" sx={{ color: '#888', fontWeight: 600 }}>
                         {MONTHS_EN[filterMonth - 1]} {filterYear}
                     </Typography>
                     <Typography
-                        variant="body2"
+                        variant="caption"
                         dir="ltr"
                         sx={{ color: '#aaa', fontWeight: 700, letterSpacing: 0.5, fontFamily: 'monospace' }}
                     >
@@ -166,14 +182,14 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         spacing={1.5}
                         sx={{ mb: 1.5 }}
                     >
-                        <BusinessIcon sx={{ color: '#d0d0d0', fontSize: '1.2rem' }} />
+                        <BusinessIcon sx={{ color: '#d0d0d0', fontSize: '1rem' }} />
                         <Typography
-                            variant="h6"
+                            variant="subtitle1"
                             sx={{
                                 fontWeight: 700,
                                 color: '#444',
                                 textAlign: 'center',
-                                fontSize: '1.15rem',
+                                fontSize: '1rem',
                                 lineHeight: 1.2
                             }}
                         >
@@ -188,26 +204,26 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                     bgcolor: '#f5f9f5',
                     borderRadius: 4,
                     border: '1.5px solid #7cb983',
-                    py: 1.5,
-                    px: 2,
+                    py: 1,
+                    px: 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    mb: 4,
-                    width: '96%',
+                    mb: 3,
+                    width: '100%',
                     mx: 'auto',
-                    minHeight: 70
+                    minHeight: 50
                 }}>
-                    <Stack direction="row" spacing={2} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
-                        <ViewListIcon sx={{ color: '#7cb983', fontSize: '2.8rem' }} />
-                        <Typography variant="h4" sx={{ color: '#7cb983', fontWeight: 700 }}>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
+                        <ViewListIcon sx={{ color: '#7cb983', fontSize: '2rem' }} />
+                        <Typography variant="h5" sx={{ color: '#7cb983', fontWeight: 700 }}>
                             {stats.requestsCount} Requests
                         </Typography>
                     </Stack>
                 </Box>
 
                 {/* 4. Action Bars (Financials) - Label Left, Value Right */}
-                <Stack spacing={1.5} sx={{ mt: 'auto', width: '96%', mx: 'auto', pb: 1 }}>
+                <Stack spacing={1.2} sx={{ mt: 'auto', width: '100%', mx: 'auto', pb: 0 }}>
 
                     {/* Amount Block */}
                     <Box sx={{
@@ -217,12 +233,12 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         bgcolor: '#92c68e',
                         color: 'white',
                         borderRadius: 10,
-                        px: 3,
-                        py: 0.8,
+                        px: 2.5,
+                        py: 0.6,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Amount</Typography>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{stats.amount.toFixed(2)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>Amount</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 800 }}>{stats.amount.toFixed(2)}</Typography>
                     </Box>
 
                     {/* Covered Block */}
@@ -233,15 +249,15 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         bgcolor: '#67bc72',
                         color: 'white',
                         borderRadius: 10,
-                        px: 3,
-                        py: 0.8,
+                        px: 2.5,
+                        py: 0.6,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
-                        <Stack direction="row" alignItems="center" spacing={1.2}>
-                            <CheckCircleIcon sx={{ fontSize: '1.3rem' }} />
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Covered</Typography>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                            <CheckCircleIcon sx={{ fontSize: '1.2rem' }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>Covered</Typography>
                         </Stack>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{stats.covered.toFixed(2)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 800 }}>{stats.covered.toFixed(2)}</Typography>
                     </Box>
 
                     {/* Refused Block */}
@@ -252,15 +268,15 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         bgcolor: '#e66a6a',
                         color: 'white',
                         borderRadius: 10,
-                        px: 3,
-                        py: 0.8,
+                        px: 2.5,
+                        py: 0.6,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
-                        <Stack direction="row" alignItems="center" spacing={1.2}>
-                            <CancelIcon sx={{ fontSize: '1.3rem' }} />
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Refused</Typography>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                            <CancelIcon sx={{ fontSize: '1.2rem' }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>Refused</Typography>
                         </Stack>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{stats.refused.toFixed(2)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 800 }}>{stats.refused.toFixed(2)}</Typography>
                     </Box>
 
                 </Stack>
@@ -474,9 +490,9 @@ export default function ClaimBatchManagement() {
                                 <CircularProgress />
                             </Box>
                         ) : filteredProviders.length > 0 ? (
-                            <Grid container spacing={2}>
+                            <Grid container spacing={3}>
                                 {filteredProviders.map((provider) => (
-                                    <Grid item xs={12} sm={12} md={6} lg={6} key={provider.id}>
+                                    <Grid item xs={12} sm={12} md={6} lg={4} key={provider.id}>
                                         <ProviderBatchCard
                                             provider={provider}
                                             selectedEmployer={selectedEmployer}

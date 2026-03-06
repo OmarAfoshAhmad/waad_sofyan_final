@@ -103,6 +103,7 @@ public class ClaimViewDto {
      */
     private BigDecimal totalAmount;
     private BigDecimal approvedAmount;
+    private BigDecimal refusedAmount;
     private BigDecimal differenceAmount;
     
     // ========== Financial Snapshot (MVP Phase) ==========

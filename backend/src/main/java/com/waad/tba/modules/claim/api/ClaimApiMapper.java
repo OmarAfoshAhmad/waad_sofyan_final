@@ -104,6 +104,10 @@ public class ClaimApiMapper {
                                 .quantity(line.getQuantity())
                                 .serviceCategoryId(line.getServiceCategoryId())
                                 .serviceCategoryName(line.getServiceCategoryName())
+                                .unitPrice(line.getGrossAmount())
+                                .refusedAmount(line.getRefusedAmount())
+                                .rejected(line.getRejected())
+                                .rejectionReason(line.getRejectionReason())
                                 .build())
                         .collect(Collectors.toList()) : null)
                 .build();
@@ -288,6 +292,7 @@ public class ClaimApiMapper {
                 .quantity(dto.getQuantity())
                 .unitPrice(dto.getUnitPrice())
                 .totalPrice(dto.getTotalPrice())
+                .refusedAmount(dto.getRefusedAmount())
                 .approvedPrice(null) // Not in ClaimLineDto - would need to be added
                 .notes(null) // Not in ClaimLineDto
                 .active(true) // Not in ClaimLineDto - default to true

@@ -89,6 +89,7 @@ import java.util.Map;
                    "Replaces the legacy separate Member/FamilyMember controllers. " +
                    "Supports: Principal creation with inline Dependents, Dependent management, " +
                    "Family eligibility checks via Barcode, CASCADE deletion, and unified CRUD operations.")
+@SuppressWarnings("deprecation")
 public class UnifiedMemberController {
 
     private final UnifiedMemberService unifiedMemberService;

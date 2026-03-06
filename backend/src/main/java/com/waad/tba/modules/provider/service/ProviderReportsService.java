@@ -277,7 +277,8 @@ public class ProviderReportsService {
                 .visitDate(visit.getVisitDate())
                 .memberName(visit.getMember() != null ? visit.getMember().getFullName() : null)
                 .memberBarcode(visit.getMember() != null ? visit.getMember().getBarcode() : null)
-                .civilId(visit.getMember() != null ? visit.getMember().getCivilId() : null)
+                .civilId(visit.getMember() != null ? 
+                    (visit.getMember().getNationalNumber() != null ? visit.getMember().getNationalNumber() : visit.getMember().getCivilId()) : null)
                 .employerName(visit.getEmployer() != null ? visit.getEmployer().getName() : null)
                 .visitType(visit.getVisitType() != null ? visit.getVisitType().name() : null)
                 .visitTypeLabel(visit.getVisitType() != null ? visit.getVisitType().getArabicLabel() : null)
@@ -314,7 +315,8 @@ public class ProviderReportsService {
             .validTo(preAuth.getExpiryDate())
             .memberName(preAuth.getVisit() != null && preAuth.getVisit().getMember() != null ? preAuth.getVisit().getMember().getFullName() : null)
             .memberBarcode(preAuth.getVisit() != null && preAuth.getVisit().getMember() != null ? preAuth.getVisit().getMember().getBarcode() : null)
-            .civilId(preAuth.getVisit() != null && preAuth.getVisit().getMember() != null ? preAuth.getVisit().getMember().getCivilId() : null)
+            .civilId(preAuth.getVisit() != null && preAuth.getVisit().getMember() != null ? 
+                (preAuth.getVisit().getMember().getNationalNumber() != null ? preAuth.getVisit().getMember().getNationalNumber() : preAuth.getVisit().getMember().getCivilId()) : null)
             .employerName(preAuth.getVisit() != null && preAuth.getVisit().getEmployer() != null ? preAuth.getVisit().getEmployer().getName() : null)
             .requestedAmount(preAuth.getContractPrice() != null ? preAuth.getContractPrice() : BigDecimal.ZERO)
             .approvedAmount(preAuth.getApprovedAmount() != null ? preAuth.getApprovedAmount() : BigDecimal.ZERO)

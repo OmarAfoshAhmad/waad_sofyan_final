@@ -78,4 +78,8 @@ public class ClaimLineDto {
      * Whether service requires pre-authorization
      */
     private Boolean requiresPA;
+
+    private Boolean rejected;
+    private String rejectionReason;
+    private BigDecimal refusedAmount;
 }

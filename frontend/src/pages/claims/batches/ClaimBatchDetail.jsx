@@ -121,7 +121,7 @@ export default function ClaimBatchDetail() {
     });
 
     const claims = useMemo(() => {
-        let items = claimsResponse?.content || [];
+        let items = claimsResponse?.items || claimsResponse?.content || [];
 
         // 1. Search Filter
         if (searchTerm) {
@@ -148,10 +148,10 @@ export default function ClaimBatchDetail() {
     }, [claims, page, rowsPerPage]);
 
     // Batch Code (Generated same as card)
-    const batchCode = useMemo(() =>
-        generateBatchCode(employer, providerId, month, year),
-        [employer, providerId, month, year]
-    );
+    const batchCode = useMemo(() => {
+        if (!employer) return '...';
+        return generateBatchCode(employer, providerId, month, year);
+    }, [employer, providerId, month, year]);
 
     // -------------------------------------------------------------------------
     // EXPORT HANDLERS
@@ -168,8 +168,9 @@ export default function ClaimBatchDetail() {
             { header: 'المريض', key: 'patient', width: 30 },
             { header: 'الحالة', key: 'status', width: 15 },
             { header: 'المبلغ الإجمالي', key: 'amount', width: 20 },
-            { header: 'التغطية المعتمدة', key: 'covered', width: 20 },
-            { header: 'المبلغ المستحق', key: 'paid', width: 20 }
+            { header: 'المعتمد', key: 'covered', width: 20 },
+            { header: 'المرفوض', key: 'refused', width: 20 },
+            { header: 'المستحق للمزود', key: 'paid', width: 20 }
         ];
 
         worksheet.views = [{ rightToLeft: true }];
@@ -183,7 +184,8 @@ export default function ClaimBatchDetail() {
                 status: c.status || 'APPROVED',
                 amount: c.requestedAmount || 0,
                 covered: c.approvedAmount || 0,
-                paid: (c.requestedAmount || 0) - (c.approvedAmount || 0)
+                refused: c.refusedAmount || 0,
+                paid: c.approvedAmount || 0
             });
         });
 
@@ -214,9 +216,10 @@ export default function ClaimBatchDetail() {
         { id: 'provider', label: 'مقدم الخدمة', minWidth: 180 },
         { id: 'patient', label: 'الاسم (المريض)', minWidth: 200 },
         { id: 'status', label: 'الحالة', minWidth: 120, align: 'center' },
-        { id: 'amount', label: 'المبلغ الإجمالي', minWidth: 130, align: 'right' },
-        { id: 'covered', label: 'التغطية المعتمدة', minWidth: 130, align: 'right' },
-        { id: 'paid', label: 'المبلغ المستحق', minWidth: 130, align: 'right' },
+        { id: 'amount', label: 'الإجمالي', minWidth: 110, align: 'right' },
+        { id: 'covered', label: 'المعتمد', minWidth: 110, align: 'right' },
+        { id: 'refused', label: 'المرفوض', minWidth: 100, align: 'right' },
+        { id: 'paid', label: 'المستحق', minWidth: 110, align: 'right' },
         { id: 'actions', label: 'إجراءات', minWidth: 100, align: 'center' }
     ];
 
@@ -280,20 +283,36 @@ export default function ClaimBatchDetail() {
             case 'amount':
                 return <Typography variant="body2" fontWeight={700}>{claim.requestedAmount?.toFixed(2)}</Typography>;
             case 'covered':
-                return <Typography variant="body2" color="success.main" fontWeight={700}>{claim.approvedAmount?.toFixed(2) || (claim.requestedAmount * 0.8).toFixed(2)}</Typography>;
+                return <Typography variant="body2" color="success.main" fontWeight={700}>{(claim.approvedAmount || 0).toFixed(2)}</Typography>;
+            case 'refused':
+                const displayRefused = (claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0))
+                    ? claim.requestedAmount
+                    : (claim.refusedAmount || 0);
+                return (
+                    <Tooltip title={claim.rejectionReason || ''} arrow placement="top">
+                        <Typography variant="body2" color="error.main" fontWeight={700}>
+                            {displayRefused.toFixed(2)}
+                        </Typography>
+                    </Tooltip>
+                );
             case 'paid':
-                return <Typography variant="body2" color="secondary.main" fontWeight={900}>{(claim.requestedAmount - (claim.approvedAmount || claim.requestedAmount * 0.8)).toFixed(2)}</Typography>;
+                // For providers, paid is usually netProviderAmount (approved - patient share if applicable)
+                // For simplicity here, we show approvedAmount
+                return <Typography variant="body2" color="secondary.main" fontWeight={900}>{(claim.approvedAmount || 0).toFixed(2)}</Typography>;
             case 'actions':
                 return (
                     <Stack direction="row" spacing={0.5} justifyContent="center">
-                        <Tooltip title="عرض التفاصيل">
-                            <IconButton size="small" color="primary">
-                                <ViewIcon fontSize="inherit" />
+                        <Tooltip title="تعديل / عرض التفاصيل">
+                            <IconButton
+                                color="primary"
+                                onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}&claimId=${claim.id}`)}
+                            >
+                                <ViewIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
                             </IconButton>
                         </Tooltip>
                         <Tooltip title="طباعة">
-                            <IconButton size="small">
-                                <PrintIcon fontSize="inherit" />
+                            <IconButton>
+                                <PrintIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
                             </IconButton>
                         </Tooltip>
                     </Stack>
@@ -464,6 +483,12 @@ export default function ClaimBatchDetail() {
                         onRowsPerPageChange={setRowsPerPage}
                         loading={isLoading}
                         renderCell={renderCell}
+                        getRowSx={(row) => {
+                            if (row.status === 'REJECTED') return { bgcolor: alpha('#ff4d4f', 0.05) };
+                            if (row.status === 'APPROVED') return { bgcolor: alpha('#52c41a', 0.03) };
+                            if (row.status === 'PENDING') return { bgcolor: alpha('#faad14', 0.03) };
+                            return {};
+                        }}
                         emptyIcon={ReceiptIcon}
                         emptyMessage="لا توجد مطالبات في هذا الباتش حالياً."
                         sx={{ flexGrow: 1, mb: 1 }}

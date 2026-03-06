@@ -1,92 +1,81 @@
 package com.waad.tba.modules.claim.mapper;
 
-import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.dto.*;
-import com.waad.tba.modules.claim.entity.Claim;
-import com.waad.tba.modules.claim.entity.ClaimAttachment;
-import com.waad.tba.modules.claim.entity.ClaimLine;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
+import com.waad.tba.modules.claim.entity.*;
 import com.waad.tba.modules.member.entity.Member;
-import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
-import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
 import com.waad.tba.modules.provider.entity.Provider;
-import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.visit.entity.Visit;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
+import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
+import com.waad.tba.modules.provider.service.ProviderContractService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.hibernate.Hibernate;
+import org.springframework.stereotype.Component;
 
-@Slf4j
+import lombok.RequiredArgsConstructor;
+
+/**
+ * ClaimMapper (CANONICAL REBUILD 2026-01-16)
+ * 
+ * Maps between Claim entities and DTOs.
+ * Enforces architectural laws for financial consistency.
+ */
 @Component
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class ClaimMapper {
 
     private final ProviderContractService providerContractService;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
 
     /**
-     * PURE TRANSFORMATION (Refactored 2026-02-24)
-     * Maps DTO to Entity using pre-resolved visit, provider, and pre-auth.
+     * Maps CreateClaimDto (from Visit) to a new Claim entity.
+     * Enforces contract-first pricing and policy-first coverage.
      */
-    public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth,
-            Map<Long, MedicalService> medicalServiceMap) {
-        log.info("📝 [CLAIM-MAPPER] Mapping Claim entity (Pure Transformation)");
-
-        LocalDate serviceDate = visit.getVisitDate();
-        if (serviceDate == null && dto.getServiceDate() != null) {
-            serviceDate = dto.getServiceDate();
-        }
-        if (serviceDate == null) {
-            serviceDate = LocalDate.now();
-        }
-
+    public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth, 
+                         Map<Long, MedicalService> medicalServiceMap) {
         Claim claim = Claim.builder()
-                .member(visit.getMember())
                 .visit(visit)
-                .providerId(visit.getProviderId())
+                .member(visit.getMember())
+                .providerId(provider.getId())
                 .providerName(provider.getName())
-                .doctorName(dto.getDoctorName())
+                .serviceDate(dto.getServiceDate())
                 .diagnosisCode(dto.getDiagnosisCode())
                 .diagnosisDescription(dto.getDiagnosisDescription())
-                .serviceDate(serviceDate)
+                .doctorName(dto.getDoctorName())
+                .status(ClaimStatus.DRAFT)
+                .claimSource(ClaimSource.NORMAL)
+                .isBacklog(false)
                 .preAuthorization(preAuth)
                 .build();
 
         BigDecimal totalRequestedAmount = BigDecimal.ZERO;
         List<ClaimLine> lines = new ArrayList<>();
-        Member member = visit.getMember();
 
         for (ClaimLineDto lineDto : dto.getLines()) {
             MedicalService medicalService = medicalServiceMap.get(lineDto.getMedicalServiceId());
-            if (medicalService == null) {
-                throw new IllegalArgumentException("MedicalService not found for ID: " + lineDto.getMedicalServiceId());
-            }
+            if (medicalService == null)
+                continue;
 
             // Resolve contract price
             EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
-                    visit.getProviderId(), medicalService.getCode(), serviceDate);
+                    provider.getId(), medicalService.getCode(), dto.getServiceDate());
+            BigDecimal unitPrice = priceResponse.isHasContract() ? priceResponse.getContractPrice()
+                    : medicalService.getBasePrice();
 
-            if (!priceResponse.isHasContract() || priceResponse.getContractPrice() == null) {
-                throw new IllegalArgumentException("No contract price found for service " + medicalService.getCode());
-            }
-
-            // Get coverage info
-            var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForService(member, medicalService.getId());
+            // Resolve coverage snapshot
+            var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForService(claim.getMember(),
+                    medicalService.getId());
             boolean requiresPA = coverageInfoOpt.map(c -> c.isRequiresPreApproval()).orElse(false);
             Integer coveragePercentSnapshot = coverageInfoOpt.map(c -> c.getCoveragePercent()).orElse(null);
             Integer patientCopayPercentSnapshot = coveragePercentSnapshot != null ? (100 - coveragePercentSnapshot)
                     : null;
 
-            BigDecimal unitPrice = priceResponse.getContractPrice();
             Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
 
@@ -95,7 +84,7 @@ public class ClaimMapper {
                     .medicalService(medicalService)
                     .serviceCode(medicalService.getCode())
                     .serviceName(medicalService.getName())
-                    .serviceCategoryId(lineDto.getServiceCategoryId()) // Category should be pre-validated by service
+                    .serviceCategoryId(lineDto.getServiceCategoryId())
                     .serviceCategoryName(lineDto.getServiceCategoryName())
                     .requiresPA(requiresPA)
                     .coveragePercentSnapshot(coveragePercentSnapshot)
@@ -121,6 +110,10 @@ public class ClaimMapper {
     public void replaceClaimLinesForDraft(Claim claim, List<ClaimLineDto> lineDtos,
             Map<Long, MedicalService> medicalServiceMap) {
         BigDecimal totalRequestedAmount = BigDecimal.ZERO;
+        BigDecimal totalRefusedAmount = BigDecimal.ZERO;
+        BigDecimal totalApprovedAmount = BigDecimal.ZERO;
+        BigDecimal totalPatientShare = BigDecimal.ZERO;
+        
         List<ClaimLine> newLines = new ArrayList<>();
         LocalDate serviceDate = claim.getServiceDate() != null ? claim.getServiceDate() : LocalDate.now();
 
@@ -147,6 +140,22 @@ public class ClaimMapper {
             BigDecimal unitPrice = priceResponse.getContractPrice();
             Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+            
+            BigDecimal lineApproved = BigDecimal.ZERO;
+            BigDecimal linePatientShare = BigDecimal.ZERO;
+            BigDecimal lineRefused = lineDto.getRefusedAmount() != null ? lineDto.getRefusedAmount() : BigDecimal.ZERO;
+
+            if (Boolean.TRUE.equals(lineDto.getRejected())) {
+                lineRefused = lineTotal;
+            } else {
+                // Approved = LineTotal * Coverage%
+                if (coveragePercentSnapshot != null) {
+                    lineApproved = lineTotal.multiply(BigDecimal.valueOf(coveragePercentSnapshot)).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    linePatientShare = lineTotal.subtract(lineApproved);
+                } else {
+                    lineApproved = lineTotal;
+                }
+            }
 
             ClaimLine line = ClaimLine.builder()
                     .claim(claim)
@@ -158,18 +167,33 @@ public class ClaimMapper {
                     .requiresPA(requiresPA)
                     .coveragePercentSnapshot(coveragePercentSnapshot)
                     .patientCopayPercentSnapshot(patientCopayPercentSnapshot)
+                    .rejected(lineDto.getRejected() != null ? lineDto.getRejected() : false)
+                    .rejectionReason(lineDto.getRejectionReason())
+                    .refusedAmount(lineRefused)
                     .quantity(quantity)
                     .unitPrice(unitPrice)
                     .totalPrice(lineTotal)
                     .build();
 
             newLines.add(line);
-            totalRequestedAmount = totalRequestedAmount.add(lineTotal);
+            
+            totalRequestedAmount = totalRequestedAmount.add(lineTotal).add(lineRefused);
+            totalRefusedAmount = totalRefusedAmount.add(lineRefused);
+            totalApprovedAmount = totalApprovedAmount.add(lineApproved);
+            totalPatientShare = totalPatientShare.add(linePatientShare);
         }
 
         claim.getLines().clear();
         newLines.forEach(claim::addLine);
         claim.setRequestedAmount(totalRequestedAmount);
+        
+        // For backlog claims, we update the processed amounts immediately
+        if (Boolean.TRUE.equals(claim.getIsBacklog())) {
+            claim.setApprovedAmount(totalApprovedAmount);
+            claim.setRefusedAmount(totalRefusedAmount);
+            claim.setPatientCoPay(totalPatientShare);
+            claim.setDifferenceAmount(totalRequestedAmount.subtract(totalApprovedAmount));
+        }
     }
 
     public void updateEntityFromDto(Claim claim, ClaimUpdateDto dto, PreAuthorization preAuth) {
@@ -181,20 +205,13 @@ public class ClaimMapper {
             claim.setApprovedAmount(dto.getApprovedAmount());
         if (dto.getReviewerComment() != null)
             claim.setReviewerComment(dto.getReviewerComment());
-        if (dto.getActive() != null)
-            claim.setActive(dto.getActive());
-        if (dto.getDiagnosisCode() != null)
-            claim.setDiagnosisCode(dto.getDiagnosisCode());
-        if (dto.getDiagnosisDescription() != null)
-            claim.setDiagnosisDescription(dto.getDiagnosisDescription());
-
-        if (preAuth != null) {
+        if (preAuth != null)
             claim.setPreAuthorization(preAuth);
-        }
+    }
 
-        if (dto.getAttachments() != null) {
-            claim.getAttachments().clear();
-            dto.getAttachments().forEach(attDto -> {
+    public void updateAttachments(Claim claim, List<ClaimAttachmentDto> attachments) {
+        if (attachments != null) {
+            attachments.forEach(attDto -> {
                 ClaimAttachment attachment = ClaimAttachment.builder()
                         .claim(claim)
                         .fileName(attDto.getFileName())
@@ -234,6 +251,10 @@ public class ClaimMapper {
                 .requestedAmount(claim.getRequestedAmount())
                 .totalAmount(claim.getRequestedAmount())
                 .approvedAmount(claim.getApprovedAmount())
+                .refusedAmount(
+                        (claim.getStatus() == ClaimStatus.REJECTED && (claim.getRefusedAmount() == null || claim.getRefusedAmount().compareTo(BigDecimal.ZERO) == 0))
+                                ? claim.getRequestedAmount()
+                                : claim.getRefusedAmount())
                 .differenceAmount(claim.getDifferenceAmount())
                 .status(claim.getStatus())
                 .statusLabel(claim.getStatus() != null ? claim.getStatus().getArabicLabel() : null)
@@ -261,6 +282,11 @@ public class ClaimMapper {
                 .businessDaysTaken(claim.getBusinessDaysTaken())
                 .slaDaysConfigured(claim.getSlaDaysConfigured())
                 .slaStatus(calculateSlaStatus(claim))
+                .claimSource(claim.getClaimSource() != null ? claim.getClaimSource().name() : null)
+                .isBacklog(claim.getIsBacklog())
+                .legacyReferenceNumber(claim.getLegacyReferenceNumber())
+                .enteredAt(claim.getEnteredAt())
+                .enteredBy(claim.getEnteredBy())
                 .build();
 
         if (claim.getVisit() != null) {
@@ -318,6 +344,9 @@ public class ClaimMapper {
                 .quantity(line.getQuantity())
                 .unitPrice(line.getUnitPrice())
                 .totalPrice(line.getTotalPrice())
+                .rejected(line.getRejected())
+                .rejectionReason(line.getRejectionReason())
+                .refusedAmount(line.getRefusedAmount())
                 .build();
     }
 
@@ -346,4 +375,3 @@ public class ClaimMapper {
         return "ON_TRACK";
     }
 }
-

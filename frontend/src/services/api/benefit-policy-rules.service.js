@@ -136,6 +136,22 @@ export const checkServiceCoverage = async (policyId, serviceId) => {
   return unwrap(response);
 };
 
+/**
+ * Check service usage against limits
+ * Endpoint: GET /api/benefit-policies/{policyId}/coverage/service/{serviceId}/usage
+ * @param {number} policyId - Policy ID
+ * @param {number} serviceId - Service ID
+ * @param {number} memberId - Member ID
+ * @param {number} year - Optional year
+ * @returns {Promise<Object>} Usage details
+ */
+export const checkServiceUsageLimit = async (policyId, serviceId, memberId, year = null) => {
+  const params = { memberId };
+  if (year) params.year = year;
+  const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/usage`, { params });
+  return unwrap(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CREATE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -265,6 +281,7 @@ export default {
   // Coverage lookup
   getCoverageForService,
   checkServiceCoverage,
+  checkServiceUsageLimit,
   // Create
   createPolicyRule,
   createPolicyRulesBulk,

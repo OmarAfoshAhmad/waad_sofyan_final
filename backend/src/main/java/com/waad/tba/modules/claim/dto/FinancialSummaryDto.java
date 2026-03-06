@@ -18,6 +18,7 @@ import lombok.NoArgsConstructor;
 public class FinancialSummaryDto {
     private BigDecimal totalClaimsAmount;
     private BigDecimal totalApprovedAmount;
+    private BigDecimal totalRefusedAmount;
     private BigDecimal totalPaidAmount;
     private BigDecimal outstandingAmount;
     private long claimsCount;

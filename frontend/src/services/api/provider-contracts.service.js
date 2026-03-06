@@ -537,7 +537,7 @@ export const getAllContractedServices = async (providerId) => {
 
     // Get all pricing items (setting a large size to get all at once for dropdowns)
     const response = await getContractPricingItems(activeContract.id, { size: 1000 });
-    return response?.content || [];
+    return response?.items || response?.content || (Array.isArray(response) ? response : []);
   } catch (error) {
     console.error('Error fetching contracted services:', error);
     return [];

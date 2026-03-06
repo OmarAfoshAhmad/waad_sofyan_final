@@ -1954,33 +1954,43 @@ public class ClaimService {
         log.info("📊 Fetching financial summary: employer={}, provider={}, status={}, from={}, to={}",
                 employerId, providerId, status, dateFrom, dateTo);
 
-        Object[] result = claimRepository.getFinancialSummary(employerId, providerId, status, dateFrom,
+        List<Object[]> queryResult = claimRepository.getFinancialSummary(employerId, providerId, status, dateFrom,
                 dateTo);
 
-        if (result == null || result.length == 0) {
+        if (queryResult == null || queryResult.isEmpty() || queryResult.get(0) == null) {
             return FinancialSummaryDto.builder()
                     .totalClaimsAmount(BigDecimal.ZERO)
                     .totalApprovedAmount(BigDecimal.ZERO)
+                    .totalRefusedAmount(BigDecimal.ZERO)
                     .totalPaidAmount(BigDecimal.ZERO)
                     .outstandingAmount(BigDecimal.ZERO)
-                    .claimsCount(0)
-                    .approvedCount(0)
-                    .settledCount(0)
+                    .claimsCount(0L)
+                    .approvedCount(0L)
+                    .settledCount(0L)
                     .build();
         }
 
-        BigDecimal totalRequested = result[1] != null ? new BigDecimal(result[1].toString()) : BigDecimal.ZERO;
-        BigDecimal totalApproved = result[2] != null ? new BigDecimal(result[2].toString()) : BigDecimal.ZERO;
-        BigDecimal totalPaid = result[3] != null ? new BigDecimal(result[3].toString()) : BigDecimal.ZERO;
+        Object[] result = queryResult.get(0);
+        int len = result.length;
+        
+        // Map results with safe index checking
+        long totalClaimsCount = (len > 0 && result[0] != null) ? ((Number) result[0]).longValue() : 0L;
+        BigDecimal totalRequested = (len > 1 && result[1] != null) ? new BigDecimal(result[1].toString()) : BigDecimal.ZERO;
+        BigDecimal totalApproved = (len > 2 && result[2] != null) ? new BigDecimal(result[2].toString()) : BigDecimal.ZERO;
+        BigDecimal totalRefused = (len > 3 && result[3] != null) ? new BigDecimal(result[3].toString()) : BigDecimal.ZERO;
+        BigDecimal totalPaid = (len > 4 && result[4] != null) ? new BigDecimal(result[4].toString()) : BigDecimal.ZERO;
+        long approvedCount = (len > 5 && result[5] != null) ? ((Number) result[5]).longValue() : 0L;
+        long settledCount = (len > 6 && result[6] != null) ? ((Number) result[6]).longValue() : 0L;
 
         return FinancialSummaryDto.builder()
-                .claimsCount(result[0] != null ? ((Number) result[0]).longValue() : 0L)
+                .claimsCount(totalClaimsCount)
                 .totalClaimsAmount(totalRequested)
                 .totalApprovedAmount(totalApproved)
+                .totalRefusedAmount(totalRefused)
                 .totalPaidAmount(totalPaid)
                 .outstandingAmount(totalApproved.subtract(totalPaid))
-                .approvedCount(result[4] != null ? ((Number) result[4]).longValue() : 0L)
-                .settledCount(result[5] != null ? ((Number) result[5]).longValue() : 0L)
+                .approvedCount(approvedCount)
+                .settledCount(settledCount)
                 .build();
     }
 }

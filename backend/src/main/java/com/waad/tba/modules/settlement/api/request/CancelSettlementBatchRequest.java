@@ -41,7 +41,7 @@ public class CancelSettlementBatchRequest {
     @Schema(
         description = "Reason for cancelling the batch (audit trail)",
         example = "Provider requested to revise claim amounts before settlement",
-        required = true,
+        requiredMode = Schema.RequiredMode.REQUIRED,
         minLength = 10,
         maxLength = 500
     )

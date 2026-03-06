@@ -53,7 +53,7 @@ public class PaySettlementBatchRequest {
     @Schema(
         description = "Unique payment reference number for audit trail",
         example = "TRF-2026-001234",
-        required = true,
+        requiredMode = Schema.RequiredMode.REQUIRED,
         minLength = 3,
         maxLength = 100
     )
@@ -71,7 +71,7 @@ public class PaySettlementBatchRequest {
     @Schema(
         description = "Payment method used for settlement",
         example = "BANK_TRANSFER",
-        required = true,
+        requiredMode = Schema.RequiredMode.REQUIRED,
         allowableValues = {"BANK_TRANSFER", "CHECK", "CASH"}
     )
     private String paymentMethod;

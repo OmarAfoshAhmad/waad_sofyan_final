@@ -361,6 +361,7 @@ public class ClaimResponse {
          */
         private BigDecimal approvedPrice;
         
+        private BigDecimal refusedAmount;
         private String notes;
         private Boolean active;
     }

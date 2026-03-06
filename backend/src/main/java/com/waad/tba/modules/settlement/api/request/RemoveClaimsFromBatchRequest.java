@@ -42,7 +42,7 @@ public class RemoveClaimsFromBatchRequest {
     @Schema(
         description = "List of claim IDs to remove from the batch",
         example = "[789, 790]",
-        required = true,
+        requiredMode = Schema.RequiredMode.REQUIRED,
         minLength = 1
     )
     private List<Long> claimIds;

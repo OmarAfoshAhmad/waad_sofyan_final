@@ -41,7 +41,7 @@ public class CreateSettlementBatchRequest {
     @Schema(
         description = "Provider ID for the settlement batch",
         example = "123",
-        required = true
+        requiredMode = Schema.RequiredMode.REQUIRED
     )
     private Long providerId;
     

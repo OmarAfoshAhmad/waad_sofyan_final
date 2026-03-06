@@ -729,16 +729,13 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         * Get financial summary statistics for reports.
         * Returns: [totalCount, totalRequested, totalApproved, totalPaid,
         * approvedCount, settledCount]
-        */
-       @Query("SELECT COUNT(c), " +
-                     "COALESCE(SUM(c.requestedAmount), 0), " +
-                     "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.approvedAmount ELSE 0 END), 0), "
-                     +
-                     "COALESCE(SUM(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN COALESCE(c.netProviderAmount, c.approvedAmount) ELSE 0 END), 0), "
-                     +
-                     "COUNT(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN 1 END), "
-                     +
-                     "COUNT(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN 1 END) " +
+        */        @Query("SELECT COUNT(c), " +
+                      "COALESCE(SUM(c.requestedAmount), 0), " +
+                      "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN c.approvedAmount ELSE 0 END), 0), " +
+                      "COALESCE(SUM(c.refusedAmount), 0), " +
+                      "COALESCE(SUM(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN COALESCE(c.netProviderAmount, c.approvedAmount) ELSE 0 END), 0), " +
+                      "COUNT(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN 1 END), " +
+                      "COUNT(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN 1 END) " +
                      "FROM Claim c " +
                      "WHERE c.active = true " +
                      "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
@@ -746,7 +743,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                      "AND (:status IS NULL OR c.status = :status) " +
                      "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                      "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo)")
-       Object[] getFinancialSummary(
+        List<Object[]> getFinancialSummary(
                      @Param("employerId") Long employerId,
                      @Param("providerId") Long providerId,
                      @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,

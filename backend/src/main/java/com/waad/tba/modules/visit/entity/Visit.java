@@ -109,6 +109,8 @@ public class Visit {
     
     private String diagnosis;
     
+    private String complaint;
+    
     private String treatment;
     
     @Column()

@@ -7,6 +7,7 @@ import com.waad.tba.modules.backlog.service.BacklogService;
 import com.waad.tba.modules.claim.entity.ClaimSource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,10 +26,19 @@ public class BacklogController {
 
     @PostMapping("/manual")
     @Operation(summary = "Create manual backlog claim")
-    public ResponseEntity<ApiResponse<Long>> createManualBacklog(@RequestBody BacklogClaimRequest request) {
+    public ResponseEntity<ApiResponse<Long>> createManualBacklog(@Valid @RequestBody BacklogClaimRequest request) {
         String currentUser = SecurityContextHolder.getContext().getAuthentication().getName();
         Long claimId = backlogService.createBacklogClaim(request, currentUser, ClaimSource.MANUAL_BACKLOG);
-        return ResponseEntity.ok(ApiResponse.success("تم إنشاء المطالبة بنجاح", claimId));
+        return ResponseEntity.ok(ApiResponse.success("\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0645\u0637\u0627\u0644\u0628\u0629 \u0628\u0646\u062c\u0627\u062d", claimId));
+    }
+
+    @DeleteMapping("/{claimId}")
+    @Operation(summary = "Cancel (soft-delete) a backlog claim")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
+    public ResponseEntity<ApiResponse<Void>> deleteBacklogClaim(@PathVariable Long claimId) {
+        String currentUser = SecurityContextHolder.getContext().getAuthentication().getName();
+        backlogService.cancelBacklogClaim(claimId, currentUser);
+        return ResponseEntity.ok(ApiResponse.success("تم إلغاء المطالبة بنجاح", null));
     }
 
     @PostMapping("/import")

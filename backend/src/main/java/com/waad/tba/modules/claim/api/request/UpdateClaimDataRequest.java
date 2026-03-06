@@ -66,5 +66,10 @@ public class UpdateClaimDataRequest {
 
         @Size(max = 255, message = "Service category name must not exceed 255 characters")
         private String serviceCategoryName;
+        private java.math.BigDecimal grossAmount;
+        private java.math.BigDecimal coveredAmount;
+        private java.math.BigDecimal refusedAmount;
+        private Boolean rejected;
+        private String rejectionReason;
     }
 }

@@ -68,10 +68,10 @@ import {
   Refresh as RefreshIcon,
   Delete as DeleteIcon,
   Add as AddIcon
-  ,Clear as ClearIcon
-  ,CloudUpload as CloudUploadIcon
-  ,Download as DownloadIcon
-  ,InsertDriveFile as FileIcon
+  , Clear as ClearIcon
+  , CloudUpload as CloudUploadIcon
+  , Download as DownloadIcon
+  , InsertDriveFile as FileIcon
 } from '@mui/icons-material';
 
 // Project Components
@@ -225,6 +225,7 @@ const ProviderContractView = () => {
     medicalCategoryId: null,
     basePrice: '',
     contractPrice: '',
+    discountPercent: '',
     notes: ''
   });
 
@@ -487,9 +488,16 @@ const ProviderContractView = () => {
 
   // Pricing Handlers
   const handleOpenAddPricing = useCallback(() => {
-    setPricingForm({ medicalServiceId: null, medicalCategoryId: null, basePrice: '', contractPrice: '', notes: '' });
+    setPricingForm({
+      medicalServiceId: null,
+      medicalCategoryId: null,
+      basePrice: '',
+      contractPrice: '',
+      discountPercent: contract?.discountPercent ?? '',
+      notes: ''
+    });
     setAddPricingDialogOpen(true);
-  }, []);
+  }, [contract?.discountPercent]);
 
   const handleAddPricingSubmit = useCallback(() => {
     if (!pricingForm.medicalCategoryId || !pricingForm.medicalServiceId || !pricingForm.basePrice || !pricingForm.contractPrice) return;
@@ -510,6 +518,7 @@ const ProviderContractView = () => {
       medicalCategoryId: getCategoryObject(item),
       basePrice: item.basePrice ?? '',
       contractPrice: item.contractPrice ?? '',
+      discountPercent: item.discountPercent ?? '',
       notes: item.notes || ''
     });
     setEditPricingDialogOpen(true);
@@ -526,6 +535,48 @@ const ProviderContractView = () => {
       notes: pricingForm.notes
     });
   }, [updatePricingMutation, pricingForm]);
+
+  // Bi-directional price/discount calculation
+  const updatePriceFields = useCallback((updates) => {
+    setPricingForm((prev) => {
+      const newState = { ...prev, ...updates };
+
+      // If basePrice changed, recalculate contractPrice if discountPercent exists,
+      // OR recalculate discountPercent if contractPrice exists.
+      if ('basePrice' in updates) {
+        const bp = parseFloat(updates.basePrice) || 0;
+        if (bp > 0) {
+          if (prev.discountPercent !== '') {
+            const dp = parseFloat(prev.discountPercent) || 0;
+            newState.contractPrice = (bp * (1 - dp / 100)).toFixed(2);
+          } else if (prev.contractPrice !== '') {
+            const cp = parseFloat(prev.contractPrice) || 0;
+            newState.discountPercent = Math.round(((bp - cp) / bp) * 100);
+          }
+        }
+      }
+
+      // If contractPrice changed, recalculate discountPercent
+      if ('contractPrice' in updates) {
+        const bp = parseFloat(newState.basePrice) || 0;
+        const cp = parseFloat(updates.contractPrice) || 0;
+        if (bp > 0) {
+          newState.discountPercent = Math.round(((bp - cp) / bp) * 100);
+        }
+      }
+
+      // If discountPercent changed, recalculate contractPrice
+      if ('discountPercent' in updates) {
+        const bp = parseFloat(newState.basePrice) || 0;
+        const dp = parseFloat(updates.discountPercent) || 0;
+        if (bp > 0) {
+          newState.contractPrice = (bp * (1 - dp / 100)).toFixed(2);
+        }
+      }
+
+      return newState;
+    });
+  }, []);
 
   const handleOpenDeletePricing = useCallback((item) => {
     setSelectedPricingItem(item);
@@ -596,58 +647,58 @@ const ProviderContractView = () => {
 
             {/* Lifecycle Actions */}
             {(contract.status === CONTRACT_STATUS.DRAFT || contract.status === CONTRACT_STATUS.SUSPENDED) && (
-              
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<ActivateIcon />}
-                  onClick={handleActivate}
-                  disabled={activateMutation.isLoading}
-                >
-                  تفعيل العقد
-                </Button>
-                
+
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<ActivateIcon />}
+                onClick={handleActivate}
+                disabled={activateMutation.isLoading}
+              >
+                تفعيل العقد
+              </Button>
+
             )}
 
             {contract.status === CONTRACT_STATUS.ACTIVE && (
-              
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<SuspendIcon />}
-                  onClick={() => setSuspendDialogOpen(true)}
-                  disabled={suspendMutation.isLoading}
-                >
-                  إيقاف
-                </Button>
-                
+
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<SuspendIcon />}
+                onClick={() => setSuspendDialogOpen(true)}
+                disabled={suspendMutation.isLoading}
+              >
+                إيقاف
+              </Button>
+
             )}
 
             {(contract.status === CONTRACT_STATUS.ACTIVE || contract.status === CONTRACT_STATUS.SUSPENDED) && (
-              
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<TerminateIcon />}
-                  onClick={() => setTerminateDialogOpen(true)}
-                  disabled={terminateMutation.isLoading}
-                >
-                  إلغاء
-                </Button>
-                
-            )}
 
-            
               <Button
                 variant="outlined"
-                color="primary"
-                startIcon={<EditIcon />}
-                onClick={handleEdit}
-                disabled={contract.status === CONTRACT_STATUS.TERMINATED}
+                color="error"
+                startIcon={<TerminateIcon />}
+                onClick={() => setTerminateDialogOpen(true)}
+                disabled={terminateMutation.isLoading}
               >
-                تعديل
+                إلغاء
               </Button>
-              
+
+            )}
+
+
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<EditIcon />}
+              onClick={handleEdit}
+              disabled={contract.status === CONTRACT_STATUS.TERMINATED}
+            >
+              تعديل
+            </Button>
+
           </Stack>
         }
       />
@@ -740,18 +791,18 @@ const ProviderContractView = () => {
             <Chip size="small" variant="outlined" color="primary" label={`${totalPricingItems} بند`} sx={{ width: 'fit-content' }} />
 
             {/* Add System Service Button */}
-            
-              <Button variant="contained" color="secondary" onClick={handleOpenAddPricing} startIcon={<AddIcon />} size="medium">
-                إضافة خدمة طبية
-              </Button>
-              
+
+            <Button variant="contained" color="secondary" onClick={handleOpenAddPricing} startIcon={<AddIcon />} size="medium">
+              إضافة خدمة طبية
+            </Button>
+
 
             {/* Import Price List Button */}
-            
-              <Button variant="outlined" color="primary" onClick={handleImportPriceList} startIcon={<ContractIcon />} size="medium">
-                استيراد قائمة الأسعار
-              </Button>
-              
+
+            <Button variant="outlined" color="primary" onClick={handleImportPriceList} startIcon={<ContractIcon />} size="medium">
+              استيراد قائمة الأسعار
+            </Button>
+
 
           </Stack>
 
@@ -793,15 +844,15 @@ const ProviderContractView = () => {
                         {(() => {
                           const service = getServiceDisplay(item);
                           return (
-                        <Stack spacing={0.25}>
-                          <Chip label={service.code} size="small" color="primary" variant="outlined" sx={{ width: 'fit-content', fontFamily: 'monospace' }} />
-                          <Typography variant="body2" fontWeight={500}>
-                            {service.nameAr}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {service.nameEn}
-                          </Typography>
-                        </Stack>
+                            <Stack spacing={0.25}>
+                              <Chip label={service.code} size="small" color="primary" variant="outlined" sx={{ width: 'fit-content', fontFamily: 'monospace' }} />
+                              <Typography variant="body2" fontWeight={500}>
+                                {service.nameAr}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {service.nameEn}
+                              </Typography>
+                            </Stack>
                           );
                         })()}
                       </TableCell>
@@ -851,20 +902,20 @@ const ProviderContractView = () => {
                       </TableCell>
                       <TableCell align="center">
                         <Stack direction="row" spacing={1} justifyContent="center">
-                          
-                            <Tooltip title="تعديل السعر">
-                              <IconButton size="small" color="primary" onClick={() => handleOpenEditPricing(item)}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            
-                          
-                            <Tooltip title="حذف">
-                              <IconButton size="small" color="error" onClick={() => handleOpenDeletePricing(item)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            
+
+                          <Tooltip title="تعديل السعر">
+                            <IconButton size="small" color="primary" onClick={() => handleOpenEditPricing(item)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
+
+                          <Tooltip title="حذف">
+                            <IconButton size="small" color="error" onClick={() => handleOpenDeletePricing(item)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -1015,11 +1066,11 @@ const ProviderContractView = () => {
               renderOption={(props, option) => {
                 const { key, ...otherProps } = props;
                 return (
-                <li key={key} {...otherProps}>
-                  <Typography variant="body2" fontWeight={option.parentId ? 400 : 600}>
-                    {option.code} - {option.nameAr || option.name}
-                  </Typography>
-                </li>
+                  <li key={key} {...otherProps}>
+                    <Typography variant="body2" fontWeight={option.parentId ? 400 : 600}>
+                      {option.code} - {option.nameAr || option.name}
+                    </Typography>
+                  </li>
                 );
               }}
               value={pricingForm.medicalCategoryId}
@@ -1043,7 +1094,11 @@ const ProviderContractView = () => {
                   ...pricingForm,
                   medicalServiceId: newValue,
                   basePrice: newValue?.basePrice ?? '',
-                  contractPrice: ''
+                  contractPrice:
+                    newValue?.basePrice && pricingForm.discountPercent
+                      ? (newValue.basePrice * (1 - parseFloat(pricingForm.discountPercent) / 100)).toFixed(2)
+                      : '',
+                  notes: ''
                 });
               }}
               disabled={!pricingForm.medicalCategoryId}
@@ -1058,21 +1113,30 @@ const ProviderContractView = () => {
               type="number"
               fullWidth
               value={pricingForm.basePrice}
-              onChange={(e) => setPricingForm({ ...pricingForm, basePrice: e.target.value })}
+              onChange={(e) => updatePriceFields({ basePrice: e.target.value })}
               required
-              helperText="السعر المرجعي للخدمة"
+              helperText="السعر المرجعي للخدمة (تغييره يؤثر على سعر العقد إذا وجد خصم)"
             />
 
             <TextField
-              label="سعر العقد (المتفق عليه)"
+              label="نسبة الخصم %"
+              type="number"
+              fullWidth
+              value={pricingForm.discountPercent}
+              onChange={(e) => updatePriceFields({ discountPercent: e.target.value })}
+              helperText="سيتم تحديث سعر العقد تلقائياً بناءً على الخصم"
+            />
+
+            <TextField
+              label="سعر العقد (المتفق عليه) *"
               type="number"
               fullWidth
               value={pricingForm.contractPrice}
-              onChange={(e) => setPricingForm({ ...pricingForm, contractPrice: e.target.value })}
+              onChange={(e) => updatePriceFields({ contractPrice: e.target.value })}
               required
               helperText={
                 pricingForm.basePrice && pricingForm.contractPrice
-                  ? `نسبة الخصم: ${Math.round(((pricingForm.basePrice - pricingForm.contractPrice) / pricingForm.basePrice) * 100)}%`
+                  ? `القيمة المخفضة: ${formatCurrency(pricingForm.basePrice - pricingForm.contractPrice)}`
                   : ''
               }
             />
@@ -1138,11 +1202,11 @@ const ProviderContractView = () => {
               renderOption={(props, option) => {
                 const { key, ...otherProps } = props;
                 return (
-                <li key={key} {...otherProps}>
-                  <Typography variant="body2" fontWeight={option.parentId ? 400 : 600}>
-                    {option.code} - {option.nameAr || option.name}
-                  </Typography>
-                </li>
+                  <li key={key} {...otherProps}>
+                    <Typography variant="body2" fontWeight={option.parentId ? 400 : 600}>
+                      {option.code} - {option.nameAr || option.name}
+                    </Typography>
+                  </li>
                 );
               }}
               value={pricingForm.medicalCategoryId}
@@ -1162,20 +1226,28 @@ const ProviderContractView = () => {
               type="number"
               fullWidth
               value={pricingForm.basePrice}
-              onChange={(e) => setPricingForm({ ...pricingForm, basePrice: e.target.value })}
+              onChange={(e) => updatePriceFields({ basePrice: e.target.value })}
               required
             />
 
             <TextField
-              label="سعر العقد الجديد"
+              label="نسبة الخصم الجديدة %"
+              type="number"
+              fullWidth
+              value={pricingForm.discountPercent}
+              onChange={(e) => updatePriceFields({ discountPercent: e.target.value })}
+            />
+
+            <TextField
+              label="سعر العقد الجديد *"
               type="number"
               fullWidth
               value={pricingForm.contractPrice}
-              onChange={(e) => setPricingForm({ ...pricingForm, contractPrice: e.target.value })}
+              onChange={(e) => updatePriceFields({ contractPrice: e.target.value })}
               required
               helperText={
                 pricingForm.basePrice && pricingForm.contractPrice
-                  ? `نسبة الخصم الجديدة: ${Math.round(((pricingForm.basePrice - pricingForm.contractPrice) / pricingForm.basePrice) * 100)}%`
+                  ? `القيمة المخفضة: ${formatCurrency(pricingForm.basePrice - pricingForm.contractPrice)}`
                   : ''
               }
             />

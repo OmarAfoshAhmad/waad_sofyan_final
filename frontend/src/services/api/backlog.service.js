@@ -42,6 +42,19 @@ export const backlogService = {
         } catch (error) {
             throw handleBacklogErrors(error);
         }
+    },
+
+    /**
+     * Cancel (soft-delete) a backlog claim
+     * @param {number} claimId - Claim ID
+     */
+    deleteManual: async (claimId) => {
+        try {
+            const response = await axiosClient.delete(`${BASE_URL}/${claimId}`);
+            return unwrap(response);
+        } catch (error) {
+            throw handleBacklogErrors(error);
+        }
     }
 };
 

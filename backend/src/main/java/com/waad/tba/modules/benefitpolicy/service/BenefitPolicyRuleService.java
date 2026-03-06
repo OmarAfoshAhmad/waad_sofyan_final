@@ -37,6 +37,7 @@ public class BenefitPolicyRuleService {
     private final BenefitPolicyRepository policyRepository;
     private final MedicalCategoryRepository categoryRepository;
     private final MedicalServiceRepository serviceRepository;
+    private final jakarta.persistence.EntityManager em;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -182,6 +183,55 @@ public class BenefitPolicyRuleService {
         return findCoverageForService(policyId, serviceId)
                 .map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
                 .orElse(0);
+    }
+
+    /**
+     * Check if a member has exceeded usage limits for a service
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long memberId, Integer year) {
+        Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId);
+        if (ruleOpt.isEmpty()) {
+            return java.util.Map.of("covered", false);
+        }
+        
+        BenefitPolicyRuleResponseDto rule = ruleOpt.get();
+        if (rule.getTimesLimit() == null && rule.getAmountLimit() == null) {
+            return java.util.Map.of("covered", true, "hasLimit", false);
+        }
+
+        // Query usage from DB
+        int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
+        String q = "SELECT SUM(cl.quantity), SUM(cl.totalPrice) FROM ClaimLine cl " +
+                   "JOIN cl.claim c " +
+                   "WHERE c.member.id = :memberId " +
+                   "AND cl.medicalService.id = :serviceId " +
+                   "AND c.status NOT IN ('REJECTED', 'DRAFT') " +
+                   "AND EXTRACT(YEAR FROM c.serviceDate) = :year";
+
+        Object[] result = (Object[]) em.createQuery(q)
+                .setParameter("memberId", memberId)
+                .setParameter("serviceId", serviceId)
+                .setParameter("year", targetYear)
+                .getSingleResult();
+
+        long usedCount = result[0] != null ? ((Number) result[0]).longValue() : 0;
+        java.math.BigDecimal usedAmount = result[1] != null ? (java.math.BigDecimal) result[1] : java.math.BigDecimal.ZERO;
+
+        boolean timesExceeded = rule.getTimesLimit() != null && usedCount >= rule.getTimesLimit();
+        boolean amountExceeded = rule.getAmountLimit() != null && usedAmount.compareTo(rule.getAmountLimit()) >= 0;
+
+        return java.util.Map.of(
+            "covered", true,
+            "hasLimit", true,
+            "timesLimit", rule.getTimesLimit(),
+            "amountLimit", rule.getAmountLimit(),
+            "usedCount", usedCount,
+            "usedAmount", usedAmount,
+            "exceeded", timesExceeded || amountExceeded,
+            "timesExceeded", timesExceeded,
+            "amountExceeded", amountExceeded
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

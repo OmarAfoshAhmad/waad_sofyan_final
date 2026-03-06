@@ -146,6 +146,17 @@ public class ClaimLine {
     @Column(name = "amount_limit_snapshot", precision = 15, scale = 2)
     private BigDecimal amountLimitSnapshot;
 
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    @Column(name = "rejected")
+    @Builder.Default
+    private Boolean rejected = false;
+
+    @Column(name = "refused_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal refusedAmount = BigDecimal.ZERO;
+
     // ==================== LIFECYCLE HOOKS ====================
 
     @PrePersist
