@@ -385,13 +385,4 @@ public class ClaimResponse {
         private String uploadedBy;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BACKLOG SUPPORT (READ-ONLY)
-    // ═══════════════════════════════════════════════════════════════════════════
-    private String claimSource;
-    private String claimSourceLabel;
-    private Boolean isBacklog;
-    private String legacyReferenceNumber;
-    private LocalDateTime enteredAt;
-    private String enteredBy;
 }

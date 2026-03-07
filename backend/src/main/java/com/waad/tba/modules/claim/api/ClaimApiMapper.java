@@ -267,14 +267,6 @@ public class ClaimApiMapper {
                 .createdBy(dto.getCreatedBy())
                 .updatedBy(dto.getUpdatedBy())
                 
-                // Backlog Support
-                .claimSource(dto.getClaimSource())
-                .claimSourceLabel(dto.getClaimSourceLabel())
-                .isBacklog(dto.getIsBacklog())
-                .legacyReferenceNumber(dto.getLegacyReferenceNumber())
-                .enteredAt(dto.getEnteredAt())
-                .enteredBy(dto.getEnteredBy())
-                
                 .build();
     }
     

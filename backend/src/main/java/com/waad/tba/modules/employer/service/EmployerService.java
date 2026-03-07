@@ -46,6 +46,7 @@ public class EmployerService {
 
     private final EmployerRepository employerRepository;
     private final EmployerMapper mapper;
+    private final com.waad.tba.modules.provider.repository.ProviderRepository providerRepository;
 
     /**
      * Get all active, non-archived employers (paginated)
@@ -100,8 +101,41 @@ public class EmployerService {
     /**
      * Get employer selectors (for dropdowns) - excludes archived
      * Non-paginated as dropdowns typically need all options
+     * 
+     * ROLE ISOLATION (2026-03-06):
+     * If current user is PROVIDER_STAFF, filter by their allowed employers.
      */
     public List<EmployerSelectorDto> getSelectors() {
+        Object principal = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        
+        if (principal instanceof com.waad.tba.modules.rbac.entity.User user) {
+            String role = user.getUserType();
+            Long providerId = user.getProviderId();
+            
+            if ("PROVIDER_STAFF".equals(role) && providerId != null) {
+                log.debug("[EmployerService] Filtering selectors for PROVIDER_STAFF user: {}, Provider: {}", user.getUsername(), providerId);
+                
+                com.waad.tba.modules.provider.entity.Provider provider = providerRepository.findById(providerId)
+                    .orElse(null);
+                
+                if (provider != null) {
+                    // If provider allows all, return all active
+                    if (Boolean.TRUE.equals(provider.getAllowAllEmployers())) {
+                        return employerRepository.findByActiveTrue().stream().map(mapper::toSelector).toList();
+                    }
+                    
+                    // Otherwise, return only authorized ones
+                    return provider.getAllowedEmployers().stream()
+                        .filter(pae -> Boolean.TRUE.equals(pae.getActive()) && pae.getEmployer() != null)
+                        .map(pae -> mapper.toSelector(pae.getEmployer()))
+                        .toList();
+                }
+                
+                // If provider not found, return empty list (defensive security)
+                return List.of();
+            }
+        }
+        
         return employerRepository.findByActiveTrue()
                 .stream()
                 .map(mapper::toSelector)

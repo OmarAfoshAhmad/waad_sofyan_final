@@ -99,7 +99,24 @@ file:
   storage:
     type: ${FILE_STORAGE_TYPE:local}
     local:
-      base-path: ${FILE_STORAGE_PATH:./uploads}
+      base-dir: ${FILE_STORAGE_LOCAL_BASE_DIR:./storage/uploads}
+    s3:
+      region: ${AWS_REGION:me-south-1}
+      bucket-name: ${AWS_S3_BUCKET:waad-medical-documents}
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+
+# ═══════════════════════════════════════════════════════════
+# WAAD FEATURE FLAGS (Phase 10)
+# ═══════════════════════════════════════════════════════════
+waad:
+  features:
+    # false = Batches ONLY (Current Requirement 2026-03-06)
+    provider-portal-enabled: ${WAAD_FEATURE_PROVIDER_PORTAL:false}
+    # false = Direct claim creation via VISIT is disabled
+    direct-claim-submission-enabled: ${WAAD_FEATURE_DIRECT_CLAIMS:false}
+    # Always true as it is our primary source
+    batch-claims-enabled: true
     max-size:
       document: ${MAX_DOCUMENT_SIZE:10485760}
       image: ${MAX_IMAGE_SIZE:52428800}

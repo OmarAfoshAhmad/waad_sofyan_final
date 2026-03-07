@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * ClaimMapper (CANONICAL REBUILD 2026-01-16)
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
  * Enforces architectural laws for financial consistency.
  */
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class ClaimMapper {
 
@@ -49,8 +51,6 @@ public class ClaimMapper {
                 .diagnosisDescription(dto.getDiagnosisDescription())
                 .doctorName(dto.getDoctorName())
                 .status(ClaimStatus.DRAFT)
-                .claimSource(ClaimSource.NORMAL)
-                .isBacklog(false)
                 .preAuthorization(preAuth)
                 .build();
 
@@ -65,8 +65,16 @@ public class ClaimMapper {
             // Resolve contract price
             EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
                     provider.getId(), medicalService.getCode(), dto.getServiceDate());
-            BigDecimal unitPrice = priceResponse.isHasContract() ? priceResponse.getContractPrice()
-                    : medicalService.getBasePrice();
+
+            BigDecimal unitPrice;
+            if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
+                unitPrice = priceResponse.getContractPrice();
+            } else {
+                // POLICY: Use base price as fallback for DRAFT claims, but log as warning
+                unitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice() : BigDecimal.ZERO;
+                log.warn("⚠️ [NO_CONTRACT] No contract price for service '{}' (provider={}, date={}). Using base price: {}. Review required.",
+                        medicalService.getCode(), provider.getId(), dto.getServiceDate(), unitPrice);
+            }
 
             // Resolve coverage snapshot
             var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForService(claim.getMember(),
@@ -176,8 +184,7 @@ public class ClaimMapper {
                     .build();
 
             newLines.add(line);
-            
-            totalRequestedAmount = totalRequestedAmount.add(lineTotal).add(lineRefused);
+            totalRequestedAmount = totalRequestedAmount.add(lineTotal);
             totalRefusedAmount = totalRefusedAmount.add(lineRefused);
             totalApprovedAmount = totalApprovedAmount.add(lineApproved);
             totalPatientShare = totalPatientShare.add(linePatientShare);
@@ -186,14 +193,6 @@ public class ClaimMapper {
         claim.getLines().clear();
         newLines.forEach(claim::addLine);
         claim.setRequestedAmount(totalRequestedAmount);
-        
-        // For backlog claims, we update the processed amounts immediately
-        if (Boolean.TRUE.equals(claim.getIsBacklog())) {
-            claim.setApprovedAmount(totalApprovedAmount);
-            claim.setRefusedAmount(totalRefusedAmount);
-            claim.setPatientCoPay(totalPatientShare);
-            claim.setDifferenceAmount(totalRequestedAmount.subtract(totalApprovedAmount));
-        }
     }
 
     public void updateEntityFromDto(Claim claim, ClaimUpdateDto dto, PreAuthorization preAuth) {
@@ -282,11 +281,6 @@ public class ClaimMapper {
                 .businessDaysTaken(claim.getBusinessDaysTaken())
                 .slaDaysConfigured(claim.getSlaDaysConfigured())
                 .slaStatus(calculateSlaStatus(claim))
-                .claimSource(claim.getClaimSource() != null ? claim.getClaimSource().name() : null)
-                .isBacklog(claim.getIsBacklog())
-                .legacyReferenceNumber(claim.getLegacyReferenceNumber())
-                .enteredAt(claim.getEnteredAt())
-                .enteredBy(claim.getEnteredBy())
                 .build();
 
         if (claim.getVisit() != null) {

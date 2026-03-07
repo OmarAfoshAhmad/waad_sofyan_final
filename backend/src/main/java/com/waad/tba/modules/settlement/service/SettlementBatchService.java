@@ -325,8 +325,7 @@ public class SettlementBatchService {
                     .claimNumber("CLM-" + item.getClaimId())
                     .memberName(memberName)
                     .serviceDate(claim != null ? claim.getServiceDate() : null)
-                    .approvedAmount(item.getNetAmountSnapshot() != null ? item.getNetAmountSnapshot()
-                            : (item.getClaimAmount() != null ? item.getClaimAmount() : BigDecimal.ZERO))
+                    .approvedAmount(item.getNetAmountSnapshot() != null ? item.getNetAmountSnapshot() : BigDecimal.ZERO)
                     .claimStatus(claim != null && claim.getStatus() != null ? claim.getStatus().name() : "BATCHED")
                     .build();
         }).toList();

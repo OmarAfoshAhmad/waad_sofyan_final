@@ -88,19 +88,17 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
             "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
             "AND (:providerId IS NULL OR c.providerId = :providerId) " +
             "AND (:status IS NULL OR c.status = :status) " +
-            "AND (:claimSource IS NULL OR c.claimSource = :claimSource) " +
             "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
             "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
             "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
             "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
             "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-            "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:status IS NULL OR c.status = :status) AND (:claimSource IS NULL OR c.claimSource = :claimSource) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+            "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Claim> searchPagedWithFilters(
             @Param("keyword") String keyword,
             @Param("employerId") Long employerId,
             @Param("providerId") Long providerId,
             @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
-            @Param("claimSource") com.waad.tba.modules.claim.entity.ClaimSource claimSource,
             @Param("dateFrom") java.time.LocalDate dateFrom,
             @Param("dateTo") java.time.LocalDate dateTo,
             Pageable pageable);
@@ -714,6 +712,68 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
        List<Claim> findByVisitId(@Param("visitId") Long visitId);
 
        /**
+        * Calculate total deductible applied for a member in a given year.
+        * REPLACES: findByMemberId() + in-memory filter (N+1 performance fix)
+        * 
+        * @param memberId Member ID
+        * @param year     Calendar year (e.g., 2026)
+        * @param statuses Valid statuses to include
+        * @return Sum of deductibleApplied for the year
+        */
+       @Query("SELECT COALESCE(SUM(c.deductibleApplied), 0) FROM Claim c " +
+                     "WHERE c.member.id = :memberId " +
+                     "AND YEAR(c.createdAt) = :year " +
+                     "AND c.status IN :statuses " +
+                     "AND c.id <> :excludeClaimId")
+       java.math.BigDecimal sumDeductibleForYear(
+                     @Param("memberId") Long memberId,
+                     @Param("year") int year,
+                     @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
+                     @Param("excludeClaimId") Long excludeClaimId);
+
+       /**
+        * Calculate total patient out-of-pocket for a member in a given year.
+        */
+       @Query("SELECT COALESCE(SUM(c.patientCoPay), 0) FROM Claim c " +
+                     "WHERE c.member.id = :memberId " +
+                     "AND YEAR(c.createdAt) = :year " +
+                     "AND c.status IN :statuses " +
+                     "AND c.id <> :excludeClaimId")
+       java.math.BigDecimal sumPatientCopayForYear(
+                     @Param("memberId") Long memberId,
+                     @Param("year") int year,
+                     @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
+                     @Param("excludeClaimId") Long excludeClaimId);
+
+       /**
+        * Calculate total approved amount for a member in a given year.
+        * Used for per-member limit validation.
+        */
+       @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
+                     "WHERE c.member.id = :memberId " +
+                     "AND YEAR(c.serviceDate) = :year " +
+                     "AND c.status IN :statuses")
+       java.math.BigDecimal sumApprovedAmountByMemberAndYear(
+                     @Param("memberId") Long memberId,
+                     @Param("year") int year,
+                     @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+
+       /**
+        * Count service usage for a member in a given year.
+        */
+       @Query("SELECT COUNT(cl) FROM ClaimLine cl " +
+                     "WHERE cl.claim.member.id = :memberId " +
+                     "AND cl.medicalService.id = :serviceId " +
+                     "AND YEAR(cl.claim.serviceDate) = :year " +
+                     "AND cl.claim.status IN :statuses " +
+                     "AND cl.rejected = false")
+       long countServiceUsageByMemberAndYear(
+                     @Param("memberId") Long memberId,
+                     @Param("serviceId") Long serviceId,
+                     @Param("year") int year,
+                     @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+
+       /**
         * Find claim by claim number (unique identifier).
         */
        @Query("SELECT c FROM Claim c " +
@@ -1085,7 +1145,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                      "AND c.providerId IN :providerIds " +
                      "AND (:employerId IS NULL OR m.employer.id = :employerId) " +
                      "AND (:status IS NULL OR c.status = :status) " +
-                     "AND (:claimSource IS NULL OR c.claimSource = :claimSource) " +
                      "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                      "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
                      "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
@@ -1107,7 +1166,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
             @Param("providerIds") List<Long> providerIds,
             @Param("employerId") Long employerId,
             @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
-            @Param("claimSource") com.waad.tba.modules.claim.entity.ClaimSource claimSource,
             @Param("dateFrom") java.time.LocalDate dateFrom,
             @Param("dateTo") java.time.LocalDate dateTo,
             Pageable pageable);

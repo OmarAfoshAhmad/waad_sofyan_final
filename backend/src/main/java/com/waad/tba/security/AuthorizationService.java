@@ -184,6 +184,27 @@ public class AuthorizationService {
         return "MEDICAL_REVIEWER".equals(user.getUserType());
     }
 
+    /**
+     * Check if user has DATA_ENTRY role.
+     * 
+     * @param user User to check
+     * @return true if user is DATA_ENTRY
+     */
+    public boolean isDataEntry(User user) {
+        if (user == null || user.getUserType() == null) {
+            return false;
+        }
+        return "DATA_ENTRY".equals(user.getUserType());
+    }
+
+    /**
+     * Check if user is internal staff (Admin, Reviewer, or Data Entry).
+     * These users typically bypass provider-facing feature restrictions.
+     */
+    public boolean isInternalStaff(User user) {
+        return isSuperAdmin(user) || isInsuranceAdmin(user) || isReviewer(user) || isDataEntry(user);
+    }
+
     // =============================================================================================
     // DATA-LEVEL ACCESS CONTROL METHODS
     // =============================================================================================

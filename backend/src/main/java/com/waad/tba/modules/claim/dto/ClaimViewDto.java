@@ -256,13 +256,4 @@ public class ClaimViewDto {
         return patientCoPay != null && netProviderAmount != null;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BACKLOG SUPPORT (2026-03-02)
-    // ═══════════════════════════════════════════════════════════════════════════
-    private String claimSource;
-    private String claimSourceLabel;
-    private Boolean isBacklog;
-    private String legacyReferenceNumber;
-    private LocalDateTime enteredAt;
-    private String enteredBy;
 }

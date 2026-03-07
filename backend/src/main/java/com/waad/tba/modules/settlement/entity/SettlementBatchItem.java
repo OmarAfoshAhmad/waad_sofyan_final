@@ -40,23 +40,11 @@ public class SettlementBatchItem {
     private Long settlementBatchId;
 
     /**
-     * Legacy column kept in old schema versions (must match settlementBatchId).
-     */
-    @Column(name = "batch_id", nullable = false)
-    private Long batchId;
-
-    /**
      * Claim reference
      * Unique constraint ensures each claim can only be in ONE batch
      */
     @Column(name = "claim_id", nullable = false, unique = true)
     private Long claimId;
-
-    /**
-     * Legacy amount column required by old schema versions.
-     */
-    @Column(name = "claim_amount", nullable = false, precision = 12, scale = 2)
-    private BigDecimal claimAmount;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // AMOUNT SNAPSHOTS (captured when added to batch)
@@ -91,15 +79,6 @@ public class SettlementBatchItem {
 
     @PrePersist
     protected void onCreate() {
-        if (batchId == null && settlementBatchId != null) {
-            batchId = settlementBatchId;
-        }
-        if (settlementBatchId == null && batchId != null) {
-            settlementBatchId = batchId;
-        }
-        if (claimAmount == null) {
-            claimAmount = grossAmountSnapshot != null ? grossAmountSnapshot : BigDecimal.ZERO;
-        }
         createdAt = LocalDateTime.now();
     }
 
@@ -126,9 +105,7 @@ public class SettlementBatchItem {
         
         return SettlementBatchItem.builder()
                 .settlementBatchId(batchId)
-            .batchId(batchId)
                 .claimId(claimId)
-                .claimAmount(grossAmount != null ? grossAmount : BigDecimal.ZERO)
                 .grossAmountSnapshot(grossAmount != null ? grossAmount : BigDecimal.ZERO)
                 .netAmountSnapshot(netAmount != null ? netAmount : BigDecimal.ZERO)
                 .patientShareSnapshot(patientShare != null ? patientShare : BigDecimal.ZERO)

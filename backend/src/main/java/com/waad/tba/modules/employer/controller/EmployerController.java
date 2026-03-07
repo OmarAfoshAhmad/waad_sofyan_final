@@ -53,7 +53,7 @@ public class EmployerController {
     }
 
     @GetMapping({"selectors", "/selector"})
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> selectors() {
         List<EmployerSelectorDto> selectors = service.getSelectors();
         return ResponseEntity.ok(ApiResponse.success(selectors));

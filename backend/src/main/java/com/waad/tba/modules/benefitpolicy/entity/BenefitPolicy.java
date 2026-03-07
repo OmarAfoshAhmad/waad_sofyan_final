@@ -126,6 +126,16 @@ public class BenefitPolicy {
     private BigDecimal perFamilyLimit;
 
     /**
+     * Annual deductible amount per member.
+     * Amount member must pay out-of-pocket before insurance kicks in.
+     * Default is ZERO (no deductible).
+     */
+    @DecimalMin(value = "0.00", message = "Annual deductible must be >= 0")
+    @Column(name = "annual_deductible", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal annualDeductible = BigDecimal.ZERO;
+
+    /**
      * Default waiting period in days (policy-level default).
      * Individual BenefitPolicyRule can override this per service/category.
      * If null or 0, no waiting period applies.

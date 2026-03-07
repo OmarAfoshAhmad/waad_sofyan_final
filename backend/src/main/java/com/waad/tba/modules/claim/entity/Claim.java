@@ -293,32 +293,6 @@ public class Claim {
     @Column(name = "sla_days_configured")
     private Integer slaDaysConfigured;
 
-    // ========== BACKLOG SUPPORT FIELDS (2026-03-03) ==========
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "claim_source", length = 30)
-    @Builder.Default
-    private ClaimSource claimSource = ClaimSource.NORMAL;
-
-    @Column(name = "legacy_reference_number", length = 100)
-    private String legacyReferenceNumber;
-
-    @Column(name = "is_backlog", nullable = false)
-    @Builder.Default
-    private Boolean isBacklog = false;
-
-    @Column(name = "entered_at")
-    private LocalDateTime enteredAt;
-
-    @Column(name = "entered_by", length = 255)
-    private String enteredBy;
-
-    @Column(name = "service_count")
-    private Integer serviceCount;
-
-    @Column(name = "attachments_count")
-    private Integer attachmentsCount;
-
     @Column(name = "active", nullable = false)
     @Builder.Default
     private Boolean active = true;
@@ -443,12 +417,6 @@ public class Claim {
         } else {
             differenceAmount = null;
         }
-
-        // Calculate service count
-        serviceCount = (lines != null) ? lines.size() : 0;
-
-        // Calculate attachments count
-        attachmentsCount = (attachments != null) ? attachments.size() : 0;
     }
 
     // Helper methods for bidirectional relationships
@@ -521,5 +489,28 @@ public class Claim {
     public BigDecimal getNetPayableAmount() {
         return netProviderAmount != null ? netProviderAmount : 
                (approvedAmount != null ? approvedAmount : BigDecimal.ZERO);
+    }
+    /**
+     * Get number of service lines (Transient)
+     */
+    @Transient
+    public Integer getServiceCount() {
+        return lines != null ? lines.size() : 0;
+    }
+
+    /**
+     * Get number of attachments (Transient)
+     */
+    @Transient
+    public Integer getAttachmentsCount() {
+        return attachments != null ? attachments.size() : 0;
+    }
+
+    /**
+     * Legacy backlog check (Always false for unified workflow)
+     */
+    @Transient
+    public Boolean getIsBacklog() {
+        return false;
     }
 }

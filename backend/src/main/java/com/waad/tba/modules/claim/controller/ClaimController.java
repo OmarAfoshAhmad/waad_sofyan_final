@@ -32,8 +32,8 @@ import com.waad.tba.modules.claim.dto.ClaimViewDto;
 import com.waad.tba.modules.claim.dto.CostBreakdownDto;
 import com.waad.tba.modules.claim.dto.FinancialSummaryDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
-import com.waad.tba.modules.claim.entity.ClaimSource;
 import com.waad.tba.modules.claim.service.ClaimService;
+import com.waad.tba.common.guard.FeatureGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -74,6 +74,7 @@ public class ClaimController {
 
     private final ClaimService claimService;
     private final ClaimApiMapper apiMapper;
+    private final FeatureGuard featureGuard;
 
     /**
      * Allowed sort fields for claims list endpoint
@@ -92,6 +93,9 @@ public class ClaimController {
                  apiRequest.getVisitId(), 
                  apiRequest.getLines() != null ? apiRequest.getLines().size() : 0);
         
+        // 🔒 FEATURE-FLAG-GUARD (Phase 10)
+        featureGuard.requireProviderPortal();
+
         try {
             // Convert API v1 request to internal DTO
             ClaimViewDto claim = claimService.createClaim(apiMapper.toCreateDto(apiRequest));
@@ -139,15 +143,24 @@ public class ClaimController {
      */
     @PutMapping("/{id:\\d+}/data")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
-    @Operation(summary = "Update claim data", description = "Update claim data fields. Allowed only in DRAFT/NEEDS_CORRECTION status.")
+    @Operation(summary = "Update claim medical/financial data", description = "Updates pricing and medical codes for a DRAFT claim.")
     public ResponseEntity<ApiResponse<ClaimResponse>> updateClaimData(
             @PathVariable Long id,
             @Valid @RequestBody UpdateClaimDataRequest apiRequest) {
+        log.info("📝 Updating claim data {}", id);
         
-        ClaimViewDto claim = claimService.updateClaimData(id, apiMapper.toDataUpdateDto(apiRequest));
-        ClaimResponse response = apiMapper.toResponse(claim);
-        
-        return ResponseEntity.ok(ApiResponse.success("Claim data updated successfully", response));
+        // 🔒 FEATURE-FLAG-GUARD (Phase 10)
+        featureGuard.requireProviderPortal();
+
+        try {
+            ClaimViewDto claim = claimService.updateClaimData(id, apiMapper.toDataUpdateDto(apiRequest));
+            ClaimResponse response = apiMapper.toResponse(claim);
+            
+            return ResponseEntity.ok(ApiResponse.success("Claim data updated successfully", response));
+        } catch (Exception e) {
+            log.error("❌ [CLAIM-API] Failed to update claim data: id={}, error={}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**
@@ -163,11 +176,20 @@ public class ClaimController {
     public ResponseEntity<ApiResponse<ClaimResponse>> reviewClaim(
             @PathVariable Long id,
             @Valid @RequestBody ReviewClaimRequest apiRequest) {
-        
-        ClaimViewDto claim = claimService.reviewClaim(id, apiMapper.toReviewDto(apiRequest));
-        ClaimResponse response = apiMapper.toResponse(claim);
-        
-        return ResponseEntity.ok(ApiResponse.success("Claim reviewed successfully", response));
+        log.info("🧐 Reviewing claim {}", id);
+
+        // NOTE: Review is an INTERNAL operation by MEDICAL_REVIEWER/SUPER_ADMIN.
+        // It is NOT gated by feature flags (those only affect provider-facing submission channels).
+
+        try {
+            ClaimViewDto claim = claimService.reviewClaim(id, apiMapper.toReviewDto(apiRequest));
+            ClaimResponse response = apiMapper.toResponse(claim);
+            
+            return ResponseEntity.ok(ApiResponse.success("Claim reviewed successfully", response));
+        } catch (Exception e) {
+            log.error("❌ [CLAIM-API] Failed to review claim: id={}, error={}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**
@@ -178,13 +200,22 @@ public class ClaimController {
      */
     @PostMapping("/{id:\\d+}/submit")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
-    @Operation(summary = "Submit claim", description = "Submit claim for review. Allowed from DRAFT or NEEDS_CORRECTION status.")
+    @Operation(summary = "Submit claim", description = "Submit a DRAFT claim for review. Transitions state to SUBMITTED.")
     public ResponseEntity<ApiResponse<ClaimResponse>> submitClaim(@PathVariable Long id) {
+        log.info("🛫 Submitting claim {}", id);
         
-        ClaimViewDto claim = claimService.submitClaim(id);
-        ClaimResponse response = apiMapper.toResponse(claim);
-        
-        return ResponseEntity.ok(ApiResponse.success("Claim submitted successfully", response));
+        // 🔒 FEATURE-FLAG-GUARD (Phase 10)
+        featureGuard.requireDirectClaimSubmission();
+
+        try {
+            ClaimViewDto claim = claimService.submitClaim(id);
+            ClaimResponse response = apiMapper.toResponse(claim);
+            
+            return ResponseEntity.ok(ApiResponse.success("Claim submitted successfully", response));
+        } catch (Exception e) {
+            log.error("❌ [CLAIM-API] Failed to submit claim: id={}, error={}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     @GetMapping("/{id:\\d+}")
@@ -203,7 +234,6 @@ public class ClaimController {
             @RequestParam(required = false) Long employerId,
             @RequestParam(required = false) Long providerId,
             @RequestParam(required = false) ClaimStatus status,
-            @RequestParam(required = false) ClaimSource claimSource,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
             @RequestParam(defaultValue = "1") int page,
@@ -219,7 +249,7 @@ public class ClaimController {
         }
         
         Page<ClaimViewDto> claimsPage = claimService.listClaims(
-                employerId, providerId, status, claimSource, dateFrom, dateTo, Math.max(0, page - 1), size, sortBy, sortDir, search);
+                employerId, providerId, status, dateFrom, dateTo, Math.max(0, page - 1), size, sortBy, sortDir, search);
 
         ClaimListResponse response = apiMapper.toListResponse(claimsPage);
 
@@ -367,14 +397,24 @@ public class ClaimController {
      * - Member can then edit and resubmit
      */
     @PostMapping("/{id:\\d+}/return-for-info")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
-    @Operation(summary = "Return for info", description = "Return a claim for additional information. Member can then edit and resubmit.")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'INSURANCE_ADMIN')")
+    @Operation(summary = "Return claim for info", description = "Transitions claim from UNDER_REVIEW back to NEEDS_CORRECTION.")
     public ResponseEntity<ApiResponse<ClaimResponse>> returnForInfo(
             @PathVariable Long id,
             @Valid @RequestBody ReturnForInfoClaimRequest apiRequest) {
-        ClaimViewDto claim = claimService.returnForInfo(id, apiMapper.toReturnForInfoDto(apiRequest));
-        ClaimResponse response = apiMapper.toResponse(claim);
-        return ResponseEntity.ok(ApiResponse.success("تم إعادة المطالبة لطلب معلومات إضافية", response));
+        log.info("↩️ Returning claim {} for info", id);
+        
+        // 🔒 FEATURE-FLAG-GUARD (Phase 10)
+        featureGuard.requireProviderPortal();
+
+        try {
+            ClaimViewDto claim = claimService.returnForInfo(id, apiMapper.toReturnForInfoDto(apiRequest));
+            ClaimResponse response = apiMapper.toResponse(claim);
+            return ResponseEntity.ok(ApiResponse.success("تم إعادة المطالبة لطلب معلومات إضافية", response));
+        } catch (Exception e) {
+            log.error("❌ [CLAIM-API] Failed to return claim for info: id={}, error={}", id, e.getMessage(), e);
+            throw e;
+        }
     }
 
     /**

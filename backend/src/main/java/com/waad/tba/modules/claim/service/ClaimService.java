@@ -36,7 +36,6 @@ import com.waad.tba.modules.claim.dto.CostBreakdownDto;
 import com.waad.tba.modules.claim.dto.FinancialSummaryDto;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
-import com.waad.tba.modules.claim.entity.ClaimSource;
 import com.waad.tba.modules.claim.entity.ClaimType;
 import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -145,6 +144,9 @@ public class ClaimService {
 
     // PHASE NEXT (2026-02-12): Medical Reviewer Isolation
     private final ReviewerProviderIsolationService reviewerIsolationService;
+
+    // Phase 10 (2026-03-06): Provider-Employer Security Hardening
+    private final com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
 
     /**
      * Search claims with explicit employer filtering.
@@ -268,6 +270,25 @@ public class ClaimService {
 
         Provider provider = providerRepository.findById(visit.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", "id", visit.getProviderId()));
+
+        // SECURITY: Verify provider is authorized for this member's employer
+        // (Prevent cross-tenant claim creation)
+        if (visit.getMember() != null && visit.getMember().getEmployer() != null) {
+            // Bypass check if provider allows all employers (global network)
+            boolean isGlobalProvider = Boolean.TRUE.equals(provider.getAllowAllEmployers());
+            
+            boolean isAuthorized = isGlobalProvider || providerAllowedEmployerRepository.hasActiveAccessToEmployer(
+                    provider.getId(), visit.getMember().getEmployer().getId());
+
+            if (!isAuthorized) {
+                log.error("🛑 SECURITY ALERT: Provider {} attempted to create claim for UNAUTHORIZED employer {} (Member: {})",
+                        provider.getId(), visit.getMember().getEmployer().getId(), visit.getMember().getId());
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + visit.getMember().getEmployer().getName() + ")."
+                );
+            }
+        }
 
         PreAuthorization preAuth = null;
         if (dto.getPreAuthorizationId() != null) {
@@ -776,7 +797,7 @@ public class ClaimService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ClaimViewDto> listClaims(Long employerId, Long providerId, ClaimStatus status, ClaimSource claimSource, LocalDate dateFrom,
+    public Page<ClaimViewDto> listClaims(Long employerId, Long providerId, ClaimStatus status, LocalDate dateFrom,
             LocalDate dateTo, int page, int size, String sortBy, String sortDir, String search) {
         log.debug(
                 "📋 Listing claims with pagination. employerId={}, providerId={}, status={}, page={}, size={}, sortBy={}, sortDir={}, search={}",
@@ -817,13 +838,13 @@ public class ClaimService {
                     currentUser.getId(), allowedProviderIds.size());
 
             claimsPage = claimRepository.searchPagedWithFiltersAndReviewerProviders(
-                    keyword, allowedProviderIds, employerId, status, claimSource, dateFrom, dateTo, pageable);
+                    keyword, allowedProviderIds, employerId, status, dateFrom, dateTo, pageable);
         } else {
             // Admin/SuperAdmin - see all claims (bypass isolation)
             log.debug("✅ [BYPASS] User {} bypasses reviewer isolation", currentUser.getId());
 
             claimsPage = claimRepository.searchPagedWithFilters(
-                    keyword, employerId, providerId, status, claimSource, dateFrom, dateTo, pageable);
+                    keyword, employerId, providerId, status, dateFrom, dateTo, pageable);
         }
 
         return claimsPage.map(claimMapper::toViewDto);

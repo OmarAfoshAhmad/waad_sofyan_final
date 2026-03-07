@@ -363,53 +363,40 @@ public class CostCalculationService {
     
     /**
      * Get the deductible amount already met by a member in the current policy period.
+     * PERFORMANCE: Now uses database-level aggregation to avoid N+1 queries.
      */
     private BigDecimal getDeductibleMetThisPeriod(Member member, Claim currentClaim) {
         if (member == null) {
             return BigDecimal.ZERO;
         }
         
-        // Calculate start of current policy period (assume annual, Jan 1)
-        LocalDate periodStart = LocalDate.now().withDayOfYear(1);
+        int year = LocalDate.now().getYear();
+        List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
+            com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
+            com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED
+        );
+        Long excludeId = currentClaim.getId() != null ? currentClaim.getId() : -1L;
         
-        // Sum deductibles from approved/settled claims in this period
-        BigDecimal totalDeductible = claimRepository.findByMemberIdAndStatusIn(
-            member.getId(), 
-            java.util.List.of(
-                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED
-            )
-        ).stream()
-            .filter(c -> c.getCreatedAt().toLocalDate().isAfter(periodStart.minusDays(1)))
-            .filter(c -> !c.getId().equals(currentClaim.getId())) // Exclude current claim
-            .map(this::extractDeductibleFromClaim)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
-        return totalDeductible;
+        return claimRepository.sumDeductibleForYear(member.getId(), year, validStatuses, excludeId);
     }
     
     /**
      * Get the total out-of-pocket amount spent by a member in the current policy period.
+     * (Calculated as sum of all patientCoPay fields in approved/settled claims)
      */
     private BigDecimal getOutOfPocketSpentThisPeriod(Member member, Claim currentClaim) {
         if (member == null) {
             return BigDecimal.ZERO;
         }
         
-        LocalDate periodStart = LocalDate.now().withDayOfYear(1);
+        int year = LocalDate.now().getYear();
+        List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
+            com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
+            com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED
+        );
+        Long excludeId = currentClaim.getId() != null ? currentClaim.getId() : -1L;
         
-        // Out-of-pocket = deductible + co-pays from all approved/settled claims
-        return claimRepository.findByMemberIdAndStatusIn(
-            member.getId(),
-            java.util.List.of(
-                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED
-            )
-        ).stream()
-            .filter(c -> c.getCreatedAt().toLocalDate().isAfter(periodStart.minusDays(1)))
-            .filter(c -> !c.getId().equals(currentClaim.getId()))
-            .map(this::extractPatientResponsibility)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return claimRepository.sumPatientCopayForYear(member.getId(), year, validStatuses, excludeId);
     }
     
     /**
@@ -439,52 +426,42 @@ public class CostCalculationService {
      * Extract total patient responsibility from a historical claim.
      * Patient responsibility = deductibleApplied + patientCoPay
      * 
+     * FIXED 2026-03-06: Included deductibleApplied in total responsibility and fixed null-logic.
+     * 
      * @param claim The historical claim
      * @return Total patient out-of-pocket for this claim
      */
     private BigDecimal extractPatientResponsibility(Claim claim) {
-        // Use actual recorded responsibility if available
-        if (claim.getPatientCoPay() != null) {
-            return claim.getPatientCoPay();
+        BigDecimal deductible = claim.getDeductibleApplied() != null ? claim.getDeductibleApplied() : BigDecimal.ZERO;
+        BigDecimal copay = claim.getPatientCoPay() != null ? claim.getPatientCoPay() : BigDecimal.ZERO;
+        
+        // If either field is explicitly set, use the sum as Single Source of Truth
+        if (claim.getDeductibleApplied() != null || claim.getPatientCoPay() != null) {
+            return deductible.add(copay);
         }
 
-        // Get deductible and copay from claim fields
-        BigDecimal deductible = claim.getDeductibleApplied();
-        BigDecimal copay = claim.getPatientCoPay();
-        
-        // Sum deductible + copay for total patient responsibility
-        BigDecimal total = BigDecimal.ZERO;
-        
-        if (deductible != null) {
-            total = total.add(deductible);
-        }
-        if (copay != null) {
-            total = total.add(copay);
+        // Legacy fallback: estimate from difference between requested and approved
+        BigDecimal requested = claim.getRequestedAmount();
+        BigDecimal approved = claim.getApprovedAmount();
+        if (requested != null && approved != null) {
+            BigDecimal diff = requested.subtract(approved).max(BigDecimal.ZERO);
+            log.warn("⚠️ Claim {} missing deductible/copay fields, estimated patient responsibility from diff: {}", 
+                claim.getId(), diff);
+            return diff;
         }
         
-        // If both are null, fall back to legacy calculation
-        if (deductible == null && copay == null) {
-            BigDecimal requested = claim.getRequestedAmount();
-            BigDecimal approved = claim.getApprovedAmount();
-            
-            if (requested != null && approved != null) {
-                total = requested.subtract(approved).max(BigDecimal.ZERO);
-                log.warn("⚠️ Claim {} missing deductible/copay fields, estimated patient responsibility from amounts: {}", 
-                    claim.getId(), total);
-            }
-        }
-        
-        return total;
+        return BigDecimal.ZERO;
     }
     
     /**
-     * Get annual deductible from benefit policy or use default.
-     * BenefitPolicy doesn't have a dedicated deductible field - return default.
-     * In production, this could be derived from perMemberLimit or added as a new field.
+     * Get annual deductible from benefit policy.
+     * FIXED 2026-03-06: Now correctly reads the annualDeductible field from BenefitPolicy.
      */
     private BigDecimal getAnnualDeductible(BenefitPolicy benefitPolicy) {
-        // Return default - in production, this would come from the policy
-        return DEFAULT_ANNUAL_DEDUCTIBLE;
+        if (benefitPolicy == null || benefitPolicy.getAnnualDeductible() == null) {
+            return DEFAULT_ANNUAL_DEDUCTIBLE;
+        }
+        return benefitPolicy.getAnnualDeductible();
     }
     
     /**
