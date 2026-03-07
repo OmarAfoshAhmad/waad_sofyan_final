@@ -36,7 +36,6 @@ import com.waad.tba.modules.claim.service.ClaimService;
 import com.waad.tba.common.guard.FeatureGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
@@ -231,16 +230,16 @@ public class ClaimController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "List claims", description = "List claims with pagination and optional filtering")
     public ResponseEntity<ApiResponse<ClaimListResponse>> listClaims(
-            @RequestParam(required = false) Long employerId,
-            @RequestParam(required = false) Long providerId,
-            @RequestParam(required = false) ClaimStatus status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir,
-            @RequestParam(required = false) String search) {
+            @RequestParam(name = "employerId", required = false) Long employerId,
+            @RequestParam(name = "providerId", required = false) Long providerId,
+            @RequestParam(name = "status", required = false) ClaimStatus status,
+            @RequestParam(name = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(name = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir,
+            @RequestParam(name = "search", required = false) String search) {
         
         // Validate and sanitize sortBy field to prevent PropertyReferenceException
         if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
@@ -266,7 +265,7 @@ public class ClaimController {
     @GetMapping("/count")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Long>> countClaims(
-            @RequestParam(required = false) Long employerId) {
+            @RequestParam(name = "employerId", required = false) Long employerId) {
         long count = claimService.countClaims(employerId);
         return ResponseEntity.ok(ApiResponse.success("Claims counted successfully", count));
     }
@@ -274,8 +273,8 @@ public class ClaimController {
     @GetMapping("/search")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<ClaimViewDto>>> search(
-            @RequestParam(required = false) Long employerId,
-            @RequestParam String query) {
+            @RequestParam(name = "employerId", required = false) Long employerId,
+            @RequestParam(name = "query") String query) {
         List<ClaimViewDto> results = claimService.search(employerId, query);
         return ResponseEntity.ok(ApiResponse.success(results));
     }
@@ -441,11 +440,11 @@ public class ClaimController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Claims pending review", description = "Get claims awaiting review (SUBMITTED or UNDER_REVIEW status)")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getPendingClaims(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir,
-            @RequestParam(required = false) Long providerId) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir,
+            @RequestParam(name = "providerId", required = false) Long providerId) {
 
         Page<ClaimViewDto> claimsPage = claimService.getPendingClaims(
                 Math.max(0, page - 1), size, sortBy, sortDir, providerId);
@@ -462,11 +461,11 @@ public class ClaimController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Claims ready for settlement", description = "Get approved claims awaiting settlement (APPROVED status)")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getApprovedClaims(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "reviewedAt") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir,
-            @RequestParam(required = false) Long providerId) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "reviewedAt") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir,
+            @RequestParam(name = "providerId", required = false) Long providerId) {
 
         Page<ClaimViewDto> claimsPage = claimService.getApprovedClaims(
                 Math.max(0, page - 1), size, sortBy, sortDir, providerId);
@@ -518,10 +517,10 @@ public class ClaimController {
     @Operation(summary = "Get claims by status", description = "Retrieve claims filtered by status with pagination")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getClaimsByStatus(
             @PathVariable ClaimStatus status,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir) {
 
         Page<ClaimViewDto> claimsPage = claimService.getClaimsByStatus(
                 status, Math.max(0, page - 1), size, sortBy, sortDir);
@@ -539,11 +538,11 @@ public class ClaimController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get financial summary", description = "Get aggregated financial KPIs for reports with filtering support.")
     public ResponseEntity<ApiResponse<FinancialSummaryDto>> getFinancialSummary(
-            @RequestParam(required = false) Long employerId,
-            @RequestParam(required = false) Long providerId,
-            @RequestParam(required = false) ClaimStatus status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+            @RequestParam(name = "employerId", required = false) Long employerId,
+            @RequestParam(name = "providerId", required = false) Long providerId,
+            @RequestParam(name = "status", required = false) ClaimStatus status,
+            @RequestParam(name = "dateFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(name = "dateTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
 
         FinancialSummaryDto summary = claimService.getFinancialSummary(employerId, providerId, status, dateFrom, dateTo);
         return ResponseEntity.ok(ApiResponse.success("Financial summary retrieved successfully", summary));

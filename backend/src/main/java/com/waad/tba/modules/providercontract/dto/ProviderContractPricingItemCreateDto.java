@@ -1,5 +1,7 @@
 package com.waad.tba.modules.providercontract.dto;
 
+import com.waad.tba.common.validation.ValidDateRange;
+import com.waad.tba.common.validation.ValidPricingRange;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +21,8 @@ import java.time.LocalDate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ValidPricingRange
+@ValidDateRange(startField = "effectiveFrom", endField = "effectiveTo")
 public class ProviderContractPricingItemCreateDto {
 
     /**
@@ -56,6 +60,7 @@ public class ProviderContractPricingItemCreateDto {
     /**
      * Currency code
      */
+    @Pattern(regexp = "^[A-Z]{3}$", message = "Currency must be a 3-letter ISO code (e.g. LYD, USD)")
     @Size(max = 3)
     @Builder.Default
     private String currency = "LYD";

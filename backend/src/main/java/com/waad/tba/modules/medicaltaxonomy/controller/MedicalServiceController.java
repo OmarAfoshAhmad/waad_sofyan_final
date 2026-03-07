@@ -96,11 +96,11 @@ public class MedicalServiceController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "List all services", description = "Get paginated list of medical services with optional status filter")
     public ResponseEntity<ApiResponse<Page<MedicalServiceResponseDto>>> findAll(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field") @RequestParam(defaultValue = "code") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "ASC") String sortDir,
-            @Parameter(description = "Filter by active status: true=active only, false=inactive only, null=all") @RequestParam(required = false) Boolean active) {
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
+            @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "code") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "ASC") String sortDir,
+            @Parameter(description = "Filter by active status: true=active only, false=inactive only, null=all") @RequestParam(name = "active", required = false) Boolean active) {
 
         log.info("[MEDICAL-SERVICES] GET /api/medical-services - page={}, size={}, active={}", page, size, active);
 
@@ -158,8 +158,8 @@ public class MedicalServiceController {
             - Provider Portal (Claim / PreAuth service lines)
             """)
     public ResponseEntity<ApiResponse<java.util.List<com.waad.tba.modules.medicaltaxonomy.dto.MedicalServiceLookupDto>>> lookup(
-            @Parameter(description = "Search term (code, name, or category)") @RequestParam(required = false) String q,
-            @Parameter(description = "Filter by category ID") @RequestParam(required = false) Long categoryId) {
+            @Parameter(description = "Search term (code, name, or category)") @RequestParam(name = "q", required = false) String q,
+            @Parameter(description = "Filter by category ID") @RequestParam(name = "categoryId", required = false) Long categoryId) {
 
         log.info("[MEDICAL-SERVICES] GET /api/medical-services/lookup - q={}, categoryId={}", q, categoryId);
 
@@ -184,8 +184,8 @@ public class MedicalServiceController {
     @Operation(summary = "Get services by category", description = "Get all services in a specific category")
     public ResponseEntity<ApiResponse<Page<MedicalServiceResponseDto>>> findByCategory(
             @PathVariable Long categoryId,
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size) {
 
         log.info("[MEDICAL-SERVICES] GET /api/medical-services/category/{}", categoryId);
 
@@ -199,8 +199,8 @@ public class MedicalServiceController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get services requiring PA", description = "Get all services that require pre-authorization")
     public ResponseEntity<ApiResponse<Page<MedicalServiceResponseDto>>> findServicesRequiringPA(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size) {
 
         log.info("[MEDICAL-SERVICES] GET /api/medical-services/requires-pa");
 
@@ -214,13 +214,13 @@ public class MedicalServiceController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Advanced search", description = "Search services with multiple filters")
     public ResponseEntity<ApiResponse<Page<MedicalServiceResponseDto>>> search(
-            @Parameter(description = "Search term (name/nameEn)") @RequestParam(required = false) String searchTerm,
-            @Parameter(description = "Category ID filter") @RequestParam(required = false) Long categoryId,
-            @Parameter(description = "Requires PA filter") @RequestParam(required = false) Boolean requiresPA,
-            @Parameter(description = "Minimum base price") @RequestParam(required = false) BigDecimal minPrice,
-            @Parameter(description = "Maximum base price") @RequestParam(required = false) BigDecimal maxPrice,
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "Search term (name/nameEn)") @RequestParam(name = "searchTerm", required = false) String searchTerm,
+            @Parameter(description = "Category ID filter") @RequestParam(name = "categoryId", required = false) Long categoryId,
+            @Parameter(description = "Requires PA filter") @RequestParam(name = "requiresPA", required = false) Boolean requiresPA,
+            @Parameter(description = "Minimum base price") @RequestParam(name = "minPrice", required = false) BigDecimal minPrice,
+            @Parameter(description = "Maximum base price") @RequestParam(name = "maxPrice", required = false) BigDecimal maxPrice,
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size) {
 
         log.info(
                 "[MEDICAL-SERVICES] GET /api/medical-services/search - term={}, category={}, requiresPA={}, price=[{}, {}]",
@@ -348,7 +348,7 @@ public class MedicalServiceController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Permanently delete all services", description = "⚠️ DANGER: Permanently delete ALL medical services. This is IRREVERSIBLE!")
     public ResponseEntity<ApiResponse<Integer>> deleteAll(
-            @RequestParam(defaultValue = "false") boolean confirm) {
+            @RequestParam(name = "confirm", defaultValue = "false") boolean confirm) {
 
         if (!confirm) {
             log.warn("[MEDICAL-SERVICES] Permanent delete attempted without confirmation");

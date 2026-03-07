@@ -9,7 +9,6 @@ import com.waad.tba.modules.settlement.dto.BatchSummaryDTO;
 import com.waad.tba.modules.settlement.dto.CreateBatchRequest;
 import com.waad.tba.modules.settlement.entity.SettlementBatch;
 import com.waad.tba.modules.settlement.entity.SettlementBatch.BatchStatus;
-import com.waad.tba.modules.settlement.entity.SettlementBatchItem;
 import com.waad.tba.modules.settlement.service.SettlementBatchService;
 import com.waad.tba.security.AuthorizationService;
 
@@ -176,11 +175,11 @@ public class SettlementBatchController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(summary = "List batches", description = "Returns paginated list of batches with optional status filter")
     public ResponseEntity<ApiResponse<SettlementBatchListResponse>> listBatches(
-            @Parameter(description = "Filter by status (DRAFT, CONFIRMED, PAID)") @RequestParam(required = false) BatchStatus status,
+            @Parameter(description = "Filter by status (DRAFT, CONFIRMED, PAID)") @RequestParam(name = "status", required = false) BatchStatus status,
 
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
 
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size) {
 
         log.info("📋 [API v1] Listing batches. Status: {}, Page: {}", status, page);
 

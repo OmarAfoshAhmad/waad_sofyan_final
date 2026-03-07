@@ -21,6 +21,7 @@ import java.util.List;
  */
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class PreAuthorizationReportTemplate {
 
     private final PdfFontConfig fontConfig;

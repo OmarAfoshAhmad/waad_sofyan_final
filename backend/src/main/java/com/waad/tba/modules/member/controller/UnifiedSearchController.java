@@ -77,7 +77,7 @@ public class UnifiedSearchController {
                 example = "1234567890",
                 required = true
             )
-            @RequestParam String query
+            @RequestParam(name = "query") String query
     ) {
         log.info("Unified search request received - query: {}", query);
 

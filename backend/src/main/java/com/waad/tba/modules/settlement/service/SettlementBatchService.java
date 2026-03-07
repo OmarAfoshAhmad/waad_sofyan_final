@@ -288,11 +288,19 @@ public class SettlementBatchService {
         return providerRepository.findById(account.getProviderId()).orElse(null);
     }
 
+    /**
+     * Max claims returned for batching UI — prevents OOM when provider has
+     * thousands of approved claims
+     */
+    private static final int MAX_CLAIMS_FOR_BATCHING = 1000;
+
     @Transactional(readOnly = true)
     public List<Claim> getAvailableClaimsForBatching(Long providerId) {
         List<Claim> approvedClaims = claimRepository.findByProviderIdAndStatusForSettlement(providerId,
                 ClaimStatus.APPROVED);
-        return approvedClaims.stream().filter(claim -> claim.getSettlementBatchId() == null)
+        return approvedClaims.stream()
+                .filter(claim -> claim.getSettlementBatchId() == null)
+                .limit(MAX_CLAIMS_FOR_BATCHING)
                 .collect(Collectors.toList());
     }
 

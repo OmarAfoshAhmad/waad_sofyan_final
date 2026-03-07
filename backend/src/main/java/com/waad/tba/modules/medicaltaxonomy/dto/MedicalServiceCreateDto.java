@@ -28,7 +28,7 @@ public class MedicalServiceCreateDto {
      */
     @NotBlank(message = "Service code is required")
     @Size(max = 50, message = "Service code must not exceed 50 characters")
-    @JsonAlias({"serviceCode", "code"})
+    @JsonAlias({ "serviceCode", "code" })
     private String code;
 
     /**
@@ -42,12 +42,14 @@ public class MedicalServiceCreateDto {
      * Category ID (required)
      */
     @NotNull(message = "Category ID is required")
+    @Positive(message = "Category ID must be positive")
     private Long categoryId;
 
     /**
      * Specialty ID (optional — auto-derived from category when null)
      * When provided, must belong to the specified category.
      */
+    @Positive(message = "Specialty ID must be positive")
     private Long specialtyId;
 
     /**
@@ -65,7 +67,7 @@ public class MedicalServiceCreateDto {
     /**
      * Flag indicating if pre-authorization is required
      */
-    @JsonAlias({"requiresPreApproval", "requiresPA"})
+    @JsonAlias({ "requiresPreApproval", "requiresPA" })
     @Builder.Default
     private Boolean requiresPA = false;
 

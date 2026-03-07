@@ -35,8 +35,8 @@ public class PreAuthorizationAuditController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditHistory(
             @PathVariable Long id,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         log.info("[AUDIT-API] Fetching audit history for PreAuth ID: {}", id);
         
@@ -70,8 +70,8 @@ public class PreAuthorizationAuditController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditsByUser(
             @PathVariable String username,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         log.info("[AUDIT-API] Fetching audits for user: {}", username);
         
@@ -89,8 +89,8 @@ public class PreAuthorizationAuditController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditsByAction(
             @PathVariable String action,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         log.info("[AUDIT-API] Fetching audits for action: {}", action);
         
@@ -109,9 +109,9 @@ public class PreAuthorizationAuditController {
     @GetMapping("/audits/recent")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getRecentAudits(
-            @RequestParam(defaultValue = "7") int days,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(name = "days", defaultValue = "7") int days,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         log.info("[AUDIT-API] Fetching audits from last {} days", days);
         
@@ -130,9 +130,9 @@ public class PreAuthorizationAuditController {
     @GetMapping("/audits/search")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> searchAudits(
-            @RequestParam String query,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(name = "query") String query,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         log.info("[AUDIT-API] Searching audits with query: {}", query);
         

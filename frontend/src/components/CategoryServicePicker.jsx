@@ -108,9 +108,9 @@ const CategoryServicePicker = ({
   const [loadingServices, setLoadingServices] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
 
-  // Coverage state (TODO: implement coverage resolution)
-  // const [coverageInfo, setCoverageInfo] = useState(null);
-  const [coverageInfo] = useState(null);
+  // Coverage state
+  const [coverageInfo, setCoverageInfo] = useState(null);
+  const [loadingCoverage, setLoadingCoverage] = useState(false);
 
   // Error state
   const [fetchError, setFetchError] = useState(null);
@@ -231,10 +231,23 @@ const CategoryServicePicker = ({
         );
       }
 
-      // TODO: Fetch coverage info if memberId is provided
-      // This would call the coverage resolution API
+      // Fetch coverage info if memberId is provided
+      if (memberId && newValue) {
+        setLoadingCoverage(true);
+        axiosClient
+          .post('/eligibility/check', { memberId, serviceDate: new Date().toISOString().slice(0, 10) })
+          .then((res) => {
+            const coverage = res.data?.data || res.data || null;
+            setCoverageInfo(coverage);
+            if (onCoverageResolved) onCoverageResolved(coverage, newValue);
+          })
+          .catch(() => setCoverageInfo(null))
+          .finally(() => setLoadingCoverage(false));
+      } else {
+        setCoverageInfo(null);
+      }
     },
-    [onSelect, selectedCategory]
+    [memberId, onCoverageResolved, onSelect, selectedCategory]
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -439,10 +452,11 @@ const CategoryServicePicker = ({
                   size="small"
                 />
                 <Chip icon={<MedicalIcon />} label={`الخدمة: ${selectedService?.code}`} color="warning" variant="filled" size="small" />
-                {coverageInfo?.covered && (
+                {loadingCoverage && <Chip label="جاري التحقق من التغطية..." size="small" />}
+                {!loadingCoverage && coverageInfo?.covered && (
                   <Chip icon={<CheckIcon />} label={`${LABELS.coverage}: ${coverageInfo.coveragePercent}%`} color="success" size="small" />
                 )}
-                {coverageInfo?.requiresPA && <Chip icon={<WarningIcon />} label={LABELS.requiresPA} color="warning" size="small" />}
+                {!loadingCoverage && coverageInfo?.requiresPA && <Chip icon={<WarningIcon />} label={LABELS.requiresPA} color="warning" size="small" />}
               </Stack>
             </Box>
           </>

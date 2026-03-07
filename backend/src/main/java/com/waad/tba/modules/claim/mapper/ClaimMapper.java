@@ -2,7 +2,6 @@ package com.waad.tba.modules.claim.mapper;
 
 import com.waad.tba.modules.claim.dto.*;
 import com.waad.tba.modules.claim.entity.*;
-import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
@@ -30,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @Slf4j
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class ClaimMapper {
 
     private final ProviderContractService providerContractService;
@@ -39,8 +39,8 @@ public class ClaimMapper {
      * Maps CreateClaimDto (from Visit) to a new Claim entity.
      * Enforces contract-first pricing and policy-first coverage.
      */
-    public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth, 
-                         Map<Long, MedicalService> medicalServiceMap) {
+    public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth,
+            Map<Long, MedicalService> medicalServiceMap) {
         Claim claim = Claim.builder()
                 .visit(visit)
                 .member(visit.getMember())
@@ -63,21 +63,25 @@ public class ClaimMapper {
             if (medicalService == null)
                 continue;
 
-            // ARCHITECTURAL LAW: For Backlog/Legacy claims, use the price provided by the user.
+            // ARCHITECTURAL LAW: For Backlog/Legacy claims, use the price provided by the
+            // user.
             // For regular visits, resolve from contract (Source of Truth).
             BigDecimal unitPrice = null;
 
             boolean isBacklog = visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG;
-            log.info("🔍 [MAPPER] Processing line for service '{}'. VisitType: {}, isBacklog: {}, DTO UnitPrice: {}", 
+            log.info("🔍 [MAPPER] Processing line for service '{}'. VisitType: {}, isBacklog: {}, DTO UnitPrice: {}",
                     medicalService.getCode(), visit.getVisitType(), isBacklog, lineDto.getUnitPrice());
 
             if (isBacklog && lineDto.getUnitPrice() != null && lineDto.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
                 unitPrice = lineDto.getUnitPrice();
-                log.info("ℹ️ [BACKLOG] Using user-provided price for service '{}': {}", medicalService.getCode(), unitPrice);
+                log.info("ℹ️ [BACKLOG] Using user-provided price for service '{}': {}", medicalService.getCode(),
+                        unitPrice);
             } else {
                 // If it's backlog but price is missing/zero, resolve anyway as fallback
                 if (isBacklog) {
-                    log.warn("⚠️ [BACKLOG] Price missing or zero in DTO for backlog service '{}'. Attempting contract resolution.", medicalService.getCode());
+                    log.warn(
+                            "⚠️ [BACKLOG] Price missing or zero in DTO for backlog service '{}'. Attempting contract resolution.",
+                            medicalService.getCode());
                 }
 
                 // Resolve contract price
@@ -89,7 +93,8 @@ public class ClaimMapper {
                 } else {
                     // POLICY: Use base price as fallback for DRAFT claims, but log as warning
                     unitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice() : BigDecimal.ZERO;
-                    log.warn("⚠️ [NO_CONTRACT] No contract price for service '{}' (provider={}, date={}). Using base price: {}. Review required.",
+                    log.warn(
+                            "⚠️ [NO_CONTRACT] No contract price for service '{}' (provider={}, date={}). Using base price: {}. Review required.",
                             medicalService.getCode(), provider.getId(), dto.getServiceDate(), unitPrice);
                 }
             }
@@ -99,12 +104,13 @@ public class ClaimMapper {
                     medicalService.getId());
             boolean requiresPA = coverageInfoOpt.map(c -> c.isRequiresPreApproval()).orElse(false);
             Integer coveragePercentSnapshot = coverageInfoOpt.map(c -> c.getCoveragePercent()).orElse(null);
-            
-            // ARCHITECTURAL LAW: If it's a backlog claim and no policy is found, 
+
+            // ARCHITECTURAL LAW: If it's a backlog claim and no policy is found,
             // default to 100% coverage to avoid showing 0.00 for historical data.
             if (isBacklog && coveragePercentSnapshot == null) {
                 coveragePercentSnapshot = 100;
-                log.info("ℹ️ [BACKLOG] No policy found for historical date. Defaulting service '{}' to 100% coverage.", medicalService.getCode());
+                log.info("ℹ️ [BACKLOG] No policy found for historical date. Defaulting service '{}' to 100% coverage.",
+                        medicalService.getCode());
             }
 
             Integer patientCopayPercentSnapshot = coveragePercentSnapshot != null ? (100 - coveragePercentSnapshot)
@@ -139,13 +145,13 @@ public class ClaimMapper {
 
         claim.setLines(lines);
         claim.setRequestedAmount(totalRequestedAmount);
-        
-        // ARCHITECTURAL LAW: For Backlog claims, initialize approved amount 
+
+        // ARCHITECTURAL LAW: For Backlog claims, initialize approved amount
         // as (Requested - Refused) assuming full coverage if not specified.
         // This ensures the UI doesn't show 0.00 for historical data.
         claim.setRefusedAmount(BigDecimal.ZERO); // Recalculated by calculateFields()
         claim.setApprovedAmount(totalRequestedAmount); // Placeholder - will be refined by hooks
-        
+
         return claim;
     }
 
@@ -158,7 +164,7 @@ public class ClaimMapper {
         BigDecimal totalRefusedAmount = BigDecimal.ZERO;
         BigDecimal totalApprovedAmount = BigDecimal.ZERO;
         BigDecimal totalPatientShare = BigDecimal.ZERO;
-        
+
         List<ClaimLine> newLines = new ArrayList<>();
         LocalDate serviceDate = claim.getServiceDate() != null ? claim.getServiceDate() : LocalDate.now();
 
@@ -170,8 +176,9 @@ public class ClaimMapper {
 
             // ARCHITECTURAL LAW: For Backlog/Legacy claims, used price provided in DTO
             BigDecimal unitPrice = null;
-            if (claim.getVisit() != null && claim.getVisit().getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG && 
-                lineDto.getUnitPrice() != null && lineDto.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
+            if (claim.getVisit() != null
+                    && claim.getVisit().getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG &&
+                    lineDto.getUnitPrice() != null && lineDto.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
                 unitPrice = lineDto.getUnitPrice();
             } else {
                 EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
@@ -181,7 +188,8 @@ public class ClaimMapper {
                     // FALLBACK: If draft + no contract, try base price
                     unitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice() : BigDecimal.ZERO;
                     if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-                        throw new IllegalArgumentException("No contract price or base price found for service " + medicalService.getCode());
+                        throw new IllegalArgumentException(
+                                "No contract price or base price found for service " + medicalService.getCode());
                     }
                 } else {
                     unitPrice = priceResponse.getContractPrice();
@@ -192,10 +200,11 @@ public class ClaimMapper {
                     medicalService.getId());
             boolean requiresPA = coverageInfoOpt.map(c -> c.isRequiresPreApproval()).orElse(false);
             Integer coveragePercentSnapshot = coverageInfoOpt.map(c -> c.getCoveragePercent()).orElse(null);
-            
+
             // Fallback for backlog claims
-            if (claim.getVisit() != null && claim.getVisit().getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG && 
-                coveragePercentSnapshot == null) {
+            if (claim.getVisit() != null
+                    && claim.getVisit().getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG &&
+                    coveragePercentSnapshot == null) {
                 coveragePercentSnapshot = 100;
             }
 
@@ -204,7 +213,7 @@ public class ClaimMapper {
 
             Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
-            
+
             BigDecimal lineApproved = BigDecimal.ZERO;
             BigDecimal linePatientShare = BigDecimal.ZERO;
             BigDecimal lineRefused = lineDto.getRefusedAmount() != null ? lineDto.getRefusedAmount() : BigDecimal.ZERO;
@@ -214,7 +223,8 @@ public class ClaimMapper {
             } else {
                 // Approved = LineTotal * Coverage%
                 if (coveragePercentSnapshot != null) {
-                    lineApproved = lineTotal.multiply(BigDecimal.valueOf(coveragePercentSnapshot)).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    lineApproved = lineTotal.multiply(BigDecimal.valueOf(coveragePercentSnapshot))
+                            .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
                     linePatientShare = lineTotal.subtract(lineApproved);
                 } else {
                     lineApproved = lineTotal;
@@ -254,7 +264,7 @@ public class ClaimMapper {
 
         claim.getLines().clear();
         newLines.forEach(claim::addLine);
-        
+
         // Ensure financial state is updated on the entity
         claim.setRequestedAmount(totalRequestedAmount);
         claim.setRefusedAmount(totalRefusedAmount);
@@ -319,9 +329,10 @@ public class ClaimMapper {
                 .totalAmount(claim.getRequestedAmount())
                 .approvedAmount(claim.getApprovedAmount())
                 .refusedAmount(
-                        (claim.getStatus() == ClaimStatus.REJECTED && (claim.getRefusedAmount() == null || claim.getRefusedAmount().compareTo(BigDecimal.ZERO) == 0))
-                                ? claim.getRequestedAmount()
-                                : claim.getRefusedAmount())
+                        (claim.getStatus() == ClaimStatus.REJECTED && (claim.getRefusedAmount() == null
+                                || claim.getRefusedAmount().compareTo(BigDecimal.ZERO) == 0))
+                                        ? claim.getRequestedAmount()
+                                        : claim.getRefusedAmount())
                 .differenceAmount(claim.getDifferenceAmount())
                 .status(claim.getStatus())
                 .statusLabel(claim.getStatus() != null ? claim.getStatus().getArabicLabel() : null)
@@ -417,15 +428,21 @@ public class ClaimMapper {
     }
 
     private BigDecimal calculateCompanyShare(ClaimLine line) {
-        if (Boolean.TRUE.equals(line.getRejected())) return BigDecimal.ZERO;
-        BigDecimal net = line.getTotalPrice().subtract(line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO);
-        if (line.getCoveragePercentSnapshot() == null) return net; // Default to full coverage
-        return net.multiply(BigDecimal.valueOf(line.getCoveragePercentSnapshot())).divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        if (Boolean.TRUE.equals(line.getRejected()))
+            return BigDecimal.ZERO;
+        BigDecimal net = line.getTotalPrice()
+                .subtract(line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO);
+        if (line.getCoveragePercentSnapshot() == null)
+            return net; // Default to full coverage
+        return net.multiply(BigDecimal.valueOf(line.getCoveragePercentSnapshot())).divide(BigDecimal.valueOf(100), 2,
+                java.math.RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculatePatientShare(ClaimLine line) {
-        if (Boolean.TRUE.equals(line.getRejected())) return BigDecimal.ZERO;
-        BigDecimal net = line.getTotalPrice().subtract(line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO);
+        if (Boolean.TRUE.equals(line.getRejected()))
+            return BigDecimal.ZERO;
+        BigDecimal net = line.getTotalPrice()
+                .subtract(line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO);
         BigDecimal company = calculateCompanyShare(line);
         return net.subtract(company);
     }

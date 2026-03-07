@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
  * DTO for returning Provider Contract data in API responses.
@@ -30,6 +32,24 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @SuppressWarnings("deprecation")
 public class ProviderContractResponseDto {
+
+    private static final Map<ContractStatus, String> STATUS_LABELS =
+            new EnumMap<>(ContractStatus.class);
+    private static final Map<PricingModel, String> PRICING_MODEL_LABELS =
+            new EnumMap<>(PricingModel.class);
+
+    static {
+        STATUS_LABELS.put(ContractStatus.DRAFT,      "مسودة");
+        STATUS_LABELS.put(ContractStatus.ACTIVE,     "نشط");
+        STATUS_LABELS.put(ContractStatus.SUSPENDED,  "موقوف");
+        STATUS_LABELS.put(ContractStatus.EXPIRED,    "منتهي");
+        STATUS_LABELS.put(ContractStatus.TERMINATED, "ملغي");
+
+        PRICING_MODEL_LABELS.put(PricingModel.FIXED,      "سعر ثابت");
+        PRICING_MODEL_LABELS.put(PricingModel.DISCOUNT,   "نسبة خصم");
+        PRICING_MODEL_LABELS.put(PricingModel.TIERED,     "تسعير متدرج");
+        PRICING_MODEL_LABELS.put(PricingModel.NEGOTIATED, "سعر تفاوضي");
+    }
 
     private Long id;
     private String contractCode;
@@ -137,13 +157,7 @@ public class ProviderContractResponseDto {
      */
     private static String getStatusLabel(ContractStatus status) {
         if (status == null) return null;
-        return switch (status) {
-            case DRAFT -> "مسودة";
-            case ACTIVE -> "نشط";
-            case SUSPENDED -> "موقوف";
-            case EXPIRED -> "منتهي";
-            case TERMINATED -> "ملغي";
-        };
+        return STATUS_LABELS.getOrDefault(status, status.name());
     }
 
     /**
@@ -151,12 +165,7 @@ public class ProviderContractResponseDto {
      */
     private static String getPricingModelLabel(PricingModel model) {
         if (model == null) return null;
-        return switch (model) {
-            case FIXED -> "سعر ثابت";
-            case DISCOUNT -> "نسبة خصم";
-            case TIERED -> "تسعير متدرج";
-            case NEGOTIATED -> "سعر تفاوضي";
-        };
+        return PRICING_MODEL_LABELS.getOrDefault(model, model.name());
     }
 
     /**

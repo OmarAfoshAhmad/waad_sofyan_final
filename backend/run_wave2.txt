@@ -1,0 +1,113 @@
+[INFO] Scanning for projects...
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-efd249c5ae56b1563923b91d7632b6a37127a0fd.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-efd249c5ae56b1563923b91d7632b6a37127a0fd.txt)
+[INFO] 
+[INFO] ------------------------< com.waad:tba-backend >------------------------
+[INFO] Building TBA-WAAD Backend 1.0.0
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] 
+[INFO] >>> spring-boot:3.5.11:run (default-cli) > test-compile @ tba-backend >>>
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-efd249c5ae56b1563923b91d7632b6a37127a0fd.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[WARNING] 1 problem was encountered while building the effective model for 'org.springdoc:springdoc-openapi-starter-webmvc-ui:jar:2.8.10' during dependency collection step for project (use -X to see details)
+[WARNING] 1 problem was encountered while building the effective model for 'org.springdoc:springdoc-openapi-starter-webmvc-api:jar:2.8.10' during dependency collection step for project (use -X to see details)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-efd249c5ae56b1563923b91d7632b6a37127a0fd.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[WARNING] 1 problem was encountered while building the effective model for 'org.springdoc:springdoc-openapi-starter-common:jar:2.8.10' during dependency collection step for project (use -X to see details)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ tba-backend ---
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] Copying 41 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ tba-backend ---
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ tba-backend ---
+[INFO] skip non existing resourceDirectory D:\tba_waad_system-main\tba_waad_system-main\backend\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ tba-backend ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] <<< spring-boot:3.5.11:run (default-cli) < test-compile @ tba-backend <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.5.11:run (default-cli) @ tba-backend ---
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Loaded 22249 auto-discovered prefixes for remote repository central (prefixes-central-712eba337df3388713842a42e637118344ff358b.txt)
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+2026-03-07 09:48:08.499 [34mINFO [0;39m [background-preinit] [36mo.h.validator.internal.util.Version[0;39m - HV000001: Hibernate Validator 8.0.3.Final
+ :: Spring Boot ::               (v3.5.11)
+
+2026-03-07 09:48:08.544 [34mINFO [0;39m [main] [36mcom.waad.tba.TbaWaadApplication[0;39m - Starting TbaWaadApplication using Java 21.0.8 with PID 20132 (D:\tba_waad_system-main\tba_waad_system-main\backend\target\classes started by Omar in D:\tba_waad_system-main\tba_waad_system-main\backend)
+2026-03-07 09:48:08.546 [34mINFO [0;39m [main] [36mcom.waad.tba.TbaWaadApplication[0;39m - No active profile set, falling back to 1 default profile: "default"
+2026-03-07 09:48:09.625 [34mINFO [0;39m [main] [36mo.s.d.r.c.RepositoryConfigurationDelegate[0;39m - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-03-07 09:48:09.818 [34mINFO [0;39m [main] [36mo.s.d.r.c.RepositoryConfigurationDelegate[0;39m - Finished Spring Data repository scanning in 186 ms. Found 48 JPA repository interfaces.
+2026-03-07 09:48:10.334 [34mINFO [0;39m [main] [36mo.s.b.w.e.tomcat.TomcatWebServer[0;39m - Tomcat initialized with port 8080 (http)
+2026-03-07 09:48:10.339 [34mINFO [0;39m [main] [36mo.a.coyote.http11.Http11NioProtocol[0;39m - Initializing ProtocolHandler ["http-nio-8080"]
+2026-03-07 09:48:10.339 [34mINFO [0;39m [main] [36mo.a.catalina.core.StandardService[0;39m - Starting service [Tomcat]
+2026-03-07 09:48:10.339 [34mINFO [0;39m [main] [36mo.a.catalina.core.StandardEngine[0;39m - Starting Servlet engine: [Apache Tomcat/10.1.52]
+2026-03-07 09:48:10.389 [34mINFO [0;39m [main] [36mo.a.c.c.C.[Tomcat].[localhost].[/][0;39m - Initializing Spring embedded WebApplicationContext
+2026-03-07 09:48:10.389 [34mINFO [0;39m [main] [36mo.s.b.w.s.c.ServletWebServerApplicationContext[0;39m - Root WebApplicationContext: initialization completed in 1817 ms
+2026-03-07 09:48:10.521 [34mINFO [0;39m [main] [36mcom.zaxxer.hikari.HikariDataSource[0;39m - HikariPool-1 - Starting...
+2026-03-07 09:48:10.617 [34mINFO [0;39m [main] [36mcom.zaxxer.hikari.pool.HikariPool[0;39m - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@59a2bed1
+2026-03-07 09:48:10.619 [34mINFO [0;39m [main] [36mcom.zaxxer.hikari.HikariDataSource[0;39m - HikariPool-1 - Start completed.
+2026-03-07 09:48:10.639 [34mINFO [0;39m [main] [36morg.flywaydb.core.FlywayExecutor[0;39m - Database: jdbc:postgresql://localhost:5432/tba_waad_system (PostgreSQL 18.1)
+2026-03-07 09:48:10.684 [34mINFO [0;39m [main] [36mo.f.core.internal.command.DbValidate[0;39m - Successfully validated 27 migrations (execution time 00:00.032s)
+2026-03-07 09:48:10.726 [34mINFO [0;39m [main] [36mo.f.core.internal.command.DbMigrate[0;39m - Current version of schema "public": 095
+2026-03-07 09:48:10.730 [34mINFO [0;39m [main] [36mo.f.core.internal.command.DbMigrate[0;39m - Schema "public" is up to date. No migration necessary.
+2026-03-07 09:48:10.809 [34mINFO [0;39m [main] [36mo.h.jpa.internal.util.LogHelper[0;39m - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-03-07 09:48:10.834 [34mINFO [0;39m [main] [36morg.hibernate.Version[0;39m - HHH000412: Hibernate ORM core version 6.6.42.Final
+2026-03-07 09:48:10.855 [34mINFO [0;39m [main] [36mo.h.c.i.RegionFactoryInitiator[0;39m - HHH000026: Second-level cache disabled
+2026-03-07 09:48:11.005 [34mINFO [0;39m [main] [36mo.s.o.j.p.SpringPersistenceUnitInfo[0;39m - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-03-07 09:48:11.061 [34mINFO [0;39m [main] [36mo.hibernate.orm.connections.pooling[0;39m - HHH10001005: Database info:
+	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
+	Database driver: undefined/unknown
+	Database version: 18.1
+	Autocommit mode: undefined/unknown
+	Isolation level: undefined/unknown
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-03-07 09:48:12.310 [34mINFO [0;39m [main] [36mo.h.e.t.j.p.i.JtaPlatformInitiator[0;39m - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-03-07 09:48:12.321 [34mINFO [0;39m [main] [36mo.s.o.j.LocalContainerEntityManagerFactoryBean[0;39m - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-03-07 09:48:12.495 [34mINFO [0;39m [main] [36mo.s.d.j.r.query.QueryEnhancerFactory[0;39m - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-03-07 09:48:13.069 [34mINFO [0;39m [main] [36mc.w.t.c.s.SystemSettingsService[0;39m - 🔧 Initializing system settings...
+2026-03-07 09:48:14.234 [34mINFO [0;39m [main] [36mc.w.t.c.file.LocalFileStorageService[0;39m - File storage initialized at: D:\tba_waad_system-main\tba_waad_system-main\backend\uploads
+2026-03-07 09:48:14.493 [34mINFO [0;39m [main] [36mo.s.s.c.a.a.c.InitializeAuthenticationProviderBeanManagerConfigurer$InitializeAuthenticationProviderManagerConfigurer[0;39m - Global AuthenticationManager configured with AuthenticationProvider bean with name authenticationProvider
+2026-03-07 09:48:16.716 [34mINFO [0;39m [main] [36mo.a.coyote.http11.Http11NioProtocol[0;39m - Starting ProtocolHandler ["http-nio-8080"]
+2026-03-07 09:48:16.738 [34mINFO [0;39m [main] [36mo.s.b.w.e.tomcat.TomcatWebServer[0;39m - Tomcat started on port 8080 (http) with context path '/'
+2026-03-07 09:48:16.742 [34mINFO [0;39m [main] [36mcom.waad.tba.TbaWaadApplication[0;39m - Started TbaWaadApplication in 8.604 seconds (process running for 8.85)
+2026-03-07 09:48:16.762 [34mINFO [0;39m [main] [36mc.w.tba.config.RbacDataInitializer[0;39m - ╔════════════════════════════════════════════════════════════╗
+2026-03-07 09:48:16.763 [34mINFO [0;39m [main] [36mc.w.tba.config.RbacDataInitializer[0;39m - ║  Static Data Initializer — Phase 5 (Role-Based Auth)       ║
+2026-03-07 09:48:16.763 [34mINFO [0;39m [main] [36mc.w.tba.config.RbacDataInitializer[0;39m - ╚════════════════════════════════════════════════════════════╝
+2026-03-07 09:48:16.786 [34mINFO [0;39m [main] [36mc.w.tba.config.RbacDataInitializer[0;39m - Super admin user already exists: superadmin
+2026-03-07 10:18:01.127 [31mWARN [0;39m [HikariPool-1:housekeeper] [36mcom.zaxxer.hikari.pool.HikariPool[0;39m - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=13m425ms883µs800ns).

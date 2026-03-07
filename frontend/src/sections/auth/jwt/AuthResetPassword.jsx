@@ -21,6 +21,7 @@ import { Formik } from 'formik';
 import useAuth from 'hooks/useAuth';
 import IconButton from 'components/@extended/IconButton';
 import AnimateButton from 'components/@extended/AnimateButton';
+import authService from 'services/api/auth.service';
 
 import { strengthColor, strengthIndicator } from 'utils/password-strength';
 import { openSnackbar } from 'api/snackbar';
@@ -53,6 +54,29 @@ export default function AuthResetPassword() {
 
   const [searchParams] = useSearchParams();
   const auth = searchParams.get('auth'); // get auth and set route based on that
+  const token = searchParams.get('token') || '';
+  const modeFromQuery = (searchParams.get('mode') || '').toUpperCase();
+  const emailFromQuery = searchParams.get('email') || '';
+
+  const [resetConfig, setResetConfig] = useState({ method: 'TOKEN', otpLength: 6 });
+
+  useEffect(() => {
+    const loadResetConfig = async () => {
+      try {
+        const config = await authService.getPasswordResetConfig();
+        setResetConfig({
+          method: (config?.method || 'TOKEN').toUpperCase(),
+          otpLength: config?.otpLength || 6
+        });
+      } catch {
+        setResetConfig({ method: 'TOKEN', otpLength: 6 });
+      }
+    };
+
+    loadResetConfig();
+  }, []);
+
+  const effectiveMode = modeFromQuery === 'OTP' ? 'OTP' : (token ? 'TOKEN' : resetConfig.method);
 
   useEffect(() => {
     changePassword('');
@@ -61,11 +85,23 @@ export default function AuthResetPassword() {
   return (
     <Formik
       initialValues={{
+        email: emailFromQuery,
+        otp: '',
         password: '',
         confirmPassword: '',
         submit: null
       }}
       validationSchema={Yup.object().shape({
+        email:
+          effectiveMode === 'OTP'
+            ? Yup.string().email('Must be a valid email').max(255).required('Email is required')
+            : Yup.string().nullable(),
+        otp:
+          effectiveMode === 'OTP'
+            ? Yup.string()
+                .required('OTP is required')
+                .matches(new RegExp(`^\\d{${Math.max(4, Math.min(10, resetConfig.otpLength || 6))}}$`), `OTP must be ${Math.max(4, Math.min(10, resetConfig.otpLength || 6))} digits`)
+            : Yup.string().nullable(),
         password: Yup.string().max(255).required('Password is required'),
         confirmPassword: Yup.string()
           .required('Confirm Password is required')
@@ -73,7 +109,15 @@ export default function AuthResetPassword() {
       })}
       onSubmit={async (values, { setErrors, setStatus, setSubmitting }) => {
         try {
-          // password reset
+          if (effectiveMode === 'OTP') {
+            await authService.resetPasswordWithOtp(values.email, values.otp, values.password);
+          } else {
+            if (!token) {
+              throw new Error('Reset token is missing');
+            }
+            await authService.resetPasswordWithToken(token, values.password, values.confirmPassword);
+          }
+
           setStatus({ success: true });
           setSubmitting(false);
           openSnackbar({
@@ -100,6 +144,46 @@ export default function AuthResetPassword() {
       {({ errors, handleBlur, handleChange, handleSubmit, isSubmitting, touched, values }) => (
         <form noValidate onSubmit={handleSubmit}>
           <Grid container spacing={3}>
+            {effectiveMode === 'OTP' && (
+              <>
+                <Grid size={12}>
+                  <Stack sx={{ gap: 1 }}>
+                    <InputLabel htmlFor="email-reset">Email Address</InputLabel>
+                    <OutlinedInput
+                      fullWidth
+                      id="email-reset"
+                      type="email"
+                      value={values.email}
+                      name="email"
+                      onBlur={handleBlur}
+                      onChange={handleChange}
+                      error={Boolean(touched.email && errors.email)}
+                      placeholder="Enter email address"
+                    />
+                  </Stack>
+                  {touched.email && errors.email && <FormHelperText error>{errors.email}</FormHelperText>}
+                </Grid>
+
+                <Grid size={12}>
+                  <Stack sx={{ gap: 1 }}>
+                    <InputLabel htmlFor="otp-reset">OTP Code</InputLabel>
+                    <OutlinedInput
+                      fullWidth
+                      id="otp-reset"
+                      type="text"
+                      value={values.otp}
+                      name="otp"
+                      onBlur={handleBlur}
+                      onChange={handleChange}
+                      error={Boolean(touched.otp && errors.otp)}
+                      placeholder={`Enter ${Math.max(4, Math.min(10, resetConfig.otpLength || 6))}-digit OTP`}
+                    />
+                  </Stack>
+                  {touched.otp && errors.otp && <FormHelperText error>{errors.otp}</FormHelperText>}
+                </Grid>
+              </>
+            )}
+
             <Grid size={12}>
               <Stack sx={{ gap: 1 }}>
                 <InputLabel htmlFor="password-reset">Password</InputLabel>

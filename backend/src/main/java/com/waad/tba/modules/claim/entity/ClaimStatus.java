@@ -1,9 +1,7 @@
 package com.waad.tba.modules.claim.entity;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Claim lifecycle status enum with strict transition rules.

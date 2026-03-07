@@ -1,9 +1,11 @@
 import { lazy } from 'react';
+import { Outlet, Navigate } from 'react-router-dom';
 
 // project imports
 import Loadable from 'components/Loadable';
 import SidebarLayout from 'layout/SidebarLayout';
 import PermissionGuard from 'components/PermissionGuard';
+import ProviderPortalGuard from 'components/guards/ProviderPortalGuard';
 
 // Contexts - Phase D2.3 Table Refresh
 import { TableRefreshLayout, TableRefreshProvider } from 'contexts/TableRefreshContext';
@@ -143,9 +145,8 @@ const CatalogHierarchyPage = Loadable(lazy(() => import('pages/medical-catalog')
 
 const ProviderMappingCenter = Loadable(lazy(() => import('pages/medical/ProviderMappingCenter')));
 
-// ==============================|| LAZY LOADING - COMPANIES ||============================== //
-
-const CompaniesList = Loadable(lazy(() => import('pages/companies')));
+// Companies — single TPA mode: redirect to company settings
+// No multi-company management needed (single TPA context)
 
 // ==============================|| LAZY LOADING - ADMIN ||============================== //
 
@@ -849,6 +850,11 @@ const MainRoutes = {
     // Provider Portal Module (Healthcare Provider Interface)
     {
       path: 'provider',
+      element: (
+        <ProviderPortalGuard>
+          <Outlet />
+        </ProviderPortalGuard>
+      ),
       children: [
         {
           path: '',
@@ -933,14 +939,10 @@ const MainRoutes = {
       ]
     },
 
-    // Companies Module
+    // Companies — single TPA mode: redirect to company settings page
     {
       path: 'companies',
-      element: (
-        <PermissionGuard isRouteGuard>
-          <CompaniesList />
-        </PermissionGuard>
-      )
+      element: <Navigate to="/settings/company" replace />
     },
 
     // Admin Module

@@ -87,8 +87,8 @@ public class ProviderContractController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(summary = "Search contracts", description = "Search contracts by code or provider name")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> search(
-            @Parameter(description = "Search query") @RequestParam(required = false) String q,
-            @Parameter(description = "Filter by status") @RequestParam(required = false) ContractStatus status,
+            @Parameter(description = "Search query") @RequestParam(name = "q", required = false) String q,
+            @Parameter(description = "Filter by status") @RequestParam(name = "status", required = false) ContractStatus status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         log.debug("REST request to search contracts: q={}, status={}", q, status);
@@ -117,7 +117,7 @@ public class ProviderContractController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(summary = "Get expiring contracts", description = "List contracts expiring within specified days")
     public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getExpiring(
-            @Parameter(description = "Days until expiration") @RequestParam(defaultValue = "30") int days) {
+            @Parameter(description = "Days until expiration") @RequestParam(name = "days", defaultValue = "30") int days) {
 
         log.debug("REST request to get contracts expiring within {} days", days);
         List<ProviderContractResponseDto> result = contractService.findExpiringWithinDays(days);
@@ -336,7 +336,7 @@ public class ProviderContractController {
     @Operation(summary = "Suspend contract", description = "Suspend an active contract")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> suspend(
             @Parameter(description = "Contract ID") @PathVariable Long id,
-            @Parameter(description = "Suspension reason") @RequestParam(required = false) String reason) {
+            @Parameter(description = "Suspension reason") @RequestParam(name = "reason", required = false) String reason) {
 
         log.debug("REST request to suspend contract: {}", id);
         ProviderContractResponseDto result = contractService.suspend(id, reason);
@@ -352,7 +352,7 @@ public class ProviderContractController {
     @Operation(summary = "Terminate contract", description = "Terminate a contract permanently")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> terminate(
             @Parameter(description = "Contract ID") @PathVariable Long id,
-            @Parameter(description = "Termination reason") @RequestParam(required = false) String reason) {
+            @Parameter(description = "Termination reason") @RequestParam(name = "reason", required = false) String reason) {
 
         log.debug("REST request to terminate contract: {}", id);
         ProviderContractResponseDto result = contractService.terminate(id, reason);
@@ -388,7 +388,7 @@ public class ProviderContractController {
     @Operation(summary = "Search pricing items", description = "Search pricing items by service code or name")
     public ResponseEntity<ApiResponse<Page<ProviderContractPricingItemResponseDto>>> searchPricing(
             @Parameter(description = "Contract ID") @PathVariable Long contractId,
-            @Parameter(description = "Search query") @RequestParam(required = false) String q,
+            @Parameter(description = "Search query") @RequestParam(name = "q", required = false) String q,
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         log.debug("REST request to search pricing in contract: {}, query: {}", contractId, q);

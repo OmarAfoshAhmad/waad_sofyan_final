@@ -10,7 +10,6 @@ import com.waad.tba.modules.provider.dto.ProviderClaimResponse;
 import com.waad.tba.modules.claim.service.ClaimService;
 import com.waad.tba.modules.claim.dto.ClaimCreateDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
-import com.waad.tba.modules.claim.entity.ClaimType;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;

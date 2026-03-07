@@ -34,12 +34,19 @@ public class ProviderExcelService {
 
     private final ProviderRepository providerRepository;
 
+    /** Maximum allowed Excel file size: 10 MB */
+    private static final long MAX_EXCEL_FILE_SIZE = 10L * 1024 * 1024;
+
     @Transactional
     public ExcelImportResultDto importFromExcel(MultipartFile file) {
         log.info("[ProviderExcel] Starting import from file: {}", file.getOriginalFilename());
 
         if (file.isEmpty()) {
             throw new BusinessRuleException("الملف فارغ");
+        }
+
+        if (file.getSize() > MAX_EXCEL_FILE_SIZE) {
+            throw new BusinessRuleException("حجم الملف يتجاوز الحد المسموح (10 ميغابايت)");
         }
 
         if (!isExcelFile(file)) {
@@ -57,7 +64,7 @@ public class ProviderExcelService {
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
-            
+
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
                 throw new BusinessRuleException("الملف لا يحتوي على صف رأس (Header)");
@@ -155,11 +162,11 @@ public class ProviderExcelService {
                 existingProvider.setActive(active);
             }
             existingProvider.setUpdatedAt(LocalDateTime.now());
-            
+
             providerRepository.save(existingProvider);
             summary.setUpdated(summary.getUpdated() + 1);
             log.debug("[ProviderExcel] Updated provider: {}", licenseNumber);
-            
+
         } else {
             // Insert new provider
             Provider newProvider = Provider.builder()
@@ -171,7 +178,7 @@ public class ProviderExcelService {
                     .email(email != null ? email.trim() : null)
                     .active(active != null ? active : true)
                     .build();
-            
+
             providerRepository.save(newProvider);
             summary.setInserted(summary.getInserted() + 1);
             log.debug("[ProviderExcel] Inserted provider: {}", licenseNumber);
@@ -180,7 +187,7 @@ public class ProviderExcelService {
 
     private ProviderType parseProviderType(String value) {
         String normalized = value.trim().toUpperCase();
-        
+
         // Direct match
         try {
             return ProviderType.valueOf(normalized);
@@ -199,15 +206,18 @@ public class ProviderExcelService {
 
     private Map<String, Integer> mapColumns(Row headerRow) {
         Map<String, Integer> columnMap = new HashMap<>();
-        
+
         for (Cell cell : headerRow) {
             String columnName = cell.getStringCellValue().trim().toLowerCase();
-            
-            if (columnName.equals("name") || columnName.equals("الاسم") || columnName.equals("اسم") || columnName.equals("namearabic") || columnName.equals("name_arabic")) {
+
+            if (columnName.equals("name") || columnName.equals("الاسم") || columnName.equals("اسم")
+                    || columnName.equals("namearabic") || columnName.equals("name_arabic")) {
                 columnMap.put("name", cell.getColumnIndex());
-            } else if (columnName.equals("licensenumber") || columnName.equals("license_number") || columnName.equals("license") || columnName.equals("رقم الترخيص")) {
+            } else if (columnName.equals("licensenumber") || columnName.equals("license_number")
+                    || columnName.equals("license") || columnName.equals("رقم الترخيص")) {
                 columnMap.put("licenseNumber", cell.getColumnIndex());
-            } else if (columnName.equals("providertype") || columnName.equals("provider_type") || columnName.equals("type") || columnName.equals("النوع")) {
+            } else if (columnName.equals("providertype") || columnName.equals("provider_type")
+                    || columnName.equals("type") || columnName.equals("النوع")) {
                 columnMap.put("providerType", cell.getColumnIndex());
             } else if (columnName.equals("city") || columnName.equals("المدينة")) {
                 columnMap.put("city", cell.getColumnIndex());
@@ -219,13 +229,13 @@ public class ProviderExcelService {
                 columnMap.put("active", cell.getColumnIndex());
             }
         }
-        
+
         return columnMap;
     }
 
     private void validateRequiredColumns(Map<String, Integer> columnMap) {
         List<String> missing = new ArrayList<>();
-        
+
         if (!columnMap.containsKey("name")) {
             missing.add("name (الاسم)");
         }
@@ -235,7 +245,7 @@ public class ProviderExcelService {
         if (!columnMap.containsKey("providerType")) {
             missing.add("providerType (النوع)");
         }
-        
+
         if (!missing.isEmpty()) {
             throw new BusinessRuleException("أعمدة مطلوبة مفقودة: " + String.join(", ", missing));
         }
@@ -245,12 +255,12 @@ public class ProviderExcelService {
         if (colIndex == null) {
             return null;
         }
-        
+
         Cell cell = row.getCell(colIndex);
         if (cell == null) {
             return null;
         }
-        
+
         return switch (cell.getCellType()) {
             case STRING -> cell.getStringCellValue();
             case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
@@ -263,12 +273,12 @@ public class ProviderExcelService {
         if (colIndex == null) {
             return null;
         }
-        
+
         Cell cell = row.getCell(colIndex);
         if (cell == null) {
             return null;
         }
-        
+
         return switch (cell.getCellType()) {
             case BOOLEAN -> cell.getBooleanCellValue();
             case STRING -> {
@@ -300,7 +310,7 @@ public class ProviderExcelService {
     private String buildSuccessMessage(ImportSummary summary) {
         StringBuilder msg = new StringBuilder();
         msg.append("تم استيراد البيانات بنجاح. ");
-        
+
         if (summary.getInserted() > 0) {
             msg.append(summary.getInserted()).append(" سجل جديد، ");
         }
@@ -310,7 +320,7 @@ public class ProviderExcelService {
         if (summary.getFailed() > 0) {
             msg.append(summary.getFailed()).append(" سجل فشل");
         }
-        
+
         return msg.toString();
     }
 }

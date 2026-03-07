@@ -27,6 +27,7 @@ public class ProviderContractCreateDto {
      * Provider ID (required)
      */
     @NotNull(message = "Provider ID is required")
+    @Positive(message = "Provider ID must be positive")
     private Long providerId;
 
     /**

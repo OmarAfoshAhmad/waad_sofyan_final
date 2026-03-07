@@ -7,20 +7,18 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * LEGACY REPOSITORY - READ ONLY
- * 
- * @deprecated Use {@link com.waad.tba.common.repository.OrganizationRepository} instead.
- *             This repository is kept for backward compatibility ONLY.
- *             DO NOT use save(), saveAll(), delete(), or any write operations.
- *             All writes must go through OrganizationRepository with type=EMPLOYER.
+ * Repository for Employer entities.
+ * Note: Future architecture plans to consolidate into a unified
+ * OrganizationRepository.
  */
-@Deprecated
 public interface EmployerRepository extends JpaRepository<Employer, Long> {
 
     List<Employer> findByActiveTrue();
-    
+
+    long countByActiveTrue();
+
     Optional<Employer> findByCode(String code);
-    
+
     /**
      * Find employer by name (case-insensitive exact match)
      */

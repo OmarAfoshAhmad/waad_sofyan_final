@@ -24,6 +24,7 @@ import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -72,7 +73,15 @@ public class ProviderAccountService {
                             .totalPaid(BigDecimal.ZERO)
                             .status(AccountStatus.ACTIVE)
                             .build();
-                    return accountRepository.save(account);
+                    try {
+                        return accountRepository.save(account);
+                    } catch (DataIntegrityViolationException e) {
+                        // Another thread created the account concurrently — fetch and return it
+                        log.info("Race condition on account creation for provider {} — fetching existing", providerId);
+                        return accountRepository.findByProviderId(providerId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                        "Provider account not found for provider: " + providerId));
+                    }
                 });
     }
 

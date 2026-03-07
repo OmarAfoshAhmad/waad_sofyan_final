@@ -36,8 +36,8 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         if (SecurityContextHolder.getContext().getAuthentication() != null &&
                 SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
@@ -55,14 +55,21 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                     User user = userRepository.findByUsername(username)
                             .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
+                    // Block deactivated users even if they have an existing session
+                    if (user.getActive() == null || !user.getActive()) {
+                        log.warn("Blocked request for deactivated user: {}", username);
+                        session.invalidate();
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+
                     String role = user.getUserType() != null ? user.getUserType() : "DATA_ENTRY";
 
                     List<SimpleGrantedAuthority> authorities = List.of(
-                            new SimpleGrantedAuthority("ROLE_" + role)
-                    );
+                            new SimpleGrantedAuthority("ROLE_" + role));
 
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(username, null, authorities);
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            username, null, authorities);
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                     SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -82,12 +89,12 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
         return path.startsWith("/api/v1/auth/login") ||
-               path.startsWith("/api/v1/auth/register") ||
-               path.startsWith("/api/v1/auth/forgot-password") ||
-               path.startsWith("/api/v1/auth/reset-password") ||
-               path.startsWith("/api/v1/auth/session/login") ||
-               path.startsWith("/api/v1/pdf/settings/active") ||
-               path.startsWith("/swagger") ||
-               path.startsWith("/v3/api-docs");
+                path.startsWith("/api/v1/auth/register") ||
+                path.startsWith("/api/v1/auth/forgot-password") ||
+                path.startsWith("/api/v1/auth/reset-password") ||
+                path.startsWith("/api/v1/auth/session/login") ||
+                path.startsWith("/api/v1/pdf/settings/active") ||
+                path.startsWith("/swagger") ||
+                path.startsWith("/v3/api-docs");
     }
 }

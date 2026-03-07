@@ -1,6 +1,5 @@
 package com.waad.tba.modules.eligibility.rules;
 
-import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.eligibility.domain.EligibilityContext;
 import com.waad.tba.modules.eligibility.domain.EligibilityReason;
 import com.waad.tba.modules.eligibility.domain.EligibilityRule;

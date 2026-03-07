@@ -29,8 +29,8 @@ public class PreAuthDashboardController {
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthDashboardDto>> getDashboard(
-            @RequestParam(defaultValue = "30") int trendDays,
-            @RequestParam(defaultValue = "10") int topProviders
+            @RequestParam(name = "trendDays", defaultValue = "30") int trendDays,
+            @RequestParam(name = "topProviders", defaultValue = "10") int topProviders
     ) {
         log.info("[DASHBOARD-API] Fetching complete dashboard (trends: {} days, topProviders: {})", 
                 trendDays, topProviders);
@@ -75,7 +75,7 @@ public class PreAuthDashboardController {
     @GetMapping("/high-priority")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.PreAuthSummaryDto>>> getHighPriorityQueue(
-            @RequestParam(defaultValue = "10") int limit
+            @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {
         log.info("[DASHBOARD-API] Fetching high priority queue (limit: {})", limit);
 
@@ -91,8 +91,8 @@ public class PreAuthDashboardController {
     @GetMapping("/expiring-soon")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.PreAuthSummaryDto>>> getExpiringSoon(
-            @RequestParam(defaultValue = "7") int withinDays,
-            @RequestParam(defaultValue = "10") int limit
+            @RequestParam(name = "withinDays", defaultValue = "7") int withinDays,
+            @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {
         log.info("[DASHBOARD-API] Fetching items expiring within {} days (limit: {})", withinDays, limit);
 
@@ -108,7 +108,7 @@ public class PreAuthDashboardController {
     @GetMapping("/trends")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.TrendData>>> getTrends(
-            @RequestParam(defaultValue = "30") int days
+            @RequestParam(name = "days", defaultValue = "30") int days
     ) {
         log.info("[DASHBOARD-API] Fetching trend data for last {} days", days);
 
@@ -124,7 +124,7 @@ public class PreAuthDashboardController {
     @GetMapping("/top-providers")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.ProviderSummary>>> getTopProviders(
-            @RequestParam(defaultValue = "10") int limit
+            @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {
         log.info("[DASHBOARD-API] Fetching top {} providers", limit);
 
@@ -140,7 +140,7 @@ public class PreAuthDashboardController {
     @GetMapping("/recent-activity")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthDashboardDto.RecentActivity>>> getRecentActivity(
-            @RequestParam(defaultValue = "10") int limit
+            @RequestParam(name = "limit", defaultValue = "10") int limit
     ) {
         log.info("[DASHBOARD-API] Fetching recent {} activities", limit);
 

@@ -17,6 +17,7 @@ import {
   Typography,
   Grid,
   TextField,
+  MenuItem,
   Button,
   Table,
   TableBody,
@@ -47,12 +48,27 @@ import {
   Save as SaveIcon,
   RestartAlt as ResetIcon,
   Assessment as ReportIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  ToggleOn as ToggleOnIcon
 } from '@mui/icons-material';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import systemSettingsService from 'services/api/systemSettings.service';
+import featureFlagsService from 'services/api/featureFlags.service';
+import useSystemConfig from 'hooks/useSystemConfig';
+
+const PASSWORD_RESET_METHOD_KEY = 'PASSWORD_RESET_METHOD';
+const PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY = 'PASSWORD_RESET_TOKEN_EXPIRY_MINUTES';
+const PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY = 'PASSWORD_RESET_OTP_EXPIRY_MINUTES';
+const PASSWORD_RESET_OTP_LENGTH_KEY = 'PASSWORD_RESET_OTP_LENGTH';
+
+const PASSWORD_RESET_SETTINGS_KEYS = new Set([
+  PASSWORD_RESET_METHOD_KEY,
+  PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY,
+  PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY,
+  PASSWORD_RESET_OTP_LENGTH_KEY
+]);
 
 // Tab panel component
 function TabPanel({ children, value, index, ...other }) {
@@ -64,6 +80,8 @@ function TabPanel({ children, value, index, ...other }) {
 }
 
 const SystemSettingsPage = () => {
+  const { refresh: refreshSystemConfig } = useSystemConfig();
+
   // State
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState([]);
@@ -78,6 +96,20 @@ const SystemSettingsPage = () => {
   const [slaUpdating, setSlaUpdating] = useState(false);
   const [slaReport, setSlaReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
+
+  // Feature flags state
+  const [featureFlags, setFeatureFlags] = useState([]);
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [flagTogglingKey, setFlagTogglingKey] = useState(null);
+
+  // Password reset settings state
+  const [passwordResetConfig, setPasswordResetConfig] = useState({
+    method: 'TOKEN',
+    tokenExpiryMinutes: '60',
+    otpExpiryMinutes: '10',
+    otpLength: '6'
+  });
+  const [passwordResetSaving, setPasswordResetSaving] = useState(false);
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -130,10 +162,43 @@ const SystemSettingsPage = () => {
     }
   }, []);
 
+  // Load feature flags
+  const loadFeatureFlags = useCallback(async () => {
+    try {
+      setFlagsLoading(true);
+      const data = await featureFlagsService.getAllFlags();
+      setFeatureFlags(data || []);
+    } catch (err) {
+      console.error('Failed to load feature flags:', err);
+    } finally {
+      setFlagsLoading(false);
+    }
+  }, []);
+
+  // Toggle a feature flag
+  const handleToggleFlag = async (flagKey, currentEnabled) => {
+    try {
+      setFlagTogglingKey(flagKey);
+      await featureFlagsService.toggleFlag(flagKey, !currentEnabled);
+      setFeatureFlags((prev) =>
+        prev.map((f) => (f.flagKey === flagKey ? { ...f, enabled: !currentEnabled } : f))
+      );
+      // Bust the sessionStorage cache so Navigation re-reads the updated flags
+      refreshSystemConfig();
+      setSuccess(`تم ${!currentEnabled ? 'تفعيل' : 'تعطيل'} الميزة بنجاح`);
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'فشل تغيير حالة الميزة');
+    } finally {
+      setFlagTogglingKey(null);
+    }
+  };
+
   useEffect(() => {
     loadSettings();
     loadSlaInfo();
-  }, [loadSettings, loadSlaInfo]);
+    loadFeatureFlags();
+  }, [loadSettings, loadSlaInfo, loadFeatureFlags]);
 
   // Update SLA days
   const handleUpdateSlaDays = async () => {
@@ -211,7 +276,95 @@ const SystemSettingsPage = () => {
 
   // Get settings by category
   const getSettingsByCategory = (category) => {
-    return settings.filter((s) => s.category === category);
+    return settings.filter((s) => {
+      if (s.category !== category) {
+        return false;
+      }
+
+      // These settings are edited in the dedicated password reset tab.
+      if (category === 'SECURITY' && PASSWORD_RESET_SETTINGS_KEYS.has(s.settingKey)) {
+        return false;
+      }
+
+      return true;
+    });
+  };
+
+  const getSettingValue = (key, fallback) => {
+    const setting = settings.find((s) => s.settingKey === key);
+    return setting?.settingValue ?? fallback;
+  };
+
+  useEffect(() => {
+    if (!settings.length) {
+      return;
+    }
+
+    setPasswordResetConfig({
+      method: getSettingValue(PASSWORD_RESET_METHOD_KEY, 'TOKEN').toUpperCase() === 'OTP' ? 'OTP' : 'TOKEN',
+      tokenExpiryMinutes: getSettingValue(PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY, '60'),
+      otpExpiryMinutes: getSettingValue(PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY, '10'),
+      otpLength: getSettingValue(PASSWORD_RESET_OTP_LENGTH_KEY, '6')
+    });
+  }, [settings]);
+
+  const validatePasswordResetConfig = () => {
+    const tokenMinutes = Number(passwordResetConfig.tokenExpiryMinutes);
+    const otpMinutes = Number(passwordResetConfig.otpExpiryMinutes);
+    const otpLength = Number(passwordResetConfig.otpLength);
+
+    if (!['TOKEN', 'OTP'].includes(passwordResetConfig.method)) {
+      return 'طريقة الاسترجاع يجب أن تكون TOKEN أو OTP';
+    }
+    if (!Number.isInteger(tokenMinutes) || tokenMinutes < 5 || tokenMinutes > 1440) {
+      return 'مدة صلاحية رابط الاسترجاع يجب أن تكون بين 5 و 1440 دقيقة';
+    }
+    if (!Number.isInteger(otpMinutes) || otpMinutes < 1 || otpMinutes > 60) {
+      return 'مدة صلاحية OTP يجب أن تكون بين 1 و 60 دقيقة';
+    }
+    if (!Number.isInteger(otpLength) || otpLength < 4 || otpLength > 10) {
+      return 'طول OTP يجب أن يكون بين 4 و 10 أرقام';
+    }
+
+    return null;
+  };
+
+  const handleSavePasswordResetConfig = async () => {
+    const validationError = validatePasswordResetConfig();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    try {
+      setPasswordResetSaving(true);
+      setError(null);
+
+      await Promise.all([
+        systemSettingsService.updateSetting(PASSWORD_RESET_METHOD_KEY, passwordResetConfig.method),
+        systemSettingsService.updateSetting(PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY, String(passwordResetConfig.tokenExpiryMinutes)),
+        systemSettingsService.updateSetting(PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY, String(passwordResetConfig.otpExpiryMinutes)),
+        systemSettingsService.updateSetting(PASSWORD_RESET_OTP_LENGTH_KEY, String(passwordResetConfig.otpLength))
+      ]);
+
+      setSuccess('تم حفظ إعدادات استرجاع كلمة المرور بنجاح');
+      await loadSettings();
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      console.error('Failed to save password reset settings:', err);
+      setError(err.response?.data?.message || 'فشل حفظ إعدادات استرجاع كلمة المرور');
+    } finally {
+      setPasswordResetSaving(false);
+    }
+  };
+
+  const handleResetPasswordResetDefaults = () => {
+    setPasswordResetConfig({
+      method: 'TOKEN',
+      tokenExpiryMinutes: '60',
+      otpExpiryMinutes: '10',
+      otpLength: '6'
+    });
   };
 
   // Render value type chip
@@ -263,6 +416,7 @@ const SystemSettingsPage = () => {
             onClick={() => {
               loadSettings();
               loadSlaInfo();
+              loadFeatureFlags();
             }}
           >
             تحديث
@@ -287,7 +441,9 @@ const SystemSettingsPage = () => {
         <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
           <Tab label="إعدادات SLA" icon={<ScheduleIcon />} iconPosition="start" />
           <Tab label="تقرير الامتثال" icon={<ReportIcon />} iconPosition="start" />
-          {categories.map((cat, idx) => (
+          <Tab label="الميزات والوحدات" icon={<ToggleOnIcon />} iconPosition="start" />
+          <Tab label="استرجاع كلمة المرور" icon={<SettingsIcon />} iconPosition="start" />
+          {categories.map((cat) => (
             <Tab key={cat} label={cat} />
           ))}
         </Tabs>
@@ -430,9 +586,155 @@ const SystemSettingsPage = () => {
           )}
         </TabPanel>
 
+        {/* Feature Flags Tab */}
+        <TabPanel value={activeTab} index={2}>
+          {flagsLoading ? (
+            <Box sx={{ p: 3, textAlign: 'center' }}><CircularProgress /></Box>
+          ) : (
+            <Grid container spacing={2}>
+              {featureFlags.length === 0 && (
+                <Grid item xs={12}>
+                  <Typography color="text.secondary" align="center">لا توجد إعدادات ميزات</Typography>
+                </Grid>
+              )}
+              {featureFlags.map((flag) => (
+                <Grid item xs={12} md={6} key={flag.flagKey}>
+                  <Card variant="outlined" sx={{ p: 2, borderColor: flag.enabled ? 'success.main' : 'divider', transition: 'border-color 0.3s' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle1" fontWeight={600}>{flag.flagName}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{flag.description}</Typography>
+                        <Typography variant="caption" color="text.disabled" fontFamily="monospace" sx={{ mt: 0.5, display: 'block' }}>{flag.flagKey}</Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                        {flagTogglingKey === flag.flagKey ? (
+                          <CircularProgress size={24} />
+                        ) : (
+                          <Switch
+                            checked={flag.enabled}
+                            onChange={() => handleToggleFlag(flag.flagKey, flag.enabled)}
+                            color="success"
+                          />
+                        )}
+                        <Chip
+                          size="small"
+                          label={flag.enabled ? 'مفعّل' : 'معطّل'}
+                          color={flag.enabled ? 'success' : 'default'}
+                        />
+                      </Box>
+                    </Box>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+          <Alert severity="info" sx={{ mt: 3 }}>
+            تسري التغييرات فوراً. قد يحتاج المستخدمون إلى إعادة تحميل الصفحة لرؤية التأثير.
+          </Alert>
+        </TabPanel>
+
+        {/* Password Reset Settings Tab */}
+        <TabPanel value={activeTab} index={3}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={8}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    إعدادات استرجاع كلمة المرور
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    اختر طريقة الاسترجاع الأساسية وحدد مدد الصلاحية. الإعدادات تطبق مباشرة على واجهة "نسيت كلمة المرور".
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        select
+                        label="طريقة الاسترجاع"
+                        value={passwordResetConfig.method}
+                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, method: e.target.value }))}
+                      >
+                        <MenuItem value="TOKEN">رابط عبر البريد (TOKEN)</MenuItem>
+                        <MenuItem value="OTP">رمز تحقق (OTP)</MenuItem>
+                      </TextField>
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="مدة صلاحية رابط الاسترجاع (دقيقة)"
+                        value={passwordResetConfig.tokenExpiryMinutes}
+                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, tokenExpiryMinutes: e.target.value }))}
+                        inputProps={{ min: 5, max: 1440 }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="مدة صلاحية OTP (دقيقة)"
+                        value={passwordResetConfig.otpExpiryMinutes}
+                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, otpExpiryMinutes: e.target.value }))}
+                        inputProps={{ min: 1, max: 60 }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="طول OTP"
+                        value={passwordResetConfig.otpLength}
+                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, otpLength: e.target.value }))}
+                        inputProps={{ min: 4, max: 10 }}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+                    <Button
+                      variant="contained"
+                      startIcon={passwordResetSaving ? <CircularProgress size={16} /> : <SaveIcon />}
+                      onClick={handleSavePasswordResetConfig}
+                      disabled={passwordResetSaving}
+                    >
+                      حفظ الإعدادات
+                    </Button>
+                    <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleResetPasswordResetDefaults} disabled={passwordResetSaving}>
+                      إعادة القيم الافتراضية
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Card sx={{ bgcolor: 'info.lighter' }}>
+                <CardContent>
+                  <Typography variant="subtitle1" gutterBottom>
+                    ملاحظات مهمة
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    اختيار TOKEN يعني تعطيل مسار OTP في API.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    اختيار OTP يعني تعطيل مسار رابط البريد في API.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    القيم هنا مرتبطة مباشرة بمفاتيح SYSTEM_SETTINGS ضمن فئة SECURITY.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
         {/* Category Settings Tabs */}
         {categories.map((category, idx) => (
-          <TabPanel key={category} value={activeTab} index={idx + 2}>
+          <TabPanel key={category} value={activeTab} index={idx + 4}>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>

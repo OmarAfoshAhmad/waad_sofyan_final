@@ -11,6 +11,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 /**
  * Employer Entity - The ONLY top-level business entity in the system.
@@ -74,6 +75,39 @@ public class Employer {
      * Displayed on employer reports and documents
      */
     private String website;
+
+    /**
+     * Commercial Registration Number (رقم السجل التجاري)
+     * Required for financial reports and legal compliance
+     */
+    @Column(name = "cr_number")
+    private String crNumber;
+
+    /**
+     * Tax/VAT Number (الرقم الضريبي)
+     * Required for invoicing and financial reports
+     */
+    @Column(name = "tax_number")
+    private String taxNumber;
+
+    /**
+     * Contract start date with the employer (تاريخ بداية التعاقد)
+     */
+    @Column(name = "contract_start_date")
+    private LocalDate contractStartDate;
+
+    /**
+     * Contract end date with the employer (تاريخ انتهاء التعاقد)
+     */
+    @Column(name = "contract_end_date")
+    private LocalDate contractEndDate;
+
+    /**
+     * Maximum number of members allowed for this employer (الحد الأقصى للأعضاء)
+     * NULL means unlimited
+     */
+    @Column(name = "max_member_limit")
+    private Integer maxMemberLimit;
 
     @Builder.Default
     private Boolean active = true;

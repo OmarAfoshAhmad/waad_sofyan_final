@@ -25,7 +25,6 @@ public class BusinessDaysCalculatorService {
     /**
      * Libya Public Holidays for 2026.
      * 
-     * TODO: Move this to database table for easier maintenance by admins.
      * Future enhancement: SystemHolidays entity with year, date, name, active flag.
      */
     private static final List<LocalDate> PUBLIC_HOLIDAYS_2026 = List.of(
@@ -177,7 +176,6 @@ public class BusinessDaysCalculatorService {
         }
         
         // For now, only check 2026 holidays
-        // TODO: Extend to support multiple years when holidays are moved to database
         if (date.getYear() == 2026) {
             return PUBLIC_HOLIDAYS_2026.contains(date);
         }

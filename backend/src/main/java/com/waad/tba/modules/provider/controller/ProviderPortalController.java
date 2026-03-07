@@ -460,25 +460,25 @@ public class ProviderPortalController {
     )
     public ResponseEntity<Page<ProviderVisitResponse>> getVisitLog(
             @Parameter(description = "Member ID filter") 
-            @RequestParam(required = false) Long memberId,
+            @RequestParam(name = "memberId", required = false) Long memberId,
             @Parameter(description = "Member name/card number/civil ID search") 
-            @RequestParam(required = false) String memberName,
+            @RequestParam(name = "memberName", required = false) String memberName,
             @Parameter(description = "Status filter (REGISTERED, IN_PROGRESS, CLAIM_SUBMITTED, etc.)") 
-            @RequestParam(required = false) String status,
+            @RequestParam(name = "status", required = false) String status,
             @Parameter(description = "Visit type filter (OUTPATIENT, INPATIENT, ...)")
-            @RequestParam(required = false) String visitType,
+            @RequestParam(name = "visitType", required = false) String visitType,
             @Parameter(description = "From date filter (YYYY-MM-DD)") 
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @Parameter(description = "To date filter (YYYY-MM-DD)") 
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @Parameter(description = "Page number (0-based)") 
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(name = "page", defaultValue = "0") int page,
             @Parameter(description = "Page size") 
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(name = "size", defaultValue = "10") int size,
             @Parameter(description = "Sort field") 
-            @RequestParam(defaultValue = "visitDate") String sortBy,
+            @RequestParam(name = "sortBy", defaultValue = "visitDate") String sortBy,
             @Parameter(description = "Sort direction (asc/desc)") 
-            @RequestParam(defaultValue = "desc") String sortDir) {
+            @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir) {
         
         String providerUsername = authorizationService.getCurrentUser() != null 
             ? authorizationService.getCurrentUser().getUsername() 
@@ -745,7 +745,7 @@ public class ProviderPortalController {
     )
     public ResponseEntity<ApiResponse<EffectivePriceResponseDto>> getServicePrice(
             @PathVariable String serviceCode,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         
         // ════════════════════════════════════════════════════════════════════════
         // PROVIDER ISOLATION: Get provider ID from security context
@@ -941,8 +941,8 @@ public class ProviderPortalController {
         description = "Services retrieved successfully"
     )
     public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<MyContractServiceDto>>> getMyContractServices(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "200") int size) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "200") int size) {
         
         Long providerId = providerContextGuard.getProviderFilter();
         
@@ -1063,9 +1063,9 @@ public class ProviderPortalController {
         description = "Returns contract services that require pre-approval based on member's benefit policy"
     )
     public ResponseEntity<ApiResponse<java.util.List<MyContractServiceDto>>> getServicesRequiringPreAuth(
-            @RequestParam Long memberId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "500") int size) {
+            @RequestParam(name = "memberId") Long memberId,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "500") int size) {
         
         Long providerId = providerContextGuard.getProviderFilter();
         

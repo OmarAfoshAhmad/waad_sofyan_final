@@ -47,8 +47,8 @@ public class ProviderController {
     @GetMapping("/selector")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     public ResponseEntity<ApiResponse<PaginationResponse<ProviderSelectorDto>>> getSelectorOptions(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "1000") int size) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "1000") int size) {
         
         // Cap maximum size at 1000
         size = Math.min(size, 1000);
@@ -112,9 +112,9 @@ public class ProviderController {
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PaginationResponse<ProviderViewDto>>> listProviders(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String search) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "search", required = false) String search) {
         Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search);
 
         PaginationResponse<ProviderViewDto> response = PaginationResponse.<ProviderViewDto>builder()
@@ -157,7 +157,7 @@ public class ProviderController {
 
     @GetMapping("/search")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<List<ProviderViewDto>>> search(@RequestParam String query) {
+    public ResponseEntity<ApiResponse<List<ProviderViewDto>>> search(@RequestParam(name = "query") String query) {
         List<ProviderViewDto> results = providerService.search(query);
         return ResponseEntity.ok(ApiResponse.success(results));
     }
@@ -302,11 +302,11 @@ public class ProviderController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<PaginationResponse<ProviderContractResponseDto>> getProviderContracts(
             @PathVariable Long id,
-            @RequestParam(defaultValue = "true") boolean activeOnly,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "effectiveFrom") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortDir) {
+            @RequestParam(name = "activeOnly", defaultValue = "true") boolean activeOnly,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "effectiveFrom") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
         
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts?activeOnly={}&page={}&size={}", 
                 id, activeOnly, page, size);
@@ -400,7 +400,7 @@ public class ProviderController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<java.util.List<ProviderPortalController.ProviderServiceDto>>> getServicesRequiringPreAuth(
             @PathVariable Long id,
-            @RequestParam Long memberId) {
+            @RequestParam(name = "memberId") Long memberId) {
         
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contract/services/requiring-preauth?memberId={}", 
                 id, memberId);

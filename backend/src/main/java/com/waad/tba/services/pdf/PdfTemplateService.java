@@ -25,6 +25,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Deprecated(since = "2026-01", forRemoval = false)
+@SuppressWarnings("dep-ann")
 public class PdfTemplateService {
     
     private final TemplateEngine templateEngine;

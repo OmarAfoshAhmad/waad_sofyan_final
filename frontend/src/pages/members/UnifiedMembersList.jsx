@@ -250,7 +250,8 @@ const UnifiedMembersList = () => {
       closeDialog();
     } catch (error) {
       console.error(errorMessage, error);
-      enqueueSnackbar(errorMessage, { variant: 'error' });
+      const apiMessage = error?.response?.data?.message || error?.response?.data?.error;
+      enqueueSnackbar(apiMessage || errorMessage, { variant: 'error' });
     }
   };
 
@@ -287,6 +288,23 @@ const UnifiedMembersList = () => {
       severity: 'error',
       confirmText: 'نعم، احذف نهائياً',
       onConfirm: () => handleConfirmAction(() => hardDeleteMember(member.id), 'تم الحذف النهائي بنجاح', 'خطأ في الحذف النهائي')
+    });
+  };
+
+  const handleToggleActiveClick = (member) => {
+    const newActive = member.active === false ? true : false;
+    setConfirmDialog({
+      open: true,
+      title: newActive ? 'تفعيل المستفيد؟' : 'إيقاف المستفيد؟',
+      content: `سيتم ${newActive ? 'تفعيل' : 'إيقاف'} المستفيد ${member.fullName}.`,
+      severity: newActive ? 'success' : 'warning',
+      confirmText: newActive ? 'نعم، فعّله' : 'نعم، أوقفه',
+      onConfirm: () =>
+        handleConfirmAction(
+          () => toggleMemberActive(member.id, newActive),
+          newActive ? 'تم تفعيل المستفيد بنجاح' : 'تم إيقاف المستفيد بنجاح',
+          'خطأ في تغيير حالة المستفيد'
+        )
     });
   };
 
@@ -337,7 +355,7 @@ const UnifiedMembersList = () => {
             variant="outlined"
             size="small"
             color="secondary"
-            sx={{ fontWeight: 'medium', fontFamily: 'monospace' }}
+            sx={{ fontWeight: 'medium', fontFamily: 'monospace', minWidth: 160, justifyContent: 'center' }}
           />
         );
 

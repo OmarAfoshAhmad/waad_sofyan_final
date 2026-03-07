@@ -198,6 +198,23 @@ export const restoreMember = async (id) => {
 };
 
 /**
+ * Toggle active/inactive status for a member
+ *
+ * @param {number} id - Member ID
+ * @param {boolean} active - true to activate, false to deactivate
+ * @returns {Promise<Object>} Updated member
+ */
+export const toggleMemberActive = async (id, active) => {
+  try {
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/active`, null, { params: { active } });
+    return response.data;
+  } catch (error) {
+    console.error('Error toggling member active status:', error);
+    throw error;
+  }
+};
+
+/**
  * Physically delete a member from the database
  *
  * @param {number} id - Member ID

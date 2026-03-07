@@ -68,7 +68,8 @@ public class PreAuthorizationService {
     // ==================== CREATE ====================
 
     /**
-     * Create a new pre-authorization with contract price lookup (CANONICAL REBUILD 2026-01-16)
+     * Create a new pre-authorization with contract price lookup (CANONICAL REBUILD
+     * 2026-01-16)
      * 
      * ARCHITECTURAL LAWS:
      * 1. Pre-authorization MUST be linked to an existing Visit
@@ -80,15 +81,15 @@ public class PreAuthorizationService {
      */
     @Transactional
     public PreAuthorizationResponseDto createPreAuthorization(PreAuthorizationCreateDto dto, String createdBy) {
-        log.info("[PRE-AUTH] Creating pre-authorization: visitId={}, medicalServiceId={}", 
-                 dto.getVisitId(), dto.getMedicalServiceId());
+        log.info("[PRE-AUTH] Creating pre-authorization: visitId={}, medicalServiceId={}",
+                dto.getVisitId(), dto.getMedicalServiceId());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // PROVIDER PORTAL: Validate and enforce provider ID from JWT
         // ═══════════════════════════════════════════════════════════════════════════
         User currentUser = authorizationService.getCurrentUser();
         validateAndEnforceProviderId(dto, currentUser);
-        
+
         // ═══════════════════════════════════════════════════════════════════════════
         // ARCHITECTURAL GUARD: Validate system invariants before processing
         // ═══════════════════════════════════════════════════════════════════════════
@@ -99,23 +100,23 @@ public class PreAuthorizationService {
         // ═══════════════════════════════════════════════════════════════════════════
         Visit visit = visitRepository.findById(dto.getVisitId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                    "ARCHITECTURAL VIOLATION: Visit not found with ID: " + dto.getVisitId() + 
-                    ". Pre-authorization MUST be created from an existing Visit."));
-        
-        if (visit.getStatus() != null && "CANCELLED".equals(visit.getStatus().toString())) {
+                        "ARCHITECTURAL VIOLATION: Visit not found with ID: " + dto.getVisitId() +
+                                ". Pre-authorization MUST be created from an existing Visit."));
+
+        if (visit.getStatus() == com.waad.tba.modules.visit.entity.VisitStatus.CANCELLED) {
             throw new IllegalArgumentException("Cannot create pre-authorization for a cancelled visit");
         }
-        
+
         // Get member from visit
         Member member = visit.getMember();
         if (member == null) {
             throw new IllegalArgumentException("Visit has no associated member");
         }
-        
+
         if (!member.getActive()) {
             throw new IllegalArgumentException("Member is not active");
         }
-        
+
         log.info("[PRE-AUTH] Visit {} validated. Member: {}", dto.getVisitId(), member.getId());
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -123,7 +124,7 @@ public class PreAuthorizationService {
         // ═══════════════════════════════════════════════════════════════════════════
         Provider provider = providerRepository.findById(dto.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider not found with ID: " + dto.getProviderId()));
-        
+
         if (!provider.getActive()) {
             throw new IllegalArgumentException("Provider is not active");
         }
@@ -133,18 +134,18 @@ public class PreAuthorizationService {
         // ═══════════════════════════════════════════════════════════════════════════
         MedicalService service = medicalServiceRepository.findById(dto.getMedicalServiceId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                    "ARCHITECTURAL VIOLATION: Medical Service not found with ID: " + dto.getMedicalServiceId() + 
-                    ". Service MUST be selected from catalog."));
-        
+                        "ARCHITECTURAL VIOLATION: Medical Service not found with ID: " + dto.getMedicalServiceId() +
+                                ". Service MUST be selected from catalog."));
+
         if (!service.isActive()) {
             throw new IllegalArgumentException("Medical service is not active");
         }
-        
+
         // NOTE: requiresPA check removed from MedicalService.
         // PA requirement is now determined by BenefitPolicyRule.requiresPreApproval.
         // Providers can submit PreAuthorization for ANY service - the insurance company
         // will decide whether to approve based on policy rules.
-        
+
         log.info("[PRE-AUTH] Medical Service validated: {} ({})", service.getCode(), service.getName());
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -152,28 +153,27 @@ public class PreAuthorizationService {
         // ═══════════════════════════════════════════════════════════════════════════
         LocalDate requestDate = dto.getRequestDate() != null ? dto.getRequestDate() : LocalDate.now();
         BigDecimal contractPrice = null;
-        
+
         try {
             EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
                     dto.getProviderId(),
                     service.getCode(),
-                    requestDate
-            );
-            
+                    requestDate);
+
             if (priceResponse.isHasContract()) {
                 contractPrice = priceResponse.getContractPrice();
-                log.info("[PRE-AUTH] Contract price resolved: {} LYD for service {}", 
-                         contractPrice, service.getCode());
+                log.info("[PRE-AUTH] Contract price resolved: {} LYD for service {}",
+                        contractPrice, service.getCode());
             } else {
                 // ARCHITECTURAL LAW: Service MUST be in Provider Contract
                 throw new IllegalArgumentException(
-                    "ARCHITECTURAL VIOLATION: Service '" + service.getCode() + 
-                    "' is not covered by Provider's contract. Select a covered service.");
+                        "ARCHITECTURAL VIOLATION: Service '" + service.getCode() +
+                                "' is not covered by Provider's contract. Select a covered service.");
             }
         } catch (ResourceNotFoundException e) {
             throw new IllegalArgumentException(
-                "ARCHITECTURAL VIOLATION: No active contract found for provider " + dto.getProviderId() + 
-                ". Provider must have an active contract to create pre-authorizations.");
+                    "ARCHITECTURAL VIOLATION: No active contract found for provider " + dto.getProviderId() +
+                            ". Provider must have an active contract to create pre-authorizations.");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -196,27 +196,29 @@ public class PreAuthorizationService {
         if (service.getCategoryId() != null) {
             serviceType = "CATEGORY_" + service.getCategoryId();
         }
-        
+
         // ═══════════════════════════════════════════════════════════════════════════
         // CANONICAL: Category resolution - prefer DTO, fallback to service.categoryId
-        // This enables correct coverage resolution when same service exists in multiple categories
+        // This enables correct coverage resolution when same service exists in multiple
+        // categories
         // ═══════════════════════════════════════════════════════════════════════════
-        Long serviceCategoryId = dto.getServiceCategoryId() != null 
-                ? dto.getServiceCategoryId() 
+        Long serviceCategoryId = dto.getServiceCategoryId() != null
+                ? dto.getServiceCategoryId()
                 : service.getCategoryId();
         String serviceCategoryName = dto.getServiceCategoryName();
-        
+
         // ═══════════════════════════════════════════════════════════════════════════
         // ARCHITECTURAL GUARD: Validate that service belongs to selected category
         // This is a HARD FAILURE - protects against Postman attacks or frontend bugs
         // ═══════════════════════════════════════════════════════════════════════════
         if (dto.getServiceCategoryId() != null && service.getCategoryId() != null) {
             if (!dto.getServiceCategoryId().equals(service.getCategoryId())) {
-                log.error("🚫 ARCHITECTURAL VIOLATION: Service {} does not belong to category {}. Service's actual category: {}",
+                log.error(
+                        "🚫 ARCHITECTURAL VIOLATION: Service {} does not belong to category {}. Service's actual category: {}",
                         service.getCode(), dto.getServiceCategoryId(), service.getCategoryId());
                 throw new IllegalArgumentException(
-                    "الخدمة الطبية '" + service.getName() + "' (" + service.getCode() + 
-                    ") لا تنتمي للتصنيف الطبي المختار. يرجى التأكد من اختيار التصنيف الصحيح.");
+                        "الخدمة الطبية '" + service.getName() + "' (" + service.getCode() +
+                                ") لا تنتمي للتصنيف الطبي المختار. يرجى التأكد من اختيار التصنيف الصحيح.");
             }
         }
 
@@ -227,26 +229,27 @@ public class PreAuthorizationService {
         var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForService(member, service.getId());
         Integer coveragePercentSnapshot = coverageInfoOpt.map(c -> c.getCoveragePercent()).orElse(null);
         Integer patientCopayPercentSnapshot = coveragePercentSnapshot != null ? (100 - coveragePercentSnapshot) : null;
-        log.info("[PRE-AUTH] Coverage snapshot: coverage={}%, copay={}%", coveragePercentSnapshot, patientCopayPercentSnapshot);
+        log.info("[PRE-AUTH] Coverage snapshot: coverage={}%, copay={}%", coveragePercentSnapshot,
+                patientCopayPercentSnapshot);
 
         PreAuthorization preAuth = PreAuthorization.builder()
-                .preAuthNumber(referenceNumber)      // Legacy column (required by database)
+                .preAuthNumber(referenceNumber) // Legacy column (required by database)
                 .referenceNumber(referenceNumber)
                 .memberId(member.getId())
                 .providerId(dto.getProviderId())
-                .visit(visit)                        // FK to Visit
-                .medicalService(service)             // FK to MedicalService (NO FREE-TEXT)
-                .serviceCode(service.getCode())      // Denormalized snapshot
-                .serviceName(service.getName())      // Denormalized snapshot
-                .serviceType(serviceType)            // Legacy column (required by database)
-                .serviceCategoryId(serviceCategoryId)   // CANONICAL: From DTO or service
+                .visit(visit) // FK to Visit
+                .medicalService(service) // FK to MedicalService (NO FREE-TEXT)
+                .serviceCode(service.getCode()) // Denormalized snapshot
+                .serviceName(service.getName()) // Denormalized snapshot
+                .serviceType(serviceType) // Legacy column (required by database)
+                .serviceCategoryId(serviceCategoryId) // CANONICAL: From DTO or service
                 .serviceCategoryName(serviceCategoryName) // CANONICAL: For display
                 .requestDate(requestDate)
-                .expectedServiceDate(requestDate)    // Default: same as request date
+                .expectedServiceDate(requestDate) // Default: same as request date
                 .expiryDate(expiryDate)
-                .contractPrice(contractPrice)        // AUTO-RESOLVED from contract
-                .requiresPA(true)                    // PreAuthorization always requires PA (that's why it exists)
-                .coveragePercentSnapshot(coveragePercentSnapshot)     // SNAPSHOT for financial audit
+                .contractPrice(contractPrice) // AUTO-RESOLVED from contract
+                .requiresPA(true) // PreAuthorization always requires PA (that's why it exists)
+                .coveragePercentSnapshot(coveragePercentSnapshot) // SNAPSHOT for financial audit
                 .patientCopayPercentSnapshot(patientCopayPercentSnapshot) // SNAPSHOT for financial audit
                 .currency(dto.getCurrency() != null ? dto.getCurrency() : "LYD")
                 .status(PreAuthStatus.PENDING)
@@ -262,11 +265,11 @@ public class PreAuthorizationService {
         // STEP 6: Save and Return
         // ═══════════════════════════════════════════════════════════════════════════
         preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("[PRE-AUTH] Created pre-authorization: id={}, ref={}, contractPrice={}", 
-                 preAuth.getId(), preAuth.getReferenceNumber(), contractPrice);
+        log.info("[PRE-AUTH] Created pre-authorization: id={}, ref={}, contractPrice={}",
+                preAuth.getId(), preAuth.getReferenceNumber(), contractPrice);
 
         // Log audit trail
-        auditService.logCreate(preAuth.getId(), preAuth.getReferenceNumber(), createdBy, 
+        auditService.logCreate(preAuth.getId(), preAuth.getReferenceNumber(), createdBy,
                 "Created with contract price: " + contractPrice + " LYD");
 
         return mapToResponseDto(preAuth, member, provider, service);
@@ -278,7 +281,8 @@ public class PreAuthorizationService {
      * Update pre-authorization (only if PENDING)
      */
     @Transactional
-    public PreAuthorizationResponseDto updatePreAuthorization(Long id, PreAuthorizationUpdateDto dto, String updatedBy) {
+    public PreAuthorizationResponseDto updatePreAuthorization(Long id, PreAuthorizationUpdateDto dto,
+            String updatedBy) {
         log.info("[PRE-AUTH] Updating pre-authorization {}", id);
 
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
@@ -322,11 +326,11 @@ public class PreAuthorizationService {
 
         // Audit logging
         if (dto.getDiagnosisCode() != null && !dto.getDiagnosisCode().equals(oldDiagnosisCode)) {
-            auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy, 
+            auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy,
                     "diagnosisCode", oldDiagnosisCode, dto.getDiagnosisCode());
         }
         if (dto.getDiagnosisDescription() != null && !dto.getDiagnosisDescription().equals(oldDiagnosisDescription)) {
-            auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy, 
+            auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy,
                     "diagnosisDescription", oldDiagnosisDescription, dto.getDiagnosisDescription());
         }
 
@@ -345,8 +349,8 @@ public class PreAuthorizationService {
      * Update pre-authorization DATA only (for PROVIDER and EMPLOYER_ADMIN).
      * SECURITY: Only allowed in PENDING and NEEDS_CORRECTION statuses.
      * 
-     * @param id PreAuth ID
-     * @param dto Data update DTO (no status/financial fields)
+     * @param id        PreAuth ID
+     * @param dto       Data update DTO (no status/financial fields)
      * @param updatedBy Username
      * @return Updated pre-authorization
      * @since Provider Portal Security Fix (Phase 3)
@@ -354,22 +358,22 @@ public class PreAuthorizationService {
     @Transactional
     public PreAuthorizationResponseDto updatePreAuthData(Long id, PreAuthDataUpdateDto dto, String updatedBy) {
         log.info("[PRE-AUTH] Updating pre-authorization DATA: id={}", id);
-        
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-        
+
         if (!preAuth.getActive()) {
             throw new IllegalArgumentException("PreAuthorization is not active");
         }
-        
+
         // SECURITY: Verify status allows editing
         if (!preAuth.allowsEdit()) {
             throw new BusinessRuleException(
-                String.format("Cannot edit pre-authorization in %s status. Only PENDING and NEEDS_CORRECTION allow edits.",
-                    preAuth.getStatus())
-            );
+                    String.format(
+                            "Cannot edit pre-authorization in %s status. Only PENDING and NEEDS_CORRECTION allow edits.",
+                            preAuth.getStatus()));
         }
-        
+
         // Update data fields only
         if (dto.getExpectedServiceDate() != null) {
             preAuth.setExpectedServiceDate(dto.getExpectedServiceDate());
@@ -385,20 +389,20 @@ public class PreAuthorizationService {
                 log.warn("[PRE-AUTH] Invalid priority: {}", dto.getPriority());
             }
         }
-        
+
         preAuth.setUpdatedBy(updatedBy);
         preAuth = preAuthorizationRepository.save(preAuth);
-        
+
         // Audit trail
         auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy, "data", "updated", "data_updated");
-        
+
         log.info("✅ [PRE-AUTH] Data updated: id={}", id);
-        
+
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
         MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
-        
+
         return mapToResponseDto(preAuth, member, provider, service);
     }
 
@@ -406,8 +410,8 @@ public class PreAuthorizationService {
      * Review pre-authorization (for REVIEWER and INSURANCE_ADMIN only).
      * SECURITY: Reviewers can ONLY change status/comment/approvedAmount.
      * 
-     * @param id PreAuth ID
-     * @param dto Review DTO (status, comment, approvedAmount only)
+     * @param id         PreAuth ID
+     * @param dto        Review DTO (status, comment, approvedAmount only)
      * @param reviewedBy Username
      * @return Updated pre-authorization
      * @since Provider Portal Security Fix (Phase 3)
@@ -415,50 +419,54 @@ public class PreAuthorizationService {
     @Transactional
     public PreAuthorizationResponseDto reviewPreAuth(Long id, PreAuthReviewDto dto, String reviewedBy) {
         log.info("[PRE-AUTH] Reviewing pre-authorization: id={}, newStatus={}", id, dto.getStatus());
-        
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-        
+
         if (!preAuth.getActive()) {
             throw new IllegalArgumentException("PreAuthorization is not active");
         }
-        
-        // SECURITY: Verify reviewer permissions
+
+        // Cannot review a cancelled pre-authorization
+        if (preAuth.getStatus() == PreAuthStatus.CANCELLED) {
+            throw new IllegalStateException(
+                    "Cannot review a cancelled pre-authorization. ID: " + id);
+        }
         User currentUser = authorizationService.getCurrentUser();
         if (!authorizationService.isReviewer(currentUser) &&
-            !authorizationService.isInsuranceAdmin(currentUser) &&
-            !authorizationService.isSuperAdmin(currentUser)) {
+                !authorizationService.isInsuranceAdmin(currentUser) &&
+                !authorizationService.isSuperAdmin(currentUser)) {
             throw new AccessDeniedException("Only reviewers can perform review actions");
         }
-        
+
         // SECURITY: Apply reviewer-provider isolation
         if (authorizationService.isReviewer(currentUser)) {
             reviewerIsolationService.validateReviewerAccess(currentUser, preAuth.getProviderId());
         }
-        
+
         PreAuthStatus previousStatus = preAuth.getStatus();
-        
+
         // Validate status transition
         if (dto.getStatus() != previousStatus) {
             // Validation for specific statuses
             if (dto.getStatus() == PreAuthStatus.REJECTED || dto.getStatus() == PreAuthStatus.NEEDS_CORRECTION) {
                 if (dto.getReviewerComment() == null || dto.getReviewerComment().isBlank()) {
                     throw new BusinessRuleException(
-                        dto.getStatus() + " status requires a reviewer comment");
+                            dto.getStatus() + " status requires a reviewer comment");
                 }
             }
-            
+
             if (dto.getStatus() == PreAuthStatus.APPROVED) {
                 if (dto.getApprovedAmount() == null || dto.getApprovedAmount().compareTo(BigDecimal.ZERO) <= 0) {
                     throw new BusinessRuleException("APPROVED status requires approved amount > 0");
                 }
                 preAuth.setApprovedAmount(dto.getApprovedAmount());
-                
+
                 if (dto.getCopayPercentage() != null) {
                     preAuth.setCopayPercentage(dto.getCopayPercentage());
                 }
             }
-            
+
             // Set rejection reason (using existing field)
             if (dto.getReviewerComment() != null) {
                 if (dto.getStatus() == PreAuthStatus.REJECTED) {
@@ -468,39 +476,39 @@ public class PreAuthorizationService {
                     preAuth.setNotes(dto.getReviewerComment());
                 }
             }
-            
+
             // Perform status transition
             preAuth.setStatus(dto.getStatus());
         }
-        
+
         preAuth.setUpdatedBy(reviewedBy);
         if (dto.getStatus() == PreAuthStatus.APPROVED) {
             preAuth.setApprovedBy(reviewedBy);
             preAuth.setApprovedAt(LocalDateTime.now());
         }
         preAuth = preAuthorizationRepository.save(preAuth);
-        
+
         // Audit trail
         if (dto.getStatus() == PreAuthStatus.APPROVED) {
-            auditService.logApprove(id, preAuth.getReferenceNumber(), reviewedBy, 
+            auditService.logApprove(id, preAuth.getReferenceNumber(), reviewedBy,
                     dto.getReviewerComment() != null ? dto.getReviewerComment() : "Approved");
         } else if (dto.getStatus() == PreAuthStatus.REJECTED) {
-            auditService.logReject(id, preAuth.getReferenceNumber(), reviewedBy, 
+            auditService.logReject(id, preAuth.getReferenceNumber(), reviewedBy,
                     dto.getReviewerComment() != null ? dto.getReviewerComment() : "Rejected");
         } else {
             // For NEEDS_CORRECTION and other status changes
-            auditService.logUpdate(id, preAuth.getReferenceNumber(), reviewedBy, 
-                    previousStatus.name(), dto.getStatus().name(), 
+            auditService.logUpdate(id, preAuth.getReferenceNumber(), reviewedBy,
+                    previousStatus.name(), dto.getStatus().name(),
                     dto.getReviewerComment() != null ? dto.getReviewerComment() : "Status changed");
         }
-        
+
         log.info("✅ [PRE-AUTH] Reviewed: id={}, status={}", id, preAuth.getStatus());
-        
+
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
         MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
-        
+
         return mapToResponseDto(preAuth, member, provider, service);
     }
 
@@ -508,7 +516,7 @@ public class PreAuthorizationService {
      * Submit pre-authorization for review.
      * Transitions from PENDING or NEEDS_CORRECTION to UNDER_REVIEW.
      * 
-     * @param id PreAuth ID
+     * @param id          PreAuth ID
      * @param submittedBy Username
      * @return Updated pre-authorization
      * @since Provider Portal Draft-First Model (Phase 3)
@@ -516,40 +524,40 @@ public class PreAuthorizationService {
     @Transactional
     public PreAuthorizationResponseDto submitPreAuth(Long id, String submittedBy) {
         log.info("[PRE-AUTH] Submitting pre-authorization: id={}", id);
-        
+
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-        
+
         if (!preAuth.getActive()) {
             throw new IllegalArgumentException("PreAuthorization is not active");
         }
-        
+
         // Validate current status allows submission
         if (preAuth.getStatus() != PreAuthStatus.PENDING && preAuth.getStatus() != PreAuthStatus.NEEDS_CORRECTION) {
             throw new BusinessRuleException(
-                String.format("Cannot submit pre-authorization in %s status. Only PENDING and NEEDS_CORRECTION can be submitted.",
-                    preAuth.getStatus())
-            );
+                    String.format(
+                            "Cannot submit pre-authorization in %s status. Only PENDING and NEEDS_CORRECTION can be submitted.",
+                            preAuth.getStatus()));
         }
-        
+
         PreAuthStatus previousStatus = preAuth.getStatus();
-        
+
         // Transition to UNDER_REVIEW
         preAuth.setStatus(PreAuthStatus.UNDER_REVIEW);
         preAuth.setUpdatedBy(submittedBy);
         preAuth = preAuthorizationRepository.save(preAuth);
-        
+
         // Audit trail
-        auditService.logUpdate(id, preAuth.getReferenceNumber(), submittedBy, 
+        auditService.logUpdate(id, preAuth.getReferenceNumber(), submittedBy,
                 previousStatus.name(), PreAuthStatus.UNDER_REVIEW.name(), "Pre-authorization submitted for review");
-        
+
         log.info("✅ [PRE-AUTH] Submitted: id={}, status={}", id, preAuth.getStatus());
-        
+
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
         MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
-        
+
         return mapToResponseDto(preAuth, member, provider, service);
     }
 
@@ -559,14 +567,16 @@ public class PreAuthorizationService {
      * Approve pre-authorization with copay calculation
      */
     @Transactional
-    public PreAuthorizationResponseDto approvePreAuthorization(Long id, PreAuthorizationApproveDto dto, String approvedBy) {
+    public PreAuthorizationResponseDto approvePreAuthorization(Long id, PreAuthorizationApproveDto dto,
+            String approvedBy) {
         log.info("[PRE-AUTH] Approving pre-authorization {}", id);
 
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
         if (!preAuth.canBeApproved()) {
-            throw new IllegalStateException("PreAuthorization cannot be approved in current status: " + preAuth.getStatus());
+            throw new IllegalStateException(
+                    "PreAuthorization cannot be approved in current status: " + preAuth.getStatus());
         }
 
         BigDecimal approvedAmount = resolveApprovedAmount(preAuth, dto);
@@ -574,8 +584,8 @@ public class PreAuthorizationService {
 
         // Validate approved amount against contract price
         if (preAuth.getContractPrice() != null && approvedAmount.compareTo(preAuth.getContractPrice()) > 0) {
-            log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}", 
-                     approvedAmount, preAuth.getContractPrice());
+            log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}",
+                    approvedAmount, preAuth.getContractPrice());
         }
 
         // Calculate copay
@@ -584,28 +594,26 @@ public class PreAuthorizationService {
         // Approve
         preAuth.approve(approvedAmount, copayAmount, approvedBy);
         preAuth.setCopayPercentage(copayPercentage);
-        
+
         if (dto.getApprovalNotes() != null) {
-            preAuth.setNotes((preAuth.getNotes() != null ? preAuth.getNotes() + "\n" : "") + 
-                            "Approval Notes: " + dto.getApprovalNotes());
+            preAuth.setNotes((preAuth.getNotes() != null ? preAuth.getNotes() + "\n" : "") +
+                    "Approval Notes: " + dto.getApprovalNotes());
         }
 
         preAuth = preAuthorizationRepository.save(preAuth);
-        log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}", 
-                 id, approvedAmount, copayAmount);
+        log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}",
+                id, approvedAmount, copayAmount);
 
-        // Update visit status if linked
-        if (preAuth.getVisit() != null) {
-            Visit visit = preAuth.getVisit();
-            visit.setStatus(com.waad.tba.modules.visit.entity.VisitStatus.COMPLETED);
-            visitRepository.save(visit);
-            log.info("✅ Updated visit {} status to COMPLETED after pre-auth approval", visit.getId());
-        }
+        // Note: visit status is NOT auto-set to COMPLETED here.
+        // A visit may have multiple pre-authorizations and claims.
+        // Visit completion is managed by the provider or when all linked items are
+        // settled.
+        log.debug("[PRE-AUTH] Pre-auth {} approved; visit status unchanged (may have other pending items)", id);
 
         // Log audit trail
         auditService.logApprove(id, preAuth.getReferenceNumber(), approvedBy,
-            "Approved amount: " + approvedAmount + 
-            ", Copay: " + copayPercentage + "%");
+                "Approved amount: " + approvedAmount +
+                        ", Copay: " + copayPercentage + "%");
 
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
@@ -621,9 +629,11 @@ public class PreAuthorizationService {
      * ═══════════════════════════════════════════════════════════════════════════════
      * 
      * This is the NEW approval endpoint that returns immediately.
-     * It transitions the pre-auth to APPROVAL_IN_PROGRESS and triggers async processing.
+     * It transitions the pre-auth to APPROVAL_IN_PROGRESS and triggers async
+     * processing.
      * 
-     * REPLACES: approvePreAuthorization() for production use (old method kept for backward compatibility)
+     * REPLACES: approvePreAuthorization() for production use (old method kept for
+     * backward compatibility)
      * 
      * FLOW:
      * 1. Validate pre-auth exists and is in valid state
@@ -631,46 +641,47 @@ public class PreAuthorizationService {
      * 3. Trigger async background processing
      * 4. Return immediately with status "APPROVAL_IN_PROGRESS"
      * 
-     * @param id PreAuthorization ID
-     * @param dto Approval details
+     * @param id         PreAuthorization ID
+     * @param dto        Approval details
      * @param approvedBy User approving
      * @return PreAuth with APPROVAL_IN_PROGRESS status
      */
     @Transactional
     public PreAuthorizationResponseDto requestApproval(Long id, PreAuthorizationApproveDto dto, String approvedBy) {
         log.info("🚀 [SPLIT-PHASE] Phase 1: Requesting approval for pre-auth {}", id);
-        
+
         // Quick validation without heavy locks
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-        
+
         if (!preAuth.canBeApproved()) {
-            throw new IllegalStateException("PreAuthorization cannot be approved in current status: " + preAuth.getStatus());
+            throw new IllegalStateException(
+                    "PreAuthorization cannot be approved in current status: " + preAuth.getStatus());
         }
-        
+
         // Store approval metadata for async processing
         if (dto.getApprovalNotes() != null) {
-            preAuth.setNotes((preAuth.getNotes() != null ? preAuth.getNotes() + "\n" : "") + 
-                            "Approval Notes: " + dto.getApprovalNotes());
+            preAuth.setNotes((preAuth.getNotes() != null ? preAuth.getNotes() + "\n" : "") +
+                    "Approval Notes: " + dto.getApprovalNotes());
         }
-        
+
         // Transition to APPROVAL_IN_PROGRESS
         preAuth.setStatus(PreAuthStatus.APPROVAL_IN_PROGRESS);
         PreAuthorization savedPreAuth = preAuthorizationRepository.save(preAuth);
-        
+
         log.info("✅ [SPLIT-PHASE] Phase 1 complete: PreAuth {} marked as APPROVAL_IN_PROGRESS", id);
-        
+
         // Trigger async phase 2 processing
         processApprovalAsync(id, dto, approvedBy);
-        
+
         // Fetch related entities for response
         Member member = memberRepository.findById(savedPreAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(savedPreAuth.getProviderId()).orElse(null);
         MedicalService service = medicalServiceRepository.findByCode(savedPreAuth.getServiceCode()).orElse(null);
-        
+
         return mapToResponseDto(savedPreAuth, member, provider, service);
     }
-    
+
     /**
      * ═══════════════════════════════════════════════════════════════════════════════
      * SPLIT-PHASE APPROVAL: PHASE 2 - Process Approval (Heavy, Background)
@@ -687,78 +698,76 @@ public class PreAuthorizationService {
      * 
      * ISOLATION: REQUIRES_NEW to avoid deadlocks with Phase 1
      * 
-     * @param id PreAuthorization ID
-     * @param dto Approval details (from Phase 1)
+     * @param id         PreAuthorization ID
+     * @param dto        Approval details (from Phase 1)
      * @param approvedBy User approving
      */
     @org.springframework.scheduling.annotation.Async("approvalTaskExecutor")
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
-                   isolation = org.springframework.transaction.annotation.Isolation.SERIALIZABLE)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, isolation = org.springframework.transaction.annotation.Isolation.SERIALIZABLE)
     public void processApprovalAsync(Long id, PreAuthorizationApproveDto dto, String approvedBy) {
         log.info("⚙️ [SPLIT-PHASE] Phase 2: Starting async approval processing for pre-auth {}", id);
-        
+
         try {
             PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                     .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
-            
+
             log.info("🔒 [ASYNC-PROCESSING] Processing pre-auth {}", id);
 
             if (preAuth.getStatus() != PreAuthStatus.APPROVAL_IN_PROGRESS) {
-                throw new IllegalStateException("PreAuthorization is not in APPROVAL_IN_PROGRESS status: " + preAuth.getStatus());
+                throw new IllegalStateException(
+                        "PreAuthorization is not in APPROVAL_IN_PROGRESS status: " + preAuth.getStatus());
             }
 
             BigDecimal approvedAmount = resolveApprovedAmount(preAuth, dto);
             BigDecimal copayPercentage = resolveCopayPercentage(preAuth, dto);
-            
+
             // Validate approved amount against contract price
             if (preAuth.getContractPrice() != null && approvedAmount.compareTo(preAuth.getContractPrice()) > 0) {
-                log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}", 
-                         approvedAmount, preAuth.getContractPrice());
+                log.warn("[PRE-AUTH] Approved amount {} exceeds contract price {}",
+                        approvedAmount, preAuth.getContractPrice());
             }
-            
+
             // Calculate copay
             BigDecimal copayAmount = preAuth.calculateCopay(approvedAmount, copayPercentage);
-            
+
             // Validate coverage if member has benefit policy
             Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
             if (member != null && member.getBenefitPolicy() != null) {
                 try {
                     benefitPolicyCoverageService.validateAmountLimits(
-                        member, member.getBenefitPolicy(), approvedAmount, 
-                        preAuth.getRequestDate() != null ? preAuth.getRequestDate() : LocalDate.now());
+                            member, member.getBenefitPolicy(), approvedAmount,
+                            preAuth.getRequestDate() != null ? preAuth.getRequestDate() : LocalDate.now());
                     log.debug("✅ BenefitPolicy amount validation passed");
                 } catch (Exception e) {
                     log.error("❌ BenefitPolicy coverage validation failed: {}", e.getMessage());
                     throw new IllegalStateException("فشل التحقق من التغطية: " + e.getMessage());
                 }
             }
-            
+
             // Approve
             preAuth.approve(approvedAmount, copayAmount, approvedBy);
             preAuth.setCopayPercentage(copayPercentage);
-            
+
             preAuth = preAuthorizationRepository.save(preAuth);
-            log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}", 
-                     id, approvedAmount, copayAmount);
-            
-            // Update visit status if linked
-            if (preAuth.getVisit() != null) {
-                Visit visit = preAuth.getVisit();
-                visit.setStatus(com.waad.tba.modules.visit.entity.VisitStatus.COMPLETED);
-                visitRepository.save(visit);
-                log.info("✅ Updated visit {} status to COMPLETED after pre-auth approval", visit.getId());
-            }
-            
+            log.info("[PRE-AUTH] Approved pre-authorization {} with amount {} and copay {}",
+                    id, approvedAmount, copayAmount);
+
+            // Note: visit status is NOT auto-set to COMPLETED here.
+            // A visit may have multiple pre-authorizations and claims.
+            // Visit completion is managed by the provider or when all linked items are
+            // settled.
+            log.debug("[PRE-AUTH] Pre-auth {} approved; visit status unchanged (may have other pending items)", id);
+
             // Log audit trail
             auditService.logApprove(id, preAuth.getReferenceNumber(), approvedBy,
-                    "Approved amount: " + approvedAmount + 
-                    ", Copay: " + copayPercentage + "%");
-            
+                    "Approved amount: " + approvedAmount +
+                            ", Copay: " + copayPercentage + "%");
+
             log.info("✅ [SPLIT-PHASE] Phase 2 complete: PreAuth {} approved successfully", id);
-            
+
         } catch (Exception e) {
             log.error("❌ [SPLIT-PHASE] Phase 2 failed for pre-auth {}: {}", id, e.getMessage(), e);
-            
+
             // On failure, transition to REJECTED with error message
             try {
                 PreAuthorization failedPreAuth = preAuthorizationRepository.findById(id).orElse(null);
@@ -817,7 +826,8 @@ public class PreAuthorizationService {
      * Reject pre-authorization
      */
     @Transactional
-    public PreAuthorizationResponseDto rejectPreAuthorization(Long id, PreAuthorizationRejectDto dto, String rejectedBy) {
+    public PreAuthorizationResponseDto rejectPreAuthorization(Long id, PreAuthorizationRejectDto dto,
+            String rejectedBy) {
         log.info("[PRE-AUTH] Rejecting pre-authorization {}", id);
 
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
@@ -891,8 +901,8 @@ public class PreAuthorizationService {
         // Validation: Only APPROVED pre-auths can be acknowledged
         if (preAuth.getStatus() != PreAuthStatus.APPROVED) {
             throw new IllegalStateException(
-                String.format("Only APPROVED pre-authorizations can be acknowledged. Current status: %s", 
-                              preAuth.getStatus()));
+                    String.format("Only APPROVED pre-authorizations can be acknowledged. Current status: %s",
+                            preAuth.getStatus()));
         }
 
         // Transition to ACKNOWLEDGED
@@ -904,8 +914,8 @@ public class PreAuthorizationService {
         log.info("✅ Pre-authorization {} acknowledged by provider", id);
 
         // Log audit trail
-        auditService.logUpdate(id, preAuth.getReferenceNumber(), acknowledgedBy, 
-                              "status", oldStatus.toString(), PreAuthStatus.ACKNOWLEDGED.toString());
+        auditService.logUpdate(id, preAuth.getReferenceNumber(), acknowledgedBy,
+                "status", oldStatus.toString(), PreAuthStatus.ACKNOWLEDGED.toString());
 
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
@@ -921,7 +931,8 @@ public class PreAuthorizationService {
      * Mark pre-authorization as USED (called when linked to a claim)
      * Lifecycle: APPROVED/ACKNOWLEDGED → USED
      * 
-     * This is typically called automatically by ClaimService when a claim is created with a pre-auth.
+     * This is typically called automatically by ClaimService when a claim is
+     * created with a pre-auth.
      */
     @Transactional
     public PreAuthorizationResponseDto markAsUsed(Long id, String claimNumber, String updatedBy) {
@@ -933,8 +944,9 @@ public class PreAuthorizationService {
         // Validation: Only APPROVED or ACKNOWLEDGED pre-auths can be marked as USED
         if (preAuth.getStatus() != PreAuthStatus.APPROVED && preAuth.getStatus() != PreAuthStatus.ACKNOWLEDGED) {
             throw new IllegalStateException(
-                String.format("Only APPROVED or ACKNOWLEDGED pre-authorizations can be marked as USED. Current status: %s", 
-                              preAuth.getStatus()));
+                    String.format(
+                            "Only APPROVED or ACKNOWLEDGED pre-authorizations can be marked as USED. Current status: %s",
+                            preAuth.getStatus()));
         }
 
         // Transition to USED
@@ -946,8 +958,8 @@ public class PreAuthorizationService {
         log.info("✅ Pre-authorization {} marked as USED (claim: {})", id, claimNumber);
 
         // Log audit trail
-        auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy, 
-                              "status", oldStatus.toString(), PreAuthStatus.USED.toString());
+        auditService.logUpdate(id, preAuth.getReferenceNumber(), updatedBy,
+                "status", oldStatus.toString(), PreAuthStatus.USED.toString());
 
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
@@ -974,7 +986,7 @@ public class PreAuthorizationService {
 
         preAuthorizationRepository.save(preAuth);
         log.info("[PRE-AUTH] Deleted pre-authorization {}", id);
-        
+
         // Log audit trail
         auditService.logDelete(id, preAuth.getReferenceNumber(), deletedBy);
     }
@@ -1002,7 +1014,8 @@ public class PreAuthorizationService {
     @Transactional(readOnly = true)
     public PreAuthorizationResponseDto getPreAuthorizationByReference(String referenceNumber) {
         PreAuthorization preAuth = preAuthorizationRepository.findByReferenceNumberAndActiveTrue(referenceNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with reference: " + referenceNumber));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "PreAuthorization not found with reference: " + referenceNumber));
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
@@ -1034,7 +1047,8 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPreAuthorizationsByProvider(Long providerId, Pageable pageable) {
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByProviderIdAndActiveTrue(providerId, pageable);
+        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByProviderIdAndActiveTrue(providerId,
+                pageable);
         return preAuths.map(this::mapToResponseDtoLight);
     }
 
@@ -1048,9 +1062,11 @@ public class PreAuthorizationService {
     }
 
     /**
-     * Get pending pre-authorizations for inbox (Operations Queue) - CANONICAL 2026-01-26
+     * Get pending pre-authorizations for inbox (Operations Queue) - CANONICAL
+     * 2026-01-26
      * 
-     * Returns pre-authorizations with PENDING or UNDER_REVIEW status for processing.
+     * Returns pre-authorizations with PENDING or UNDER_REVIEW status for
+     * processing.
      * Mirrors ClaimService.getPendingClaims() behavior.
      * 
      * FIFO pattern - oldest first for fair processing.
@@ -1060,20 +1076,20 @@ public class PreAuthorizationService {
      * - UNDER_REVIEW: Currently being reviewed by operations staff
      * 
      * @param pageable Pagination parameters (page, size, sort)
-     * @return Page of PreAuthorizationResponseDto with all required fields for inbox display
+     * @return Page of PreAuthorizationResponseDto with all required fields for
+     *         inbox display
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPendingInbox(Pageable pageable) {
         log.info("[SERVICE] Fetching pending pre-authorizations for inbox (PENDING + UNDER_REVIEW)");
-        
+
         // CANONICAL: Include both PENDING and UNDER_REVIEW statuses (like Claims)
         List<PreAuthStatus> inboxStatuses = List.of(PreAuthStatus.PENDING, PreAuthStatus.UNDER_REVIEW);
-        
+
         Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusIn(
-                inboxStatuses, 
-                pageable
-        );
-        
+                inboxStatuses,
+                pageable);
+
         log.info("[SERVICE] Found {} pre-authorizations in inbox", preAuths.getTotalElements());
         return preAuths.map(this::mapToResponseDtoLight);
     }
@@ -1084,17 +1100,16 @@ public class PreAuthorizationService {
     @Transactional(readOnly = true)
     public PreAuthorizationResponseDto findValidPreAuthorization(Long memberId, Long providerId, String serviceCode) {
         List<PreAuthorization> validPreAuths = preAuthorizationRepository.findValidPreAuthorizations(
-                memberId, providerId, serviceCode, LocalDate.now()
-        );
+                memberId, providerId, serviceCode, LocalDate.now());
 
         if (validPreAuths.isEmpty()) {
-            throw new ResourceNotFoundException("No valid pre-authorization found for member " + memberId + 
-                                               ", provider " + providerId + ", service " + serviceCode);
+            throw new ResourceNotFoundException("No valid pre-authorization found for member " + memberId +
+                    ", provider " + providerId + ", service " + serviceCode);
         }
 
         // Return the most recent one
         PreAuthorization preAuth = validPreAuths.get(0);
-        
+
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
         MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
@@ -1120,13 +1135,15 @@ public class PreAuthorizationService {
         }
 
         if (preAuth.getStatus() != PreAuthStatus.PENDING) {
-            throw new IllegalStateException("Only PENDING pre-authorizations can be started for review. Current status: " + preAuth.getStatus());
+            throw new IllegalStateException(
+                    "Only PENDING pre-authorizations can be started for review. Current status: "
+                            + preAuth.getStatus());
         }
 
         // Transition to UNDER_REVIEW
         preAuth.setStatus(PreAuthStatus.UNDER_REVIEW);
         preAuth.setUpdatedBy(reviewedBy);
-        
+
         preAuth = preAuthorizationRepository.save(preAuth);
         log.info("[PRE-AUTH] Pre-authorization {} is now UNDER_REVIEW by {}", id, reviewedBy);
 
@@ -1139,7 +1156,7 @@ public class PreAuthorizationService {
         }
 
         // Log audit trail
-        auditService.logUpdate(id, preAuth.getReferenceNumber(), reviewedBy, 
+        auditService.logUpdate(id, preAuth.getReferenceNumber(), reviewedBy,
                 "status", "PENDING", "UNDER_REVIEW");
 
         // Fetch related entities for response
@@ -1156,7 +1173,7 @@ public class PreAuthorizationService {
      * Check if a member has a valid pre-authorization for a specific service.
      * Returns the valid pre-authorization if found, null otherwise.
      * 
-     * @param memberId The member ID
+     * @param memberId    The member ID
      * @param serviceCode The medical service code
      * @return Valid PreAuthorizationResponseDto or null if not found
      */
@@ -1165,13 +1182,8 @@ public class PreAuthorizationService {
         log.info("[PRE-AUTH] Checking validity for member {} and service {}", memberId, serviceCode);
 
         // Find approved and valid pre-authorizations for this member and service
-        List<PreAuthorization> validPreAuths = preAuthorizationRepository.findAll().stream()
-                .filter(pa -> pa.getMemberId().equals(memberId))
-                .filter(pa -> pa.getServiceCode().equals(serviceCode))
-                .filter(pa -> pa.getActive())
-                .filter(pa -> pa.getStatus() == PreAuthStatus.APPROVED)
-                .filter(pa -> !pa.isExpired())
-                .toList();
+        List<PreAuthorization> validPreAuths = preAuthorizationRepository
+                .findValidByMemberAndService(memberId, serviceCode, LocalDate.now());
 
         if (validPreAuths.isEmpty()) {
             log.info("[PRE-AUTH] No valid pre-authorization found for member {} and service {}", memberId, serviceCode);
@@ -1183,8 +1195,8 @@ public class PreAuthorizationService {
                 .max((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
                 .orElse(validPreAuths.get(0));
 
-        log.info("[PRE-AUTH] Found valid pre-authorization {} for member {} and service {}", 
-                 preAuth.getReferenceNumber(), memberId, serviceCode);
+        log.info("[PRE-AUTH] Found valid pre-authorization {} for member {} and service {}",
+                preAuth.getReferenceNumber(), memberId, serviceCode);
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
@@ -1201,17 +1213,17 @@ public class PreAuthorizationService {
     @Transactional
     public int markExpiredPreAuthorizations() {
         log.info("[PRE-AUTH] Marking expired pre-authorizations");
-        
+
         List<PreAuthorization> expiredList = preAuthorizationRepository.findExpiredPreAuthorizations(LocalDate.now());
-        
+
         for (PreAuthorization preAuth : expiredList) {
             preAuth.markAsExpired();
         }
-        
+
         if (!expiredList.isEmpty()) {
             preAuthorizationRepository.saveAll(expiredList);
         }
-        
+
         log.info("[PRE-AUTH] Marked {} expired pre-authorizations", expiredList.size());
         return expiredList.size();
     }
@@ -1239,8 +1251,8 @@ public class PreAuthorizationService {
     /**
      * Map to response DTO with full details (CANONICAL REBUILD 2026-01-16)
      */
-    private PreAuthorizationResponseDto mapToResponseDto(PreAuthorization preAuth, Member member, 
-                                                         Provider provider, MedicalService service) {
+    private PreAuthorizationResponseDto mapToResponseDto(PreAuthorization preAuth, Member member,
+            Provider provider, MedicalService service) {
         Integer daysUntilExpiry = null;
         if (preAuth.getExpiryDate() != null) {
             daysUntilExpiry = (int) ChronoUnit.DAYS.between(LocalDate.now(), preAuth.getExpiryDate());
@@ -1248,7 +1260,7 @@ public class PreAuthorizationService {
 
         // Get visit info
         Visit visit = preAuth.getVisit();
-        
+
         return PreAuthorizationResponseDto.builder()
                 .id(preAuth.getId())
                 .referenceNumber(preAuth.getReferenceNumber())
@@ -1322,12 +1334,12 @@ public class PreAuthorizationService {
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
         MedicalService service = preAuth.getMedicalService();
-        
+
         // Fallback: try to find service by code if not loaded
         if (service == null && preAuth.getServiceCode() != null) {
             service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
         }
-        
+
         return mapToResponseDto(preAuth, member, provider, service);
     }
 
@@ -1337,11 +1349,11 @@ public class PreAuthorizationService {
      * 
      * Rules (HARDENED 2026-01-16):
      * - PROVIDER users: providerId ALWAYS comes from ProviderContextGuard (session)
-     *   ANY providerId from request is IGNORED to prevent data leakage
+     * ANY providerId from request is IGNORED to prevent data leakage
      * - SUPER_ADMIN/INSURANCE_ADMIN can set any providerId
      * - Other users can set any providerId
      * 
-     * @param dto The pre-authorization creation DTO
+     * @param dto         The pre-authorization creation DTO
      * @param currentUser The currently authenticated user
      */
     private void validateAndEnforceProviderId(PreAuthorizationCreateDto dto, User currentUser) {
@@ -1358,19 +1370,21 @@ public class PreAuthorizationService {
             // ═══════════════════════════════════════════════════════════════════════════
             providerContextGuard.validateProviderBinding(currentUser);
             Long userProviderId = currentUser.getProviderId();
-            
+
             // Log if request contained different providerId (potential attack/bug)
             if (dto.getProviderId() != null && !dto.getProviderId().equals(userProviderId)) {
-                log.warn("🚨 PROVIDER_ID_OVERRIDE: User {} requested providerId={} but enforced to {} (potential security issue)", 
-                    currentUser.getUsername(), dto.getProviderId(), userProviderId);
+                log.warn(
+                        "🚨 PROVIDER_ID_OVERRIDE: User {} requested providerId={} but enforced to {} (potential security issue)",
+                        currentUser.getUsername(), dto.getProviderId(), userProviderId);
             }
-            
+
             // ALWAYS override with user's providerId - NO EXCEPTIONS
             dto.setProviderId(userProviderId);
-            
-            log.info("🔒 PROVIDER {} creating pre-auth with their providerId: {} (enforced by ProviderContextGuard)", 
-                currentUser.getUsername(), userProviderId);
-        } else if (authorizationService.isSuperAdmin(currentUser) || authorizationService.isInsuranceAdmin(currentUser)) {
+
+            log.info("🔒 PROVIDER {} creating pre-auth with their providerId: {} (enforced by ProviderContextGuard)",
+                    currentUser.getUsername(), userProviderId);
+        } else if (authorizationService.isSuperAdmin(currentUser)
+                || authorizationService.isInsuranceAdmin(currentUser)) {
             // SUPER_ADMIN and INSURANCE_ADMIN can set any provider
             log.info("🔓 ADMIN user {} creating pre-auth - any providerId allowed", currentUser.getUsername());
         }

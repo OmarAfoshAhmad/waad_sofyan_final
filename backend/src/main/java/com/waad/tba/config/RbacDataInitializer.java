@@ -48,7 +48,6 @@ public class RbacDataInitializer implements CommandLineRunner {
     private void ensureSuperAdminUser() {
         String username = "superadmin";
         String email = "superadmin@tba.sa";
-        String password = System.getenv().getOrDefault("ADMIN_DEFAULT_PASSWORD", "Admin@123");
 
         if (!hasColumn("users", "is_active")) {
             log.warn("Skipping: users table schema incomplete (missing is_active)");
@@ -67,6 +66,17 @@ public class RbacDataInitializer implements CommandLineRunner {
             log.info("Super admin user already exists: {}", username);
             return;
         }
+
+        String envPassword = System.getenv("ADMIN_DEFAULT_PASSWORD");
+        if (envPassword == null || envPassword.isBlank()) {
+            // SECURITY: Warn only when creation is needed.
+            log.error("╔═══════════════════════════════════════════════════════════════╗");
+            log.error("║  SECURITY WARNING: ADMIN_DEFAULT_PASSWORD env var is NOT set! ║");
+            log.error("║  Super admin will be created with the insecure default.        ║");
+            log.error("║  Set ADMIN_DEFAULT_PASSWORD in your .env before first run.     ║");
+            log.error("╚═══════════════════════════════════════════════════════════════╝");
+        }
+        String password = (envPassword != null && !envPassword.isBlank()) ? envPassword : "Admin@123";
 
         User superAdmin = User.builder()
                 .username(username)
@@ -88,8 +98,8 @@ public class RbacDataInitializer implements CommandLineRunner {
     private boolean hasColumn(String tableName, String columnName) {
         try {
             Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
-                Integer.class, tableName, columnName);
+                    "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
+                    Integer.class, tableName, columnName);
             return count != null && count > 0;
         } catch (Exception ex) {
             return false;

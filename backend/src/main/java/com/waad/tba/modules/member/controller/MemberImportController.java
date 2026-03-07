@@ -35,10 +35,12 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * LEGACY Controller for member bulk import from Excel.
  * 
- * @deprecated Use MemberExcelTemplateController for new template-based import system
- * Supports Odoo hr.employee.public exports.
+ * @deprecated Use MemberExcelTemplateController for new template-based import
+ *             system
+ *             Supports Odoo hr.employee.public exports.
  */
 @Deprecated
+@SuppressWarnings("dep-ann")
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/members/legacy-import")
@@ -61,45 +63,42 @@ public class MemberImportController {
      */
     @PostMapping(value = "/detect-columns", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
-    @Operation(
-    )
+    @Operation()
     public ResponseEntity<ApiResponse<ExcelColumnDetectionDto>> detectColumns(
-            @Parameter(description = "Excel file (.xlsx or .xls)")
-            @RequestParam("file") MultipartFile file) {
-        
+            @Parameter(description = "Excel file (.xlsx or .xls)") @RequestParam("file") MultipartFile file) {
+
         log.info("🔍 [Column Detection] Request for file: {}", file.getOriginalFilename());
-        
+
         try {
             // Validate file
             if (file.isEmpty()) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("الملف فارغ"));
             }
-            
+
             String fileName = file.getOriginalFilename();
             if (fileName == null || (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls"))) {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("يجب رفع ملف Excel (.xlsx أو .xls)"));
             }
-            
+
             // Detect columns and suggest mappings
             ExcelColumnDetectionDto detection = columnMappingService.detectColumns(file);
-            
+
             log.info("✅ [Column Detection] Success: {} columns detected, {} auto-accepted, {} need review",
                     detection.getTotalColumns(),
                     detection.getAutoAcceptedCount(),
                     detection.getManualReviewCount());
-            
+
             return ResponseEntity.ok(ApiResponse.success(
                     "تم تحليل الملف واكتشاف الأعمدة بنجاح",
-                    detection
-            ));
-            
+                    detection));
+
         } catch (IllegalArgumentException e) {
             log.error("❌ [Column Detection] Validation error: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(e.getMessage()));
-                    
+
         } catch (Exception e) {
             log.error("❌ [Column Detection] Error analyzing file: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
@@ -115,36 +114,33 @@ public class MemberImportController {
      * 
      * Returns parsed data for user confirmation.
      * 
-     * @param file Excel file
-     * @param customMappings Optional: User-customized column mappings (Excel column → system field)
+     * @param file           Excel file
+     * @param customMappings Optional: User-customized column mappings (Excel column
+     *                       → system field)
      */
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
-    @Operation(
-        description = "Upload Excel file and preview data before import. Returns validation errors and mapping."
-    )
+    @Operation(description = "Upload Excel file and preview data before import. Returns validation errors and mapping.")
     public ResponseEntity<ApiResponse<MemberImportPreviewDto>> previewImport(
-            @Parameter(description = "Excel file (.xlsx)")
-            @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Custom column mappings (optional, JSON format)")
-            @RequestParam(value = "customMappings", required = false) java.util.Map<String, String> customMappings) {
-        
-        log.info("📊 Preview import request: {} (custom mappings: {})", 
-                file.getOriginalFilename(), 
+            @Parameter(description = "Excel file (.xlsx)") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Custom column mappings (optional, JSON format)") @RequestParam(value = "customMappings", required = false) java.util.Map<String, String> customMappings) {
+
+        log.info("📊 Preview import request: {} (custom mappings: {})",
+                file.getOriginalFilename(),
                 customMappings != null ? "yes" : "auto");
-        
+
         // Validate file
         if (file.isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("الملف فارغ"));
         }
-        
+
         String fileName = file.getOriginalFilename();
         if (fileName == null || (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls"))) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("يجب رفع ملف Excel (.xlsx أو .xls)"));
         }
-        
+
         try {
             MemberImportPreviewDto preview = importService.parseAndPreview(file, customMappings);
             return ResponseEntity.ok(ApiResponse.success("تم تحليل الملف بنجاح", preview));
@@ -168,46 +164,40 @@ public class MemberImportController {
      */
     @PostMapping(value = "/execute", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
-    @Operation(
-        description = "Import members from Excel file with selected employer and benefit policy"
-    )
+    @Operation(description = "Import members from Excel file with selected employer and benefit policy")
     public ResponseEntity<ApiResponse<MemberImportResultDto>> executeImport(
-            @Parameter(description = "Excel file (.xlsx)")
-            @RequestParam("file") MultipartFile file,
-            
-            @Parameter(description = "Selected Employer ID (REQUIRED)", required = true)
-            @RequestParam("employerId") Long employerId,
-            
-            @Parameter(description = "Selected Benefit Policy ID (OPTIONAL)")
-            @RequestParam(value = "benefitPolicyId", required = false) Long benefitPolicyId,
-            
-            @Parameter(description = "Batch ID from preview (optional)")
-            @RequestParam(value = "batchId", required = false) String batchId) {
-        
-        log.info("📥 Execute import request: file={}, employer={}, policy={}, batch={}", 
+            @Parameter(description = "Excel file (.xlsx)") @RequestParam("file") MultipartFile file,
+
+            @Parameter(description = "Selected Employer ID (REQUIRED)", required = true) @RequestParam("employerId") Long employerId,
+
+            @Parameter(description = "Selected Benefit Policy ID (OPTIONAL)") @RequestParam(value = "benefitPolicyId", required = false) Long benefitPolicyId,
+
+            @Parameter(description = "Batch ID from preview (optional)") @RequestParam(value = "batchId", required = false) String batchId) {
+
+        log.info("📥 Execute import request: file={}, employer={}, policy={}, batch={}",
                 file.getOriginalFilename(), employerId, benefitPolicyId, batchId);
-        
+
         // Validate file
         if (file.isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("الملف فارغ"));
         }
-        
+
         // Validate employer is provided
         if (employerId == null) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("يجب تحديد صاحب العمل"));
         }
-        
+
         // Generate batch ID if not provided
         if (batchId == null || batchId.isBlank()) {
             batchId = UUID.randomUUID().toString();
         }
-        
+
         try {
             MemberImportResultDto result = importService.executeImport(
                     file, batchId, employerId, benefitPolicyId);
-            
+
             String status = result.getStatus();
             if ("COMPLETED".equals(status)) {
                 return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
@@ -218,7 +208,7 @@ public class MemberImportController {
                 return ResponseEntity.badRequest()
                         .body(ApiResponse.error("فشل الاستيراد: " + result.getMessage()));
             }
-            
+
         } catch (Exception e) {
             log.error("❌ Import failed: {}", e.getMessage(), e);
             return ResponseEntity.badRequest()
@@ -235,12 +225,12 @@ public class MemberImportController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
     @Operation(summary = "Get import history", description = "List all import logs with pagination")
     public ResponseEntity<ApiResponse<Page<MemberImportLog>>> getImportLogs(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
+
         Page<MemberImportLog> logs = importLogRepository.findAll(
                 PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));
-        
+
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
     }
 
@@ -254,7 +244,7 @@ public class MemberImportController {
     @Operation(summary = "Get import log by batch ID")
     public ResponseEntity<ApiResponse<MemberImportLog>> getImportLog(
             @PathVariable String batchId) {
-        
+
         return importLogRepository.findByImportBatchId(batchId)
                 .map(log -> ResponseEntity.ok(ApiResponse.success("Import log found", log)))
                 .orElse(ResponseEntity.notFound().build());
@@ -270,7 +260,7 @@ public class MemberImportController {
     @Operation(summary = "Get errors for import batch")
     public ResponseEntity<ApiResponse<?>> getImportErrors(
             @PathVariable String batchId) {
-        
+
         var errors = importErrorRepository.findByImportBatchId(batchId);
         return ResponseEntity.ok(ApiResponse.success("Import errors retrieved", errors));
     }
@@ -285,31 +275,26 @@ public class MemberImportController {
     @Operation(summary = "Get import template info", description = "Returns expected column mappings")
     public ResponseEntity<ApiResponse<?>> getTemplate() {
         var template = java.util.Map.of(
-            "mandatory_columns", java.util.List.of(
-                java.util.Map.of("name", "national_id", "aliases", "identification_id, civil_id, الرقم الوطني"),
-                java.util.Map.of("name", "full_name", "aliases", "name, full_name_arabic, الاسم الكامل"),
-                java.util.Map.of("name", "employer", "aliases", "company, company_id, جهة العمل"),
-                java.util.Map.of("name", "policy", "aliases", "policy_number, policy_id, الوثيقة")
-            ),
-            "optional_columns", java.util.List.of(
-                "full_name_english", "birth_date", "gender", "phone", "email", 
-                "nationality", "employee_number"
-            ),
-            "attribute_columns", java.util.List.of(
-                java.util.Map.of("name", "job_title", "description", "الوظيفة"),
-                java.util.Map.of("name", "department", "description", "القسم/الإدارة"),
-                java.util.Map.of("name", "work_location", "description", "موقع العمل"),
-                java.util.Map.of("name", "grade", "description", "الدرجة/المستوى"),
-                java.util.Map.of("name", "manager", "description", "المدير"),
-                java.util.Map.of("name", "cost_center", "description", "مركز التكلفة")
-            ),
-            "notes", java.util.List.of(
-                "Any extra columns will be stored as member attributes",
-                "Duplicate national_id → updates existing member",
-                "Compatible with Odoo hr.employee.public exports"
-            )
-        );
-        
+                "mandatory_columns", java.util.List.of(
+                        java.util.Map.of("name", "national_id", "aliases", "identification_id, civil_id, الرقم الوطني"),
+                        java.util.Map.of("name", "full_name", "aliases", "name, full_name_arabic, الاسم الكامل"),
+                        java.util.Map.of("name", "employer", "aliases", "company, company_id, جهة العمل"),
+                        java.util.Map.of("name", "policy", "aliases", "policy_number, policy_id, الوثيقة")),
+                "optional_columns", java.util.List.of(
+                        "full_name_english", "birth_date", "gender", "phone", "email",
+                        "nationality", "employee_number"),
+                "attribute_columns", java.util.List.of(
+                        java.util.Map.of("name", "job_title", "description", "الوظيفة"),
+                        java.util.Map.of("name", "department", "description", "القسم/الإدارة"),
+                        java.util.Map.of("name", "work_location", "description", "موقع العمل"),
+                        java.util.Map.of("name", "grade", "description", "الدرجة/المستوى"),
+                        java.util.Map.of("name", "manager", "description", "المدير"),
+                        java.util.Map.of("name", "cost_center", "description", "مركز التكلفة")),
+                "notes", java.util.List.of(
+                        "Any extra columns will be stored as member attributes",
+                        "Duplicate national_id → updates existing member",
+                        "Compatible with Odoo hr.employee.public exports"));
+
         return ResponseEntity.ok(ApiResponse.success("Import template info", template));
     }
 }

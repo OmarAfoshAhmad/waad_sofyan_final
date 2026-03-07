@@ -69,7 +69,7 @@ public class FeatureFlag {
      * Example: ["EMPLOYER", "ADMIN"]
      * If null/empty, applies to all roles
      */
-    @Column(name = "role_filters", columnDefinition = "JSON")
+    @Column(name = "role_filters", columnDefinition = "text")
     private String roleFilters;
 
     /**

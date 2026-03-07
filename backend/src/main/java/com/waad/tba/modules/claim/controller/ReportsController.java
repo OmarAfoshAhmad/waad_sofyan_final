@@ -70,16 +70,16 @@ public class ReportsController {
     )
     public ResponseEntity<ApiResponse<AdjudicationReportDto>> getAdjudicationReport(
             @Parameter(description = "تاريخ البداية (YYYY-MM-DD)")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "fromDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             
             @Parameter(description = "تاريخ النهاية (YYYY-MM-DD)")
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "toDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             
             @Parameter(description = "فلترة حسب مقدم الخدمة")
-            @RequestParam(required = false) String providerName,
+            @RequestParam(name = "providerName", required = false) String providerName,
             
             @Parameter(description = "فلترة حسب حالة المطالبة")
-            @RequestParam(required = false) List<ClaimStatus> statuses) {
+            @RequestParam(name = "statuses", required = false) List<ClaimStatus> statuses) {
         
         AdjudicationReportDto report = adjudicationReportService.generateReport(
             fromDate, toDate, providerName, statuses);
@@ -101,7 +101,7 @@ public class ReportsController {
     )
     public ResponseEntity<ApiResponse<AdjudicationReportDto>> getProviderSettlementReport(
             @Parameter(description = "اسم مقدم الخدمة")
-            @RequestParam(required = false) String providerName) {
+            @RequestParam(name = "providerName", required = false) String providerName) {
         
         AdjudicationReportDto report = adjudicationReportService.generateProviderSettlementReport(providerName);
         return ResponseEntity.ok(ApiResponse.success("تم إنشاء تقرير التسوية", report));
@@ -124,10 +124,10 @@ public class ReportsController {
             @PathVariable Long memberId,
             
             @Parameter(description = "تاريخ البداية (اختياري)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             
             @Parameter(description = "تاريخ النهاية (اختياري)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         
         // Default to current year if dates not specified
         if (fromDate == null) {
@@ -185,13 +185,13 @@ public class ReportsController {
     )
     public ResponseEntity<ApiResponse<ClaimFinancialSummaryDto>> getFinancialSummary(
             @Parameter(description = "فلتر حسب جهة العمل (اختياري)")
-            @RequestParam(required = false) Long employerOrgId,
+            @RequestParam(name = "employerOrgId", required = false) Long employerOrgId,
             
             @Parameter(description = "تاريخ البداية (اختياري)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             
             @Parameter(description = "تاريخ النهاية (اختياري)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         
         ClaimFinancialSummaryDto summary = claimFinancialSummaryService.getFinancialSummary(
             employerOrgId, fromDate, toDate);
@@ -214,7 +214,7 @@ public class ReportsController {
     )
     public ResponseEntity<ApiResponse<ClaimFinancialSummaryDto>> getSettlementSummary(
             @Parameter(description = "فلتر حسب جهة العمل (اختياري)")
-            @RequestParam(required = false) Long employerOrgId) {
+            @RequestParam(name = "employerOrgId", required = false) Long employerOrgId) {
         
         ClaimFinancialSummaryDto summary = claimFinancialSummaryService.getSettlementSummary(employerOrgId);
         
@@ -248,28 +248,28 @@ public class ReportsController {
     )
     public ResponseEntity<ApiResponse<ProviderSettlementReportDto>> getProviderSettlementReport(
             @Parameter(description = "معرف مقدم الخدمة (إجباري للأدمن، يُتجاهل للمقدمين)")
-            @RequestParam(required = false) Long providerId,
+            @RequestParam(name = "providerId", required = false) Long providerId,
 
             @Parameter(description = "فلترة حسب جهة العمل (اختياري)")
-            @RequestParam(required = false) Long employerOrgId,
+            @RequestParam(name = "employerOrgId", required = false) Long employerOrgId,
             
             @Parameter(description = "تاريخ البداية (YYYY-MM-DD)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             
             @Parameter(description = "تاريخ النهاية (YYYY-MM-DD)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             
             @Parameter(description = "فلترة حسب حالة المطالبة (APPROVED, SETTLED)")
-            @RequestParam(required = false) List<ClaimStatus> statuses,
+            @RequestParam(name = "statuses", required = false) List<ClaimStatus> statuses,
             
             @Parameter(description = "فلترة حسب رقم المطالبة")
-            @RequestParam(required = false) String claimNumber,
+            @RequestParam(name = "claimNumber", required = false) String claimNumber,
             
             @Parameter(description = "فلترة حسب رقم الموافقة المسبقة")
-            @RequestParam(required = false) String preAuthNumber,
+            @RequestParam(name = "preAuthNumber", required = false) String preAuthNumber,
             
             @Parameter(description = "فلترة حسب المريض")
-            @RequestParam(required = false) Long memberId) {
+            @RequestParam(name = "memberId", required = false) Long memberId) {
         
         // Security: PROVIDER users can only see their own provider
         Long effectiveProviderId = providerId;
@@ -349,28 +349,28 @@ public class ReportsController {
     )
     public ResponseEntity<byte[]> exportProviderSettlementToExcel(
             @Parameter(description = "معرف مقدم الخدمة (إجباري للأدمن، يُتجاهل للمقدمين)")
-            @RequestParam(required = false) Long providerId,
+            @RequestParam(name = "providerId", required = false) Long providerId,
 
             @Parameter(description = "فلترة حسب جهة العمل (اختياري)")
-            @RequestParam(required = false) Long employerOrgId,
+            @RequestParam(name = "employerOrgId", required = false) Long employerOrgId,
             
             @Parameter(description = "تاريخ البداية (YYYY-MM-DD)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             
             @Parameter(description = "تاريخ النهاية (YYYY-MM-DD)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             
             @Parameter(description = "فلترة حسب حالة المطالبة (APPROVED, SETTLED)")
-            @RequestParam(required = false) List<ClaimStatus> statuses,
+            @RequestParam(name = "statuses", required = false) List<ClaimStatus> statuses,
             
             @Parameter(description = "فلترة حسب رقم المطالبة")
-            @RequestParam(required = false) String claimNumber,
+            @RequestParam(name = "claimNumber", required = false) String claimNumber,
             
             @Parameter(description = "فلترة حسب رقم الموافقة المسبقة")
-            @RequestParam(required = false) String preAuthNumber,
+            @RequestParam(name = "preAuthNumber", required = false) String preAuthNumber,
             
             @Parameter(description = "فلترة حسب المريض")
-            @RequestParam(required = false) Long memberId) {
+            @RequestParam(name = "memberId", required = false) Long memberId) {
         
         log.info("📊 [EXCEL-EXPORT] Export request for provider: {}", providerId);
         

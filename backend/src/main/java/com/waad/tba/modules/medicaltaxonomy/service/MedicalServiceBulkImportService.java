@@ -323,6 +323,7 @@ public class MedicalServiceBulkImportService {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private MedicalService processRow(Row row, int rowNum,
             Map<String, MedicalCategory> categoryCache,
             Map<String, com.waad.tba.modules.medicaltaxonomy.entity.MedicalSpecialty> specialtyCache,
@@ -555,32 +556,6 @@ public class MedicalServiceBulkImportService {
                     if (value == null || value.trim().isEmpty())
                         return null;
                     return new BigDecimal(value.trim());
-                default:
-                    return null;
-            }
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private Boolean getCellBoolean(Row row, int colIndex) {
-        Cell cell = row.getCell(colIndex);
-        if (cell == null)
-            return null;
-
-        try {
-            switch (cell.getCellType()) {
-                case BOOLEAN:
-                    return cell.getBooleanCellValue();
-                case STRING:
-                    String value = cell.getStringCellValue();
-                    if (value == null || value.trim().isEmpty())
-                        return null;
-                    value = value.trim().toLowerCase();
-                    return value.equals("yes") || value.equals("نعم") ||
-                            value.equals("true") || value.equals("1");
-                case NUMERIC:
-                    return cell.getNumericCellValue() == 1;
                 default:
                     return null;
             }

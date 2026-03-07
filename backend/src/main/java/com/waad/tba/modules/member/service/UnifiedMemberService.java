@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -34,6 +33,7 @@ import com.waad.tba.modules.rbac.entity.User;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * ==================== UNIFIED MEMBER ARCHITECTURE ====================
@@ -72,6 +72,7 @@ public class UnifiedMemberService {
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
     private final MemberFinancialSummaryService financialSummaryService;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -94,24 +95,7 @@ public class UnifiedMemberService {
         String barcode = barcodeGenerator.generateUniqueBarcodeForPrincipal();
         log.info("✅ Generated barcode for principal: {}", barcode);
 
-        // 2. Generate CARD NUMBER (base number)
-        String cardNumber = dto.getCardNumber();
-        if (cardNumber == null || cardNumber.trim().isEmpty()) {
-            cardNumber = cardNumberGenerator.generateUniqueForPrincipal();
-            log.info("✅ Generated card number for principal: {}", cardNumber);
-        } else {
-            // Validate user-provided card number
-            if (!cardNumberGenerator.isValidCardNumberFormat(cardNumber)) {
-                throw new BusinessRuleException(
-                        "Invalid card number format. Must be 6 digits (e.g., 000123)");
-            }
-            if (memberRepository.existsByCardNumber(cardNumber)) {
-                throw new BusinessRuleException(
-                        "Card number already exists: " + cardNumber);
-            }
-        }
-
-        // 3. Load employer relationships
+        // 2. Load employer (needed for card number formula)
         Employer employer = employerRepository.findById(dto.getEmployerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + dto.getEmployerId()));
 
@@ -132,14 +116,27 @@ public class UnifiedMemberService {
             }
         }
 
-        // 4. Create PRINCIPAL member entity
+        // 3. Build PRINCIPAL member entity (employer/joinDate/employeeNumber needed for
+        // card number)
         Member principal = mapper.toEntity(dto);
         principal.setBarcode(barcode);
-        principal.setCardNumber(cardNumber);
         principal.setEmployer(employer);
         principal.setBenefitPolicy(benefitPolicy);
         principal.setParent(null); // PRINCIPAL
         principal.setRelationship(null); // PRINCIPAL has no relationship
+
+        // 4. Generate CARD NUMBER (formula: EMPLOYER_CODE-JOIN_YEAR-EMPLOYEE_NUMBER)
+        String cardNumber = dto.getCardNumber();
+        if (cardNumber == null || cardNumber.trim().isEmpty()) {
+            cardNumber = cardNumberGenerator.generateUniqueForPrincipal(principal);
+            log.info("✅ Generated card number for principal: {}", cardNumber);
+        } else {
+            if (memberRepository.existsByCardNumber(cardNumber)) {
+                throw new BusinessRuleException(
+                        "Card number already exists: " + cardNumber);
+            }
+        }
+        principal.setCardNumber(cardNumber);
 
         // 5. Save principal
         principal = memberRepository.save(principal);
@@ -263,8 +260,8 @@ public class UnifiedMemberService {
     protected Member createDependentInternal(Member principal, DependentMemberDto dto) {
         log.debug("Creating dependent: {} ({})", dto.getFullName(), dto.getRelationship());
 
-        // 1. Generate card number with suffix
-        String cardNumber = cardNumberGenerator.generateForDependent(principal);
+        // 1. Generate card number with relationship suffix (e.g. JFZ-2025-126565-D1)
+        String cardNumber = cardNumberGenerator.generateForDependent(principal, dto.getRelationship());
         log.debug("✅ Generated card number for dependent: {}", cardNumber);
 
         // 2. Create dependent entity
@@ -332,6 +329,32 @@ public class UnifiedMemberService {
         } else {
             return mapper.toViewDto(member);
         }
+    }
+
+    /**
+     * Activate or deactivate a member.
+     *
+     * @param id     Member ID
+     * @param active true = activate, false = deactivate
+     * @return Updated member view DTO
+     */
+    @Transactional
+    public MemberViewDto toggleActive(Long id, boolean active) {
+        log.info("🔄 Setting active={} for member ID={}", active, id);
+
+        Member member = memberRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+
+        member.setActive(active);
+        member = memberRepository.save(member);
+
+        log.info("✅ Member ID={} active status set to {}", id, active);
+
+        if (member.isPrincipal()) {
+            List<Member> dependents = memberRepository.findByParentId(member.getId());
+            return mapper.toViewDto(member, dependents);
+        }
+        return mapper.toViewDto(member);
     }
 
     private BenefitPolicy findActiveEmployerPolicy(Long employerId) {
@@ -471,10 +494,17 @@ public class UnifiedMemberService {
     }
 
     /**
-     * Delete member (principal or dependent).
-     * 
-     * IMPORTANT: Deleting a principal will CASCADE delete all dependents.
-     * 
+     * Soft-delete a member (principal or dependent).
+     *
+     * Sets active=false and status=TERMINATED. Physical deletion is intentionally
+     * avoided because FK constraints (claims, visits, pre-auth, etc.) use
+     * ON DELETE RESTRICT, which would cause a 500 for any member with related
+     * records. The hard-delete path ({@link #hardDeleteMember}) still exists for
+     * admin use when all related records have been removed.
+     *
+     * IMPORTANT: Soft-deleting a principal will cascade the same flags to all
+     * dependents.
+     *
      * @param id Member ID
      */
     @Transactional
@@ -482,14 +512,46 @@ public class UnifiedMemberService {
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
 
+        // Collect IDs to check (principal + its dependents)
+        List<Long> allIds = new java.util.ArrayList<>();
+        allIds.add(id);
         if (member.isPrincipal()) {
-            long dependentsCount = memberRepository.countByParentId(id);
-            log.warn("⚠️ Deleting PRINCIPAL member ID={} will CASCADE delete {} dependents",
-                    id, dependentsCount);
+            memberRepository.findByParentId(id).forEach(d -> allIds.add(d.getId()));
+        }
+        String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+
+        // Block soft deletion if any financial/medical records exist
+        long claimsCount       = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
+        long preAuthCount      = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
+        long visitsCount       = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
+
+        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0) {
+            String details = String.format(
+                "مطالبات: %d، موافقات مسبقة: %d، زيارات: %d",
+                claimsCount, preAuthCount, visitsCount);
+            throw new IllegalStateException(
+                "لا يمكن حذف المستفيد لأن له معاملات مالية مرتبطة (" + details + "). " +
+                "يُرجى أرشفة المستفيد بدلاً من الحذف، أو مراجعة السجلات المالية أولاً.");
         }
 
-        memberRepository.delete(member);
-        log.info("✅ Deleted member ID={}", id);
+        member.setActive(false);
+        member.setStatus(Member.MemberStatus.TERMINATED);
+        memberRepository.save(member);
+
+        if (member.isPrincipal()) {
+            List<Member> dependents = memberRepository.findByParentId(id);
+            if (!dependents.isEmpty()) {
+                log.warn("⚠️ Soft-deleting PRINCIPAL member ID={} — cascading TERMINATED to {} dependents",
+                        id, dependents.size());
+                dependents.forEach(dep -> {
+                    dep.setActive(false);
+                    dep.setStatus(Member.MemberStatus.TERMINATED);
+                });
+                memberRepository.saveAll(dependents);
+            }
+        }
+
+        log.info("✅ Soft-deleted member ID={} (status=TERMINATED, active=false)", id);
     }
 
     // ==================== ADDITIONAL METHODS FOR UNIFIED CONTROLLER
@@ -626,8 +688,7 @@ public class UnifiedMemberService {
             safePageable = org.springframework.data.domain.PageRequest.of(
                     pageable.getPageNumber(),
                     pageable.getPageSize(),
-                    org.springframework.data.domain.Sort.by(safeOrders)
-            );
+                    org.springframework.data.domain.Sort.by(safeOrders));
         }
 
         Page<Member> membersPage = memberRepository.findAll(spec, safePageable);
@@ -754,6 +815,7 @@ public class UnifiedMemberService {
             Long benefitPolicyId,
             String status,
             String type,
+            boolean deleted,
             Pageable pageable) {
 
         log.info("Searching members: nameAr={}, civilId={}, barcode={}, cardNumber={}",
@@ -796,9 +858,8 @@ public class UnifiedMemberService {
                     // If both are provided and different, combine with OR to search fullName
                     String searchEn = "%" + nameEn.toLowerCase() + "%";
                     predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("fullName")), searchAr),
-                        cb.like(cb.lower(root.get("fullName")), searchEn)
-                    ));
+                            cb.like(cb.lower(root.get("fullName")), searchAr),
+                            cb.like(cb.lower(root.get("fullName")), searchEn)));
                 } else {
                     predicates.add(cb.like(cb.lower(root.get("fullName")), searchAr));
                 }
@@ -846,6 +907,13 @@ public class UnifiedMemberService {
                 }
             }
 
+            // active / soft-delete filter
+            if (deleted) {
+                predicates.add(cb.equal(root.get("active"), false));
+            } else {
+                predicates.add(cb.or(cb.isNull(root.get("active")), cb.equal(root.get("active"), true)));
+            }
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
@@ -863,8 +931,7 @@ public class UnifiedMemberService {
             safePageable = org.springframework.data.domain.PageRequest.of(
                     pageable.getPageNumber(),
                     pageable.getPageSize(),
-                    org.springframework.data.domain.Sort.by(safeOrders)
-            );
+                    org.springframework.data.domain.Sort.by(safeOrders));
         }
 
         Page<Member> membersPage = memberRepository.findAll(spec, safePageable);
@@ -1021,15 +1088,34 @@ public class UnifiedMemberService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
 
-        // If principal, also delete all dependents
+        // Collect all IDs to delete (principal + its dependents)
+        List<Long> allIds = new java.util.ArrayList<>();
+        allIds.add(memberId);
         if (!member.isDependent()) {
             List<Member> dependents = memberRepository.findByParentId(memberId);
-            if (!dependents.isEmpty()) {
-                log.warn("⚠️ Also deleting {} dependents of principal {}", dependents.size(), memberId);
-                memberRepository.deleteAll(dependents);
-            }
+            dependents.forEach(d -> allIds.add(d.getId()));
         }
 
+        String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        log.warn("⚠️ Cascade hard delete for member IDs: {}", idList);
+
+        // Delete in correct FK order (RESTRICT constraints must be removed first)
+        String claimsSubquery = "(SELECT id FROM claims WHERE member_id IN (" + idList + "))";
+        // claim_audit_logs.claim_id REFERENCES claims(id) ON DELETE RESTRICT
+        jdbcTemplate.update("DELETE FROM claim_audit_logs WHERE claim_id IN " + claimsSubquery);
+        // settlement_batch_items.claim_id REFERENCES claims(id) ON DELETE RESTRICT
+        jdbcTemplate.update("DELETE FROM settlement_batch_items WHERE claim_id IN " + claimsSubquery);
+        jdbcTemplate.update("DELETE FROM claims WHERE member_id IN (" + idList + ")");
+        jdbcTemplate.update("DELETE FROM preauthorization_requests WHERE member_id IN (" + idList + ")");
+        jdbcTemplate.update("DELETE FROM visits WHERE member_id IN (" + idList + ")");
+        jdbcTemplate.update("DELETE FROM eligibility_checks WHERE member_id IN (" + idList + ")");
+        jdbcTemplate.update("DELETE FROM member_policy_assignments WHERE member_id IN (" + idList + ")");
+        jdbcTemplate.update("DELETE FROM member_deductibles WHERE member_id IN (" + idList + ")");
+
+        // Delete dependents first (self-FK parent_id SET NULL is OK, but easier to delete directly)
+        if (!member.isDependent()) {
+            memberRepository.deleteByParentId(memberId);
+        }
         memberRepository.delete(member);
 
         log.info("✅ Member hard deleted: memberId={}", memberId);

@@ -1,7 +1,6 @@
 package com.waad.tba.modules.benefitpolicy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
-import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
@@ -12,7 +11,6 @@ import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
@@ -67,7 +65,6 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@SuppressWarnings("deprecation")
 public class BenefitPolicyCoverageService {
 
     private final BenefitPolicyRepository policyRepository;
@@ -122,17 +119,20 @@ public class BenefitPolicyCoverageService {
             var resolvedOpt = policyRepository
                     .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), serviceDate);
 
-            // Fallback for internal staff: Try finding ANY active policy regardless of date for backlog entry
+            // Fallback for internal staff: Try finding ANY active policy regardless of date
+            // for backlog entry
             if (resolvedOpt.isEmpty()) {
                 User currentUser = authorizationService.getCurrentUser();
                 if (currentUser != null && authorizationService.isInternalStaff(currentUser)) {
-                    log.info("🔍 No date-matched policy found for backlog. Searching for any active policy for employer...");
+                    log.info(
+                            "🔍 No date-matched policy found for backlog. Searching for any active policy for employer...");
                     List<BenefitPolicy> allActive = policyRepository.findByEmployerIdAndStatusAndActiveTrue(
-                        member.getEmployer().getId(), BenefitPolicyStatus.ACTIVE);
+                            member.getEmployer().getId(), BenefitPolicyStatus.ACTIVE);
                     if (!allActive.isEmpty()) {
                         // Pick the latest created one
                         policy = allActive.get(allActive.size() - 1);
-                        log.info("✅ Best-effort resolution: using latest active policy '{}' for backlog entry", policy.getName());
+                        log.info("✅ Best-effort resolution: using latest active policy '{}' for backlog entry",
+                                policy.getName());
                     }
                 }
             } else {
@@ -150,7 +150,7 @@ public class BenefitPolicyCoverageService {
         if (policy == null) {
             throw new BusinessRuleException(
                     String.format("Member %s has no assigned Benefit Policy. Cannot process claim. (Employer: %s)",
-                            member.getFullName(), 
+                            member.getFullName(),
                             member.getEmployer() != null ? member.getEmployer().getName() : "None"));
         }
 
@@ -481,15 +481,17 @@ public class BenefitPolicyCoverageService {
         // PHASE 2.2: PER-FAMILY LIMIT VALIDATION
         // ═══════════════════════════════════════════════════════════════════════════
         BigDecimal perFamilyLimit = benefitPolicy.getPerFamilyLimit();
-        if (perFamilyLimit != null && perFamilyLimit.compareTo(BigDecimal.ZERO) > 0 && member.getFamilyId() != null) {
-            BigDecimal familyUsed = calculateFamilyUsedAmountForYear(member.getFamilyId(), serviceDate.getYear());
+        if (perFamilyLimit != null && perFamilyLimit.compareTo(BigDecimal.ZERO) > 0) {
+            Long principalId = member.getPrincipalMember().getId();
+            BigDecimal familyUsed = calculateFamilyUsedAmountForYear(principalId, serviceDate.getYear());
             BigDecimal remainingFamily = perFamilyLimit.subtract(familyUsed);
 
             if (requestedAmount.compareTo(remainingFamily) > 0) {
-                log.warn("❌ Per-family limit exceeded for family {}: requested={}, remaining={}, familyLimit={}", 
-                        member.getFamilyId(), requestedAmount, remainingFamily, perFamilyLimit);
+                log.warn("❌ Per-family limit exceeded for family {}: requested={}, remaining={}, familyLimit={}",
+                        principalId, requestedAmount, remainingFamily, perFamilyLimit);
                 throw new BusinessRuleException(
-                        String.format("المبلغ المطلوب (%.2f) يتجاوز حد العائلة المتبقي (%.2f). حد العائلة: %.2f، المستخدم: %.2f",
+                        String.format(
+                                "المبلغ المطلوب (%.2f) يتجاوز حد العائلة المتبقي (%.2f). حد العائلة: %.2f، المستخدم: %.2f",
                                 requestedAmount, remainingFamily, perFamilyLimit, familyUsed));
             }
         }
@@ -674,23 +676,22 @@ public class BenefitPolicyCoverageService {
      */
     private BigDecimal calculateUsedAmountForYear(Long memberId, int year) {
         List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
-            com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-            com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
-            com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED
-        );
+                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
+                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
+                com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
         return claimRepository.sumApprovedAmountByMemberAndYear(memberId, year, validStatuses);
     }
 
     /**
-     * Calculate used amount for a whole family in a specific year using DB aggregation.
+     * Calculate used amount for a whole family in a specific year using DB
+     * aggregation.
      */
-    private BigDecimal calculateFamilyUsedAmountForYear(String familyId, int year) {
+    private BigDecimal calculateFamilyUsedAmountForYear(Long principalId, int year) {
         List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
-            com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-            com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
-            com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED
-        );
-        return claimRepository.sumApprovedAmountByFamilyAndYear(familyId, year, validStatuses);
+                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
+                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
+                com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
+        return claimRepository.sumApprovedAmountByFamilyAndYear(principalId, year, validStatuses);
     }
 
     /**
@@ -1075,4 +1076,3 @@ public class BenefitPolicyCoverageService {
                 .orElse(service.getCategoryId());
     }
 }
-

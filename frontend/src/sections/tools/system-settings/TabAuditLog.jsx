@@ -6,6 +6,8 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
+import CircularProgress from '@mui/material/CircularProgress';
+import Typography from '@mui/material/Typography';
 
 // third-party
 import {
@@ -16,58 +18,66 @@ import {
   getPaginationRowModel,
   flexRender
 } from '@tanstack/react-table';
+import { useQuery } from '@tanstack/react-query';
 
 // project imports
 import MainCard from 'components/MainCard';
 import ScrollX from 'components/ScrollX';
 import { CSVExport } from 'components/third-party/react-table';
+import axiosClient from 'utils/axios';
 
 // icons
 import { FileTextOutlined, SafetyOutlined, UserOutlined, DatabaseOutlined, CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons';
 
-// ==============================|| MOCK DATA ||============================== //
+// ==============================|| ACTION CONFIG ||============================== //
 
-const actions = [
-  { type: 'LOGIN', icon: SafetyOutlined, color: 'success' },
-  { type: 'LOGOUT', icon: SafetyOutlined, color: 'default' },
-  { type: 'CREATE_CLAIM', icon: FileTextOutlined, color: 'primary' },
-  { type: 'UPDATE_CLAIM', icon: FileTextOutlined, color: 'info' },
-  { type: 'DELETE_CLAIM', icon: FileTextOutlined, color: 'error' },
-  { type: 'CREATE_MEMBER', icon: UserOutlined, color: 'primary' },
-  { type: 'UPDATE_SETTINGS', icon: DatabaseOutlined, color: 'warning' },
-  { type: 'EXPORT_DATA', icon: FileTextOutlined, color: 'info' }
-];
-
-const users = ['admin@tba-waad.ly', 'doctor@clinic.ly', 'staff@hospital.ly', 'manager@tba-waad.ly'];
-const modules = ['Authentication', 'Claims', 'Members', 'Settings', 'Reports'];
-const ips = ['192.168.1.10', '10.0.0.25', '172.16.0.5', '192.168.1.100'];
-
-const generateMockData = () => {
-  const data = [];
-  for (let i = 0; i < 50; i++) {
-    const action = actions[Math.floor(Math.random() * actions.length)];
-    data.push({
-      id: i + 1,
-      timestamp: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString(),
-      user: users[Math.floor(Math.random() * users.length)],
-      action: action.type,
-      actionIcon: action.icon,
-      actionColor: action.color,
-      module: modules[Math.floor(Math.random() * modules.length)],
-      ipAddress: ips[Math.floor(Math.random() * ips.length)],
-      status: Math.random() > 0.1 ? 'success' : 'failed'
-    });
-  }
-  return data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+const ACTION_CONFIG = {
+  LOGIN: { icon: SafetyOutlined, color: 'success' },
+  LOGOUT: { icon: SafetyOutlined, color: 'default' },
+  CREATE_CLAIM: { icon: FileTextOutlined, color: 'primary' },
+  UPDATE_CLAIM: { icon: FileTextOutlined, color: 'info' },
+  DELETE_CLAIM: { icon: FileTextOutlined, color: 'error' },
+  CREATE_MEMBER: { icon: UserOutlined, color: 'primary' },
+  UPDATE_SETTINGS: { icon: DatabaseOutlined, color: 'warning' },
+  EXPORT_DATA: { icon: FileTextOutlined, color: 'info' }
 };
+
+const DEFAULT_ICON = FileTextOutlined;
+const DEFAULT_COLOR = 'default';
+
+const modules = ['Authentication', 'Claims', 'Members', 'Settings', 'Reports'];
 
 // ==============================|| AUDIT LOG TABLE ||============================== //
 
 export default function TabAuditLog() {
-  const [data] = useState(generateMockData());
   const [globalFilter, setGlobalFilter] = useState('');
   const [moduleFilter, setModuleFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('');
+
+  const { data: rawData, isLoading, isError } = useQuery({
+    queryKey: ['admin-audit-log'],
+    queryFn: async () => {
+      const response = await axiosClient.get('/admin/audit', { params: { size: 200 } });
+      const payload = response.data?.data || response.data;
+      // Backend may return paginated {content:[...]} or a plain array
+      if (Array.isArray(payload?.content)) return payload.content;
+      if (Array.isArray(payload)) return payload;
+      return [];
+    },
+    staleTime: 30_000
+  });
+
+  const data = useMemo(() => {
+    if (!rawData) return [];
+    return rawData.map((entry) => {
+      const actionCfg = ACTION_CONFIG[entry.action] || {};
+      return {
+        ...entry,
+        actionIcon: actionCfg.icon || DEFAULT_ICON,
+        actionColor: actionCfg.color || DEFAULT_COLOR
+      };
+    });
+  }, [rawData]);
 
   const columns = useMemo(
     () => [
@@ -161,6 +171,24 @@ export default function TabAuditLog() {
             </Stack>
           }
         >
+          {/* Loading / Error states */}
+          {isLoading && (
+            <Stack alignItems="center" justifyContent="center" sx={{ p: 6 }}>
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                جارٍ تحميل سجل التدقيق...
+              </Typography>
+            </Stack>
+          )}
+          {isError && (
+            <Stack alignItems="center" sx={{ p: 4 }}>
+              <Typography variant="body2" color="error">
+                تعذّر تحميل سجل التدقيق. تحقق من الصلاحيات أو اتصل بالمسؤول.
+              </Typography>
+            </Stack>
+          )}
+          {!isLoading && !isError && (
+            <>
           {/* Filters */}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ p: 3, pb: 0 }}>
             <TextField
@@ -312,6 +340,8 @@ export default function TabAuditLog() {
               </Stack>
             </Stack>
           </ScrollX>
+            </>
+          )}
         </MainCard>
       </Grid>
     </Grid>

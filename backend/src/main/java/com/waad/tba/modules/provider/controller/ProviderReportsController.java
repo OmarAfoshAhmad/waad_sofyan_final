@@ -49,57 +49,50 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/api/v1/provider/reports")
 @RequiredArgsConstructor
-@Tag(name = "Provider Reports", description = "Provider-specific reporting endpoints")
+@Tag(name = "Provider Reports", description = "Provider Portal Reports — Claims, Pre-Auth, Visits")
 public class ProviderReportsController {
-    
+
+    /** Maximum records returned per export — prevents OOM on large datasets */
+    private static final int MAX_EXPORT_SIZE = 500;
+
     private final ProviderReportsService reportsService;
     private final ProviderReportExcelService providerReportExcelService;
     private final ProviderContextGuard providerContextGuard;
 
     private static final DateTimeFormatter FILE_TS_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
-    
+
     /**
      * Get claims report for current provider
      * 
      * Shows all claims submitted by this provider with filtering options.
      */
     @GetMapping("/claims")
-        @PreAuthorize("hasRole('PROVIDER_STAFF')")
+    @PreAuthorize("hasRole('PROVIDER_STAFF')")
     @Operation(summary = "Get claims report", description = "Retrieve claims submitted by current provider")
     public ResponseEntity<ApiResponse<Page<ProviderClaimReportDto>>> getClaimsReport(
-            @Parameter(description = "From date (YYYY-MM-DD)")
-            @RequestParam(required = false) 
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            
-            @Parameter(description = "To date (YYYY-MM-DD)")
-            @RequestParam(required = false) 
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            
-            @Parameter(description = "Claim status filter")
-            @RequestParam(required = false) String status,
-            
-            @Parameter(description = "Member barcode filter")
-            @RequestParam(required = false) String memberBarcode,
-            
-            @Parameter(description = "Page number (0-based)")
-            @RequestParam(defaultValue = "0") int page,
-            
-            @Parameter(description = "Page size")
-            @RequestParam(defaultValue = "20") int size,
-            
-            @Parameter(description = "Sort field")
-            @RequestParam(defaultValue = "claimDate") String sortBy,
-            
-            @Parameter(description = "Sort direction")
-            @RequestParam(defaultValue = "DESC") String sortDir) {
-        
+            @Parameter(description = "From date (YYYY-MM-DD)") @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+
+            @Parameter(description = "To date (YYYY-MM-DD)") @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+
+            @Parameter(description = "Claim status filter") @RequestParam(name = "status", required = false) String status,
+
+            @Parameter(description = "Member barcode filter") @RequestParam(name = "memberBarcode", required = false) String memberBarcode,
+
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
+
+            @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "claimDate") String sortBy,
+
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
+
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
-        
-        log.info("📊 [PROVIDER-REPORTS] Claims report requested: provider={}, fromDate={}, toDate={}, status={}", 
+
+        log.info("📊 [PROVIDER-REPORTS] Claims report requested: provider={}, fromDate={}, toDate={}, status={}",
                 providerId, fromDate, toDate, status);
-        
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-        PageRequest pageRequest = PageRequest.of(page, size, sort);
+        PageRequest pageRequest = PageRequest.of(page, Math.min(size, 100), sort);
 
         ClaimStatus claimStatus = null;
         if (status != null && !status.isBlank()) {
@@ -109,104 +102,84 @@ public class ProviderReportsController {
                 log.warn("Ignoring invalid claim status filter '{}' for provider {}", status, providerId);
             }
         }
-        
+
         Page<ProviderClaimReportDto> report = reportsService.getClaimsReport(
                 providerId, fromDate, toDate, claimStatus, memberBarcode, pageRequest);
-        
+
         return ResponseEntity.ok(ApiResponse.success(report));
     }
-    
+
     /**
      * Get pre-authorizations report for current provider
      */
     @GetMapping("/pre-auth")
-        @PreAuthorize("hasRole('PROVIDER_STAFF')")
+    @PreAuthorize("hasRole('PROVIDER_STAFF')")
     @Operation(summary = "Get pre-auth report", description = "Retrieve pre-auth requests by current provider")
     public ResponseEntity<ApiResponse<Page<ProviderPreAuthReportDto>>> getPreAuthReport(
-            @Parameter(description = "From date (YYYY-MM-DD)")
-            @RequestParam(required = false) 
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            
-            @Parameter(description = "To date (YYYY-MM-DD)")
-            @RequestParam(required = false) 
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            
-            @Parameter(description = "Pre-auth status filter")
-            @RequestParam(required = false) String status,
-            
-            @Parameter(description = "Member barcode filter")
-            @RequestParam(required = false) String memberBarcode,
-            
-            @Parameter(description = "Page number (0-based)")
-            @RequestParam(defaultValue = "0") int page,
-            
-            @Parameter(description = "Page size")
-            @RequestParam(defaultValue = "20") int size,
-            
-            @Parameter(description = "Sort field")
-            @RequestParam(defaultValue = "requestDate") String sortBy,
-            
-            @Parameter(description = "Sort direction")
-            @RequestParam(defaultValue = "DESC") String sortDir) {
-        
+            @Parameter(description = "From date (YYYY-MM-DD)") @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+
+            @Parameter(description = "To date (YYYY-MM-DD)") @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+
+            @Parameter(description = "Pre-auth status filter") @RequestParam(name = "status", required = false) String status,
+
+            @Parameter(description = "Member barcode filter") @RequestParam(name = "memberBarcode", required = false) String memberBarcode,
+
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
+
+            @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "requestDate") String sortBy,
+
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
+
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
-        
-        log.info("📊 [PROVIDER-REPORTS] Pre-auth report requested: provider={}, fromDate={}, toDate={}", 
+
+        log.info("📊 [PROVIDER-REPORTS] Pre-auth report requested: provider={}, fromDate={}, toDate={}",
                 providerId, fromDate, toDate);
-        
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-        PageRequest pageRequest = PageRequest.of(page, size, sort);
-        
+        PageRequest pageRequest = PageRequest.of(page, Math.min(size, 100), sort);
+
         Page<ProviderPreAuthReportDto> report = reportsService.getPreAuthReport(
                 providerId, fromDate, toDate, status, memberBarcode, pageRequest);
-        
+
         return ResponseEntity.ok(ApiResponse.success(report));
     }
-    
+
     /**
      * Get visits report for current provider
      */
     @GetMapping("/visits")
-        @PreAuthorize("hasRole('PROVIDER_STAFF')")
+    @PreAuthorize("hasRole('PROVIDER_STAFF')")
     @Operation(summary = "Get visits report", description = "Retrieve visit history for current provider")
     public ResponseEntity<ApiResponse<Page<ProviderVisitReportDto>>> getVisitsReport(
-            @Parameter(description = "From date (YYYY-MM-DD)")
-            @RequestParam(required = false) 
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            
-            @Parameter(description = "To date (YYYY-MM-DD)")
-            @RequestParam(required = false) 
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            
-            @Parameter(description = "Visit status filter")
-            @RequestParam(required = false) String status,
-            
-            @Parameter(description = "Member barcode filter")
-            @RequestParam(required = false) String memberBarcode,
-            
-            @Parameter(description = "Page number (0-based)")
-            @RequestParam(defaultValue = "0") int page,
-            
-            @Parameter(description = "Page size")
-            @RequestParam(defaultValue = "20") int size,
-            
-            @Parameter(description = "Sort field")
-            @RequestParam(defaultValue = "visitDate") String sortBy,
-            
-            @Parameter(description = "Sort direction")
-            @RequestParam(defaultValue = "DESC") String sortDir) {
-        
+            @Parameter(description = "From date (YYYY-MM-DD)") @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+
+            @Parameter(description = "To date (YYYY-MM-DD)") @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+
+            @Parameter(description = "Visit status filter") @RequestParam(name = "status", required = false) String status,
+
+            @Parameter(description = "Member barcode filter") @RequestParam(name = "memberBarcode", required = false) String memberBarcode,
+
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
+
+            @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "visitDate") String sortBy,
+
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
+
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
-        
-        log.info("📊 [PROVIDER-REPORTS] Visits report requested: provider={}, fromDate={}, toDate={}", 
+
+        log.info("📊 [PROVIDER-REPORTS] Visits report requested: provider={}, fromDate={}, toDate={}",
                 providerId, fromDate, toDate);
-        
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-        PageRequest pageRequest = PageRequest.of(page, size, sort);
-        
+        PageRequest pageRequest = PageRequest.of(page, Math.min(size, 100), sort);
+
         Page<ProviderVisitReportDto> report = reportsService.getVisitsReport(
                 providerId, fromDate, toDate, status, memberBarcode, pageRequest);
-        
+
         return ResponseEntity.ok(ApiResponse.success(report));
     }
 
@@ -214,10 +187,10 @@ public class ProviderReportsController {
     @PreAuthorize("hasRole('PROVIDER_STAFF')")
     @Operation(summary = "Export claims report", description = "Export filtered provider claims report to Excel")
     public ResponseEntity<byte[]> exportClaimsReport(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String memberBarcode) {
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "memberBarcode", required = false) String memberBarcode) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
 
@@ -236,14 +209,14 @@ public class ProviderReportsController {
                 toDate,
                 claimStatus,
                 memberBarcode,
-                PageRequest.of(0, 10000, Sort.by(Sort.Direction.DESC, "createdAt"))
-        ).getContent();
+                PageRequest.of(0, MAX_EXPORT_SIZE, Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
 
         byte[] excel = providerReportExcelService.exportClaimsReport(reportRows);
         String fileName = "provider_claims_report_" + LocalDateTime.now().format(FILE_TS_FORMATTER) + ".xlsx";
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                 .body(excel);
     }
@@ -252,10 +225,10 @@ public class ProviderReportsController {
     @PreAuthorize("hasRole('PROVIDER_STAFF')")
     @Operation(summary = "Export pre-auth report", description = "Export filtered provider pre-authorization report to Excel")
     public ResponseEntity<byte[]> exportPreAuthReport(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String memberBarcode) {
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "memberBarcode", required = false) String memberBarcode) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
 
@@ -265,14 +238,14 @@ public class ProviderReportsController {
                 toDate,
                 status,
                 memberBarcode,
-                PageRequest.of(0, 10000, Sort.by(Sort.Direction.DESC, "requestDate"))
-        ).getContent();
+                PageRequest.of(0, MAX_EXPORT_SIZE, Sort.by(Sort.Direction.DESC, "requestDate"))).getContent();
 
         byte[] excel = providerReportExcelService.exportPreAuthReport(reportRows);
         String fileName = "provider_preauth_report_" + LocalDateTime.now().format(FILE_TS_FORMATTER) + ".xlsx";
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                 .body(excel);
     }
@@ -281,10 +254,10 @@ public class ProviderReportsController {
     @PreAuthorize("hasRole('PROVIDER_STAFF')")
     @Operation(summary = "Export visits report", description = "Export filtered provider visits report to Excel")
     public ResponseEntity<byte[]> exportVisitsReport(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String memberBarcode) {
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "memberBarcode", required = false) String memberBarcode) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
 
@@ -294,14 +267,14 @@ public class ProviderReportsController {
                 toDate,
                 status,
                 memberBarcode,
-                PageRequest.of(0, 10000, Sort.by(Sort.Direction.DESC, "visitDate"))
-        ).getContent();
+                PageRequest.of(0, MAX_EXPORT_SIZE, Sort.by(Sort.Direction.DESC, "visitDate"))).getContent();
 
         byte[] excel = providerReportExcelService.exportVisitsReport(reportRows);
         String fileName = "provider_visits_report_" + LocalDateTime.now().format(FILE_TS_FORMATTER) + ".xlsx";
 
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
                 .body(excel);
     }

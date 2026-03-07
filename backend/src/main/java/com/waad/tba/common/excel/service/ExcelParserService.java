@@ -20,24 +20,31 @@ import java.util.Date;
 @Slf4j
 @Service
 public class ExcelParserService {
-    
+
+    /** Maximum allowed Excel file size: 10 MB */
+    private static final long MAX_EXCEL_FILE_SIZE = 10L * 1024 * 1024;
+
     /**
-     * Validate Excel file format
+     * Validate Excel file format and size.
      */
     public void validateExcelFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BusinessRuleException("الملف فارغ");
         }
-        
-        String filename = file.getOriginalFilename();
-        if (filename == null || 
-            (!filename.toLowerCase().endsWith(".xlsx") && !filename.toLowerCase().endsWith(".xls"))) {
+
+        if (file.getSize() > MAX_EXCEL_FILE_SIZE) {
             throw new BusinessRuleException(
-                "نوع الملف غير صحيح. يجب أن يكون ملف Excel (.xlsx أو .xls)"
-            );
+                    "حجم الملف يتجاوز الحد المسموح (10 ميغابايت)");
+        }
+
+        String filename = file.getOriginalFilename();
+        if (filename == null ||
+                (!filename.toLowerCase().endsWith(".xlsx") && !filename.toLowerCase().endsWith(".xls"))) {
+            throw new BusinessRuleException(
+                    "نوع الملف غير صحيح. يجب أن يكون ملف Excel (.xlsx أو .xls)");
         }
     }
-    
+
     /**
      * Open workbook from multipart file
      */
@@ -47,7 +54,7 @@ public class ExcelParserService {
             return WorkbookFactory.create(inputStream);
         }
     }
-    
+
     /**
      * Get first data sheet (skip metadata sheet)
      */
@@ -57,19 +64,18 @@ public class ExcelParserService {
         if (dataSheet != null) {
             return dataSheet;
         }
-        
+
         // Otherwise, get first visible sheet
         for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
             if (!workbook.isSheetHidden(i)) {
                 return workbook.getSheetAt(i);
             }
         }
-        
+
         throw new BusinessRuleException(
-            "لم يتم العثور على ورقة بيانات صالحة في الملف"
-        );
+                "لم يتم العثور على ورقة بيانات صالحة في الملف");
     }
-    
+
     /**
      * Check if row is empty
      */
@@ -77,7 +83,7 @@ public class ExcelParserService {
         if (row == null) {
             return true;
         }
-        
+
         for (int i = 0; i < row.getLastCellNum(); i++) {
             Cell cell = row.getCell(i);
             if (cell != null && cell.getCellType() != CellType.BLANK) {
@@ -87,10 +93,10 @@ public class ExcelParserService {
                 }
             }
         }
-        
+
         return true;
     }
-    
+
     /**
      * Get cell value as string (handles all cell types)
      */
@@ -98,12 +104,12 @@ public class ExcelParserService {
         if (cell == null) {
             return null;
         }
-        
+
         try {
             switch (cell.getCellType()) {
                 case STRING:
                     return cell.getStringCellValue().trim();
-                    
+
                 case NUMERIC:
                     if (DateUtil.isCellDateFormatted(cell)) {
                         Date date = cell.getDateCellValue();
@@ -116,10 +122,10 @@ public class ExcelParserService {
                         }
                         return String.valueOf(numValue);
                     }
-                    
+
                 case BOOLEAN:
                     return String.valueOf(cell.getBooleanCellValue());
-                    
+
                 case FORMULA:
                     try {
                         return cell.getStringCellValue().trim();
@@ -134,7 +140,7 @@ public class ExcelParserService {
                             return null;
                         }
                     }
-                    
+
                 case BLANK:
                 default:
                     return null;
@@ -144,7 +150,7 @@ public class ExcelParserService {
             return null;
         }
     }
-    
+
     /**
      * Get cell value as LocalDate
      */
@@ -152,7 +158,7 @@ public class ExcelParserService {
         if (cell == null) {
             return null;
         }
-        
+
         try {
             if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
                 Date date = cell.getDateCellValue();
@@ -164,10 +170,10 @@ public class ExcelParserService {
         } catch (Exception e) {
             log.warn("[ExcelParser] Error parsing date from cell: {}", e.getMessage());
         }
-        
+
         return null;
     }
-    
+
     /**
      * Get cell value as Integer
      */
@@ -175,7 +181,7 @@ public class ExcelParserService {
         if (cell == null) {
             return null;
         }
-        
+
         try {
             if (cell.getCellType() == CellType.NUMERIC) {
                 return (int) cell.getNumericCellValue();
@@ -188,10 +194,10 @@ public class ExcelParserService {
         } catch (Exception e) {
             log.warn("[ExcelParser] Error parsing integer from cell: {}", e.getMessage());
         }
-        
+
         return null;
     }
-    
+
     /**
      * Get cell value as Double
      */
@@ -199,7 +205,7 @@ public class ExcelParserService {
         if (cell == null) {
             return null;
         }
-        
+
         try {
             if (cell.getCellType() == CellType.NUMERIC) {
                 return cell.getNumericCellValue();
@@ -212,10 +218,10 @@ public class ExcelParserService {
         } catch (Exception e) {
             log.warn("[ExcelParser] Error parsing double from cell: {}", e.getMessage());
         }
-        
+
         return null;
     }
-    
+
     /**
      * Get cell value as Boolean
      */
@@ -223,17 +229,17 @@ public class ExcelParserService {
         if (cell == null) {
             return null;
         }
-        
+
         try {
             if (cell.getCellType() == CellType.BOOLEAN) {
                 return cell.getBooleanCellValue();
             } else if (cell.getCellType() == CellType.STRING) {
                 String value = cell.getStringCellValue().trim().toLowerCase();
-                if (value.equals("true") || value.equals("yes") || value.equals("1") || 
-                    value.equals("نعم") || value.equals("صحيح")) {
+                if (value.equals("true") || value.equals("yes") || value.equals("1") ||
+                        value.equals("نعم") || value.equals("صحيح")) {
                     return true;
-                } else if (value.equals("false") || value.equals("no") || value.equals("0") || 
-                           value.equals("لا") || value.equals("خطأ")) {
+                } else if (value.equals("false") || value.equals("no") || value.equals("0") ||
+                        value.equals("لا") || value.equals("خطأ")) {
                     return false;
                 }
             } else if (cell.getCellType() == CellType.NUMERIC) {
@@ -242,10 +248,10 @@ public class ExcelParserService {
         } catch (Exception e) {
             log.warn("[ExcelParser] Error parsing boolean from cell: {}", e.getMessage());
         }
-        
+
         return null;
     }
-    
+
     /**
      * Find column index by header name (case-insensitive, handles Arabic/English)
      * 
@@ -259,19 +265,23 @@ public class ExcelParserService {
         // Pass 1: Look for exact matches (most robust)
         for (int i = 0; i < headerRow.getLastCellNum(); i++) {
             Cell cell = headerRow.getCell(i);
-            if (cell == null) continue;
+            if (cell == null)
+                continue;
             String headerValue = getCellValueAsString(cell);
-            if (headerValue == null) continue;
+            if (headerValue == null)
+                continue;
             headerValue = headerValue.replace("*", "").trim();
             String[] headerParts = headerValue.split("[\\r\\n]+");
 
             for (String name : headerNames) {
                 String nameTrimmed = name.trim();
                 // Check full value exact
-                if (headerValue.equalsIgnoreCase(nameTrimmed)) return i;
+                if (headerValue.equalsIgnoreCase(nameTrimmed))
+                    return i;
                 // Check parts exact
                 for (String part : headerParts) {
-                    if (part.trim().equalsIgnoreCase(nameTrimmed)) return i;
+                    if (part.trim().equalsIgnoreCase(nameTrimmed))
+                        return i;
                 }
             }
         }
@@ -279,20 +289,25 @@ public class ExcelParserService {
         // Pass 2: Look for partial matches (if exact not found)
         for (int i = 0; i < headerRow.getLastCellNum(); i++) {
             Cell cell = headerRow.getCell(i);
-            if (cell == null) continue;
+            if (cell == null)
+                continue;
             String headerValue = getCellValueAsString(cell);
-            if (headerValue == null) continue;
+            if (headerValue == null)
+                continue;
             headerValue = headerValue.replace("*", "").trim();
             String headerLower = headerValue.toLowerCase();
             String[] headerParts = headerValue.split("[\\r\\n]+");
 
             for (String name : headerNames) {
                 String nameLower = name.trim().toLowerCase();
-                if (nameLower.length() < 3) continue; // Avoid matching extremely short keywords like 'id' partially
+                if (nameLower.length() < 3)
+                    continue; // Avoid matching extremely short keywords like 'id' partially
 
-                if (headerLower.contains(nameLower)) return i;
+                if (headerLower.contains(nameLower))
+                    return i;
                 for (String part : headerParts) {
-                    if (part.toLowerCase().contains(nameLower)) return i;
+                    if (part.toLowerCase().contains(nameLower))
+                        return i;
                 }
             }
         }

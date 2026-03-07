@@ -132,7 +132,7 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<List<UserResponseDto>>> searchUsers(
-                        @Parameter(name = "query", description = "Search query", required = true) @RequestParam String query) {
+                        @Parameter(name = "query", description = "Search query", required = true) @RequestParam(name = "query") String query) {
                 List<UserResponseDto> users = userService.search(query);
                 return ResponseEntity.ok(ApiResponse.success(users));
         }
@@ -145,8 +145,8 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<Page<UserResponseDto>>> getUsersPaginated(
-                        @Parameter(name = "page", description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-                        @Parameter(name = "size", description = "Page size") @RequestParam(defaultValue = "10") int size) {
+                        @Parameter(name = "page", description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+                        @Parameter(name = "size", description = "Page size") @RequestParam(name = "size", defaultValue = "10") int size) {
                 Page<UserResponseDto> users = userService.findAllPaginated(PageRequest.of(page, size));
                 return ResponseEntity.ok(ApiResponse.success(users));
         }

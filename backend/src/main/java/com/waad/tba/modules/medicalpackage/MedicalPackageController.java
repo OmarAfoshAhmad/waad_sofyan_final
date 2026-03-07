@@ -52,11 +52,11 @@ public class MedicalPackageController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "List medical packages with pagination", description = "Returns paginated list of medical packages with optional search")
     public ResponseEntity<ApiResponse<PaginationResponse<MedicalPackage>>> list(
-            @Parameter(description = "Page number (1-based)") @RequestParam(defaultValue = "1") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Search query") @RequestParam(required = false) String search,
-            @Parameter(description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir) {
+            @Parameter(description = "Page number (1-based)") @RequestParam(name = "page", defaultValue = "1") int page,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "10") int size,
+            @Parameter(description = "Search query") @RequestParam(name = "search", required = false) String search,
+            @Parameter(description = "Sort by field") @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir) {
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
         PageRequest pageRequest = PageRequest.of(Math.max(0, page - 1), size, sort);
@@ -180,7 +180,7 @@ public class MedicalPackageController {
     @GetMapping("/search")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Search medical packages")
-    public ResponseEntity<ApiResponse<List<MedicalPackage>>> search(@RequestParam String query) {
+    public ResponseEntity<ApiResponse<List<MedicalPackage>>> search(@RequestParam(name = "query") String query) {
         List<MedicalPackage> results = service.search(query);
         return ResponseEntity.ok(ApiResponse.success(results));
     }

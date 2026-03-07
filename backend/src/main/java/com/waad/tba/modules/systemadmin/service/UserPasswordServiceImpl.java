@@ -60,4 +60,35 @@ public class UserPasswordServiceImpl implements UserPasswordService {
         
         log.info("Password changed successfully for user: {}", username);
     }
+
+    @Override
+    @Transactional
+    public void updateProfile(String username, String fullName, String email, String phone) {
+        log.info("Profile update requested for user: {}", username);
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new BusinessRuleException("المستخدم غير موجود"));
+
+        if (fullName != null && !fullName.isBlank()) {
+            user.setFullName(fullName.strip());
+        }
+
+        if (email != null && !email.isBlank()) {
+            String normalizedEmail = email.strip().toLowerCase();
+            // Ensure the new email is not taken by another account
+            userRepository.findByEmail(normalizedEmail).ifPresent(other -> {
+                if (!other.getId().equals(user.getId())) {
+                    throw new BusinessRuleException("البريد الإلكتروني مستخدم بالفعل من قِبَل حساب آخر");
+                }
+            });
+            user.setEmail(normalizedEmail);
+        }
+
+        if (phone != null) {
+            user.setPhone(phone.isBlank() ? null : phone.strip());
+        }
+
+        userRepository.save(user);
+        log.info("Profile updated successfully for user: {}", username);
+    }
 }

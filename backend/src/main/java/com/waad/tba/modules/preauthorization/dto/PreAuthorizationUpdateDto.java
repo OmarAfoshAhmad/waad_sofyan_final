@@ -3,7 +3,6 @@ package com.waad.tba.modules.preauthorization.dto;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
-import java.math.BigDecimal;
 
 /**
  * DTO for updating a PreAuthorization (CANONICAL REBUILD)

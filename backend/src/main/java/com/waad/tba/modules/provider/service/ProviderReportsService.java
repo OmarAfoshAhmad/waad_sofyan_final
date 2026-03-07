@@ -34,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("deprecation")
 public class ProviderReportsService {
     
     private final EntityManager entityManager;

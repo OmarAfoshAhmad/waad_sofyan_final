@@ -62,14 +62,14 @@ public class ModuleAccess {
      * JSON array of roles allowed to access this module
      * Example: ["SUPER_ADMIN", "ADMIN", "EMPLOYER"]
      */
-    @Column(name = "allowed_roles", nullable = false, columnDefinition = "JSON")
+    @Column(name = "allowed_roles", nullable = false, columnDefinition = "text")
     private String allowedRoles;
 
     /**
      * JSON array of required permissions
      * Example: ["VIEW_MEMBERS", "MANAGE_MEMBERS"]
      */
-    @Column(name = "required_permissions", columnDefinition = "JSON")
+    @Column(name = "required_permissions", columnDefinition = "text")
     private String requiredPermissions;
 
     /**

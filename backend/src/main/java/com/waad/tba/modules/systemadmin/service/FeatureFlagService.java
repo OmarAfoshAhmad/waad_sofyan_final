@@ -74,10 +74,10 @@ public class FeatureFlagService {
                 .build();
 
         FeatureFlag saved = featureFlagRepository.save(flag);
-        
+
         // Audit log
-        createAuditLog("FEATURE_FLAG_CREATED", "FeatureFlag", saved.getId(), 
-                      "Created feature flag: " + saved.getFlagKey(), createdBy);
+        createAuditLog("FEATURE_FLAG_CREATED", "FeatureFlag", saved.getId(),
+                "Created feature flag: " + saved.getFlagKey(), createdBy);
 
         return toDto(saved);
     }
@@ -98,9 +98,9 @@ public class FeatureFlagService {
         FeatureFlag updated = featureFlagRepository.save(flag);
 
         // Audit log
-        createAuditLog("FEATURE_FLAG_TOGGLED", "FeatureFlag", updated.getId(), 
-                      String.format("Feature flag '%s' %s", flagKey, enabled ? "enabled" : "disabled"), 
-                      updatedBy);
+        createAuditLog("FEATURE_FLAG_TOGGLED", "FeatureFlag", updated.getId(),
+                String.format("Feature flag '%s' %s", flagKey, enabled ? "enabled" : "disabled"),
+                updatedBy);
 
         return toDto(updated);
     }
@@ -124,8 +124,8 @@ public class FeatureFlagService {
         FeatureFlag updated = featureFlagRepository.save(flag);
 
         // Audit log
-        createAuditLog("FEATURE_FLAG_UPDATED", "FeatureFlag", updated.getId(), 
-                      "Updated feature flag: " + flagKey, updatedBy);
+        createAuditLog("FEATURE_FLAG_UPDATED", "FeatureFlag", updated.getId(),
+                "Updated feature flag: " + flagKey, updatedBy);
 
         return toDto(updated);
     }
@@ -144,8 +144,20 @@ public class FeatureFlagService {
         featureFlagRepository.delete(flag);
 
         // Audit log
-        createAuditLog("FEATURE_FLAG_DELETED", "FeatureFlag", flagId, 
-                      "Deleted feature flag: " + flagKey, deletedBy);
+        createAuditLog("FEATURE_FLAG_DELETED", "FeatureFlag", flagId,
+                "Deleted feature flag: " + flagKey, deletedBy);
+    }
+
+    /**
+     * Check if a feature flag is enabled (DB lookup, no audit log).
+     * Used by FeatureGuard for runtime checks.
+     * Returns defaultValue if the flag does not exist in DB.
+     */
+    @Transactional(readOnly = true)
+    public boolean isFlagEnabled(String flagKey, boolean defaultValue) {
+        return featureFlagRepository.findByFlagKey(flagKey)
+                .map(FeatureFlag::getEnabled)
+                .orElse(defaultValue);
     }
 
     /**
@@ -201,8 +213,8 @@ public class FeatureFlagService {
             return List.of();
         }
         try {
-            return objectMapper.readValue(json, 
-                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+            return objectMapper.readValue(json,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
         } catch (JsonProcessingException e) {
             log.error("Error parsing JSON", e);
             return List.of();

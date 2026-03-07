@@ -401,6 +401,11 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        List<Member> findByParentId(Long parentId);
 
        /**
+        * Delete all dependents of a principal member.
+        */
+       void deleteByParentId(Long parentId);
+
+       /**
         * Find all active dependents for a specific principal member.
         * 
         * @param parentId Principal member ID
@@ -410,11 +415,21 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        /**
         * Count dependents for a principal member.
-        * 
+        *
         * @param parentId Principal member ID
         * @return Number of dependents
         */
        long countByParentId(Long parentId);
+
+       /**
+        * Count dependents of a specific relationship type for a principal member.
+        * Used to determine the next ordinal suffix (W1, W2, S1, D1 …).
+        *
+        * @param parentId     Principal member ID
+        * @param relationship Relationship type
+        * @return Number of existing dependents with that relationship
+        */
+       long countByParentIdAndRelationship(Long parentId, Member.Relationship relationship);
 
        /**
         * Find principal member with all dependents (using fetch join).

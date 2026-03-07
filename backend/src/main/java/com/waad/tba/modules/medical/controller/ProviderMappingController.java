@@ -46,8 +46,8 @@ public class ProviderMappingController {
     @Operation(summary = "List raw services for a provider",
                description = "Returns raw service names optionally filtered by mapping status")
     public ResponseEntity<ApiResponse<List<RawServiceDto>>> getRawServices(
-            @RequestParam Long providerId,
-            @RequestParam(required = false, defaultValue = "PENDING") String status) {
+            @RequestParam(name = "providerId") Long providerId,
+            @RequestParam(name = "status", required = false, defaultValue = "PENDING") String status) {
 
         MappingStatus statusEnum = null;
         if (status != null && !status.isBlank()) {

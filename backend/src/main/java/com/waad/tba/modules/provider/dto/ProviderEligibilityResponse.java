@@ -1,7 +1,6 @@
 package com.waad.tba.modules.provider.dto;
 
 import com.waad.tba.modules.member.dto.MemberViewDto;
-import com.waad.tba.modules.member.dto.DependentViewDto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

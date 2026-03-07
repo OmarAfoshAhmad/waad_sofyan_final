@@ -3,6 +3,7 @@ package com.waad.tba.modules.employer.dto;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -64,6 +65,30 @@ public class EmployerResponseDto {
      * Website
      */
     private String website;
+
+    /** Contact phone */
+    private String phone;
+
+    /** Contact email */
+    private String email;
+
+    /** Address */
+    private String address;
+
+    /** Commercial Registration Number */
+    private String crNumber;
+
+    /** Tax/VAT Number */
+    private String taxNumber;
+
+    /** Contract start date */
+    private LocalDate contractStartDate;
+
+    /** Contract end date */
+    private LocalDate contractEndDate;
+
+    /** Maximum members allowed (null = unlimited) */
+    private Integer maxMemberLimit;
 
     /**
      * Creation timestamp (audit field)

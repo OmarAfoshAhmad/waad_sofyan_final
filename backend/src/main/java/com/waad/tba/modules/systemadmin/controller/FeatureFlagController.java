@@ -22,16 +22,31 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('SUPER_ADMIN')")
-@CrossOrigin(origins = "*")
 public class FeatureFlagController {
 
     private final FeatureFlagService featureFlagService;
 
+    /**
+     * Public endpoint — returns only UI-relevant feature flags (no SUPER_ADMIN
+     * required).
+     * Used by the frontend on app load to determine visible features.
+     * Internal-only flags are excluded.
+     */
+    @GetMapping("/public")
+    @Operation(summary = "Get public feature flags (no auth required)")
+    @PreAuthorize("permitAll()")
+    public ApiResponse<List<FeatureFlagDto>> getPublicFeatureFlags() {
+        List<FeatureFlagDto> publicFlags = featureFlagService.getAllFeatureFlags().stream()
+                .filter(f -> !f.getFlagKey().startsWith("INTERNAL_"))
+                .toList();
+        return ApiResponse.success("Public feature flags retrieved", publicFlags);
+    }
+
     @GetMapping
     @Operation(summary = "Get all feature flags")
     @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Success"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
     })
     public ApiResponse<List<FeatureFlagDto>> getAllFeatureFlags() {
         List<FeatureFlagDto> flags = featureFlagService.getAllFeatureFlags();
@@ -60,7 +75,7 @@ public class FeatureFlagController {
     @Operation(summary = "Toggle feature flag")
     public ApiResponse<FeatureFlagDto> toggleFeatureFlag(
             @PathVariable String key,
-            @RequestParam Boolean enabled,
+            @RequestParam(name = "enabled") Boolean enabled,
             Authentication authentication) {
         String updatedBy = authentication.getName();
         FeatureFlagDto toggled = featureFlagService.toggleFeatureFlag(key, enabled, updatedBy);

@@ -314,9 +314,18 @@ public class AuthorizationService {
 
         Claim claim = claimOpt.get();
 
-        // PROVIDER: Can access claims (TODO: implement createdBy check)
+        // PROVIDER: Can only access claims belonging to their own provider
         if (isProvider(user)) {
-            log.debug("✅ canAccessClaim: ALLOWED - user={} is PROVIDER (TODO: add createdBy check)", user.getUsername());
+            if (user.getProviderId() == null) {
+                log.warn("❌ canAccessClaim: DENIED - PROVIDER user {} has no providerId", user.getUsername());
+                return false;
+            }
+            if (!user.getProviderId().equals(claim.getProviderId())) {
+                log.warn("❌ canAccessClaim: DENIED - user {} attempted to access claim {} from different provider",
+                        user.getUsername(), claimId);
+                return false;
+            }
+            log.debug("✅ canAccessClaim: ALLOWED - user={} providerId matches", user.getUsername());
             return true;
         }
 
@@ -378,6 +387,21 @@ public class AuthorizationService {
         }
 
         Visit visit = visitOpt.get();
+
+        // PROVIDER: Can only access visits belonging to their own provider
+        if (isProvider(user)) {
+            if (user.getProviderId() == null) {
+                log.warn("❌ canAccessVisit: DENIED - PROVIDER user {} has no providerId", user.getUsername());
+                return false;
+            }
+            if (!user.getProviderId().equals(visit.getProviderId())) {
+                log.warn("❌ canAccessVisit: DENIED - user {} attempted to access visit {} from different provider",
+                        user.getUsername(), visitId);
+                return false;
+            }
+            log.debug("✅ canAccessVisit: ALLOWED - user={} providerId matches", user.getUsername());
+            return true;
+        }
 
         // EMPLOYER_ADMIN: Check if visit's member belongs to their employer
         if (isEmployerAdmin(user)) {

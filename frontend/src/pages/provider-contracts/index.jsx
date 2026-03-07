@@ -11,9 +11,9 @@
  * - ProviderContractView.jsx - Detail view with pricing table
  * - data/providerContracts.mock.js - Mock data for development
  *
- * Backend Status: NOT IMPLEMENTED
- * This module uses mock data derived from Excel contract structures.
- * When backend is ready, replace mock imports with API service calls.
+ * Backend Status: IMPLEMENTED
+ * This module uses the real provider-contracts API via provider-contracts.service.js
+ * Backend endpoint: /api/v1/provider-contracts (ProviderContractController.java)
  *
  * Route Configuration (in MainRoutes.jsx):
  * - /provider-contracts → ProviderContractsList (this export)

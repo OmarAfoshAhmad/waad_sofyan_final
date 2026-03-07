@@ -1,7 +1,6 @@
 package com.waad.tba.services.pdf.templates;
 
 import com.lowagie.text.*;
-import com.lowagie.text.pdf.PdfPTable;
 import com.waad.tba.modules.providercontract.dto.ContractResponseDto;
 import com.waad.tba.services.pdf.PdfTableBuilder;
 import com.waad.tba.services.pdf.config.PdfFontConfig;
@@ -21,6 +20,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class ContractReportTemplate {
     
     private final PdfFontConfig fontConfig;

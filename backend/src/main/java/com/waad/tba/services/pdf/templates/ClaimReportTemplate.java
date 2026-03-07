@@ -20,6 +20,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class ClaimReportTemplate {
 
     private final PdfFontConfig fontConfig;

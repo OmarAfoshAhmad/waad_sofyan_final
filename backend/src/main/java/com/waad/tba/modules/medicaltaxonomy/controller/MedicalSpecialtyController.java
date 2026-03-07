@@ -39,7 +39,7 @@ public class MedicalSpecialtyController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DATA_ENTRY','MEDICAL_REVIEWER'," +
                   "'ACCOUNTANT','PROVIDER_STAFF','EMPLOYER_ADMIN','FINANCE_VIEWER')")
     public ResponseEntity<ApiResponse<List<MedicalSpecialtyDto>>> listAll(
-            @RequestParam(required = false) Long categoryId) {
+            @RequestParam(name = "categoryId", required = false) Long categoryId) {
 
         List<MedicalSpecialtyDto> data = categoryId != null
                 ? specialtyService.listByCategory(categoryId)

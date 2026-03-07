@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -9,7 +9,7 @@ import {
   Typography,
   Alert,
   Stack,
-  CircularProgress,
+  LinearProgress,
   IconButton,
   Grid,
   Paper
@@ -46,7 +46,28 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [result, setResult] = useState(null); // Added result state
+  const [result, setResult] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const progressTimerRef = useRef(null);
+
+  const startProgressSimulation = () => {
+    setProgress(0);
+    progressTimerRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 85) return prev;
+        const increment = prev < 40 ? 6 : prev < 65 ? 3 : 1;
+        return Math.min(prev + increment, 85);
+      });
+    }, 400);
+  };
+
+  const stopProgressSimulation = (finalValue = 100) => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    setProgress(finalValue);
+  };
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
@@ -87,10 +108,12 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     }
 
     setUploading(true);
-    setResult(null); // Clear previous result before new upload
+    setResult(null);
+    startProgressSimulation();
     try {
       const response = await importMembers(selectedFile);
       const data = response?.data || response;
+      stopProgressSimulation(100);
       setResult(data);
 
       if (data?.success) {
@@ -101,6 +124,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
       if (onSuccess) onSuccess(data);
     } catch (error) {
+      stopProgressSimulation(0);
       console.error('Upload failed:', error.response?.data || error.message);
       const errorMessage = error.response?.data?.message || error.message || LABELS.error;
       enqueueSnackbar(errorMessage, { variant: 'error' });
@@ -112,7 +136,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const handleClose = () => {
     if (!uploading) {
       setSelectedFile(null);
-      setResult(null); // Clear result on close
+      setResult(null);
+      setProgress(0);
       onClose();
     }
   };
@@ -120,7 +145,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const handleRemoveFile = (e) => {
     e.stopPropagation();
     setSelectedFile(null);
-    setResult(null); // Clear result when file is removed
+    setResult(null);
+    setProgress(0);
   };
 
   return (
@@ -148,7 +174,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                     size="small"
                     onClick={handleDownloadTemplate}
                     disabled={downloading || uploading}
-                    startIcon={downloading ? <CircularProgress size={16} /> : <DownloadIcon />}
+                    startIcon={<DownloadIcon />}
                   >
                     {downloading ? 'جار التحميل...' : LABELS.downloadTemplate}
                   </Button>
@@ -264,10 +290,17 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
             </Box>
           )}
 
-          {uploading && ( // Show uploading progress
-            <Box sx={{ width: '100%', textAlign: 'center', py: 2 }}>
-              <CircularProgress size={40} sx={{ mb: 2 }} />
-              <Typography variant="body1">{LABELS.uploading}</Typography>
+          {uploading && (
+            <Box sx={{ width: '100%', py: 2 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="body1">{LABELS.uploading}</Typography>
+                <Typography variant="body2" color="primary" fontWeight="bold">{progress}%</Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={progress}
+                sx={{ height: 10, borderRadius: 5, mb: 1 }}
+              />
               <Typography variant="caption" color="textSecondary">قد تستغرق معالجة الملفات الكبيرة عدة دقائق...</Typography>
             </Box>
           )}
@@ -284,7 +317,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
             disabled={!selectedFile || uploading}
             variant="contained"
             color="primary"
-            startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+            startIcon={<CloudUploadIcon />}
           >
             {uploading ? 'جاري المعالجة...' : LABELS.upload}
           </Button>

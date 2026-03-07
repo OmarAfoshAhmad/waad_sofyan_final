@@ -52,12 +52,12 @@ public class ProviderDocumentController {
     @GetMapping
     @PreAuthorize("hasRole('PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<ProviderDocumentDto>>> getProviderDocuments(
-            @RequestParam(required = false) String referenceType,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(name = "referenceType", required = false) String referenceType,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
             Authentication authentication) {
         
         log.info("[PROVIDER-DOCS] Request: type={}, status={}, from={}, to={}, page={}, size={}",

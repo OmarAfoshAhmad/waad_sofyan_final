@@ -31,7 +31,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("deprecation")
 public class ProviderService {
 
     private final ProviderRepository providerRepository;

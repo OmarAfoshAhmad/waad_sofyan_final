@@ -138,6 +138,7 @@ public class SystemSetting {
      * Get setting value as Integer.
      */
     @Transient
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public Integer getValueAsInteger() {
         if (settingValue == null) {
             return null;
@@ -145,7 +146,7 @@ public class SystemSetting {
         try {
             return Integer.parseInt(settingValue);
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("Setting " + settingKey + " cannot be parsed as Integer: " + settingValue);
+            return null;
         }
     }
     
@@ -153,6 +154,7 @@ public class SystemSetting {
      * Get setting value as Boolean.
      */
     @Transient
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public Boolean getValueAsBoolean() {
         if (settingValue == null) {
             return null;

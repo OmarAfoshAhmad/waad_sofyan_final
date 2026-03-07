@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @see com.waad.tba.modules.member.service.CardNumberGeneratorService
  */
 @Deprecated(since = "Phase 2 Remediation", forRemoval = true)
+@SuppressWarnings("dep-ann")
 public class CardNumberGenerator {
     
     /**

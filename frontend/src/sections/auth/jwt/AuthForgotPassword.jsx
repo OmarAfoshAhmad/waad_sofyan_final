@@ -17,13 +17,14 @@ import { Formik } from 'formik';
 import useAuth from 'hooks/useAuth';
 import AnimateButton from 'components/@extended/AnimateButton';
 import { openSnackbar } from 'api/snackbar';
+import authService from 'services/api/auth.service';
 
 // ============================|| JWT - FORGOT PASSWORD ||============================ //
 
 export default function AuthForgotPassword() {
   const navigate = useNavigate();
 
-  const { isLoggedIn, resetPassword } = useAuth();
+  const { isLoggedIn } = useAuth();
 
   const [searchParams] = useSearchParams();
   const auth = searchParams.get('auth'); // get auth and set route based on that
@@ -40,38 +41,47 @@ export default function AuthForgotPassword() {
         })}
         onSubmit={async (values, { setErrors, setStatus, setSubmitting }) => {
           try {
-            await resetPassword?.(values.email).then(
-              () => {
-                setStatus({ success: true });
-                setSubmitting(false);
-                openSnackbar({
-                  open: true,
-                  message: 'Check mail for reset password link',
-                  variant: 'alert',
+            const config = await authService.getPasswordResetConfig();
+            const method = (config?.method || 'TOKEN').toUpperCase();
 
-                  alert: {
-                    color: 'success'
-                  }
-                });
-                setTimeout(() => {
-                  navigate(isLoggedIn ? '/auth/check-mail' : auth ? `/${auth}/check-mail?auth=jwt` : '/check-mail', { replace: true });
-                }, 1500);
+            if (method === 'OTP') {
+              await authService.requestPasswordResetOtp(values.email);
+              setStatus({ success: true });
+              setSubmitting(false);
+              openSnackbar({
+                open: true,
+                message: 'OTP sent to your email. Enter it to reset password.',
+                variant: 'alert',
+                alert: {
+                  color: 'success'
+                }
+              });
 
-                // WARNING: do not set any formik state here as formik might be already destroyed here. You may get following error by doing so.
-                // Warning: Can't perform a React state update on an unmounted component. This is a no-op, but it indicates a memory leak in your application.
-                // To fix, cancel all subscriptions and asynchronous tasks in a useEffect cleanup function.
-                // github issue: https://github.com/formium/formik/issues/2430
-              },
-              (err) => {
-                setStatus({ success: false });
-                setErrors({ submit: err.message });
-                setSubmitting(false);
+              setTimeout(() => {
+                navigate(`/auth/reset-password?mode=otp&email=${encodeURIComponent(values.email)}`, { replace: true });
+              }, 1200);
+              return;
+            }
+
+            await authService.requestPasswordResetToken(values.email);
+            setStatus({ success: true });
+            setSubmitting(false);
+            openSnackbar({
+              open: true,
+              message: 'Check your email for the password reset link',
+              variant: 'alert',
+              alert: {
+                color: 'success'
               }
-            );
+            });
+
+            setTimeout(() => {
+              navigate(isLoggedIn ? '/auth/check-mail' : auth ? `/${auth}/check-mail?auth=jwt` : '/check-mail', { replace: true });
+            }, 1500);
           } catch (err) {
             console.error(err);
             setStatus({ success: false });
-            setErrors({ submit: err.message });
+            setErrors({ submit: err?.response?.data?.message || err.message || 'Failed to process password reset request' });
             setSubmitting(false);
           }
         }}

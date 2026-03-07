@@ -310,10 +310,10 @@ public class ProviderSettlementReportDto {
             reportDate != null ? reportDate.toString() : "-",
             providerName != null ? providerName : "-",
             totalClaimsCount != null ? totalClaimsCount : 0,
-            totalRequestedAmount != null ? totalRequestedAmount.doubleValue() : 0.0,
-            totalRejectedAmount != null ? totalRejectedAmount.doubleValue() : 0.0,
-            totalPatientShare != null ? totalPatientShare.doubleValue() : 0.0,
-            netProviderAmount != null ? netProviderAmount.doubleValue() : 0.0
+            totalRequestedAmount != null ? totalRequestedAmount : java.math.BigDecimal.ZERO,
+            totalRejectedAmount != null ? totalRejectedAmount : java.math.BigDecimal.ZERO,
+            totalPatientShare != null ? totalPatientShare : java.math.BigDecimal.ZERO,
+            netProviderAmount != null ? netProviderAmount : java.math.BigDecimal.ZERO
         );
     }
 }

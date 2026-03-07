@@ -100,7 +100,7 @@ class MemberExcelImportServiceTest {
 
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());
         when(memberRepository.findByCivilId(anyString())).thenReturn(Optional.empty());
-        when(barcodeGeneratorService.generate()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
+        when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
         when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> {
             Member member = invocation.getArgument(0);
             if (member.getId() == null) {
@@ -127,7 +127,7 @@ class MemberExcelImportServiceTest {
     @Test
     void parsePreview_headerOnly_shouldFailValidationWithZeroValidRows() throws Exception {
         MockMultipartFile file = buildExcelFile(Collections.singletonList(
-            new String[] { "full_name", "employer", "national_id", "start_date", "policy_number" }));
+                new String[] { "full_name", "employer", "national_id", "start_date", "policy_number" }));
 
         MemberImportPreviewDto preview = service.parseAndPreview(file, null, 0);
 
@@ -147,7 +147,8 @@ class MemberExcelImportServiceTest {
         assertThat(preview.getValidRows()).isEqualTo(0);
         assertThat(preview.getInvalidRows()).isEqualTo(1);
         assertThat(preview.getErrors())
-                .anyMatch(error -> "employer".equals(error.getField()) && error.getMessage().contains("Employer not found"));
+                .anyMatch(error -> "employer".equals(error.getField())
+                        && error.getMessage().contains("Employer not found"));
     }
 
     @Test
@@ -166,7 +167,8 @@ class MemberExcelImportServiceTest {
     }
 
     private MockMultipartFile buildExcelFile(List<String[]> rows) throws Exception {
-        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("Members");
             for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
                 var row = sheet.createRow(rowIndex);

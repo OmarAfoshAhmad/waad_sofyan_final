@@ -1,6 +1,7 @@
 package com.waad.tba.modules.rbac.service;
 
 import com.waad.tba.common.email.*;
+import com.waad.tba.common.service.SystemSettingsService;
 import com.waad.tba.config.SecurityConfigurationProperties;
 import com.waad.tba.modules.rbac.dto.*;
 import com.waad.tba.modules.rbac.entity.*;
@@ -39,6 +40,7 @@ public class UserSecurityService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final SecurityConfigurationProperties config;
+    private final SystemSettingsService systemSettingsService;
 
     // =====================================================
     // PASSWORD MANAGEMENT
@@ -137,8 +139,8 @@ public class UserSecurityService {
 
         // Generate new token
         String token = UUID.randomUUID().toString();
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusHours(config.getSecurity().getPasswordResetTokenValidityHours());
+        int expiryMinutes = Math.max(5, Math.min(1440, systemSettingsService.getPasswordResetTokenExpiryMinutes()));
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(expiryMinutes);
 
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .userId(user.getId())

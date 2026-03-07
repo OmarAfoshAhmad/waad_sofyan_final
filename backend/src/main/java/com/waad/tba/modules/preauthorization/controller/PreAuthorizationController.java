@@ -269,7 +269,7 @@ public class PreAuthorizationController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> cancelPreAuthorization(
             @PathVariable Long id,
-            @RequestParam(required = false) String reason,
+            @RequestParam(name = "reason", required = false) String reason,
             Authentication authentication) {
         
         log.info("[API] Cancelling pre-authorization {}", id);
@@ -320,7 +320,7 @@ public class PreAuthorizationController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponse>> markPreAuthorizationAsUsed(
             @PathVariable Long id,
-            @RequestParam(required = false) String claimNumber,
+            @RequestParam(name = "claimNumber", required = false) String claimNumber,
             Authentication authentication) {
         
         log.info("[API v1] Marking pre-authorization {} as USED", id);
@@ -388,10 +388,10 @@ public class PreAuthorizationController {
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthorizationListResponse>> getAllPreAuthorizations(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortDirection) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
         log.info("[API v1] Fetching all pre-authorizations, page: {}, size: {}", page, size);
         
@@ -424,10 +424,10 @@ public class PreAuthorizationController {
     @GetMapping("/inbox/pending")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationResponseDto>>> getPendingInbox(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "ASC") String sortDir) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "ASC") String sortDir) {
         
         log.info("[API] Fetching pending pre-authorizations for inbox, page: {}, size: {}", page, size);
         
@@ -489,10 +489,10 @@ public class PreAuthorizationController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByMember(
             @PathVariable Long memberId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortDirection) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
         log.info("[API] Fetching pre-authorizations for member {}", memberId);
         
@@ -514,10 +514,10 @@ public class PreAuthorizationController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByProvider(
             @PathVariable Long providerId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortDirection) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
         log.info("[API] Fetching pre-authorizations for provider {}", providerId);
         
@@ -539,10 +539,10 @@ public class PreAuthorizationController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<PaginationResponse<PreAuthorizationResponseDto>> getPreAuthorizationsByStatus(
             @PathVariable String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortDirection) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
         log.info("[API] Fetching pre-authorizations with status {}", status);
         
@@ -564,9 +564,9 @@ public class PreAuthorizationController {
     @GetMapping("/valid")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> findValidPreAuthorization(
-            @RequestParam Long memberId,
-            @RequestParam Long providerId,
-            @RequestParam String serviceCode) {
+            @RequestParam(name = "memberId") Long memberId,
+            @RequestParam(name = "providerId") Long providerId,
+            @RequestParam(name = "serviceCode") String serviceCode) {
         
         log.info("[API] Finding valid pre-authorization for member {}, provider {}, service {}", 
                  memberId, providerId, serviceCode);
@@ -623,8 +623,8 @@ public class PreAuthorizationController {
     @GetMapping("/check-validity")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<PreAuthorizationResponseDto>> checkValidity(
-            @RequestParam Long memberId,
-            @RequestParam String serviceCode) {
+            @RequestParam(name = "memberId") Long memberId,
+            @RequestParam(name = "serviceCode") String serviceCode) {
         
         log.info("[API] Checking validity for member {}, service {}", memberId, serviceCode);
         

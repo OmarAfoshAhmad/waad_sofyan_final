@@ -87,10 +87,64 @@ export const isAuthenticated = async () => {
   }
 };
 
+/**
+ * Get public password reset config.
+ * Returns: { method: 'TOKEN' | 'OTP', tokenExpiryMinutes, otpExpiryMinutes, otpLength }
+ */
+export const getPasswordResetConfig = async () => {
+  const response = await axiosClient.get('/auth/password-reset-config');
+  return response.data?.data || { method: 'TOKEN', tokenExpiryMinutes: 60, otpExpiryMinutes: 10, otpLength: 6 };
+};
+
+/**
+ * Request password reset link (token flow).
+ */
+export const requestPasswordResetToken = async (email) => {
+  const response = await axiosClient.post('/auth/token/forgot-password', { email });
+  return response.data;
+};
+
+/**
+ * Reset password using secure token flow.
+ */
+export const resetPasswordWithToken = async (token, newPassword, confirmPassword) => {
+  const response = await axiosClient.post('/auth/token/reset-password', {
+    token,
+    newPassword,
+    confirmPassword
+  });
+  return response.data;
+};
+
+/**
+ * Request OTP for password reset (legacy flow).
+ */
+export const requestPasswordResetOtp = async (email) => {
+  const response = await axiosClient.post('/auth/forgot-password', { email });
+  return response.data;
+};
+
+/**
+ * Reset password using OTP flow.
+ */
+export const resetPasswordWithOtp = async (email, otp, newPassword) => {
+  const response = await axiosClient.post('/auth/reset-password', {
+    email,
+    otp,
+    newPassword
+  });
+  return response.data;
+};
+
 // Export as default for backward compatibility
 export default {
   login,
   me,
   logout,
-  isAuthenticated
+  isAuthenticated,
+  getPasswordResetConfig,
+  requestPasswordResetToken,
+  resetPasswordWithToken,
+  requestPasswordResetOtp,
+  resetPasswordWithOtp
 };

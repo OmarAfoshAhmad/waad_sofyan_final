@@ -25,9 +25,21 @@ public class EmployerMapper {
         return EmployerResponseDto.builder()
                 .id(employer.getId())
                 .code(employer.getCode())
-                .name(employer.getName())  // Arabic name - will be serialized as 'nameAr'
+                .name(employer.getName())
                 .active(employer.getActive())
-                .archived(false)  // Employer table doesn't have archived field
+                .archived(false)
+                .isDefault(Boolean.TRUE.equals(employer.getIsDefault()))
+                .logoUrl(employer.getLogoUrl())
+                .businessType(employer.getBusinessType())
+                .website(employer.getWebsite())
+                .phone(employer.getPhone())
+                .email(employer.getEmail())
+                .address(employer.getAddress())
+                .crNumber(employer.getCrNumber())
+                .taxNumber(employer.getTaxNumber())
+                .contractStartDate(employer.getContractStartDate())
+                .contractEndDate(employer.getContractEndDate())
+                .maxMemberLimit(employer.getMaxMemberLimit())
                 .createdAt(employer.getCreatedAt())
                 .updatedAt(employer.getUpdatedAt())
                 .build();

@@ -39,9 +39,9 @@ public class EmployerController {
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     public ResponseEntity<ApiResponse<Page<EmployerResponseDto>>> getAll(
-            @RequestParam(required = false, defaultValue = "false") boolean includeArchived,
-            @RequestParam(required = false, defaultValue = "0") int page,
-            @RequestParam(required = false, defaultValue = "20") int size) {
+            @RequestParam(name = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
+            @RequestParam(name = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(name = "size", required = false, defaultValue = "20") int size) {
         
         Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
         

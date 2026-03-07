@@ -45,8 +45,8 @@ public class ProviderPaymentController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(summary = "Get confirmed batches for payment center")
     public ResponseEntity<ApiResponse<SettlementBatchListResponse>> getConfirmedBatches(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
 
         Page<SettlementBatch> batchesPage = providerPaymentService.getConfirmedBatches(
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "confirmedAt"))

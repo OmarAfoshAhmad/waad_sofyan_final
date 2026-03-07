@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 @Data
@@ -18,6 +19,6 @@ public class MedicalPackageDTO {
     private String name;
     private String description;
     private Set<Long> serviceIds;
-    private Double totalCoverageLimit;
+    private BigDecimal totalCoverageLimit;
     private Boolean active;
 }

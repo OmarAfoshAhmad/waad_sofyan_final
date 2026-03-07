@@ -182,7 +182,7 @@ const menuItem = [
         titleEn: 'Provider Portal',
         type: 'collapse',
         icon: LocalHospitalIcon,
-        resource: '__hidden_provider_portal__', // Hid temporarily upon user request
+        resource: 'provider_portal', // controlled by PROVIDER_PORTAL_ENABLED feature flag
         action: 'view',
         children: [
           {

@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://db:5432/tba_waad_system
     username: postgres
-    password: ${DB_PASSWORD:12345}
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -22,7 +22,8 @@ spring:
     clean-disabled: true
 
 jwt:
-  secret: ${JWT_SECRET:waad_tba_system_secure_secret_long_string_2026_9dda11e5_28fd_4086_a6c7}
+  # MUST be set via environment variable — no fallback allowed in production
+  secret: ${JWT_SECRET}
 
 server:
   forward-headers-strategy: framework

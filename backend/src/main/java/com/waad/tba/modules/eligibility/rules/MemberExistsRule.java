@@ -4,7 +4,6 @@ import com.waad.tba.modules.eligibility.domain.EligibilityContext;
 import com.waad.tba.modules.eligibility.domain.EligibilityReason;
 import com.waad.tba.modules.eligibility.domain.EligibilityRule;
 import com.waad.tba.modules.eligibility.domain.RuleResult;
-import com.waad.tba.modules.member.entity.Member;
 
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;

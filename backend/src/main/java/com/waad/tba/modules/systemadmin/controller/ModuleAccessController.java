@@ -171,7 +171,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
         public ApiResponse<ModuleAccessDto> toggleModuleStatus(@PathVariable Long id,
-                        @RequestParam Boolean active,
+                        @RequestParam(name = "active") Boolean active,
                         Authentication authentication) {
                 log.info("PUT /api/admin/modules/{}/toggle?active={}", id, active);
                 String updatedBy = authentication.getName();

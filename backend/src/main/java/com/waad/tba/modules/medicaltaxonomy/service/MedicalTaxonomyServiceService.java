@@ -16,8 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Service for managing Medical Services (Reference Data).
@@ -31,6 +29,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class MedicalTaxonomyServiceService {
 
     private final MedicalServiceRepository serviceRepository;
@@ -123,10 +122,10 @@ public class MedicalTaxonomyServiceService {
             BigDecimal minPrice,
             BigDecimal maxPrice,
             Pageable pageable) {
-        
+
         log.debug("Searching services: term={}, category={}, requiresPA={}, price=[{}, {}]",
                 searchTerm, categoryId, requiresPA, minPrice, maxPrice);
-        
+
         return serviceRepository.advancedSearch(searchTerm, categoryId, requiresPA, minPrice, maxPrice, pageable)
                 .map(this::toDto);
     }
@@ -149,7 +148,8 @@ public class MedicalTaxonomyServiceService {
         if (dto.getCategoryId() != null) {
             // Validate category exists and is active
             categoryRepository.findActiveById(dto.getCategoryId())
-                    .orElseThrow(() -> new BusinessRuleException("Category not found or inactive: " + dto.getCategoryId()));
+                    .orElseThrow(
+                            () -> new BusinessRuleException("Category not found or inactive: " + dto.getCategoryId()));
             service.setCategoryId(dto.getCategoryId());
         }
         if (dto.getBasePrice() != null) {

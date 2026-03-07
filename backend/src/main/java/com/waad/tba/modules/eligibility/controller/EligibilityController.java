@@ -54,189 +54,173 @@ import java.util.List;
 @Tag(name = "Eligibility", description = "Eligibility Engine API - Member eligibility verification")
 public class EligibilityController {
 
-    private final EligibilityEngineService eligibilityService;
-    private final FamilyEligibilityService familyEligibilityService;
-    private final EligibilityCheckRepository eligibilityCheckRepository;
-    private final AuthorizationService authorizationService;
+        private final EligibilityEngineService eligibilityService;
+        private final FamilyEligibilityService familyEligibilityService;
+        private final EligibilityCheckRepository eligibilityCheckRepository;
+        private final AuthorizationService authorizationService;
 
-    // ============================================
-    // Eligibility Check
-    // ============================================
+        // ============================================
+        // Eligibility Check
+        // ============================================
 
-    @Operation(
-            summary = "Check Member Eligibility",
-            description = "Verify if a member is eligible for a medical service on a specific date. " +
-                    "Returns eligibility status with detailed reasons and snapshot."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "Eligibility check completed",
-                    content = @Content(schema = @Schema(implementation = EligibilityCheckResponse.class))
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "400",
-                    description = "Invalid request parameters"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "403",
-                    description = "Insufficient permissions"
-            )
-    })
-    @PostMapping("/check")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<EligibilityCheckResponse>> checkEligibility(
-            @Valid @RequestBody EligibilityCheckRequest request) {
+        @Operation(summary = "Check Member Eligibility", description = "Verify if a member is eligible for a medical service on a specific date. "
+                        +
+                        "Returns eligibility status with detailed reasons and snapshot.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Eligibility check completed", content = @Content(schema = @Schema(implementation = EligibilityCheckResponse.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
+        })
+        @PostMapping("/check")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+        public ResponseEntity<ApiResponse<EligibilityCheckResponse>> checkEligibility(
+                        @Valid @RequestBody EligibilityCheckRequest request) {
 
-        log.info("[EligibilityAPI] Check request - MemberID: {}, ServiceDate: {}",
-                request.getMemberId(), request.getServiceDate());
+                log.info("[EligibilityAPI] Check request - MemberID: {}, ServiceDate: {}",
+                                request.getMemberId(), request.getServiceDate());
 
-        // Execute eligibility check
-        EligibilityResult result = eligibilityService.checkEligibility(request);
+                // Execute eligibility check
+                EligibilityResult result = eligibilityService.checkEligibility(request);
 
-        // Convert to DTO
-        EligibilityCheckResponse response = EligibilityCheckResponse.from(result);
+                // Convert to DTO
+                EligibilityCheckResponse response = EligibilityCheckResponse.from(result);
 
-        // Return appropriate response based on eligibility
-        if (result.isEligible()) {
-            return ResponseEntity.ok(ApiResponse.success(
-                    "تم التحقق من الأهلية بنجاح - مؤهل", response));
-        } else {
-            return ResponseEntity.ok(ApiResponse.success(
-                    "تم التحقق من الأهلية - غير مؤهل", response));
-        }
-    }
-
-    // ============================================
-    // Family Eligibility Check
-    // ============================================
-
-    @Operation(
-            summary = "Check Family Eligibility",
-            description = "Verify eligibility for a member and all their family members (dependents or principal + siblings). " +
-                    "Returns eligibility status for each family member."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "Family eligibility check completed",
-                    content = @Content(schema = @Schema(implementation = FamilyEligibilityResponse.class))
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "400",
-                    description = "Invalid request parameters"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "Member not found"
-            )
-    })
-    @GetMapping("/family/{memberId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<FamilyEligibilityResponse>> checkFamilyEligibility(
-            @PathVariable Long memberId,
-            @RequestParam(required = false) @Parameter(description = "Service date (defaults to today)") 
-            java.time.LocalDate serviceDate) {
-
-        log.info("[EligibilityAPI] Family check request - MemberID: {}, ServiceDate: {}", memberId, serviceDate);
-
-        FamilyEligibilityResponse response = familyEligibilityService.checkFamilyEligibility(memberId, serviceDate);
-
-        String message = response.getSummary().getFamilyStatus().equals("ALL_ELIGIBLE") ?
-                "تم التحقق من أهلية العائلة - جميع الأفراد مؤهلون" :
-                response.getSummary().getFamilyStatus().equals("PARTIAL") ?
-                        "تم التحقق من أهلية العائلة - بعض الأفراد مؤهلون" :
-                        "تم التحقق من أهلية العائلة - لا يوجد أفراد مؤهلون";
-
-        return ResponseEntity.ok(ApiResponse.success(message, response));
-    }
-
-    // ============================================
-    // Audit Logs
-    // ============================================
-
-    @Operation(
-            summary = "Get Eligibility Check Logs",
-            description = "View audit trail of eligibility checks. Filterable by member, policy, and date range."
-    )
-    @GetMapping("/logs")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<Page<EligibilityCheck>>> getLogs(
-            @Parameter(description = "Filter by member ID")
-            @RequestParam(required = false) Long memberId,
-
-            @Parameter(description = "Filter by policy ID")
-            @RequestParam(required = false) Long policyId,
-
-            @Parameter(description = "Search by name, civil ID, or request ID")
-            @RequestParam(required = false) String search,
-
-            @PageableDefault(size = 20, sort = "checkTimestamp") Pageable pageable) {
-
-        User currentUser = authorizationService.getCurrentUser();
-        boolean isSuperAdmin = currentUser != null && authorizationService.isSuperAdmin(currentUser);
-        Long companyScopeId = isSuperAdmin ? null : (currentUser != null ? currentUser.getEmployerId() : null);
-
-        Page<EligibilityCheck> logs;
-
-        if (memberId != null) {
-            logs = eligibilityCheckRepository.findByMemberId(memberId, pageable);
-        } else if (policyId != null) {
-            logs = eligibilityCheckRepository.findByPolicyId(policyId, pageable);
-        } else if (search != null && !search.isEmpty()) {
-            logs = eligibilityCheckRepository.search(companyScopeId, search, pageable);
-        } else if (companyScopeId != null) {
-            logs = eligibilityCheckRepository.findByCompanyScopeId(companyScopeId, pageable);
-        } else {
-            logs = eligibilityCheckRepository.findAll(pageable);
+                // Return appropriate response based on eligibility
+                if (result.isEligible()) {
+                        return ResponseEntity.ok(ApiResponse.success(
+                                        "تم التحقق من الأهلية بنجاح - مؤهل", response));
+                } else {
+                        return ResponseEntity.ok(ApiResponse.success(
+                                        "تم التحقق من الأهلية - غير مؤهل", response));
+                }
         }
 
-        return ResponseEntity.ok(ApiResponse.success("تم جلب سجلات التحقق من الأهلية", logs));
-    }
+        // ============================================
+        // Family Eligibility Check
+        // ============================================
 
-    @Operation(
-            summary = "Get Eligibility Check by Request ID",
-            description = "Retrieve a specific eligibility check record by its unique request ID."
-    )
-    @GetMapping("/logs/{requestId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<EligibilityCheck>> getLogByRequestId(
-            @PathVariable String requestId) {
+        @Operation(summary = "Check Family Eligibility", description = "Verify eligibility for a member and all their family members (dependents or principal + siblings). "
+                        +
+                        "Returns eligibility status for each family member.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Family eligibility check completed", content = @Content(schema = @Schema(implementation = FamilyEligibilityResponse.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request parameters"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found")
+        })
+        @GetMapping("/family/{memberId}")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+        public ResponseEntity<ApiResponse<FamilyEligibilityResponse>> checkFamilyEligibility(
+                        @PathVariable Long memberId,
+                        @RequestParam(required = false) @Parameter(description = "Service date (defaults to today)") java.time.LocalDate serviceDate) {
 
-        return eligibilityCheckRepository.findByRequestId(requestId)
-                .map(check -> ResponseEntity.ok(ApiResponse.success("تم جلب سجل التحقق", check)))
-                .orElse(ResponseEntity.notFound().build());
-    }
+                log.info("[EligibilityAPI] Family check request - MemberID: {}, ServiceDate: {}", memberId,
+                                serviceDate);
 
-    // ============================================
-    // Rules Info
-    // ============================================
+                FamilyEligibilityResponse response = familyEligibilityService.checkFamilyEligibility(memberId,
+                                serviceDate);
 
-    @Operation(
-            summary = "Get Active Eligibility Rules",
-            description = "List all active eligibility rules in evaluation order."
-    )
-    @GetMapping("/rules")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<List<String>>> getActiveRules() {
-        List<String> rules = eligibilityService.getActiveRules();
-        return ResponseEntity.ok(ApiResponse.success("قواعد التحقق من الأهلية النشطة", rules));
-    }
+                String message = response.getSummary().getFamilyStatus().equals("ALL_ELIGIBLE")
+                                ? "تم التحقق من أهلية العائلة - جميع الأفراد مؤهلون"
+                                : response.getSummary().getFamilyStatus().equals("PARTIAL")
+                                                ? "تم التحقق من أهلية العائلة - بعض الأفراد مؤهلون"
+                                                : "تم التحقق من أهلية العائلة - لا يوجد أفراد مؤهلون";
 
-    // ============================================
-    // Health Check (Now requires authentication per security policy)
-    // ============================================
+                return ResponseEntity.ok(ApiResponse.success(message, response));
+        }
 
-    @Operation(
-            summary = "Eligibility Engine Health Check",
-            description = "Check if the eligibility engine is operational."
-    )
-    @GetMapping("/health")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<String>> healthCheck() {
-        int ruleCount = eligibilityService.getActiveRules().size();
-        return ResponseEntity.ok(ApiResponse.success(
-                "محرك الأهلية يعمل بشكل صحيح",
-                "OK - " + ruleCount + " rules active"));
-    }
+        // ============================================
+        // Audit Logs
+        // ============================================
+
+        @Operation(summary = "Get Eligibility Check Logs", description = "View audit trail of eligibility checks. Filterable by member, policy, and date range.")
+        @GetMapping("/logs")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+        public ResponseEntity<ApiResponse<Page<EligibilityCheck>>> getLogs(
+                        @Parameter(description = "Filter by member ID") @RequestParam(name = "memberId", required = false) Long memberId,
+
+                        @Parameter(description = "Filter by policy ID") @RequestParam(name = "policyId", required = false) Long policyId,
+
+                        @Parameter(description = "Search by name, civil ID, or request ID") @RequestParam(name = "search", required = false) String search,
+
+                        @PageableDefault(size = 20, sort = "checkTimestamp") Pageable pageable) {
+
+                User currentUser = authorizationService.getCurrentUser();
+                boolean isSuperAdmin = currentUser != null && authorizationService.isSuperAdmin(currentUser);
+                // companyScopeId is null only for SUPER_ADMIN — all other users are scoped to
+                // their employer
+                Long companyScopeId = isSuperAdmin ? null : (currentUser != null ? currentUser.getEmployerId() : null);
+
+                Page<EligibilityCheck> logs;
+
+                if (memberId != null) {
+                        // Always apply company scope — non-admins cannot query members from other
+                        // employers
+                        if (companyScopeId != null) {
+                                logs = eligibilityCheckRepository.findByMemberIdAndCompanyScopeId(memberId,
+                                                companyScopeId, pageable);
+                        } else {
+                                logs = eligibilityCheckRepository.findByMemberId(memberId, pageable);
+                        }
+                } else if (policyId != null) {
+                        // Always apply company scope — non-admins cannot query policies from other
+                        // employers
+                        if (companyScopeId != null) {
+                                logs = eligibilityCheckRepository.findByPolicyIdAndCompanyScopeId(policyId,
+                                                companyScopeId, pageable);
+                        } else {
+                                logs = eligibilityCheckRepository.findByPolicyId(policyId, pageable);
+                        }
+                } else if (search != null && !search.isEmpty()) {
+                        logs = eligibilityCheckRepository.search(companyScopeId, search, pageable);
+                } else if (companyScopeId != null) {
+                        logs = eligibilityCheckRepository.findByCompanyScopeId(companyScopeId, pageable);
+                } else if (isSuperAdmin) {
+                        // Only SUPER_ADMIN may retrieve all records
+                        logs = eligibilityCheckRepository.findAll(pageable);
+                } else {
+                        // Non-admin users with no employer scope cannot list all records
+                        return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                                        .<ApiResponse<Page<EligibilityCheck>>>body(ApiResponse
+                                                        .error("غير مصرح لك بعرض سجلات الأهلية دون تحديد نطاق"));
+                }
+
+                return ResponseEntity.ok(ApiResponse.success("تم جلب سجلات التحقق من الأهلية", logs));
+        }
+
+        @Operation(summary = "Get Eligibility Check by Request ID", description = "Retrieve a specific eligibility check record by its unique request ID.")
+        @GetMapping("/logs/{requestId}")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+        public ResponseEntity<ApiResponse<EligibilityCheck>> getLogByRequestId(
+                        @PathVariable String requestId) {
+
+                return eligibilityCheckRepository.findByRequestId(requestId)
+                                .map(check -> ResponseEntity.ok(ApiResponse.success("تم جلب سجل التحقق", check)))
+                                .orElse(ResponseEntity.notFound().build());
+        }
+
+        // ============================================
+        // Rules Info
+        // ============================================
+
+        @Operation(summary = "Get Active Eligibility Rules", description = "List all active eligibility rules in evaluation order.")
+        @GetMapping("/rules")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
+        public ResponseEntity<ApiResponse<List<String>>> getActiveRules() {
+                List<String> rules = eligibilityService.getActiveRules();
+                return ResponseEntity.ok(ApiResponse.success("قواعد التحقق من الأهلية النشطة", rules));
+        }
+
+        // ============================================
+        // Health Check (Now requires authentication per security policy)
+        // ============================================
+
+        @Operation(summary = "Eligibility Engine Health Check", description = "Check if the eligibility engine is operational.")
+        @GetMapping("/health")
+        @PreAuthorize("isAuthenticated()")
+        public ResponseEntity<ApiResponse<String>> healthCheck() {
+                int ruleCount = eligibilityService.getActiveRules().size();
+                return ResponseEntity.ok(ApiResponse.success(
+                                "محرك الأهلية يعمل بشكل صحيح",
+                                "OK - " + ruleCount + " rules active"));
+        }
 }

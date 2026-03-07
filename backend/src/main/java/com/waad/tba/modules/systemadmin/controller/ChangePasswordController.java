@@ -2,6 +2,7 @@ package com.waad.tba.modules.systemadmin.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.systemadmin.dto.ChangePasswordRequest;
+import com.waad.tba.modules.systemadmin.dto.ProfileUpdateRequest;
 import com.waad.tba.modules.systemadmin.service.UserPasswordService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +56,33 @@ public class ChangePasswordController {
 
         return ResponseEntity.ok(
                 ApiResponse.success("تم تغيير كلمة المرور بنجاح", null)
+        );
+    }
+
+    /**
+     * Update profile for the currently authenticated user.
+     *
+     * PUT /api/v1/profile/me
+     * Authentication: JWT required (any authenticated user)
+     *
+     * Only provided (non-null) fields are updated.
+     */
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<Void>> updateProfile(
+            @Valid @RequestBody ProfileUpdateRequest request,
+            Authentication authentication
+    ) {
+        log.info("Profile update request received for user: {}", authentication.getName());
+
+        userPasswordService.updateProfile(
+                authentication.getName(),
+                request.getFullName(),
+                request.getEmail(),
+                request.getPhone()
+        );
+
+        return ResponseEntity.ok(
+                ApiResponse.success("تم تحديث الملف الشخصي بنجاح", null)
         );
     }
 }

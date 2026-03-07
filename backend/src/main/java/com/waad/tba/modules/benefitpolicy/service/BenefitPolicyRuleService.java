@@ -12,6 +12,7 @@ import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+import com.waad.tba.modules.claim.entity.ClaimStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -140,7 +141,7 @@ public class BenefitPolicyRuleService {
      * 2. Falls back to category rule if no service rule exists
      * 3. Returns empty if not covered
      * 
-     * @param policyId The benefit policy ID
+     * @param policyId  The benefit policy ID
      * @param serviceId The medical service ID
      * @return The applicable rule, or empty if not covered
      */
@@ -149,8 +150,9 @@ public class BenefitPolicyRuleService {
         // Get the service to find its category
         MedicalService service = serviceRepository.findById(serviceId)
                 .orElseThrow(() -> new ResourceNotFoundException("MedicalService", "id", serviceId));
-        
-        // Resolve the effective category ID (prefers primary mapping from unified catalog)
+
+        // Resolve the effective category ID (prefers primary mapping from unified
+        // catalog)
         Long categoryId = resolveCategoryIdForCoverage(service);
 
         // Find best matching rule (service > category priority)
@@ -169,7 +171,8 @@ public class BenefitPolicyRuleService {
         if (findCoverageForService(policyId, serviceId).isPresent()) {
             return true;
         }
-        // Fallback: if no rule, is it covered by default? (Check if defaultCoverage > 0)
+        // Fallback: if no rule, is it covered by default? (Check if defaultCoverage >
+        // 0)
         return policyRepository.findById(policyId)
                 .map(p -> p.getDefaultCoveragePercent() > 0)
                 .orElse(false);
@@ -210,7 +213,7 @@ public class BenefitPolicyRuleService {
         if (ruleOpt.isEmpty()) {
             return java.util.Map.of("covered", false);
         }
-        
+
         BenefitPolicyRuleResponseDto rule = ruleOpt.get();
         if (rule.getTimesLimit() == null && rule.getAmountLimit() == null) {
             return java.util.Map.of("covered", true, "hasLimit", false);
@@ -219,35 +222,36 @@ public class BenefitPolicyRuleService {
         // Query usage from DB
         int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
         String q = "SELECT SUM(cl.quantity), SUM(cl.totalPrice) FROM ClaimLine cl " +
-                   "JOIN cl.claim c " +
-                   "WHERE c.member.id = :memberId " +
-                   "AND cl.medicalService.id = :serviceId " +
-                   "AND c.status NOT IN ('REJECTED', 'DRAFT') " +
-                   "AND EXTRACT(YEAR FROM c.serviceDate) = :year";
+                "JOIN cl.claim c " +
+                "WHERE c.member.id = :memberId " +
+                "AND cl.medicalService.id = :serviceId " +
+                "AND c.status NOT IN :excludeStatuses " +
+                "AND YEAR(c.serviceDate) = :year";
 
         Object[] result = (Object[]) em.createQuery(q)
                 .setParameter("memberId", memberId)
                 .setParameter("serviceId", serviceId)
+                .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED, ClaimStatus.DRAFT))
                 .setParameter("year", targetYear)
                 .getSingleResult();
 
         long usedCount = result[0] != null ? ((Number) result[0]).longValue() : 0;
-        java.math.BigDecimal usedAmount = result[1] != null ? (java.math.BigDecimal) result[1] : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal usedAmount = result[1] != null ? (java.math.BigDecimal) result[1]
+                : java.math.BigDecimal.ZERO;
 
         boolean timesExceeded = rule.getTimesLimit() != null && usedCount >= rule.getTimesLimit();
         boolean amountExceeded = rule.getAmountLimit() != null && usedAmount.compareTo(rule.getAmountLimit()) >= 0;
 
         return java.util.Map.of(
-            "covered", true,
-            "hasLimit", true,
-            "timesLimit", rule.getTimesLimit(),
-            "amountLimit", rule.getAmountLimit(),
-            "usedCount", usedCount,
-            "usedAmount", usedAmount,
-            "exceeded", timesExceeded || amountExceeded,
-            "timesExceeded", timesExceeded,
-            "amountExceeded", amountExceeded
-        );
+                "covered", true,
+                "hasLimit", true,
+                "timesLimit", rule.getTimesLimit(),
+                "amountLimit", rule.getAmountLimit(),
+                "usedCount", usedCount,
+                "usedAmount", usedAmount,
+                "exceeded", timesExceeded || amountExceeded,
+                "timesExceeded", timesExceeded,
+                "amountExceeded", amountExceeded);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -258,7 +262,7 @@ public class BenefitPolicyRuleService {
      * Create a new rule for a policy
      */
     public BenefitPolicyRuleResponseDto create(Long policyId, BenefitPolicyRuleCreateDto dto) {
-        log.info("Creating rule for policy {} - category: {}, service: {}", 
+        log.info("Creating rule for policy {} - category: {}, service: {}",
                 policyId, dto.getMedicalCategoryId(), dto.getMedicalServiceId());
 
         // Validate policy exists
@@ -283,29 +287,31 @@ public class BenefitPolicyRuleService {
         // Set category or service
         if (dto.getMedicalCategoryId() != null) {
             MedicalCategory category = categoryRepository.findById(dto.getMedicalCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("MedicalCategory", "id", dto.getMedicalCategoryId()));
-            
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("MedicalCategory", "id", dto.getMedicalCategoryId()));
+
             // Check for duplicate category rule
             if (ruleRepository.existsCategoryRule(policyId, dto.getMedicalCategoryId(), null)) {
                 throw new BusinessRuleException("A rule for this category already exists in this policy");
             }
-            
+
             rule.setMedicalCategory(category);
         } else {
             MedicalService service = serviceRepository.findById(dto.getMedicalServiceId())
-                    .orElseThrow(() -> new ResourceNotFoundException("MedicalService", "id", dto.getMedicalServiceId()));
-            
+                    .orElseThrow(
+                            () -> new ResourceNotFoundException("MedicalService", "id", dto.getMedicalServiceId()));
+
             // Check for duplicate service rule
             if (ruleRepository.existsServiceRule(policyId, dto.getMedicalServiceId(), null)) {
                 throw new BusinessRuleException("A rule for this service already exists in this policy");
             }
-            
+
             rule.setMedicalService(service);
         }
 
         BenefitPolicyRule saved = ruleRepository.save(rule);
         log.info("Created rule {} for policy {}", saved.getId(), policyId);
-        
+
         return BenefitPolicyRuleResponseDto.fromEntity(saved);
     }
 
@@ -314,7 +320,7 @@ public class BenefitPolicyRuleService {
      */
     public List<BenefitPolicyRuleResponseDto> createBulk(Long policyId, List<BenefitPolicyRuleCreateDto> dtos) {
         log.info("Bulk creating {} rules for policy {}", dtos.size(), policyId);
-        
+
         return dtos.stream()
                 .map(dto -> create(policyId, dto))
                 .toList();
@@ -359,7 +365,7 @@ public class BenefitPolicyRuleService {
 
         BenefitPolicyRule saved = ruleRepository.save(rule);
         log.info("Updated rule {}", ruleId);
-        
+
         return BenefitPolicyRuleResponseDto.fromEntity(saved);
     }
 
@@ -369,10 +375,10 @@ public class BenefitPolicyRuleService {
     public BenefitPolicyRuleResponseDto toggleActive(Long ruleId) {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
-        
+
         rule.setActive(!rule.isActive());
         BenefitPolicyRule saved = ruleRepository.save(rule);
-        
+
         log.info("Toggled rule {} active status to {}", ruleId, saved.isActive());
         return BenefitPolicyRuleResponseDto.fromEntity(saved);
     }
@@ -387,10 +393,10 @@ public class BenefitPolicyRuleService {
     public void delete(Long ruleId) {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
-        
+
         rule.setActive(false);
         ruleRepository.save(rule);
-        
+
         log.info("Soft deleted rule {}", ruleId);
     }
 
@@ -440,14 +446,14 @@ public class BenefitPolicyRuleService {
 
         if (hasCategory && hasService) {
             throw new BusinessRuleException(
-                "Rule must target either a category OR a service, not both. " +
-                "Remove one of: medicalCategoryId or medicalServiceId");
+                    "Rule must target either a category OR a service, not both. " +
+                            "Remove one of: medicalCategoryId or medicalServiceId");
         }
 
         if (!hasCategory && !hasService) {
             throw new BusinessRuleException(
-                "Rule must target at least a category or a service. " +
-                "Provide either medicalCategoryId or medicalServiceId");
+                    "Rule must target at least a category or a service. " +
+                            "Provide either medicalCategoryId or medicalServiceId");
         }
     }
 
@@ -473,7 +479,7 @@ public class BenefitPolicyRuleService {
 
     /**
      * Resolve the effective category ID for a service.
-     * Prefers the primary category link from the junction table, 
+     * Prefers the primary category link from the junction table,
      * falling back to the legacy categoryId column.
      */
     private Long resolveCategoryIdForCoverage(MedicalService service) {

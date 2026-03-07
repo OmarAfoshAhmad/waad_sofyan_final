@@ -92,11 +92,11 @@ public class MedicalCategoryController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "List all categories", description = "Get paginated list of all medical categories with optional parent filter")
     public ResponseEntity<ApiResponse<Page<MedicalCategoryResponseDto>>> findAll(
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
-            @Parameter(description = "Sort field") @RequestParam(defaultValue = "id") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(defaultValue = "DESC") String sortDir,
-            @Parameter(description = "Filter by parent category ID") @RequestParam(required = false) Long parentId) {
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
+            @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "id") String sortBy,
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir,
+            @Parameter(description = "Filter by parent category ID") @RequestParam(name = "parentId", required = false) Long parentId) {
         
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories - page={}, size={}, parentId={}", page, size, parentId);
         

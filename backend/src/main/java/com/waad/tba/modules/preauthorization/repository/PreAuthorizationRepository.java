@@ -271,4 +271,53 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
         */
        @Query("SELECT pa FROM PreAuthorization pa WHERE pa.id IN :ids")
        List<PreAuthorization> findSummaryBaseByIds(@Param("ids") java.util.Collection<Long> ids);
+
+       // ==================== Performance Queries (Wave-2) ====================
+
+       /**
+        * Check validity for a member + service (no provider filter).
+        * Replaces findAll().stream().filter() in PreAuthorizationService.checkValidity().
+        */
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.memberId = :memberId " +
+                     "AND pa.serviceCode = :serviceCode " +
+                     "AND pa.status = 'APPROVED' " +
+                     "AND (pa.expiryDate IS NULL OR pa.expiryDate >= :currentDate) " +
+                     "ORDER BY pa.createdAt DESC")
+       List<PreAuthorization> findValidByMemberAndService(
+                     @Param("memberId") Long memberId,
+                     @Param("serviceCode") String serviceCode,
+                     @Param("currentDate") LocalDate currentDate);
+
+       /**
+        * Aggregate stats for all active records in a single DB round-trip.
+        * Returns: [totalCount, sumContractPrice, sumApprovedAmount(APPROVED only)]
+        * Used by PreAuthDashboardService.getOverallStats().
+        */
+       @Query("SELECT COUNT(pa), " +
+                     "COALESCE(SUM(pa.contractPrice), 0), " +
+                     "COALESCE(SUM(CASE WHEN pa.status = 'APPROVED' THEN pa.approvedAmount ELSE null END), 0) " +
+                     "FROM PreAuthorization pa WHERE pa.active = true")
+       Object[] getActiveSummary();
+
+       /**
+        * Find all active pre-authorizations from a start date (for trend calculation).
+        * Replaces findAll().stream().filter(date range) in PreAuthDashboardService.getTrends().
+        */
+       @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
+                     "AND pa.requestDate >= :startDate " +
+                     "ORDER BY pa.requestDate ASC")
+       List<PreAuthorization> findActiveFromDate(@Param("startDate") LocalDate startDate);
+
+       /**
+        * Provider-level aggregation for dashboard top-providers widget.
+        * Returns: [providerId, totalCount, sumApprovedAmount(APPROVED only)]
+        * Replaces findAll().stream() + N×providerRepository.findById() in getTopProviders().
+        */
+       @Query("SELECT pa.providerId, COUNT(pa), " +
+                     "COALESCE(SUM(CASE WHEN pa.status = 'APPROVED' THEN pa.approvedAmount ELSE null END), 0) " +
+                     "FROM PreAuthorization pa WHERE pa.active = true " +
+                     "GROUP BY pa.providerId " +
+                     "ORDER BY COUNT(pa) DESC")
+       List<Object[]> getActiveProviderStats();
 }

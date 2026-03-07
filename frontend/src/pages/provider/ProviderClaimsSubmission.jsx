@@ -731,7 +731,7 @@ export default function ProviderClaimsSubmission() {
   const fetchVisitDetails = async () => {
     if (!linkedVisitId) return;
     try {
-      const response = await axiosClient.get(`/provider/visits/${linkedVisitId}`);
+      const response = await axiosClient.get(`/visits/${linkedVisitId}`);
       setVisitDetails(response.data?.data || response.data);
     } catch (err) {
       console.error('Failed to fetch visit:', err);

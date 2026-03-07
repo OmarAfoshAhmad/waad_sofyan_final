@@ -53,7 +53,7 @@ public class UserManagementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
     })
     public ApiResponse<UserViewDto> toggleUserStatus(@PathVariable Long id,
-                                                     @RequestParam Boolean active,
+                                                     @RequestParam(name = "active") Boolean active,
                                                      Authentication authentication) {
         log.info("PUT /api/admin/user-management/{}/toggle?active={}", id, active);
         String updatedBy = authentication.getName();

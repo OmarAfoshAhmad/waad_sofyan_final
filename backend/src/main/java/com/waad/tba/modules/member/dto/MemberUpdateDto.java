@@ -2,7 +2,6 @@ package com.waad.tba.modules.member.dto;
 
 import java.time.LocalDate;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.waad.tba.modules.member.entity.Member;
 
 import io.swagger.v3.oas.annotations.media.Schema;

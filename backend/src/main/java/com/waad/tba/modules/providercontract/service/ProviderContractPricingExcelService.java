@@ -20,7 +20,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.util.*;
 
 /**
@@ -135,6 +134,7 @@ public class ProviderContractPricingExcelService {
      * @return Import result with statistics
      */
     @Transactional
+    @SuppressWarnings("deprecation")
     public ExcelImportResultDto importFromExcel(Long contractId, MultipartFile file) {
         log.info("Starting Excel import for contract ID: {}", contractId);
 

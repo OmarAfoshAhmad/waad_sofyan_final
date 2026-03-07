@@ -4,7 +4,6 @@ import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.benefitpolicy.dto.*;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -57,8 +56,8 @@ public class BenefitPolicyRuleController {
     @Operation(summary = "List all rules for a policy (paginated)")
     public ResponseEntity<ApiResponse<Page<BenefitPolicyRuleResponseDto>>> findAllPaged(
             @PathVariable Long policyId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<BenefitPolicyRuleResponseDto> result = ruleService.findByPolicy(policyId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Rules retrieved", result));
@@ -158,8 +157,8 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkServiceUsage(
             @PathVariable Long policyId,
             @PathVariable Long serviceId,
-            @RequestParam Long memberId,
-            @RequestParam(required = false) Integer year) {
+            @RequestParam(name = "memberId") Long memberId,
+            @RequestParam(name = "year", required = false) Integer year) {
         
         Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, memberId, year);
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));

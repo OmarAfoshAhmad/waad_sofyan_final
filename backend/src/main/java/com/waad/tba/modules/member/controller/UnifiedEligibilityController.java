@@ -109,7 +109,7 @@ public class UnifiedEligibilityController {
     )
     public ResponseEntity<ApiResponse<com.waad.tba.modules.member.dto.CoverageLimitsDto>> getServiceCoverage(
             @PathVariable Long memberId,
-            @RequestParam String serviceCode) {
+            @RequestParam(name = "serviceCode") String serviceCode) {
         
         log.info("📊 Retrieving service coverage limits: memberId={}, serviceCode={}", memberId, serviceCode);
         
@@ -169,7 +169,7 @@ public class UnifiedEligibilityController {
             required = true,
             example = "1234567890"
         )
-        @RequestParam String query
+        @RequestParam(name = "query") String query
     ) {
         // Security: Don't log query content (may contain sensitive data)
         log.info("📥 [ELIGIBILITY-REQUEST] Received");

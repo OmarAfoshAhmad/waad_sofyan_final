@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class MedicalServiceService {
 
     private final MedicalServiceRepository serviceRepository;
@@ -68,7 +69,8 @@ public class MedicalServiceService {
             specialty = specialtyRepository.findById(dto.getSpecialtyId())
                     .orElseThrow(() -> new BusinessRuleException("Specialty not found: " + dto.getSpecialtyId()));
             if (Boolean.TRUE.equals(specialty.getDeleted())) {
-                throw new BusinessRuleException("Cannot create service under deleted specialty: " + dto.getSpecialtyId());
+                throw new BusinessRuleException(
+                        "Cannot create service under deleted specialty: " + dto.getSpecialtyId());
             }
             // Cross-validate: specialty must belong to the specified category
             if (specialty.getCategoryId() != null && !specialty.getCategoryId().equals(dto.getCategoryId())) {
@@ -84,11 +86,11 @@ public class MedicalServiceService {
 
         // Create entity
         MedicalService service = MedicalService.builder()
-            .code(normalizedCode)
-            .name(normalizedName)
+                .code(normalizedCode)
+                .name(normalizedName)
                 .categoryId(dto.getCategoryId())
                 .specialty(specialty)
-            .description(normalizedDescription)
+                .description(normalizedDescription)
                 .basePrice(dto.getBasePrice())
                 .requiresPA(dto.getRequiresPA() != null ? dto.getRequiresPA() : false)
                 .active(dto.getActive() != null ? dto.getActive() : true)
@@ -135,12 +137,12 @@ public class MedicalServiceService {
      * Find all medical services with optional status filter
      * 
      * @param pageable pagination info
-     * @param active null = all, true = active only, false = inactive only
+     * @param active   null = all, true = active only, false = inactive only
      */
     @Transactional(readOnly = true)
     public Page<MedicalServiceResponseDto> findAll(Pageable pageable, Boolean active) {
         log.debug("Finding medical services, page: {}, active filter: {}", pageable.getPageNumber(), active);
-        
+
         Page<MedicalService> services;
         if (active == null) {
             // Return ALL services (including inactive)
@@ -152,7 +154,7 @@ public class MedicalServiceService {
             // Return only inactive services
             services = serviceRepository.findByActiveFalse(pageable);
         }
-        
+
         return services.map(this::toDto);
     }
 
@@ -166,12 +168,11 @@ public class MedicalServiceService {
         long total = serviceRepository.count();
         long active = serviceRepository.countByActiveTrue();
         long inactive = serviceRepository.countByActiveFalse();
-        
+
         return java.util.Map.of(
-            "total", total,
-            "active", active,
-            "inactive", inactive
-        );
+                "total", total,
+                "active", active,
+                "inactive", inactive);
     }
 
     /**
@@ -196,21 +197,21 @@ public class MedicalServiceService {
      * Unified lookup for medical service selection.
      * 
      * ARCHITECTURAL LAW: MedicalService MUST always be represented as:
-     *   CODE + NAME + CATEGORY
+     * CODE + NAME + CATEGORY
      * 
      * Features:
      * - Search by: code, nameAr, nameEn, categoryNameAr, categoryNameEn
      * - Optional filter by categoryId
      * - Returns full context for display
      * 
-     * @param query Search term (optional)
+     * @param query      Search term (optional)
      * @param categoryId Filter by category (optional)
      * @return List of services with full category context
      */
     @Transactional(readOnly = true)
     public List<MedicalServiceLookupDto> lookup(String query, Long categoryId) {
         log.debug("Lookup medical services: query={}, categoryId={}", query, categoryId);
-        
+
         return serviceRepository.lookupServices(query, categoryId)
                 .stream()
                 .map(p -> MedicalServiceLookupDto.builder()
@@ -245,10 +246,10 @@ public class MedicalServiceService {
             BigDecimal minPrice,
             BigDecimal maxPrice,
             Pageable pageable) {
-        
+
         log.debug("Searching services: term={}, category={}, requiresPA={}, price=[{}, {}]",
                 searchTerm, categoryId, requiresPA, minPrice, maxPrice);
-        
+
         return serviceRepository.advancedSearch(searchTerm, categoryId, requiresPA, minPrice, maxPrice, pageable)
                 .map(this::toDto);
     }
@@ -271,7 +272,8 @@ public class MedicalServiceService {
         if (dto.getCategoryId() != null) {
             // Validate category exists and is active
             categoryRepository.findActiveById(dto.getCategoryId())
-                    .orElseThrow(() -> new BusinessRuleException("Category not found or inactive: " + dto.getCategoryId()));
+                    .orElseThrow(
+                            () -> new BusinessRuleException("Category not found or inactive: " + dto.getCategoryId()));
             service.setCategoryId(dto.getCategoryId());
             serviceCategoryRepository.insertIfAbsent(service.getId(), dto.getCategoryId());
         }
@@ -338,7 +340,7 @@ public class MedicalServiceService {
     /**
      * Quick update category only (for inline/table editing)
      * 
-     * @param id Service ID
+     * @param id         Service ID
      * @param categoryId New category ID (null to remove category)
      * @return Updated service DTO
      */
@@ -388,12 +390,11 @@ public class MedicalServiceService {
         for (Long serviceId : serviceIds) {
             try {
                 serviceRepository.findById(serviceId).ifPresentOrElse(
-                    service -> {
-                        service.setCategoryId(categoryId);
-                        serviceRepository.save(service);
-                    },
-                    () -> errors.add("الخدمة غير موجودة: " + serviceId)
-                );
+                        service -> {
+                            service.setCategoryId(categoryId);
+                            serviceRepository.save(service);
+                        },
+                        () -> errors.add("الخدمة غير موجودة: " + serviceId));
                 updated++;
             } catch (Exception e) {
                 failed++;
@@ -424,9 +425,9 @@ public class MedicalServiceService {
     @Transactional
     public int deactivateAll() {
         log.warn("🔴 BULK DEACTIVATE: Deactivating ALL medical services");
-        
+
         int count = serviceRepository.softDeleteAll();
-        
+
         log.warn("✅ BULK DEACTIVATE: Deactivated {} medical services", count);
         return count;
     }
@@ -440,9 +441,9 @@ public class MedicalServiceService {
     @Transactional
     public int activateAll() {
         log.warn("🟢 BULK ACTIVATE: Activating ALL medical services");
-        
+
         int count = serviceRepository.activateAll();
-        
+
         log.warn("✅ BULK ACTIVATE: Activated {} medical services", count);
         return count;
     }
@@ -456,10 +457,10 @@ public class MedicalServiceService {
     @Transactional
     public int permanentDeleteAll() {
         log.warn("🗑️ PERMANENT DELETE: Deleting ALL medical services permanently!");
-        
+
         long count = serviceRepository.count();
         serviceRepository.deleteAll();
-        
+
         log.warn("✅ PERMANENT DELETE: Deleted {} medical services", count);
         return (int) count;
     }

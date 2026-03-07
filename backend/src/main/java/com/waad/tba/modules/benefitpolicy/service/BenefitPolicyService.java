@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class BenefitPolicyService {
 
     private final BenefitPolicyRepository benefitPolicyRepository;
@@ -477,7 +476,6 @@ public class BenefitPolicyService {
     }
 
     /**
-     * Generate a unique policy code in format POL-YYYY-XXX
      * Example: POL-2025-001, POL-2025-002, etc.
      */
     private String generatePolicyCode() {
@@ -495,14 +493,11 @@ public class BenefitPolicyService {
             try {
                 nextSequence = Integer.parseInt(sequencePart) + 1;
             } catch (NumberFormatException e) {
-                log.warn("Failed to parse sequence from policy code: {}, starting from 1", code);
                 nextSequence = 1;
             }
         }
         
-        // Format: POL-YYYY-XXX (zero-padded to 3 digits)
         String generatedCode = String.format("POL-%d-%03d", year, nextSequence);
-        log.debug("Generated policy code: {}", generatedCode);
         return generatedCode;
     }
 }

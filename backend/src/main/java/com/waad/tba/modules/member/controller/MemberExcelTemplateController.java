@@ -325,8 +325,8 @@ public class MemberExcelTemplateController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
     @Operation(summary = "Get import logs")
     public ResponseEntity<ApiResponse<Page<MemberImportLog>>> getImportLogs(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
         
         Page<MemberImportLog> logs = importLogRepository.findAll(
                 PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt")));

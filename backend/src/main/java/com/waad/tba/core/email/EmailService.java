@@ -21,6 +21,9 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:3000}")
+    private String portalUrl;
+
     // Send plain text
     public void sendText(String to, String subject, String body) {
         try {
@@ -108,7 +111,7 @@ public class EmailService {
                     .replace("{{claimAmount}}", claimAmount)
                     .replace("{{claimId}}", claimId)
                     .replace("{{year}}", String.valueOf(java.time.Year.now().getValue()))
-                    .replace("{{portalUrl}}", "http://localhost:3000"); // TODO: من الـ config
+                    .replace("{{portalUrl}}", portalUrl);
 
             sendHtml(to, "تم تقديم مطالبتك بنجاح - رقم " + claimNumber, html);
             log.info("✅ Claim submitted notification sent to {}", to);
@@ -159,7 +162,7 @@ public class EmailService {
                     .replace("{{paymentDestination}}", paymentDestination)
                     .replace("{{claimId}}", claimId)
                     .replace("{{year}}", String.valueOf(java.time.Year.now().getValue()))
-                    .replace("{{portalUrl}}", "http://localhost:3000"); // TODO: من الـ config
+                    .replace("{{portalUrl}}", portalUrl);
 
             sendHtml(to, "🎉 مبروك! تمت الموافقة على مطالبتك - رقم " + claimNumber, html);
             log.info("✅ Claim approved notification sent to {}", to);
@@ -205,7 +208,7 @@ public class EmailService {
                     .replace("{{additionalNotes}}", additionalNotes != null ? additionalNotes : "")
                     .replace("{{claimId}}", claimId)
                     .replace("{{year}}", String.valueOf(java.time.Year.now().getValue()))
-                    .replace("{{portalUrl}}", "http://localhost:3000"); // TODO: من الـ config
+                    .replace("{{portalUrl}}", portalUrl);
 
             // Handle conditional sections (Mustache-like syntax)
             if (hasNotes) {

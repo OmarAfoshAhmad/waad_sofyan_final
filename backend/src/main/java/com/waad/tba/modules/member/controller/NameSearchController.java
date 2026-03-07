@@ -65,7 +65,7 @@ public class NameSearchController {
                     required = true,
                     example = "احمد"
             )
-            @RequestParam String query
+            @RequestParam(name = "query") String query
     ) {
         log.info("Name search request received: {}", query);
 

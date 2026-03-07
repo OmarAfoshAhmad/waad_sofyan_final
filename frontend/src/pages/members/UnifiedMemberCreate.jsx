@@ -103,7 +103,8 @@ const UnifiedMemberCreate = () => {
     isVip: false,
     isUrgent: false,
     emergencyNotes: '',
-    noEmployer: false
+    noEmployer: false,
+    active: true
   });
 
   // Tab State
@@ -343,6 +344,7 @@ const UnifiedMemberCreate = () => {
         occupation: principalForm.occupation || null,
         policyNumber: principalForm.policyNumber || null,
         status: principalForm.isFastTrack ? 'PENDING' : principalForm.status || 'ACTIVE',
+        active: principalForm.active !== false,
         startDate: principalForm.startDate ? dayjs(principalForm.startDate).format('YYYY-MM-DD') : null,
         endDate: principalForm.endDate ? dayjs(principalForm.endDate).format('YYYY-MM-DD') : null,
         notes: principalForm.notes || null,
@@ -850,6 +852,23 @@ const UnifiedMemberCreate = () => {
                     multiline
                     rows={2}
                     size="small"
+                  />
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={principalForm.active !== false}
+                        onChange={(e) => setPrincipalForm((prev) => ({ ...prev, active: e.target.checked }))}
+                        color="success"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" color={principalForm.active !== false ? 'success.main' : 'text.secondary'}>
+                        {principalForm.active !== false ? 'نشط' : 'غير نشط'}
+                      </Typography>
+                    }
                   />
                 </Grid>
 

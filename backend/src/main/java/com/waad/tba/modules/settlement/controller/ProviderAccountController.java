@@ -85,9 +85,9 @@ public class ProviderAccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - Missing VIEW_PROVIDER_ACCOUNTS permission")
     })
     public ResponseEntity<ApiResponse<List<ProviderAccountListDTO>>> listAccounts(
-            @Parameter(description = "Filter by account status") @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by account status") @RequestParam(name = "status", required = false) String status,
 
-            @Parameter(description = "Filter accounts with balance > 0") @RequestParam(required = false, defaultValue = "false") boolean hasBalance) {
+            @Parameter(description = "Filter accounts with balance > 0") @RequestParam(name = "hasBalance", required = false, defaultValue = "false") boolean hasBalance) {
 
         log.info("Listing provider accounts. Filters: status={}, hasBalance={}", status, hasBalance);
 
@@ -168,13 +168,13 @@ public class ProviderAccountController {
     public ResponseEntity<ApiResponse<Page<AccountTransaction>>> getTransactions(
             @Parameter(description = "Provider ID", required = true) @PathVariable Long providerId,
 
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
 
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
 
-            @Parameter(description = "Start date filter") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @Parameter(description = "Start date filter") @RequestParam(name = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
 
-            @Parameter(description = "End date filter") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+            @Parameter(description = "End date filter") @RequestParam(name = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
 
         log.info("Getting transactions for provider {}. Page: {}, Size: {}", providerId, page, size);
 

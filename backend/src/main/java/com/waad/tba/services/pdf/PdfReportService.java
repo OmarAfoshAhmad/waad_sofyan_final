@@ -113,6 +113,7 @@ public class PdfReportService {
     /**
      * Generate content elements based on report type
      */
+    @SuppressWarnings("unchecked")
     private List<Element> generateContent(PdfReportRequest<?> request) {
         PdfReportMetadata metadata = request.getMetadata();
         

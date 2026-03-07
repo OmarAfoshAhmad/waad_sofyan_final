@@ -21,6 +21,7 @@ import java.util.List;
  */
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class BenefitPolicyReportTemplate {
 
     private final PdfFontConfig fontConfig;

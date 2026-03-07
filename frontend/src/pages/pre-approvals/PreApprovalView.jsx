@@ -193,10 +193,21 @@ const PreApprovalView = () => {
     navigate('/pre-approvals/inbox');
   };
 
-  // Placeholder for Convert to Claim (UI only - no logic)
+  // Navigate to Provider Portal claims submission pre-filled with this pre-auth data
   const handleConvertToClaim = () => {
-    // TODO: Implement in future phase
-    console.log('Convert to Claim - Not implemented yet');
+    if (!preApproval) return;
+    navigate('/provider/claims/submit', {
+      state: {
+        fromPreAuth: true,
+        preAuthId: preApproval.id,
+        preAuthNumber: preApproval.preAuthNumber,
+        visitId: preApproval.visitId,
+        memberId: preApproval.memberId,
+        memberName: preApproval.memberName,
+        providerId: preApproval.providerId,
+        approvedAmount: preApproval.approvedAmount
+      }
+    });
   };
 
   // Build preview URL for document side panel

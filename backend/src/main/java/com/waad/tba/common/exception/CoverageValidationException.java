@@ -75,8 +75,8 @@ public class CoverageValidationException extends BusinessRuleException {
     private static String buildLimitMessage(BigDecimal requested, BigDecimal available) {
         return String.format(
             "Claim amount %.2f LYD exceeds remaining coverage limit of %.2f LYD",
-            requested != null ? requested.doubleValue() : 0,
-            available != null ? available.doubleValue() : 0
+            requested != null ? requested : java.math.BigDecimal.ZERO,
+            available != null ? available : java.math.BigDecimal.ZERO
         );
     }
 

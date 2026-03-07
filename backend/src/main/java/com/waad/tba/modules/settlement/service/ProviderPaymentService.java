@@ -9,7 +9,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.provider.entity.Provider;
@@ -98,16 +97,26 @@ public class ProviderPaymentService {
 
         List<SettlementBatchItem> items = settlementBatchItemRepository.findBySettlementBatchId(batchId);
         LocalDateTime settledAt = LocalDateTime.now();
-        for (SettlementBatchItem item : items) {
-            Claim claim = claimRepository.findById(item.getClaimId())
-                    .orElseThrow(() -> new EntityNotFoundException("Claim not found: " + item.getClaimId()));
+
+        // Batch-load all claims in one query, update in memory, then saveAll in one query
+        List<Long> claimIds = items.stream().map(SettlementBatchItem::getClaimId).collect(java.util.stream.Collectors.toList());
+        List<com.waad.tba.modules.claim.entity.Claim> claims = claimRepository.findAllById(claimIds);
+        if (claims.size() != claimIds.size()) {
+            // Detect any missing claims before committing
+            java.util.Set<Long> found = claims.stream().map(com.waad.tba.modules.claim.entity.Claim::getId).collect(java.util.stream.Collectors.toSet());
+            claimIds.stream().filter(id -> !found.contains(id)).findFirst().ifPresent(id -> {
+                throw new jakarta.persistence.EntityNotFoundException("Claim not found: " + id);
+            });
+        }
+        String settlementNote = "Settled via payment #" + payment.getId() + " for batch " + batch.getBatchNumber();
+        for (com.waad.tba.modules.claim.entity.Claim claim : claims) {
             claim.setStatus(ClaimStatus.SETTLED);
             claim.setSettledAt(settledAt);
             claim.setPaymentReference(reference);
-            claim.setSettlementNotes("Settled via payment #" + payment.getId() + " for batch " + batch.getBatchNumber());
+            claim.setSettlementNotes(settlementNote);
             claim.setUpdatedAt(settledAt);
-            claimRepository.save(claim);
         }
+        claimRepository.saveAll(claims);
 
         batch.pay(userId);
         settlementBatchRepository.save(batch);

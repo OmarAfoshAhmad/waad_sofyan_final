@@ -17,12 +17,13 @@ import java.math.BigDecimal;
  * - Unit price is AUTO-RESOLVED from Provider Contract - NO manual entry
  * - Total price is SERVER-CALCULATED: quantity × unitPrice
  * 
- * Data Flow: MedicalService (from Contract) → ContractPrice (auto) → TotalPrice (calculated)
+ * Data Flow: MedicalService (from Contract) → ContractPrice (auto) → TotalPrice
+ * (calculated)
  */
 @Entity
 @Table(name = "claim_lines", indexes = {
-    @Index(name = "idx_claim_line_service", columnList = "medical_service_id"),
-    @Index(name = "idx_claim_line_claim", columnList = "claim_id")
+        @Index(name = "idx_claim_line_service", columnList = "medical_service_id"),
+        @Index(name = "idx_claim_line_claim", columnList = "claim_id")
 })
 @Data
 @NoArgsConstructor
@@ -40,11 +41,13 @@ public class ClaimLine {
      * 
      * Provides additional concurrency protection for claim line modifications.
      * While ClaimLine modifications are typically protected by parent Claim's
-     * PESSIMISTIC lock, this @Version provides defense-in-depth for scenarios where:
+     * PESSIMISTIC lock, this @Version provides defense-in-depth for scenarios
+     * where:
      * - Line-level API updates might be exposed
      * - Draft claim editing happens concurrently
      * 
-     * Prevents lost updates if two transactions modify the same line simultaneously.
+     * Prevents lost updates if two transactions modify the same line
+     * simultaneously.
      * 
      * @since Financial Hardening Phase - Post-Production Enhancement
      */
@@ -57,10 +60,11 @@ public class ClaimLine {
     private Claim claim;
 
     // ==================== MEDICAL SERVICE (CONTRACT-DRIVEN) ====================
-    
+
     /**
      * Medical Service (FK)
-     * ARCHITECTURAL LAW: Service MUST be selected from Provider Contract - NO free-text
+     * ARCHITECTURAL LAW: Service MUST be selected from Provider Contract - NO
+     * free-text
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "medical_service_id")
@@ -71,13 +75,13 @@ public class ClaimLine {
      */
     @Column(name = "service_code", length = 50, nullable = false)
     private String serviceCode;
-    
+
     /**
      * Service name (denormalized snapshot at claim time)
      */
     @Column(name = "service_name", length = 255)
     private String serviceName;
-    
+
     /**
      * Medical Category ID (MANDATORY - ARCHITECTURAL LAW)
      * 
@@ -87,7 +91,7 @@ public class ClaimLine {
      */
     @Column(name = "service_category_id")
     private Long serviceCategoryId;
-    
+
     /**
      * Medical Category Name (denormalized snapshot for reports)
      */
@@ -116,26 +120,31 @@ public class ClaimLine {
      */
     @Column(name = "total_price", precision = 15, scale = 2, nullable = false)
     private BigDecimal totalPrice;
-    
+
     /**
      * Whether service requires pre-authorization (snapshot from MedicalService)
      */
     @Column(name = "requires_pa")
     @Builder.Default
     private Boolean requiresPA = false;
-    
-    // ==================== COVERAGE SNAPSHOT (FINANCIAL AUDIT TRAIL) ====================
-    
+
+    // ==================== COVERAGE SNAPSHOT (FINANCIAL AUDIT TRAIL)
+    // ====================
+
     /**
-     * Coverage percentage at time of claim creation (snapshot from BenefitPolicyRule)
-     * IMPORTANT: This is stored as snapshot and should NOT be recalculated after creation
+     * Coverage percentage at time of claim creation (snapshot from
+     * BenefitPolicyRule)
+     * IMPORTANT: This is stored as snapshot and should NOT be recalculated after
+     * creation
      */
     @Column(name = "coverage_percent_snapshot")
     private Integer coveragePercentSnapshot;
-    
+
     /**
-     * Patient copay percentage at time of claim creation (snapshot from BenefitPolicyRule)
-     * IMPORTANT: This is stored as snapshot and should NOT be recalculated after creation
+     * Patient copay percentage at time of claim creation (snapshot from
+     * BenefitPolicyRule)
+     * IMPORTANT: This is stored as snapshot and should NOT be recalculated after
+     * creation
      */
     @Column(name = "patient_copay_percent_snapshot")
     private Integer patientCopayPercentSnapshot;
@@ -150,7 +159,8 @@ public class ClaimLine {
     private String rejectionReason;
 
     /**
-     * Rejection reason code (e.g., "PRICE_EXCEEDED", "NOT_COVERED", "PRE_AUTH_REQUIRED")
+     * Rejection reason code (e.g., "PRICE_EXCEEDED", "NOT_COVERED",
+     * "PRE_AUTH_REQUIRED")
      */
     @Column(name = "rejection_reason_code", length = 50)
     private String rejectionReasonCode;
@@ -169,7 +179,8 @@ public class ClaimLine {
     @Builder.Default
     private BigDecimal refusedAmount = BigDecimal.ZERO;
 
-    // ==================== FINANCIAL AUDIT: REQUESTED VS APPROVED ====================
+    // ==================== FINANCIAL AUDIT: REQUESTED VS APPROVED
+    // ====================
 
     @Column(name = "requested_unit_price", precision = 15, scale = 2)
     private BigDecimal requestedUnitPrice;
@@ -192,24 +203,28 @@ public class ClaimLine {
         calculateTotalPrice();
         validateArchitecturalRules();
     }
-    
+
     @PreUpdate
     private void preUpdate() {
         populateDenormalizedFields();
         calculateTotalPrice();
         validateArchitecturalRules();
     }
-    
+
     private void initializeFinancialAuditFields() {
-        if (requestedUnitPrice == null) requestedUnitPrice = unitPrice;
-        if (requestedQuantity == null) requestedQuantity = quantity;
-        
+        if (requestedUnitPrice == null)
+            requestedUnitPrice = unitPrice;
+        if (requestedQuantity == null)
+            requestedQuantity = quantity;
+
         if (Boolean.TRUE.equals(rejected)) {
             approvedUnitPrice = BigDecimal.ZERO;
             approvedQuantity = 0;
         } else {
-            if (approvedUnitPrice == null) approvedUnitPrice = unitPrice;
-            if (approvedQuantity == null) approvedQuantity = quantity;
+            if (approvedUnitPrice == null)
+                approvedUnitPrice = unitPrice;
+            if (approvedQuantity == null)
+                approvedQuantity = quantity;
         }
     }
 
@@ -220,13 +235,13 @@ public class ClaimLine {
         if (this.medicalService != null) {
             this.serviceCode = this.medicalService.getCode();
             this.serviceName = this.medicalService.getName();
-            
-            // Only update category from DB if it exists there, 
+
+            // Only update category from DB if it exists there,
             // otherwise keep the one sent from the UI
             if (this.medicalService.getCategoryId() != null) {
                 this.serviceCategoryId = this.medicalService.getCategoryId();
             }
-            
+
             this.requiresPA = this.medicalService.isRequiresPA();
         }
     }
@@ -236,7 +251,7 @@ public class ClaimLine {
             totalPrice = unitPrice.multiply(new BigDecimal(quantity));
         }
     }
-    
+
     /**
      * Validate architectural rules
      */
@@ -250,32 +265,32 @@ public class ClaimLine {
         if (medicalService == null) {
             throw new IllegalStateException("ARCHITECTURAL VIOLATION: ClaimLine MUST reference a MedicalService");
         }
-        
+
         // RULE: Category is MANDATORY (must come from service)
         if (serviceCategoryId == null) {
             throw new IllegalStateException(
-                "ARCHITECTURAL VIOLATION: ClaimLine MUST have a medical category. " +
-                "Service selection without category is not allowed.");
+                    "ARCHITECTURAL VIOLATION: ClaimLine MUST have a medical category. " +
+                            "Service selection without category is not allowed.");
         }
-        
+
         // RULE: Service must belong to the selected category
-        if (medicalService.getCategoryId() != null && 
-            !medicalService.getCategoryId().equals(serviceCategoryId)) {
+        if (medicalService.getCategoryId() != null &&
+                !medicalService.getCategoryId().equals(serviceCategoryId)) {
             throw new IllegalStateException(
-                "ARCHITECTURAL VIOLATION: Medical service does not belong to the selected category. " +
-                "Service categoryId=" + medicalService.getCategoryId() + 
-                ", selected categoryId=" + serviceCategoryId);
+                    "ARCHITECTURAL VIOLATION: Medical service does not belong to the selected category. " +
+                            "Service categoryId=" + medicalService.getCategoryId() +
+                            ", selected categoryId=" + serviceCategoryId);
         }
-        
+
         // RULE: Unit price must be set (from contract)
         if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("ARCHITECTURAL VIOLATION: Unit price must be resolved from Provider Contract");
+            throw new IllegalStateException(
+                    "ARCHITECTURAL VIOLATION: Unit price must be resolved from Provider Contract");
         }
-        
+
         // RULE: Quantity must be positive
         if (quantity == null || quantity <= 0) {
             throw new IllegalStateException("Quantity must be a positive number");
         }
     }
 }
-

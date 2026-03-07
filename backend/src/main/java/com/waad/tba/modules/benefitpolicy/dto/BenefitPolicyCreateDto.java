@@ -1,5 +1,6 @@
 package com.waad.tba.modules.benefitpolicy.dto;
 
+import com.waad.tba.common.validation.ValidDateRange;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ValidDateRange(startField = "startDate", endField = "endDate")
 public class BenefitPolicyCreateDto {
 
     @NotBlank(message = "Policy name is required")
@@ -29,6 +31,7 @@ public class BenefitPolicyCreateDto {
     private String description;
 
     @NotNull(message = "Employer organization ID is required")
+    @Positive(message = "Employer organization ID must be positive")
     private Long employerOrgId;
 
     @NotNull(message = "Start date is required")

@@ -772,7 +772,6 @@ public class PriceListExcelTemplateService {
     /**
      * Extracts a service code from a name string (e.g., "Incision WE-001" ->
      * "WE-001")
-     * Regex: Matches patterns like MC-001, WE-002, SRV-XXX-123
      */
     private String extractCodeFromName(String name) {
         if (name == null || name.isBlank())

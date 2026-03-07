@@ -42,6 +42,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class MedicalServiceExcelService {
 
     private final MedicalServiceRepository serviceRepository;
@@ -74,7 +75,7 @@ public class MedicalServiceExcelService {
 
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
-            
+
             // Read header row
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) {
@@ -132,9 +133,9 @@ public class MedicalServiceExcelService {
     /**
      * Process single row
      */
-    private void processRow(Row row, int rowNum, Map<String, Integer> columnMap, 
-                           Map<String, MedicalCategory> categoryCache, ImportSummary summary) {
-        
+    private void processRow(Row row, int rowNum, Map<String, Integer> columnMap,
+            Map<String, MedicalCategory> categoryCache, ImportSummary summary) {
+
         // Extract data from row - support both new and legacy column names
         String code = getCellValueAsString(row, columnMap.get("code"));
         // Support both 'name' (new) and 'nameAr' (legacy)
@@ -183,11 +184,11 @@ public class MedicalServiceExcelService {
                 existingService.setActive(active);
             }
             existingService.setUpdatedAt(LocalDateTime.now());
-            
+
             serviceRepository.save(existingService);
             summary.setUpdated(summary.getUpdated() + 1);
             log.debug("[MedicalServiceExcel] Updated service: {}", code);
-            
+
         } else {
             // Insert new service
             if (category == null) {
@@ -202,7 +203,7 @@ public class MedicalServiceExcelService {
                     .basePrice(price)
                     .active(active != null ? active : true)
                     .build();
-            
+
             serviceRepository.save(newService);
             summary.setInserted(summary.getInserted() + 1);
             log.debug("[MedicalServiceExcel] Inserted service: {}", code);
@@ -215,40 +216,46 @@ public class MedicalServiceExcelService {
      */
     private Map<String, Integer> mapColumns(Row headerRow) {
         Map<String, Integer> columnMap = new HashMap<>();
-        
+
         for (Cell cell : headerRow) {
             String columnName = cell.getStringCellValue().trim().toLowerCase();
-            
+
             // Code column (required)
-            if (columnName.equals("code") || columnName.equals("الرمز") || columnName.equals("كود") || columnName.equals("service_code") || columnName.equals("رمز الخدمة")) {
+            if (columnName.equals("code") || columnName.equals("الرمز") || columnName.equals("كود")
+                    || columnName.equals("service_code") || columnName.equals("رمز الخدمة")) {
                 columnMap.put("code", cell.getColumnIndex());
-            } 
+            }
             // Name column (new standard - unified name)
             else if (columnName.equals("name") || columnName.equals("اسم الخدمة")) {
                 columnMap.put("name", cell.getColumnIndex());
             }
             // Legacy nameAr column (for backward compatibility)
-            else if (columnName.equals("namear") || columnName.equals("name_ar") || columnName.equals("الاسم") || columnName.equals("الاسم بالعربية")) {
+            else if (columnName.equals("namear") || columnName.equals("name_ar") || columnName.equals("الاسم")
+                    || columnName.equals("الاسم بالعربية")) {
                 columnMap.put("nameAr", cell.getColumnIndex());
-            } 
+            }
             // Category column
-            else if (columnName.equals("category_code") || columnName.equals("categorycode") || columnName.equals("رمز التصنيف") || columnName.equals("category") || columnName.equals("التصنيف") || columnName.equals("الفئة") || columnName.equals("categoryname")) {
+            else if (columnName.equals("category_code") || columnName.equals("categorycode")
+                    || columnName.equals("رمز التصنيف") || columnName.equals("category") || columnName.equals("التصنيف")
+                    || columnName.equals("الفئة") || columnName.equals("categoryname")) {
                 columnMap.put("categoryCode", cell.getColumnIndex());
-            } 
+            }
             // Description column
             else if (columnName.equals("description") || columnName.equals("الوصف")) {
                 columnMap.put("description", cell.getColumnIndex());
             }
             // Price column
-            else if (columnName.equals("base_price") || columnName.equals("baseprice") || columnName.equals("pricelyd") || columnName.equals("price_lyd") || columnName.equals("price") || columnName.equals("السعر") || columnName.equals("السعر المرجعي")) {
+            else if (columnName.equals("base_price") || columnName.equals("baseprice") || columnName.equals("pricelyd")
+                    || columnName.equals("price_lyd") || columnName.equals("price") || columnName.equals("السعر")
+                    || columnName.equals("السعر المرجعي")) {
                 columnMap.put("priceLyd", cell.getColumnIndex());
-            } 
+            }
             // Active column
             else if (columnName.equals("active") || columnName.equals("نشط") || columnName.equals("الحالة")) {
                 columnMap.put("active", cell.getColumnIndex());
             }
         }
-        
+
         return columnMap;
     }
 
@@ -257,7 +264,7 @@ public class MedicalServiceExcelService {
      */
     private void validateRequiredColumns(Map<String, Integer> columnMap) {
         List<String> missing = new ArrayList<>();
-        
+
         if (!columnMap.containsKey("code")) {
             missing.add("code (الرمز)");
         }
@@ -265,7 +272,7 @@ public class MedicalServiceExcelService {
         if (!columnMap.containsKey("name") && !columnMap.containsKey("nameAr")) {
             missing.add("name (اسم الخدمة)");
         }
-        
+
         if (!missing.isEmpty()) {
             throw new BusinessRuleException("أعمدة مطلوبة مفقودة: " + String.join(", ", missing));
         }
@@ -278,7 +285,7 @@ public class MedicalServiceExcelService {
     private Map<String, MedicalCategory> loadCategoryCache() {
         Map<String, MedicalCategory> cache = new HashMap<>();
         List<MedicalCategory> categories = categoryRepository.findAll();
-        
+
         for (MedicalCategory category : categories) {
             // البحث بالكود
             if (category.getCode() != null) {
@@ -289,7 +296,7 @@ public class MedicalServiceExcelService {
                 cache.put(category.getName().trim(), category);
             }
         }
-        
+
         log.info("[MedicalServiceExcel] Loaded {} categories into cache (with name lookups)", cache.size());
         return cache;
     }
@@ -301,12 +308,12 @@ public class MedicalServiceExcelService {
         if (colIndex == null) {
             return null;
         }
-        
+
         Cell cell = row.getCell(colIndex);
         if (cell == null) {
             return null;
         }
-        
+
         return switch (cell.getCellType()) {
             case STRING -> cell.getStringCellValue();
             case NUMERIC -> String.valueOf((long) cell.getNumericCellValue());
@@ -322,12 +329,12 @@ public class MedicalServiceExcelService {
         if (colIndex == null) {
             return null;
         }
-        
+
         Cell cell = row.getCell(colIndex);
         if (cell == null) {
             return null;
         }
-        
+
         return switch (cell.getCellType()) {
             case NUMERIC -> BigDecimal.valueOf(cell.getNumericCellValue());
             case STRING -> {
@@ -348,12 +355,12 @@ public class MedicalServiceExcelService {
         if (colIndex == null) {
             return null;
         }
-        
+
         Cell cell = row.getCell(colIndex);
         if (cell == null) {
             return null;
         }
-        
+
         return switch (cell.getCellType()) {
             case BOOLEAN -> cell.getBooleanCellValue();
             case STRING -> {
@@ -394,7 +401,7 @@ public class MedicalServiceExcelService {
     private String buildSuccessMessage(ImportSummary summary) {
         StringBuilder msg = new StringBuilder();
         msg.append("تم استيراد البيانات بنجاح. ");
-        
+
         if (summary.getInserted() > 0) {
             msg.append(summary.getInserted()).append(" سجل جديد، ");
         }
@@ -404,7 +411,7 @@ public class MedicalServiceExcelService {
         if (summary.getFailed() > 0) {
             msg.append(summary.getFailed()).append(" سجل فشل");
         }
-        
+
         return msg.toString();
     }
 }

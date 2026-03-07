@@ -1101,6 +1101,7 @@ public class MemberExcelImportService {
      * @param employer      Pre-selected employer (REQUIRED)
      * @param benefitPolicy Pre-selected benefit policy (OPTIONAL)
      */
+    @SuppressWarnings("deprecation")
     private ImportRowResult processRow(Row row, int rowNum,
             Map<String, Integer> fieldToColumnIndex,
             Map<Integer, String> columnIndexToName,
@@ -1111,7 +1112,6 @@ public class MemberExcelImportService {
         // Extract fields
         String fullName = getFieldValue(row, fieldToColumnIndex, "fullName");
         String civilId = getFieldValue(row, fieldToColumnIndex, "civilId"); // Optional
-        String memberNumber = getFieldValue(row, fieldToColumnIndex, "employeeNumber");
         String policyNumber = getFieldValue(row, fieldToColumnIndex, "policyNumber");
         String startDateStr = getFieldValue(row, fieldToColumnIndex, "startDate");
 
@@ -1149,7 +1149,7 @@ public class MemberExcelImportService {
                 .status(MemberStatus.ACTIVE)
                 .cardStatus(Member.CardStatus.ACTIVE)
                 .active(true)
-                .barcode(barcodeGeneratorService.generate()) // Auto barcode for every imported member
+                .barcode(barcodeGeneratorService.generateForPrincipal()) // Auto barcode for every imported member
                 .build();
 
         log.debug("✨ Creating new member (create-only mode): fullName={}, policy={}",

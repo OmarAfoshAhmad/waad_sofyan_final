@@ -59,14 +59,15 @@ public class Member {
      * Optimistic Locking Version (PHASE 1: Concurrency Protection)
      *
      * Critical for ensuring financial limits are not exceeded by concurrent claims.
-     * Every time a claim is approved for this member, this version should be incremented.
+     * Every time a claim is approved for this member, this version should be
+     * incremented.
      */
     @Version
     private Long version;
 
     // ==================== UNIFIED MEMBER ARCHITECTURE ====================
     // Self-Referencing Relationship for Principal/Dependent Structure
-    
+
     /**
      * Parent Member (Principal) - NULL for principal members, set for dependents.
      * This creates a self-referencing tree structure where:
@@ -154,7 +155,8 @@ public class Member {
     @Column(nullable = false, length = 200, name = "full_name")
     private String fullName;
 
-    // Phase 1 Enterprise Fix: Civil ID is Optional (DEPRECATED - use nationalNumber)
+    // Phase 1 Enterprise Fix: Civil ID is Optional (DEPRECATED - use
+    // nationalNumber)
     @Deprecated
     @Column(length = 50, name = "civil_id")
     private String civilId;
@@ -164,7 +166,7 @@ public class Member {
     private String nationalNumber;
 
     // ==================== UNIFIED IDENTIFICATION SYSTEM ====================
-    
+
     /**
      * Card Number (رقم بطاقة العضو) - UNIFIED for family.
      * 
@@ -215,29 +217,25 @@ public class Member {
         if (isPrincipal()) {
             if (this.barcode == null || this.barcode.trim().isEmpty()) {
                 throw new IllegalStateException(
-                    "Principal Member cannot be persisted without a valid barcode. " +
-                    "Use BarcodeGeneratorService.generateForMember()."
-                );
+                        "Principal Member cannot be persisted without a valid barcode. " +
+                                "Use BarcodeGeneratorService.generateForMember().");
             }
         } else if (isDependent()) {
             // IMPORTANT: Dependents should NOT have barcode
             if (this.barcode != null && !this.barcode.trim().isEmpty()) {
                 throw new IllegalStateException(
-                    "Dependent Member should NOT have a barcode. " +
-                    "Barcode is only for Principal members."
-                );
+                        "Dependent Member should NOT have a barcode. " +
+                                "Barcode is only for Principal members.");
             }
             // Dependents MUST have a parent
             if (this.parent == null) {
                 throw new IllegalStateException(
-                    "Dependent Member must have a parent (Principal Member)."
-                );
+                        "Dependent Member must have a parent (Principal Member).");
             }
             // Dependents MUST have a relationship
             if (this.relationship == null) {
                 throw new IllegalStateException(
-                    "Dependent Member must have a relationship type (e.g., SON, DAUGHTER, WIFE)."
-                );
+                        "Dependent Member must have a relationship type (e.g., SON, DAUGHTER, WIFE).");
             }
         }
 
@@ -387,30 +385,47 @@ public class Member {
     }
 
     // ==================== ENUMS ====================
-    
+
     /**
      * Member Type - AUTO-CALCULATED based on parent_id.
      * PRINCIPAL: parent = null (head of family, has barcode)
      * DEPENDENT: parent != null (family member, uses parent's barcode)
      */
     public enum MemberType {
-        PRINCIPAL,  // Parent = null, has barcode, can have dependents
-        DEPENDENT   // Parent != null, no barcode, has relationship
+        PRINCIPAL, // Parent = null, has barcode, can have dependents
+        DEPENDENT // Parent != null, no barcode, has relationship
     }
 
     /**
      * Relationship Type - ONLY for DEPENDENT members.
      * NULL for PRINCIPAL members.
+     *
+     * Each value carries its card-number suffix code.
+     * Example: DAUGHTER("D") → card suffix "D1", "D2", …
      */
     public enum Relationship {
-        WIFE,      // زوجة
-        HUSBAND,   // زوج
-        SON,       // ابن
-        DAUGHTER,  // ابنة
-        FATHER,    // أب
-        MOTHER,    // أم
-        BROTHER,   // أخ
-        SISTER     // أخت
+        WIFE("W"), // زوجة
+        HUSBAND("H"), // زوج
+        SON("S"), // ابن
+        DAUGHTER("D"), // ابنة
+        FATHER("F"), // أب
+        MOTHER("M"), // أم
+        BROTHER("B"), // أخ
+        SISTER("SR"); // أخت
+
+        private final String cardCode;
+
+        Relationship(String cardCode) {
+            this.cardCode = cardCode;
+        }
+
+        /**
+         * Returns the card-number suffix prefix for this relationship (e.g. "D" for
+         * DAUGHTER).
+         */
+        public String getCardCode() {
+            return cardCode;
+        }
     }
 
     public enum Gender {

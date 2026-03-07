@@ -25,6 +25,7 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class MemberReportTemplate {
     
     private final PdfFontConfig fontConfig;

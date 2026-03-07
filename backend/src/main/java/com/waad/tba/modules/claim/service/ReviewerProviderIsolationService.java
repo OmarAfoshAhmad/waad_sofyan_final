@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -37,10 +36,11 @@ import java.util.stream.Collectors;
  * ```java
  * // In ClaimService - List claims
  * if (isolationService.isSubjectToIsolation(currentUser)) {
- *     List<Long> allowedProviders = isolationService.getAllowedProviderIds(currentUser);
- *     return claimRepository.findByProviderIdIn(allowedProviders);
+ * List<Long> allowedProviders =
+ * isolationService.getAllowedProviderIds(currentUser);
+ * return claimRepository.findByProviderIdIn(allowedProviders);
  * } else {
- *     return claimRepository.findAll();
+ * return claimRepository.findAll();
  * }
  * 
  * // In ClaimService - Approve claim
@@ -91,7 +91,7 @@ public class ReviewerProviderIsolationService {
         if (isReviewer) {
             log.debug("User {} is medical reviewer - subject to isolation", user.getId());
         }
-        
+
         return isReviewer;
     }
 
@@ -112,16 +112,15 @@ public class ReviewerProviderIsolationService {
 
         if (!isSubjectToIsolation(user)) {
             throw new IllegalStateException(
-                "User " + user.getId() + " is not subject to reviewer isolation. " +
-                "This method should only be called for MEDICAL_REVIEWER role."
-            );
+                    "User " + user.getId() + " is not subject to reviewer isolation. " +
+                            "This method should only be called for MEDICAL_REVIEWER role.");
         }
 
         List<Long> providerIds = medicalReviewerProviderRepository
                 .findProviderIdsByReviewerId(user.getId());
 
-        log.info("Reviewer {} has access to {} providers: {}", 
-            user.getId(), providerIds.size(), providerIds);
+        log.info("Reviewer {} has access to {} providers: {}",
+                user.getId(), providerIds.size(), providerIds);
 
         return providerIds;
     }
@@ -129,24 +128,26 @@ public class ReviewerProviderIsolationService {
     /**
      * Validate that a reviewer has access to a specific provider.
      * 
-     * DEFENSIVE VALIDATION: Use this in service methods to prevent unauthorized access.
+     * DEFENSIVE VALIDATION: Use this in service methods to prevent unauthorized
+     * access.
      * 
      * Example usage:
      * ```java
      * public void approveClaim(Long claimId) {
-     *     Claim claim = claimRepository.findById(claimId);
-     *     User currentUser = authorizationService.getCurrentUser();
-     *     
-     *     // Defensive validation
-     *     isolationService.validateReviewerAccess(currentUser, claim.getProviderId());
-     *     
-     *     // Proceed with approval...
+     * Claim claim = claimRepository.findById(claimId);
+     * User currentUser = authorizationService.getCurrentUser();
+     * 
+     * // Defensive validation
+     * isolationService.validateReviewerAccess(currentUser, claim.getProviderId());
+     * 
+     * // Proceed with approval...
      * }
      * ```
      * 
-     * @param user The user attempting access
+     * @param user       The user attempting access
      * @param providerId The provider ID of the claim
-     * @throws AccessDeniedException if reviewer doesn't have access to this provider
+     * @throws AccessDeniedException if reviewer doesn't have access to this
+     *                               provider
      */
     public void validateReviewerAccess(User user, Long providerId) {
         if (user == null) {
@@ -168,13 +169,12 @@ public class ReviewerProviderIsolationService {
                 .existsByReviewerIdAndProviderIdAndActiveTrue(user.getId(), providerId);
 
         if (!hasAccess) {
-            log.warn("⚠️ ISOLATION VIOLATION: Reviewer {} attempted to access provider {} (NOT ASSIGNED)", 
-                user.getId(), providerId);
+            log.warn("⚠️ ISOLATION VIOLATION: Reviewer {} attempted to access provider {} (NOT ASSIGNED)",
+                    user.getId(), providerId);
             throw new AccessDeniedException(
-                String.format("Medical reviewer %d does not have access to provider %d. " +
-                    "Reviewers can only access claims from assigned providers.", 
-                    user.getId(), providerId)
-            );
+                    String.format("Medical reviewer %d does not have access to provider %d. " +
+                            "Reviewers can only access claims from assigned providers.",
+                            user.getId(), providerId));
         }
 
         log.debug("✅ Reviewer {} has valid access to provider {}", user.getId(), providerId);
@@ -185,7 +185,7 @@ public class ReviewerProviderIsolationService {
      * 
      * Convenience method that extracts providerId from claim.
      * 
-     * @param user The user attempting access
+     * @param user       The user attempting access
      * @param providerId The provider ID from the claim
      * @throws AccessDeniedException if reviewer doesn't have access
      */
@@ -244,17 +244,15 @@ public class ReviewerProviderIsolationService {
 
         if (!isSubjectToIsolation(user)) {
             throw new IllegalStateException(
-                "User " + user.getId() + " is not subject to reviewer isolation. " +
-                "This method should only be called for MEDICAL_REVIEWER role."
-            );
+                    "User " + user.getId() + " is not subject to reviewer isolation. " +
+                            "This method should only be called for MEDICAL_REVIEWER role.");
         }
 
         return medicalReviewerProviderRepository.findByReviewerIdAndActiveTrue(user.getId())
                 .stream()
                 .map(mapping -> new ReviewerProviderOptionDto(
-                    mapping.getProvider().getId(),
-                    mapping.getProvider().getName()
-                ))
+                        mapping.getProvider().getId(),
+                        mapping.getProvider().getName()))
                 .collect(Collectors.toList());
     }
 

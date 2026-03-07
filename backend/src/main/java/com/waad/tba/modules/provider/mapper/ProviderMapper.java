@@ -8,8 +8,29 @@ import com.waad.tba.modules.provider.dto.ProviderUpdateDto;
 import com.waad.tba.modules.provider.dto.ProviderViewDto;
 import com.waad.tba.modules.provider.entity.Provider;
 
+import java.util.EnumMap;
+import java.util.Map;
+
 @Component
 public class ProviderMapper {
+
+    private static final Map<Provider.ProviderType, String> PROVIDER_TYPE_LABELS =
+            new EnumMap<>(Provider.ProviderType.class);
+
+    private static final Map<Provider.NetworkTier, String> NETWORK_TIER_LABELS =
+            new EnumMap<>(Provider.NetworkTier.class);
+
+    static {
+        PROVIDER_TYPE_LABELS.put(Provider.ProviderType.HOSPITAL,  "مستشفى");
+        PROVIDER_TYPE_LABELS.put(Provider.ProviderType.CLINIC,    "عيادة");
+        PROVIDER_TYPE_LABELS.put(Provider.ProviderType.LAB,       "مختبر");
+        PROVIDER_TYPE_LABELS.put(Provider.ProviderType.PHARMACY,  "صيدلية");
+        PROVIDER_TYPE_LABELS.put(Provider.ProviderType.RADIOLOGY, "أشعة");
+
+        NETWORK_TIER_LABELS.put(Provider.NetworkTier.IN_NETWORK,     "داخل الشبكة");
+        NETWORK_TIER_LABELS.put(Provider.NetworkTier.OUT_OF_NETWORK, "خارج الشبكة");
+        NETWORK_TIER_LABELS.put(Provider.NetworkTier.PREFERRED,      "مزود مفضل");
+    }
 
     /**
      * Maps ProviderCreateDto to Provider entity.
@@ -145,20 +166,10 @@ public class ProviderMapper {
     }
 
     private String getProviderTypeLabel(Provider.ProviderType type) {
-        return switch (type) {
-            case HOSPITAL -> "مستشفى";
-            case CLINIC -> "عيادة";
-            case LAB -> "مختبر";
-            case PHARMACY -> "صيدلية";
-            case RADIOLOGY -> "أشعة";
-        };
+        return PROVIDER_TYPE_LABELS.getOrDefault(type, type != null ? type.name() : null);
     }
 
     private String getNetworkStatusLabel(Provider.NetworkTier tier) {
-        return switch (tier) {
-            case IN_NETWORK -> "داخل الشبكة";
-            case OUT_OF_NETWORK -> "خارج الشبكة";
-            case PREFERRED -> "مزود مفضل";
-        };
+        return NETWORK_TIER_LABELS.getOrDefault(tier, tier != null ? tier.name() : null);
     }
 }

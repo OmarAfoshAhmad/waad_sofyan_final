@@ -23,12 +23,14 @@ public class BenefitPolicyRuleCreateDto {
      * Target Medical Category ID (for category-level rules)
      * Mutually exclusive with medicalServiceId
      */
+    @Positive(message = "Medical Category ID must be positive")
     private Long medicalCategoryId;
 
     /**
      * Target Medical Service ID (for service-specific rules)
      * Mutually exclusive with medicalCategoryId
      */
+    @Positive(message = "Medical Service ID must be positive")
     private Long medicalServiceId;
 
     /**

@@ -16,7 +16,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -53,6 +52,7 @@ import java.awt.image.BufferedImage;
 @Service
 @RequiredArgsConstructor
 @Deprecated(since = "2026-01", forRemoval = false)
+@SuppressWarnings("dep-ann")
 public class MemberPdfExportService {
 
     private static final String REPORT_TITLE = "تقرير قائمة المنتفعين";

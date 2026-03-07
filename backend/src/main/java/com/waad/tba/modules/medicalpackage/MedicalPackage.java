@@ -57,7 +57,7 @@ public class MedicalPackage {
      * Sum of all included services coverage limits
      */
     @Column()
-    private Double totalCoverageLimit;
+    private java.math.BigDecimal totalCoverageLimit;
 
     @Builder.Default
     @Column(nullable = false)

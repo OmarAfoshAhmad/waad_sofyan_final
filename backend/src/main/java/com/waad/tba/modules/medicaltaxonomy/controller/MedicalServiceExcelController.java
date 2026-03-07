@@ -1,7 +1,5 @@
 package com.waad.tba.modules.medicaltaxonomy.controller;
 
-import com.waad.tba.common.dto.ApiResponse;
-import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto;
 import com.waad.tba.modules.medicaltaxonomy.service.MedicalServiceBulkImportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,7 +10,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 

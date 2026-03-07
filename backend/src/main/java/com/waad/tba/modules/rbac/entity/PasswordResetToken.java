@@ -61,7 +61,15 @@ public class PasswordResetToken {
      * Check if token is expired
      */
     public boolean isExpired() {
-        return LocalDateTime.now().isAfter(expiresAt);
+        if (expiresAt != null) {
+            return LocalDateTime.now().isAfter(expiresAt);
+        }
+        // Fallback for OTP-based flow which uses expiryTime
+        if (expiryTime != null) {
+            return LocalDateTime.now().isAfter(expiryTime);
+        }
+        // No expiry set — treat as expired
+        return true;
     }
 
     /**

@@ -13,13 +13,11 @@ const SoftDeleteToggle = ({ showDeleted, onToggle }) => {
             variant={showDeleted ? 'contained' : 'outlined'}
             startIcon={showDeleted ? <VisibilityIcon /> : <DeleteIcon />}
             onClick={onToggle}
-            color={showDeleted ? 'error' : 'inherit'}
             sx={{
                 minWidth: '155px',
-                ...(showDeleted && {
-                    bgcolor: '#d32f2f',
-                    '&:hover': { bgcolor: '#b71c1c' }
-                })
+                ...(showDeleted
+                    ? { bgcolor: '#d32f2f', color: '#fff', borderColor: '#d32f2f', '&:hover': { bgcolor: '#b71c1c' } }
+                    : { color: '#b71c1c', borderColor: '#b71c1c', '&:hover': { bgcolor: '#fdecea', borderColor: '#d32f2f' } })
             }}
         >
             {showDeleted ? 'عرض النشطة' : 'سجل المحذوفات'}

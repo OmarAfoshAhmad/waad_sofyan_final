@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Collectors;
 
 /**
  * Medical Services Excel Template Generator and Import Service
@@ -41,6 +40,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("deprecation")
 public class MedicalServiceExcelTemplateService {
 
     private final ExcelTemplateService templateService;
@@ -424,11 +424,6 @@ public class MedicalServiceExcelTemplateService {
         } catch (NumberFormatException e) {
             throw new BusinessRuleException("تنسيق السعر غير صحيح: " + priceStr);
         }
-    }
-
-    private void processRow(Row row, int rowNumber, Map<String, MedicalCategory> categoryCache,
-            ImportSummary summary, List<ImportError> errors) {
-        processRow(row, rowNumber, categoryCache, new HashMap<>(), summary, errors);
     }
 
     private String getCellValue(Row row, int columnIndex) {

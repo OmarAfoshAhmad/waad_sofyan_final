@@ -126,7 +126,7 @@ public class VisitController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<List<VisitResponseDto>>> search(
-                        @Parameter(name = "query", description = "Search query", required = true) @RequestParam String query) {
+                        @Parameter(name = "query", description = "Search query", required = true) @RequestParam(name = "query") String query) {
                 List<VisitResponseDto> list = service.search(query);
                 return ResponseEntity.ok(ApiResponse.success(list));
         }
@@ -140,12 +140,12 @@ public class VisitController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")
         })
         public ResponseEntity<ApiResponse<PaginationResponse<VisitResponseDto>>> paginate(
-                        @Parameter(name = "employerId", description = "Employer ID for filtering (null = show all for admin)") @RequestParam(required = false) Long employerId,
-                        @Parameter(name = "page", description = "Page number (1-based)") @RequestParam(defaultValue = "1") int page,
-                        @Parameter(name = "size", description = "Page size") @RequestParam(defaultValue = "10") int size,
-                        @Parameter(name = "search", description = "Search query") @RequestParam(required = false) String search,
-                        @Parameter(name = "sortBy", description = "Sort by field") @RequestParam(defaultValue = "createdAt") String sortBy,
-                        @Parameter(name = "sortDir", description = "Sort direction") @RequestParam(defaultValue = "desc") String sortDir) {
+                        @Parameter(name = "employerId", description = "Employer ID for filtering (null = show all for admin)") @RequestParam(name = "employerId", required = false) Long employerId,
+                        @Parameter(name = "page", description = "Page number (1-based)") @RequestParam(name = "page", defaultValue = "1") int page,
+                        @Parameter(name = "size", description = "Page size") @RequestParam(name = "size", defaultValue = "10") int size,
+                        @Parameter(name = "search", description = "Search query") @RequestParam(name = "search", required = false) String search,
+                        @Parameter(name = "sortBy", description = "Sort by field") @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+                        @Parameter(name = "sortDir", description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir) {
                 org.springframework.data.domain.Pageable pageable = PageRequest.of(Math.max(0, page - 1), size,
                                 org.springframework.data.domain.Sort.by(
                                                 org.springframework.data.domain.Sort.Direction.fromString(sortDir),
@@ -164,7 +164,7 @@ public class VisitController {
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
         @Operation(summary = "Count visits", description = "Returns total number of visits (filtered by employer if provided)")
         public ResponseEntity<ApiResponse<Long>> count(
-                        @Parameter(name = "employerId", description = "Employer ID for filtering") @RequestParam(required = false) Long employerId) {
+                        @Parameter(name = "employerId", description = "Employer ID for filtering") @RequestParam(name = "employerId", required = false) Long employerId) {
                 long total = service.count(employerId);
                 return ResponseEntity.ok(ApiResponse.success(total));
         }

@@ -192,10 +192,11 @@ public class MemberExcelTemplateService {
             // Build employer lookup map
             Map<String, Employer> employerLookup = buildEmployerLookup();
             Map<Long, Set<String>> existingNamesCache = new HashMap<>();
-            
-            // Session cache for newly imported principals (to allow linking dependents in same file)
+
+            // Session cache for newly imported principals (to allow linking dependents in
+            // same file)
             Map<String, Member> importedPrincipalsCache = new HashMap<>();
-            
+
             Set<String> inFileKeys = new HashSet<>();
             List<Member> memberBatch = new ArrayList<>();
             final int BATCH_SIZE = 100;
@@ -215,7 +216,8 @@ public class MemberExcelTemplateService {
                 }
 
                 try {
-                    Member member = parseAndCreateMember(row, rowNum, columnIndices, employerLookup, importedPrincipalsCache, errors);
+                    Member member = parseAndCreateMember(row, rowNum, columnIndices, employerLookup,
+                            importedPrincipalsCache, errors);
 
                     if (member != null) {
                         String fullNameLower = member.getFullName().trim().toLowerCase();
@@ -245,16 +247,17 @@ public class MemberExcelTemplateService {
                         if (member.isPrincipal()) {
                             // If card number provided in Excel, use it. Otherwise generate.
                             if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
-                                member.setCardNumber(cardNumberGeneratorService.generateUniqueForPrincipal());
+                                member.setCardNumber(cardNumberGeneratorService.generateUniqueForPrincipal(member));
                             }
                             member.setBarcode(barcodeGeneratorService.generateUniqueBarcodeForPrincipal());
-                            
+
                             // Add to session cache for dependents to find
                             importedPrincipalsCache.put(member.getCardNumber(), member);
                         } else {
                             // Dependent ID generation logic
                             if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
-                                member.setCardNumber(cardNumberGeneratorService.generateForDependent(member.getParent()));
+                                member.setCardNumber(cardNumberGeneratorService.generateForDependent(member.getParent(),
+                                        member.getRelationship()));
                             }
                         }
 
@@ -326,7 +329,7 @@ public class MemberExcelTemplateService {
                 "relationship", "القرابة", "rel type", "صلة القرابة"));
         indices.put("card_number", parserService.findColumnIndex(headerRow,
                 "card_number", "رقم البطاقة", "member card", "معرّف البطاقة"));
-        
+
         log.info("[MemberImport] Final Column Indices Detection: {}", indices);
         return indices;
     }
@@ -465,21 +468,25 @@ public class MemberExcelTemplateService {
         // ═══════════════════════════════════════════════════════════════════════════
         // MEMBER TYPE IDENTIFICATION - IMPROVED
         // ═══════════════════════════════════════════════════════════════════════════
-        
+
         // A row is a dependent if:
         // 1. It has a relationship specified
         // 2. OR it specifies a principal card number
-        // 3. OR it lacks an employer name (Principals in this system MUST belong to an employer)
-        
+        // 3. OR it lacks an employer name (Principals in this system MUST belong to an
+        // employer)
+
         boolean dependentRow = hasRelationship || hasPrincipalCard || !hasEmployerName;
-        
-        // If it's a dependent but lacks a relationship, default to a placeholder or fail
-        // In some cases, we might want to default to SON/DAUGHTER if unknown but it's better to keep it null and let validator catch it if needed
-        
-        // Special Case: If it says "موظف" or "self" in relationship, it's actually a principal
-        if (hasRelationship && (relationshipValue.equalsIgnoreCase("موظف") || 
-                               relationshipValue.equalsIgnoreCase("SELF") || 
-                               relationshipValue.equalsIgnoreCase("PRINCIPAL"))) {
+
+        // If it's a dependent but lacks a relationship, default to a placeholder or
+        // fail
+        // In some cases, we might want to default to SON/DAUGHTER if unknown but it's
+        // better to keep it null and let validator catch it if needed
+
+        // Special Case: If it says "موظف" or "self" in relationship, it's actually a
+        // principal
+        if (hasRelationship && (relationshipValue.equalsIgnoreCase("موظف") ||
+                relationshipValue.equalsIgnoreCase("SELF") ||
+                relationshipValue.equalsIgnoreCase("PRINCIPAL"))) {
             dependentRow = false;
         }
 
@@ -510,7 +517,8 @@ public class MemberExcelTemplateService {
         } else {
             if (employerName == null || employerName.trim().isEmpty()) {
                 errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "employer",
-                        "جهة العمل مطلوبة للعضو الرئيسي", "Employer is required for principal rows", employerName, fullName));
+                        "جهة العمل مطلوبة للعضو الرئيسي", "Employer is required for principal rows", employerName,
+                        fullName));
                 hasErrors = true;
             }
         }
@@ -525,7 +533,7 @@ public class MemberExcelTemplateService {
             if (hasPrincipalCard) {
                 // Try session cache first
                 principal = sessionPrincipals.get(principalCardNumber);
-                
+
                 // Then try DB
                 if (principal == null) {
                     principal = memberRepository.findByCardNumber(principalCardNumber)
