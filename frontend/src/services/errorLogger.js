@@ -110,6 +110,16 @@ export const classifyError = (status, url, context = {}) => {
     };
   }
 
+  // ===== 409 CONFLICT / 422 UNPROCESSABLE ENTITY =====
+  if (status === 409 || status === 422) {
+    return {
+      type: ErrorType.VALIDATION_ERROR,
+      severity: ErrorSeverity.WARNING,
+      shouldLog: true,
+      message: 'Business rule violation'
+    };
+  }
+
   // ===== 500+ SERVER ERROR =====
   if (status >= 500) {
     return {

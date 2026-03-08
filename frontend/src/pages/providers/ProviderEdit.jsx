@@ -238,7 +238,9 @@ const ProviderEdit = () => {
         const allEmployers = Array.isArray(employersRes) ? employersRes : employersRes?.data || [];
 
         const allowedIds = await providersService.getAllowedEmployerIds(id);
-        const allowedSet = new Set(Array.isArray(allowedIds) ? allowedIds : []);
+        const rawList = Array.isArray(allowedIds) ? allowedIds : [];
+        // Response may be plain IDs or AllowedEmployerDto objects — normalise to IDs
+        const allowedSet = new Set(rawList.map((a) => (typeof a === 'object' && a !== null ? a.id : a)));
 
         const mapped = allEmployers.map((emp) => ({
           id: emp.id || emp.value,

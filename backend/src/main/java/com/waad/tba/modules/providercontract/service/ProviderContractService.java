@@ -362,7 +362,7 @@ public class ProviderContractService {
                 .filter(existing -> !existing.getId().equals(contractId))
                 .ifPresent(existing -> {
                     throw new BusinessRuleException(
-                            "Provider already has an active contract: " + existing.getContractCode());
+                            "يوجد عقد نشط مسبقاً لمقدم الخدمة: " + existing.getContractCode());
                 });
         
         // Check for overlapping contracts

@@ -96,7 +96,7 @@ public class ProviderController {
     @PutMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> updateProvider(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody ProviderUpdateDto dto) {
         ProviderViewDto provider = providerService.updateProvider(id, dto);
         return ResponseEntity.ok(ApiResponse.success("Provider updated successfully", provider));
@@ -104,7 +104,7 @@ public class ProviderController {
 
     @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<ProviderViewDto>> getProvider(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<ProviderViewDto>> getProvider(@PathVariable("id") Long id) {
         ProviderViewDto provider = providerService.getProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider retrieved successfully", provider));
     }
@@ -136,7 +136,7 @@ public class ProviderController {
      */
     @DeleteMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deactivateProvider(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deactivateProvider(@PathVariable("id") Long id) {
         providerService.deactivateProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider deactivated successfully", null));
     }
@@ -172,7 +172,7 @@ public class ProviderController {
     @PostMapping("/{id}/services")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderServiceResponseDto>> assignService(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody ProviderServiceAssignDto dto) {
         
         log.info("[PROVIDER-SERVICES] POST /api/providers/{}/services - serviceCode={}", 
@@ -189,8 +189,8 @@ public class ProviderController {
     @DeleteMapping("/{id}/services/{serviceCode}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> removeService(
-            @PathVariable Long id,
-            @PathVariable String serviceCode) {
+            @PathVariable("id") Long id,
+            @PathVariable("serviceCode") String serviceCode) {
         
         log.info("[PROVIDER-SERVICES] DELETE /api/providers/{}/services/{}", id, serviceCode);
         
@@ -205,7 +205,7 @@ public class ProviderController {
     @GetMapping("/{id}/services")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderServiceResponseDto>>> getProviderServices(
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
         
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/services", id);
         
@@ -219,7 +219,7 @@ public class ProviderController {
      */
     @GetMapping("/{id}/service-codes")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<List<String>>> getProviderServiceCodes(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<String>>> getProviderServiceCodes(@PathVariable("id") Long id) {
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/service-codes", id);
         
         List<String> serviceCodes = providerServiceService.getProviderServiceCodes(id);
@@ -233,8 +233,8 @@ public class ProviderController {
     @GetMapping("/{id}/services/{serviceCode}/check")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Boolean>> checkProviderService(
-            @PathVariable Long id,
-            @PathVariable String serviceCode) {
+            @PathVariable("id") Long id,
+            @PathVariable("serviceCode") String serviceCode) {
         
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/services/{}/check", id, serviceCode);
         
@@ -251,7 +251,7 @@ public class ProviderController {
     @PostMapping("/{id}/contracts")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> createContract(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody ProviderContractCreateDto dto) {
         
         log.info("[PROVIDER-CONTRACTS] POST /api/providers/{}/contracts", id);
@@ -268,8 +268,8 @@ public class ProviderController {
     @PutMapping("/{id}/contracts/{contractId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> updateContract(
-            @PathVariable Long id,
-            @PathVariable Long contractId,
+            @PathVariable("id") Long id,
+            @PathVariable("contractId") Long contractId,
             @Valid @RequestBody ProviderContractUpdateDto dto) {
         
         log.info("[PROVIDER-CONTRACTS] PUT /api/providers/{}/contracts/{}", id, contractId);
@@ -285,8 +285,8 @@ public class ProviderController {
     @DeleteMapping("/{id}/contracts/{contractId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteContract(
-            @PathVariable Long id,
-            @PathVariable Long contractId) {
+            @PathVariable("id") Long id,
+            @PathVariable("contractId") Long contractId) {
         
         log.info("[PROVIDER-CONTRACTS] DELETE /api/providers/{}/contracts/{}", id, contractId);
         
@@ -301,7 +301,7 @@ public class ProviderController {
     @GetMapping("/{id}/contracts")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<PaginationResponse<ProviderContractResponseDto>> getProviderContracts(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam(name = "activeOnly", defaultValue = "true") boolean activeOnly,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
@@ -330,7 +330,7 @@ public class ProviderController {
     @GetMapping("/{id}/contracts/current")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getCurrentContracts(
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
         
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/current", id);
         
@@ -345,8 +345,8 @@ public class ProviderController {
     @GetMapping("/{id}/contracts/{contractId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getContractById(
-            @PathVariable Long id,
-            @PathVariable Long contractId) {
+            @PathVariable("id") Long id,
+            @PathVariable("contractId") Long contractId) {
         
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/{}", id, contractId);
         
@@ -361,8 +361,8 @@ public class ProviderController {
     @GetMapping("/{id}/services/{serviceCode}/price")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<EffectivePriceResponseDto>> getEffectivePrice(
-            @PathVariable Long id,
-            @PathVariable String serviceCode,
+            @PathVariable("id") Long id,
+            @PathVariable("serviceCode") String serviceCode,
             @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) 
             java.time.LocalDate date) {
         
@@ -379,7 +379,7 @@ public class ProviderController {
      */
     @GetMapping("/{id}/contracts/count")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Long>> getContractCount(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Long>> getContractCount(@PathVariable("id") Long id) {
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/count", id);
         
         long count = providerContractService.countActiveContracts(id);
@@ -399,7 +399,7 @@ public class ProviderController {
     @GetMapping("/{id}/contract/services/requiring-preauth")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<java.util.List<ProviderPortalController.ProviderServiceDto>>> getServicesRequiringPreAuth(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam(name = "memberId") Long memberId) {
         
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contract/services/requiring-preauth?memberId={}", 
@@ -421,7 +421,7 @@ public class ProviderController {
          */
         @GetMapping("/{id}/allowed-employers-ids")
         @PreAuthorize("hasRole('SUPER_ADMIN')")
-        public ResponseEntity<ApiResponse<List<Long>>> getAllowedEmployerIds(@PathVariable Long id) {
+        public ResponseEntity<ApiResponse<List<Long>>> getAllowedEmployerIds(@PathVariable("id") Long id) {
             log.info("[PROVIDER] GET /api/providers/{}/allowed-employers-ids", id);
             List<Long> employerIds = providerService.getAllowedEmployerIds(id);
             return ResponseEntity.ok(ApiResponse.success("Allowed employers retrieved", employerIds));
@@ -435,7 +435,7 @@ public class ProviderController {
     @GetMapping("/{id}/documents")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderAdminDocumentResponseDto>>> getProviderDocuments(
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
         log.info("[PROVIDER] GET /api/providers/{}/documents", id);
         List<ProviderAdminDocumentResponseDto> documents = providerAdminDocumentService.getDocumentsByProviderId(id);
         return ResponseEntity.ok(ApiResponse.success("Documents retrieved successfully", documents));
@@ -449,7 +449,7 @@ public class ProviderController {
     @PostMapping("/{id}/documents")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderAdminDocumentResponseDto>> addProviderDocument(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestPart("data") @Valid ProviderAdminDocumentCreateDto dto,
             @RequestPart(value = "file", required = false) MultipartFile file) {
         
@@ -468,8 +468,8 @@ public class ProviderController {
     @DeleteMapping("/{providerId}/documents/{docId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteProviderDocument(
-            @PathVariable Long providerId,
-            @PathVariable Long docId) {
+            @PathVariable("providerId") Long providerId,
+            @PathVariable("docId") Long docId) {
         
         log.info("[PROVIDER] DELETE /api/providers/{}/documents/{}", providerId, docId);
         
@@ -486,7 +486,7 @@ public class ProviderController {
      */
     @GetMapping("/{id}/allowed-employers")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<List<AllowedEmployerDto>>> getAllowedEmployers(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<AllowedEmployerDto>>> getAllowedEmployers(@PathVariable("id") Long id) {
         // Security check: if provider user, ensure accessing own provider
         var currentUser = authorizationService.getCurrentUser();
         if (authorizationService.isProvider(currentUser)) {
@@ -507,7 +507,7 @@ public class ProviderController {
     @PutMapping("/{id}/allowed-employers")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> updateAllowedEmployers(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody List<Long> employerIds) {
         
         providerService.updateAllowedEmployers(id, employerIds);
@@ -523,7 +523,7 @@ public class ProviderController {
     @GetMapping("/by-employer/{employerId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getProvidersByEmployer(
-            @PathVariable Long employerId) {
+            @PathVariable("employerId") Long employerId) {
         log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", employerId);
         List<ProviderViewDto> providers = providerService.getProvidersByEmployer(employerId);
         return ResponseEntity.ok(ApiResponse.success(providers));

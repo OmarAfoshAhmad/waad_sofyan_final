@@ -28,6 +28,7 @@ import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.provider.entity.ProviderAllowedEmployer;
+import com.waad.tba.modules.provider.repository.ProviderAllowedEmployerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -41,6 +42,7 @@ public class ProviderService {
     private final ProviderMapper providerMapper;
     private final EmployerRepository employerRepository;
     private final ProviderContractRepository providerContractRepository;
+    private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
 
     /**
      * Get provider selector options with pagination
@@ -76,11 +78,12 @@ public class ProviderService {
     /**
      * Update provider details
      * 
-     * PHASE 3 REVIEW (Issue F): Object-level validation enforced at controller layer.
+     * PHASE 3 REVIEW (Issue F): Object-level validation enforced at controller
+     * layer.
      * ProviderController uses AuthorizationService to ensure users can only
      * access providers they are authorized for (based on providerId in JWT).
      * 
-     * @param id Provider ID
+     * @param id  Provider ID
      * @param dto Update data
      * @return Updated provider view
      * @throws RuntimeException if provider not found
@@ -105,15 +108,15 @@ public class ProviderService {
     public Page<ProviderViewDto> listProviders(int page, int size, String search) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Provider> providers;
-        
+
         if (search != null && !search.isEmpty()) {
             // Search ALL providers (active AND inactive)
             providers = providerRepository.searchPagedAll(search, pageable);
         } else {
-            // Return ALL providers (active AND inactive)  
+            // Return ALL providers (active AND inactive)
             providers = providerRepository.findAll(pageable);
         }
-        
+
         return providers.map(providerMapper::toViewDto);
     }
 
@@ -158,30 +161,31 @@ public class ProviderService {
     /**
      * Update allowed employers for a provider.
      * 
-     * @param providerId Provider ID
+     * @param providerId  Provider ID
      * @param employerIds List of allowed employer IDs
      */
     @Transactional
     public void updateAllowedEmployers(Long providerId, List<Long> employerIds) {
         Provider provider = providerRepository.findById(providerId)
                 .orElseThrow(() -> new RuntimeException("Provider not found with id: " + providerId));
-        
-        // Clear existing
-        provider.getAllowedEmployers().clear();
-        
+
+        // Delete existing via direct repository call + flush to ensure DELETEs reach DB
+        // before INSERTs, avoiding unique constraint violation on (provider_id,
+        // employer_id).
+        providerAllowedEmployerRepository.deleteByProviderId(providerId);
+        providerAllowedEmployerRepository.flush();
+
         // Add new
         if (employerIds != null && !employerIds.isEmpty()) {
             List<Employer> employers = employerRepository.findAllById(employerIds);
             for (Employer emp : employers) {
-                provider.getAllowedEmployers().add(ProviderAllowedEmployer.builder()
-                    .provider(provider)
-                    .employer(emp)
-                    .active(true)
-                    .build());
+                providerAllowedEmployerRepository.save(ProviderAllowedEmployer.builder()
+                        .provider(provider)
+                        .employer(emp)
+                        .active(true)
+                        .build());
             }
         }
-        
-        providerRepository.save(provider);
     }
 
     /**
@@ -189,7 +193,8 @@ public class ProviderService {
      * 
      * Returns employers from BOTH:
      * 1. TPA Model: provider_allowed_employers table (explicit partnerships)
-     * 2. Contract Model: provider_contracts (formal contracts - FUTURE, not currently used)
+     * 2. Contract Model: provider_contracts (formal contracts - FUTURE, not
+     * currently used)
      * 
      * If provider has allowAllEmployers=true, returns a "Global Network" entry.
      * 
@@ -200,34 +205,34 @@ public class ProviderService {
     public List<AllowedEmployerDto> getAllowedEmployers(Long providerId) {
         Provider provider = providerRepository.findById(providerId)
                 .orElseThrow(() -> new RuntimeException("Provider not found with id: " + providerId));
-        
+
         Set<AllowedEmployerDto> distinctEmployers = new HashSet<>();
 
         // 1. Check Global Network flag
         if (Boolean.TRUE.equals(provider.getAllowAllEmployers())) {
             log.debug("Provider {} has allowAllEmployers=true, adding global network entry", providerId);
             distinctEmployers.add(AllowedEmployerDto.builder()
-                .id(-1L)
-                .name("الشبكة العامة")
-                .nameEn("Global Network")
-                .isGlobal(true)
-                .isActive(true)
-                .build());
+                    .id(-1L)
+                    .name("الشبكة العامة")
+                    .nameEn("Global Network")
+                    .isGlobal(true)
+                    .isActive(true)
+                    .build());
         }
 
         // 2. Add TPA Model Employers (provider_allowed_employers table)
         if (provider.getAllowedEmployers() != null) {
             provider.getAllowedEmployers().stream()
-                .filter(pae -> Boolean.TRUE.equals(pae.getActive()) && pae.getEmployer() != null)
-                .forEach(pae -> {
-                    distinctEmployers.add(AllowedEmployerDto.builder()
-                        .id(pae.getEmployer().getId())
-                        .name(pae.getEmployer().getName())
-                        .nameEn(pae.getEmployer().getName())
-                        .isGlobal(false)
-                        .isActive(true)
-                        .build());
-                });
+                    .filter(pae -> Boolean.TRUE.equals(pae.getActive()) && pae.getEmployer() != null)
+                    .forEach(pae -> {
+                        distinctEmployers.add(AllowedEmployerDto.builder()
+                                .id(pae.getEmployer().getId())
+                                .name(pae.getEmployer().getName())
+                                .nameEn(pae.getEmployer().getName())
+                                .isGlobal(false)
+                                .isActive(true)
+                                .build());
+                    });
         }
 
         // 3. Future: Add Contract Model Employers (provider_contracts table)
@@ -237,12 +242,14 @@ public class ProviderService {
 
         // 4. Return sorted list (Global first, then alphabetically)
         return distinctEmployers.stream()
-            .sorted((a, b) -> {
-                if (Boolean.TRUE.equals(a.getIsGlobal())) return -1;
-                if (Boolean.TRUE.equals(b.getIsGlobal())) return 1;
-                return a.getName().compareTo(b.getName());
-            })
-            .collect(Collectors.toList());
+                .sorted((a, b) -> {
+                    if (Boolean.TRUE.equals(a.getIsGlobal()))
+                        return -1;
+                    if (Boolean.TRUE.equals(b.getIsGlobal()))
+                        return 1;
+                    return a.getName().compareTo(b.getName());
+                })
+                .collect(Collectors.toList());
     }
 
     /**
@@ -262,7 +269,8 @@ public class ProviderService {
 
     /**
      * Get all providers allowed for a specific employer.
-     * Used by Claims Batch System to show potential providers for their monthly claims.
+     * Used by Claims Batch System to show potential providers for their monthly
+     * claims.
      * 
      * @param employerId Employer ID
      * @return List of providers
@@ -275,4 +283,3 @@ public class ProviderService {
                 .collect(Collectors.toList());
     }
 }
-

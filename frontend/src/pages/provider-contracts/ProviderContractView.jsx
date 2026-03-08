@@ -258,7 +258,7 @@ const ProviderContractView = () => {
         q: pricingSearch || undefined
       }),
     enabled: !!id,
-    keepPreviousData: true
+    placeholderData: (prev) => prev
   });
 
   // NOTE: Medical services are now fetched dynamically by MedicalServiceSelector component

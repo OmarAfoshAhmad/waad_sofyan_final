@@ -26,14 +26,18 @@ import java.util.concurrent.TimeUnit;
 /**
  * Unified Medical Catalog — read-only view endpoints.
  *
- * <p>Two endpoints:
+ * <p>
+ * Two endpoints:
  * <ul>
- *   <li>{@code GET /api/v1/medical-catalog/tree} — full hierarchical catalog</li>
- *   <li>{@code GET /api/v1/medical-catalog/search?q=} — flat ILIKE search (max 50)</li>
+ * <li>{@code GET /api/v1/medical-catalog/tree} — full hierarchical catalog</li>
+ * <li>{@code GET /api/v1/medical-catalog/search?q=} — flat ILIKE search (max
+ * 50)</li>
  * </ul>
  *
- * <p>Access: SUPER_ADMIN and DATA_ENTRY only.
- * No write operations — catalog mutations go through the existing CRUD endpoints.
+ * <p>
+ * Access: SUPER_ADMIN and DATA_ENTRY only.
+ * No write operations — catalog mutations go through the existing CRUD
+ * endpoints.
  */
 @Slf4j
 @RestController
@@ -48,7 +52,8 @@ public class MedicalCatalogController {
     /**
      * Returns the full medical catalog as a hierarchical category→services tree.
      *
-     * <p>Implementation guarantee: single SQL query, no N+1.
+     * <p>
+     * Implementation guarantee: single SQL query, no N+1.
      * Categories with no services are not included in the response.
      *
      * @return list of category nodes, each with child service list
@@ -65,15 +70,17 @@ public class MedicalCatalogController {
     /**
      * Searches for medical services matching the query string.
      *
-     * <p>Searches across:
+     * <p>
+     * Searches across:
      * <ul>
-     *   <li>medical_services.code</li>
-     *   <li>medical_services.name_ar</li>
-     *   <li>medical_services.name_en</li>
-     *   <li>ent_service_aliases.alias_text</li>
+     * <li>medical_services.code</li>
+     * <li>medical_services.name_ar</li>
+     * <li>medical_services.name_en</li>
+     * <li>ent_service_aliases.alias_text</li>
      * </ul>
      *
-     * <p>Uses LOWER(col) LIKE :pattern for case-insensitive matching.
+     * <p>
+     * Uses LOWER(col) LIKE :pattern for case-insensitive matching.
      * Returns at most 50 results ordered by service code.
      *
      * @param q search query (required, min 1 char; returns empty list if blank)

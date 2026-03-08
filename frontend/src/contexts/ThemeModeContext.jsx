@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 import { createContext, useContext, useEffect, useCallback } from 'react';
 import { useColorScheme } from '@mui/material/styles';
-import useAuth from 'hooks/useAuth';
+import AuthContext from 'contexts/AuthContext';
 
 // ==============================|| THEME MODE CONTEXT ||============================== //
 
@@ -14,11 +14,11 @@ export const useThemeMode = () => {
 };
 
 export const ThemeModeProvider = ({ children }) => {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
   const { mode, setMode } = useColorScheme();
 
   // 1️⃣ Determine userId (Fallback to 'guest')
-  const userId = user?.id || 'guest';
+  const userId = auth?.user?.id || 'guest';
   const storageKey = `theme-mode:${userId}`;
 
   // 2️⃣ Rehydrate on user change
