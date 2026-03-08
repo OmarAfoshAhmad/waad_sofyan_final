@@ -185,6 +185,7 @@ export const normalizeEmployerResponse = (backendDto) => {
     email: backendDto.email,
     phone: backendDto.phone,
     address: backendDto.address,
+    membersCount: backendDto.membersCount ?? 0,
     createdAt: backendDto.createdAt,
     updatedAt: backendDto.updatedAt
   };

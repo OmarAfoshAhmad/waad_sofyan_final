@@ -39,6 +39,11 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
     Page<BenefitPolicy> findByActiveTrue(Pageable pageable);
 
     /**
+     * Find soft-deleted policies - paginated
+     */
+    Page<BenefitPolicy> findByActiveFalse(Pageable pageable);
+
+    /**
      * Find all policies with a specific status
      */
     List<BenefitPolicy> findByStatus(BenefitPolicyStatus status);

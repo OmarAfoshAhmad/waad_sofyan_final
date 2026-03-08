@@ -14,6 +14,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
+import PeopleIcon from '@mui/icons-material/People';
 import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
@@ -227,6 +228,7 @@ const EmployersList = () => {
       { id: 'email', label: 'البريد الإلكتروني', minWidth: 200, align: 'right', sortable: true },
       { id: 'phone', label: 'رقم الهاتف', minWidth: 150, align: 'right', sortable: true },
       { id: 'address', label: 'العنوان', minWidth: 200, align: 'right', sortable: true },
+      { id: 'membersCount', label: 'المستفيدون', minWidth: 110, align: 'center', sortable: true },
       { id: 'active', label: 'الحالة', minWidth: 100, align: 'center', sortable: true },
       { id: 'actions', label: 'الإجراءات', minWidth: 130, align: 'center', sortable: false }
     ],
@@ -252,6 +254,15 @@ const EmployersList = () => {
         return <Typography variant="body2" color="text.secondary" dir="ltr" sx={{ textAlign: 'right' }}>{row.phone || '-'}</Typography>;
       case 'address':
         return <Typography variant="body2" color="text.secondary">{row.address || '-'}</Typography>;
+      case 'membersCount':
+        return (
+          <Chip
+            label={row.membersCount ?? 0}
+            size="small"
+            color={row.membersCount > 0 ? 'info' : 'default'}
+            icon={<PeopleIcon sx={{ fontSize: '14px !important' }} />}
+          />
+        );
       case 'active':
         return (
           <Chip

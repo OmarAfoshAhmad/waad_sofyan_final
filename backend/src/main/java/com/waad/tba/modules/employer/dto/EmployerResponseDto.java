@@ -90,6 +90,9 @@ public class EmployerResponseDto {
     /** Maximum members allowed (null = unlimited) */
     private Integer maxMemberLimit;
 
+    /** Number of active members linked to this employer */
+    private Long membersCount;
+
     /**
      * Creation timestamp (audit field)
      */

@@ -72,14 +72,6 @@ const validationSchema = Yup.object().shape({
 
   defaultCoveragePercent: Yup.number().required('نسبة التغطية مطلوبة').min(0, 'النسبة لا تقل عن 0%').max(100, 'النسبة لا تزيد عن 100%'),
 
-  perMemberLimit: Yup.mixed()
-    .test('is-positive', 'يجب أن يكون رقماً موجباً', (val) => !val || (!isNaN(val) && Number(val) > 0))
-    .nullable(),
-
-  perFamilyLimit: Yup.mixed()
-    .test('is-positive', 'يجب أن يكون رقماً موجباً', (val) => !val || (!isNaN(val) && Number(val) > 0))
-    .nullable(),
-
   status: Yup.string().required('الحالة مطلوبة'),
 
   description: Yup.string().max(1000, 'الوصف طويل جداً')
@@ -222,8 +214,6 @@ const BenefitPolicyEdit = () => {
         endDate: values.endDate ? dayjs(values.endDate).format('YYYY-MM-DD') : null,
         annualLimit: parseFloat(values.annualLimit),
         defaultCoveragePercent: parseInt(values.defaultCoveragePercent, 10),
-        perMemberLimit: values.perMemberLimit ? parseFloat(values.perMemberLimit) : null,
-        perFamilyLimit: values.perFamilyLimit ? parseFloat(values.perFamilyLimit) : null,
         notes: values.notes?.trim() || null,
         status: values.status
       };
@@ -266,10 +256,8 @@ const BenefitPolicyEdit = () => {
     employerOrgId: policy?.employerOrgId || '',
     startDate: policy?.startDate ? dayjs(policy.startDate) : dayjs(),
     endDate: policy?.endDate ? dayjs(policy.endDate) : dayjs().add(1, 'year'),
-    annualLimit: policy?.annualLimit || '60000',
-    defaultCoveragePercent: policy?.defaultCoveragePercent || 75,
-    perMemberLimit: policy?.perMemberLimit || '',
-    perFamilyLimit: policy?.perFamilyLimit || '',
+    annualLimit: policy?.annualLimit || '10000',
+    defaultCoveragePercent: policy?.defaultCoveragePercent || 80,
     notes: policy?.notes || '',
     status: policy?.status || 'DRAFT'
   };
@@ -285,300 +273,296 @@ const BenefitPolicyEdit = () => {
       />
 
       <LocalizationProvider dateAdapter={AdapterDayjs}>
-        <MainCard>
+        <MainCard
+          content={false}
+          sx={{
+            height: 'calc(100vh - 210px)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
           {generalError && (
-            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setGeneralError(null)}>
-              {generalError}
-            </Alert>
+            <Box sx={{ p: 2, pb: 0 }}>
+              <Alert severity="error" variant="outlined" onClose={() => setGeneralError(null)}>
+                {generalError}
+              </Alert>
+            </Box>
           )}
 
           {overlapWarning && (
-            <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setOverlapWarning(null)}>
-              {overlapWarning}
-            </Alert>
+            <Box sx={{ p: 2, pb: 0 }}>
+              <Alert severity="warning" variant="outlined" onClose={() => setOverlapWarning(null)}>
+                {overlapWarning}
+              </Alert>
+            </Box>
           )}
 
           <Formik initialValues={initialValues} validationSchema={validationSchema} onSubmit={handleSubmit} enableReinitialize>
             {({ values, errors, touched, handleChange, handleBlur, setFieldValue, isSubmitting }) => (
-              <Form autoComplete="off">
-                {/* Check for overlap when dates or employer change */}
+              <Form autoComplete="off" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <FormValuesEffect checkOverlap={checkOverlap} policyId={policy?.id} />
 
-                <Grid container spacing={4}>
-                  {/* === Section 1: Basic Information === */}
-                  <Grid size={{ xs: 12 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                      <BusinessIcon color="primary" fontSize="small" />
-                      <Typography variant="h6" color="primary">
-                        البيانات الأساسية
-                      </Typography>
-                    </Stack>
-                    <Divider />
-                  </Grid>
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                  <Grid container spacing={2}>
 
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      fullWidth
-                      label="اسم الوثيقة"
-                      name="name"
-                      placeholder="مثال: وثيقة التأمين الصحي - شركة الواحة"
-                      value={values.name}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.name && Boolean(errors.name)}
-                      helperText={touched.name && errors.name}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <PolicyIcon fontSize="small" color="action" />
-                          </InputAdornment>
-                        )
-                      }}
-                    />
-                  </Grid>
+                    {/* ── Section 1: هوية الوثيقة ── */}
+                    <Grid size={{ xs: 12 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                        <PolicyIcon fontSize="small" color="action" />
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>هوية الوثيقة</Typography>
+                      </Stack>
+                      <Divider />
+                    </Grid>
 
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      fullWidth
-                      select
-                      label="الشريك (صاحب العمل)"
-                      name="employerOrgId"
-                      value={values.employerOrgId}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.employerOrgId && Boolean(errors.employerOrgId)}
-                      helperText={(touched.employerOrgId && errors.employerOrgId) || 'اختر المؤسسة صاحبة الوثيقة'}
-                      disabled={loadingEmployers}
-                    >
-                      {loadingEmployers ? (
-                        <MenuItem value="" disabled>
-                          <CircularProgress size={20} sx={{ mr: 1 }} /> جارٍ التحميل...
-                        </MenuItem>
-                      ) : employers.length > 0 ? (
-                        employers.map((emp) => (
-                          <MenuItem key={emp.id} value={emp.id}>
-                            {emp.label || emp.name}
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      <TextField
+                        fullWidth
+                        label="رمز الوثيقة"
+                        size="small"
+                        name="policyCode"
+                        value={values.policyCode}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.policyCode && Boolean(errors.policyCode)}
+                        helperText={(touched.policyCode && errors.policyCode) || 'اتركه فارغاً للتوليد التلقائي'}
+                        InputProps={{ readOnly: Boolean(policy?.policyCode) }}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 8 }}>
+                      <TextField
+                        fullWidth
+                        label="اسم الوثيقة"
+                        name="name"
+                        size="small"
+                        placeholder="مثال: وثيقة التأمين الصحي - شركة الواحة"
+                        value={values.name}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.name && Boolean(errors.name)}
+                        helperText={touched.name && errors.name}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <PolicyIcon fontSize="small" color="action" />
+                            </InputAdornment>
+                          )
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 8 }}>
+                      <TextField
+                        fullWidth
+                        select
+                        size="small"
+                        label="الشريك (صاحب العمل)"
+                        name="employerOrgId"
+                        value={values.employerOrgId}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.employerOrgId && Boolean(errors.employerOrgId)}
+                        helperText={(touched.employerOrgId && errors.employerOrgId) || 'اختر المؤسسة صاحبة الوثيقة'}
+                        disabled={loadingEmployers}
+                      >
+                        {loadingEmployers ? (
+                          <MenuItem value="" disabled>
+                            <CircularProgress size={16} sx={{ mr: 1 }} /> جارٍ التحميل...
                           </MenuItem>
-                        ))
-                      ) : (
-                        <MenuItem value="" disabled>
-                          لا يوجد شركاء متاحين
-                        </MenuItem>
-                      )}
-                    </TextField>
-                  </Grid>
+                        ) : employers.length > 0 ? (
+                          employers.map((emp) => (
+                            <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '13px' }}>
+                              {emp.label || emp.name}
+                            </MenuItem>
+                          ))
+                        ) : (
+                          <MenuItem value="" disabled>لا يوجد شركاء متاحين</MenuItem>
+                        )}
+                      </TextField>
+                    </Grid>
 
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      fullWidth
-                      label="رمز الوثيقة"
-                      name="policyCode"
-                      value={values.policyCode}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.policyCode && Boolean(errors.policyCode)}
-                      helperText={touched.policyCode && errors.policyCode}
-                      InputProps={{
-                        readOnly: Boolean(policy?.policyCode) // Read-only if auto-generated
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      fullWidth
-                      select
-                      label="حالة الوثيقة"
-                      name="status"
-                      value={values.status}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                    >
-                      <MenuItem value="DRAFT">مسودة (Draft)</MenuItem>
-                      <MenuItem value="ACTIVE">نشط (Active)</MenuItem>
-                      <MenuItem value="INACTIVE">غير نشط (Inactive)</MenuItem>
-                      <MenuItem value="SUSPENDED">معلق (Suspended)</MenuItem>
-                      <MenuItem value="EXPIRED">منتهي (Expired)</MenuItem>
-                      <MenuItem value="CANCELLED">ملغي (Cancelled)</MenuItem>
-                    </TextField>
-                  </Grid>
-
-                  {/* === Section 2: Coverage & Limits === */}
-                  <Grid item xs={12} sx={{ mt: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                      <AttachMoneyIcon color="primary" fontSize="small" />
-                      <Typography variant="h6" color="primary">
-                        التغطية والحدود المالية
-                      </Typography>
-                    </Stack>
-                    <Divider />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                    <TextField
-                      fullWidth
-                      label="السقف السنوي"
-                      name="annualLimit"
-                      type="number"
-                      value={values.annualLimit}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.annualLimit && Boolean(errors.annualLimit)}
-                      helperText={touched.annualLimit && errors.annualLimit}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">د.ل</InputAdornment>
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                    <TextField
-                      fullWidth
-                      label="نسبة التغطية"
-                      name="defaultCoveragePercent"
-                      type="number"
-                      value={values.defaultCoveragePercent}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.defaultCoveragePercent && Boolean(errors.defaultCoveragePercent)}
-                      helperText={touched.defaultCoveragePercent && errors.defaultCoveragePercent}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">%</InputAdornment>
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                    <TextField
-                      fullWidth
-                      label="الحد للفرد"
-                      name="perMemberLimit"
-                      type="number"
-                      value={values.perMemberLimit}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.perMemberLimit && Boolean(errors.perMemberLimit)}
-                      helperText={(touched.perMemberLimit && errors.perMemberLimit) || 'اختياري'}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">د.ل</InputAdornment>
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                    <TextField
-                      fullWidth
-                      label="الحد للعائلة"
-                      name="perFamilyLimit"
-                      type="number"
-                      value={values.perFamilyLimit}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      error={touched.perFamilyLimit && Boolean(errors.perFamilyLimit)}
-                      helperText={(touched.perFamilyLimit && errors.perFamilyLimit) || 'اختياري'}
-                      InputProps={{
-                        endAdornment: <InputAdornment position="end">د.ل</InputAdornment>
-                      }}
-                    />
-                  </Grid>
-
-                  {/* === Section 3: Period === */}
-                  <Grid item xs={12} sx={{ mt: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                      <CalendarTodayIcon color="primary" fontSize="small" />
-                      <Typography variant="h6" color="primary">
-                        فترة السريان
-                      </Typography>
-                    </Stack>
-                    <Divider />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <DatePicker
-                      label="تاريخ البدء *"
-                      value={values.startDate}
-                      onChange={(value) => setFieldValue('startDate', value)}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          error: touched.startDate && Boolean(errors.startDate),
-                          helperText: touched.startDate && errors.startDate
-                        }
-                      }}
-                    />
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <DatePicker
-                      label="تاريخ الانتهاء *"
-                      value={values.endDate}
-                      onChange={(value) => setFieldValue('endDate', value)}
-                      minDate={values.startDate || dayjs()}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          error: touched.endDate && Boolean(errors.endDate),
-                          helperText: touched.endDate && errors.endDate
-                        }
-                      }}
-                    />
-                  </Grid>
-
-                  {/* === Section 4: Notes === */}
-                  <Grid item xs={12} sx={{ mt: 1 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                      <DescriptionIcon color="primary" fontSize="small" />
-                      <Typography variant="h6" color="primary">
-                        توضيحات إضافية
-                      </Typography>
-                    </Stack>
-                    <Divider />
-                  </Grid>
-
-                  <Grid size={{ xs: 12 }}>
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={4}
-                      label="ملاحظات"
-                      name="notes"
-                      value={values.notes}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      placeholder="أضف وصفاً تفصيلياً أو ملاحظات إضافية..."
-                    />
-                  </Grid>
-
-                  {/* === Actions === */}
-                  <Grid size={{ xs: 12 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="flex-end"
-                      spacing={2}
-                      sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}
-                    >
-                      <Button
-                        variant="outlined"
-                        color="inherit"
-                        onClick={() => navigate('/benefit-policies')}
-                        startIcon={<CancelIcon />}
-                        disabled={isSubmitting}
+                    <Grid size={{ xs: 12, md: 4 }}>
+                      <TextField
+                        fullWidth
+                        select
+                        size="small"
+                        label="حالة الوثيقة"
+                        name="status"
+                        value={values.status}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
                       >
-                        إلغاء
-                      </Button>
-                      <LoadingButton
-                        type="submit"
-                        variant="contained"
-                        loading={isSubmitting}
-                        loadingPosition="start"
-                        startIcon={<SaveIcon />}
-                        sx={{ minWidth: 120 }}
-                      >
-                        حفظ التعديلات
-                      </LoadingButton>
-                    </Stack>
+                        <MenuItem value="DRAFT" sx={{ fontSize: '13px' }}>مسودة (Draft)</MenuItem>
+                        <MenuItem value="ACTIVE" sx={{ fontSize: '13px' }}>نشط (Active)</MenuItem>
+                        <MenuItem value="INACTIVE" sx={{ fontSize: '13px' }}>غير نشط (Inactive)</MenuItem>
+                      </TextField>
+                    </Grid>
+
+                    {/* ── Section 2: مدة السريان ── */}
+                    <Grid size={{ xs: 12 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                        <CalendarTodayIcon fontSize="small" color="action" />
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>مدة السريان</Typography>
+                      </Stack>
+                      <Divider />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <DatePicker
+                        label="تاريخ البدء *"
+                        value={values.startDate}
+                        onChange={(value) => setFieldValue('startDate', value)}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            size: 'small',
+                            error: touched.startDate && Boolean(errors.startDate),
+                            helperText: touched.startDate && errors.startDate
+                          }
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <DatePicker
+                        label="تاريخ الانتهاء *"
+                        value={values.endDate}
+                        onChange={(value) => setFieldValue('endDate', value)}
+                        minDate={values.startDate || dayjs()}
+                        slotProps={{
+                          textField: {
+                            fullWidth: true,
+                            size: 'small',
+                            error: touched.endDate && Boolean(errors.endDate),
+                            helperText: touched.endDate && errors.endDate
+                          }
+                        }}
+                      />
+                    </Grid>
+
+                    {/* ── Section 3: الحدود المالية ── */}
+                    <Grid size={{ xs: 12 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                        <AttachMoneyIcon fontSize="small" color="action" />
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>الحدود المالية</Typography>
+                      </Stack>
+                      <Divider />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="السقف السنوي"
+                        name="annualLimit"
+                        type="number"
+                        size="small"
+                        value={values.annualLimit}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.annualLimit && Boolean(errors.annualLimit)}
+                        helperText={touched.annualLimit && errors.annualLimit}
+                        InputProps={{ endAdornment: <InputAdornment position="end">د.ل</InputAdornment> }}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="نسبة التغطية"
+                        name="defaultCoveragePercent"
+                        type="number"
+                        size="small"
+                        value={values.defaultCoveragePercent}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.defaultCoveragePercent && Boolean(errors.defaultCoveragePercent)}
+                        helperText={touched.defaultCoveragePercent && errors.defaultCoveragePercent}
+                        InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="الحد للفرد"
+                        name="perMemberLimit"
+                        type="number"
+                        size="small"
+                        value={values.perMemberLimit}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.perMemberLimit && Boolean(errors.perMemberLimit)}
+                        helperText={(touched.perMemberLimit && errors.perMemberLimit) || 'اختياري'}
+                        InputProps={{ endAdornment: <InputAdornment position="end">د.ل</InputAdornment> }}
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="الحد للعائلة"
+                        name="perFamilyLimit"
+                        type="number"
+                        size="small"
+                        value={values.perFamilyLimit}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        error={touched.perFamilyLimit && Boolean(errors.perFamilyLimit)}
+                        helperText={(touched.perFamilyLimit && errors.perFamilyLimit) || 'اختياري'}
+                        InputProps={{ endAdornment: <InputAdornment position="end">د.ل</InputAdornment> }}
+                      />
+                    </Grid>
+
+                    {/* ── Section 4: ملاحظات ── */}
+                    <Grid size={{ xs: 12 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                        <DescriptionIcon fontSize="small" color="action" />
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>ملاحظات</Typography>
+                      </Stack>
+                      <Divider />
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={2}
+                        label="ملاحظات توضيحية"
+                        name="notes"
+                        size="small"
+                        value={values.notes}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="أضف وصفاً تفصيلياً أو ملاحظات إضافية..."
+                      />
+                    </Grid>
+
                   </Grid>
-                </Grid>
+                </Box>
+
+                {/* Sticky Footer Actions */}
+                <Divider />
+                <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, bgcolor: 'background.default' }}>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    onClick={() => navigate('/benefit-policies')}
+                    startIcon={<CancelIcon />}
+                    disabled={isSubmitting}
+                  >
+                    إلغاء
+                  </Button>
+                  <LoadingButton
+                    type="submit"
+                    variant="contained"
+                    loading={isSubmitting}
+                    loadingPosition="start"
+                    startIcon={<SaveIcon />}
+                    sx={{ minWidth: 140 }}
+                  >
+                    حفظ التعديلات
+                  </LoadingButton>
+                </Box>
               </Form>
             )}
           </Formik>

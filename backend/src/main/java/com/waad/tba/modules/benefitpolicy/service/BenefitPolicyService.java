@@ -50,9 +50,18 @@ public class BenefitPolicyService {
         log.debug("Finding all benefit policies, page: {}", pageable.getPageNumber());
         Page<BenefitPolicyResponseDto> result = benefitPolicyRepository.findByActiveTrue(pageable)
                 .map(BenefitPolicyResponseDto::fromEntity);
-        log.info("[BENEFIT-POLICIES] Retrieved {} records (total: {})", 
+        log.info("[BENEFIT-POLICIES] Retrieved {} records (total: {})",
                 result.getContent().size(), result.getTotalElements());
         return result;
+    }
+
+    /**
+     * Get soft-deleted benefit policies (paginated)
+     */
+    @Transactional(readOnly = true)
+    public Page<BenefitPolicyResponseDto> findDeleted(Pageable pageable) {
+        return benefitPolicyRepository.findByActiveFalse(pageable)
+                .map(BenefitPolicyResponseDto::fromEntity);
     }
 
     /**
@@ -283,17 +292,17 @@ public class BenefitPolicyService {
         // Handle date changes with validation
         LocalDate newStartDate = dto.getStartDate() != null ? dto.getStartDate() : policy.getStartDate();
         LocalDate newEndDate = dto.getEndDate() != null ? dto.getEndDate() : policy.getEndDate();
-        
+
         if (dto.getStartDate() != null || dto.getEndDate() != null) {
             validateDates(newStartDate, newEndDate);
-            
+
             // If policy is active, check for overlapping
             if (policy.getStatus() == BenefitPolicyStatus.ACTIVE) {
                 checkOverlappingActivePolicy(
                         policy.getEmployer().getId(),
                         newStartDate, newEndDate, policy.getId());
             }
-            
+
             policy.setStartDate(newStartDate);
             policy.setEndDate(newEndDate);
         }
@@ -409,6 +418,37 @@ public class BenefitPolicyService {
         log.info("✅ Soft deleted benefit policy: {}", id);
     }
 
+    /**
+     * Permanently delete a soft-deleted benefit policy (hard delete from DB)
+     */
+    @Transactional
+    public void permanentDelete(Long id) {
+        log.info("Permanently deleting benefit policy: {}", id);
+        BenefitPolicy policy = benefitPolicyRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
+        if (policy.isActive()) {
+            throw new BusinessRuleException(
+                    "لا يمكن الحذف النهائي إلا للوثائق المحذوفة مسبقاً. استخدم الحذف العادي أولاً.");
+        }
+        benefitPolicyRepository.deleteById(id);
+        log.info("✅ Permanently deleted benefit policy: {}", id);
+    }
+
+    /**
+     * Restore a soft-deleted benefit policy
+     */
+    @Transactional
+    public BenefitPolicyResponseDto restore(Long id) {
+        log.info("Restoring benefit policy: {}", id);
+        BenefitPolicy policy = benefitPolicyRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
+        policy.setActive(true);
+        policy.setStatus(BenefitPolicyStatus.DRAFT);
+        BenefitPolicy saved = benefitPolicyRepository.save(policy);
+        log.info("✅ Restored benefit policy: {}", id);
+        return BenefitPolicyResponseDto.fromEntity(saved);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // MAINTENANCE OPERATIONS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -419,15 +459,15 @@ public class BenefitPolicyService {
     @Transactional
     public int expireOldPolicies() {
         log.info("Running auto-expiration of old policies");
-        
+
         List<BenefitPolicy> expiredPolicies = benefitPolicyRepository.findExpiredActivePolicies(LocalDate.now());
-        
+
         for (BenefitPolicy policy : expiredPolicies) {
             policy.setStatus(BenefitPolicyStatus.EXPIRED);
             benefitPolicyRepository.save(policy);
             log.debug("Auto-expired policy: {} (ID: {})", policy.getName(), policy.getId());
         }
-        
+
         log.info("✅ Auto-expired {} policies", expiredPolicies.size());
         return expiredPolicies.size();
     }
@@ -439,7 +479,7 @@ public class BenefitPolicyService {
     public List<BenefitPolicyResponseDto> getPoliciesExpiringSoon(int days) {
         LocalDate today = LocalDate.now();
         LocalDate futureDate = today.plusDays(days);
-        
+
         return benefitPolicyRepository.findPoliciesExpiringSoon(today, futureDate)
                 .stream()
                 .map(BenefitPolicyResponseDto::fromEntity)
@@ -465,7 +505,8 @@ public class BenefitPolicyService {
     /**
      * Check if there's an overlapping active policy for the employer
      */
-    private void checkOverlappingActivePolicy(Long employerOrgId, LocalDate startDate, LocalDate endDate, Long excludeId) {
+    private void checkOverlappingActivePolicy(Long employerOrgId, LocalDate startDate, LocalDate endDate,
+            Long excludeId) {
         boolean hasOverlap;
         if (excludeId != null) {
             hasOverlap = benefitPolicyRepository.existsOverlappingActivePolicy(
@@ -474,11 +515,11 @@ public class BenefitPolicyService {
             hasOverlap = benefitPolicyRepository.existsOverlappingActivePolicyNew(
                     employerOrgId, startDate, endDate);
         }
-        
+
         if (hasOverlap) {
             throw new BusinessRuleException(
-                    "An active benefit policy already exists for this employer in the specified date range. " +
-                    "Only one active policy is allowed per employer per period.");
+                    "يوجد بالفعل وثيقة تأمين فعالة لهذا الشريك في نفس الفترة الزمنية. " +
+                            "يُسمح بوثيقة فعالة واحدة فقط لكل شريك في أي فترة.");
         }
     }
 
@@ -488,10 +529,10 @@ public class BenefitPolicyService {
     private String generatePolicyCode() {
         int year = LocalDate.now().getYear();
         String yearPrefix = String.format("POL-%d-", year);
-        
+
         // Find the highest existing code for this year
         Optional<String> maxCode = benefitPolicyRepository.findMaxPolicyCodeByYearPrefix(yearPrefix);
-        
+
         int nextSequence = 1;
         if (maxCode.isPresent()) {
             // Extract sequence number from code (e.g., "POL-2025-005" → 5)
@@ -503,10 +544,8 @@ public class BenefitPolicyService {
                 nextSequence = 1;
             }
         }
-        
+
         String generatedCode = String.format("POL-%d-%03d", year, nextSequence);
         return generatedCode;
     }
 }
-
-

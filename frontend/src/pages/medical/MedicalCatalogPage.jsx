@@ -304,13 +304,15 @@ export default function MedicalCatalogPage() {
   const { data: tree = [], isLoading: treeLoading, error: treeError } = useQuery({
     queryKey: ['medical-catalog-tree'],
     queryFn: getCatalogTree,
-    staleTime: 5 * 60 * 1000 // 5 min
+    staleTime: 10 * 60 * 1000, // 10 min — data changes infrequently
+    gcTime: 30 * 60 * 1000     // 30 min — keep in memory
   });
 
   const { data: specialties = [] } = useQuery({
     queryKey: ['medical-specialties'],
     queryFn: getSpecialties,
-    staleTime: 10 * 60 * 1000 // 10 min — specialties change infrequently
+    staleTime: 30 * 60 * 1000, // 30 min — specialties rarely change
+    gcTime: 60 * 60 * 1000
   });
 
   const { data: searchResults = [], isLoading: searchLoading } = useQuery({
@@ -323,13 +325,15 @@ export default function MedicalCatalogPage() {
   const { data: allServices = [] } = useQuery({
     queryKey: ['medical-services-all'],
     queryFn: getAllMedicalServices,
-    staleTime: 2 * 60 * 1000
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000
   });
 
   const { data: allCategories = [] } = useQuery({
     queryKey: ['medical-categories-all'],
     queryFn: getAllMedicalCategories,
-    staleTime: 5 * 60 * 1000
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000
   });
 
   const assignCategoryMutation = useMutation({
@@ -378,9 +382,10 @@ export default function MedicalCatalogPage() {
   };
 
   // ── Tree filtering ────────────────────────────────────────────────────────
-  const filteredTree = tree
-    .map((cat) => ({ ...cat }))
-    .filter(Boolean);
+  const filteredTree = useMemo(
+    () => tree.map((cat) => ({ ...cat })).filter(Boolean),
+    [tree]
+  );
 
   const normalizedTree = useMemo(() => {
     const servicesByCategoryId = new Map(

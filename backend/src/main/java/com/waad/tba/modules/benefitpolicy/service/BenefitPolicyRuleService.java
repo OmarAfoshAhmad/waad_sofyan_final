@@ -292,7 +292,7 @@ public class BenefitPolicyRuleService {
 
             // Check for duplicate category rule
             if (ruleRepository.existsCategoryRule(policyId, dto.getMedicalCategoryId(), null)) {
-                throw new BusinessRuleException("A rule for this category already exists in this policy");
+                throw new BusinessRuleException("يوجد قاعدة تغطية لهذا التصنيف بالفعل في هذه الوثيقة");
             }
 
             rule.setMedicalCategory(category);
@@ -341,9 +341,8 @@ public class BenefitPolicyRuleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
 
         // Update fields if provided
-        if (dto.getCoveragePercent() != null) {
-            rule.setCoveragePercent(dto.getCoveragePercent());
-        }
+        // coveragePercent: always update (null means "inherit from policy default")
+        rule.setCoveragePercent(dto.getCoveragePercent());
         if (dto.getAmountLimit() != null) {
             rule.setAmountLimit(dto.getAmountLimit());
         }

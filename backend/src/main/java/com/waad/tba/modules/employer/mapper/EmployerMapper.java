@@ -3,6 +3,8 @@ package com.waad.tba.modules.employer.mapper;
 import com.waad.tba.modules.employer.dto.EmployerResponseDto;
 import com.waad.tba.modules.employer.dto.EmployerSelectorDto;
 import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.member.repository.MemberRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,7 +12,10 @@ import org.springframework.stereotype.Component;
  * Simplified: Arabic name only (no English name)
  */
 @Component
+@RequiredArgsConstructor
 public class EmployerMapper {
+
+    private final MemberRepository memberRepository;
 
     /**
      * Map Employer entity to EmployerResponseDto
@@ -40,6 +45,7 @@ public class EmployerMapper {
                 .contractStartDate(employer.getContractStartDate())
                 .contractEndDate(employer.getContractEndDate())
                 .maxMemberLimit(employer.getMaxMemberLimit())
+                .membersCount(memberRepository.countByEmployerIdAndActiveTrue(employer.getId()))
                 .createdAt(employer.getCreatedAt())
                 .updatedAt(employer.getUpdatedAt())
                 .build();

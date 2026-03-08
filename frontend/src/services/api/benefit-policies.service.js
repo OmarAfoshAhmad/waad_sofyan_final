@@ -233,6 +233,37 @@ export const deleteBenefitPolicy = async (id) => {
   return unwrap(response);
 };
 
+/**
+ * Get soft-deleted (archived) benefit policies
+ * Endpoint: GET /api/benefit-policies/deleted
+ * @param {Object} params - Pagination parameters
+ * @returns {Promise<Object>} Paginated response
+ */
+export const getDeletedBenefitPolicies = async (params = {}) => {
+  const response = await axiosClient.get(`${BASE_URL}/deleted`, { params });
+  return unwrap(response);
+};
+
+/**
+ * Restore a soft-deleted benefit policy
+ * Endpoint: POST /api/benefit-policies/{id}/restore
+ * @param {number} id - Policy ID
+ * @returns {Promise<Object>} Restored policy
+ */
+export const restoreBenefitPolicy = async (id) => {
+  const response = await axiosClient.post(`${BASE_URL}/${id}/restore`);
+  return unwrap(response);
+};
+
+/**
+ * Permanently delete a soft-deleted benefit policy (hard delete)
+ * Endpoint: DELETE /api/benefit-policies/{id}/permanent
+ * @param {number} id - Policy ID
+ */
+export const permanentDeleteBenefitPolicy = async (id) => {
+  await axiosClient.delete(`${BASE_URL}/${id}/permanent`);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ADMIN OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -270,6 +301,7 @@ export default {
   suspendBenefitPolicy,
   cancelBenefitPolicy,
   deleteBenefitPolicy,
+  permanentDeleteBenefitPolicy,
   // Admin
   expireOldPolicies
 };

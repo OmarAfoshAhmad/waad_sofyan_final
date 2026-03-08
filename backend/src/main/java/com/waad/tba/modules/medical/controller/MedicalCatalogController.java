@@ -18,6 +18,10 @@ import com.waad.tba.modules.medicaltaxonomy.service.MedicalCatalogHierarchyServi
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * Unified Medical Catalog — read-only view endpoints.
@@ -53,7 +57,9 @@ public class MedicalCatalogController {
     public ResponseEntity<ApiResponse<List<CatalogTreeCategoryDto>>> getTree() {
         log.debug("GET /api/v1/medical-catalog/tree");
         List<CatalogTreeCategoryDto> tree = catalogService.getTree();
-        return ResponseEntity.ok(ApiResponse.success(tree));
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePrivate())
+                .body(ApiResponse.success(tree));
     }
 
     /**

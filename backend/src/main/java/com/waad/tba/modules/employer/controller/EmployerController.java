@@ -61,7 +61,7 @@ public class EmployerController {
 
     @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<EmployerResponseDto>> getById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<EmployerResponseDto>> getById(@PathVariable("id") Long id) {
         EmployerResponseDto employer = service.getById(id);
         return ResponseEntity.ok(ApiResponse.success("Employer retrieved successfully", employer));
     }
@@ -82,7 +82,7 @@ public class EmployerController {
     @PutMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody EmployerUpdateDto dto) {
         EmployerResponseDto updated = service.update(id, dto);
         return ResponseEntity.ok(ApiResponse.success("Employer updated successfully", updated));
@@ -90,7 +90,7 @@ public class EmployerController {
 
     @DeleteMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable("id") Long id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Employer deleted successfully", null));
     }
@@ -101,7 +101,7 @@ public class EmployerController {
      */
     @PostMapping("/{id:\\d+}/archive")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<EmployerResponseDto>> archive(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<EmployerResponseDto>> archive(@PathVariable("id") Long id) {
         EmployerResponseDto archived = service.archive(id);
         return ResponseEntity.ok(ApiResponse.success("Employer archived successfully", archived));
     }
@@ -112,7 +112,7 @@ public class EmployerController {
      */
     @PostMapping("/{id:\\d+}/restore")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<EmployerResponseDto>> restore(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<EmployerResponseDto>> restore(@PathVariable("id") Long id) {
         EmployerResponseDto restored = service.restore(id);
         return ResponseEntity.ok(ApiResponse.success("Employer restored successfully", restored));
     }

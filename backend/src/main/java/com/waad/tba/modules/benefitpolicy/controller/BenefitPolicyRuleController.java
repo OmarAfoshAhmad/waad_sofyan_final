@@ -46,7 +46,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List all rules for a policy")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> findAll(
-            @PathVariable Long policyId) {
+            @PathVariable("policyId") Long policyId) {
         List<BenefitPolicyRuleResponseDto> result = ruleService.findByPolicy(policyId);
         return ResponseEntity.ok(ApiResponse.success("Rules retrieved", result));
     }
@@ -55,7 +55,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List all rules for a policy (paginated)")
     public ResponseEntity<ApiResponse<Page<BenefitPolicyRuleResponseDto>>> findAllPaged(
-            @PathVariable Long policyId,
+            @PathVariable("policyId") Long policyId,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -67,7 +67,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List only active rules for a policy")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> findActive(
-            @PathVariable Long policyId) {
+            @PathVariable("policyId") Long policyId) {
         List<BenefitPolicyRuleResponseDto> result = ruleService.findActiveByPolicy(policyId);
         return ResponseEntity.ok(ApiResponse.success("Active rules retrieved", result));
     }
@@ -76,8 +76,8 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Get a specific rule by ID")
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> findById(
-            @PathVariable Long policyId,
-            @PathVariable Long ruleId) {
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("ruleId") Long ruleId) {
         BenefitPolicyRuleResponseDto result = ruleService.findById(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule retrieved", result));
     }
@@ -86,7 +86,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List category-level rules for a policy")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> findCategoryRules(
-            @PathVariable Long policyId) {
+            @PathVariable("policyId") Long policyId) {
         List<BenefitPolicyRuleResponseDto> result = ruleService.findCategoryRules(policyId);
         return ResponseEntity.ok(ApiResponse.success("Category rules retrieved", result));
     }
@@ -95,7 +95,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List service-level rules for a policy")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> findServiceRules(
-            @PathVariable Long policyId) {
+            @PathVariable("policyId") Long policyId) {
         List<BenefitPolicyRuleResponseDto> result = ruleService.findServiceRules(policyId);
         return ResponseEntity.ok(ApiResponse.success("Service rules retrieved", result));
     }
@@ -104,7 +104,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List rules that require pre-approval")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> findPreApprovalRules(
-            @PathVariable Long policyId) {
+            @PathVariable("policyId") Long policyId) {
         List<BenefitPolicyRuleResponseDto> result = ruleService.findPreApprovalRules(policyId);
         return ResponseEntity.ok(ApiResponse.success("Pre-approval rules retrieved", result));
     }
@@ -115,19 +115,19 @@ public class BenefitPolicyRuleController {
 
     @GetMapping("/coverage/service/{serviceId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Get coverage rule for a specific service",
-               description = "Returns the applicable coverage rule for a service. " +
-                           "Service-specific rules take priority over category rules.")
+    @Operation(summary = "Get coverage rule for a specific service", description = "Returns the applicable coverage rule for a service. "
+            +
+            "Service-specific rules take priority over category rules.")
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> getCoverageForService(
-            @PathVariable Long policyId,
-            @PathVariable Long serviceId) {
-        
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("serviceId") Long serviceId) {
+
         Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId);
-        
+
         if (result.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success("Service not covered under this policy", null));
         }
-        
+
         return ResponseEntity.ok(ApiResponse.success("Coverage found", result.get()));
     }
 
@@ -135,19 +135,18 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Quick check if a service is covered")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkServiceCoverage(
-            @PathVariable Long policyId,
-            @PathVariable Long serviceId) {
-        
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("serviceId") Long serviceId) {
+
         boolean isCovered = ruleService.isServiceCovered(policyId, serviceId);
         int coveragePercent = ruleService.getCoveragePercent(policyId, serviceId);
         boolean requiresPreApproval = ruleService.requiresPreApproval(policyId, serviceId);
-        
+
         Map<String, Object> result = Map.of(
-            "covered", isCovered,
-            "coveragePercent", coveragePercent,
-            "requiresPreApproval", requiresPreApproval
-        );
-        
+                "covered", isCovered,
+                "coveragePercent", coveragePercent,
+                "requiresPreApproval", requiresPreApproval);
+
         return ResponseEntity.ok(ApiResponse.success("Coverage check complete", result));
     }
 
@@ -155,11 +154,11 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Check service usage against policy limits for a member")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkServiceUsage(
-            @PathVariable Long policyId,
-            @PathVariable Long serviceId,
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "year", required = false) Integer year) {
-        
+
         Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, memberId, year);
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
     }
@@ -170,15 +169,14 @@ public class BenefitPolicyRuleController {
 
     @PostMapping("/rules")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Create a new rule for the policy",
-               description = "Either medicalCategoryId OR medicalServiceId must be provided, not both.")
+    @Operation(summary = "Create a new rule for the policy", description = "Either medicalCategoryId OR medicalServiceId must be provided, not both.")
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> create(
-            @PathVariable Long policyId,
+            @PathVariable("policyId") Long policyId,
             @Valid @RequestBody BenefitPolicyRuleCreateDto dto) {
-        
-        log.info("Creating rule for policy {} - category: {}, service: {}", 
+
+        log.info("Creating rule for policy {} - category: {}, service: {}",
                 policyId, dto.getMedicalCategoryId(), dto.getMedicalServiceId());
-        
+
         BenefitPolicyRuleResponseDto result = ruleService.create(policyId, dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Rule created successfully", result));
@@ -188,11 +186,11 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Bulk create rules for the policy")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> createBulk(
-            @PathVariable Long policyId,
+            @PathVariable("policyId") Long policyId,
             @Valid @RequestBody List<BenefitPolicyRuleCreateDto> dtos) {
-        
+
         log.info("Bulk creating {} rules for policy {}", dtos.size(), policyId);
-        
+
         List<BenefitPolicyRuleResponseDto> result = ruleService.createBulk(policyId, dtos);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Rules created successfully", result));
@@ -204,15 +202,14 @@ public class BenefitPolicyRuleController {
 
     @PutMapping("/rules/{ruleId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Update an existing rule",
-               description = "Note: Cannot change the target (category/service) after creation.")
+    @Operation(summary = "Update an existing rule", description = "Note: Cannot change the target (category/service) after creation.")
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> update(
-            @PathVariable Long policyId,
-            @PathVariable Long ruleId,
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("ruleId") Long ruleId,
             @Valid @RequestBody BenefitPolicyRuleUpdateDto dto) {
-        
+
         log.info("Updating rule {} for policy {}", ruleId, policyId);
-        
+
         BenefitPolicyRuleResponseDto result = ruleService.update(ruleId, dto);
         return ResponseEntity.ok(ApiResponse.success("Rule updated successfully", result));
     }
@@ -221,9 +218,9 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Toggle rule active status")
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> toggleActive(
-            @PathVariable Long policyId,
-            @PathVariable Long ruleId) {
-        
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("ruleId") Long ruleId) {
+
         BenefitPolicyRuleResponseDto result = ruleService.toggleActive(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule toggled", result));
     }
@@ -236,9 +233,9 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Soft delete a rule (deactivate)")
     public ResponseEntity<ApiResponse<Void>> delete(
-            @PathVariable Long policyId,
-            @PathVariable Long ruleId) {
-        
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("ruleId") Long ruleId) {
+
         log.info("Deleting rule {} from policy {}", ruleId, policyId);
         ruleService.delete(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule deleted", null));
@@ -248,9 +245,9 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Permanently delete a rule")
     public ResponseEntity<ApiResponse<Void>> hardDelete(
-            @PathVariable Long policyId,
-            @PathVariable Long ruleId) {
-        
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("ruleId") Long ruleId) {
+
         log.info("Hard deleting rule {} from policy {}", ruleId, policyId);
         ruleService.hardDelete(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule permanently deleted", null));
@@ -260,8 +257,8 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Delete all rules for this policy")
     public ResponseEntity<ApiResponse<Void>> deleteAll(
-            @PathVariable Long policyId) {
-        
+            @PathVariable("policyId") Long policyId) {
+
         log.info("Deleting all rules for policy {}", policyId);
         ruleService.deleteAllForPolicy(policyId);
         return ResponseEntity.ok(ApiResponse.success("All rules deleted", null));
@@ -271,8 +268,8 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Deactivate all rules for this policy")
     public ResponseEntity<ApiResponse<Integer>> deactivateAll(
-            @PathVariable Long policyId) {
-        
+            @PathVariable("policyId") Long policyId) {
+
         log.info("Deactivating all rules for policy {}", policyId);
         int count = ruleService.deactivateAllForPolicy(policyId);
         return ResponseEntity.ok(ApiResponse.success("Deactivated " + count + " rules", count));
@@ -287,16 +284,15 @@ public class BenefitPolicyRuleController {
     @Operation(summary = "Get rule count for the policy")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getRuleCount(
             @PathVariable Long policyId) {
-        
+
         long total = ruleService.countByPolicy(policyId);
         long active = ruleService.countActiveByPolicy(policyId);
-        
+
         Map<String, Long> counts = Map.of(
-            "total", total,
-            "active", active,
-            "inactive", total - active
-        );
-        
+                "total", total,
+                "active", active,
+                "inactive", total - active);
+
         return ResponseEntity.ok(ApiResponse.success("Rule counts", counts));
     }
 }

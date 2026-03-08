@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Box, Button, CircularProgress, FormControlLabel, Grid, InputAdornment, Stack, Switch, TextField, Divider, Alert, Typography } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
@@ -75,6 +76,7 @@ const EmployerEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
   const { data: employerData, loading: loadingEmployer, error: fetchError } = useEmployerDetails(id);
   const [employer, setEmployer] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -140,6 +142,7 @@ const EmployerEdit = () => {
       setSaving(true);
       await updateEmployer(id, employer);
       enqueueSnackbar(LABELS.updatedSuccess, { variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['employers'] });
       navigate('/employers');
     } catch (err) {
       const fieldError = parseApiError(err);
