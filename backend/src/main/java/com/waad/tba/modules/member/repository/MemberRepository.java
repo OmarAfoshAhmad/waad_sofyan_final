@@ -188,6 +188,11 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         */
        long countByBenefitPolicyId(Long benefitPolicyId);
 
+       /**
+        * Count active members by benefit policy ID (used by DeletionGuard)
+        */
+       long countByBenefitPolicyIdAndActiveTrue(Long benefitPolicyId);
+
        // ═══════════════════════════════════════════════════════════════════════════
        // PHASE 2: STATUS & CARD STATUS FILTERING
        // ═══════════════════════════════════════════════════════════════════════════

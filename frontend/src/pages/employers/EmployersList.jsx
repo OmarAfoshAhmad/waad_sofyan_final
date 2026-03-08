@@ -11,7 +11,6 @@ import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography, TextField, I
 
 // MUI Icons - Always as Component, NEVER as JSX
 import AddIcon from '@mui/icons-material/Add';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -29,8 +28,8 @@ import { ModernPageHeader, SoftDeleteToggle, DataExportWizard, ActionConfirmDial
 import PermissionGuard from 'components/PermissionGuard';
 
 // Services
-import { getEmployers, archiveEmployer, restoreEmployer, exportEmployers } from 'services/api/employers.service';
-import { openSnackbar } from 'api/snackbar';
+import { getEmployers, archiveEmployer, restoreEmployer, deleteEmployer, exportEmployers } from 'services/api/employers.service';
+import { useSnackbar } from 'notistack';
 
 // ============================================================================
 // CONSTANTS
@@ -46,6 +45,7 @@ const MODULE_NAME = 'employers';
 const EmployersList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -72,13 +72,6 @@ const EmployersList = () => {
     navigate('/employers/create');
   }, [navigate]);
 
-  const handleNavigateView = useCallback(
-    (id) => {
-      navigate(`/employers/${id}`);
-    },
-    [navigate]
-  );
-
   const handleNavigateEdit = useCallback(
     (id) => {
       navigate(`/employers/edit/${id}`);
@@ -96,11 +89,12 @@ const EmployersList = () => {
         onConfirm: async () => {
           try {
             await archiveEmployer(id);
-            openSnackbar({ message: 'تم حذف جهة العمل بنجاح', variant: 'success' });
+            enqueueSnackbar('تم حذف جهة العمل بنجاح', { variant: 'success' });
             queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
           } catch (err) {
             console.error('[Employers] Archive failed:', err);
-            openSnackbar({ message: err.message || 'فشل حذف جهة العمل', variant: 'error' });
+            const apiMsg = err?.response?.data?.message;
+            enqueueSnackbar(apiMsg || err.message || 'فشل حذف جهة العمل', { variant: 'error' });
           } finally {
             setConfirmDialog(prev => ({ ...prev, open: false }));
           }
@@ -120,11 +114,36 @@ const EmployersList = () => {
         onConfirm: async () => {
           try {
             await restoreEmployer(id);
-            openSnackbar({ message: 'تم استعادة جهة العمل بنجاح', variant: 'success' });
+            enqueueSnackbar('تم استعادة جهة العمل بنجاح', { variant: 'success' });
             queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
           } catch (err) {
             console.error('[Employers] Restore failed:', err);
-            openSnackbar({ message: 'فشل استعادة جهة العمل', variant: 'error' });
+            enqueueSnackbar('فشل استعادة جهة العمل', { variant: 'error' });
+          } finally {
+            setConfirmDialog(prev => ({ ...prev, open: false }));
+          }
+        }
+      });
+    },
+    [queryClient]
+  );
+
+  const handlePermanentDelete = useCallback(
+    (id, name) => {
+      setConfirmDialog({
+        open: true,
+        title: 'حذف نهائي',
+        message: `⚠️ سيتم حذف جهة العمل "${name}" نهائياً ولا يمكن التراجع عن هذا الإجراء.\n\nهل أنت متأكد؟`,
+        confirmColor: 'error',
+        onConfirm: async () => {
+          try {
+            await deleteEmployer(id);
+            enqueueSnackbar('تم الحذف النهائي بنجاح', { variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Employers] Permanent delete failed:', err);
+            const apiMsg = err?.response?.data?.message || err?.message;
+            enqueueSnackbar(apiMsg || 'فشل الحذف النهائي', { variant: 'error' });
           } finally {
             setConfirmDialog(prev => ({ ...prev, open: false }));
           }
@@ -161,8 +180,8 @@ const EmployersList = () => {
       );
     }
 
-    // Archived Filtering
-    rawData = rawData.filter((item) => (showArchived ? item.archived === true : item.archived !== true));
+    // Archived Filtering — use active field directly (no separate archived column in DB)
+    rawData = rawData.filter((item) => (showArchived ? item.active === false : item.active !== false));
 
     // Active Status Filtering
     if (filters.active !== '') {
@@ -195,7 +214,7 @@ const EmployersList = () => {
       content: rawData.slice(startIndex, startIndex + rowsPerPage),
       totalCount: totalFiltered
     };
-  }, [data, page, rowsPerPage, sortBy, sortDirection, searchTerm, filters]);
+  }, [data, page, rowsPerPage, sortBy, sortDirection, searchTerm, filters, showArchived]);
 
   // ========================================
   // COLUMN DEFINITIONS
@@ -244,42 +263,54 @@ const EmployersList = () => {
       case 'actions':
         return (
           <Stack direction="row" spacing={0.5} justifyContent="center">
-            <Tooltip title="عرض">
-              <IconButton size="small" color="primary" onClick={() => handleNavigateView(row.id)}>
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <PermissionGuard resource="employers" action="update">
-              <Tooltip title="تعديل">
-                <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </PermissionGuard>
-            {row.archived ? (
-              <Tooltip title="استعادة">
+            {row.active === false ? (
+              /* ── سجل المحذوفات: استعادة + حذف نهائي ── */
+              <>
                 <PermissionGuard resource="employers" action="delete">
-                  <IconButton
-                    size="small"
-                    color="success"
-                    onClick={() => handleRestore(row.id, row.name || row.code)}
-                  >
-                    <UndoIcon fontSize="small" />
-                  </IconButton>
+                  <Tooltip title="استعادة">
+                    <IconButton
+                      size="small"
+                      color="success"
+                      onClick={() => handleRestore(row.id, row.name || row.code)}
+                    >
+                      <UndoIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </PermissionGuard>
-              </Tooltip>
+                <PermissionGuard resource="employers" action="delete">
+                  <Tooltip title="حذف نهائي">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handlePermanentDelete(row.id, row.name || row.code)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </PermissionGuard>
+              </>
             ) : (
-              <Tooltip title="حذف">
-                <PermissionGuard resource="employers" action="delete">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={() => handleArchive(row.id, row.name || row.code)}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
+              /* ── الوضع النشط: تعديل + حذف ── */
+              <>
+                <PermissionGuard resource="employers" action="update">
+                  <Tooltip title="تعديل">
+                    <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </PermissionGuard>
-              </Tooltip>
+                <PermissionGuard resource="employers" action="delete">
+                  <Tooltip title="حذف">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleArchive(row.id, row.name || row.code)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </PermissionGuard>
+              </>
             )}
           </Stack>
         );

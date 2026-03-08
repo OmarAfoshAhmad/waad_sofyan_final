@@ -126,13 +126,6 @@ const DocumentsLibrary = Loadable(lazy(() => import('pages/documents/DocumentsLi
 
 const UnderDevelopment = Loadable(lazy(() => import('pages/under-development')));
 
-// ==============================|| LAZY LOADING - MEDICAL PACKAGES ||============================== //
-
-const MedicalPackagesList = Loadable(lazy(() => import('pages/medical-packages')));
-const MedicalPackageCreate = Loadable(lazy(() => import('pages/medical-packages/MedicalPackageCreate')));
-const MedicalPackageEdit = Loadable(lazy(() => import('pages/medical-packages/MedicalPackageEdit')));
-const MedicalPackageView = Loadable(lazy(() => import('pages/medical-packages/MedicalPackageView')));
-
 // ==============================|| LAZY LOADING - MEDICAL SPECIALTIES ||============================== //
 
 const MedicalSpecialtiesPage = Loadable(lazy(() => import('pages/medical-specialties')));
@@ -697,45 +690,6 @@ const MainRoutes = {
           <ProviderMappingCenter />
         </PermissionGuard>
       )
-    },
-
-    // Medical Packages Module
-    {
-      path: 'medical-packages',
-      children: [
-        {
-          path: '',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <MedicalPackagesList />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'add',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <MedicalPackageCreate />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'edit/:id',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <MedicalPackageEdit />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: ':id',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <MedicalPackageView />
-            </PermissionGuard>
-          )
-        }
-      ]
     },
 
     // Medical Specialties Management

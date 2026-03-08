@@ -12,6 +12,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.guard.DeletionGuard;
+import com.waad.tba.modules.provider.repository.ProviderContractRepository;
+
 import com.waad.tba.modules.provider.dto.AllowedEmployerDto;
 import com.waad.tba.modules.provider.dto.ProviderCreateDto;
 import com.waad.tba.modules.provider.dto.ProviderSelectorDto;
@@ -36,6 +40,7 @@ public class ProviderService {
     private final ProviderRepository providerRepository;
     private final ProviderMapper providerMapper;
     private final EmployerRepository employerRepository;
+    private final ProviderContractRepository providerContractRepository;
 
     /**
      * Get provider selector options with pagination
@@ -123,7 +128,12 @@ public class ProviderService {
      */
     public void deactivateProvider(Long id) {
         Provider provider = providerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Provider not found with id: " + id));
+                .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+
+        DeletionGuard.of("مقدم الخدمة")
+                .check("عقود نشطة", providerContractRepository.countByProviderIdAndActive(id, true))
+                .throwIfBlocked("أنهِ العقود النشطة المرتبطة بمقدم الخدمة أولاً.");
+
         provider.setActive(false);
         providerRepository.save(provider);
         log.info("Provider {} deactivated (soft delete)", id);

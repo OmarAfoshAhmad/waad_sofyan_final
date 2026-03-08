@@ -201,6 +201,14 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, code, ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.warn("Business state violation - Path: {}, Message: {}, TrackingId: {}",
+                request.getRequestURI(), ex.getMessage(), trackingId);
+        return build(HttpStatus.CONFLICT, ErrorCode.BUSINESS_RULE_VIOLATION, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
         String trackingId = generateTrackingId();

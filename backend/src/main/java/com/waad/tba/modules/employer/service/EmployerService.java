@@ -2,6 +2,8 @@ package com.waad.tba.modules.employer.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.common.guard.DeletionGuard;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.dto.EmployerCreateDto;
 import com.waad.tba.modules.employer.dto.EmployerResponseDto;
 import com.waad.tba.modules.employer.dto.EmployerSelectorDto;
@@ -9,6 +11,7 @@ import com.waad.tba.modules.employer.dto.EmployerUpdateDto;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.mapper.EmployerMapper;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
+import com.waad.tba.modules.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -46,6 +49,8 @@ public class EmployerService {
     private final EmployerRepository employerRepository;
     private final EmployerMapper mapper;
     private final com.waad.tba.modules.provider.repository.ProviderRepository providerRepository;
+    private final MemberRepository memberRepository;
+    private final BenefitPolicyRepository benefitPolicyRepository;
 
     /**
      * Get all active, non-archived employers (paginated)
@@ -171,17 +176,21 @@ public class EmployerService {
     public EmployerResponseDto create(EmployerCreateDto dto) {
         log.info("[EmployerService] Creating employer with name: {}", dto.getName());
 
-        // Step 1: Normalize and generate code if needed
-        String employerCode = normalizeAndGenerateCode(dto.getCode());
-        log.debug("[EmployerService] Normalized/Generated code: {}", employerCode);
+        String employerCode = dto.getCode().trim().toUpperCase();
 
-        // Step 2: Validate code uniqueness
-        validateCodeUniqueness(employerCode, null);
+        // Validate code uniqueness
+        if (employerRepository.existsByCodeIgnoreCase(employerCode)) {
+            throw new IllegalStateException("CODE_DUPLICATE:هذا الرمز مستخدم مسبقاً، اختر رمزاً آخر");
+        }
 
-        // Step 3: Build Employer entity (Arabic name only)
+        // Validate name uniqueness
+        if (employerRepository.existsByNameIgnoreCase(dto.getName().trim())) {
+            throw new IllegalStateException("NAME_DUPLICATE:اسم جهة العمل هذا مستخدم مسبقاً، اختر اسماً آخر");
+        }
+
         Employer employer = Employer.builder()
                 .code(employerCode)
-                .name(dto.getName())
+                .name(dto.getName().trim())
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .address(dto.getAddress())
                 .phone(dto.getPhone())
@@ -196,7 +205,6 @@ public class EmployerService {
                 .maxMemberLimit(dto.getMaxMemberLimit())
                 .build();
 
-        // Step 4: Persist and return
         Employer saved = employerRepository.save(employer);
         log.info("[EmployerService] Created employer with ID: {} and code: {}", saved.getId(), saved.getCode());
 
@@ -222,20 +230,20 @@ public class EmployerService {
     public EmployerResponseDto update(Long id, EmployerUpdateDto dto) {
         log.info("[EmployerService] Updating employer ID: {}", id);
 
-        // Step 1: Find existing employer
         Employer employer = findEmployerById(id);
-        String oldCode = employer.getCode();
 
-        // Step 2: Validate code change (if applicable)
-        if (!oldCode.equals(dto.getCode())) {
-            log.warn("[EmployerService] Changing employer code from {} to {} for ID: {}",
-                    oldCode, dto.getCode(), id);
-            validateCodeUniqueness(dto.getCode(), id);
+        // Validate code uniqueness (exclude self)
+        if (employerRepository.existsByCodeIgnoreCaseAndIdNot(dto.getCode().trim().toUpperCase(), id)) {
+            throw new IllegalStateException("CODE_DUPLICATE:هذا الرمز مستخدم مسبقاً، اختر رمزاً آخر");
         }
 
-        // Step 3: Update mutable fields (Arabic name only)
-        employer.setCode(dto.getCode());
-        employer.setName(dto.getName());
+        // Validate name uniqueness (exclude self)
+        if (employerRepository.existsByNameIgnoreCaseAndIdNot(dto.getName().trim(), id)) {
+            throw new IllegalStateException("NAME_DUPLICATE:اسم جهة العمل هذا مستخدم مسبقاً، اختر اسماً آخر");
+        }
+
+        employer.setCode(dto.getCode().trim().toUpperCase());
+        employer.setName(dto.getName().trim());
 
         if (dto.getActive() != null) {
             employer.setActive(dto.getActive());
@@ -252,7 +260,6 @@ public class EmployerService {
         employer.setContractEndDate(dto.getContractEndDate());
         employer.setMaxMemberLimit(dto.getMaxMemberLimit());
 
-        // Step 4: Persist and return
         Employer updated = employerRepository.save(employer);
         log.info("[EmployerService] Updated employer ID: {}", id);
 
@@ -276,9 +283,16 @@ public class EmployerService {
      */
     @Transactional
     public void delete(Long id) {
-        throw new BusinessRuleException(
-                "لا يمكن حذف الشريك. استخدم الأرشفة بدلاً من ذلك. "
-                        + "Employer cannot be deleted. Use archive instead to preserve system integrity.");
+        Employer employer = findEmployerById(id);
+        // Only allow hard delete if already archived (inactive)
+        if (Boolean.TRUE.equals(employer.getActive())) {
+            throw new BusinessRuleException("لا يمكن الحذف النهائي إلا بعد الأرشفة. أرشف جهة العمل أولاً.");
+        }
+        DeletionGuard.of("جهة العمل")
+                .check("مستفيدون نشطون", memberRepository.countByEmployerIdAndActiveTrue(id))
+                .throwIfBlocked("أوقف تفعيل المستفيدين أولاً قبل الحذف النهائي.");
+        employerRepository.deleteById(id);
+        log.info("[EmployerService] Hard-deleted employer ID: {}", id);
     }
 
     /**
@@ -301,7 +315,13 @@ public class EmployerService {
 
         Employer employer = findEmployerById(id);
 
-        // Archive by setting active=false
+        DeletionGuard.of("جهة العمل")
+                .check("مستفيدون نشطون", memberRepository.countByEmployerIdAndActiveTrue(id))
+                .check("مستفيدون غير نشطين",
+                        memberRepository.countByEmployerId(id) - memberRepository.countByEmployerIdAndActiveTrue(id))
+                .check("وثائق تأمين نشطة", benefitPolicyRepository.countByEmployerIdAndActiveTrue(id))
+                .throwIfBlocked("أوقف تفعيل المستفيدين وأنهِ الوثائق أولاً.");
+
         employer.setActive(false);
         Employer updated = employerRepository.save(employer);
 
@@ -408,6 +428,32 @@ public class EmployerService {
         log.info("[EmployerService] Auto-generated employer code: {}", generatedCode);
 
         return generatedCode;
+    }
+
+    /**
+     * Check if an employer code is available (case-insensitive, always uppercased).
+     *
+     * @param code      code to check (will be uppercased)
+     * @param excludeId employer ID to exclude (pass null for create)
+     * @return true if available
+     */
+    public boolean isCodeAvailable(String code, Long excludeId) {
+        String upper = code.trim().toUpperCase();
+        if (excludeId == null) return !employerRepository.existsByCodeIgnoreCase(upper);
+        return !employerRepository.existsByCodeIgnoreCaseAndIdNot(upper, excludeId);
+    }
+
+    /**
+     * Check if an employer name is available (case-insensitive).
+     *
+     * @param name      name to check
+     * @param excludeId employer ID to exclude (pass null for create)
+     * @return true if available
+     */
+    public boolean isNameAvailable(String name, Long excludeId) {
+        String trimmed = name.trim();
+        if (excludeId == null) return !employerRepository.existsByNameIgnoreCase(trimmed);
+        return !employerRepository.existsByNameIgnoreCaseAndIdNot(trimmed, excludeId);
     }
 
     /**

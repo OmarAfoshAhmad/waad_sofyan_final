@@ -74,13 +74,6 @@ const ExcelImportButton = ({
           title: 'استيراد التصنيفات الطبية',
           filename: 'Medical_Categories_Import_Template.xlsx'
         };
-      case 'medical-packages':
-        return {
-          downloadFn: excelImportService.downloadMedicalPackageTemplate,
-          importFn: excelImportService.importMedicalPackages,
-          title: 'استيراد الباقات الطبية',
-          filename: 'Medical_Packages_Import_Template.xlsx'
-        };
       default:
         console.error(`[ExcelImportButton] Unknown module: ${module}`);
         return { downloadFn: onDownloadTemplate, importFn: onImport };

@@ -119,7 +119,7 @@ export const normalizeEmployerRequest = (frontendDto) => {
 
   // Only include code if provided (otherwise backend auto-generates)
   if (code !== null && code.trim() !== '') {
-    normalized.code = code.trim();
+    normalized.code = code.trim().toUpperCase();
   }
 
   console.debug('[EmployerService] Request normalized:', {
@@ -292,8 +292,9 @@ export const handleEmployerErrors = (error) => {
       errorResponse.message = 'الشريك غير موجود';
       break;
 
-    case 409: // Conflict (Duplicate Code)
-      errorResponse.message = 'رمز الشريك مستخدم بالفعل. يرجى اختيار رمز آخر.';
+    case 409: // Conflict — keep server message (may be CODE_DUPLICATE/NAME_DUPLICATE prefix for forms, or delete-guard message for permanent delete)
+      // Do not override: parseApiError in forms uses the prefix to route to field-level errors;
+      // permanent delete uses the Arabic message directly in the snackbar.
       break;
 
     case 403: // Forbidden
@@ -581,7 +582,15 @@ export const updateEmployer = async (id, frontendDto) => {
  * @throws {Error} Always throws - delete is not allowed
  */
 export const deleteEmployer = async (id) => {
-  throw new Error('لا يمكن حذف الشريك. استخدم الأرشفة بدلاً من ذلك. Employer cannot be deleted. Use archive instead.');
+  try {
+    console.debug(`[EmployerService] Hard-deleting employer ID: ${id}...`);
+    const response = await axiosClient.delete(`${BASE_URL}/${id}`);
+    console.info(`[EmployerService] Employer ID: ${id} permanently deleted`);
+    return unwrap(response);
+  } catch (error) {
+    console.error(`[EmployerService] deleteEmployer(${id}) failed:`, error);
+    throw handleEmployerErrors(error);
+  }
 };
 
 /**
@@ -642,6 +651,24 @@ export const getEmployerSelectors = async () => {
       console.error('[EmployerService] getEmployerSelectors failed:', error);
     }
     throw handleEmployerErrors(error);
+  }
+};
+
+/**
+ * Check if a code or name is already taken — used for live uniqueness feedback.
+ * @param {'code'|'name'} field
+ * @param {string} value
+ * @param {number|null} excludeId  pass employer id when editing, null when creating
+ * @returns {Promise<boolean>}  true = available, false = already taken
+ */
+export const checkEmployerField = async (field, value, excludeId = null) => {
+  try {
+    const params = { field, value: field === 'code' ? value.trim().toUpperCase() : value.trim() };
+    if (excludeId) params.excludeId = excludeId;
+    const response = await axiosClient.get(`${BASE_URL}/check`, { params });
+    return unwrap(response) === true;
+  } catch {
+    return true; // on network error, allow typing to continue
   }
 };
 

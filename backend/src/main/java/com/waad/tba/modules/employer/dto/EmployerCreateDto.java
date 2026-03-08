@@ -24,10 +24,9 @@ import java.time.LocalDate;
 public class EmployerCreateDto {
 
     /**
-     * Employer code - OPTIONAL (auto-generated if not provided)
-     * Format: EMP-XX (zero-padded, numeric sequence for up to 15 employers)
-     * Accepts: 'code' or 'employerCode' (frontend compatibility)
+     * Employer code - REQUIRED, must be unique
      */
+    @NotBlank(message = "الرمز مطلوب")
     @JsonAlias({"employerCode"})
     @Size(max = 50, message = "Employer code too long")
     private String code;

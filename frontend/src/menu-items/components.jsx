@@ -9,7 +9,6 @@ import {
   PeopleAlt as PeopleAltIcon,
   MedicalServices as MedicalServicesIcon,
   Category as CategoryIcon,
-  Inventory as InventoryIcon,
   Assignment as AssignmentIcon,
   Settings as SettingsIcon,
   Assessment as AssessmentIcon,
@@ -649,37 +648,7 @@ const menuItem = [
             resource: 'medical_catalog',
             action: 'view'
           },
-          {
-            id: 'medical-packages',
-            title: 'الحزم الطبية',
-            titleEn: 'Medical Packages',
-            type: 'item',
-            url: '/medical-packages',
-            icon: InventoryIcon,
-            resource: 'medical_packages',
-            action: 'view',
-            chip: {
-              label: '✅',
-              color: 'success',
-              size: 'small'
-            }
-          }
         ]
-      },
-      {
-        id: 'cities-networks',
-        title: 'المدن والشبكات',
-        titleEn: 'Cities & Networks',
-        type: 'item',
-        url: '/under-development',
-        icon: BusinessIcon,
-        resource: 'system_settings',
-        action: 'view',
-        chip: {
-          label: '⏳',
-          color: 'warning',
-          size: 'small'
-        }
       },
       {
         id: 'settings',

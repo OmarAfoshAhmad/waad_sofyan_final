@@ -42,17 +42,17 @@ public class EmployerController {
             @RequestParam(name = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
             @RequestParam(name = "page", required = false, defaultValue = "0") int page,
             @RequestParam(name = "size", required = false, defaultValue = "20") int size) {
-        
+
         Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
-        
-        Page<EmployerResponseDto> employers = includeArchived 
-            ? service.getAllIncludingArchived(pageable) 
-            : service.getAll(pageable);
-        
+
+        Page<EmployerResponseDto> employers = includeArchived
+                ? service.getAllIncludingArchived(pageable)
+                : service.getAll(pageable);
+
         return ResponseEntity.ok(ApiResponse.success(employers));
     }
 
-    @GetMapping({"selectors", "/selector"})
+    @GetMapping({ "selectors", "/selector" })
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> selectors() {
         List<EmployerSelectorDto> selectors = service.getSelectors();
@@ -69,8 +69,14 @@ public class EmployerController {
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<EmployerResponseDto>> create(@Valid @RequestBody EmployerCreateDto dto) {
-        EmployerResponseDto created = service.create(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Employer created successfully", created));
+        try {
+            EmployerResponseDto created = service.create(dto);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Employer created successfully", created));
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @PutMapping("/{id:\\d+}")
@@ -116,5 +122,24 @@ public class EmployerController {
     public ResponseEntity<ApiResponse<Long>> count() {
         long total = service.count();
         return ResponseEntity.ok(ApiResponse.success(total));
+    }
+
+    /**
+     * Live-check field availability (used for instant feedback while typing).
+     * field = "code" | "name"
+     * excludeId is optional (omit on create, pass self-id on edit)
+     */
+    @GetMapping("/check")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Boolean>> check(
+            @RequestParam String field,
+            @RequestParam String value,
+            @RequestParam(required = false) Long excludeId) {
+        boolean available = switch (field) {
+            case "code" -> service.isCodeAvailable(value, excludeId);
+            case "name" -> service.isNameAvailable(value, excludeId);
+            default -> true;
+        };
+        return ResponseEntity.ok(ApiResponse.success(available));
     }
 }

@@ -19,6 +19,14 @@ public interface EmployerRepository extends JpaRepository<Employer, Long> {
 
     Optional<Employer> findByCode(String code);
 
+    boolean existsByCodeIgnoreCase(String code);
+
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
+
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
+
     /**
      * Find employer by name (case-insensitive exact match)
      */

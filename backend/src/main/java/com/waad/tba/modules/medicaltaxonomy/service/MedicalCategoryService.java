@@ -1,6 +1,7 @@
 package com.waad.tba.modules.medicaltaxonomy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.guard.DeletionGuard;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryCreateDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryResponseDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryUpdateDto;
@@ -224,17 +225,10 @@ public class MedicalCategoryService {
         MedicalCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Medical category not found: " + id));
 
-        // Guard: specialty exists under this category?
-        if (specialtyRepository.existsByCategoryIdAndDeletedFalse(id)) {
-            throw new BusinessRuleException(
-                    "Cannot delete category — active specialties still reference it. Deactivate those specialties first.");
-        }
-
-        // Check if category has active services (legacy direct FK)
-        long serviceCount = serviceRepository.countActiveByCategoryId(id);
-        if (serviceCount > 0) {
-            throw new BusinessRuleException("Cannot delete category with active services: " + serviceCount + " services found");
-        }
+        DeletionGuard.of("تصنيف طبي")
+                .check("تخصصات نشطة", specialtyRepository.existsByCategoryIdAndDeletedFalse(id) ? 1L : 0L)
+                .check("خدمات طبية نشطة", serviceRepository.countActiveByCategoryId(id))
+                .throwIfBlocked("أوقف تفعيل التخصصات والخدمات المرتبطة أولاً.");
 
         // Soft delete
         category.setActive(false);

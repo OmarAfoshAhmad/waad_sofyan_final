@@ -27,7 +27,7 @@ public class EmployerMapper {
                 .code(employer.getCode())
                 .name(employer.getName())
                 .active(employer.getActive())
-                .archived(false)
+                .archived(!employer.getActive())
                 .isDefault(Boolean.TRUE.equals(employer.getIsDefault()))
                 .logoUrl(employer.getLogoUrl())
                 .businessType(employer.getBusinessType())
@@ -51,10 +51,8 @@ public class EmployerMapper {
     public EmployerSelectorDto toSelector(Employer employer) {
         return EmployerSelectorDto.builder()
                 .id(employer.getId())
-                .label(employer.getName())  // Use Arabic name for display
-                .code(employer.getCode())   // Include code for filtering
+                .label(employer.getName()) // Use Arabic name for display
+                .code(employer.getCode()) // Include code for filtering
                 .build();
     }
 }
-
-

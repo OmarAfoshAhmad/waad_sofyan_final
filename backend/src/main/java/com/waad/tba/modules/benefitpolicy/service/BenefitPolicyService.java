@@ -1,6 +1,8 @@
 package com.waad.tba.modules.benefitpolicy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.guard.DeletionGuard;
+import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.benefitpolicy.dto.*;
@@ -34,6 +36,7 @@ public class BenefitPolicyService {
 
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final EmployerRepository employerRepository;
+    private final MemberRepository memberRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -393,6 +396,10 @@ public class BenefitPolicyService {
 
         BenefitPolicy policy = benefitPolicyRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
+
+        DeletionGuard.of("وثيقة التأمين")
+                .check("مستفيدون مسجلون بها", memberRepository.countByBenefitPolicyIdAndActiveTrue(id))
+                .throwIfBlocked("أنهِ تسجيل المستفيدين في هذه الوثيقة أولاً.");
 
         // Soft delete
         policy.setActive(false);
