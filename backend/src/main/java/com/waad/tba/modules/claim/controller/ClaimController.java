@@ -124,7 +124,7 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     @Operation(summary = "[DEPRECATED - DISABLED] Update claim", description = "DEPRECATED: Use /data or /review endpoints instead. This endpoint is disabled.")
     public ResponseEntity<ApiResponse<ClaimResponse>> updateClaim(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UpdateClaimRequest apiRequest) {
         
         // SECURITY: This endpoint is disabled to prevent bypassing role-based field restrictions
@@ -144,7 +144,7 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     @Operation(summary = "Update claim medical/financial data", description = "Updates pricing and medical codes for a DRAFT claim.")
     public ResponseEntity<ApiResponse<ClaimResponse>> updateClaimData(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UpdateClaimDataRequest apiRequest) {
         log.info("📝 Updating claim data {}", id);
         
@@ -173,7 +173,7 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Review claim", description = "Reviewer action: change status, add comment, set approved amount.")
     public ResponseEntity<ApiResponse<ClaimResponse>> reviewClaim(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody ReviewClaimRequest apiRequest) {
         log.info("🧐 Reviewing claim {}", id);
 
@@ -200,7 +200,7 @@ public class ClaimController {
     @PostMapping("/{id:\\d+}/submit")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     @Operation(summary = "Submit claim", description = "Submit a DRAFT claim for review. Transitions state to SUBMITTED.")
-    public ResponseEntity<ApiResponse<ClaimResponse>> submitClaim(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<ClaimResponse>> submitClaim(@PathVariable("id") Long id) {
         log.info("🛫 Submitting claim {}", id);
         
         // 🔒 FEATURE-FLAG-GUARD (Phase 10)
@@ -220,7 +220,7 @@ public class ClaimController {
     @GetMapping("/{id:\\d+}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get claim by ID", description = "Retrieve a single claim with complete financial snapshot")
-    public ResponseEntity<ApiResponse<ClaimResponse>> getClaim(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<ClaimResponse>> getClaim(@PathVariable("id") Long id) {
         ClaimViewDto claim = claimService.getClaim(id);
         ClaimResponse response = apiMapper.toResponse(claim);
         return ResponseEntity.ok(ApiResponse.success("Claim retrieved successfully", response));
@@ -257,7 +257,7 @@ public class ClaimController {
 
     @DeleteMapping("/{id:\\d+}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<Void>> deleteClaim(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deleteClaim(@PathVariable("id") Long id) {
         claimService.deleteClaim(id);
         return ResponseEntity.ok(ApiResponse.success("Claim deleted successfully", null));
     }
@@ -282,7 +282,7 @@ public class ClaimController {
     @GetMapping("/member/{memberId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get claims by member", description = "Retrieve all claims for a specific member")
-    public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByMember(@PathVariable Long memberId) {
+    public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByMember(@PathVariable("memberId") Long memberId) {
         List<ClaimViewDto> claims = claimService.getClaimsByMember(memberId);
         List<ClaimResponse> responses = claims.stream()
                 .map(apiMapper::toResponse)
@@ -293,7 +293,7 @@ public class ClaimController {
     @GetMapping("/pre-authorization/{preAuthorizationId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get claims by pre-authorization", description = "Retrieve all claims linked to a pre-authorization")
-    public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByPreAuthorization(@PathVariable Long preAuthorizationId) {
+    public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByPreAuthorization(@PathVariable("preAuthorizationId") Long preAuthorizationId) {
         List<ClaimViewDto> claims = claimService.getClaimsByPreAuthorization(preAuthorizationId);
         List<ClaimResponse> responses = claims.stream()
                 .map(apiMapper::toResponse)
@@ -312,7 +312,7 @@ public class ClaimController {
     @PostMapping("/{id:\\d+}/start-review")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Start review", description = "Take a submitted claim for review. Transitions to UNDER_REVIEW status.")
-    public ResponseEntity<ApiResponse<ClaimResponse>> startReview(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<ClaimResponse>> startReview(@PathVariable("id") Long id) {
         ClaimViewDto claim = claimService.startReview(id);
         ClaimResponse response = apiMapper.toResponse(claim);
         return ResponseEntity.ok(ApiResponse.success("تم استلام المطالبة للمراجعة", response));
@@ -356,7 +356,7 @@ public class ClaimController {
                       "⚠️ CRITICAL: Approved amount is CALCULATED BY BACKEND, not from request."
     )
     public ResponseEntity<ApiResponse<ClaimResponse>> approveClaim(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody ApproveClaimRequest apiRequest) {
         
         // Convert API v1 request to internal DTO
@@ -378,7 +378,7 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Reject claim", description = "Reject a claim. Rejection reason is mandatory.")
     public ResponseEntity<ApiResponse<ClaimResponse>> rejectClaim(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody RejectClaimRequest apiRequest) {
         ClaimViewDto claim = claimService.rejectClaim(id, apiMapper.toRejectDto(apiRequest));
         ClaimResponse response = apiMapper.toResponse(claim);
@@ -399,7 +399,7 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'INSURANCE_ADMIN')")
     @Operation(summary = "Return claim for info", description = "Transitions claim from UNDER_REVIEW back to NEEDS_CORRECTION.")
     public ResponseEntity<ApiResponse<ClaimResponse>> returnForInfo(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody ReturnForInfoClaimRequest apiRequest) {
         log.info("↩️ Returning claim {} for info", id);
         
@@ -423,7 +423,7 @@ public class ClaimController {
     @GetMapping("/{id:\\d+}/cost-breakdown")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get cost breakdown", description = "Get detailed cost breakdown including deductible, co-pay, and insurance amount.")
-    public ResponseEntity<ApiResponse<CostBreakdownDto>> getCostBreakdown(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<CostBreakdownDto>> getCostBreakdown(@PathVariable("id") Long id) {
         CostBreakdownDto breakdown = claimService.getCostBreakdownDto(id);
         return ResponseEntity.ok(ApiResponse.success("تم استرجاع تفاصيل التكلفة", breakdown));
     }
@@ -487,7 +487,7 @@ public class ClaimController {
     @GetMapping("/visit/{visitId}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get claims by visit", description = "Retrieve all claims for a specific visit")
-    public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByVisit(@PathVariable Long visitId) {
+    public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByVisit(@PathVariable("visitId") Long visitId) {
         List<ClaimViewDto> claims = claimService.getClaimsByVisit(visitId);
         List<ClaimResponse> responses = claims.stream()
                 .map(apiMapper::toResponse)
@@ -502,7 +502,7 @@ public class ClaimController {
     @GetMapping("/number/{claimNumber}")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get claim by number", description = "Retrieve a claim by its unique claim number")
-    public ResponseEntity<ApiResponse<ClaimResponse>> getClaimByNumber(@PathVariable Long claimNumber) {
+    public ResponseEntity<ApiResponse<ClaimResponse>> getClaimByNumber(@PathVariable("claimNumber") Long claimNumber) {
         ClaimViewDto claim = claimService.getClaimByNumber(claimNumber);
         ClaimResponse response = apiMapper.toResponse(claim);
         return ResponseEntity.ok(ApiResponse.success("Claim retrieved successfully", response));
@@ -516,7 +516,7 @@ public class ClaimController {
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get claims by status", description = "Retrieve claims filtered by status with pagination")
     public ResponseEntity<ApiResponse<ClaimListResponse>> getClaimsByStatus(
-            @PathVariable ClaimStatus status,
+            @PathVariable("status") ClaimStatus status,
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
@@ -548,3 +548,4 @@ public class ClaimController {
         return ResponseEntity.ok(ApiResponse.success("Financial summary retrieved successfully", summary));
     }
 }
+

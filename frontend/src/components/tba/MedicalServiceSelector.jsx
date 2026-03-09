@@ -160,7 +160,14 @@ const MedicalServiceSelector = ({
 
   const getOptionLabel = useCallback((option) => {
     if (!option) return '';
-    return `[${option.code}] ${option.name || ''}`;
+    if (option.getDisplayLabel) return option.getDisplayLabel(); // In case DTO methods were somehow available (unlikely in JS)
+
+    let label = `[${option.code}] `;
+    if (option.nameAr) label += option.nameAr;
+    else if (option.name) label += option.name;
+
+    if (option.nameEn) label += ` ${option.nameEn}`;
+    return label;
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -218,8 +225,13 @@ const MedicalServiceSelector = ({
                     fontSize: '0.75rem'
                   }}
                 />
-                <Typography variant="body1" fontWeight={600} noWrap sx={{ maxWidth: 300 }}>
-                  {option.name}
+                <Typography variant="body1" fontWeight={600} noWrap sx={{ maxWidth: 400 }}>
+                  {option.nameAr || option.name}
+                  {option.nameEn && (
+                    <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 400 }}>
+                      {option.nameEn}
+                    </Typography>
+                  )}
                 </Typography>
               </Stack>
 
@@ -227,7 +239,8 @@ const MedicalServiceSelector = ({
               <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.5 }}>
                 <CategoryIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
-                  {LABELS.categoryLabel}: {categoryName}
+                  {LABELS.categoryLabel}: {option.categoryNameAr || option.categoryName || LABELS.uncategorized}
+                  {option.categoryNameEn && ` (${option.categoryNameEn})`}
                 </Typography>
               </Stack>
             </Box>

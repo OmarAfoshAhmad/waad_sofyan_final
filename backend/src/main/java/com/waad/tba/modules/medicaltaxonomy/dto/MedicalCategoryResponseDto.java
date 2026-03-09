@@ -22,10 +22,16 @@ public class MedicalCategoryResponseDto {
     private String name;
     private Long parentId;
     private String parentName; // For UX - display parent category name
-    private String context;   // Clinical care-setting: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY, SPECIAL, ANY
+    private String context; // Clinical care-setting: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY,
+                            // SPECIAL, ANY
     private boolean active;
+    private java.math.BigDecimal coveragePercent;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // For multi-context support
+    private java.util.List<Long> multiParentIds;
+    private java.util.List<String> multiParentNames;
 
     // For tree/hierarchy responses
     private List<MedicalCategoryResponseDto> children;

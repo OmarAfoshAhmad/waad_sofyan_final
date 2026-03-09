@@ -118,23 +118,30 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
     /**
      * Find the best matching rule for a service within a policy.
      * Returns the most specific rule (service rule > category rule).
+     * Works for both mapped (serviceId given) and unmapped (serviceId=null, categoryId given) lookups.
      */
     @Query("""
       SELECT r FROM BenefitPolicyRule r
       WHERE r.benefitPolicy.id = :policyId
         AND r.active = true
         AND (
-          r.medicalService.id = :serviceId
-          OR (r.medicalCategory.id = :categoryId AND r.medicalService IS NULL)
+          (:serviceId IS NOT NULL AND r.medicalService.id = :serviceId)
+          OR (:categoryId IS NOT NULL AND r.medicalCategory.id = :categoryId AND r.medicalService IS NULL)
+          OR (:parentCategoryId IS NOT NULL AND r.medicalCategory.id = :parentCategoryId AND r.medicalService IS NULL)
         )
       ORDER BY
-        CASE WHEN r.medicalService IS NOT NULL THEN 0 ELSE 1 END
+        CASE
+          WHEN :serviceId IS NOT NULL AND r.medicalService IS NOT NULL THEN 0
+          WHEN r.medicalCategory.id = :categoryId THEN 1
+          ELSE 2
+        END
       LIMIT 1
       """)
     Optional<BenefitPolicyRule> findBestRuleForService(
             @Param("policyId") Long policyId,
             @Param("serviceId") Long serviceId,
-            @Param("categoryId") Long categoryId);
+            @Param("categoryId") Long categoryId,
+            @Param("parentCategoryId") Long parentCategoryId);
 
     /**
      * Find active category rule for a policy

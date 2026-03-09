@@ -2,8 +2,11 @@ package com.waad.tba.modules.provider.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
 import com.waad.tba.modules.provider.dto.*;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.ProviderContract;
@@ -52,8 +55,8 @@ public class ProviderContractService {
     private final ProviderRepository providerRepository;
     private final MedicalServiceRepository medicalServiceRepository;
     private final ProviderContractPricingItemRepository pricingItemRepository;
-    private final com.waad.tba.modules.member.repository.MemberRepository memberRepository;
-    private final com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService benefitPolicyRuleService;
+    private final MemberRepository memberRepository;
+    private final BenefitPolicyRuleService benefitPolicyRuleService;
 
     // ==================== CREATE ====================
 
@@ -546,7 +549,7 @@ public class ProviderContractService {
      * @param memberId Member ID to check benefit policy rules
      * @return List of services requiring pre-approval with contract prices
      */
-    public java.util.List<com.waad.tba.modules.provider.controller.ProviderPortalController.ProviderServiceDto> getServicesRequiringPreAuth(Long providerId, Long memberId) {
+    public java.util.List<ProviderServiceDto> getServicesRequiringPreAuth(Long providerId, Long memberId) {
         log.info("[PROVIDER-CONTRACT] Getting services requiring pre-auth for provider {} and member {}", 
                 providerId, memberId);
         
@@ -575,11 +578,11 @@ public class ProviderContractService {
                 if (service == null) return false;
                 
                 // Check if this service requires pre-approval in the member's policy
-                return benefitPolicyRuleService.requiresPreApproval(policyId, service.getId());
+                return benefitPolicyRuleService.requiresPreApproval(policyId, service.getId(), null);
             })
             .map(item -> {
                 MedicalService service = item.getMedicalService();
-                return com.waad.tba.modules.provider.controller.ProviderPortalController.ProviderServiceDto.builder()
+                return ProviderServiceDto.builder()
                     .serviceId(service.getId())
                     .serviceCode(service.getCode())
                     .serviceName(service.getName())

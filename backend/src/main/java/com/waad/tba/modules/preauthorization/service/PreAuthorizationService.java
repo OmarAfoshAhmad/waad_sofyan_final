@@ -1390,4 +1390,19 @@ public class PreAuthorizationService {
         }
         // Other roles: no restriction on providerId
     }
+    /**
+     * Search pre-authorizations
+     */
+    @Transactional(readOnly = true)
+    public Page<PreAuthorizationResponseDto> search(String query, Pageable pageable) {
+        log.debug("Searching pre-authorizations with query: {}", query);
+        if (query == null || query.isBlank()) {
+            return getAllPreAuthorizations(pageable);
+        }
+        return preAuthorizationRepository.search(query, pageable)
+                .map(pa -> mapToResponseDto(pa, 
+                    memberRepository.findById(pa.getMemberId()).orElse(null),
+                    providerRepository.findById(pa.getProviderId()).orElse(null),
+                    pa.getMedicalService()));
+    }
 }

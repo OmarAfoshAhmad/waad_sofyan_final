@@ -798,16 +798,25 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
         /**
          * Get financial summary statistics for reports.
-         * Returns: [totalCount, totalRequested, totalApproved, totalPaid,
+         * Returns: [totalCount, totalRequested, totalApproved, totalRefused, totalPaid,
          * approvedCount, settledCount]
+         *
+         * NOTE: approvedAmount is summed for ALL non-DRAFT statuses PLUS DRAFT claims
+         * that already
+         * have an approvedAmount set (batch-entry backlog claims created directly as
+         * processed).
          */
         @Query("SELECT COUNT(c), " +
                         "COALESCE(SUM(c.requestedAmount), 0), " +
-                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN c.approvedAmount ELSE 0 END), 0), "
+                        "COALESCE(SUM(CASE WHEN c.status <> com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT " +
+                        "               OR (c.status = com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT AND c.approvedAmount IS NOT NULL AND c.approvedAmount > 0) "
                         +
-                        "COALESCE(SUM(c.refusedAmount), 0), " +
-                        "COALESCE(SUM(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN COALESCE(c.netProviderAmount, c.approvedAmount) ELSE 0 END), 0), "
+                        "               THEN c.approvedAmount ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN c.status <> com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT " +
+                        "               OR (c.status = com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT AND c.approvedAmount IS NOT NULL AND c.approvedAmount > 0) "
                         +
+                        "               THEN c.refusedAmount ELSE 0 END), 0), " +
+                        "COALESCE(SUM(CASE WHEN c.netProviderAmount IS NOT NULL THEN c.netProviderAmount ELSE 0 END), 0), " +
                         "COUNT(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN 1 END), "
                         +
                         "COUNT(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN 1 END) "

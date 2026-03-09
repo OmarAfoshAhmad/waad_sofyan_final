@@ -532,12 +532,8 @@ export const getMyContractServices = async (params = {}) => {
  */
 export const getAllContractedServices = async (providerId) => {
   try {
-    const activeContract = await getActiveContractByProvider(providerId);
-    if (!activeContract) return [];
-
-    // Get all pricing items (setting a large size to get all at once for dropdowns)
-    const response = await getContractPricingItems(activeContract.id, { size: 1000 });
-    return response?.items || response?.content || (Array.isArray(response) ? response : []);
+    const response = await axiosClient.get(`${BASE_URL}/provider/${providerId}/services`);
+    return unwrap(response);
   } catch (error) {
     console.error('Error fetching contracted services:', error);
     return [];

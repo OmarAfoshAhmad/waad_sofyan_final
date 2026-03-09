@@ -80,7 +80,7 @@ public class MedicalCategoryController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get category by ID", description = "Retrieve a medical category by its ID")
-    public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findById(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}", id);
         
         MedicalCategoryResponseDto result = categoryService.findById(id);
@@ -110,7 +110,7 @@ public class MedicalCategoryController {
     @GetMapping("/code/{code}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get category by code", description = "Retrieve a medical category by its unique code")
-    public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findByCode(@PathVariable String code) {
+    public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findByCode(@PathVariable("code") String code) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/code/{}", code);
         
         MedicalCategoryResponseDto result = categoryService.findByCode(code);
@@ -121,7 +121,7 @@ public class MedicalCategoryController {
     @GetMapping("/{id}/children")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get subcategories", description = "Get all direct children of a category")
-    public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findChildren(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findChildren(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/children", id);
         
         List<MedicalCategoryResponseDto> result = categoryService.findChildren(id);
@@ -150,7 +150,7 @@ public class MedicalCategoryController {
                       "This is the canonical endpoint for service selection - services MUST be filtered by category first."
     )
     public ResponseEntity<ApiResponse<List<MedicalServiceResponseDto>>> getServicesByCategory(
-            @Parameter(description = "Category ID") @PathVariable Long id) {
+            @Parameter(description = "Category ID") @PathVariable("id") Long id) {
         
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/medical-services - Canonical service lookup", id);
         
@@ -195,7 +195,7 @@ public class MedicalCategoryController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Update category", description = "Update an existing medical category (code is immutable)")
     public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody MedicalCategoryUpdateDto dto) {
         
         log.info("[MEDICAL-CATEGORIES] PUT /api/medical-categories/{}", id);
@@ -212,7 +212,7 @@ public class MedicalCategoryController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Delete category", description = "Soft delete a medical category (sets active = false)")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] DELETE /api/medical-categories/{}", id);
         categoryService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("تم حذف التصنيف بنجاح", null));
@@ -226,9 +226,10 @@ public class MedicalCategoryController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Toggle category active state",
                description = "Enable or disable a category. Blocked if active specialties exist.")
-    public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> toggle(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> toggle(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] PATCH /api/medical-categories/{}/toggle", id);
         MedicalCategoryResponseDto result = categoryService.toggle(id);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
+

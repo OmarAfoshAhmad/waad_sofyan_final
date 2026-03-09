@@ -62,7 +62,7 @@ public class UnifiedEligibilityController {
         description = "Returns the remaining coverage limit for a member. Used in Provider Portal during claim creation."
     )
     public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getRemainingLimit(
-            @PathVariable Long memberId) {
+            @PathVariable("memberId") Long memberId) {
         
         log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
         
@@ -108,7 +108,7 @@ public class UnifiedEligibilityController {
         description = "Returns coverage details and calculated limits for a specific service against a member's active policy."
     )
     public ResponseEntity<ApiResponse<com.waad.tba.modules.member.dto.CoverageLimitsDto>> getServiceCoverage(
-            @PathVariable Long memberId,
+            @PathVariable("memberId") Long memberId,
             @RequestParam(name = "serviceCode") String serviceCode) {
         
         log.info("📊 Retrieving service coverage limits: memberId={}, serviceCode={}", memberId, serviceCode);
@@ -218,3 +218,4 @@ public class UnifiedEligibilityController {
             .body(ApiResponse.error(e.getMessage()));
     }
 }
+

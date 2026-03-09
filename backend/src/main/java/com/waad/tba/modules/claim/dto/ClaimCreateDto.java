@@ -1,5 +1,6 @@
 package com.waad.tba.modules.claim.dto;
 
+import com.waad.tba.modules.claim.entity.ClaimStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -29,6 +30,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ClaimCreateDto {
+
+    private ClaimStatus status;
 
     // ==================== MANDATORY FIELDS ====================
 
@@ -102,4 +105,11 @@ public class ClaimCreateDto {
      */
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
+
+    private String rejectionReason;
+    private String complaint;
+
+    // ==================== COVERAGE CONTEXT ====================
+    private Boolean manualCategoryEnabled;
+    private String primaryCategoryCode;
 }

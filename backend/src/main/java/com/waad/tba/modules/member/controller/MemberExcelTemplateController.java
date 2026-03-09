@@ -294,7 +294,7 @@ public class MemberExcelTemplateController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
     @Operation(summary = "Get import status by batch ID")
     public ResponseEntity<ApiResponse<MemberImportLog>> getImportStatus(
-            @PathVariable String batchId) {
+            @PathVariable("batchId") String batchId) {
         
         return importLogRepository.findByImportBatchId(batchId)
                 .map(log -> ResponseEntity.ok(ApiResponse.success("Import status found", log)))
@@ -310,7 +310,7 @@ public class MemberExcelTemplateController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
     @Operation(summary = "Get errors for import batch")
     public ResponseEntity<ApiResponse<?>> getImportErrors(
-            @PathVariable String batchId) {
+            @PathVariable("batchId") String batchId) {
         
         var errors = importErrorRepository.findByImportBatchId(batchId);
         return ResponseEntity.ok(ApiResponse.success("Import errors retrieved", errors));
@@ -334,3 +334,4 @@ public class MemberExcelTemplateController {
         return ResponseEntity.ok(ApiResponse.success("Import logs retrieved", logs));
     }
 }
+

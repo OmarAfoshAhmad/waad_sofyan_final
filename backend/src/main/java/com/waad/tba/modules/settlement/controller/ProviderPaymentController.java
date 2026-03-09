@@ -96,7 +96,7 @@ public class ProviderPaymentController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(summary = "Record payment for confirmed batch")
     public ResponseEntity<ApiResponse<ProviderPaymentDTO>> createPayment(
-            @PathVariable Long batchId,
+            @PathVariable("batchId") Long batchId,
             @Valid @RequestBody CreateProviderPaymentRequest request) {
 
         Long userId = authorizationService.getCurrentUser() != null ? authorizationService.getCurrentUser().getId() : null;
@@ -106,3 +106,4 @@ public class ProviderPaymentController {
         return ResponseEntity.ok(ApiResponse.success("تم تسجيل الدفع بنجاح", payment));
     }
 }
+

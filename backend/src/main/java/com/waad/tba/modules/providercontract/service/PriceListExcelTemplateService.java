@@ -73,11 +73,12 @@ public class PriceListExcelTemplateService {
 
     // Column indices (0-based) - simplified upload template
     private static final int COL_SERVICE_NAME = 0;
-    private static final int COL_SERVICE_CODE = 1; // NEW
-    private static final int COL_UNIT_PRICE = 2;
-    private static final int COL_CATEGORY = 3; // NEW
-    private static final int COL_SPECIALTY = 4; // NEW
-    private static final int COL_NOTES = 5;
+    private static final int COL_SERVICE_CODE = 1;
+    private static final int COL_BASE_PRICE = 2;
+    private static final int COL_CONTRACT_PRICE = 3;
+    private static final int COL_CATEGORY = 4;
+    private static final int COL_SPECIALTY = 5;
+    private static final int COL_NOTES = 6;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // TEMPLATE GENERATION - SIMPLIFIED
@@ -132,25 +133,30 @@ public class PriceListExcelTemplateService {
             cell1.setCellValue("service_code / الكود");
             cell1.setCellStyle(headerStyle);
 
-            // unit_price (optional)
-            Cell cell2 = headerRow.createCell(COL_UNIT_PRICE);
-            cell2.setCellValue("unit_price / السعر");
+            // standard_price (optional - reference price)
+            Cell cell2 = headerRow.createCell(COL_BASE_PRICE);
+            cell2.setCellValue("standard_price / السعر الأساسي");
             cell2.setCellStyle(headerStyle);
 
-            // category (NEW - optional)
-            Cell cell3 = headerRow.createCell(COL_CATEGORY);
-            cell3.setCellValue("category / التصنيف");
+            // contract_price (optional - what we pay)
+            Cell cell3 = headerRow.createCell(COL_CONTRACT_PRICE);
+            cell3.setCellValue("contract_price / سعر العقد");
             cell3.setCellStyle(headerStyle);
 
-            // specialty (NEW - optional)
-            Cell cell4 = headerRow.createCell(COL_SPECIALTY);
-            cell4.setCellValue("specialty / التخصص");
+            // category (optional)
+            Cell cell4 = headerRow.createCell(COL_CATEGORY);
+            cell4.setCellValue("category / التصنيف");
             cell4.setCellStyle(headerStyle);
 
-            // notes (optional)
-            Cell cell5 = headerRow.createCell(COL_NOTES);
-            cell5.setCellValue("notes / ملاحظات");
+            // specialty (optional)
+            Cell cell5 = headerRow.createCell(COL_SPECIALTY);
+            cell5.setCellValue("specialty / التخصص");
             cell5.setCellStyle(headerStyle);
+
+            // notes (optional)
+            Cell cell6 = headerRow.createCell(COL_NOTES);
+            cell6.setCellValue("notes / ملاحظات");
+            cell6.setCellStyle(headerStyle);
 
             // Row 1: Example data row
             Row exampleRow = sheet.createRow(1);
@@ -163,26 +169,31 @@ public class PriceListExcelTemplateService {
             ex1.setCellValue("MC-001");
             ex1.setCellStyle(exampleStyle);
 
-            Cell ex2 = exampleRow.createCell(COL_UNIT_PRICE);
-            ex2.setCellValue(100.00);
+            Cell ex2 = exampleRow.createCell(COL_BASE_PRICE);
+            ex2.setCellValue(120.00);
             ex2.setCellStyle(exampleStyle);
 
-            Cell ex3 = exampleRow.createCell(COL_CATEGORY);
-            ex3.setCellValue("عيادات خارجية");
+            Cell ex3 = exampleRow.createCell(COL_CONTRACT_PRICE);
+            ex3.setCellValue(100.00);
             ex3.setCellStyle(exampleStyle);
 
-            Cell ex4 = exampleRow.createCell(COL_SPECIALTY);
-            ex4.setCellValue("باطنة");
+            Cell ex4 = exampleRow.createCell(COL_CATEGORY);
+            ex4.setCellValue("عيادات خارجية");
             ex4.setCellStyle(exampleStyle);
 
-            Cell ex5 = exampleRow.createCell(COL_NOTES);
-            ex5.setCellValue("مثال - احذف هذا الصف");
+            Cell ex5 = exampleRow.createCell(COL_SPECIALTY);
+            ex5.setCellValue("باطنة");
             ex5.setCellStyle(exampleStyle);
+
+            Cell ex6 = exampleRow.createCell(COL_NOTES);
+            ex6.setCellValue("مثال - احذف هذا الصف");
+            ex6.setCellStyle(exampleStyle);
 
             // Set column widths
             sheet.setColumnWidth(COL_SERVICE_NAME, 40 * 256);
             sheet.setColumnWidth(COL_SERVICE_CODE, 15 * 256);
-            sheet.setColumnWidth(COL_UNIT_PRICE, 15 * 256);
+            sheet.setColumnWidth(COL_BASE_PRICE, 15 * 256);
+            sheet.setColumnWidth(COL_CONTRACT_PRICE, 15 * 256);
             sheet.setColumnWidth(COL_CATEGORY, 25 * 256);
             sheet.setColumnWidth(COL_SPECIALTY, 25 * 256);
             sheet.setColumnWidth(COL_NOTES, 40 * 256);
@@ -462,9 +473,13 @@ public class PriceListExcelTemplateService {
                     || value.contains("رمز")) {
                 indices.put("service_code", i);
             }
-            // unit_price detection
-            else if (value.contains("unit_price") || value.contains("السعر") || value.contains("price")) {
-                indices.put("unit_price", i);
+            // Prices detection
+            else if (value.contains("base_price") || value.contains("السعر الأساسي") || value.contains("standard")) {
+                indices.put("base_price", i);
+            }
+            else if (value.contains("contract_price") || value.contains("سعر العقد") || value.contains("unit_price") 
+                    || value.contains("السعر") || value.equals("price")) {
+                indices.put("contract_price", i);
             }
             // category/classification detection
             else if (value.contains("category") || value.contains("classification") || value.contains("تصنيف")
@@ -519,25 +534,44 @@ public class PriceListExcelTemplateService {
 
         serviceName = truncate(serviceName.trim(), 255);
 
-        // Get unit_price (optional, default 0)
-        BigDecimal unitPrice = BigDecimal.ZERO;
-        Integer unitPriceIdx = columnIndices.get("unit_price");
-        if (unitPriceIdx != null) {
-            Cell priceCell = row.getCell(unitPriceIdx);
-            if (priceCell != null) {
-                try {
-                    if (priceCell.getCellType() == CellType.NUMERIC) {
-                        unitPrice = BigDecimal.valueOf(priceCell.getNumericCellValue());
-                    } else {
-                        String priceStr = getCellStringValue(priceCell);
-                        if (priceStr != null && !priceStr.trim().isEmpty()) {
-                            unitPrice = new BigDecimal(priceStr.trim());
-                        }
-                    }
-                } catch (NumberFormatException e) {
-                    // Keep default 0
-                    log.debug("[PriceListImport] Invalid price at row {}, using 0", rowNum);
-                }
+        // Get Prices
+        BigDecimal basePrice = null;
+        Integer basePriceIdx = columnIndices.get("base_price");
+        if (basePriceIdx != null) {
+            basePrice = readBigDecimal(row.getCell(basePriceIdx), rowNum);
+        }
+
+        BigDecimal contractPrice = null;
+        Integer contractPriceIdx = columnIndices.get("contract_price");
+        if (contractPriceIdx != null) {
+            contractPrice = readBigDecimal(row.getCell(contractPriceIdx), rowNum);
+        }
+
+        // Logic if only one price is provided
+        if (basePrice == null && contractPrice != null) {
+            basePrice = contractPrice; // Assume 0% discount if only contract price exists
+        } else if (contractPrice == null && basePrice != null) {
+            contractPrice = basePrice; // Assume 0% discount if only standard price exists
+        }
+
+        // Final fallbacks
+        if (basePrice == null || basePrice.compareTo(BigDecimal.ZERO) == 0) {
+            if (medicalService != null && medicalService.getBasePrice() != null) {
+                basePrice = medicalService.getBasePrice();
+            } else if (basePrice == null) {
+                basePrice = BigDecimal.ZERO;
+            }
+        }
+        
+        if (contractPrice == null) contractPrice = basePrice;
+        if (contractPrice == null) contractPrice = BigDecimal.ZERO;
+
+        // Calculate discount if possible
+        BigDecimal discountPercent = BigDecimal.ZERO;
+        if (basePrice.compareTo(BigDecimal.ZERO) > 0 && contractPrice.compareTo(BigDecimal.ZERO) >= 0) {
+            BigDecimal diff = basePrice.subtract(contractPrice);
+            if (diff.compareTo(BigDecimal.ZERO) > 0) {
+                discountPercent = diff.multiply(BigDecimal.valueOf(100)).divide(basePrice, 2, java.math.RoundingMode.HALF_UP);
             }
         }
 
@@ -610,9 +644,48 @@ public class PriceListExcelTemplateService {
         if (medicalService != null) {
             serviceCode = medicalService.getCode(); // Update code to canonical if matched
             categoryName = resolveCategoryNameFromUnifiedCatalog(medicalService);
+            
+            // Link to the medical service's category if pricing item has no override yet
+            if (medicalCategory == null && medicalService.getCategoryId() != null) {
+                medicalCategory = medicalCategoryRepository.findById(medicalService.getCategoryId()).orElse(null);
+            }
         }
 
-        // 4. Sync to ProviderRawService & Mapping Center (NON-CRITICAL)
+        // 4. Resolve Medical Category (Override)
+        MedicalCategory medicalCategory = null;
+        
+        // Priority 1: Match by 'category' column from Excel
+        if (rawCategory != null && !rawCategory.isBlank()) {
+            medicalCategory = medicalCategoryRepository.findFirstByName(rawCategory).orElse(null);
+            if (medicalCategory != null) {
+                categoryName = medicalCategory.getName();
+            } else {
+                categoryName = rawCategory; // User text fallback
+            }
+        }
+        
+        // Priority 2: Extract from Notes "Root Mapping: CAT-XXXX"
+        if (medicalCategory == null && notes != null && notes.contains("Root Mapping:")) {
+            try {
+                String rootCode = notes.split("Root Mapping:")[1].trim().split("\\s+")[0];
+                medicalCategory = medicalCategoryRepository.findActiveByCode(rootCode).orElse(null);
+                if (medicalCategory != null) {
+                    categoryName = medicalCategory.getName();
+                }
+            } catch (Exception e) {
+                log.debug("[PriceListImport] Failed to parse root mapping from notes: {}", notes);
+            }
+        }
+        
+        // Priority 3: Fallback to Service's Category if matched and not yet set
+        if (medicalCategory == null && medicalService != null && medicalService.getCategoryId() != null) {
+            medicalCategory = medicalCategoryRepository.findActiveById(medicalService.getCategoryId()).orElse(null);
+            if (medicalCategory != null) {
+                categoryName = medicalCategory.getName();
+            }
+        }
+
+        // 5. Sync to ProviderRawService & Mapping Center (NON-CRITICAL)
         try {
             syncProviderRawAndMapping(contract, serviceName, serviceCode, rawCategory, rawSpecialty, medicalService);
         } catch (Exception e) {
@@ -624,10 +697,13 @@ public class PriceListExcelTemplateService {
                 .serviceName(serviceName)
                 .serviceCode(serviceCode)
                 .categoryName(categoryName)
-                .contractPrice(unitPrice)
+                .basePrice(basePrice)
+                .contractPrice(contractPrice)
+                .discountPercent(discountPercent)
                 .quantity(quantity)
                 .notes(notes)
                 .medicalService(medicalService)
+                .medicalCategory(medicalCategory)
                 .active(true)
                 .build();
     }
@@ -783,6 +859,25 @@ public class PriceListExcelTemplateService {
 
         if (matcher.find()) {
             return matcher.group();
+        }
+        return null;
+    }
+
+    private BigDecimal readBigDecimal(Cell cell, int rowNum) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return null;
+        }
+        try {
+            if (cell.getCellType() == CellType.NUMERIC) {
+                return BigDecimal.valueOf(cell.getNumericCellValue());
+            } else {
+                String val = getCellStringValue(cell);
+                if (val != null && !val.trim().isEmpty()) {
+                    return new BigDecimal(val.trim().replace(",", ""));
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[PriceListImport] Invalid numeric value at row {}: {}", rowNum, e.getMessage());
         }
         return null;
     }

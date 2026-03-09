@@ -83,6 +83,11 @@ public class ClaimViewDto {
      */
     private String diagnosisDescription;
     
+    /**
+     * Patient complaint
+     */
+    private String complaint;
+    
     // Claim details
     private Long providerId;
     private String providerName;
@@ -255,5 +260,10 @@ public class ClaimViewDto {
     public boolean hasFinancialSnapshot() {
         return patientCoPay != null && netProviderAmount != null;
     }
+
+    // ==================== COVERAGE CONTEXT ====================
+    private Boolean manualCategoryEnabled;
+    private String primaryCategoryCode;
+    private String primaryCategoryName;
 
 }

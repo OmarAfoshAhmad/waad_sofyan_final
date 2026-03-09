@@ -33,6 +33,11 @@ public interface MedicalCategoryRepository extends JpaRepository<MedicalCategory
     Optional<MedicalCategory> findByCode(String code);
 
     /**
+     * Find category by exact name (for import mapping)
+     */
+    Optional<MedicalCategory> findFirstByName(String name);
+
+    /**
      * Check if code exists (for duplicate validation)
      */
     boolean existsByCode(String code);
@@ -82,6 +87,12 @@ public interface MedicalCategoryRepository extends JpaRepository<MedicalCategory
      */
     @Query("SELECT mc FROM MedicalCategory mc WHERE mc.parentId = :parentId AND mc.active = true")
     List<MedicalCategory> findActiveChildrenByParentId(@Param("parentId") Long parentId);
+
+    /**
+     * Find categories belonging to a specific root (Phase 10 Many-to-Many)
+     */
+    @Query("SELECT mc FROM MedicalCategory mc JOIN mc.roots r WHERE r.id = :rootId AND mc.active = true")
+    List<MedicalCategory> findByRootId(@Param("rootId") Long rootId);
 
     /**
      * Check if category has children (for delete validation)

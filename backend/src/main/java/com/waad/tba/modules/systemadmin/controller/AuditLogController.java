@@ -39,14 +39,14 @@ public class AuditLogController {
 
     @GetMapping("/{id:\\d+}")
     @Operation(summary = "Get audit log by ID")
-    public ApiResponse<AuditLog> getAuditLogById(@PathVariable Long id) {
+    public ApiResponse<AuditLog> getAuditLogById(@PathVariable("id") Long id) {
         AuditLog log = auditLogService.getAuditLogById(id);
         return ApiResponse.success("Audit log retrieved", log);
     }
 
     @GetMapping("/user/{userId}")
     @Operation(summary = "Get audit logs by user")
-    public ApiResponse<Page<AuditLog>> getAuditLogsByUser(@PathVariable Long userId, Pageable pageable) {
+    public ApiResponse<Page<AuditLog>> getAuditLogsByUser(@PathVariable("userId") Long userId, Pageable pageable) {
         Page<AuditLog> logs = auditLogService.getAuditLogsByUser(userId, pageable);
         return ApiResponse.success("User audit logs retrieved", logs);
     }
@@ -54,8 +54,8 @@ public class AuditLogController {
     @GetMapping("/entity/{entityType}/{entityId}")
     @Operation(summary = "Get audit logs by entity")
     public ApiResponse<Page<AuditLog>> getAuditLogsByEntity(
-            @PathVariable String entityType,
-            @PathVariable Long entityId,
+            @PathVariable("entityType") String entityType,
+            @PathVariable("entityId") Long entityId,
             Pageable pageable) {
         Page<AuditLog> logs = auditLogService.getAuditLogsByEntity(entityType, entityId, pageable);
         return ApiResponse.success("Entity audit logs retrieved", logs);
@@ -70,8 +70,9 @@ public class AuditLogController {
 
     @GetMapping("/action/{action}")
     @Operation(summary = "Get audit logs by action")
-    public ApiResponse<Page<AuditLog>> getAuditLogsByAction(@PathVariable String action, Pageable pageable) {
+    public ApiResponse<Page<AuditLog>> getAuditLogsByAction(@PathVariable("action") String action, Pageable pageable) {
         Page<AuditLog> logs = auditLogService.getAuditLogsByAction(action, pageable);
         return ApiResponse.success("Action audit logs retrieved", logs);
     }
 }
+

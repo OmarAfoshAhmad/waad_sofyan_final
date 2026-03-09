@@ -110,7 +110,7 @@ public class EligibilityController {
         @GetMapping("/family/{memberId}")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
         public ResponseEntity<ApiResponse<FamilyEligibilityResponse>> checkFamilyEligibility(
-                        @PathVariable Long memberId,
+                        @PathVariable("memberId") Long memberId,
                         @RequestParam(required = false) @Parameter(description = "Service date (defaults to today)") java.time.LocalDate serviceDate) {
 
                 log.info("[EligibilityAPI] Family check request - MemberID: {}, ServiceDate: {}", memberId,
@@ -191,7 +191,7 @@ public class EligibilityController {
         @GetMapping("/logs/{requestId}")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
         public ResponseEntity<ApiResponse<EligibilityCheck>> getLogByRequestId(
-                        @PathVariable String requestId) {
+                        @PathVariable("requestId") String requestId) {
 
                 return eligibilityCheckRepository.findByRequestId(requestId)
                                 .map(check -> ResponseEntity.ok(ApiResponse.success("تم جلب سجل التحقق", check)))
@@ -224,3 +224,4 @@ public class EligibilityController {
                                 "OK - " + ruleCount + " rules active"));
         }
 }
+

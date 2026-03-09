@@ -28,7 +28,7 @@ public class MedicalCategoryCreateDto {
      */
     @NotBlank(message = "Category code is required")
     @Size(max = 50, message = "Category code must not exceed 50 characters")
-    @JsonAlias({"categoryCode", "code"})
+    @JsonAlias({ "categoryCode", "code" })
     private String code;
 
     /**
@@ -41,12 +41,13 @@ public class MedicalCategoryCreateDto {
     /**
      * Parent category ID (null for root categories)
      */
-    @JsonAlias({"parentCategoryId", "parentId"})
+    @JsonAlias({ "parentCategoryId", "parentId" })
     private Long parentId;
 
     /**
      * Clinical care-setting context.
-     * Accepted values: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY, SPECIAL, ANY
+     * Accepted values: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY, SPECIAL,
+     * ANY
      * Defaults to ANY if not provided.
      */
     private String context;
@@ -56,4 +57,13 @@ public class MedicalCategoryCreateDto {
      */
     @Builder.Default
     private Boolean active = true;
+
+    @jakarta.validation.constraints.DecimalMax(value = "100.0", message = "Coverage percent must be <= 100")
+    private java.math.BigDecimal coveragePercent;
+
+    /**
+     * Multiple parent root IDs for cross-context support (Phase 10)
+     */
+    @com.fasterxml.jackson.annotation.JsonAlias({ "multiParentIds", "rootIds" })
+    private java.util.List<Long> multiParentIds;
 }

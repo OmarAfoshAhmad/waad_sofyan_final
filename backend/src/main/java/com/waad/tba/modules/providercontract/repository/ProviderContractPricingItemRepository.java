@@ -145,13 +145,23 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
      * Search pricing items by service code or name
      */
     @Query("SELECT p FROM ProviderContractPricingItem p " +
+           "LEFT JOIN p.medicalService ms " +
+           "LEFT JOIN p.medicalCategory mc " +
            "WHERE p.contract.id = :contractId " +
            "AND p.active = true " +
-           "AND (LOWER(p.medicalService.code) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "     OR LOWER(p.medicalService.name) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<ProviderContractPricingItem> searchByServiceCodeOrName(
+           "AND (:q IS NULL OR :q = '' " +
+           "     OR LOWER(ms.code) LIKE LOWER(CONCAT('%', :q, '%')) " +
+           "     OR LOWER(ms.name) LIKE LOWER(CONCAT('%', :q, '%')) " +
+           "     OR LOWER(ms.nameAr) LIKE LOWER(CONCAT('%', :q, '%')) " +
+           "     OR LOWER(ms.nameEn) LIKE LOWER(CONCAT('%', :q, '%')) " +
+           "     OR LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :q, '%')) " +
+           "     OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :q, '%')) " +
+           "     OR LOWER(p.categoryName) LIKE LOWER(CONCAT('%', :q, '%'))) " +
+           "AND (:categoryId IS NULL OR mc.id = :categoryId OR ms.categoryId = :categoryId)")
+    Page<ProviderContractPricingItem> searchByServiceCodeOrNameAndCategory(
             @Param("contractId") Long contractId,
-            @Param("search") String search,
+            @Param("q") String q,
+            @Param("categoryId") Long categoryId,
             Pageable pageable);
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -296,14 +306,14 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
             @Param("categoryId") Long categoryId);
 
     /**
-     * Get all services available in active contracts for a provider
+     * Get ALL pricing items (mapped AND unmapped) in active contracts for a provider.
+     * This is used for the service dropdown in claim/preauth entry.
      */
     @Query("SELECT p FROM ProviderContractPricingItem p " +
            "WHERE p.contract.provider.id = :providerId " +
            "AND p.active = true " +
            "AND p.contract.active = true " +
            "AND p.contract.status = 'ACTIVE' " +
-           "AND p.medicalService IS NOT NULL " +
            "AND p.contract.startDate <= CURRENT_DATE " +
            "AND (p.contract.endDate IS NULL OR p.contract.endDate >= CURRENT_DATE)")
     List<ProviderContractPricingItem> findAllServicesByProvider(

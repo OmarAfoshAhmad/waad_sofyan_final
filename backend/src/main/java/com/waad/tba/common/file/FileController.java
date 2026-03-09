@@ -69,8 +69,8 @@ import org.springframework.web.multipart.MultipartFile;
     @GetMapping("/{folder}/{filename}/download")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> downloadFile(
-            @PathVariable String folder,
-            @PathVariable String filename) {
+            @PathVariable("folder") String folder,
+            @PathVariable("filename") String filename) {
         
         String fileKey = folder + "/" + filename;
         log.info("Downloading file: {}", fileKey);
@@ -103,8 +103,8 @@ import org.springframework.web.multipart.MultipartFile;
     @GetMapping("/{folder}/{filename}/preview")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> previewFile(
-            @PathVariable String folder,
-            @PathVariable String filename) {
+            @PathVariable("folder") String folder,
+            @PathVariable("filename") String filename) {
         
         String fileKey = folder + "/" + filename;
         log.info("Previewing file: {}", fileKey);
@@ -167,8 +167,8 @@ import org.springframework.web.multipart.MultipartFile;
     @DeleteMapping("/{folder}/{filename}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<String> deleteFile(
-            @PathVariable String folder,
-            @PathVariable String filename) {
+            @PathVariable("folder") String folder,
+            @PathVariable("filename") String filename) {
         
         String fileKey = folder + "/" + filename;
         log.info("Deleting file: {}", fileKey);
@@ -195,8 +195,8 @@ import org.springframework.web.multipart.MultipartFile;
     @GetMapping("/{folder}/{filename}/url")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<String> getPresignedUrl(
-            @PathVariable String folder,
-            @PathVariable String filename,
+            @PathVariable("folder") String folder,
+            @PathVariable("filename") String filename,
             @RequestParam(value = "expiryMinutes", defaultValue = "60") int expiryMinutes) {
         
         String fileKey = folder + "/" + filename;
@@ -222,11 +222,12 @@ import org.springframework.web.multipart.MultipartFile;
     @GetMapping("/{folder}/{filename}/exists")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Boolean> fileExists(
-            @PathVariable String folder,
-            @PathVariable String filename) {
+            @PathVariable("folder") String folder,
+            @PathVariable("filename") String filename) {
         
         String fileKey = folder + "/" + filename;
         boolean exists = fileStorageService.exists(fileKey);
         return ResponseEntity.ok(exists);
     }
 }
+

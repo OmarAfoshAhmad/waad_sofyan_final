@@ -26,7 +26,7 @@
  * @updated 2026-01-02 - Added branding fields
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -42,11 +42,13 @@ import {
   Typography,
   Divider,
   CircularProgress,
-  Alert
+  Alert,
+  Chip
 } from '@mui/material';
-import { Save as SaveIcon } from '@mui/icons-material';
+import { Save as SaveIcon, CloudUpload as CloudUploadIcon, RestartAlt as ResetIcon } from '@mui/icons-material';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { useSystemCompany, useUpdateCompany } from 'hooks/useCompany';
+import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
 const CompanySettingsPage = () => {
   // ============================================================================
@@ -69,6 +71,27 @@ const CompanySettingsPage = () => {
   });
 
   const [errors, setErrors] = useState({});
+
+  // ============================================================================
+  // LOGO MANAGEMENT (localStorage-based via CompanySettingsContext)
+  // ============================================================================
+  const { getLogoSrc, updateSettings, resetToDefaultLogo, hasCustomLogo } = useCompanySettings();
+  const fileInputRef = useRef(null);
+
+  const handleLogoFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      updateSettings({ logoBase64: evt.target.result, logoUrl: null });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetDefaultLogo = () => {
+    resetToDefaultLogo();
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   // ============================================================================
   // DATA FETCHING
@@ -321,18 +344,7 @@ const CompanySettingsPage = () => {
                 />
               </Grid>
 
-              {/* Logo URL */}
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="رابط الشعار"
-                  name="logoUrl"
-                  value={formData.logoUrl}
-                  onChange={handleChange('logoUrl')}
-                  placeholder="https://example.com/logo.png"
-                  helperText="رابط صورة الشعار (URL)"
-                />
-              </Grid>
+              {/* Logo URL - hidden: logo is managed via the Logo section below */}
 
               {/* Active Status */}
               <Grid item xs={12} md={6}>
@@ -365,6 +377,74 @@ const CompanySettingsPage = () => {
           </CardContent>
         </Card>
       </Box>
+
+      {/* ================================================================ */}
+      {/* LOGO MANAGEMENT CARD                                             */}
+      {/* ================================================================ */}
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h6" gutterBottom>شعار الشركة</Typography>
+            <Divider />
+          </Box>
+
+          {/* Preview */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, mb: 3 }}>
+            <Box
+              component="img"
+              src={getLogoSrc()}
+              alt="شعار الشركة"
+              sx={{
+                maxHeight: 130,
+                maxWidth: 300,
+                objectFit: 'contain',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 2,
+                bgcolor: '#fafafa'
+              }}
+            />
+            <Chip
+              label={hasCustomLogo ? 'شعار مخصص' : 'الشعار الافتراضي'}
+              color={hasCustomLogo ? 'primary' : 'default'}
+              size="small"
+            />
+          </Box>
+
+          {/* Buttons */}
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png, image/jpeg, image/svg+xml, image/webp"
+              style={{ display: 'none' }}
+              onChange={handleLogoFileChange}
+            />
+            <Button
+              variant="contained"
+              startIcon={<CloudUploadIcon />}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              رفع شعار مخصص
+            </Button>
+            {hasCustomLogo && (
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<ResetIcon />}
+                onClick={handleResetDefaultLogo}
+              >
+                استعادة الشعار الافتراضي
+              </Button>
+            )}
+          </Box>
+
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+            يظهر الشعار في جميع التقارير والطباعة — يُخزَّن محلياً في المتصفح
+          </Typography>
+        </CardContent>
+      </Card>
     </Box>
   );
 };

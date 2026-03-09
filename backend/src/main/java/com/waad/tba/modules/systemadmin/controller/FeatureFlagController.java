@@ -55,7 +55,7 @@ public class FeatureFlagController {
 
     @GetMapping("/{key}")
     @Operation(summary = "Get feature flag by key")
-    public ApiResponse<FeatureFlagDto> getFeatureFlagByKey(@PathVariable String key) {
+    public ApiResponse<FeatureFlagDto> getFeatureFlagByKey(@PathVariable("key") String key) {
         FeatureFlagDto flag = featureFlagService.getFeatureFlagByKey(key);
         return ApiResponse.success("Feature flag retrieved", flag);
     }
@@ -74,7 +74,7 @@ public class FeatureFlagController {
     @PutMapping("/{key}/toggle")
     @Operation(summary = "Toggle feature flag")
     public ApiResponse<FeatureFlagDto> toggleFeatureFlag(
-            @PathVariable String key,
+            @PathVariable("key") String key,
             @RequestParam(name = "enabled") Boolean enabled,
             Authentication authentication) {
         String updatedBy = authentication.getName();
@@ -85,7 +85,7 @@ public class FeatureFlagController {
     @PutMapping("/{key}")
     @Operation(summary = "Update feature flag")
     public ApiResponse<FeatureFlagDto> updateFeatureFlag(
-            @PathVariable String key,
+            @PathVariable("key") String key,
             @Valid @RequestBody FeatureFlagDto dto,
             Authentication authentication) {
         String updatedBy = authentication.getName();
@@ -95,9 +95,10 @@ public class FeatureFlagController {
 
     @DeleteMapping("/{key}")
     @Operation(summary = "Delete feature flag")
-    public ApiResponse<Void> deleteFeatureFlag(@PathVariable String key, Authentication authentication) {
+    public ApiResponse<Void> deleteFeatureFlag(@PathVariable("key") String key, Authentication authentication) {
         String deletedBy = authentication.getName();
         featureFlagService.deleteFeatureFlag(key, deletedBy);
         return ApiResponse.success("Feature flag deleted", null);
     }
 }
+

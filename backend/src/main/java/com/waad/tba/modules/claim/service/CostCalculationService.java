@@ -229,7 +229,13 @@ public class CostCalculationService {
         BigDecimal weightedCopaySum = BigDecimal.ZERO;
 
         for (ClaimLine line : lines) {
-            BigDecimal lineAmount = line.getTotalPrice();
+            BigDecimal requestedUnit = line.getRequestedUnitPrice() != null ? line.getRequestedUnitPrice()
+                    : line.getUnitPrice();
+            BigDecimal lineAmount = requestedUnit != null && line.getQuantity() != null
+                    ? requestedUnit.multiply(BigDecimal.valueOf(line.getQuantity()))
+                    : BigDecimal.ZERO;
+            BigDecimal lineRefused = line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO;
+            lineAmount = lineAmount.subtract(lineRefused).max(BigDecimal.ZERO);
             if (lineAmount == null || lineAmount.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }

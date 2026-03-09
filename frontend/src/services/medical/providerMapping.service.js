@@ -8,6 +8,16 @@ const BASE = '/provider-mapping';
 
 export const providerMappingService = {
   /**
+   * GET /providers-active
+   * Returns providers that have at least one ACTIVE contract.
+   * Used to populate the provider selector in the Mapping Center.
+   */
+  getProvidersWithActiveContracts: async () => {
+    const response = await axiosClient.get(`${BASE}/providers-active`);
+    return response.data?.data ?? [];
+  },
+
+  /**
    * GET /raw?providerId=X&status=PENDING
    * Returns raw services for a provider filtered by status.
    */

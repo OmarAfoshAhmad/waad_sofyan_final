@@ -162,17 +162,17 @@ public class ProviderContractPricingItemService {
      * Search pricing items within a contract
      */
     @Transactional(readOnly = true)
-    public Page<ProviderContractPricingItemResponseDto> searchInContract(Long contractId, String query,
-            Pageable pageable) {
-        log.debug("Searching pricing items in contract: {}, query: {}", contractId, query);
+    public Page<ProviderContractPricingItemResponseDto> searchInContract(
+            Long contractId, String query, Long categoryId, Pageable pageable) {
+        log.debug("Searching pricing in contract {}: query={}, categoryId={}", contractId, query, categoryId);
 
         verifyContractExists(contractId);
 
-        if (query == null || query.trim().isEmpty()) {
+        if ((query == null || query.isBlank()) && categoryId == null) {
             return findByContract(contractId, pageable);
         }
 
-        return pricingRepository.searchByServiceCodeOrName(contractId, query, pageable)
+        return pricingRepository.searchByServiceCodeOrNameAndCategory(contractId, query, categoryId, pageable)
                 .map(ProviderContractPricingItemResponseDto::fromEntity);
     }
 
@@ -457,6 +457,34 @@ public class ProviderContractPricingItemService {
 
             if (service != null) {
                 item.setMedicalService(service);
+                
+                // Sync price if missing
+                if (item.getBasePrice() == null || item.getBasePrice().compareTo(BigDecimal.ZERO) == 0) {
+                    item.setBasePrice(service.getBasePrice());
+                }
+                
+                // Recalculate discount
+                if (item.getBasePrice() != null && item.getBasePrice().compareTo(BigDecimal.ZERO) > 0 
+                        && item.getContractPrice() != null) {
+                    BigDecimal diff = item.getBasePrice().subtract(item.getContractPrice());
+                    if (diff.compareTo(BigDecimal.ZERO) > 0) {
+                        item.setDiscountPercent(diff.multiply(BigDecimal.valueOf(100))
+                                .divide(item.getBasePrice(), 2, RoundingMode.HALF_UP));
+                    } else {
+                        item.setDiscountPercent(BigDecimal.ZERO);
+                    }
+                }
+                
+                // Sync category
+                if (item.getMedicalCategory() == null && service.getCategoryId() != null) {
+                    medicalCategoryRepository.findById(service.getCategoryId()).ifPresent(cat -> {
+                        item.setMedicalCategory(cat);
+                        item.setCategoryName(cat.getName());
+                    });
+                } else if (item.getCategoryName() == null) {
+                    item.setCategoryName(resolveCategoryNameForService(service));
+                }
+                
                 pricingRepository.save(item);
                 fixedCount++;
             }
@@ -529,7 +557,8 @@ public class ProviderContractPricingItemService {
     }
 
     /**
-     * Get all services available in active contracts for a provider
+     * Get all services (mapped AND unmapped) available in active contracts for a provider.
+     * For unmapped items without a MedicalCategory FK, we resolve categoryId from the categoryName text.
      */
     @Transactional(readOnly = true)
     public List<ContractServiceDto> findAllServicesByProvider(Long providerId) {
@@ -538,23 +567,49 @@ public class ProviderContractPricingItemService {
         var pricingItems = pricingRepository.findAllServicesByProvider(providerId);
         Map<Long, MedicalCategory> categoryMap = buildCategoryMap(pricingItems);
 
+        // Pre-load a name→id cache for unmapped items that only have categoryName text
+        // This avoids N+1 queries per item
+        Map<String, Long> categoryNameToIdCache = new HashMap<>();
+
         return pricingItems.stream()
-                .filter(p -> p.getMedicalService() != null)
-                .map(p -> ContractServiceDto.builder()
-                        .id(p.getMedicalService().getId())
-                        .code(p.getMedicalService().getCode())
-                        .name(p.getMedicalService().getName())
-                        .categoryId(categoryMap.get(p.getMedicalService().getId()) != null
-                                ? categoryMap.get(p.getMedicalService().getId()).getId()
-                                : null)
-                        .categoryName(categoryMap.get(p.getMedicalService().getId()) != null
-                                ? categoryMap.get(p.getMedicalService().getId()).getName()
-                                : p.getCategoryName())
+                .map(p -> {
+                    boolean hasMS = p.getMedicalService() != null;
+                    Long msId = hasMS ? p.getMedicalService().getId() : null;
+
+                    // Resolve category ID for unmapped items using categoryName text
+                    Long resolvedCategoryId = null;
+                    String resolvedCategoryName = null;
+
+                    if (msId != null && categoryMap.containsKey(msId)) {
+                        // Mapped service: use the category from the category map
+                        resolvedCategoryId = categoryMap.get(msId).getId();
+                        resolvedCategoryName = categoryMap.get(msId).getName();
+                    } else if (p.getMedicalCategory() != null) {
+                        // Unmapped but has explicit MedicalCategory FK
+                        resolvedCategoryId = p.getMedicalCategory().getId();
+                        resolvedCategoryName = p.getMedicalCategory().getName();
+                    } else if (p.getCategoryName() != null && !p.getCategoryName().isBlank()) {
+                        // Unmapped with only a text categoryName — look up by name (fuzzy)
+                        String catName = p.getCategoryName().trim();
+                        resolvedCategoryId = categoryNameToIdCache.computeIfAbsent(catName,
+                            this::resolveCategoryIdByName
+                        );
+                        resolvedCategoryName = catName;
+                    }
+
+                    return ContractServiceDto.builder()
+                        .id(msId != null ? msId : p.getId())
+                        .code(hasMS ? p.getMedicalService().getCode() : p.getServiceCode())
+                        .name(hasMS ? p.getMedicalService().getName() : p.getServiceName())
+                        .categoryId(resolvedCategoryId)
+                        .categoryName(resolvedCategoryName)
                         .contractPrice(p.getContractPrice())
                         .basePrice(p.getBasePrice())
                         .discountPercent(p.getDiscountPercent())
-                        .requiresPreAuth(p.getMedicalService().isRequiresPA())
-                        .build())
+                        .requiresPreAuth(hasMS ? p.getMedicalService().isRequiresPA() : false)
+                        .mapped(hasMS)
+                        .build();
+                })
                 .collect(Collectors.toList());
     }
 
@@ -569,6 +624,42 @@ public class ProviderContractPricingItemService {
         if (!contractRepository.existsByIdAndActiveTrue(contractId)) {
             throw new BusinessRuleException("Provider contract not found: " + contractId);
         }
+    }
+
+    /**
+     * Resolve a MedicalCategory ID from a freetext category name (imported data).
+     * Uses a 3-step fuzzy matching approach to handle name variations:
+     * 1. Exact match
+     * 2. Strip parenthetical suffixes like "(IP)", "(OP)" then exact match
+     * 3. LIKE (contains) search on the stripped name
+     */
+    private Long resolveCategoryIdByName(String rawName) {
+        if (rawName == null || rawName.isBlank()) return null;
+        String name = rawName.trim();
+
+        // Step 1: exact match
+        Optional<MedicalCategory> found = medicalCategoryRepository.findFirstByName(name);
+        if (found.isPresent()) return found.get().getId();
+
+        // Step 2: strip parenthetical suffix like " (IP)" or " (OP)" then exact
+        String stripped = name.replaceAll("\\s*\\(.*?\\)\\s*$", "").trim();
+        if (!stripped.equals(name)) {
+            found = medicalCategoryRepository.findFirstByName(stripped);
+            if (found.isPresent()) return found.get().getId();
+        }
+
+        // Step 3: LIKE search (contains) on the stripped name
+        if (!stripped.isBlank()) {
+            List<MedicalCategory> candidates = medicalCategoryRepository.searchByName(stripped);
+            if (!candidates.isEmpty()) return candidates.get(0).getId();
+        }
+
+        // Step 4: LIKE search on full original name
+        List<MedicalCategory> candidates = medicalCategoryRepository.searchByName(name);
+        if (!candidates.isEmpty()) return candidates.get(0).getId();
+
+        log.debug("Could not resolve category ID for name: '{}'", rawName);
+        return null;
     }
 
     private String resolveCategoryNameForService(MedicalService service) {
@@ -644,6 +735,7 @@ public class ProviderContractPricingItemService {
         private BigDecimal contractPrice;
         private BigDecimal basePrice;
         private BigDecimal discountPercent;
-        private Boolean requiresPreAuth; // Flag to filter services that require pre-authorization
+        private Boolean requiresPreAuth;
+        private Boolean mapped; 
     }
 }

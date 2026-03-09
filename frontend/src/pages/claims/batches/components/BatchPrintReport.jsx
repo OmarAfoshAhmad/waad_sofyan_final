@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
-import { Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Stack } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Stack } from '@mui/material';
+import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
 const MONTHS_AR = [
     'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -10,6 +11,13 @@ const MONTHS_AR = [
  * Batch Print Report (matches the exact paper provided by Waad TPA)
  */
 const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, batchCode }, ref) => {
+    const { getLogoSrc, settings } = useCompanySettings();
+    const logoSrc = getLogoSrc();
+    // Full company title to match physical report: "شركة وعد لإدارة النفقات الطبية"
+    const companyName = settings?.companyName || 'وعد';
+    const businessType = (settings?.businessType || 'لإدارة النفقات الطبية').replace(/\s*\(.*?\)\s*/g, '').trim();
+    const fullTitle = `شركة ${companyName} ${businessType}`;
+
     if (!claims || claims.length === 0) return null;
 
     // Calculate Global Stats
@@ -95,7 +103,7 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
     const printDate = new Date().toISOString().split('T')[0];
 
     return (
-        <div ref={ref} style={{ display: 'none' }} className="print-content-wrapper">
+        <div ref={ref} style={{ position: 'fixed', bottom: '-9999px', left: 0, zIndex: -1, width: '210mm', overflow: 'hidden' }} className="print-content-wrapper">
             <style type="text/css" media="print">
                 {`
                     @page { size: A4 portrait; margin: 15mm; }
@@ -128,77 +136,68 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                     .gt-col.net { background: #fff !important; border-right: none; border-left: none; }
                     .gt-col.rejected { background: #fff !important; color: #000 !important; border-left: none; }
                     
-                    /* Hide everything else on the page during print */
+                    /* Hide everything else on the page during print - only show this component */
                     @media print {
                         body * { visibility: hidden; }
                         .print-content-wrapper, .print-content-wrapper * { visibility: visible; }
-                        .print-content-wrapper { position: absolute; left: 0; top: 0; width: 100%; }
+                        .print-content-wrapper { position: absolute; left: 0; top: 0; width: 100%; bottom: auto; overflow: visible; }
                     }
                 `}
             </style>
 
-            {/* PAGE 1: COVER / SUMMARY */}
+            {/* PAGE 1: COVER / SUMMARY — matches physical reference */}
             <div className="page-break">
+                {/* Header: logo centered + company name */}
                 <div className="print-header">
-                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
-                        {/* Fake Logo to match image */}
-                        <div style={{ width: 60, height: 40, border: '3px solid #000', borderRadius: '50%', position: 'relative' }}>
-                            <div style={{ position: 'absolute', top: 10, left: 10, width: 20, height: 10, background: '#000', borderRadius: '10px' }}></div>
-                        </div>
-                    </div>
-                    <div className="print-title" style={{ color: '#000' }}>شركة وعد لإدارة النفقات الطبية</div>
+                    <img src={logoSrc} alt="logo" style={{ height: 70, width: 'auto', objectFit: 'contain', marginBottom: 6 }} />
+                    <div className="print-title">{fullTitle}</div>
                 </div>
 
+                {/* Meta row: date+page on RIGHT (RTL start), batch code on LEFT */}
                 <div className="meta-info">
-                    <div>
-                        التاريخ: {printDate} <br />
-                        الصفحة 1
-                    </div>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
-                        {batchCode}
+                    <div style={{ textAlign: 'left', direction: 'ltr' }}>{batchCode}</div>
+                    <div style={{ textAlign: 'right' }}>
+                        {printDate} :التاريخ<br />
+                        1 :الصفحة
                     </div>
                 </div>
 
-                <Box sx={{ mt: 6, mb: 4, fontWeight: 'bold', fontSize: '15px' }}>
+                {/* Recipient */}
+                <div style={{ fontWeight: 'bold', fontSize: '14px', margin: '32px 0 16px 0', textAlign: 'center' }}>
                     السادة: {provider?.name || '________________'}
-                </Box>
-
-                <Typography variant="body2" sx={{ lineHeight: 2, fontSize: '13px' }}>
-                    نود إفادتكم بأن المطالبات المالية المستلمة من سيادتكم بتاريخ ضمن إيصال رقم <strong>{batchCode}</strong> ذات قيمة إجمالية قدرها <strong>{formatLYD(totalGross)}</strong> قد تمت مراجعتها وتدقيقها وفق البرامج الصحية المعتمدة بالخصوص، حيث نتج ما يلي:
-                </Typography>
-
-                <div className="summary-section">
-                    <div className="summary-line">
-                        • إجمالي القيمة المقدمة من المرفق: <strong>{formatLYD(totalGross)}</strong>
-                    </div>
-                    <div className="summary-line">
-                        • إجمالي القيمة الغير مستحقة (المرفوضة): <strong>{formatLYD(totalRejected)}</strong>
-                    </div>
-                    <div className="summary-line">
-                        • إجمالي القيمة المدفوعة من المؤمن: <strong>{formatLYD(totalPatientShare)}</strong>
-                    </div>
-                    <div className="summary-line">
-                        • صافي القيمة المستحق للمرفق: <strong>{formatLYD(totalNet)}</strong>
-                    </div>
-                    <div className="summary-line">
-                        • عدد المطالبات المستلمة: <strong>[{claims.length}]</strong>
-                    </div>
                 </div>
 
-                <Box sx={{ mt: 8, fontSize: '13px' }}>
-                    عليه، يرجى من سيادتكم تسوية الملاحظات والنواقص خلال مدة أقصاها أسبوعين من تاريخ الاستلام لتسوية القيمة المستحقة نهائياً.
-                </Box>
+                {/* Body text */}
+                <div style={{ lineHeight: 2, fontSize: '13px', marginBottom: '24px' }}>
+                    نود إفادتكم بأن المطالبات المالية المستلمة من سيادتكم بتاريخ ضمن إيصال رقم <strong>{batchCode}</strong> ذات قيمة إجمالية قدرها <strong>{formatLYD(totalGross)}</strong> قد تمت مراجعتها وتدقيقها وفق البرامج الصحية المعتمدة بالخصوص، حيث نتج ما يلي:
+                </div>
 
-                <Box sx={{ mt: 6, fontSize: '13px', textAlign: 'center' }}>
-                    والسلام عليكم <br />
+                {/* Summary list */}
+                <div className="summary-section">
+                    <div className="summary-line">• إجمالي القيمة المقدمة من المرفق: <strong>{formatLYD(totalGross)}</strong></div>
+                    <div className="summary-line">• إجمالي القيمة الغير مستحقة (المرفوضة): <strong>{formatLYD(totalRejected)}</strong></div>
+                    <div className="summary-line">• إجمالي القيمة المدفوعة من المؤمن: <strong>{formatLYD(totalPatientShare)}</strong></div>
+                    <div className="summary-line">• صافي القيمة المستحق للمرفق: <strong>{formatLYD(totalNet)}</strong></div>
+                    <div className="summary-line">• عدد المطالبات المستلمة: <strong>[{claims.length}]</strong></div>
+                </div>
+
+                {/* Footer note */}
+                <div style={{ marginTop: '48px', fontSize: '13px' }}>
+                    كم تسوية الملاحظات والنواقص خلال مدة أقصاها أسبوعين من تاريخ الاستلام لتسوية القيمة المستحقة نهائياً.
+                </div>
+
+                {/* Sign-off — NO logo repeat, just text */}
+                <div style={{ marginTop: '40px', fontSize: '13px', textAlign: 'center' }}>
+                    والسلام عليكم<br />
                     <strong>القسم المالي والتدقيق</strong>
-                </Box>
+                </div>
             </div>
 
             {/* PAGE 2+: DETAILED LISTING */}
             <div>
                 <div className="print-header" style={{ marginBottom: '15px' }}>
-                    <div className="print-title" style={{ fontSize: '15px' }}>شركة وعد لإدارة النفقات الطبية</div>
+                    <img src={logoSrc} alt="logo" style={{ height: 55, width: 'auto', objectFit: 'contain', marginBottom: 6 }} />
+                    <div className="print-title" style={{ fontSize: '15px' }}>{fullTitle}</div>
                 </div>
 
                 <div className="meta-info" style={{ marginBottom: '15px' }}>

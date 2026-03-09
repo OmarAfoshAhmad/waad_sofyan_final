@@ -69,7 +69,7 @@ public class SystemSettingsController {
     @GetMapping("/category/{category}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Get settings by category")
-    public ResponseEntity<List<SystemSetting>> getSettingsByCategory(@PathVariable String category) {
+    public ResponseEntity<List<SystemSetting>> getSettingsByCategory(@PathVariable("category") String category) {
         log.info("📋 Getting settings for category: {}", category);
 
         List<SystemSetting> settings = systemSettingsService.getSettingsByCategory(category);
@@ -177,7 +177,7 @@ public class SystemSettingsController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Update a specific setting by key")
     public ResponseEntity<SystemSetting> updateSettingByKey(
-            @PathVariable String key,
+            @PathVariable("key") String key,
             @RequestBody UpdateSettingRequest request) {
 
         String username = authorizationService.getCurrentUser() != null
@@ -222,3 +222,4 @@ public class SystemSettingsController {
             String value) {
     }
 }
+

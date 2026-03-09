@@ -160,8 +160,11 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
          */
         @Query("""
                             SELECT ms FROM MedicalService ms
-                            WHERE LOWER(ms.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
-                              AND ms.active = true
+                            WHERE ms.active = true
+                              AND (LOWER(ms.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                   OR LOWER(ms.nameAr) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                   OR LOWER(ms.nameEn) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                   OR LOWER(ms.code) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
                         """)
         List<MedicalService> searchByName(@Param("searchTerm") String searchTerm);
 
@@ -170,8 +173,11 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
          */
         @Query("""
                             SELECT ms FROM MedicalService ms
-                            WHERE LOWER(ms.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
-                              AND ms.active = true
+                            WHERE ms.active = true
+                              AND (LOWER(ms.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                   OR LOWER(ms.nameAr) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                   OR LOWER(ms.nameEn) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                   OR LOWER(ms.code) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
                         """)
         Page<MedicalService> searchByName(@Param("searchTerm") String searchTerm, Pageable pageable);
 
@@ -181,7 +187,10 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
         @Query("""
                             SELECT ms FROM MedicalService ms
                             WHERE (:searchTerm IS NULL
-                                OR LOWER(ms.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+                                OR LOWER(ms.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                OR LOWER(ms.nameAr) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                OR LOWER(ms.nameEn) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                                OR LOWER(ms.code) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
                               AND (:categoryId IS NULL OR ms.categoryId = :categoryId)
                               AND (:requiresPA IS NULL OR ms.requiresPA = :requiresPA)
                               AND (:minPrice IS NULL OR ms.basePrice >= :minPrice)
@@ -313,8 +322,12 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
                             ms.id as id,
                             ms.code as code,
                             ms.name as name,
+                            ms.name_ar as nameAr,
+                            ms.name_en as nameEn,
                             COALESCE(ms.category_id, msc_primary.category_id) as categoryId,
-                            mc.name as categoryName
+                            mc.name as categoryName,
+                            mc.name_ar as categoryNameAr,
+                            mc.name_en as categoryNameEn
                         FROM medical_services ms
                             LEFT JOIN LATERAL (
                                 SELECT msc.category_id
@@ -329,8 +342,13 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
                           AND (:query IS NULL OR :query = ''
                                OR LOWER(ms.code) LIKE LOWER(CONCAT('%', :query, '%'))
                                OR LOWER(ms.name) LIKE LOWER(CONCAT('%', :query, '%'))
-                               OR LOWER(mc.name) LIKE LOWER(CONCAT('%', :query, '%')))
-                          AND (:categoryId IS NULL OR COALESCE(ms.category_id, msc_primary.category_id) = :categoryId)
+                               OR LOWER(ms.name_ar) LIKE LOWER(CONCAT('%', :query, '%'))
+                               OR LOWER(ms.name_en) LIKE LOWER(CONCAT('%', :query, '%'))
+                               OR LOWER(mc.name) LIKE LOWER(CONCAT('%', :query, '%'))
+                               OR LOWER(mc.name_ar) LIKE LOWER(CONCAT('%', :query, '%'))
+                               OR LOWER(mc.name_en) LIKE LOWER(CONCAT('%', :query, '%')))
+                          AND (:categoryId IS NULL OR COALESCE(ms.category_id, msc_primary.category_id) = :categoryId 
+                               OR EXISTS (SELECT 1 FROM medical_categories sc WHERE sc.id = COALESCE(ms.category_id, msc_primary.category_id) AND sc.parent_id = :categoryId))
                         ORDER BY COALESCE(mc.name, 'zzz'), ms.name
                         """, nativeQuery = true)
         List<MedicalServiceLookupProjection> lookupServices(
@@ -347,9 +365,17 @@ public interface MedicalServiceRepository extends JpaRepository<MedicalService, 
 
                 String getName();
 
+                String getNameAr();
+
+                String getNameEn();
+
                 Long getCategoryId();
 
                 String getCategoryName();
+
+                String getCategoryNameAr();
+
+                String getCategoryNameEn();
         }
 
         // ═══════════════════════════════ CATALOG HIERARCHY ═══════════════════════

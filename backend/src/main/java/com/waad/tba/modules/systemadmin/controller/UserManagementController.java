@@ -52,7 +52,7 @@ public class UserManagementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
     })
-    public ApiResponse<UserViewDto> toggleUserStatus(@PathVariable Long id,
+    public ApiResponse<UserViewDto> toggleUserStatus(@PathVariable("id") Long id,
                                                      @RequestParam(name = "active") Boolean active,
                                                      Authentication authentication) {
         log.info("PUT /api/admin/user-management/{}/toggle?active={}", id, active);
@@ -72,7 +72,7 @@ public class UserManagementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
     })
-    public ApiResponse<Void> resetPassword(@PathVariable Long id,
+    public ApiResponse<Void> resetPassword(@PathVariable("id") Long id,
                                            @RequestBody Map<String, String> payload,
                                            Authentication authentication) {
         log.info("PUT /api/admin/user-management/{}/reset-password", id);
@@ -86,3 +86,4 @@ public class UserManagementController {
     }
 
 }
+

@@ -54,7 +54,7 @@ public class Claim {
     // REMOVED: InsurancePolicy and PolicyBenefitPackage
     // Coverage is now determined via Member.benefitPolicy (BenefitPolicy module)
     // Legacy columns kept in DB for data migration but not mapped
-    
+
     /**
      * ARCHITECTURAL DECISION (2026-01-15):
      * - Claim links to PreAuthorization (modules/preauthorization)
@@ -64,9 +64,9 @@ public class Claim {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pre_authorization_id")
     private PreAuthorization preAuthorization;
-    
+
     // ==================== UNIFIED WORKFLOW ====================
-    
+
     /**
      * Related visit (unified workflow)
      * ARCHITECTURAL DECISION (2026-01-15): Required - Visit-Centric Architecture
@@ -88,7 +88,7 @@ public class Claim {
     private List<ClaimAttachment> attachments = new ArrayList<>();
 
     // ==================== PROVIDER INFORMATION ====================
-    
+
     /**
      * Provider ID - Links claim to the healthcare provider
      * AUTO-FILLED from JWT security context
@@ -106,18 +106,21 @@ public class Claim {
     private String doctorName;
 
     // ==================== DIAGNOSIS (SYSTEM-SELECTED) ====================
-    
+
     /**
      * Diagnosis ICD-10 code (selected, not free-text)
      */
     @Column(name = "diagnosis_code", length = 20)
     private String diagnosisCode;
-    
+
     /**
      * Diagnosis description (snapshot at claim time)
      */
     @Column(name = "diagnosis_description", length = 500)
     private String diagnosisDescription;
+
+    @Column(name = "complaint", length = 1000)
+    private String complaint;
 
     /**
      * Service/Visit date
@@ -125,8 +128,9 @@ public class Claim {
     @Column(name = "service_date")
     private LocalDate serviceDate;
 
-    // ==================== CALCULATED AMOUNTS (CONTRACT-DRIVEN) ====================
-    
+    // ==================== CALCULATED AMOUNTS (CONTRACT-DRIVEN)
+    // ====================
+
     /**
      * Total requested amount (SUM of all claim lines total_price)
      * SERVER-CALCULATED from lines
@@ -155,26 +159,45 @@ public class Claim {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
+    // ==================== COVERAGE CONTEXT (PHASE: DYNAMIC BENEFITS) ====================
+
+    /**
+     * Whether the user manually selected a coverage category context.
+     * If FALSE (default), coverage is determined from each service's own category.
+     * If TRUE, every service in the claim uses the rule from primaryCategoryCode.
+     */
+    @Column(name = "manual_category_enabled")
+    @Builder.Default
+    private Boolean manualCategoryEnabled = false;
+
+    /**
+     * The primary category code used for overriding coverage rules.
+     * Only relevant if manualCategoryEnabled is TRUE.
+     * Example: "CAT-OUTPAT" (عيادات خارجية), "CAT-OPER" (عمليات)
+     */
+    @Column(name = "primary_category_code", length = 50)
+    private String primaryCategoryCode;
+
     // ========== Financial Snapshot Fields (Phase MVP) ==========
-    
+
     /**
      * نسبة تحمل المريض (Co-Pay + Deductible)
      */
     @Column(name = "patient_copay", precision = 15, scale = 2)
     private BigDecimal patientCoPay;
-    
+
     /**
      * المبلغ الصافي المستحق لمقدم الخدمة
      */
     @Column(name = "net_provider_amount", precision = 15, scale = 2)
     private BigDecimal netProviderAmount;
-    
+
     /**
      * نسبة المشاركة المُطبقة (%)
      */
     @Column(name = "copay_percent", precision = 5, scale = 2)
     private BigDecimal coPayPercent;
-    
+
     /**
      * الخصم المُطبق (Deductible)
      */
@@ -182,27 +205,28 @@ public class Claim {
     private BigDecimal deductibleApplied;
 
     // ========== Settlement Fields (Phase MVP) ==========
-    
+
     /**
      * رقم مرجع الدفع
      */
     @Column(name = "payment_reference", length = 100)
     private String paymentReference;
-    
+
     /**
      * تاريخ التسوية
      */
     @Column(name = "settled_at")
     private LocalDateTime settledAt;
-    
+
     /**
      * ملاحظات التسوية
      */
     @Column(name = "settlement_notes", columnDefinition = "TEXT")
     private String settlementNotes;
 
-    // ========== Provider Account Settlement (Phase: Settlement Refactor) ==========
-    
+    // ========== Provider Account Settlement (Phase: Settlement Refactor)
+    // ==========
+
     /**
      * Settlement batch reference (NEW Provider Account Settlement model)
      * 
@@ -220,9 +244,10 @@ public class Claim {
     private Long settlementBatchId;
 
     // ========== SLA Tracking Fields (Phase 1: SLA Implementation) ==========
-    
+
     /**
-     * Expected completion date (calculated from submission date + SLA business days).
+     * Expected completion date (calculated from submission date + SLA business
+     * days).
      * Automatically set when claim status changes to SUBMITTED.
      * Uses configurable system setting CLAIM_SLA_DAYS (default: 10 business days).
      * 
@@ -235,7 +260,7 @@ public class Claim {
      */
     @Column(name = "expected_completion_date")
     private LocalDate expectedCompletionDate;
-    
+
     /**
      * Actual completion date (when claim is approved or rejected).
      * Set automatically when status changes to APPROVED or REJECTED.
@@ -244,7 +269,7 @@ public class Claim {
      */
     @Column(name = "actual_completion_date")
     private LocalDate actualCompletionDate;
-    
+
     /**
      * Whether the claim was completed within SLA.
      * 
@@ -258,7 +283,7 @@ public class Claim {
      */
     @Column(name = "within_sla")
     private Boolean withinSla;
-    
+
     /**
      * Number of business days taken to process the claim.
      * 
@@ -274,7 +299,7 @@ public class Claim {
      */
     @Column(name = "business_days_taken")
     private Integer businessDaysTaken;
-    
+
     /**
      * SLA days configured at the time of submission.
      * Stores the SLA value used for this specific claim.
@@ -333,25 +358,24 @@ public class Claim {
         if (visit == null) {
             throw new IllegalStateException("ARCHITECTURAL VIOLATION: Claim MUST reference a Visit");
         }
-        
+
         // RULE: Provider ID is MANDATORY
         if (providerId == null) {
             throw new IllegalStateException("Provider ID is required");
         }
-        
+
         // RULE: At least one claim line is required
         if (lines == null || lines.isEmpty()) {
             throw new IllegalStateException("ARCHITECTURAL VIOLATION: Claim MUST have at least one service line");
         }
-        
+
         // RULE: Check if any line requires PA and validate preAuthorization
         boolean anyLineRequiresPA = lines.stream()
                 .anyMatch(line -> Boolean.TRUE.equals(line.getRequiresPA()));
-        
-        if (anyLineRequiresPA && preAuthorization == null) {
+
+        if (anyLineRequiresPA && preAuthorization == null && !Boolean.TRUE.equals(isBacklog)) {
             throw new IllegalStateException(
-                "ARCHITECTURAL VIOLATION: Claim contains services requiring pre-authorization. " +
-                "PreAuthorization ID is REQUIRED.");
+                    "يرجى إدخال رقم الموافقة المسبقة. المطالبة تحتوي على خدمات تتطلب موافقة مسبقة ولم يتم العثور على موافقة مرتبطة.");
         }
     }
 
@@ -370,7 +394,8 @@ public class Claim {
             }
         }
 
-        // Note: Partial approval is now just APPROVED with approvedAmount < requestedAmount
+        // Note: Partial approval is now just APPROVED with approvedAmount <
+        // requestedAmount
         // The difference is tracked via differenceAmount field
 
         if (status == ClaimStatus.REJECTED) {
@@ -386,49 +411,109 @@ public class Claim {
     }
 
     private void calculateFields() {
-        // Calculate requested amount from lines (SUM of all line totals)
-        if (lines != null && !lines.isEmpty()) {
-            requestedAmount = lines.stream()
-                    .map(line -> {
-                        // Extra safety: Recalculate if totalPrice is missing in memory
-                        if (line.getTotalPrice() == null || line.getTotalPrice().compareTo(BigDecimal.ZERO) == 0) {
-                            if (line.getUnitPrice() != null && line.getQuantity() != null) {
-                                return line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity()));
-                            }
-                        }
-                        return line.getTotalPrice();
-                    })
-                    .filter(java.util.Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            
-            // Calculate refused amount from rejected lines (Phase: Partial Rejection)
-            refusedAmount = lines.stream()
-                    .filter(line -> Boolean.TRUE.equals(line.getRejected()))
-                    .map(line -> {
-                        if (line.getTotalPrice() == null || line.getTotalPrice().compareTo(BigDecimal.ZERO) == 0) {
-                            if (line.getUnitPrice() != null && line.getQuantity() != null) {
-                                return line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity()));
-                            }
-                        }
-                        return line.getTotalPrice();
-                    })
-                    .filter(java.util.Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        } else {
-            requestedAmount = requestedAmount != null ? requestedAmount : BigDecimal.ZERO;
-            refusedAmount = (status == ClaimStatus.REJECTED) ? requestedAmount : BigDecimal.ZERO;
-        }
-        
-        // If entire claim is REJECTED, refusedAmount = requestedAmount
+        // Skip calculation for entirely REJECTED claims (handled separately below)
         if (status == ClaimStatus.REJECTED) {
-            refusedAmount = requestedAmount;
+            refusedAmount = requestedAmount != null ? requestedAmount : BigDecimal.ZERO;
             approvedAmount = BigDecimal.ZERO;
             patientCoPay = BigDecimal.ZERO;
+            netProviderAmount = BigDecimal.ZERO;
+            differenceAmount = requestedAmount;
+            return;
         }
-        
-        // Calculate difference amount (Requested - Approved)
-        if (requestedAmount != null && approvedAmount != null) {
-            differenceAmount = requestedAmount.subtract(approvedAmount);
+
+        // Calculate requested and refused amounts from lines (Phase: Partial Rejection
+        // Support)
+        if (lines != null && !lines.isEmpty()) {
+            // 1. Total Requested Amount (Gross) - Based on what provider actually ENTERED
+            requestedAmount = lines.stream()
+                    .map(line -> {
+                        BigDecimal rPrice = line.getRequestedUnitPrice();
+                        if (rPrice == null || rPrice.compareTo(BigDecimal.ZERO) == 0) {
+                            rPrice = line.getUnitPrice(); // Fallback to resolved if requested is missing
+                        }
+                        return rPrice != null ? rPrice.multiply(BigDecimal.valueOf(line.getQuantity()))
+                                : BigDecimal.ZERO;
+                    })
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // 2. Total Refused Amount (Partial + Full Rejections)
+            refusedAmount = lines.stream()
+                    .map(line -> {
+                        // If line is marked as rejected, it's 100% refused
+                        if (Boolean.TRUE.equals(line.getRejected())) {
+                            BigDecimal requestedUnit = line.getRequestedUnitPrice() != null
+                                    ? line.getRequestedUnitPrice()
+                                    : line.getUnitPrice();
+                            if (requestedUnit != null && line.getQuantity() != null) {
+                                return requestedUnit.multiply(BigDecimal.valueOf(line.getQuantity()));
+                            }
+                            return BigDecimal.ZERO;
+                        }
+                        // Otherwise, use the specific refused_amount field (Partial rejection)
+                        return line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO;
+                    })
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // 3. Status-Specific Financial Resolution
+            if (status == ClaimStatus.DRAFT || status == ClaimStatus.SUBMITTED || status == ClaimStatus.NEEDS_CORRECTION
+                    || (status == ClaimStatus.SETTLED && approvedAmount == null)) {
+
+                // Calculate total patient share from lines
+                BigDecimal totalPatientShare = lines.stream()
+                        .filter(l -> !Boolean.TRUE.equals(l.getRejected()))
+                        .map(l -> {
+                            if (l.getPatientCopayPercentSnapshot() == null)
+                                return BigDecimal.ZERO;
+
+                            // Patient co-pay is applied to the ALLOWED amount (Requested - Refused)
+                            BigDecimal lineRequestedTotal = (l.getRequestedUnitPrice() != null
+                                    ? l.getRequestedUnitPrice()
+                                    : l.getUnitPrice())
+                                    .multiply(BigDecimal.valueOf(l.getQuantity()));
+                            BigDecimal lineRefused = l.getRefusedAmount() != null ? l.getRefusedAmount()
+                                    : BigDecimal.ZERO;
+
+                            BigDecimal acceptedBase = lineRequestedTotal.subtract(lineRefused).max(BigDecimal.ZERO);
+
+                            return acceptedBase.multiply(BigDecimal.valueOf(l.getPatientCopayPercentSnapshot()))
+                                    .divide(new BigDecimal(100), 2, java.math.RoundingMode.HALF_UP);
+                        })
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                BigDecimal safeRequested = requestedAmount != null ? requestedAmount : BigDecimal.ZERO;
+                BigDecimal safeRefused = refusedAmount != null ? refusedAmount : BigDecimal.ZERO;
+                BigDecimal netAfterRefused = safeRequested.subtract(safeRefused);
+                BigDecimal totalCompanyShare = netAfterRefused.subtract(totalPatientShare);
+
+                if (patientCoPay == null) {
+                    patientCoPay = totalPatientShare;
+                }
+
+                if (approvedAmount == null) {
+                    approvedAmount = totalCompanyShare;
+                }
+
+                if (netProviderAmount == null) {
+                    netProviderAmount = totalCompanyShare;
+                }
+            }
+        } else {
+            requestedAmount = requestedAmount != null ? requestedAmount : BigDecimal.ZERO;
+            refusedAmount = BigDecimal.ZERO;
+        }
+
+        // Final sanity check: Approved cannot exceed Requested - Refused
+        if (requestedAmount != null && refusedAmount != null && approvedAmount != null) {
+            BigDecimal maxPossibleApproved = requestedAmount.subtract(refusedAmount);
+            if (approvedAmount.compareTo(maxPossibleApproved) > 0) {
+                approvedAmount = maxPossibleApproved;
+            }
+        }
+
+        // Calculate difference amount (Requested - Net Provider)
+        BigDecimal effectiveNetProvider = netProviderAmount != null ? netProviderAmount : approvedAmount;
+        if (requestedAmount != null && effectiveNetProvider != null) {
+            differenceAmount = requestedAmount.subtract(effectiveNetProvider);
         } else {
             differenceAmount = null;
         }
@@ -456,14 +541,14 @@ public class Claim {
     }
 
     // ========== Provider Account Settlement Helper Methods ==========
-    
+
     /**
      * Check if claim is currently in a settlement batch
      */
     public boolean isInBatch() {
         return settlementBatchId != null && status == ClaimStatus.BATCHED;
     }
-    
+
     /**
      * Check if claim can be added to a batch
      * Only APPROVED claims can be batched
@@ -471,40 +556,41 @@ public class Claim {
     public boolean canBeAddedToBatch() {
         return status == ClaimStatus.APPROVED && settlementBatchId == null;
     }
-    
+
     /**
      * Add claim to a batch (state transition helper)
      */
     public void addToBatch(Long batchId) {
         if (!canBeAddedToBatch()) {
             throw new IllegalStateException(
-                "Cannot add claim to batch. Status must be APPROVED and not already in a batch. " +
-                "Current status: " + status + ", batchId: " + settlementBatchId);
+                    "Cannot add claim to batch. Status must be APPROVED and not already in a batch. " +
+                            "Current status: " + status + ", batchId: " + settlementBatchId);
         }
         this.settlementBatchId = batchId;
         this.status = ClaimStatus.BATCHED;
     }
-    
+
     /**
      * Remove claim from batch (state transition helper)
      */
     public void removeFromBatch() {
         if (status != ClaimStatus.BATCHED) {
             throw new IllegalStateException(
-                "Cannot remove claim from batch. Status must be BATCHED. Current status: " + status);
+                    "Cannot remove claim from batch. Status must be BATCHED. Current status: " + status);
         }
         this.settlementBatchId = null;
         this.status = ClaimStatus.APPROVED;
     }
-    
+
     /**
      * Get the net amount payable to provider
      * Used when adding to batch for amount snapshot
      */
     public BigDecimal getNetPayableAmount() {
-        return netProviderAmount != null ? netProviderAmount : 
-               (approvedAmount != null ? approvedAmount : BigDecimal.ZERO);
+        return netProviderAmount != null ? netProviderAmount
+                : (approvedAmount != null ? approvedAmount : BigDecimal.ZERO);
     }
+
     /**
      * Get number of service lines (Transient)
      */

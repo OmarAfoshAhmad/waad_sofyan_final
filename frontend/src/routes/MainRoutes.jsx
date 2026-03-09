@@ -138,6 +138,10 @@ const CatalogHierarchyPage = Loadable(lazy(() => import('pages/medical-catalog')
 
 const ProviderMappingCenter = Loadable(lazy(() => import('pages/medical/ProviderMappingCenter')));
 
+// ==============================|| LAZY LOADING - MEDICAL SERVICES MAPPING ||============================== //
+
+const MedicalServicesMappingPage = Loadable(lazy(() => import('pages/medical/MedicalServicesPage')));
+
 // Companies — single TPA mode: redirect to company settings
 // No multi-company management needed (single TPA context)
 
@@ -688,6 +692,16 @@ const MainRoutes = {
       element: (
         <PermissionGuard isRouteGuard>
           <ProviderMappingCenter />
+        </PermissionGuard>
+      )
+    },
+
+    // Medical Services Mapping
+    {
+      path: 'medical/services-mapping',
+      element: (
+        <PermissionGuard isRouteGuard>
+          <MedicalServicesMappingPage />
         </PermissionGuard>
       )
     },

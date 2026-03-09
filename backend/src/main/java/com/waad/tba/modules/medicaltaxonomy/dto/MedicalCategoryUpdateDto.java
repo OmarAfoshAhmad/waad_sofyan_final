@@ -25,18 +25,19 @@ public class MedicalCategoryUpdateDto {
      * Category name (unified)
      */
     @Size(max = 200, message = "Category name must not exceed 200 characters")
-    @JsonAlias({"nameAr", "name"})
+    @JsonAlias({ "nameAr", "name" })
     private String name;
 
     /**
      * Parent category ID (null to make root category)
      */
-    @JsonAlias({"parentCategoryId", "parentId"})
+    @JsonAlias({ "parentCategoryId", "parentId" })
     private Long parentId;
 
     /**
      * Clinical care-setting context (optional).
-     * Accepted values: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY, SPECIAL, ANY
+     * Accepted values: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY, SPECIAL,
+     * ANY
      */
     private String context;
 
@@ -44,4 +45,13 @@ public class MedicalCategoryUpdateDto {
      * Active status
      */
     private Boolean active;
+
+    @jakarta.validation.constraints.DecimalMax(value = "100.0", message = "Coverage percent must be <= 100")
+    private java.math.BigDecimal coveragePercent;
+
+    /**
+     * Multiple parent root IDs for cross-context support (Phase 10)
+     */
+    @com.fasterxml.jackson.annotation.JsonAlias({ "multiParentIds", "rootIds" })
+    private java.util.List<Long> multiParentIds;
 }

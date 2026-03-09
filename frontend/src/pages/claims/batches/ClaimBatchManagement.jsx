@@ -117,11 +117,12 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
         queryKey: ['batch-stats', selectedEmployer?.id, provider?.id, filterMonth, filterYear],
         queryFn: () => {
             if (!selectedEmployer?.id || !provider?.id || !filterMonth || !filterYear) return null;
+            const lastDay = new Date(filterYear, filterMonth, 0).getDate();
             return claimsService.getFinancialSummary({
                 employerId: selectedEmployer.id,
                 providerId: provider.id,
                 dateFrom: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
-                dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-31`
+                dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
             });
         },
         enabled: !!selectedEmployer?.id && !!provider?.id
@@ -362,11 +363,14 @@ export default function ClaimBatchManagement() {
     // 4. Fetch Global Financial Stats (lazy - only when showStats=true)
     const { data: globalStats, isLoading: isLoadingStats } = useQuery({
         queryKey: ['batch-global-stats', selectedEmployer?.id, filterMonth, filterYear],
-        queryFn: () => claimsService.getFinancialSummary({
-            employerId: selectedEmployer?.id,
-            dateFrom: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
-            dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-31`
-        }),
+        queryFn: () => {
+            const lastDay = new Date(filterYear, filterMonth, 0).getDate();
+            return claimsService.getFinancialSummary({
+                employerId: selectedEmployer?.id,
+                dateFrom: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
+                dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+            });
+        },
         enabled: !!selectedEmployer && showStats
     });
 

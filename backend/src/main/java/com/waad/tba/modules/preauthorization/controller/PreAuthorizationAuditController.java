@@ -34,7 +34,7 @@ public class PreAuthorizationAuditController {
     @GetMapping("/{id:\\d+}/history")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditHistory(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
@@ -53,7 +53,7 @@ public class PreAuthorizationAuditController {
     @GetMapping("/{id:\\d+}/history/full")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<PreAuthorizationAuditDto>>> getFullAuditHistory(
-            @PathVariable Long id
+            @PathVariable("id") Long id
     ) {
         log.info("[AUDIT-API] Fetching full audit history for PreAuth ID: {}", id);
         
@@ -69,7 +69,7 @@ public class PreAuthorizationAuditController {
     @GetMapping("/audits/user/{username}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditsByUser(
-            @PathVariable String username,
+            @PathVariable("username") String username,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
@@ -88,7 +88,7 @@ public class PreAuthorizationAuditController {
     @GetMapping("/audits/action/{action}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Page<PreAuthorizationAuditDto>>> getAuditsByAction(
-            @PathVariable String action,
+            @PathVariable("action") String action,
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
@@ -156,3 +156,4 @@ public class PreAuthorizationAuditController {
         return ResponseEntity.ok(ApiResponse.success("Statistics retrieved successfully", stats));
     }
 }
+

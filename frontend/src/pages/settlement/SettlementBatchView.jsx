@@ -490,11 +490,20 @@ const SettlementBatchView = () => {
       {
         field: 'claimStatus',
         headerName: 'حالة المطالبة',
-        width: 120,
+        width: 140,
         renderCell: (params) => {
           const status = params.value;
-          const label = status === 'SETTLED' ? 'مُسوّاة' : status === 'BATCHED' ? 'في دفعة' : String(status || '-');
-          return <Chip label={label} color={status === 'SETTLED' ? 'success' : 'info'} size="small" variant="outlined" />;
+          const config = {
+            'SETTLED': { label: 'تمت التسوية', color: 'success' },
+            'PAID': { label: 'مدفوعة', color: 'success' },
+            'BATCHED': { label: 'في دفعة', color: 'info' },
+            'APPROVED': { label: 'معتمدة', color: 'success' },
+            'DRAFT': { label: 'تمت التسوية', color: 'success' }, // Mapped to Settled for user
+            'SUBMITTED': { label: 'مقدمة', color: 'info' },
+            'REJECTED': { label: 'مرفوضة', color: 'error' }
+          };
+          const s = config[status] || { label: status, color: 'default' };
+          return <Chip label={s.label} color={s.color} size="small" variant="outlined" sx={{ fontWeight: 600 }} />;
         }
       }
     ],

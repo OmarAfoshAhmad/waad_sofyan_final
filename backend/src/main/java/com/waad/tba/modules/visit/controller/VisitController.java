@@ -59,7 +59,7 @@ public class VisitController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<VisitResponseDto>> getById(
-                        @Parameter(name = "id", description = "Visit ID", required = true) @PathVariable Long id) {
+                        @Parameter(name = "id", description = "Visit ID", required = true) @PathVariable("id") Long id) {
                 VisitResponseDto dto = service.findById(id);
                 return ResponseEntity.ok(ApiResponse.success(dto));
         }
@@ -91,7 +91,7 @@ public class VisitController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<VisitResponseDto>> update(
-                        @Parameter(name = "id", description = "Visit ID", required = true) @PathVariable Long id,
+                        @Parameter(name = "id", description = "Visit ID", required = true) @PathVariable("id") Long id,
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Visit update payload") @Valid @RequestBody VisitCreateDto dto) {
                 VisitResponseDto updated = service.update(id, dto);
                 return ResponseEntity.ok(ApiResponse.success("Visit updated successfully", updated));
@@ -107,7 +107,7 @@ public class VisitController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<Void>> delete(
-                        @Parameter(name = "id", description = "Visit ID", required = true) @PathVariable Long id) {
+                        @Parameter(name = "id", description = "Visit ID", required = true) @PathVariable("id") Long id) {
                 service.delete(id);
                 return ResponseEntity.ok(ApiResponse.success("Visit deleted successfully", null));
         }
@@ -169,3 +169,4 @@ public class VisitController {
                 return ResponseEntity.ok(ApiResponse.success(total));
         }
 }
+

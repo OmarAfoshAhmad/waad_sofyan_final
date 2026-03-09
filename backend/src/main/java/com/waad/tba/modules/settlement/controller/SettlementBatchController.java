@@ -158,7 +158,7 @@ public class SettlementBatchController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Batch not found")
     })
     public ResponseEntity<ApiResponse<BatchSummaryDTO>> getBatch(
-            @Parameter(description = "Batch ID", required = true) @PathVariable Long batchId) {
+            @Parameter(description = "Batch ID", required = true) @PathVariable("batchId") Long batchId) {
 
         log.info("Getting batch details for ID {}", batchId);
 
@@ -246,7 +246,7 @@ public class SettlementBatchController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(summary = "Get batch items", description = "Returns claims included in the batch")
     public ResponseEntity<ApiResponse<?>> getBatchItems(
-            @Parameter(description = "Batch ID", required = true) @PathVariable Long batchId) {
+            @Parameter(description = "Batch ID", required = true) @PathVariable("batchId") Long batchId) {
 
         log.info("📋 Getting items for batch {}", batchId);
 
@@ -262,7 +262,7 @@ public class SettlementBatchController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(summary = "Get available claims", description = "Returns APPROVED claims not yet in any batch for the provider")
     public ResponseEntity<ApiResponse<List<AvailableClaimDTO>>> getAvailableClaims(
-            @Parameter(description = "Provider ID", required = true) @PathVariable Long providerId) {
+            @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
 
         log.info("Getting available claims for provider {}", providerId);
 
@@ -296,7 +296,7 @@ public class SettlementBatchController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Batch not in DRAFT status")
     })
     public ResponseEntity<ApiResponse<Map<String, Object>>> addClaims(
-            @Parameter(description = "Batch ID", required = true) @PathVariable Long batchId,
+            @Parameter(description = "Batch ID", required = true) @PathVariable("batchId") Long batchId,
             @Valid @RequestBody AddClaimsToBatchRequest apiRequest) {
 
         log.info("➕ [API v1] Adding {} claims to batch {}", apiRequest.getClaimIds().size(), batchId);
@@ -325,7 +325,7 @@ public class SettlementBatchController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(summary = "Remove claims from batch", description = "Removes claims from a DRAFT batch. Batch must be in DRAFT status.")
     public ResponseEntity<ApiResponse<Map<String, Object>>> removeClaims(
-            @Parameter(description = "Batch ID", required = true) @PathVariable Long batchId,
+            @Parameter(description = "Batch ID", required = true) @PathVariable("batchId") Long batchId,
             @Valid @RequestBody RemoveClaimsFromBatchRequest apiRequest) {
 
         log.info("➖ [API v1] Removing {} claims from batch {}", apiRequest.getClaimIds().size(), batchId);
@@ -362,7 +362,7 @@ public class SettlementBatchController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Cannot confirm (wrong status or empty)")
     })
     public ResponseEntity<ApiResponse<BatchSummaryDTO>> confirmBatch(
-            @Parameter(description = "Batch ID", required = true) @PathVariable Long batchId,
+            @Parameter(description = "Batch ID", required = true) @PathVariable("batchId") Long batchId,
             @Valid @RequestBody(required = false) ConfirmSettlementBatchRequest apiRequest) {
 
         Long userId = authorizationService.getCurrentUser() != null ? authorizationService.getCurrentUser().getId()
@@ -406,3 +406,4 @@ public class SettlementBatchController {
     }
 
 }
+

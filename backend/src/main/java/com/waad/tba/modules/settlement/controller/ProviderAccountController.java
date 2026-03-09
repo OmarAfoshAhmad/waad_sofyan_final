@@ -118,7 +118,7 @@ public class ProviderAccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden")
     })
     public ResponseEntity<ApiResponse<AccountSummaryDTO>> getAccountByProvider(
-            @Parameter(description = "Provider ID", required = true) @PathVariable Long providerId) {
+            @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
 
         log.info("Getting account summary for provider {}", providerId);
 
@@ -138,7 +138,7 @@ public class ProviderAccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found")
     })
     public ResponseEntity<ApiResponse<ProviderAccount>> getAccountById(
-            @Parameter(description = "Account ID", required = true) @PathVariable Long accountId) {
+            @Parameter(description = "Account ID", required = true) @PathVariable("accountId") Long accountId) {
 
         log.info("Getting account by ID {}", accountId);
 
@@ -166,7 +166,7 @@ public class ProviderAccountController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Provider not found")
     })
     public ResponseEntity<ApiResponse<Page<AccountTransaction>>> getTransactions(
-            @Parameter(description = "Provider ID", required = true) @PathVariable Long providerId,
+            @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId,
 
             @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
 
@@ -211,7 +211,7 @@ public class ProviderAccountController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(summary = "Get recent transactions", description = "Returns last 10 transactions for quick view")
     public ResponseEntity<ApiResponse<List<AccountTransaction>>> getRecentTransactions(
-            @Parameter(description = "Provider ID", required = true) @PathVariable Long providerId) {
+            @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
 
         log.info("Getting recent transactions for provider {}", providerId);
 
@@ -261,7 +261,7 @@ public class ProviderAccountController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(summary = "Verify account balance", description = "Verifies that account balance matches transaction history")
     public ResponseEntity<ApiResponse<Map<String, Object>>> verifyBalance(
-            @Parameter(description = "Account ID", required = true) @PathVariable Long accountId) {
+            @Parameter(description = "Account ID", required = true) @PathVariable("accountId") Long accountId) {
 
         log.info("Verifying balance for account {}", accountId);
 
@@ -291,7 +291,7 @@ public class ProviderAccountController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(summary = "Settle remaining balance", description = "Creates manual debit adjustment to settle the full outstanding balance for provider account")
     public ResponseEntity<ApiResponse<Map<String, Object>>> settleRemainingBalance(
-            @Parameter(description = "Provider ID", required = true) @PathVariable Long providerId,
+            @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId,
             @RequestBody(required = false) Map<String, String> request) {
 
         String reason = request != null ? request.get("reason") : null;
@@ -312,3 +312,4 @@ public class ProviderAccountController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
+

@@ -119,8 +119,10 @@ export const getPolicyRulesCount = async (policyId) => {
  * @param {number} serviceId - Service ID
  * @returns {Promise<Object|null>} Coverage rule or null
  */
-export const getCoverageForService = async (policyId, serviceId) => {
-  const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}`);
+export const getCoverageForService = async (policyId, serviceId, categoryId = null) => {
+  const params = {};
+  if (categoryId) params.categoryId = categoryId;
+  const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}`, { params });
   return unwrap(response);
 };
 
@@ -131,8 +133,10 @@ export const getCoverageForService = async (policyId, serviceId) => {
  * @param {number} serviceId - Service ID
  * @returns {Promise<Object>} { covered, coveragePercent, requiresPreApproval }
  */
-export const checkServiceCoverage = async (policyId, serviceId) => {
-  const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/check`);
+export const checkServiceCoverage = async (policyId, serviceId, categoryId = null) => {
+  const params = {};
+  if (categoryId) params.categoryId = categoryId;
+  const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/check`, { params });
   return unwrap(response);
 };
 
@@ -145,8 +149,9 @@ export const checkServiceCoverage = async (policyId, serviceId) => {
  * @param {number} year - Optional year
  * @returns {Promise<Object>} Usage details
  */
-export const checkServiceUsageLimit = async (policyId, serviceId, memberId, year = null) => {
+export const checkServiceUsageLimit = async (policyId, serviceId, memberId, categoryId = null, year = null) => {
   const params = { memberId };
+  if (categoryId) params.categoryId = categoryId;
   if (year) params.year = year;
   const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/usage`, { params });
   return unwrap(response);

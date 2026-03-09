@@ -771,13 +771,26 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const canEdit = policyStatus !== 'CANCELLED';
   const isLoading = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
+  const categoryMap = useMemo(() => {
+    const map = new Map();
+    categories.forEach((cat) => map.set(cat.id, cat));
+    return map;
+  }, [categories]);
+
   const normalizedRules = useMemo(() => {
     return rules.map((rule) => {
       const isCategory = rule.ruleType === 'CATEGORY';
       const code = isCategory ? rule.medicalCategoryCode || '-' : rule.medicalServiceCode || '-';
       const nameAr = rule.label || (isCategory ? rule.medicalCategoryName : rule.medicalServiceName) || '-';
       const nameEn = isCategory ? rule.medicalCategoryNameEn || '-' : rule.medicalServiceNameEn || '-';
-      const typeLabel = isCategory ? 'تصنيف طبي' : 'خدمة طبية';
+
+      let typeLabel = 'خدمة طبية';
+      if (isCategory) {
+        const cat = categoryMap.get(rule.medicalCategoryId);
+        const isRoot = cat ? !cat.parentId : true;
+        typeLabel = isRoot ? 'تصنيف طبي رئيسي' : 'تصنيف طبي فرعي';
+      }
+
       const changedAt = rule.updatedAt || rule.lastModifiedAt || rule.modifiedAt || rule.createdAt || null;
       const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel}`.toLowerCase();
 
@@ -791,7 +804,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         searchable
       };
     });
-  }, [rules]);
+  }, [rules, categoryMap]);
 
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
@@ -1126,23 +1139,23 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
                     {/* Coverage % */}
                     <TableCell align="center">
-                          {rule.coveragePercent !== null && rule.coveragePercent !== undefined ? (
-                            <Chip
-                              label={`${rule.coveragePercent}%`}
-                              size="small"
-                              color="primary"
-                              variant="filled"
-                            />
-                          ) : (
-                            <Tooltip title={`افتراضي الوثيقة: ${rule.effectiveCoveragePercent}%`}>
-                              <Chip
-                                label={`${rule.effectiveCoveragePercent}% (افتراضي)`}
-                                size="small"
-                                color="default"
-                                variant="outlined"
-                              />
-                            </Tooltip>
-                          )}
+                      {rule.coveragePercent !== null && rule.coveragePercent !== undefined ? (
+                        <Chip
+                          label={`${rule.coveragePercent}%`}
+                          size="small"
+                          color="primary"
+                          variant="filled"
+                        />
+                      ) : (
+                        <Tooltip title={`افتراضي الوثيقة: ${rule.effectiveCoveragePercent}%`}>
+                          <Chip
+                            label={`${rule.effectiveCoveragePercent}% (افتراضي)`}
+                            size="small"
+                            color="default"
+                            variant="outlined"
+                          />
+                        </Tooltip>
+                      )}
                     </TableCell>
 
                     {/* Amount Limit */}

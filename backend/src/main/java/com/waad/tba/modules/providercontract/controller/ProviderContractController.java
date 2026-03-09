@@ -215,18 +215,19 @@ public class ProviderContractController {
      */
     @GetMapping("/provider/{providerId}/categories")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF')")
-    @Operation(summary = "Get contracted categories", 
-               description = "Get medical categories available in provider's active contract. Use this for claims/preauth creation.")
+    @Operation(summary = "Get contracted categories", description = "Get medical categories available in provider's active contract. Use this for claims/preauth creation.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractCategoryDto>>> getContractedCategories(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
 
         log.debug("REST request to get contracted categories for provider: {}", providerId);
-        List<ProviderContractPricingItemService.ContractCategoryDto> result = pricingService.findCategoriesByProvider(providerId);
+        List<ProviderContractPricingItemService.ContractCategoryDto> result = pricingService
+                .findCategoriesByProvider(providerId);
         return ResponseEntity.ok(ApiResponse.success("Contracted categories retrieved", result));
     }
 
     /**
-     * GET /api/provider-contracts/provider/{providerId}/categories/{categoryId}/services
+     * GET
+     * /api/provider-contracts/provider/{providerId}/categories/{categoryId}/services
      * Get medical services for a category in provider's active contract
      * 
      * CRITICAL: This is the ONLY way to get services for claims/preauth creation
@@ -234,30 +235,31 @@ public class ProviderContractController {
      */
     @GetMapping("/provider/{providerId}/categories/{categoryId}/services")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF')")
-    @Operation(summary = "Get contracted services by category", 
-               description = "Get medical services for a category in provider's active contract. Use this for claims/preauth creation.")
+    @Operation(summary = "Get contracted services by category", description = "Get medical services for a category in provider's active contract. Use this for claims/preauth creation.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getContractedServicesByCategory(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId,
             @Parameter(description = "Category ID") @PathVariable("categoryId") Long categoryId) {
 
         log.debug("REST request to get contracted services for provider: {}, category: {}", providerId, categoryId);
-        List<ProviderContractPricingItemService.ContractServiceDto> result = pricingService.findServicesByProviderAndCategory(providerId, categoryId);
+        List<ProviderContractPricingItemService.ContractServiceDto> result = pricingService
+                .findServicesByProviderAndCategory(providerId, categoryId);
         return ResponseEntity.ok(ApiResponse.success("Contracted services retrieved", result));
     }
 
     /**
      * GET /api/provider-contracts/provider/{providerId}/services
-     * Get ALL medical services in provider's active contract (without category filter)
+     * Get ALL medical services in provider's active contract (without category
+     * filter)
      */
     @GetMapping("/provider/{providerId}/services")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'ACCOUNTANT')")
-    @Operation(summary = "Get all contracted services", 
-               description = "Get all medical services in provider's active contract.")
+    @Operation(summary = "Get all contracted services", description = "Get all medical services in provider's active contract.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getAllContractedServices(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
 
         log.debug("REST request to get all contracted services for provider: {}", providerId);
-        List<ProviderContractPricingItemService.ContractServiceDto> result = pricingService.findAllServicesByProvider(providerId);
+        List<ProviderContractPricingItemService.ContractServiceDto> result = pricingService
+                .findAllServicesByProvider(providerId);
         return ResponseEntity.ok(ApiResponse.success("All contracted services retrieved", result));
     }
 
@@ -369,13 +371,16 @@ public class ProviderContractController {
      */
     @GetMapping("/{contractId}/pricing")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
-    @Operation(summary = "List pricing items", description = "Get pricing items for a contract")
+    @Operation(summary = "List pricing items", description = "Get pricing items for a contract with optional search and filtering")
     public ResponseEntity<ApiResponse<Page<ProviderContractPricingItemResponseDto>>> getPricing(
             @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
+            @Parameter(description = "Search query") @RequestParam(name = "q", required = false) String q,
+            @Parameter(description = "Category ID") @RequestParam(name = "categoryId", required = false) Long categoryId,
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        log.debug("REST request to get pricing for contract: {}", contractId);
-        Page<ProviderContractPricingItemResponseDto> result = pricingService.findByContract(contractId, pageable);
+        log.debug("REST request to get pricing for contract: {}, query: {}, category: {}", contractId, q, categoryId);
+        Page<ProviderContractPricingItemResponseDto> result = pricingService.searchInContract(contractId, q, categoryId,
+                pageable);
         return ResponseEntity.ok(ApiResponse.success("Pricing items retrieved", result));
     }
 
@@ -392,7 +397,8 @@ public class ProviderContractController {
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         log.debug("REST request to search pricing in contract: {}, query: {}", contractId, q);
-        Page<ProviderContractPricingItemResponseDto> result = pricingService.searchInContract(contractId, q, pageable);
+        Page<ProviderContractPricingItemResponseDto> result = pricingService.searchInContract(contractId, q, null,
+                pageable);
         return ResponseEntity.ok(ApiResponse.success("Search completed", result));
     }
 

@@ -11,7 +11,9 @@ import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.security.AuthorizationService;
@@ -73,6 +75,7 @@ public class BenefitPolicyCoverageService {
     private final MedicalServiceCategoryRepository serviceCategoryRepository;
     private final ClaimRepository claimRepository;
     private final MemberRepository memberRepository;
+    private final MedicalCategoryRepository categoryRepository;
     private final AuthorizationService authorizationService;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -207,6 +210,18 @@ public class BenefitPolicyCoverageService {
      * @return Coverage info, or empty if not covered
      */
     public Optional<CoverageInfo> getCoverageForService(Member member, Long serviceId) {
+        return getCoverageForService(member, serviceId, null);
+    }
+
+    /**
+     * Check if a specific service is covered under the member's policy with an optional category override.
+     * 
+     * @param member             The member
+     * @param serviceId          The medical service ID
+     * @param categoryOverrideId Optional: Category ID to use instead of service's default
+     * @return Coverage info, or empty if not covered
+     */
+    public Optional<CoverageInfo> getCoverageForService(Member member, Long serviceId, Long categoryOverrideId) {
         BenefitPolicy policy = member.getBenefitPolicy();
         if (policy == null) {
             return Optional.empty();
@@ -217,14 +232,31 @@ public class BenefitPolicyCoverageService {
             return Optional.empty();
         }
 
-        Long categoryId = resolveCategoryIdForCoverage(service);
+        // Use override if provided, otherwise resolve from service
+        Long categoryId = (categoryOverrideId != null) ? categoryOverrideId : resolveCategoryIdForCoverage(service);
+        
+        // Resolve parent category for hierarchical rule lookup
+        Long parentCategoryId = null;
+        if (categoryId != null) {
+            parentCategoryId = categoryRepository.findById(categoryId)
+                    .map(MedicalCategory::getParentId)
+                    .orElse(null);
+        }
 
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                policy.getId(), serviceId, categoryId);
+                policy.getId(), serviceId, categoryId, parentCategoryId);
 
         if (ruleOpt.isEmpty()) {
-            log.debug("❌ Service {} not covered under policy {}", serviceId, policy.getName());
-            return Optional.empty();
+            log.debug("⚠️ No specific rule found for service {} in policy {}. Falling back to default: {}%", 
+                    serviceId, policy.getName(), policy.getDefaultCoveragePercent());
+
+            return Optional.of(CoverageInfo.builder()
+                    .covered(true)
+                    .coveragePercent(policy.getDefaultCoveragePercent())
+                    .requiresPreApproval(false)
+                    .ruleType("POLICY_DEFAULT")
+                    .serviceName(service.getName())
+                    .build());
         }
 
         BenefitPolicyRule rule = ruleOpt.get();
@@ -357,7 +389,7 @@ public class BenefitPolicyCoverageService {
         Long categoryId = resolveCategoryIdForCoverage(service);
 
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                policy.getId(), serviceId, categoryId);
+                policy.getId(), serviceId, categoryId, null);
 
         if (ruleOpt.isEmpty()) {
             return ServiceCoverageResult.builder()
@@ -587,7 +619,7 @@ public class BenefitPolicyCoverageService {
         Long categoryId = resolveCategoryIdForCoverage(service);
 
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                benefitPolicy.getId(), service.getId(), categoryId);
+                benefitPolicy.getId(), service.getId(), categoryId, null);
 
         if (ruleOpt.isPresent()) {
             BenefitPolicyRule rule = ruleOpt.get();
@@ -624,7 +656,7 @@ public class BenefitPolicyCoverageService {
         Long categoryId = resolveCategoryIdForCoverage(service);
 
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                benefitPolicy.getId(), serviceId, categoryId);
+                benefitPolicy.getId(), serviceId, categoryId, null);
 
         if (ruleOpt.isEmpty()) {
             String serviceName = service.getName() != null ? service.getName() : service.getName();

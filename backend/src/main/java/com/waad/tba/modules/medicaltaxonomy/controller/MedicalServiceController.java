@@ -84,7 +84,7 @@ public class MedicalServiceController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get service by ID", description = "Retrieve a medical service by its ID")
-    public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> findById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> findById(@PathVariable("id") Long id) {
         log.info("[MEDICAL-SERVICES] GET /api/medical-services/{}", id);
 
         MedicalServiceResponseDto result = serviceService.findById(id);
@@ -171,7 +171,7 @@ public class MedicalServiceController {
     @GetMapping("/code/{code}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get service by code", description = "Retrieve a medical service by its unique code")
-    public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> findByCode(@PathVariable String code) {
+    public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> findByCode(@PathVariable("code") String code) {
         log.info("[MEDICAL-SERVICES] GET /api/medical-services/code/{}", code);
 
         MedicalServiceResponseDto result = serviceService.findByCode(code);
@@ -183,7 +183,7 @@ public class MedicalServiceController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get services by category", description = "Get all services in a specific category")
     public ResponseEntity<ApiResponse<Page<MedicalServiceResponseDto>>> findByCategory(
-            @PathVariable Long categoryId,
+            @PathVariable("categoryId") Long categoryId,
             @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size) {
 
@@ -241,7 +241,7 @@ public class MedicalServiceController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Update service", description = "Update an existing medical service (code is immutable)")
     public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody MedicalServiceUpdateDto dto) {
 
         log.info("[MEDICAL-SERVICES] PUT /api/medical-services/{}", id);
@@ -255,7 +255,7 @@ public class MedicalServiceController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Quick update category", description = "Update only the category of a medical service (inline edit)")
     public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> updateCategory(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody java.util.Map<String, Long> payload) {
 
         Long categoryId = payload.get("categoryId");
@@ -296,7 +296,7 @@ public class MedicalServiceController {
     @PatchMapping("/{id}/toggle")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Toggle service active state", description = "Flip active/inactive state for a medical service (SUPER_ADMIN only)")
-    public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> toggle(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MedicalServiceResponseDto>> toggle(@PathVariable("id") Long id) {
         log.info("[MEDICAL-SERVICES] PATCH /api/v1/medical-services/{}/toggle", id);
         MedicalServiceResponseDto result = serviceService.toggle(id);
         String msg = result.isActive() ? "تم تفعيل الخدمة الطبية" : "تم إلغاء تفعيل الخدمة الطبية";
@@ -310,7 +310,7 @@ public class MedicalServiceController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Delete service", description = "Soft delete a medical service (sets active = false)")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable("id") Long id) {
         log.info("[MEDICAL-SERVICES] DELETE /api/medical-services/{}", id);
 
         serviceService.delete(id);
@@ -365,3 +365,4 @@ public class MedicalServiceController {
                 count));
     }
 }
+

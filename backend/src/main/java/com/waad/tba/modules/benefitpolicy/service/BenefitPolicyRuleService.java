@@ -147,17 +147,48 @@ public class BenefitPolicyRuleService {
      */
     @Transactional(readOnly = true)
     public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId) {
-        // Get the service to find its category
-        MedicalService service = serviceRepository.findById(serviceId)
-                .orElseThrow(() -> new ResourceNotFoundException("MedicalService", "id", serviceId));
+        return findCoverageForService(policyId, serviceId, null);
+    }
 
-        // Resolve the effective category ID (prefers primary mapping from unified
-        // catalog)
-        Long categoryId = resolveCategoryIdForCoverage(service);
+    @Transactional(readOnly = true)
+    public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId, Long categoryOverrideId) {
+        // Resolve target category and its parent
+        Long targetCategoryId = categoryOverrideId;
+        Long parentCategoryId = null;
 
-        // Find best matching rule (service > category priority)
-        return ruleRepository.findBestRuleForService(policyId, serviceId, categoryId)
-                .map(BenefitPolicyRuleResponseDto::fromEntity);
+        // If serviceId is provided (> 0) and categoryOverrideId is null, resolve category from service
+        if (targetCategoryId == null && serviceId != null && serviceId > 0) {
+            MedicalService service = serviceRepository.findById(serviceId)
+                    .orElseThrow(() -> new ResourceNotFoundException("MedicalService", "id", serviceId));
+            targetCategoryId = resolveCategoryIdForCoverage(service);
+        }
+
+        if (targetCategoryId != null) {
+            parentCategoryId = categoryRepository.findById(targetCategoryId)
+                    .map(MedicalCategory::getParentId)
+                    .orElse(null);
+        }
+
+        // Search for best rule. If serviceId is null/0, it will only match category-level rules
+        Long sid = (serviceId != null && serviceId > 0) ? serviceId : null;
+        
+        Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(policyId, sid, targetCategoryId, parentCategoryId);
+        
+        if (ruleOpt.isPresent()) {
+            return ruleOpt.map(BenefitPolicyRuleResponseDto::fromEntity);
+        }
+
+        // FALLBACK TO POLICY DEFAULT IF ALLOWED
+        return policyRepository.findById(policyId)
+                .map(policy -> BenefitPolicyRuleResponseDto.builder()
+                        .benefitPolicyId(policy.getId())
+                        .benefitPolicyName(policy.getName())
+                        .ruleType("POLICY_DEFAULT")
+                        .coveragePercent(policy.getDefaultCoveragePercent())
+                        .effectiveCoveragePercent(policy.getDefaultCoveragePercent())
+                        .label("تغطية عامة (السياسة)")
+                        .active(true)
+                        .build());
     }
 
     /**
@@ -167,12 +198,10 @@ public class BenefitPolicyRuleService {
      * 2. OR the policy has a default coverage > 0
      */
     @Transactional(readOnly = true)
-    public boolean isServiceCovered(Long policyId, Long serviceId) {
-        if (findCoverageForService(policyId, serviceId).isPresent()) {
+    public boolean isServiceCovered(Long policyId, Long serviceId, Long categoryOverrideId) {
+        if (findCoverageForService(policyId, serviceId, categoryOverrideId).isPresent()) {
             return true;
         }
-        // Fallback: if no rule, is it covered by default? (Check if defaultCoverage >
-        // 0)
         return policyRepository.findById(policyId)
                 .map(p -> p.getDefaultCoveragePercent() > 0)
                 .orElse(false);
@@ -182,8 +211,8 @@ public class BenefitPolicyRuleService {
      * Check if a service requires pre-approval under a policy
      */
     @Transactional(readOnly = true)
-    public boolean requiresPreApproval(Long policyId, Long serviceId) {
-        return findCoverageForService(policyId, serviceId)
+    public boolean requiresPreApproval(Long policyId, Long serviceId, Long categoryOverrideId) {
+        return findCoverageForService(policyId, serviceId, categoryOverrideId)
                 .map(BenefitPolicyRuleResponseDto::isRequiresPreApproval)
                 .orElse(false);
     }
@@ -193,14 +222,13 @@ public class BenefitPolicyRuleService {
      * Returns policy default if no specific rule exists.
      */
     @Transactional(readOnly = true)
-    public int getCoveragePercent(Long policyId, Long serviceId) {
-        return findCoverageForService(policyId, serviceId)
+    public int getCoveragePercent(Long policyId, Long serviceId, Long categoryOverrideId) {
+        return findCoverageForService(policyId, serviceId, categoryOverrideId)
                 .map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
                 .orElseGet(() -> {
-                    // Fallback to policy-level default coverage
                     return policyRepository.findById(policyId)
                             .map(BenefitPolicy::getDefaultCoveragePercent)
-                            .orElse(0); // Only return 0 if policy doesn't exist at all
+                            .orElse(0);
                 });
     }
 
@@ -208,8 +236,9 @@ public class BenefitPolicyRuleService {
      * Check if a member has exceeded usage limits for a service
      */
     @Transactional(readOnly = true)
-    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long memberId, Integer year) {
-        Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId);
+    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId, Integer year) {
+        
+        Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId, categoryId);
         if (ruleOpt.isEmpty()) {
             return java.util.Map.of("covered", false);
         }
@@ -221,19 +250,30 @@ public class BenefitPolicyRuleService {
 
         // Query usage from DB
         int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
+        
+        // Decide whether to query by Service or Category based on the rule level
+        boolean isCategoryRule = rule.getMedicalServiceId() == null;
+        String usageFilter = isCategoryRule ? "cl.appliedCategoryId = :catId" : "cl.medicalService.id = :serviceId";
+        
         String q = "SELECT SUM(cl.quantity), SUM(cl.totalPrice) FROM ClaimLine cl " +
                 "JOIN cl.claim c " +
                 "WHERE c.member.id = :memberId " +
-                "AND cl.medicalService.id = :serviceId " +
+                "AND " + usageFilter + " " +
                 "AND c.status NOT IN :excludeStatuses " +
                 "AND YEAR(c.serviceDate) = :year";
 
-        Object[] result = (Object[]) em.createQuery(q)
+        var query = em.createQuery(q)
                 .setParameter("memberId", memberId)
-                .setParameter("serviceId", serviceId)
                 .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED, ClaimStatus.DRAFT))
-                .setParameter("year", targetYear)
-                .getSingleResult();
+                .setParameter("year", targetYear);
+        
+        if (isCategoryRule) {
+            query.setParameter("catId", rule.getMedicalCategoryId());
+        } else {
+            query.setParameter("serviceId", rule.getMedicalServiceId());
+        }
+
+        Object[] result = (Object[]) query.getSingleResult();
 
         long usedCount = result[0] != null ? ((Number) result[0]).longValue() : 0;
         java.math.BigDecimal usedAmount = result[1] != null ? (java.math.BigDecimal) result[1]
@@ -242,16 +282,20 @@ public class BenefitPolicyRuleService {
         boolean timesExceeded = rule.getTimesLimit() != null && usedCount >= rule.getTimesLimit();
         boolean amountExceeded = rule.getAmountLimit() != null && usedAmount.compareTo(rule.getAmountLimit()) >= 0;
 
-        return java.util.Map.of(
-                "covered", true,
-                "hasLimit", true,
-                "timesLimit", rule.getTimesLimit(),
-                "amountLimit", rule.getAmountLimit(),
-                "usedCount", usedCount,
-                "usedAmount", usedAmount,
-                "exceeded", timesExceeded || amountExceeded,
-                "timesExceeded", timesExceeded,
-                "amountExceeded", amountExceeded);
+        java.util.Map<String, Object> usageMap = new java.util.HashMap<>();
+        usageMap.put("covered", true);
+        usageMap.put("hasLimit", true);
+        usageMap.put("ruleId", rule.getId());
+        usageMap.put("medicalServiceId", rule.getMedicalServiceId());
+        usageMap.put("medicalCategoryId", rule.getMedicalCategoryId());
+        usageMap.put("timesLimit", rule.getTimesLimit());
+        usageMap.put("amountLimit", rule.getAmountLimit());
+        usageMap.put("usedCount", usedCount);
+        usageMap.put("usedAmount", usedAmount);
+        usageMap.put("exceeded", timesExceeded || amountExceeded);
+        usageMap.put("timesExceeded", timesExceeded);
+        usageMap.put("amountExceeded", amountExceeded);
+        return usageMap;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

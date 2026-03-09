@@ -29,6 +29,7 @@ import com.waad.tba.modules.provider.dto.ProviderEligibilityRequest;
 import com.waad.tba.modules.provider.dto.ProviderEligibilityResponse;
 import com.waad.tba.modules.provider.dto.ProviderVisitRegisterRequest;
 import com.waad.tba.modules.provider.dto.ProviderVisitResponse;
+import com.waad.tba.modules.provider.dto.ProviderServiceDto;
 import com.waad.tba.modules.provider.service.ProviderClaimsService;
 import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.provider.service.ProviderPortalService;
@@ -190,7 +191,7 @@ public class ProviderPortalController {
         description = "Member not found"
     )
     public ResponseEntity<ProviderEligibilityResponse> checkEligibilityByBarcode(
-            @PathVariable String barcode) {
+            @PathVariable("barcode") String barcode) {
         
         String provider = authorizationService.getCurrentUser() != null 
             ? authorizationService.getCurrentUser().getUsername() 
@@ -535,7 +536,7 @@ public class ProviderPortalController {
         responseCode = "404",
         description = "Visit not found"
     )
-    public ResponseEntity<ProviderVisitResponse> getVisitById(@PathVariable Long id) {
+    public ResponseEntity<ProviderVisitResponse> getVisitById(@PathVariable("id") Long id) {
         
         log.debug("📋 Provider visit details request: visitId={}", id);
         
@@ -574,7 +575,7 @@ public class ProviderPortalController {
         description = "Returns the decision payload to determine where to navigate. " +
                       "Backend decides based on what exists (claim, pre-auth, or just eligibility)."
     )
-    public ResponseEntity<ApiResponse<VisitContextDto>> getVisitContext(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<VisitContextDto>> getVisitContext(@PathVariable("id") Long id) {
         
         log.info("📋 [VISIT-CONTEXT] Request for visitId={}", id);
         
@@ -744,7 +745,7 @@ public class ProviderPortalController {
         description = "Service or contract not found"
     )
     public ResponseEntity<ApiResponse<EffectivePriceResponseDto>> getServicePrice(
-            @PathVariable String serviceCode,
+            @PathVariable("serviceCode") String serviceCode,
             @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         
         // ════════════════════════════════════════════════════════════════════════
@@ -1118,7 +1119,7 @@ public class ProviderPortalController {
                     if (serviceId == null) return false;
                     
                     // Check if this service requires pre-approval in the member's policy
-                    return benefitPolicyRuleService.requiresPreApproval(policyId, serviceId);
+                    return benefitPolicyRuleService.requiresPreApproval(policyId, serviceId, null);
                 })
                 .map(item -> {
                     String serviceCode = item.getServiceCode();
@@ -1227,25 +1228,6 @@ public class ProviderPortalController {
         private Boolean requiresPreApproval;
     }
     
-    /**
-     * Simplified DTO for frontend service dropdown
-     */
-    @lombok.Data
-    @lombok.Builder
-    @lombok.NoArgsConstructor
-    @lombok.AllArgsConstructor
-    public static class ProviderServiceDto {
-        private Long serviceId;
-        private String serviceCode;
-        private String serviceName;
-        private String serviceNameArabic;
-        private String categoryCode;
-        private String categoryName;
-        private java.math.BigDecimal contractPrice;
-        private String currency;
-        private Boolean requiresPA;
-    }
-    
     // ═══════════════════════════════════════════════════════════════════════════
     // MEDICAL CATEGORIES (FOR PROVIDER CLAIMS/PRE-APPROVAL FORMS)
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1294,7 +1276,7 @@ public class ProviderPortalController {
         summary = "Generate visit PDF",
         description = "Generate a PDF report for a specific visit. Provider can only access their own visits."
     )
-    public ResponseEntity<byte[]> getVisitPdf(@PathVariable Long visitId) {
+    public ResponseEntity<byte[]> getVisitPdf(@PathVariable("visitId") Long visitId) {
         log.info("[PROVIDER-PORTAL] GET /api/provider/visits/{}/pdf", visitId);
         
         Long providerId = providerContextGuard.getRequiredProviderId();
@@ -1311,3 +1293,4 @@ public class ProviderPortalController {
             .body(pdfBytes);
     }
 }
+

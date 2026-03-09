@@ -243,7 +243,7 @@ public class MemberImportController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
     @Operation(summary = "Get import log by batch ID")
     public ResponseEntity<ApiResponse<MemberImportLog>> getImportLog(
-            @PathVariable String batchId) {
+            @PathVariable("batchId") String batchId) {
 
         return importLogRepository.findByImportBatchId(batchId)
                 .map(log -> ResponseEntity.ok(ApiResponse.success("Import log found", log)))
@@ -259,7 +259,7 @@ public class MemberImportController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
     @Operation(summary = "Get errors for import batch")
     public ResponseEntity<ApiResponse<?>> getImportErrors(
-            @PathVariable String batchId) {
+            @PathVariable("batchId") String batchId) {
 
         var errors = importErrorRepository.findByImportBatchId(batchId);
         return ResponseEntity.ok(ApiResponse.success("Import errors retrieved", errors));
@@ -298,3 +298,4 @@ public class MemberImportController {
         return ResponseEntity.ok(ApiResponse.success("Import template info", template));
     }
 }
+

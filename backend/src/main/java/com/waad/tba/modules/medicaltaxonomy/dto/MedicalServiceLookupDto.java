@@ -56,9 +56,19 @@ public class MedicalServiceLookupDto {
     private String code;
 
     /**
-     * Service name (unified field)
+     * Service name (unified - Arabic-only system)
      */
     private String name;
+
+    /**
+     * Arabic display name
+     */
+    private String nameAr;
+
+    /**
+     * English display name
+     */
+    private String nameEn;
 
     /**
      * Category ID (for filtering)
@@ -71,19 +81,39 @@ public class MedicalServiceLookupDto {
     private String categoryName;
 
     /**
+     * Category Arabic name
+     */
+    private String categoryNameAr;
+
+    /**
+     * Category English name
+     */
+    private String categoryNameEn;
+
+    /**
      * Display label combining code and name
-     * Format: "[SVC-001] أشعة مقطعية"
+     * Format: "[SVC-001] أشعة مقطعية CT Scan"
      */
     public String getDisplayLabel() {
-        return String.format("[%s] %s", code, name != null ? name : "");
+        StringBuilder sb = new StringBuilder();
+        sb.append("[").append(code).append("] ");
+        if (nameAr != null && !nameAr.isBlank()) {
+            sb.append(nameAr);
+        } else if (name != null) {
+            sb.append(name);
+        }
+        
+        if (nameEn != null && !nameEn.isBlank()) {
+            sb.append(" ").append(nameEn);
+        }
+        return sb.toString();
     }
 
     /**
      * Full display with category
-     * Format: "[SVC-001] أشعة مقطعية - الأشعة التشخيصية"
      */
     public String getFullDisplayLabel() {
-        String category = categoryName != null ? categoryName : "غير مصنف";
-        return String.format("[%s] %s - %s", code, name != null ? name : "", category);
+        String cat = categoryNameAr != null ? categoryNameAr : (categoryName != null ? categoryName : "غير مصنف");
+        return String.format("%s - %s", getDisplayLabel(), cat);
     }
 }

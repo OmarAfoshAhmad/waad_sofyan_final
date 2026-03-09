@@ -241,6 +241,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "visit", "medicalService" })
        @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
                      "AND (LOWER(pa.referenceNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(pa.preAuthNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
                      "OR LOWER(pa.diagnosisDescription) LIKE LOWER(CONCAT('%', :query, '%')) " +
                      "OR LOWER(pa.notes) LIKE LOWER(CONCAT('%', :query, '%')))")
        Page<PreAuthorization> search(@Param("query") String query, Pageable pageable);

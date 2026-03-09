@@ -63,7 +63,7 @@ public class MedicalSpecialtyController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<MedicalSpecialtyDto>> update(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody MedicalSpecialtyUpdateDto dto) {
 
         MedicalSpecialtyDto result = specialtyService.update(id, dto);
@@ -74,8 +74,9 @@ public class MedicalSpecialtyController {
 
     @PatchMapping("/{id}/toggle")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<MedicalSpecialtyDto>> toggle(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MedicalSpecialtyDto>> toggle(@PathVariable("id") Long id) {
         MedicalSpecialtyDto result = specialtyService.toggle(id);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
+

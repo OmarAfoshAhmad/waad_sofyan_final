@@ -74,7 +74,7 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<UserResponseDto>> getUserById(
-                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable Long id) {
+                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable("id") Long id) {
                 UserResponseDto user = userService.findById(id);
                 return ResponseEntity.ok(ApiResponse.success(user));
         }
@@ -104,7 +104,7 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<UserResponseDto>> updateUser(
-                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable Long id,
+                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable("id") Long id,
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User update payload") @Valid @RequestBody UserUpdateDto dto) {
                 UserResponseDto updatedUser = userService.update(id, dto);
                 return ResponseEntity.ok(ApiResponse.success("User updated successfully", updatedUser));
@@ -119,7 +119,7 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<Void>> deleteUser(
-                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable Long id) {
+                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable("id") Long id) {
                 userService.delete(id);
                 return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
         }
@@ -161,7 +161,7 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<UserResponseDto>> toggleUserStatus(
-                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable Long id) {
+                        @Parameter(name = "id", description = "User ID", required = true) @PathVariable("id") Long id) {
                 UserResponseDto user = userService.toggleStatus(id);
                 String message = Boolean.TRUE.equals(user.getActive()) ? "تم تفعيل المستخدم بنجاح" : "تم تعطيل المستخدم بنجاح";
                 return ResponseEntity.ok(ApiResponse.success(message, user));
@@ -187,8 +187,9 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<List<UserResponseDto>>> getUsersByProvider(
-                        @Parameter(name = "providerId", description = "Provider ID", required = true) @PathVariable Long providerId) {
+                        @Parameter(name = "providerId", description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
                 List<UserResponseDto> users = userService.findByProviderId(providerId);
                 return ResponseEntity.ok(ApiResponse.success(users));
         }
 }
+

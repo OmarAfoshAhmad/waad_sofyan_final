@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Repository for {@link ServiceAlias} — searchable display aliases for medical services.
+ * Repository for {@link ServiceAlias} — searchable display aliases for medical
+ * services.
  */
 @Repository
 public interface ServiceAliasRepository extends JpaRepository<ServiceAlias, Long> {
@@ -29,4 +30,11 @@ public interface ServiceAliasRepository extends JpaRepository<ServiceAlias, Long
      * Used for broader alias-based auto-matching.
      */
     Optional<ServiceAlias> findFirstByAliasTextIgnoreCase(String aliasText);
+
+    /**
+     * Check if an alias already exists for a given medical service and text.
+     * Used to avoid duplicate alias entries when confirming provider service
+     * mappings.
+     */
+    boolean existsByMedicalServiceIdAndAliasTextIgnoreCase(Long medicalServiceId, String aliasText);
 }

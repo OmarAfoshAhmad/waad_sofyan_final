@@ -8,6 +8,9 @@
 
 import { createContext, useContext, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import waadLogoDefault from '../assets/images/waad-logo.png';
+
+export { waadLogoDefault };
 
 const STORAGE_KEY = 'companySettings';
 
@@ -86,8 +89,23 @@ export function CompanySettingsProvider({ children }) {
   const getLogoSrc = useCallback(() => {
     if (settings.logoBase64) return settings.logoBase64;
     if (settings.logoUrl) return settings.logoUrl;
-    return '/assets/images/waad-logo.png';
+    return waadLogoDefault;
   }, [settings.logoBase64, settings.logoUrl]);
+
+  /**
+   * Reset logo to factory default (removes any custom logo from localStorage)
+   */
+  const resetToDefaultLogo = useCallback(() => {
+    setSettings((prev) => {
+      const updated = { ...prev, logoBase64: null, logoUrl: null };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {
+        console.warn('[CompanySettings] Failed to save to localStorage:', e);
+      }
+      return updated;
+    });
+  }, []);
 
   /**
    * Check if logo is available
@@ -110,8 +128,10 @@ export function CompanySettingsProvider({ children }) {
     error,
     updateSettings,
     refreshSettings,
+    resetToDefaultLogo,
     getLogoSrc,
     hasLogo,
+    hasCustomLogo: !!(settings.logoBase64 || settings.logoUrl),
     getInitials,
     companyName: settings.companyName,
     companyNameEn: settings.companyNameEn,
@@ -140,8 +160,10 @@ export function useCompanySettings() {
       error: null,
       updateSettings: () => { },
       refreshSettings: () => Promise.resolve(),
-      getLogoSrc: () => '/assets/images/waad-logo.png',
+      resetToDefaultLogo: () => { },
+      getLogoSrc: () => waadLogoDefault,
       hasLogo: () => false,
+      hasCustomLogo: false,
       getInitials: () => 'T',
       companyName: DEFAULT_SETTINGS.companyName,
       companyNameEn: DEFAULT_SETTINGS.companyNameEn,

@@ -240,7 +240,7 @@ const BeneficiariesReports = () => {
 
   // Print the table with proper header/footer
   const handlePrintTable = useReactToPrint({
-    content: () => printRef.current,
+    contentRef: printRef,
     documentTitle: `Members_Report_${new Date().toISOString().split('T')[0]}`,
     pageStyle: `
       @page { 
@@ -924,7 +924,7 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
   const { getLogoSrc, companyName, hasLogo } = useCompanySettings();
 
   const handlePrint = useReactToPrint({
-    content: () => componentRef.current,
+    contentRef: componentRef,
     documentTitle: `Member_Report_${member?.cardNumber || 'Unknown'}`,
     pageStyle: `
       @page { size: A4 portrait; margin: 10mm; }

@@ -398,14 +398,14 @@ public class ProviderController {
      */
     @GetMapping("/{id}/contract/services/requiring-preauth")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
-    public ResponseEntity<ApiResponse<java.util.List<ProviderPortalController.ProviderServiceDto>>> getServicesRequiringPreAuth(
+    public ResponseEntity<ApiResponse<java.util.List<ProviderServiceDto>>> getServicesRequiringPreAuth(
             @PathVariable("id") Long id,
             @RequestParam(name = "memberId") Long memberId) {
         
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contract/services/requiring-preauth?memberId={}", 
                 id, memberId);
         
-        java.util.List<ProviderPortalController.ProviderServiceDto> services = providerContractService.getServicesRequiringPreAuth(id, memberId);
+        java.util.List<ProviderServiceDto> services = providerContractService.getServicesRequiringPreAuth(id, memberId);
         
         return ResponseEntity.ok(ApiResponse.success(
             "Services requiring pre-approval retrieved", 

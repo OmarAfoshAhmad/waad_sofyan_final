@@ -51,6 +51,9 @@ public class ClaimDataUpdateDto {
      * Provider can link/unlink during DRAFT phase
      */
     private Long preAuthorizationId;
+
+    private String complaint;
+    private String rejectionReason;
     
     /**
      * Claim lines - can be modified in DRAFT only

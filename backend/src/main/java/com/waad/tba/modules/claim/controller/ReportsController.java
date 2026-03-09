@@ -121,7 +121,7 @@ public class ReportsController {
         description = "جميع مطالبات العضو مع الإجماليات"
     )
     public ResponseEntity<ApiResponse<AdjudicationReportDto>> getMemberStatement(
-            @PathVariable Long memberId,
+            @PathVariable("memberId") Long memberId,
             
             @Parameter(description = "تاريخ البداية (اختياري)")
             @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -434,3 +434,4 @@ public class ReportsController {
         return String.format("Settlement_Report_%s_%s_%s.xlsx", providerName, fromDate, toDate);
     }
 }
+

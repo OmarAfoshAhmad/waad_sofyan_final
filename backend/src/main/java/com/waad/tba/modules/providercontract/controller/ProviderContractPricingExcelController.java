@@ -66,7 +66,7 @@ public class ProviderContractPricingExcelController {
     )
     public ResponseEntity<byte[]> downloadTemplate(
             @Parameter(description = "Provider contract ID", required = true)
-            @PathVariable Long contractId
+            @PathVariable("contractId") Long contractId
     ) throws IOException {
         log.info("[PriceListImport] Template download requested for contract ID: {}", contractId);
         
@@ -103,7 +103,7 @@ public class ProviderContractPricingExcelController {
     )
     public ResponseEntity<ApiResponse<ExcelImportResult>> importPriceList(
             @Parameter(description = "Provider contract ID", required = true)
-            @PathVariable Long contractId,
+            @PathVariable("contractId") Long contractId,
             
             @Parameter(description = "Excel template file", required = true)
             @RequestParam("file") MultipartFile file
@@ -119,3 +119,4 @@ public class ProviderContractPricingExcelController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
+

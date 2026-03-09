@@ -218,8 +218,12 @@ public class MedicalServiceService {
                         .id(p.getId())
                         .code(p.getCode())
                         .name(p.getName())
+                        .nameAr(p.getNameAr())
+                        .nameEn(p.getNameEn())
                         .categoryId(p.getCategoryId())
                         .categoryName(p.getCategoryName())
+                        .categoryNameAr(p.getCategoryNameAr())
+                        .categoryNameEn(p.getCategoryNameEn())
                         .build())
                 .collect(Collectors.toList());
     }

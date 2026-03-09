@@ -50,7 +50,7 @@ public class VisitAttachmentController {
     @PostMapping("/{visitId}/attachments")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
     public ResponseEntity<VisitAttachment> uploadAttachment(
-            @PathVariable Long visitId,
+            @PathVariable("visitId") Long visitId,
             @RequestParam("file") MultipartFile file,
             @RequestParam("attachmentType") VisitAttachmentType attachmentType,
             @RequestParam(value = "description", required = false) String description) {
@@ -76,7 +76,7 @@ public class VisitAttachmentController {
      */
     @GetMapping("/{visitId}/attachments")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
-    public ResponseEntity<List<VisitAttachment>> getVisitAttachments(@PathVariable Long visitId) {
+    public ResponseEntity<List<VisitAttachment>> getVisitAttachments(@PathVariable("visitId") Long visitId) {
         log.info("Get attachments for visit ID: {}", visitId);
         
         List<VisitAttachment> attachments = attachmentService.getVisitAttachments(visitId);
@@ -93,8 +93,8 @@ public class VisitAttachmentController {
     @GetMapping("/{visitId}/attachments/{attachmentId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
     public ResponseEntity<Resource> downloadAttachment(
-            @PathVariable Long visitId,
-            @PathVariable Long attachmentId) {
+            @PathVariable("visitId") Long visitId,
+            @PathVariable("attachmentId") Long attachmentId) {
         
         log.info("Download attachment: visitId={}, attachmentId={}", visitId, attachmentId);
         
@@ -127,8 +127,8 @@ public class VisitAttachmentController {
     @DeleteMapping("/{visitId}/attachments/{attachmentId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
     public ResponseEntity<String> deleteAttachment(
-            @PathVariable Long visitId,
-            @PathVariable Long attachmentId) {
+            @PathVariable("visitId") Long visitId,
+            @PathVariable("attachmentId") Long attachmentId) {
         
         log.info("Delete attachment: visitId={}, attachmentId={}", visitId, attachmentId);
         
@@ -151,10 +151,11 @@ public class VisitAttachmentController {
      */
     @GetMapping("/{visitId}/attachments/count")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
-    public ResponseEntity<Long> getAttachmentCount(@PathVariable Long visitId) {
+    public ResponseEntity<Long> getAttachmentCount(@PathVariable("visitId") Long visitId) {
         log.info("Get attachment count for visit ID: {}", visitId);
         
         long count = attachmentService.countAttachments(visitId);
         return ResponseEntity.ok(count);
     }
 }
+

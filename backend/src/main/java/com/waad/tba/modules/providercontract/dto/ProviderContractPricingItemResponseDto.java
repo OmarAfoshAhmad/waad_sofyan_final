@@ -97,6 +97,8 @@ public class ProviderContractPricingItemResponseDto {
                     .id(entity.getMedicalService().getId())
                     .code(entity.getMedicalService().getCode())
                     .name(entity.getMedicalService().getName())
+                    .nameAr(entity.getMedicalService().getNameAr())
+                    .nameEn(entity.getMedicalService().getNameEn())
                     .build();
         }
 
@@ -106,6 +108,7 @@ public class ProviderContractPricingItemResponseDto {
                     .id(entity.getMedicalCategory().getId())
                     .code(entity.getMedicalCategory().getCode())
                     .name(entity.getMedicalCategory().getName())
+                    .nameAr(entity.getMedicalCategory().getNameAr())
                     .build();
         }
 
@@ -119,7 +122,8 @@ public class ProviderContractPricingItemResponseDto {
         if (entity.getMedicalCategory() != null) {
             // Use item's override category
             effectiveCategoryDto = categoryDto;
-            effectiveCategoryName = entity.getMedicalCategory().getName();
+            effectiveCategoryName = entity.getMedicalCategory().getNameAr() != null ? 
+                    entity.getMedicalCategory().getNameAr() : entity.getMedicalCategory().getName();
         } else if (serviceId != null && categoryMap != null && categoryMap.containsKey(serviceId)) {
             // Lookup category from serviceId -> category map
             MedicalCategory serviceCategory = categoryMap.get(serviceId);
@@ -127,14 +131,16 @@ public class ProviderContractPricingItemResponseDto {
                     .id(serviceCategory.getId())
                     .code(serviceCategory.getCode())
                     .name(serviceCategory.getName())
+                    .nameAr(serviceCategory.getNameAr())
                     .build();
-            effectiveCategoryName = serviceCategory.getName();
+            effectiveCategoryName = serviceCategory.getNameAr() != null ? serviceCategory.getNameAr() : serviceCategory.getName();
         }
 
-        // Get display name: prefer medical service name, fallback to serviceName field
+        // Get display name: prefer medical service nameAr, then name, fallback to serviceName field
         String displayServiceName = entity.getServiceName();
-        if (entity.getMedicalService() != null && entity.getMedicalService().getName() != null) {
-            displayServiceName = entity.getMedicalService().getName();
+        if (entity.getMedicalService() != null) {
+            displayServiceName = entity.getMedicalService().getNameAr() != null ? 
+                    entity.getMedicalService().getNameAr() : entity.getMedicalService().getName();
         }
         
         return ProviderContractPricingItemResponseDto.builder()
@@ -173,6 +179,8 @@ public class ProviderContractPricingItemResponseDto {
         private Long id;
         private String code;
         private String name;
+        private String nameAr;
+        private String nameEn;
     }
 
     /**
@@ -186,5 +194,6 @@ public class ProviderContractPricingItemResponseDto {
         private Long id;
         private String code;
         private String name;
+        private String nameAr;
     }
 }

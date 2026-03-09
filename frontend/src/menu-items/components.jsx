@@ -26,7 +26,8 @@ import {
   History as HistoryIcon,
   PriceCheck as PriceCheckIcon,
   BarChart as BarChartIcon,
-  ErrorOutline as ErrorOutlineIcon
+  ErrorOutline as ErrorOutlineIcon,
+  AccountTree as AccountTreeIcon
 } from '@mui/icons-material';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -113,14 +114,14 @@ const menuItem = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'group-statistics',
-    title: 'الإحصائيات والتقارير المالية',
-    titleEn: 'Statistics & Analytics',
+    title: 'لوحة المعلومات',
+    titleEn: 'Dashboard',
     type: 'group',
     children: [
       {
         id: 'dashboard',
-        title: 'لوحة الإحصائيات',
-        titleEn: 'Statistics Dashboard',
+        title: 'لوحة المعلومات',
+        titleEn: 'Dashboard',
         type: 'item',
         url: '/dashboard',
         icon: AssessmentIcon,
@@ -181,7 +182,7 @@ const menuItem = [
         titleEn: 'Provider Portal',
         type: 'collapse',
         icon: LocalHospitalIcon,
-        resource: 'provider_portal', // controlled by PROVIDER_PORTAL_ENABLED feature flag
+        resource: '__hidden_provider_portal', // Hidden per user request
         action: 'view',
         children: [
           {
@@ -548,8 +549,7 @@ const menuItem = [
         type: 'item',
         url: '/documents',
         icon: DescriptionIcon,
-        resource: 'documents',
-        action: 'view',
+        resource: '__hidden_documents', // Hidden per user request
         chip: {
           label: '✅',
           color: 'success',
@@ -648,6 +648,16 @@ const menuItem = [
             resource: 'medical_catalog',
             action: 'view'
           },
+          {
+            id: 'provider-mapping-center',
+            title: 'مركز تعيين خدمات المزودين',
+            titleEn: 'Provider Mapping Center',
+            type: 'item',
+            url: '/medical/provider-mapping',
+            icon: AccountTreeIcon,
+            resource: 'medical_catalog',
+            action: 'view'
+          },
         ]
       },
       {
@@ -688,6 +698,16 @@ const menuItem = [
               color: 'success',
               size: 'small'
             }
+          },
+          {
+            id: 'medical-services-mapping',
+            title: 'الخدمات الطبية',
+            titleEn: 'Medical Services',
+            type: 'item',
+            url: '/medical/services-mapping',
+            icon: AssignmentIcon,
+            resource: 'medical_catalog',
+            action: 'view'
           }
         ]
       }

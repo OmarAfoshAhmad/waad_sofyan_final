@@ -13,6 +13,10 @@ import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.entity.ServiceAlias;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.ServiceAliasRepository;
+import com.waad.tba.modules.provider.dto.ProviderSelectorDto;
+import com.waad.tba.modules.provider.entity.Provider;
+import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -59,6 +64,35 @@ public class ProviderMappingService {
         private final MedicalServiceRepository medicalServiceRepo;
         private final ServiceAliasRepository aliasRepo;
         private final UserRepository userRepo;
+        private final ProviderRepository providerRepository;
+        private final ProviderContractRepository contractRepository;
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // PROVIDERS WITH ACTIVE CONTRACTS
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /**
+         * Returns providers that have at least one currently ACTIVE contract.
+         * Used by the Mapping Center selector to prevent linking services to
+         * providers without a valid contract.
+         */
+        @Transactional(readOnly = true)
+        public List<ProviderSelectorDto> getProvidersWithActiveContracts() {
+                List<Long> ids = contractRepository.findDistinctProviderIdsWithActiveContracts();
+                return providerRepository.findAllById(ids).stream()
+                                .filter(Provider::getActive)
+                                .sorted(Comparator.comparing(Provider::getName,
+                                                Comparator.nullsLast(Comparator.naturalOrder())))
+                                .map(p -> ProviderSelectorDto.builder()
+                                                .id(p.getId())
+                                                .code(p.getLicenseNumber())
+                                                .name(p.getName())
+                                                .providerType(p.getProviderType() != null
+                                                                ? p.getProviderType().name()
+                                                                : null)
+                                                .build())
+                                .collect(Collectors.toList());
+        }
 
         // ═══════════════════════════════════════════════════════════════════════
         // READ
@@ -135,6 +169,9 @@ public class ProviderMappingService {
                         mapping.setMappedBy(null); // system action
                         mappingRepo.save(mapping);
 
+                        // Register raw name as alias in unified catalog (if new)
+                        saveAliasIfAbsent(matched.getId(), raw.getRawName(), "system");
+
                         // Update raw service status
                         raw.setStatus(MappingStatus.AUTO_MATCHED);
                         raw.setConfidenceScore(BigDecimal.valueOf(100));
@@ -194,6 +231,9 @@ public class ProviderMappingService {
                 mapping.setMappedAt(LocalDateTime.now());
                 mapping.setConfidenceScore(BigDecimal.valueOf(100));
                 mappingRepo.save(mapping);
+
+                // Register raw name as alias in unified catalog (if new)
+                saveAliasIfAbsent(service.getId(), raw.getRawName(), "user:" + userId);
 
                 raw.setStatus(MappingStatus.MANUAL_CONFIRMED);
                 raw.setConfidenceScore(BigDecimal.valueOf(100));
@@ -294,6 +334,25 @@ public class ProviderMappingService {
                 if (raw == null)
                         return "";
                 return raw.trim().toLowerCase().replaceAll("\\s+", " ");
+        }
+
+        /**
+         * Adds the raw service name as an alias for the confirmed medical service
+         * in the unified catalog (ent_service_aliases), skipping duplicates.
+         */
+        private void saveAliasIfAbsent(Long medicalServiceId, String rawName, String createdBy) {
+                if (rawName == null || rawName.isBlank())
+                        return;
+                String trimmed = rawName.trim();
+                if (!aliasRepo.existsByMedicalServiceIdAndAliasTextIgnoreCase(medicalServiceId, trimmed)) {
+                        aliasRepo.save(ServiceAlias.builder()
+                                        .medicalServiceId(medicalServiceId)
+                                        .aliasText(trimmed)
+                                        .locale("ar")
+                                        .createdBy(createdBy)
+                                        .build());
+                        log.debug("ALIAS_ADDED: medicalServiceId={} aliasText={}", medicalServiceId, trimmed);
+                }
         }
 
         private void writeAudit(ProviderRawService raw, User operator,

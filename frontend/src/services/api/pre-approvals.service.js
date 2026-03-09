@@ -400,6 +400,27 @@ export const preApprovalsService = {
     } catch (error) {
       throw handlePreApprovalErrors(error);
     }
+  },
+
+  /**
+   * Search pre-approvals
+   * @param {Object} params - { q, page, size, sortBy, sortDir }
+   * @returns {Promise<Object>} Paginated results
+   */
+  search: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.q) queryParams.append('q', params.q);
+      if (params.page !== undefined) queryParams.append('page', params.page);
+      if (params.size) queryParams.append('size', params.size);
+      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+      if (params.sortDir) queryParams.append('sortDirection', params.sortDir);
+
+      const response = await axiosClient.get(`${BASE_URL}/search?${queryParams.toString()}`);
+      return normalizePaginatedResponse(response);
+    } catch (error) {
+      throw handlePreApprovalErrors(error);
+    }
   }
 };
 

@@ -66,6 +66,7 @@ const INITIAL_FORM_STATE = {
   code: '',
   name: '',
   parentId: '',
+  multiParentIds: [],
   context: 'ANY',
   active: true
 };
@@ -330,7 +331,8 @@ const MedicalCategoryCreate = () => {
         const payload = {
           code: form.code?.trim().toUpperCase(),
           name: form.name?.trim(),
-          parentId: categoryType === CATEGORY_TYPE.SUB ? form.parentId : null,
+          parentId: categoryType === CATEGORY_TYPE.SUB ? (form.parentId || null) : null,
+          multiParentIds: categoryType === CATEGORY_TYPE.SUB ? (form.multiParentIds || []) : [],
           context: form.context || 'ANY',
           active: form.active
         };
@@ -415,24 +417,28 @@ const MedicalCategoryCreate = () => {
               />
 
               <FormControl fullWidth error={!!errors.parentId}>
-                <InputLabel>اختر التصنيف الأب *</InputLabel>
+                <InputLabel>اختر التصنيفات الأم (متعدد) *</InputLabel>
                 <Select
-                  value={form.parentId}
-                  onChange={handleChange('parentId')}
-                  label="اختر التصنيف الأب *"
+                  multiple
+                  value={form.multiParentIds || []}
+                  onChange={handleChange('multiParentIds')}
+                  label="اختر التصنيفات الأم (متعدد) *"
                   disabled={submitting}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {selected.map((value) => {
+                        const cat = categories.find(c => c.id === value);
+                        return <Chip key={value} label={cat?.name || value} size="small" />;
+                      })}
+                    </Box>
+                  )}
                   sx={{
                     '& .MuiSelect-select': {
                       py: 1.5
                     }
                   }}
                 >
-                  <MenuItem value="" disabled>
-                    <Typography color="text.secondary">— اختر التصنيف الأب —</Typography>
-                  </MenuItem>
-
-                  {organizedCategories.map((mainCat) => [
-                    // Main category as group header
+                  {organizedCategories.map((mainCat) => (
                     <MenuItem
                       key={mainCat.id}
                       value={mainCat.id}
@@ -446,19 +452,8 @@ const MedicalCategoryCreate = () => {
                         <span>{mainCat.name}</span>
                         <Chip label={mainCat.code} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />
                       </Stack>
-                    </MenuItem>,
-
-                    // Sub-categories indented
-                    ...mainCat.children.map((subCat) => (
-                      <MenuItem key={subCat.id} value={subCat.id} sx={{ pr: 4 }}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <SubdirectoryArrowLeftIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                          <span>{subCat.name}</span>
-                          <Chip label={subCat.code} size="small" variant="outlined" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />
-                        </Stack>
-                      </MenuItem>
-                    ))
-                  ])}
+                    </MenuItem>
+                  ))}
                 </Select>
 
                 {errors.parentId && (

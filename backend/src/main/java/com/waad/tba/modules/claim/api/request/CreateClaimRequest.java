@@ -113,11 +113,24 @@ public class CreateClaimRequest {
      */
     private LocalDate serviceDate;
     
-    /**
-     * Additional notes
-     */
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
+
+    /**
+     * Optional: Target status for the claim (e.g., SETTLED, REJECTED)
+     * Defaults to SETTLED if not specified to bypass DRAFT.
+     */
+    private com.waad.tba.modules.claim.entity.ClaimStatus status;
+
+    /**
+     * Patient complaint or clinical notes (for reviewer context)
+     */
+    private String complaint;
+
+    /**
+     * Optional: Global rejection reason for the entire claim
+     */
+    private String rejectionReason;
     
     // ═══════════════════════════════════════════════════════════════════════════
     // ⛔ FORBIDDEN FIELDS - FINANCIAL SAFETY
@@ -174,6 +187,16 @@ public class CreateClaimRequest {
          * For backlog claims, this is used as the source of truth.
          */
         private java.math.BigDecimal unitPrice;
+
+        /**
+         * Whether this specific line is rejected by the provider
+         */
+        private Boolean rejected;
+
+        /**
+         * Reason for rejection (if rejected)
+         */
+        private String rejectionReason;
 
         // ❌ NO totalPrice - Calculated as quantity * unitPrice
         // ❌ NO approvedPrice - Calculated during approval

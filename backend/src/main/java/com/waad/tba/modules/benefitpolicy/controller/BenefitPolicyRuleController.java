@@ -114,15 +114,14 @@ public class BenefitPolicyRuleController {
     // ═══════════════════════════════════════════════════════════════════════════
 
     @GetMapping("/coverage/service/{serviceId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Get coverage rule for a specific service", description = "Returns the applicable coverage rule for a service. "
-            +
-            "Service-specific rules take priority over category rules.")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
+    @Operation(summary = "Get detailed coverage for a service")
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> getCoverageForService(
             @PathVariable("policyId") Long policyId,
-            @PathVariable("serviceId") Long serviceId) {
+            @PathVariable("serviceId") Long serviceId,
+            @RequestParam(name = "categoryId", required = false) Long categoryId) {
 
-        Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId);
+        Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId, categoryId);
 
         if (result.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success("Service not covered under this policy", null));
@@ -132,20 +131,27 @@ public class BenefitPolicyRuleController {
     }
 
     @GetMapping("/coverage/service/{serviceId}/check")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Quick check if a service is covered")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkServiceCoverage(
             @PathVariable("policyId") Long policyId,
-            @PathVariable("serviceId") Long serviceId) {
+            @PathVariable("serviceId") Long serviceId,
+            @RequestParam(name = "categoryId", required = false) Long categoryId) {
 
-        boolean isCovered = ruleService.isServiceCovered(policyId, serviceId);
-        int coveragePercent = ruleService.getCoveragePercent(policyId, serviceId);
-        boolean requiresPreApproval = ruleService.requiresPreApproval(policyId, serviceId);
+        boolean isCovered = ruleService.isServiceCovered(policyId, serviceId, categoryId);
+        int coveragePercent = ruleService.getCoveragePercent(policyId, serviceId, categoryId);
+        boolean requiresPreApproval = ruleService.requiresPreApproval(policyId, serviceId, categoryId);
 
-        Map<String, Object> result = Map.of(
-                "covered", isCovered,
-                "coveragePercent", coveragePercent,
-                "requiresPreApproval", requiresPreApproval);
+        // Also include limit info from the rule
+        Optional<BenefitPolicyRuleResponseDto> ruleOpt = ruleService.findCoverageForService(policyId, serviceId, categoryId);
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("covered", isCovered);
+        result.put("coveragePercent", coveragePercent);
+        result.put("requiresPreApproval", requiresPreApproval);
+        ruleOpt.ifPresent(rule -> {
+            result.put("timesLimit", rule.getTimesLimit());
+            result.put("amountLimit", rule.getAmountLimit());
+        });
 
         return ResponseEntity.ok(ApiResponse.success("Coverage check complete", result));
     }
@@ -157,9 +163,10 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "memberId") Long memberId,
+            @RequestParam(name = "categoryId", required = false) Long categoryId,
             @RequestParam(name = "year", required = false) Integer year) {
 
-        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, memberId, year);
+        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId, memberId, year);
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
     }
 
@@ -283,7 +290,7 @@ public class BenefitPolicyRuleController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Get rule count for the policy")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getRuleCount(
-            @PathVariable Long policyId) {
+            @PathVariable("policyId") Long policyId) {
 
         long total = ruleService.countByPolicy(policyId);
         long active = ruleService.countActiveByPolicy(policyId);
@@ -296,3 +303,4 @@ public class BenefitPolicyRuleController {
         return ResponseEntity.ok(ApiResponse.success("Rule counts", counts));
     }
 }
+

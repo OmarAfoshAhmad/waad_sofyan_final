@@ -29,6 +29,7 @@ public class CatalogCategoryNodeDto {
     int    specialtyCount;
     int    serviceCount;
 
+    List<CatalogCategoryNodeDto> children;
     List<CatalogSpecialtyNodeDto> specialties;
 
     @Value

@@ -314,7 +314,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error or parent is not a Principal", content = @Content(mediaType = "application/json"))
     })
     public ResponseEntity<MemberViewDto> addDependent(
-            @Parameter(description = "ID of the Principal Member", required = true) @PathVariable Long principalId,
+            @Parameter(description = "ID of the Principal Member", required = true) @PathVariable("principalId") Long principalId,
             @Valid @RequestBody DependentMemberDto dto) {
 
         log.info("Adding Dependent to Principal: principalId={}, dependentName={}",
@@ -359,7 +359,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found", content = @Content(mediaType = "application/json"))
     })
     public ResponseEntity<MemberViewDto> getMember(
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
 
         log.info("Retrieving Member: id={}", id);
 
@@ -602,7 +602,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Barcode format invalid or belongs to Dependent (Dependents do not have Barcodes)", content = @Content(mediaType = "application/json"))
     })
     public ResponseEntity<FamilyEligibilityResponseDto> checkEligibility(
-            @PathVariable String barcode) {
+            @PathVariable("barcode") String barcode) {
 
         log.info("Checking family eligibility: barcode={}", barcode);
 
@@ -713,7 +713,7 @@ public class UnifiedMemberController {
     // @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN',
     // 'PROVIDER_STAFF')")
     @Deprecated(since = "2026-01", forRemoval = false)
-    public ResponseEntity<byte[]> downloadMemberPdf(@PathVariable Long id) throws IOException {
+    public ResponseEntity<byte[]> downloadMemberPdf(@PathVariable("id") Long id) throws IOException {
         // Logic to print single member details... reusing beneficiaries report for now
         // for single item,
         // OR we could make a specific 'member-card.html' later.
@@ -795,7 +795,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error or attempt to modify immutable field", content = @Content(mediaType = "application/json"))
     })
     public ResponseEntity<MemberViewDto> updateMember(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody MemberUpdateDto dto) {
 
         log.info("Updating Member: id={}", id);
@@ -827,7 +827,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found")
     })
     public ResponseEntity<ApiResponse<MemberViewDto>> setActive(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam(name = "active") boolean active) {
 
         log.info("Setting active={} for member ID={}", active, id);
@@ -885,7 +885,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden: Insufficient permissions (requires ADMIN or EMPLOYER role)", content = @Content(mediaType = "application/json"))
     })
     public ResponseEntity<ApiResponse<Void>> deleteMember(
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
 
         log.info("Deleting Member: id={}", id);
 
@@ -924,7 +924,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Member is not a Principal", content = @Content(mediaType = "application/json"))
     })
     public ResponseEntity<List<MemberViewDto>> getDependents(
-            @PathVariable Long principalId) {
+            @PathVariable("principalId") Long principalId) {
 
         log.info("Retrieving Dependents for Principal: principalId={}", principalId);
 
@@ -953,7 +953,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Long.class)))
     })
     public ResponseEntity<Long> countDependents(
-            @PathVariable Long principalId) {
+            @PathVariable("principalId") Long principalId) {
 
         log.info("Counting Dependents for Principal: principalId={}", principalId);
 
@@ -985,7 +985,7 @@ public class UnifiedMemberController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(summary = "Get Member Remaining Limit", description = "Returns the remaining coverage limit for a member. Used in Provider Portal during claim creation.")
     public ResponseEntity<java.util.Map<String, Object>> getRemainingLimit(
-            @PathVariable Long memberId) {
+            @PathVariable("memberId") Long memberId) {
 
         log.info("📊 Retrieving remaining limit for member: memberId={}", memberId);
 
@@ -1095,7 +1095,7 @@ public class UnifiedMemberController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found")
     })
     public ResponseEntity<MemberFinancialSummaryDto> getFinancialSummary(
-            @PathVariable Long memberId) {
+            @PathVariable("memberId") Long memberId) {
 
         log.info("📊 Retrieving financial summary for member: memberId={}", memberId);
 
@@ -1120,7 +1120,7 @@ public class UnifiedMemberController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
     @Operation(summary = "Upload Member Photo", description = "Upload profile photo for a member. Accepts JPEG or PNG images.")
     public ResponseEntity<ApiResponse<MemberViewDto>> uploadPhoto(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file) {
 
         log.info("📸 Photo upload request: memberId={}, filename={}, size={}",
@@ -1168,7 +1168,7 @@ public class UnifiedMemberController {
     @GetMapping(value = "/{id}/photo", produces = { MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE })
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER', 'PROVIDER_STAFF')")
     @Operation(summary = "Get Member Photo", description = "Retrieve member profile photo as image binary")
-    public ResponseEntity<byte[]> getPhoto(@PathVariable Long id) {
+    public ResponseEntity<byte[]> getPhoto(@PathVariable("id") Long id) {
         log.debug("📸 Photo request: memberId={}", id);
 
         try {
@@ -1202,7 +1202,7 @@ public class UnifiedMemberController {
     @DeleteMapping("/{id}/photo")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
     @Operation(summary = "Delete Member Photo", description = "Remove profile photo from a member")
-    public ResponseEntity<ApiResponse<Void>> deletePhoto(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> deletePhoto(@PathVariable("id") Long id) {
         log.info("🗑️ Photo delete request: memberId={}", id);
 
         try {
@@ -1236,7 +1236,7 @@ public class UnifiedMemberController {
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
     @Operation(summary = "Restore Deleted Member", description = "Restore a soft-deleted member (unset deleted flag)")
-    public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<MemberViewDto>> restoreMember(@PathVariable("id") Long id) {
         log.info("♻️ Restore request: memberId={}", id);
 
         try {
@@ -1262,7 +1262,7 @@ public class UnifiedMemberController {
     @DeleteMapping("/{id}/hard")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Hard Delete Member", description = "Permanently delete a member from the database (SUPER_ADMIN only)")
-    public ResponseEntity<ApiResponse<Void>> hardDeleteMember(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<Void>> hardDeleteMember(@PathVariable("id") Long id) {
         log.warn("⚠️ HARD DELETE request: memberId={}", id);
 
         try {
@@ -1327,3 +1327,4 @@ public class UnifiedMemberController {
         }
     }
 }
+

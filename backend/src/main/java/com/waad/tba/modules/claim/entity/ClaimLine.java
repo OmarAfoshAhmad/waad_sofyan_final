@@ -98,6 +98,21 @@ public class ClaimLine {
     @Column(name = "service_category_name", length = 200)
     private String serviceCategoryName;
 
+    // ==================== APPLIED COVERAGE RESOLUTION ====================
+
+    /**
+     * The category ID actually used for coverage calculation.
+     * This might be different from serviceCategoryId if Claim.manualCategoryEnabled is TRUE.
+     */
+    @Column(name = "applied_category_id")
+    private Long appliedCategoryId;
+
+    /**
+     * Denormalized name of the applied category.
+     */
+    @Column(name = "applied_category_name", length = 200)
+    private String appliedCategoryName;
+
     // ==================== QUANTITY & PRICING ====================
 
     /**

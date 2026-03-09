@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -276,17 +277,18 @@ public class ClaimService {
         if (visit.getMember() != null && visit.getMember().getEmployer() != null) {
             // Bypass check if provider allows all employers (global network)
             boolean isGlobalProvider = Boolean.TRUE.equals(provider.getAllowAllEmployers());
-            
+
             boolean isAuthorized = isGlobalProvider || providerAllowedEmployerRepository.hasActiveAccessToEmployer(
                     provider.getId(), visit.getMember().getEmployer().getId());
 
             if (!isAuthorized) {
-                log.error("🛑 SECURITY ALERT: Provider {} attempted to create claim for UNAUTHORIZED employer {} (Member: {})",
+                log.error(
+                        "🛑 SECURITY ALERT: Provider {} attempted to create claim for UNAUTHORIZED employer {} (Member: {})",
                         provider.getId(), visit.getMember().getEmployer().getId(), visit.getMember().getId());
                 throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.FORBIDDEN,
-                    "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + visit.getMember().getEmployer().getName() + ")."
-                );
+                        org.springframework.http.HttpStatus.FORBIDDEN,
+                        "المزود غير مخول لتقديم خدمات لموظفي هذه الجهة (" + visit.getMember().getEmployer().getName()
+                                + ").");
             }
         }
 
@@ -302,32 +304,7 @@ public class ClaimService {
                 .collect(Collectors.toMap(MedicalService::getId, s -> s));
 
         Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, medicalServiceMap);
-        claim.setStatus(ClaimStatus.DRAFT); // Always start as DRAFT
-
-        // Get member from the claim (derived from Visit in mapper)
-        Member member = claim.getMember();
-        LocalDate serviceDate = claim.getServiceDate() != null ? claim.getServiceDate() : LocalDate.now();
-
-        log.info("📋 Claim derived: Member={}, Provider={}, ServiceDate={}, Lines={}, Total={}",
-                member.getId(), claim.getProviderId(), serviceDate,
-                claim.getLines() != null ? claim.getLines().size() : 0,
-                claim.getRequestedAmount());
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 3: BenefitPolicy Validation (Single Source of Truth)
-        // ═══════════════════════════════════════════════════════════════════════════
-        benefitPolicyCoverageService.validateCanCreateClaim(member, serviceDate);
-        log.info("✅ Member {} has valid BenefitPolicy for date {}", member.getNationalNumber(), serviceDate);
-
-        // Validate amount limits using BenefitPolicy
-        if (claim.getRequestedAmount() != null && member.getBenefitPolicy() != null) {
-            benefitPolicyCoverageService.validateAmountLimits(
-                    member, member.getBenefitPolicy(), claim.getRequestedAmount(), serviceDate);
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 4: Save and audit
-        // ═══════════════════════════════════════════════════════════════════════════
+        // Status is already SETTLED by mapper as per user request
         Claim savedClaim = claimRepository.save(claim);
 
         // Record creation in audit trail
@@ -335,7 +312,7 @@ public class ClaimService {
             claimAuditService.recordCreation(savedClaim, currentUser);
         }
 
-        log.info("✅ Claim {} created in DRAFT status (Contract-Driven Architecture)", savedClaim.getId());
+        log.info("✅ Claim {} created in SETTLED status (Direct Implementation)", savedClaim.getId());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // PHASE 5: Auto-mark PreAuthorization as USED when linked to claim
@@ -519,11 +496,17 @@ public class ClaimService {
             claim.setDiagnosisDescription(dto.getDiagnosisDescription());
         }
         if (dto.getPreAuthorizationId() != null) {
-            // Validate and link PreAuth (just set the ID, don't fetch full entity)
-            // The entity will handle the relationship
             PreAuthorization preAuth = new PreAuthorization();
             preAuth.setId(dto.getPreAuthorizationId());
             claim.setPreAuthorization(preAuth);
+        }
+
+        if (dto.getComplaint() != null) {
+            claim.setComplaint(dto.getComplaint());
+        }
+
+        if (dto.getRejectionReason() != null) {
+            claim.setReviewerComment(dto.getRejectionReason());
         }
 
         // DRAFT line edits (services/categories/quantities) with backend contract
@@ -983,11 +966,24 @@ public class ClaimService {
                 .calculateCostsWithAtomicDeductible(claim);
         log.info("💰 [ATOMIC] Cost breakdown for claim {}: {}", id, breakdown.getSummary());
 
+        BigDecimal requestedAmount = claim.getRequestedAmount() != null ? claim.getRequestedAmount() : BigDecimal.ZERO;
+        BigDecimal refusedAmount = claim.getRefusedAmount() != null ? claim.getRefusedAmount() : BigDecimal.ZERO;
+        BigDecimal netAcceptedAmount = requestedAmount.subtract(refusedAmount).max(BigDecimal.ZERO);
+
+        // System snapshot starts from accepted base only (requested - refused).
+        BigDecimal systemPatientCoPay = breakdown.patientResponsibility() != null
+                ? breakdown.patientResponsibility()
+                : BigDecimal.ZERO;
+        if (systemPatientCoPay.compareTo(netAcceptedAmount) > 0) {
+            systemPatientCoPay = netAcceptedAmount;
+        }
+        BigDecimal systemNetProvider = netAcceptedAmount.subtract(systemPatientCoPay);
+
         // Step 2: Determine approved amount
         BigDecimal approvedAmount;
         if (Boolean.TRUE.equals(dto.getUseSystemCalculation()) || dto.getApprovedAmount() == null) {
             // Use system-calculated amount (insurance pays)
-            approvedAmount = breakdown.insuranceAmount();
+            approvedAmount = systemNetProvider;
             log.info("📊 Using system-calculated approved amount: {}", approvedAmount);
         } else {
             // Use manual amount from reviewer
@@ -997,19 +993,20 @@ public class ClaimService {
 
         // Step 3: Validate approved amount using AtomicFinancialService
         atomicFinancialService.validatePositiveAmount(approvedAmount, "المبلغ المعتمد (Approved Amount)");
-        atomicFinancialService.validateApprovedAmount(approvedAmount, claim.getRequestedAmount());
+        atomicFinancialService.validateApprovedAmount(approvedAmount, netAcceptedAmount);
 
         // Step 4: Validate Financial Snapshot equation
-        // Rule: RequestedAmount = PatientCoPay + NetProviderAmount
-        BigDecimal patientCoPay = breakdown.patientResponsibility();
-        BigDecimal netProviderAmount = breakdown.insuranceAmount();
+        // Rule: NetAcceptedAmount = PatientCoPay + NetProviderAmount
+        BigDecimal patientCoPay = netAcceptedAmount.subtract(approvedAmount);
+        BigDecimal netProviderAmount = approvedAmount;
         BigDecimal total = patientCoPay.add(netProviderAmount);
 
-        if (total.compareTo(claim.getRequestedAmount()) != 0) {
+        if (total.compareTo(netAcceptedAmount) != 0) {
             log.warn("⚠️ Financial calculation mismatch: {} + {} = {} != {}",
-                    patientCoPay, netProviderAmount, total, claim.getRequestedAmount());
+                    patientCoPay, netProviderAmount, total, netAcceptedAmount);
             // Auto-adjust to ensure balance
-            netProviderAmount = claim.getRequestedAmount().subtract(patientCoPay);
+            netProviderAmount = netAcceptedAmount.subtract(patientCoPay).max(BigDecimal.ZERO);
+            approvedAmount = netProviderAmount;
         }
 
         // Step 5: Validate coverage limits using BenefitPolicy (Single Source of Truth)
@@ -1036,9 +1033,14 @@ public class ClaimService {
         claim.setApprovedAmount(approvedAmount);
         claim.setPatientCoPay(patientCoPay);
         claim.setNetProviderAmount(netProviderAmount);
-        claim.setCoPayPercent(breakdown.coPayPercent());
-        claim.setDeductibleApplied(breakdown.deductibleApplied());
-        claim.setDifferenceAmount(claim.getRequestedAmount().subtract(approvedAmount));
+        BigDecimal effectiveCoPayPercent = netAcceptedAmount.compareTo(BigDecimal.ZERO) > 0
+                ? patientCoPay.multiply(new BigDecimal("100")).divide(netAcceptedAmount, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+        claim.setCoPayPercent(effectiveCoPayPercent);
+        BigDecimal rawDeductible = breakdown.deductibleApplied() != null ? breakdown.deductibleApplied()
+                : BigDecimal.ZERO;
+        claim.setDeductibleApplied(rawDeductible.min(patientCoPay));
+        claim.setDifferenceAmount(claim.getRequestedAmount().subtract(netProviderAmount));
 
         if (dto.getNotes() != null && !dto.getNotes().isBlank()) {
             claim.setReviewerComment(dto.getNotes());
@@ -1202,10 +1204,23 @@ public class ClaimService {
                     .calculateCostsWithAtomicDeductible(claim);
             log.info("💰 [ATOMIC] Cost breakdown for claim {}: {}", id, breakdown.getSummary());
 
+            BigDecimal requestedAmount = claim.getRequestedAmount() != null ? claim.getRequestedAmount()
+                    : BigDecimal.ZERO;
+            BigDecimal refusedAmount = claim.getRefusedAmount() != null ? claim.getRefusedAmount() : BigDecimal.ZERO;
+            BigDecimal netAcceptedAmount = requestedAmount.subtract(refusedAmount).max(BigDecimal.ZERO);
+
+            BigDecimal systemPatientCoPay = breakdown.patientResponsibility() != null
+                    ? breakdown.patientResponsibility()
+                    : BigDecimal.ZERO;
+            if (systemPatientCoPay.compareTo(netAcceptedAmount) > 0) {
+                systemPatientCoPay = netAcceptedAmount;
+            }
+            BigDecimal systemNetProvider = netAcceptedAmount.subtract(systemPatientCoPay);
+
             // Step 2: Determine approved amount
             BigDecimal approvedAmount;
             if (Boolean.TRUE.equals(dto.getUseSystemCalculation()) || dto.getApprovedAmount() == null) {
-                approvedAmount = breakdown.insuranceAmount();
+                approvedAmount = systemNetProvider;
                 log.info("📊 Using system-calculated approved amount: {}", approvedAmount);
             } else {
                 approvedAmount = dto.getApprovedAmount();
@@ -1214,17 +1229,18 @@ public class ClaimService {
 
             // Step 3: Validate approved amount
             atomicFinancialService.validatePositiveAmount(approvedAmount, "المبلغ المعتمد (Approved Amount)");
-            atomicFinancialService.validateApprovedAmount(approvedAmount, claim.getRequestedAmount());
+            atomicFinancialService.validateApprovedAmount(approvedAmount, netAcceptedAmount);
 
             // Step 4: Validate Financial Snapshot equation
-            BigDecimal patientCoPay = breakdown.patientResponsibility();
-            BigDecimal netProviderAmount = breakdown.insuranceAmount();
+            BigDecimal patientCoPay = netAcceptedAmount.subtract(approvedAmount);
+            BigDecimal netProviderAmount = approvedAmount;
             BigDecimal total = patientCoPay.add(netProviderAmount);
 
-            if (total.compareTo(claim.getRequestedAmount()) != 0) {
+            if (total.compareTo(netAcceptedAmount) != 0) {
                 log.warn("⚠️ Financial calculation mismatch: {} + {} = {} != {}",
-                        patientCoPay, netProviderAmount, total, claim.getRequestedAmount());
-                netProviderAmount = claim.getRequestedAmount().subtract(patientCoPay);
+                        patientCoPay, netProviderAmount, total, netAcceptedAmount);
+                netProviderAmount = netAcceptedAmount.subtract(patientCoPay).max(BigDecimal.ZERO);
+                approvedAmount = netProviderAmount;
             }
 
             // Step 5: Validate coverage limits
@@ -1246,9 +1262,14 @@ public class ClaimService {
             claim.setApprovedAmount(approvedAmount);
             claim.setPatientCoPay(patientCoPay);
             claim.setNetProviderAmount(netProviderAmount);
-            claim.setCoPayPercent(breakdown.coPayPercent());
-            claim.setDeductibleApplied(breakdown.deductibleApplied());
-            claim.setDifferenceAmount(claim.getRequestedAmount().subtract(approvedAmount));
+            BigDecimal effectiveCoPayPercent = netAcceptedAmount.compareTo(BigDecimal.ZERO) > 0
+                    ? patientCoPay.multiply(new BigDecimal("100")).divide(netAcceptedAmount, 2, RoundingMode.HALF_UP)
+                    : BigDecimal.ZERO;
+            claim.setCoPayPercent(effectiveCoPayPercent);
+            BigDecimal rawDeductible = breakdown.deductibleApplied() != null ? breakdown.deductibleApplied()
+                    : BigDecimal.ZERO;
+            claim.setDeductibleApplied(rawDeductible.min(patientCoPay));
+            claim.setDifferenceAmount(claim.getRequestedAmount().subtract(netProviderAmount));
 
             // Step 7: Transition to APPROVED status
             claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
@@ -1689,12 +1710,13 @@ public class ClaimService {
         return providerNetworkService.validateProviderForClaim(claim.getProviderName());
     }
 
-    public void deleteClaim(Long id) {
-        Claim claim = claimRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Claim not found with id: " + id));
-        claim.setActive(false);
-        claimRepository.save(claim);
-    }
+    // public void deleteClaim(Long id) {
+    // Claim claim = claimRepository.findById(id)
+    // .orElseThrow(() -> new IllegalArgumentException("Claim not found with id: " +
+    // id));
+    // claim.setActive(false);
+    // claimRepository.save(claim);
+    // }
 
     @Transactional(readOnly = true)
     public long countClaims(Long employerId) {
@@ -1993,12 +2015,15 @@ public class ClaimService {
 
         Object[] result = queryResult.get(0);
         int len = result.length;
-        
+
         // Map results with safe index checking
         long totalClaimsCount = (len > 0 && result[0] != null) ? ((Number) result[0]).longValue() : 0L;
-        BigDecimal totalRequested = (len > 1 && result[1] != null) ? new BigDecimal(result[1].toString()) : BigDecimal.ZERO;
-        BigDecimal totalApproved = (len > 2 && result[2] != null) ? new BigDecimal(result[2].toString()) : BigDecimal.ZERO;
-        BigDecimal totalRefused = (len > 3 && result[3] != null) ? new BigDecimal(result[3].toString()) : BigDecimal.ZERO;
+        BigDecimal totalRequested = (len > 1 && result[1] != null) ? new BigDecimal(result[1].toString())
+                : BigDecimal.ZERO;
+        BigDecimal totalApproved = (len > 2 && result[2] != null) ? new BigDecimal(result[2].toString())
+                : BigDecimal.ZERO;
+        BigDecimal totalRefused = (len > 3 && result[3] != null) ? new BigDecimal(result[3].toString())
+                : BigDecimal.ZERO;
         BigDecimal totalPaid = (len > 4 && result[4] != null) ? new BigDecimal(result[4].toString()) : BigDecimal.ZERO;
         long approvedCount = (len > 5 && result[5] != null) ? ((Number) result[5]).longValue() : 0L;
         long settledCount = (len > 6 && result[6] != null) ? ((Number) result[6]).longValue() : 0L;
@@ -2014,5 +2039,17 @@ public class ClaimService {
                 .settledCount(settledCount)
                 .build();
     }
-}
 
+    /**
+     * Delete a claim (Phase MVP).
+     */
+    @Transactional
+    public void deleteClaim(Long id) {
+        log.info("🗑️ Deleting claim {}", id);
+        Claim claim = claimRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
+
+        claimRepository.delete(claim);
+        log.info("✅ Claim {} deleted successfully", id);
+    }
+}

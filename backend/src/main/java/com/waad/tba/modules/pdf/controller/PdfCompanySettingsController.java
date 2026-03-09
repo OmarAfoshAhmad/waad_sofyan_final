@@ -57,7 +57,7 @@ public class PdfCompanySettingsController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<PdfCompanySettings> getSettingsById(@PathVariable Long id) {
+    public ResponseEntity<PdfCompanySettings> getSettingsById(@PathVariable("id") Long id) {
         log.info("[PdfSettingsController] Getting PDF settings: {}", id);
         PdfCompanySettings settings = service.getSettingsById(id);
         return ResponseEntity.ok(settings);
@@ -83,7 +83,7 @@ public class PdfCompanySettingsController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<PdfCompanySettings> updateSettings(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody PdfCompanySettings updates,
             Principal principal
     ) {
@@ -98,7 +98,7 @@ public class PdfCompanySettingsController {
     @PostMapping(value = "/{id}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<?> uploadLogo(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam("file") MultipartFile file,
             Principal principal
     ) {
@@ -133,7 +133,7 @@ public class PdfCompanySettingsController {
     @PatchMapping("/{id}/activate")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<PdfCompanySettings> activateSettings(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             Principal principal
     ) {
         log.info("[PdfSettingsController] Activating PDF settings: {}", id);
@@ -146,9 +146,10 @@ public class PdfCompanySettingsController {
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Void> deleteSettings(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteSettings(@PathVariable("id") Long id) {
         log.info("[PdfSettingsController] Deleting PDF settings: {}", id);
         service.deleteSettings(id);
         return ResponseEntity.noContent().build();
     }
 }
+

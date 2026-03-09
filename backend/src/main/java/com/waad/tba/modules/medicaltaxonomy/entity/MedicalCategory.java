@@ -4,6 +4,7 @@ import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -44,7 +45,7 @@ public class MedicalCategory {
     private String name;
 
     /**
-     * Parent category for hierarchy support
+     * Parent category for hierarchy support (Legacy support)
      * NULL = root category
      * NOT NULL = subcategory
      */
@@ -52,14 +53,17 @@ public class MedicalCategory {
     private Long parentId;
 
     /**
-     * Clinical care-setting context for this category.
-     *
-     * <p>Controls which categories are visible / applicable in:
-     * - Benefit Policy Rule creation (filter by context)
-     * - Claim / Pre-auth form (show only categories matching visit type)
-     *
-     * <p>NULL is treated as {@link CategoryContext#ANY} throughout the system.
+     * Many-to-Many roots (Multi-context support)
+     * Allows a category (e.g. Lab) to belong to multiple roots (OP, IP, etc.)
      */
+    @jakarta.persistence.ManyToMany(fetch = jakarta.persistence.FetchType.LAZY)
+    @jakarta.persistence.JoinTable(
+        name = "medical_category_roots",
+        joinColumns = @jakarta.persistence.JoinColumn(name = "category_id"),
+        inverseJoinColumns = @jakarta.persistence.JoinColumn(name = "root_id")
+    )
+    private java.util.Set<MedicalCategory> roots = new java.util.HashSet<>();
+
     @Enumerated(EnumType.STRING)
     @Column(name = "context", length = 20)
     @Builder.Default
@@ -76,6 +80,13 @@ public class MedicalCategory {
      */
     @Column(name = "name_en", length = 200)
     private String nameEn;
+
+    /**
+     * Admin-managed target coverage percentage (0–100).
+     * NULL = not configured yet.
+     */
+    @Column(name = "coverage_percent", precision = 5, scale = 2)
+    private BigDecimal coveragePercent;
 
     /**
      * Soft-delete flag (unified catalog pattern)

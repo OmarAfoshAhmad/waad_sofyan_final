@@ -133,7 +133,7 @@ public class UnifiedSearchController {
     })
     public ResponseEntity<ApiResponse<MemberSearchDto>> getMemberDetails(
             @Parameter(description = "Member ID", example = "12345", required = true)
-            @PathVariable Long id
+            @PathVariable("id") Long id
     ) {
         log.info("Member details request - ID: {}", id);
 
@@ -176,3 +176,4 @@ public class UnifiedSearchController {
         return String.format("Found %d members matching query", results.size());
     }
 }
+

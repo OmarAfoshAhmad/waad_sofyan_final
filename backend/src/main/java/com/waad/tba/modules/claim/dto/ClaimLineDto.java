@@ -96,4 +96,7 @@ public class ClaimLineDto {
     private Integer patientSharePercent;
     private BigDecimal companyShare;
     private BigDecimal patientShare;
+
+    private Long appliedCategoryId;
+    private String appliedCategoryName;
 }

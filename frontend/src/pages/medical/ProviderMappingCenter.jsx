@@ -2,11 +2,13 @@
  * Provider Mapping Center
  *
  * Features:
- *  - Provider selector dropdown (loads all providers)
+ *  - Provider selector dropdown (only providers with active contracts)
  *  - Table of raw services (default: status=PENDING)
  *  - Auto Match button per row
  *  - Manual Map button (opens modal with searchable medical_services list)
  *  - Reject button per row
+ *  - Confirmed mappings automatically register the raw name as an alias
+ *    in the unified medical catalog (ent_service_aliases).
  *
  * Access: SUPER_ADMIN, DATA_ENTRY
  */
@@ -43,10 +45,10 @@ import {
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import BlockIcon from '@mui/icons-material/Block';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import MapIcon from '@mui/icons-material/Map';
 
-import { providersService } from 'services/api';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import providerMappingService from 'services/medical/providerMapping.service';
@@ -79,10 +81,10 @@ const ProviderMappingCenter = () => {
   const [serviceCategoryId, setServiceCategoryId] = useState('');
   const [selectedService, setSelectedService] = useState(null); // chosen medical service in modal
 
-  // ── Load providers for selector ──────────────────────────────────────────
+  // ── Load providers with active contracts only ────────────────────────────
   const { data: providers = [], isLoading: providersLoading } = useQuery({
-    queryKey: ['providers-selector'],
-    queryFn: () => providersService.getAll({ size: 500 }).then(r => r.data?.content ?? r.data ?? []),
+    queryKey: ['providers-with-active-contracts'],
+    queryFn: () => providerMappingService.getProvidersWithActiveContracts(),
     staleTime: 5 * 60 * 1000
   });
 
@@ -163,6 +165,12 @@ const ProviderMappingCenter = () => {
         </Typography>
       </Stack>
 
+      {/* Info: alias registration notice */}
+      <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ mb: 2 }}>
+        عند تأكيد ربط خدمة (تلقائيًا أو يدويًا)، يُضاف اسم الخدمة الخام تلقائيًا كاسم بديل (Alias) في القاموس الموحد للخدمات الطبية.
+        القائمة تعرض فقط مقدمي الخدمة الذين لديهم عقد نشط.
+      </Alert>
+
       {/* Error Banner */}
       {mutationError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -179,7 +187,7 @@ const ProviderMappingCenter = () => {
           loading={providersLoading}
           value={selectedProvider}
           onChange={(_, v) => setSelectedProvider(v)}
-          getOptionLabel={(o) => `${o.providerName ?? o.name ?? ''}${o.providerCode ? ` (${o.providerCode})` : ''}`}
+          getOptionLabel={(o) => `${o.name ?? ''}${o.code ? ` (${o.code})` : ''}${o.providerType ? ` — ${o.providerType}` : ''}`}
           isOptionEqualToValue={(o, v) => o.id === v.id}
           renderInput={(params) => (
             <TextField

@@ -46,22 +46,34 @@ public class MedicalCatalogHierarchyService {
      */
     @Transactional(readOnly = true)
     public List<CatalogCategoryNodeDto> getTree() {
-        log.debug("Building medical catalog hierarchy tree");
+        log.debug("Building medical catalog hierarchy tree based on Phase 10 Roots");
 
-        List<MedicalCategory> categories = categoryRepository.findByActiveTrue();
-        // Sort by nameAr (nulls last)
-        categories.sort((a, b) -> {
-            String na = a.getNameAr() != null ? a.getNameAr() : a.getName() != null ? a.getName() : "";
-            String nb = b.getNameAr() != null ? b.getNameAr() : b.getName() != null ? b.getName() : "";
-            return na.compareTo(nb);
-        });
+        // 1. Get the 8 Roots (parentId is NULL)
+        List<MedicalCategory> roots = categoryRepository.findRootCategories();
+        
+        // 2. Build the tree
+        return roots.stream()
+                .map(this::buildRootNode)
+                .collect(Collectors.toList());
+    }
 
-        List<CatalogCategoryNodeDto> tree = categories.stream()
-                .map(this::buildCategoryNode)
+    private CatalogCategoryNodeDto buildRootNode(MedicalCategory root) {
+        // Find sub-categories mapped to this root (Many-to-Many)
+        List<MedicalCategory> subCats = categoryRepository.findByRootId(root.getId());
+        
+        List<CatalogCategoryNodeDto> subCatNodes = subCats.stream()
+                .map(this::buildCategoryNode) 
                 .collect(Collectors.toList());
 
-        log.debug("Catalog tree built: {} categories", tree.size());
-        return tree;
+        return CatalogCategoryNodeDto.builder()
+                .id(root.getId())
+                .code(root.getCode())
+                .nameAr(root.getNameAr() != null ? root.getNameAr() : root.getName())
+                .nameEn(root.getNameEn())
+                .children(subCatNodes) 
+                .specialtyCount(0)
+                .serviceCount(subCatNodes.stream().mapToInt(CatalogCategoryNodeDto::getServiceCount).sum())
+                .build();
     }
 
     /**

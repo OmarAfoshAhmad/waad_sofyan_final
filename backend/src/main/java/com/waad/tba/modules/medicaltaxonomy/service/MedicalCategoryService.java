@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 public class MedicalCategoryService {
 
     private final MedicalCategoryRepository categoryRepository;
-    private final MedicalServiceRepository  serviceRepository;
+    private final MedicalServiceRepository serviceRepository;
     private final MedicalSpecialtyRepository specialtyRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -61,18 +61,28 @@ public class MedicalCategoryService {
         String parentName = null;
         if (dto.getParentId() != null) {
             MedicalCategory parent = categoryRepository.findActiveById(dto.getParentId())
-                    .orElseThrow(() -> new BusinessRuleException("Parent category not found or inactive: " + dto.getParentId()));
+                    .orElseThrow(() -> new BusinessRuleException(
+                            "Parent category not found or inactive: " + dto.getParentId()));
             parentName = parent.getName();
         }
 
         // Create entity
         MedicalCategory category = MedicalCategory.builder()
-            .code(normalizedCode)
-            .name(normalizedName)
+                .code(normalizedCode)
+                .name(normalizedName)
                 .parentId(dto.getParentId())
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .context(parseContext(dto.getContext()))
+                .coveragePercent(dto.getCoveragePercent())
                 .build();
+
+        // Handle multi-parents (Roots)
+        if (dto.getMultiParentIds() != null && !dto.getMultiParentIds().isEmpty()) {
+            java.util.Set<MedicalCategory> roots = new java.util.HashSet<>(
+                categoryRepository.findAllById(dto.getMultiParentIds())
+            );
+            category.setRoots(roots);
+        }
 
         category = categoryRepository.save(category);
         log.info("✅ Created medical category: {} (ID: {})", category.getCode(), category.getId());
@@ -145,29 +155,29 @@ public class MedicalCategoryService {
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> getCategoryTree() {
         log.debug("Building category tree");
-        
+
         // Get all active categories
         List<MedicalCategory> allCategories = categoryRepository.findByActiveTrue();
-        
+
         // Build parent map for efficient lookup
         Map<Long, String> parentNames = allCategories.stream()
                 .collect(Collectors.toMap(MedicalCategory::getId, MedicalCategory::getName));
-        
+
         // Convert to DTOs
         List<MedicalCategoryResponseDto> allDtos = allCategories.stream()
                 .map(cat -> toDto(cat, parentNames.get(cat.getParentId())))
                 .collect(Collectors.toList());
-        
+
         // Build hierarchy
         Map<Long, List<MedicalCategoryResponseDto>> childrenMap = allDtos.stream()
                 .filter(dto -> dto.getParentId() != null)
                 .collect(Collectors.groupingBy(MedicalCategoryResponseDto::getParentId));
-        
+
         // Attach children to parents
         allDtos.forEach(dto -> {
             dto.setChildren(childrenMap.getOrDefault(dto.getId(), new ArrayList<>()));
         });
-        
+
         // Return only root categories
         return allDtos.stream()
                 .filter(dto -> dto.getParentId() == null)
@@ -192,13 +202,14 @@ public class MedicalCategoryService {
         if (dto.getParentId() != null) {
             // Validate parent category exists and is active
             categoryRepository.findActiveById(dto.getParentId())
-                    .orElseThrow(() -> new BusinessRuleException("Parent category not found or inactive: " + dto.getParentId()));
-            
+                    .orElseThrow(() -> new BusinessRuleException(
+                            "Parent category not found or inactive: " + dto.getParentId()));
+
             // Prevent circular reference
             if (dto.getParentId().equals(id)) {
                 throw new BusinessRuleException("Category cannot be its own parent");
             }
-            
+
             category.setParentId(dto.getParentId());
         }
         if (dto.getActive() != null) {
@@ -206,6 +217,16 @@ public class MedicalCategoryService {
         }
         if (dto.getContext() != null) {
             category.setContext(parseContext(dto.getContext()));
+        }
+        if (dto.getCoveragePercent() != null) {
+            category.setCoveragePercent(dto.getCoveragePercent());
+        }
+
+        if (dto.getMultiParentIds() != null) {
+            java.util.Set<MedicalCategory> roots = new java.util.HashSet<>(
+                categoryRepository.findAllById(dto.getMultiParentIds())
+            );
+            category.setRoots(roots);
         }
 
         category = categoryRepository.save(category);
@@ -290,14 +311,14 @@ public class MedicalCategoryService {
     @Transactional(readOnly = true)
     public List<MedicalServiceResponseDto> findServicesByCategory(Long categoryId) {
         log.debug("Finding services for category: {}", categoryId);
-        
+
         // Get category info for response enrichment
         MedicalCategory category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new BusinessRuleException("Medical category not found: " + categoryId));
-        
+
         // Get all active services in this category
         List<MedicalService> services = serviceRepository.findActiveByCategoryId(categoryId);
-        
+
         // Convert to DTOs with category info
         return services.stream()
                 .map(service -> toServiceDto(service, category))
@@ -327,11 +348,14 @@ public class MedicalCategoryService {
                 .parentName(parentName)
                 .context(category.getContext() != null ? category.getContext().name() : "ANY")
                 .active(category.isActive())
+                .coveragePercent(category.getCoveragePercent())
+                .multiParentIds(category.getRoots().stream().map(MedicalCategory::getId).collect(Collectors.toList()))
+                .multiParentNames(category.getRoots().stream().map(MedicalCategory::getName).collect(Collectors.toList()))
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
                 .build();
     }
-    
+
     /**
      * Convert MedicalService entity to DTO with category info.
      */
@@ -357,8 +381,10 @@ public class MedicalCategoryService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Safely parse a String into a {@link com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext}.
-     * Returns {@code CategoryContext.ANY} for null or unrecognised values (backward-compatible).
+     * Safely parse a String into a
+     * {@link com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext}.
+     * Returns {@code CategoryContext.ANY} for null or unrecognised values
+     * (backward-compatible).
      */
     private com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext parseContext(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -372,4 +398,3 @@ public class MedicalCategoryService {
         }
     }
 }
-

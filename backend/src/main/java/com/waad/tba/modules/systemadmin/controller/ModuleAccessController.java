@@ -77,7 +77,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Module not found"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<ModuleAccessDto> getModuleById(@PathVariable Long id) {
+        public ApiResponse<ModuleAccessDto> getModuleById(@PathVariable("id") Long id) {
                 log.info("GET /api/admin/modules/{}", id);
                 ModuleAccessDto module = moduleAccessService.getModuleById(id);
                 return ApiResponse.success("Module retrieved successfully", module);
@@ -94,7 +94,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Module not found"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<ModuleAccessDto> getModuleByKey(@PathVariable String key) {
+        public ApiResponse<ModuleAccessDto> getModuleByKey(@PathVariable("key") String key) {
                 log.info("GET /api/admin/modules/key/{}", key);
                 ModuleAccessDto module = moduleAccessService.getModuleByKey(key);
                 return ApiResponse.success("Module retrieved successfully", module);
@@ -132,7 +132,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation error"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<ModuleAccessDto> updateModule(@PathVariable Long id,
+        public ApiResponse<ModuleAccessDto> updateModule(@PathVariable("id") Long id,
                         @Valid @RequestBody ModuleAccessDto dto,
                         Authentication authentication) {
                 log.info("PUT /api/admin/modules/{} - Updating module", id);
@@ -152,7 +152,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Module not found"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<Void> deleteModule(@PathVariable Long id, Authentication authentication) {
+        public ApiResponse<Void> deleteModule(@PathVariable("id") Long id, Authentication authentication) {
                 log.info("DELETE /api/admin/modules/{}", id);
                 String deletedBy = authentication.getName();
                 moduleAccessService.deleteModule(id, deletedBy);
@@ -170,7 +170,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Module not found"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<ModuleAccessDto> toggleModuleStatus(@PathVariable Long id,
+        public ApiResponse<ModuleAccessDto> toggleModuleStatus(@PathVariable("id") Long id,
                         @RequestParam(name = "active") Boolean active,
                         Authentication authentication) {
                 log.info("PUT /api/admin/modules/{}/toggle?active={}", id, active);
@@ -190,7 +190,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Module not found"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<ModuleAccessDto> updateModuleAccess(@PathVariable Long id,
+        public ApiResponse<ModuleAccessDto> updateModuleAccess(@PathVariable("id") Long id,
                         @RequestBody Map<String, List<String>> payload,
                         Authentication authentication) {
                 log.info("PUT /api/admin/modules/{}/access", id);
@@ -218,7 +218,7 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Modules retrieved successfully"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<List<ModuleAccessDto>> getModulesForRole(@PathVariable String roleName) {
+        public ApiResponse<List<ModuleAccessDto>> getModulesForRole(@PathVariable("roleName") String roleName) {
                 log.info("GET /api/admin/modules/role/{}", roleName);
                 List<ModuleAccessDto> modules = moduleAccessService.getModulesForRole(roleName);
                 return ApiResponse.success("Modules retrieved successfully", modules);
@@ -234,9 +234,10 @@ public class ModuleAccessController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Modules retrieved successfully"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden - SUPER_ADMIN only")
         })
-        public ApiResponse<List<ModuleAccessDto>> getModulesByFeatureFlag(@PathVariable String flagKey) {
+        public ApiResponse<List<ModuleAccessDto>> getModulesByFeatureFlag(@PathVariable("flagKey") String flagKey) {
                 log.info("GET /api/admin/modules/feature/{}", flagKey);
                 List<ModuleAccessDto> modules = moduleAccessService.getModulesByFeatureFlag(flagKey);
                 return ApiResponse.success("Modules retrieved successfully", modules);
         }
 }
+
