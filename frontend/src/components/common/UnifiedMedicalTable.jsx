@@ -44,9 +44,14 @@ import {
   Stack,
   TableSortLabel,
   alpha,
-  useTheme
+  useTheme,
+  Collapse,
+  IconButton
 } from '@mui/material';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import { useState, Fragment } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MEDICAL COLOR THEME (SYSTEM-WIDE STANDARD)
@@ -129,6 +134,10 @@ const UnifiedMedicalTable = ({
   getRowKey = (row, index) => row.id || index,
   getRowSx,
 
+  // Expandable Row
+  renderExpandedRow,
+  isRowExpandable,
+
   // Empty State - accept both individual props and emptyStateConfig object
   emptyMessage = 'لا توجد بيانات',
   emptyIcon: EmptyIcon = LocalHospitalIcon,
@@ -177,7 +186,17 @@ const UnifiedMedicalTable = ({
   };
 
   // Calculate columns span for loading/empty states
-  const colSpan = columns.length;
+  const colSpan = columns.length + (renderExpandedRow ? 1 : 0);
+
+  // Expansion state
+  const [expandedRows, setExpandedRows] = useState({});
+
+  const toggleRowExpansion = (rowId) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [rowId]: !prev[rowId]
+    }));
+  };
 
   // Handle sort
   const handleSortRequest = (columnId) => {
@@ -215,6 +234,15 @@ const UnifiedMedicalTable = ({
           {/* Header - Soft Medical Green */}
           <TableHead>
             <TableRow>
+              {renderExpandedRow && (
+                <TableCell
+                  padding="checkbox"
+                  sx={{
+                    bgcolor: headerBg,
+                    borderBottom: `2px solid ${theme.palette.divider}`
+                  }}
+                />
+              )}
               {columns.map((column) => {
                 const isSortable = column.sortable !== false && onSort;
                 const isActive = sortBy === column.id;
@@ -298,33 +326,61 @@ const UnifiedMedicalTable = ({
               </TableRow>
             ) : (
               /* Data Rows */
-              rows.map((row, rowIndex) => (
-                <TableRow
-                  key={getRowKey(row, rowIndex)}
-                  hover={hover}
-                  sx={{
-                    '&:nth-of-type(odd)': { bgcolor: rowOdd },
-                    '&:hover': {
-                      bgcolor: `${rowHover} !important`
-                    },
-                    transition: 'background-color 0.2s',
-                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`,
-                    ...(getRowSx ? getRowSx(row, rowIndex) : {})
-                  }}
-                >
-                  {columns.map((column) => (
-                    <TableCell
-                      key={column.id}
-                      align={column.align || 'left'}
+              rows.map((row, rowIndex) => {
+                const rowKey = getRowKey(row, rowIndex);
+                const isExpanded = !!expandedRows[rowKey];
+                const expandable = isRowExpandable ? isRowExpandable(row) : !!renderExpandedRow;
+
+                return (
+                  <Fragment key={rowKey}>
+                    <TableRow
+                      hover={hover}
                       sx={{
-                        py: 1.5
+                        '&:nth-of-type(odd)': { bgcolor: rowOdd },
+                        '&:hover': {
+                          bgcolor: `${rowHover} !important`
+                        },
+                        transition: 'background-color 0.2s',
+                        borderBottom: renderExpandedRow ? 'none' : `1px solid ${alpha(theme.palette.divider, 0.8)}`,
+                        ...(getRowSx ? getRowSx(row, rowIndex) : {})
                       }}
                     >
-                      {renderCell ? renderCell(row, column, rowIndex) : row[column.id]}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+                      {renderExpandedRow && (
+                        <TableCell padding="checkbox" sx={{ py: 1.5, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}` }}>
+                          {expandable && (
+                            <IconButton size="small" onClick={() => toggleRowExpansion(rowKey)}>
+                              {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      )}
+                      {columns.map((column) => (
+                        <TableCell
+                          key={column.id}
+                          align={column.align || 'left'}
+                          sx={{
+                            py: 1.5,
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`
+                          }}
+                        >
+                          {renderCell ? renderCell(row, column, rowIndex) : row[column.id]}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {renderExpandedRow && expandable && (
+                      <TableRow sx={{ '& td': { padding: 0, borderBottom: isExpanded ? `1px solid ${alpha(theme.palette.divider, 0.8)}` : 'none' } }}>
+                        <TableCell colSpan={colSpan}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ p: 2, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                              {renderExpandedRow(row, rowIndex)}
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -387,6 +443,11 @@ UnifiedMedicalTable.propTypes = {
   // Row Rendering
   renderCell: PropTypes.func,
   getRowKey: PropTypes.func,
+  getRowSx: PropTypes.func,
+
+  // Expandable Row
+  renderExpandedRow: PropTypes.func,
+  isRowExpandable: PropTypes.func,
 
   // Empty State
   emptyMessage: PropTypes.string,

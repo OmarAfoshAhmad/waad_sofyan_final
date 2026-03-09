@@ -1,217 +1,222 @@
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from 'react';
+import useEmployerScope from 'hooks/useEmployerScope';
+import useClaimsReport, { DEFAULT_FILTERS, CLAIM_STATUS_LABELS } from 'hooks/useClaimsReport';
+import { formatNumber } from 'utils/formatters';
+import { providersService } from 'services/api/providers.service';
+import { exportToExcel } from 'utils/exportUtils';
+import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
-// material-ui
-import {
-    Box,
-    Card,
-    CardContent,
-    Typography,
-    Grid,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Stack,
-    TextField,
-    Button,
-    IconButton,
-    Tooltip,
-    Alert,
-    Skeleton,
-    Chip
-} from '@mui/material';
+// MUI Components
+import { Box, Stack, Typography, IconButton, Tooltip, Alert, Chip, AlertTitle, Button } from '@mui/material';
 
-// icons
-import {
-    Refresh as RefreshIcon,
-    TableChart as ExcelIcon,
-    Print as PrintIcon,
-    ErrorOutline as ErrorIcon,
-    LocalHospital as ProviderIcon
-} from '@mui/icons-material';
+// MUI Icons
+import RefreshIcon from '@mui/icons-material/Refresh';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
-// project imports
+// Components
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
-import { reportsService, providersService } from 'services/api';
-import { exportToExcel } from 'utils/exportUtils';
+import { ClaimsFilters, ClaimsTable } from 'components/reports/claims';
 
 /**
- * تقرير المرفوضات التفصيلي
- * يركز فقط على الخدمات التي تم رفضها مع ذكر الأسباب والمبالغ
+ * Rejections Operational Report
+ *
+ * READ-ONLY operational view of rejected claims or claims with rejected lines.
  */
 const RejectionsReport = () => {
-    const [selectedProviderId, setSelectedProviderId] = useState('');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
+  const { companyName } = useCompanySettings();
 
-    // Fetch providers for filter
-    const { data: providers } = useQuery({
-        queryKey: ['providers-selector'],
-        queryFn: async () => {
-            const response = await providersService.getSelector();
-            return response?.data || response || [];
-        }
-    });
+  const [selectedEmployerId, setSelectedEmployerId] = useState(null);
+  const { canSelectEmployer, effectiveEmployerId, employers, isEmployerLocked, userEmployerId } = useEmployerScope(selectedEmployerId);
 
-    // Fetch rejections
-    const { data: rejectionsData, isLoading, refetch, isFetching } = useQuery({
-        queryKey: ['rejections-detailed', selectedProviderId, dateFrom, dateTo],
-        queryFn: async () => {
-            const response = await reportsService.getDetailedRejections({
-                providerId: selectedProviderId || undefined,
-                dateFrom: dateFrom || undefined,
-                dateTo: dateTo || undefined
-            });
-            return response?.data || response || [];
-        }
-    });
+  useEffect(() => {
+    if (isEmployerLocked && userEmployerId && !selectedEmployerId) {
+      setSelectedEmployerId(userEmployerId);
+    }
+  }, [isEmployerLocked, userEmployerId, selectedEmployerId]);
 
-    const formatLYD = (val) => `${(val || 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} د.ل`;
-    const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB') : '-';
+  const [selectedProviderId, setSelectedProviderId] = useState(null);
+  const [providers, setProviders] = useState([]);
 
-    const handleExportExcel = () => {
-        exportToExcel(rejectionsData, `تقرير_المرفوضات_${new Date().toISOString().split('T')[0]}`, {
-            columnLabels: {
-                claimNumber: 'رقم المطالبة',
-                patientName: 'اسم المريض',
-                providerName: 'المزود',
-                serviceName: 'الخدمة',
-                rejectedAmount: 'المبلغ المرفوض',
-                rejectionReason: 'سبب الرفض'
-            }
-        });
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const data = await providersService.getSelector();
+        const providersList = data ?? [];
+        setProviders(Array.isArray(providersList) ? providersList : []);
+      } catch (err) {
+        console.error('Failed to fetch providers:', err);
+        setProviders([]);
+      }
     };
+    fetchProviders();
+  }, []);
 
-    return (
-        <MainCard>
-            <ModernPageHeader
-                titleKey="تقرير المرفوضات التفصيلي"
-                titleIcon={<ErrorIcon color="error" />}
-                subtitleKey="قائمة تفصيلية بجميع الخدمات المرفوضة مع أسباب الرفض"
-                actions={
-                    <Stack direction="row" spacing={1}>
-                        <Tooltip title="تحديث">
-                            <IconButton onClick={() => refetch()} disabled={isLoading || isFetching}>
-                                <RefreshIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="تصدير Excel">
-                            <IconButton onClick={handleExportExcel} disabled={!rejectionsData?.length}>
-                                <ExcelIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
-                }
-            />
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
-            {/* Filters */}
-            <Card sx={{ mb: 3 }}>
-                <CardContent>
-                    <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={3}>
-                            <TextField
-                                select
-                                fullWidth
-                                size="small"
-                                label="مقدم الخدمة"
-                                value={selectedProviderId}
-                                onChange={(e) => setSelectedProviderId(e.target.value)}
-                                SelectProps={{ native: true }}
-                            >
-                                <option value="">جميع مقدمي الخدمة</option>
-                                {providers?.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </TextField>
-                        </Grid>
-                        <Grid item xs={12} md={3}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                type="date"
-                                label="من تاريخ"
-                                value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                            />
-                        </Grid>
-                        <Grid item xs={12} md={3}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                type="date"
-                                label="إلى تاريخ"
-                                value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                            />
-                        </Grid>
-                        <Grid item xs={12} md={3}>
-                            <Button fullWidth variant="contained" color="error" onClick={() => refetch()} startIcon={<RefreshIcon />}>
-                                بحث المرفوضات
-                            </Button>
-                        </Grid>
-                    </Grid>
-                </CardContent>
-            </Card>
+  const { claims, totalFetched, loading, error, pagination, refetch } = useClaimsReport({
+    employerId: effectiveEmployerId,
+    providerId: selectedProviderId,
+    filters
+  });
 
-            {/* Table */}
-            <TableContainer component={Paper} sx={{ border: '1px solid #ffccbc' }}>
-                <Table stickyHeader size="small">
-                    <TableHead>
-                        <TableRow sx={{ bgcolor: '#fff3e0' }}>
-                            <TableCell sx={{ fontWeight: 'bold' }}>رقم المطالبة</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>المريض</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>المزود</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>الخدمة المرفوضة</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 'bold', color: 'error.main' }}>المبلغ المرفوض</TableCell>
-                            <TableCell sx={{ fontWeight: 'bold' }}>سبب الرفض</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {isLoading ? (
-                            Array(5).fill(0).map((_, i) => (
-                                <TableRow key={i}>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                    <TableCell><Skeleton /></TableCell>
-                                </TableRow>
-                            ))
-                        ) : rejectionsData?.length > 0 ? (
-                            rejectionsData.map((row, idx) => (
-                                <TableRow key={idx} hover>
-                                    <TableCell fontWeight="bold">{row.claimNumber}</TableCell>
-                                    <TableCell>{row.patientName || row.patientNameArabic}</TableCell>
-                                    <TableCell>{row.providerName}</TableCell>
-                                    <TableCell>{row.serviceName || row.serviceNameArabic}</TableCell>
-                                    <TableCell align="right" sx={{ color: 'error.main', fontWeight: 'bold' }}>{formatLYD(row.rejectedAmount)}</TableCell>
-                                    <TableCell>
-                                        <Chip label={row.rejectionReason} size="small" variant="outlined" color="error" />
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={6} align="center">
-                                    <Typography variant="body2" sx={{ py: 3, color: 'text.secondary' }}>
-                                        لا توجد مرفوضات مسجلة لهذه الفترة
-                                    </Typography>
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </MainCard>
-    );
+  // Filter ONLY claims that have rejections or refused amounts
+  const rejectedClaims = useMemo(() => {
+    return claims.filter(c => {
+      const isStatusRejected = c.status === 'REJECTED';
+      const hasRefusedLines = c._raw?.lines?.some(l => l.rejected || l.refusedAmount > 0);
+      const hasRefusedAmount = c._raw?.refusedAmount > 0;
+      return isStatusRejected || hasRefusedLines || hasRefusedAmount;
+    });
+  }, [claims]);
+
+  const totalCount = rejectedClaims.length;
+  const hasPartialData = pagination.totalElements > totalFetched;
+
+  const handleEmployerChange = (employerId) => {
+    if (canSelectEmployer) {
+      setSelectedEmployerId(employerId);
+      setPage(0);
+    }
+  };
+
+  const handleProviderChange = (providerId) => {
+    setSelectedProviderId(providerId);
+    setPage(0);
+  };
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+    setPage(0);
+  };
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+  };
+
+  const handleRowsPerPageChange = (newSize) => {
+    setRowsPerPage(newSize);
+    setPage(0);
+  };
+
+  const handleExportExcel = () => {
+    try {
+      const exportData = rejectedClaims.map((claim) => ({
+        'رقم المطالبة': claim._raw?.claimNumber || claim.id,
+        'اسم المؤمن عليه': claim.memberName,
+        الشريك: claim.employerName,
+        'مقدم الخدمة': claim.providerName,
+        الحالة: CLAIM_STATUS_LABELS[claim.status] || claim.status,
+        'المبلغ المطلوب': claim.requestedAmount,
+        'المبلغ المرفوض': claim._raw?.refusedAmount || '-',
+        'تاريخ الزيارة': claim.visitDate || '-',
+        'آخر تحديث': claim.updatedAt ? new Date(claim.updatedAt).toLocaleDateString('en-US') : '-'
+      }));
+
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `تقرير_المرفوضات_${timestamp}`;
+
+      exportToExcel(exportData, filename, { companyName });
+    } catch (error) {
+      console.error('Failed to export Excel:', error);
+    }
+  };
+
+  return (
+    <MainCard>
+      <ModernPageHeader
+        titleKey="تقرير المرفوضات التشغيلي"
+        titleIcon={<ErrorOutlineIcon color="error" />}
+        subtitleKey="قائمة بالمطالبات المرفوضة أو التي تحتوي على خدمات مرفوضة"
+        actions={
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Chip label={`${totalCount} مطالبة`} size="small" color="error" variant="outlined" />
+            <Tooltip title="تصدير Excel">
+              <Button
+                variant="outlined"
+                size="small"
+                color="success"
+                onClick={handleExportExcel}
+                disabled={loading || totalCount === 0}
+                startIcon={<FileDownloadIcon />}
+              >
+                Excel
+              </Button>
+            </Tooltip>
+            <Tooltip title="تحديث البيانات">
+              <IconButton onClick={refetch} disabled={loading} color="primary">
+                <RefreshIcon sx={{ fontSize: 20, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        }
+      />
+
+      {error && (
+        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {hasPartialData && (
+        <Alert severity="warning" icon={<ErrorOutlineIcon />} sx={{ mb: 2 }}>
+          <AlertTitle>تحذير: بيانات جزئية</AlertTitle>
+          <Typography variant="body2">
+            تم تحميل {formatNumber(totalFetched)} سجل من أصل {formatNumber(pagination.totalElements)} سجل. الفلاتر تطبق على البيانات
+            المحمّلة فقط. النتائج قد تكون غير شاملة.
+          </Typography>
+        </Alert>
+      )}
+
+      <Box sx={{ mt: 2 }}>
+        <ClaimsFilters
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          employers={employers}
+          canSelectEmployer={canSelectEmployer}
+          selectedEmployerId={selectedEmployerId}
+          onEmployerChange={handleEmployerChange}
+          providers={providers}
+          selectedProviderId={selectedProviderId}
+          onProviderChange={handleProviderChange}
+        />
+      </Box>
+
+      {!loading && totalFetched > 0 && (
+        <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="body2" color="text.secondary">
+            إجمالي السجلات: <strong>{totalFetched}</strong>
+          </Typography>
+          <Typography variant="body2" color="error.main" fontWeight="bold">
+            | المرفوضات: <strong>{totalCount}</strong>
+          </Typography>
+        </Box>
+      )}
+
+      <ClaimsTable
+        claims={rejectedClaims}
+        loading={loading}
+        totalCount={totalCount}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        onPageChange={handlePageChange}
+        onRowsPerPageChange={handleRowsPerPageChange}
+      />
+
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+    </MainCard>
+  );
 };
 
 export default RejectionsReport;

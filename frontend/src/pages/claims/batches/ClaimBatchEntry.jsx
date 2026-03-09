@@ -527,6 +527,20 @@ export default function ClaimBatchEntry() {
         });
     }, [fetchCoverage, updateLine, lines, enqueueSnackbar, primaryCategoryCode, policyInfo]);
 
+    // جلب التغطية عند اختيار المريض أو تغيير البوليصة أو تغيير السياق
+    const refetchAllLinesCoverage = useCallback(async (newCategoryCode) => {
+        if (!policyId || !member?.id) return;
+        const catCode = newCategoryCode !== undefined ? newCategoryCode : primaryCategoryCode;
+        const updated = await Promise.all(
+            lines.map(async (line, idx) => {
+                if (!line.service) return line;
+                const cov = await fetchCoverage(line.service, catCode);
+                return { ...line, ...cov };
+            })
+        );
+        setLines(prev => updated.map((line, i) => recompute(line, i, updated)));
+    }, [policyId, member?.id, lines, primaryCategoryCode, fetchCoverage, recompute]);
+
     useEffect(() => {
         if (!policyId || !member?.id) return;
         lines.forEach((line, idx) => {
@@ -989,9 +1003,12 @@ export default function ClaimBatchEntry() {
                                                     checked={primaryCategoryCode === 'CAT-OUTPAT'}
                                                     onChange={(e) => {
                                                         const checked = e.target.checked;
-                                                        setPrimaryCategoryCode(checked ? 'CAT-OUTPAT' : '');
+                                                        const newCode = checked ? 'CAT-OUTPAT' : '';
+                                                        setPrimaryCategoryCode(newCode);
                                                         setManualCategoryEnabled(true);
                                                         setIsDirty(true);
+                                                        // إعادة جلب السقف لجميع البنود بالسياق الجديد
+                                                        refetchAllLinesCoverage(newCode);
                                                     }}
                                                 />
                                             }
@@ -1005,9 +1022,12 @@ export default function ClaimBatchEntry() {
                                                 getOptionLabel={(o) => o.name || o.nameAr || ''}
                                                 value={rootCategories?.find(c => c.code === primaryCategoryCode) || null}
                                                 onChange={(_, v) => {
-                                                    setPrimaryCategoryCode(v?.code || '');
+                                                    const newCode = v?.code || '';
+                                                    setPrimaryCategoryCode(newCode);
                                                     setManualCategoryEnabled(!!v);
                                                     setIsDirty(true);
+                                                    // إعادة جلب السقف لجميع البنود بالسياق الجديد
+                                                    refetchAllLinesCoverage(newCode);
                                                 }}
                                                 renderInput={(params) => (
                                                     <TextField {...params} variant="standard" placeholder="اختر التصنيف..."
@@ -1016,33 +1036,6 @@ export default function ClaimBatchEntry() {
                                             />
                                         )}
                                     </Stack>
-                                </Grid>
-
-                                <Grid size={{ xs: 12 }}>
-                                    <Paper variant="outlined" sx={{ p: 1, bgcolor: '#fcfcfc', borderStyle: 'dashed' }}>
-                                        <Stack direction="row" spacing={3} divider={<Divider orientation="vertical" flexItem />}>
-                                            <Box>
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.65rem', fontWeight: 700 }}>نموذج التسعير</Typography>
-                                                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{activeContract?.pricingModel || '—'}</Typography>
-                                            </Box>
-                                            <Box>
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.65rem', fontWeight: 700 }}>نسبة التخفيض</Typography>
-                                                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.75rem', color: '#1b5e20' }}>%{activeContract?.discountPercent || 0}</Typography>
-                                            </Box>
-                                            <Box>
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.65rem', fontWeight: 700 }}>عدد البنود</Typography>
-                                                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{serviceOptions?.length || 0}</Typography>
-                                            </Box>
-                                            <Box>
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.65rem', fontWeight: 700 }}>بداية العقد</Typography>
-                                                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{activeContract?.startDate || activeContract?.effectiveFrom || '—'}</Typography>
-                                            </Box>
-                                            <Box>
-                                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.65rem', fontWeight: 700 }}>نهاية العقد</Typography>
-                                                <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.75rem' }}>{activeContract?.endDate || activeContract?.effectiveTo || '—'}</Typography>
-                                            </Box>
-                                        </Stack>
-                                    </Paper>
                                 </Grid>
 
                                 {/* Row 2: Pre-approval, Complaint, Notes */}
@@ -1109,12 +1102,12 @@ export default function ClaimBatchEntry() {
                             <Table dir="rtl" size="small" stickyHeader sx={{ minWidth: 760 }}>
                                 <TableHead>
                                     <TableRow>
-                                        <TH align="right" w={280}>الخدمة الطبية</TH>
+                                        <TH align="center" w={280}>الخدمة الطبية</TH>
                                         <TH align="center" w={45}>الكمية</TH>
                                         <TH align="center" w={70}>سعر الوحدة</TH>
                                         <TH align="center" w={60}>التحمل %</TH>
                                         <TH align="center" w={110}>سقف المنفعة</TH>
-                                        <TH align="center" w={110}>الرصيد المتبقي</TH>
+                                        <TH align="center" w={110}> المتبقي من السقف </TH>
                                         <TH align="center" w={75}>المرفوض</TH>
                                         <TH align="center" w={100}>شركة / مشترك</TH>
                                         <TH align="center" w={80}>الإجمالي</TH>
@@ -1202,9 +1195,42 @@ export default function ClaimBatchEntry() {
                                                             )}
                                                             {line.usageDetails.amountLimit > 0 && (
                                                                 <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.amountExceeded || line.usageDetails.totalUsedAmount > line.usageDetails.amountLimit ? 'error.main' : 'text.secondary', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                                                                    د.ل: {line.usageDetails.totalUsedAmount?.toFixed(2)}/{line.usageDetails.amountLimit}
+                                                                    د.ل: {(line.usageDetails.totalUsedAmount ?? 0).toFixed(2)}/{line.usageDetails.amountLimit}
                                                                 </Typography>
                                                             )}
+                                                        </Stack>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    {line.usageDetails && (
+                                                        <Stack spacing={0.3} alignItems="center" justifyContent="center">
+                                                            {line.usageDetails.timesLimit > 0 && (() => {
+                                                                const remaining = Math.max(0, line.usageDetails.timesLimit - line.usageDetails.totalUsedCount);
+                                                                return (
+                                                                    <Typography variant="caption" sx={{
+                                                                        fontSize: '0.75rem',
+                                                                        color: remaining === 0 ? 'error.main' : 'primary.main',
+                                                                        fontWeight: 900, whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        مرات: {remaining}
+                                                                    </Typography>
+                                                                );
+                                                            })()}
+                                                            {line.usageDetails.amountLimit > 0 && (() => {
+                                                                // Use remainingAmount from recompute (amountLimit - totalUsedInBatch - currentLineEffective)
+                                                                const remaining = line.usageDetails.remainingAmount != null
+                                                                    ? line.usageDetails.remainingAmount
+                                                                    : Math.max(0, line.usageDetails.amountLimit - (line.usageDetails.totalUsedAmount ?? 0));
+                                                                return (
+                                                                    <Typography variant="caption" sx={{
+                                                                        fontSize: '0.75rem',
+                                                                        color: remaining <= 0 ? 'error.main' : 'primary.main',
+                                                                        fontWeight: 900, whiteSpace: 'nowrap'
+                                                                    }}>
+                                                                        د.ل: {remaining.toFixed(2)}
+                                                                    </Typography>
+                                                                );
+                                                            })()}
                                                         </Stack>
                                                     )}
                                                 </TableCell>

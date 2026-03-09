@@ -1,7 +1,7 @@
 import psycopg2
 
 try:
-    conn = psycopg2.connect("dbname=waad user=postgres password=root host=localhost")
+    conn = psycopg2.connect("dbname=tba_waad_system user=postgres password=12345 host=localhost")
     cur = conn.cursor()
     
     # Query to find all foreign keys referencing the 'claims' table
