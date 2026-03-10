@@ -41,7 +41,14 @@ import visitsService from 'services/api/visits.service';
 import benefitPoliciesService from 'services/api/benefit-policies.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
 import providerContractsService from 'services/api/provider-contracts.service';
-import { checkServiceCoverage, checkServiceUsageLimit, getCoverageForService } from 'services/api/benefit-policy-rules.service';
+
+import { useCalculationLogic } from './hooks/useCalculationLogic';
+import { useCoverageLogic } from './hooks/useCoverageLogic';
+
+import { BatchHistorySidebar } from './components/BatchHistorySidebar';
+import { ClaimHeaderFields } from './components/ClaimHeaderFields';
+import { ClaimLineRow } from './components/ClaimLineRow';
+import { ClaimTotalsFooter } from './components/ClaimTotalsFooter';
 
 // ── أسماء الشهور ─────────────────────────────────────────────────────────────
 const MONTHS_AR = [
@@ -50,7 +57,8 @@ const MONTHS_AR = [
 ];
 
 const newLine = () => ({
-    id: Math.random(), service: null, serviceName: '', serviceCode: '',
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+    service: null, serviceName: '', serviceCode: '',
     quantity: 1, unitPrice: 0, contractPrice: 0, byCompany: 0, byEmployee: 0,
     refusalTypes: '', total: 0, coveragePercent: null,
     requiresPreApproval: false, notCovered: false,
@@ -116,6 +124,7 @@ export default function ClaimBatchEntry() {
     const [editingClaimId, setEditingClaimId] = useState(initialClaimId);
     const [preAuthId, setPreAuthId] = useState('');
     const [preAuthSearch, setPreAuthSearch] = useState('');
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
     // ✅ Claim Category Context (Manual Rule Selection)
     const [manualCategoryEnabled, setManualCategoryEnabled] = useState(true);
@@ -129,7 +138,35 @@ export default function ClaimBatchEntry() {
     const [serviceDate, setServiceDate] = useState(defaultDate);
 
     const memberRef = useRef(null);
+    const linesRef = useRef(lines);
 
+    // Keep linesRef in sync
+    useEffect(() => {
+        linesRef.current = lines;
+    }, [lines]);
+
+    // ── الاستعلامات الأساسية اللازمة للمنطق ──────────────────────────────────────
+    const { data: rootCategories } = useQuery({
+        queryKey: ['medical-categories-root'],
+        queryFn: () => medicalCategoriesService.getAllMedicalCategories(),
+        select: (data) => data.filter(c => !c.parentId),
+        staleTime: Infinity
+    });
+
+    // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
+    const { recompute } = useCalculationLogic({ applyBenefits, policyInfo });
+    
+    const { fetchCoverage, refetchAllLinesCoverage } = useCoverageLogic({
+        policyId, policyInfo, member, applyBenefits, rootCategories, primaryCategoryCode,
+        setLines, recompute,
+        currentClaimId: editingClaimId
+    });
+
+    const refetchAllLinesCoverageCallback = useCallback(async (newCategoryCode) => {
+        const updated = await refetchAllLinesCoverage(newCategoryCode, linesRef.current);
+        if (updated) setLines(updated);
+    }, [refetchAllLinesCoverage]);
+    const isSavingRef = useRef(false);
 
     // ── الاستعلامات ──────────────────────────────────────────────────────────
     const { data: employer } = useQuery({
@@ -199,12 +236,6 @@ export default function ClaimBatchEntry() {
         staleTime: 5000
     });
 
-    const { data: rootCategories } = useQuery({
-        queryKey: ['medical-categories-root'],
-        queryFn: () => medicalCategoriesService.getAllMedicalCategories(),
-        select: (data) => data.filter(c => !c.parentId),
-        staleTime: Infinity
-    });
 
     // ── Helper to refresh all batch related views ───────────────────────────
     const invalidateBatchData = useCallback(() => {
@@ -272,7 +303,7 @@ export default function ClaimBatchEntry() {
                         label: `${l.medicalServiceCode ? '[' + l.medicalServiceCode + '] ' : ''}${l.medicalServiceName || ''}`
                     };
                 const line = {
-                    id: l.id || Math.random(),
+                    id: l.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
                     service: serviceObj,
                     quantity: l.quantity,
                     unitPrice: enteredPrice,
@@ -288,6 +319,13 @@ export default function ClaimBatchEntry() {
             setManualCategoryEnabled(editingClaim.manualCategoryEnabled ?? true);
             setPrimaryCategoryCode(editingClaim.primaryCategoryCode || 'CAT-OUTPAT');
             setIsDirty(false);
+
+            // المرحلة 1.3: إعادة جلب التغطية والسقوف للمطالبة المحملة لضمان دقة العرض
+            if (policyId && editingClaim.memberId) {
+                setTimeout(() => {
+                    refetchAllLinesCoverage(editingClaim.primaryCategoryCode || 'CAT-OUTPAT');
+                }, 300);
+            }
         }
     }, [editingClaim, defaultDate, contractedRaw]);
 
@@ -313,172 +351,12 @@ export default function ClaimBatchEntry() {
         batchData?.data?.items ?? batchData?.items ?? batchData?.data?.content ?? batchData?.content ?? [], [batchData]);
     const batchTotal = batchData?.data?.total ?? batchData?.total ?? batchData?.data?.totalElements ?? batchData?.totalElements ?? 0;
 
-    // ── التحقق من التغطية التأمينية ──────────────────────────────────────────
-    const fetchCoverage = useCallback(async (service, categoryCodeOverride) => {
-        const sid = service?.medicalServiceId || 0;
-        let categoryId = service?.categoryId || null;
-        const fallbackPercent = policyInfo?.defaultCoveragePercent ?? 100;
-
-        if (!policyId || !applyBenefits)
-            return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
-
-        if (!sid && !categoryId && !categoryCodeOverride)
-            return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
-
-        try {
-            if (categoryCodeOverride) {
-                const cat = rootCategories?.find(c => c.code === categoryCodeOverride);
-                if (cat) categoryId = cat.id;
-            }
-
-            // Fetch coverage check (quick) and full rule (for limits) in parallel
-            const [r, fullRule] = await Promise.all([
-                checkServiceCoverage(policyId, sid, categoryId),
-                getCoverageForService(policyId, sid, categoryId).catch(() => null)
-            ]);
-
-            // timesLimit / amountLimit: prefer /check response (new backend), fallback to full rule
-            const timesLimit = r?.timesLimit ?? fullRule?.timesLimit ?? null;
-            const amountLimit = r?.amountLimit != null
-                ? parseFloat(r.amountLimit)
-                : (fullRule?.amountLimit != null ? parseFloat(fullRule.amountLimit) : null);
-
-            console.log('@@@ fetchCoverage call:', { sid, categoryId, checkResult: r, fullRuleResult: fullRule, decidedTimes: timesLimit, decidedAmount: amountLimit });
-
-            // Build base coverage info (includes limits from rule)
-            const hasLimits = (timesLimit != null) || (amountLimit != null);
-            let baseLimitDetails = hasLimits ? {
-                hasLimit: true,
-                timesLimit,
-                amountLimit,
-                usedCount: 0,
-                usedAmount: 0,
-                exceeded: false,
-                timesExceeded: false,
-                amountExceeded: false
-            } : null;
-
-            // If member is selected, also fetch actual usage data
-            if (member?.id) {
-                const memberId = member.id;
-                if (memberId) {
-                    const usage = await checkServiceUsageLimit(policyId, sid, memberId, categoryId);
-                    if (usage && usage.hasLimit) {
-                        baseLimitDetails = { ...baseLimitDetails, ...usage };
-                    }
-                }
-            }
-
-            return {
-                coveragePercent: r?.coveragePercent ?? fallbackPercent,
-                requiresPreApproval: r?.requiresPreApproval ?? false,
-                notCovered: r?.covered === false,
-                usageExceeded: baseLimitDetails?.exceeded ?? false,
-                usageDetails: baseLimitDetails
-            };
-        } catch (err) {
-            console.error('[fetchCoverage] error:', err);
-            return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
-        }
-    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories]);
-
-    // ── منطق الجدول ──────────────────────────────────────────────────────────
-    const recompute = useCallback((line, idx = null, currentBatch = null) => {
-        if (!line) return line;
-
-        const qty = Math.max(0, parseInt(line.quantity) || 0);
-        const enteredPrice = Math.max(0, parseFloat(line.unitPrice) || 0);
-        const total = parseFloat((enteredPrice * qty).toFixed(2));
-
-        if (line.rejected) {
-            return { ...line, byCompany: 0, byEmployee: 0, total, refusedAmount: total };
-        }
-
-        const contractPrice = parseFloat(line.contractPrice || 0);
-
-        // Calculate the amount that is "authorized" by the contract
-        // If price exceeds contract, the "Excess" is refused.
-        const effectivePrice = (contractPrice > 0 && enteredPrice > contractPrice) ? contractPrice : enteredPrice;
-        const effectiveTotal = parseFloat((effectivePrice * qty).toFixed(2));
-
-        // The difference is "Refused" because of price ceiling
-        const priceRefused = Math.max(0, total - effectiveTotal);
-
-        // --- Usage Limit Enforcement (PHASE 2.2) ---
-        let limitRefused = 0;
-        let usageExceeded = false;
-        const usage = line.usageDetails;
-
-        let batchUsedTimes = 0;
-        let batchUsedAmount = 0;
-        let totalUsedCount = 0;
-        let totalUsedAmount = 0;
-
-        if (usage && usage.hasLimit) {
-            // New logic: Check other lines in the same batch that share the same rule
-            const currentRuleId = usage.ruleId;
-            if (currentRuleId && currentBatch && idx !== null) {
-                currentBatch.forEach((l, i) => {
-                    // Only count lines BEFORE this one
-                    if (i < idx && !l.rejected && l.service && l.usageDetails?.ruleId === currentRuleId) {
-                        batchUsedTimes += (parseInt(l.quantity) || 0);
-                        const lQty = parseInt(l.quantity) || 0;
-                        const lPrice = Math.min(parseFloat(l.unitPrice || 0), parseFloat(l.contractPrice || 0) || Infinity);
-                        batchUsedAmount += (lPrice * lQty);
-                    }
-                });
-            }
-
-            totalUsedCount = (usage?.usedCount || 0) + batchUsedTimes;
-            totalUsedAmount = (usage?.usedAmount || 0) + batchUsedAmount;
-
-            if (usage.timesLimit > 0 && totalUsedCount >= usage.timesLimit) {
-                limitRefused = effectiveTotal;
-                usageExceeded = true;
-            } else if (usage.amountLimit > 0) {
-                const remaining = Math.max(0, usage.amountLimit - totalUsedAmount);
-                if (effectiveTotal > remaining) {
-                    limitRefused = Math.max(limitRefused, effectiveTotal - remaining);
-                    usageExceeded = true;
-                }
-            }
-        }
-
-        const approvedTotalForCoverage = Math.max(0, effectiveTotal - limitRefused);
-
-        let byCompany, byEmployee;
-        const cov = (line.coveragePercent !== null && line.coveragePercent !== undefined) ? line.coveragePercent : (policyInfo?.defaultCoveragePercent ?? 100);
-
-        if (applyBenefits) {
-            byCompany = parseFloat((approvedTotalForCoverage * cov / 100).toFixed(2));
-            byEmployee = parseFloat((effectiveTotal - byCompany).toFixed(2));
-        } else {
-            byEmployee = Math.max(0, parseFloat(line.byEmployee) || 0);
-            byCompany = parseFloat(Math.max(0, approvedTotalForCoverage - byEmployee).toFixed(2));
-        }
-
-        return {
-            ...line,
-            total,
-            byCompany,
-            byEmployee,
-            refusedAmount: parseFloat((priceRefused + limitRefused).toFixed(2)),
-            usageExceeded: usageExceeded || (usage && usage.exceeded),
-            usageExhausted: limitRefused >= effectiveTotal && effectiveTotal > 0,
-            usageDetails: usage ? {
-                ...usage,
-                totalUsedCount,
-                totalUsedAmount,
-                remainingAmount: usage.amountLimit > 0 ? Math.max(0, usage.amountLimit - totalUsedAmount - approvedTotalForCoverage) : null
-            } : null
-        };
-    }, [applyBenefits, policyInfo?.defaultCoveragePercent]);
+    // ── المنطق المالي وتغطية الخدمات (مطبق في الأعلى) ───────────────────────────
 
     const updateLine = useCallback((idx, patch) => {
         setLines(prev => {
             const n = [...prev];
             n[idx] = { ...n[idx], ...patch };
-            // Cascade recompute to all lines to ensure cross-limit consistency
             return n.map((line, i) => recompute(line, i, n));
         });
         setIsDirty(true);
@@ -515,7 +393,6 @@ export default function ClaimBatchEntry() {
             cov = await fetchCoverage(svc, primaryCategoryCode);
         }
 
-        const hasContractPrice = svc.hasContract !== false && svc.price !== undefined && svc.price !== null;
         const price = svc?.contractPrice ?? svc?.basePrice ?? svc?.price ?? 0;
         updateLine(idx, {
             service: svc,
@@ -527,30 +404,15 @@ export default function ClaimBatchEntry() {
         });
     }, [fetchCoverage, updateLine, lines, enqueueSnackbar, primaryCategoryCode, policyInfo]);
 
-    // جلب التغطية عند اختيار المريض أو تغيير البوليصة أو تغيير السياق
-    const refetchAllLinesCoverage = useCallback(async (newCategoryCode) => {
-        if (!policyId || !member?.id) return;
-        const catCode = newCategoryCode !== undefined ? newCategoryCode : primaryCategoryCode;
-        const updated = await Promise.all(
-            lines.map(async (line, idx) => {
-                if (!line.service) return line;
-                const cov = await fetchCoverage(line.service, catCode);
-                return { ...line, ...cov };
-            })
-        );
-        setLines(prev => updated.map((line, i) => recompute(line, i, updated)));
-    }, [policyId, member?.id, lines, primaryCategoryCode, fetchCoverage, recompute]);
-
     useEffect(() => {
         if (!policyId || !member?.id) return;
-        lines.forEach((line, idx) => {
-            if (!line.service || line.usageDetails) return;
-            fetchCoverage(line.service, primaryCategoryCode).then(cov =>
-                updateLine(idx, cov)
-            );
+        
+        // Force refetch usage/limits for ALL lines when member or policy changes
+        refetchAllLinesCoverage(primaryCategoryCode, linesRef.current).then(updated => {
+            if (updated) setLines(updated);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [policyId, applyBenefits, primaryCategoryCode, member?.id, lines.length]);
+    }, [policyId, member?.id, primaryCategoryCode]);
 
     const addLine = useCallback(() => { setLines(p => [...p, newLine()]); setIsDirty(true); }, []);
     const removeLine = useCallback((idx) => {
@@ -596,14 +458,24 @@ export default function ClaimBatchEntry() {
     };
 
     const handleSave = async () => {
+        if (isSavingRef.current) return;
         if (!member) { enqueueSnackbar(t('claimEntry.validationMember'), { variant: 'error' }); return; }
         if (lines.some(l => !l.service && !l.serviceName)) { enqueueSnackbar(t('claimEntry.validationService'), { variant: 'error' }); return; }
         if (!isClaimRejected && lines.some(l => !l.rejected && (parseFloat(l.unitPrice) || 0) <= 0)) {
             enqueueSnackbar('يجب أن يكون سعر الوحدة أكبر من صفر لكل بند غير مرفوض', { variant: 'error' }); return;
         }
+
+        isSavingRef.current = true;
         setSaving(true);
         try {
             const actualDate = serviceDate || defaultDate;
+
+            // المرحلة 2.2: التحقق من انتهاء صلاحية الوثيقة
+            if (policyInfo?.endDate && new Date(actualDate) > new Date(policyInfo.endDate)) {
+                enqueueSnackbar(`⚠️ تاريخ الخدمة (${actualDate}) يتجاوز نهاية الوثيقة المحددة (${policyInfo.endDate})`,
+                    { variant: 'warning', autoHideDuration: 6000 });
+                // لا نوقف الحفظ تماماً في حالة السماح بالعمليات اللاحقة، ولكن نعطيه تحذيراً صارماً
+            }
 
             const claimData = {
                 memberId: member.id,
@@ -686,7 +558,10 @@ export default function ClaimBatchEntry() {
             setEditingClaimId(null);
         } catch (err) {
             enqueueSnackbar(err.message || t('claimEntry.saveFailed'), { variant: 'error' });
-        } finally { setSaving(false); }
+        } finally {
+            setSaving(false);
+            isSavingRef.current = false;
+        }
     };
 
     // ── طباعة وتصدير ─────────────────────────────────────────────────────────
@@ -717,10 +592,16 @@ export default function ClaimBatchEntry() {
     // ── حذف مطالبة من الشريط الجانبي ─────────────────────────────────────────
     const handleDeleteClaim = async (claimId, e) => {
         e.stopPropagation();
-        if (!window.confirm(`هل تريد إلغاء المطالبة #${claimId}؟`)) return;
+        setConfirmDeleteId(claimId);
+    };
+
+    const confirmDeleteClaim = async () => {
+        const claimId = confirmDeleteId;
+        if (!claimId) return;
         try {
             await claimsService.remove(claimId);
             enqueueSnackbar(`✅ تم إلغاء المطالبة #${claimId}`, { variant: 'success' });
+            setConfirmDeleteId(null);
             invalidateBatchData();
         } catch (err) {
             enqueueSnackbar(err.message || 'فشل إلغاء المطالبة', { variant: 'error' });
@@ -768,123 +649,26 @@ export default function ClaimBatchEntry() {
             </Box>
 
             {/* ═══ المحتوى ═══ */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', gap: 2, overflow: 'hidden', minHeight: 0 }}>
-
-                {/* ── الشريط الجانبي — يسار ── */}
-                <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', order: -1 }}>
-                    <Paper variant="outlined" sx={{
-                        flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                        borderRadius: 2.5, p: 1.5,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-                    }}>
-                        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1.5 }}>
-                            <HistoryIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                            <Typography variant="subtitle2" fontWeight={900} sx={{ fontSize: '0.9rem', flex: 1 }}>
-                                {t('claimEntry.batchHistory')}
-                            </Typography>
-                            <Button size="small" variant="contained" color="primary" startIcon={<AddIcon sx={{ fontSize: 13 }} />}
-                                onClick={() => { resetForm(); setEditingClaimId(null); }}
-                                sx={{ height: 24, fontSize: '0.75rem', fontWeight: 800, borderRadius: 1.2 }}>
-                                جديد
-                            </Button>
-                        </Stack>
-                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', mb: 1, display: 'block' }}>
-                            {monthLabel} {year}
-                        </Typography>
-                        <Divider sx={{ mb: 1 }} />
-
-                        {loadingBatch ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                                <CircularProgress size={20} thickness={4} />
-                            </Box>
-                        ) : (
-                            <Stack spacing={0.5} sx={{ flex: 1, overflowY: 'auto' }}>
-                                {batchContent.map(c => (
-                                    <Paper key={c.id} variant="outlined"
-                                        onClick={() => setEditingClaimId(c.id)}
-                                        sx={{
-                                            p: 0.75, borderRadius: 1.5, cursor: 'pointer', flexShrink: 0,
-                                            transition: 'all 0.15s',
-                                            bgcolor: editingClaimId === c.id ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
-                                            borderColor: editingClaimId === c.id ? 'primary.main' : 'divider',
-                                            '&:hover': {
-                                                bgcolor: alpha(theme.palette.primary.main, 0.05),
-                                                borderColor: 'primary.light',
-                                                transform: 'translateX(2px)'
-                                            }
-                                        }}>
-                                        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={0.5}>
-                                            <Typography variant="caption" fontWeight={800}
-                                                sx={{ fontSize: '0.75rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {c.memberName}
-                                            </Typography>
-                                            <Stack direction="row" alignItems="center" spacing={0.25}>
-                                                <Typography variant="caption" fontWeight={900} sx={{
-                                                    color: 'success.dark', bgcolor: alpha('#2e7d32', 0.09),
-                                                    px: 0.7, py: 0.3, borderRadius: 1, fontSize: '0.85rem'
-                                                }}>
-                                                    {(c.approvedAmount || 0).toFixed(2)}
-                                                </Typography>
-                                                {(c.refusedAmount > 0) && (
-                                                    <Typography variant="caption" fontWeight={900} sx={{
-                                                        color: '#d32f2f', bgcolor: alpha('#d32f2f', 0.09),
-                                                        px: 0.7, py: 0.3, borderRadius: 1, fontSize: '0.85rem'
-                                                    }}>
-                                                        {(c.refusedAmount || 0).toFixed(2)}
-                                                    </Typography>
-                                                )}
-                                                <Tooltip title="إلغاء المطالبة">
-                                                    <IconButton size="small" color="error"
-                                                        onClick={(e) => handleDeleteClaim(c.id, e)}
-                                                        sx={{ p: 0.25, opacity: 0.5, '&:hover': { opacity: 1 } }}>
-                                                        <DeleteIcon sx={{ fontSize: 11 }} />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </Stack>
-                                        </Stack>
-                                        <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.3 }}>
-                                            <Typography variant="caption" color="text.disabled"
-                                                sx={{ fontFamily: 'monospace', fontSize: '0.6rem' }}>
-                                                #{c.id}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                                                {c.serviceDate}
-                                            </Typography>
-                                        </Stack>
-                                    </Paper>
-                                ))}
-                                {batchData?.totalPages > 1 && (
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1, py: 1, borderTop: '1px solid #eee', mb: 1 }}>
-                                        <Pagination
-                                            count={batchData.totalPages}
-                                            page={page + 1}
-                                            onChange={(e, v) => setPage(v - 1)}
-                                            size="small"
-                                            siblingCount={0}
-                                            boundaryCount={1}
-                                            shape="rounded"
-                                            color="primary"
-                                        />
-                                    </Box>
-                                )}
-                                {!batchContent.length && (
-                                    <Box sx={{ textAlign: 'center', py: 3, opacity: 0.3 }}>
-                                        <ReceiptIcon sx={{ fontSize: 28, mb: 0.5 }} />
-                                        <Typography variant="caption" display="block" fontWeight={700} sx={{ fontSize: '0.75rem' }}>
-                                            {t('claimEntry.noHistoryYet')}
-                                        </Typography>
-                                    </Box>
-                                )}
-                            </Stack>
-                        )}
-
-                        <Divider sx={{ mt: 1, mb: 1 }} />
-                        <Button fullWidth variant="text" size="small" color="primary"
-                            onClick={() => navigate(detailUrl)} sx={{ fontWeight: 800, fontSize: '0.75rem' }}>
-                            {t('claimEntry.viewAllBatch')}
-                        </Button>
-                    </Paper>
-                </Box>
+            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, gap: 2, px: 2, pb: 2 }}>
+                
+                {/* ── الشريط الجانبي — يسار (سجل الدفعة) ── */}
+                <BatchHistorySidebar
+                    loadingBatch={loadingBatch}
+                    batchContent={batchContent}
+                    editingClaimId={editingClaimId}
+                    setEditingClaimId={setEditingClaimId}
+                    handleDeleteClaim={handleDeleteClaim}
+                    resetForm={resetForm}
+                    batchData={batchData}
+                    page={page}
+                    setPage={setPage}
+                    monthLabel={monthLabel}
+                    year={year}
+                    theme={theme}
+                    navigate={navigate}
+                    detailUrl={detailUrl}
+                    t={t}
+                />
 
                 {/* ── النموذج الرئيسي (يمين الشاشة) ── */}
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
@@ -962,128 +746,33 @@ export default function ClaimBatchEntry() {
                             </Stack>
                         </Box>
 
-                        {/* ── حقول الرأس (مضغوطة) ── */}
+                        {/* ── حقول الرأس (مكون منفصل) ── */}
                         <Box sx={{ flexShrink: 0, px: 2.5, py: 1.5, bgcolor: 'background.paper' }}>
-                            <Grid container spacing={2}>
-                                {/* Row 1: Patient, Diagnosis, Context */}
-                                <Grid size={{ xs: 12, sm: 3 }}>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                                        {t('claimEntry.patient')} <Typography component="span" color="error.main">*</Typography>
-                                    </Typography>
-                                    <Autocomplete size="small" fullWidth options={memberOptions} loading={searchingMember}
-                                        value={member}
-                                        onChange={(_, v) => { setMember(v); setIsDirty(true); }}
-                                        onInputChange={(_, v) => setMemberInput(v)}
-                                        getOptionLabel={o => `${o.fullName || ''} · ${o.cardNumber || ''}`}
-                                        isOptionEqualToValue={(o, v) => o.id === v?.id}
-                                        renderInput={params => (
-                                            <TextField {...params} inputRef={memberRef} variant="standard" autoFocus
-                                                placeholder={t('claimEntry.searchPatient')} sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-                                        )}
-                                    />
-                                </Grid>
-
-                                <Grid size={{ xs: 12, sm: 3 }}>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                                        {t('claimEntry.diagnosis')}
-                                    </Typography>
-                                    <TextField fullWidth size="small" variant="standard" value={diagnosis}
-                                        onChange={e => { setDiagnosis(e.target.value); setIsDirty(true); }} sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-                                </Grid>
-
-                                <Grid size={{ xs: 12, sm: 6 }}>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                                        سياق التغطية (Context)
-                                    </Typography>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <FormControlLabel
-                                            control={
-                                                <Checkbox
-                                                    size="small"
-                                                    checked={primaryCategoryCode === 'CAT-OUTPAT'}
-                                                    onChange={(e) => {
-                                                        const checked = e.target.checked;
-                                                        const newCode = checked ? 'CAT-OUTPAT' : '';
-                                                        setPrimaryCategoryCode(newCode);
-                                                        setManualCategoryEnabled(true);
-                                                        setIsDirty(true);
-                                                        // إعادة جلب السقف لجميع البنود بالسياق الجديد
-                                                        refetchAllLinesCoverage(newCode);
-                                                    }}
-                                                />
-                                            }
-                                            label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 900, whiteSpace: 'nowrap' }}>عيادات خارجية</Typography>}
-                                        />
-                                        {primaryCategoryCode !== 'CAT-OUTPAT' && (
-                                            <Autocomplete
-                                                size="small"
-                                                sx={{ flexGrow: 1 }}
-                                                options={rootCategories?.filter(c => c.code !== 'CAT-OUTPAT') || []}
-                                                getOptionLabel={(o) => o.name || o.nameAr || ''}
-                                                value={rootCategories?.find(c => c.code === primaryCategoryCode) || null}
-                                                onChange={(_, v) => {
-                                                    const newCode = v?.code || '';
-                                                    setPrimaryCategoryCode(newCode);
-                                                    setManualCategoryEnabled(!!v);
-                                                    setIsDirty(true);
-                                                    // إعادة جلب السقف لجميع البنود بالسياق الجديد
-                                                    refetchAllLinesCoverage(newCode);
-                                                }}
-                                                renderInput={(params) => (
-                                                    <TextField {...params} variant="standard" placeholder="اختر التصنيف..."
-                                                        sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-                                                )}
-                                            />
-                                        )}
-                                    </Stack>
-                                </Grid>
-
-                                {/* Row 2: Pre-approval, Complaint, Notes */}
-                                <Grid size={{ xs: 12, sm: 4 }}>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                                        رقم الموافقة المسبقة (PA Selection)
-                                    </Typography>
-                                    <Autocomplete
-                                        size="small"
-                                        fullWidth
-                                        options={preAuthResults?.items || []}
-                                        loading={searchingPreAuth}
-                                        value={preAuthResults?.items?.find(pa => pa.id === parseInt(preAuthId)) || null}
-                                        onInputChange={(_, v) => setPreAuthSearch(v)}
-                                        onChange={(_, v) => {
-                                            setPreAuthId(v?.id || '');
-                                            setIsDirty(true);
-                                        }}
-                                        getOptionLabel={o => `[${o.preAuthNumber || o.referenceNumber || o.id}] ${o.medicalServiceName || ''}`}
-                                        renderInput={params => (
-                                            <TextField {...params} variant="standard"
-                                                placeholder="ابحث برقم الموافقة..."
-                                                sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
-                                            />
-                                        )}
-                                        noOptionsText="لا توجد موافقات مسبقة"
-                                    />
-                                </Grid>
-
-                                <Grid size={{ xs: 12, sm: 4 }}>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                                        {t('claimEntry.complaint')}
-                                    </Typography>
-                                    <TextField fullWidth size="small" variant="standard" value={complaint}
-                                        onChange={e => { setComplaint(e.target.value); setIsDirty(true); }} sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-                                </Grid>
-
-                                <Grid size={{ xs: 12, sm: 4 }}>
-                                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                                        {t('claimEntry.notes')}
-                                    </Typography>
-                                    <TextField fullWidth size="small" variant="standard" value={notes}
-                                        onChange={e => { setNotes(e.target.value); setIsDirty(true); }}
-                                        sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-                                </Grid>
-                            </Grid>
+                            <ClaimHeaderFields
+                                member={member}
+                                setMember={setMember}
+                                memberOptions={memberOptions}
+                                searchingMember={searchingMember}
+                                setMemberInput={setMemberInput}
+                                memberRef={memberRef}
+                                diagnosis={diagnosis}
+                                setDiagnosis={setDiagnosis}
+                                primaryCategoryCode={primaryCategoryCode}
+                                setPrimaryCategoryCode={setPrimaryCategoryCode}
+                                setManualCategoryEnabled={setManualCategoryEnabled}
+                                rootCategories={rootCategories}
+                                refetchAllLinesCoverage={refetchAllLinesCoverage}
+                                preAuthResults={preAuthResults}
+                                searchingPreAuth={searchingPreAuth}
+                                preAuthId={preAuthId}
+                                setPreAuthId={setPreAuthId}
+                                setPreAuthSearch={setPreAuthSearch}
+                                complaint={complaint}
+                                setComplaint={setComplaint}
+                                setIsDirty={setIsDirty}
+                                t={t}
+                            />
                         </Box>
-
 
                         <Divider />
 
@@ -1102,6 +791,7 @@ export default function ClaimBatchEntry() {
                             <Table dir="rtl" size="small" stickyHeader sx={{ minWidth: 760 }}>
                                 <TableHead>
                                     <TableRow>
+                                        <TH align="center" w={40}>#</TH>
                                         <TH align="center" w={280}>الخدمة الطبية</TH>
                                         <TH align="center" w={45}>الكمية</TH>
                                         <TH align="center" w={70}>سعر الوحدة</TH>
@@ -1116,181 +806,22 @@ export default function ClaimBatchEntry() {
                                 </TableHead>
                                 <TableBody>
                                     {lines.map((line, idx) => (
-                                        <Fragment key={line.id}>
-                                            <TableRow hover sx={{
-                                                '& td': { py: 0.6, px: 1.5 },
-                                                ...(line.rejected && { bgcolor: alpha(theme.palette.error.main, 0.05) })
-                                            }}>
-                                                <TableCell align="right">
-                                                    <Stack spacing={0.5} alignItems="flex-start">
-                                                        <Autocomplete
-                                                            size="small"
-                                                            freeSolo
-                                                            fullWidth
-                                                            options={serviceOptions}
-                                                            loading={loadingServices}
-                                                            value={line.service}
-                                                            onInputChange={(_, v) => {
-                                                                if (typeof v === 'string') {
-                                                                    handleServiceChange(idx, v);
-                                                                }
-                                                            }}
-                                                            onChange={(_, v) => handleServiceChange(idx, v)}
-                                                            groupBy={(option) => option?.categoryName || 'أخرى'}
-                                                            getOptionLabel={o => typeof o === 'string' ? o : (o?.label || o?.serviceName || '')}
-                                                            isOptionEqualToValue={(option, value) => {
-                                                                if (!option || !value) return false;
-                                                                if (typeof value === 'string') return option.serviceName === value;
-                                                                const optId = option?.medicalServiceId || option?.pricingItemId || option?.id;
-                                                                const valId = value?.medicalServiceId || value?.pricingItemId || value?.id;
-                                                                return optId && valId && optId === valId;
-                                                            }}
-                                                            renderInput={params => (
-                                                                <TextField
-                                                                    {...params}
-                                                                    variant="standard"
-                                                                    sx={{ ...inlineSx, '& input': { textAlign: 'right', fontSize: '0.8rem', fontWeight: 500 } }}
-                                                                    placeholder={loadingServices ? "جاري التحميل..." : "ابحث عن خدمة..."}
-                                                                    inputProps={{ ...params.inputProps, style: { textAlign: 'right' } }}
-                                                                />
-                                                            )}
-                                                            noOptionsText={loadingServices ? "جاري تحميل خدمات العقد..." : "لم يتم العثور على خدمات في العقد"}
-                                                        />
-                                                        {line.service && !line.service.medicalServiceId && line.service.pricingItemId && (
-                                                            <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: 16, fontSize: '0.65rem', fontWeight: 700 }} />
-                                                        )}
-                                                    </Stack>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <TextField variant="standard" type="number" value={line.quantity}
-                                                        onChange={e => updateLine(idx, { quantity: e.target.value })} sx={inlineSx} />
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <Tooltip title={line.contractPrice > 0 && line.unitPrice > line.contractPrice ? `السعر يتجاوز العقد (${line.contractPrice})` : ''} arrow>
-                                                        <TextField variant="standard" type="number" value={line.unitPrice}
-                                                            onChange={e => updateLine(idx, { unitPrice: e.target.value })}
-                                                            sx={{
-                                                                ...inlineSx,
-                                                                '& input': {
-                                                                    ...inlineSx['& input'],
-                                                                    color: line.contractPrice > 0 && line.unitPrice > line.contractPrice ? 'error.main' : 'inherit',
-                                                                    fontWeight: line.contractPrice > 0 && line.unitPrice > line.contractPrice ? 900 : 'inherit'
-                                                                }
-                                                            }}
-                                                        />
-                                                    </Tooltip>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 700, color: 'text.secondary' }}>
-                                                        {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    {line.usageDetails && (
-                                                        <Stack spacing={0.3} alignItems="center" justifyContent="center">
-                                                            {line.usageDetails.timesLimit > 0 && (
-                                                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.timesExceeded || line.usageDetails.totalUsedCount > line.usageDetails.timesLimit ? 'error.main' : 'text.secondary', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                                                                    مرات: {line.usageDetails.totalUsedCount}/{line.usageDetails.timesLimit}
-                                                                </Typography>
-                                                            )}
-                                                            {line.usageDetails.amountLimit > 0 && (
-                                                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.amountExceeded || line.usageDetails.totalUsedAmount > line.usageDetails.amountLimit ? 'error.main' : 'text.secondary', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                                                                    د.ل: {(line.usageDetails.totalUsedAmount ?? 0).toFixed(2)}/{line.usageDetails.amountLimit}
-                                                                </Typography>
-                                                            )}
-                                                        </Stack>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    {line.usageDetails && (
-                                                        <Stack spacing={0.3} alignItems="center" justifyContent="center">
-                                                            {line.usageDetails.timesLimit > 0 && (() => {
-                                                                const remaining = Math.max(0, line.usageDetails.timesLimit - line.usageDetails.totalUsedCount);
-                                                                return (
-                                                                    <Typography variant="caption" sx={{
-                                                                        fontSize: '0.75rem',
-                                                                        color: remaining === 0 ? 'error.main' : 'primary.main',
-                                                                        fontWeight: 900, whiteSpace: 'nowrap'
-                                                                    }}>
-                                                                        مرات: {remaining}
-                                                                    </Typography>
-                                                                );
-                                                            })()}
-                                                            {line.usageDetails.amountLimit > 0 && (() => {
-                                                                // Use remainingAmount from recompute (amountLimit - totalUsedInBatch - currentLineEffective)
-                                                                const remaining = line.usageDetails.remainingAmount != null
-                                                                    ? line.usageDetails.remainingAmount
-                                                                    : Math.max(0, line.usageDetails.amountLimit - (line.usageDetails.totalUsedAmount ?? 0));
-                                                                return (
-                                                                    <Typography variant="caption" sx={{
-                                                                        fontSize: '0.75rem',
-                                                                        color: remaining <= 0 ? 'error.main' : 'primary.main',
-                                                                        fontWeight: 900, whiteSpace: 'nowrap'
-                                                                    }}>
-                                                                        د.ل: {remaining.toFixed(2)}
-                                                                    </Typography>
-                                                                );
-                                                            })()}
-                                                        </Stack>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 800, color: 'error.main' }}>
-                                                        {(line.rejected ? line.total : line.refusedAmount)?.toFixed(2)}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <Stack spacing={0} alignItems="center">
-                                                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 900, color: 'success.main', lineHeight: 1.2 }}>
-                                                            {line.byCompany?.toFixed(2)}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 900, color: 'warning.dark', lineHeight: 1.2 }}>
-                                                            {line.byEmployee?.toFixed(2)}
-                                                        </Typography>
-                                                    </Stack>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 900, color: 'primary.main' }}>
-                                                        {line.total?.toFixed(2)}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="left">
-                                                    <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
-                                                        <IconButton size="small" color={line.rejected ? "error" : "default"}
-                                                            onClick={() => line.rejected ? updateLine(idx, { rejected: false }) : openRejectDialog('line', idx)}>
-                                                            <RejectIcon sx={{ fontSize: 15 }} />
-                                                        </IconButton>
-                                                        <IconButton size="small" color="error" onClick={() => removeLine(idx)}>
-                                                            <DeleteIcon sx={{ fontSize: 15 }} />
-                                                        </IconButton>
-                                                    </Stack>
-                                                </TableCell>
-                                            </TableRow>
-                                            {line.rejected && (
-                                                <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.02) }}>
-                                                    <TableCell colSpan={10} sx={{ py: 0.5 }}>
-                                                        <Typography variant="caption" color="error" fontWeight={800} sx={{ fontSize: '0.75rem', px: 2 }}>
-                                                            سبب الرفض: {line.rejectionReason}
-                                                        </Typography>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
-                                            {line.usageExceeded && !line.rejected && (
-                                                <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
-                                                    <TableCell colSpan={10} sx={{ py: 0.5 }}>
-                                                        <Typography variant="caption" color={line.usageExhausted ? "error.main" : "warning.dark"} fontWeight={900} sx={{ fontSize: '0.75rem', px: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                            {line.usageExhausted ? <RejectIcon sx={{ fontSize: 14 }} /> : <WarningIcon sx={{ fontSize: 14 }} />}
-                                                            {line.usageExhausted ? "⚠️ رصيد المنفعة استنفذ بالكامل: " : "⚠️ تجاوز سقف المنفعة المحدد: "}
-                                                            {line.usageDetails?.timesLimit > 0 && `(تم استهلاك ${line.usageDetails.usedCount} من ${line.usageDetails.timesLimit} مرّة)`}
-                                                            {line.usageDetails?.amountLimit > 0 && ` (تم استهلاك ${line.usageDetails.usedAmount} من ${line.usageDetails.amountLimit} ريال)`}
-                                                        </Typography>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
-                                        </Fragment>
+                                        <ClaimLineRow
+                                            key={line.id}
+                                            line={line}
+                                            idx={idx}
+                                            theme={theme}
+                                            serviceOptions={serviceOptions}
+                                            loadingServices={loadingServices}
+                                            updateLine={updateLine}
+                                            handleServiceChange={handleServiceChange}
+                                            removeLine={removeLine}
+                                            openRejectDialog={openRejectDialog}
+                                            policyInfo={policyInfo}
+                                        />
                                     ))}
                                     <TableRow>
-                                        <TableCell colSpan={10} sx={{ py: 1, textAlign: 'center' }}>
+                                        <TableCell colSpan={11} sx={{ py: 1, textAlign: 'center' }}>
                                             <Button size="small" startIcon={<AddIcon />} onClick={addLine} sx={{ fontWeight: 800 }}>
                                                 {t('claimEntry.addLine')}
                                             </Button>
@@ -1300,42 +831,18 @@ export default function ClaimBatchEntry() {
                             </Table>
                         </TableContainer>
 
-                        <Box sx={{ flexShrink: 0, px: 2.5, py: 1.5, borderTop: `1px solid ${theme.palette.divider}`, display: 'flex', gap: 2, alignItems: 'center', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
-                            <Button variant="contained" color={isClaimRejected ? "error" : "primary"}
-                                onClick={handleSave} disabled={saving || !isDirty} sx={{ px: 4, fontWeight: 900, borderRadius: 2 }}>
-                                {saving ? t('claimEntry.saving') : (isClaimRejected ? "حفظ (مرفوض)" : t('claimEntry.saveAndAdd'))}
-                            </Button>
-
-                            {!isClaimRejected ? (
-                                <Button variant="outlined" color="error" startIcon={<RejectIcon />}
-                                    onClick={() => openRejectDialog('claim')} sx={{ fontWeight: 800, borderRadius: 2 }}>
-                                    رفض المطالبة
-                                </Button>
-                            ) : (
-                                <Button variant="text" onClick={() => setIsClaimRejected(false)} sx={{ fontWeight: 800 }}>
-                                    تغيير للقبول
-                                </Button>
-                            )}
-
-                            <Box sx={{ mr: 'auto', display: 'flex', gap: 4 }}>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>حصة الشركة</Typography>
-                                    <Typography variant="subtitle2" fontWeight={900} color="success.main" sx={{ fontSize: '0.9rem' }}>{totals.company.toFixed(2)}</Typography>
-                                </Box>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>حصة المشترك</Typography>
-                                    <Typography variant="subtitle2" fontWeight={900} color="warning.dark" sx={{ fontSize: '0.9rem' }}>{totals.employee.toFixed(2)}</Typography>
-                                </Box>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>المرفوضات</Typography>
-                                    <Typography variant="subtitle2" fontWeight={900} color="error.main" sx={{ fontSize: '0.9rem' }}>{totals.refused.toFixed(2)}</Typography>
-                                </Box>
-                                <Box sx={{ textAlign: 'center' }}>
-                                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>الإجمالي</Typography>
-                                    <Typography variant="h6" fontWeight={900} color="primary.main" sx={{ fontSize: '1.1rem' }}>{totals.total.toFixed(2)}</Typography>
-                                </Box>
-                            </Box>
-                        </Box>
+                        {/* ── ذيل المطالبة والمجاميع (مكون منفصل) ── */}
+                        <ClaimTotalsFooter
+                            isClaimRejected={isClaimRejected}
+                            handleSave={handleSave}
+                            saving={saving}
+                            isDirty={isDirty}
+                            setIsClaimRejected={setIsClaimRejected}
+                            openRejectDialog={openRejectDialog}
+                            totals={totals}
+                            theme={theme}
+                            t={t}
+                        />
                     </Paper>
                 </Box>
             </Box>
@@ -1353,6 +860,17 @@ export default function ClaimBatchEntry() {
                     <Button onClick={confirmRejection} variant="contained" color="error" disabled={!rejectionInput.trim()}>
                         تأكيد الرفض
                     </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)}>
+                <DialogTitle sx={{ fontWeight: 900 }}>تأكيد إلغاء المطالبة</DialogTitle>
+                <DialogContent>
+                    هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟ هذا الإجراء لا يمكن التراجع عنه.
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setConfirmDeleteId(null)} color="inherit">تراجع</Button>
+                    <Button onClick={confirmDeleteClaim} variant="contained" color="error">تأكيد الإلغاء</Button>
                 </DialogActions>
             </Dialog>
         </Box>

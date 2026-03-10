@@ -238,6 +238,11 @@ public class BenefitPolicyRuleService {
      */
     @Transactional(readOnly = true)
     public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId, Integer year) {
+        return checkUsageLimit(policyId, serviceId, categoryId, memberId, year, null);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId, Integer year, Long excludeClaimId) {
         
         Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId, categoryId);
         if (ruleOpt.isEmpty()) {
@@ -261,12 +266,18 @@ public class BenefitPolicyRuleService {
                 "WHERE c.member.id = :memberId " +
                 "AND " + usageFilter + " " +
                 "AND c.status NOT IN :excludeStatuses " +
+                "AND c.active = true " +
+                (excludeClaimId != null ? "AND c.id <> :excludeClaimId " : "") +
                 "AND YEAR(c.serviceDate) = :year";
 
         var query = em.createQuery(q)
                 .setParameter("memberId", memberId)
-                .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED, ClaimStatus.DRAFT))
+                .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED))
                 .setParameter("year", targetYear);
+        
+        if (excludeClaimId != null) {
+            query.setParameter("excludeClaimId", excludeClaimId);
+        }
         
         if (isCategoryRule) {
             query.setParameter("catId", rule.getMedicalCategoryId());

@@ -164,9 +164,10 @@ public class BenefitPolicyRuleController {
             @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "categoryId", required = false) Long categoryId,
-            @RequestParam(name = "year", required = false) Integer year) {
+            @RequestParam(name = "year", required = false) Integer year,
+            @RequestParam(name = "excludeClaimId", required = false) Long excludeClaimId) {
 
-        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId, memberId, year);
+        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId, memberId, year, excludeClaimId);
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
     }
 

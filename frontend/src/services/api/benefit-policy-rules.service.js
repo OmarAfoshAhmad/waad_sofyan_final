@@ -147,12 +147,15 @@ export const checkServiceCoverage = async (policyId, serviceId, categoryId = nul
  * @param {number} serviceId - Service ID
  * @param {number} memberId - Member ID
  * @param {number} year - Optional year
+ * @param {number} categoryId - Optional category ID
+ * @param {number} excludeClaimId - Optional claim ID to exclude from usage calculation
  * @returns {Promise<Object>} Usage details
  */
-export const checkServiceUsageLimit = async (policyId, serviceId, memberId, categoryId = null, year = null) => {
+export const checkServiceUsageLimit = async (policyId, serviceId, memberId, categoryId = null, year = null, excludeClaimId = null) => {
   const params = { memberId };
   if (categoryId) params.categoryId = categoryId;
   if (year) params.year = year;
+  if (excludeClaimId) params.excludeClaimId = excludeClaimId;
   const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/usage`, { params });
   return unwrap(response);
 };
