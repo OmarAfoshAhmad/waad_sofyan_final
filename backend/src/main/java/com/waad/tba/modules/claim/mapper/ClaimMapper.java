@@ -63,30 +63,40 @@ public class ClaimMapper {
                 .isBacklog(visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG)
                 .build();
 
-        // Resolve Manual Category Override ID
+        // Resolve category override from primaryCategoryCode.
+        // When manualCategoryEnabled=true → used as hard override for coverage
+        // resolution.
+        // When manualCategoryEnabled=false → used ONLY as a fallback for unmapped
+        // services
+        // (medicalService=null) so that appliedCategoryId is never left NULL.
         Long categoryOverrideId = null;
-        if (Boolean.TRUE.equals(claim.getManualCategoryEnabled()) && claim.getPrimaryCategoryCode() != null) {
-            categoryOverrideId = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
+        Long contextCategoryId = null; // fallback for unmapped services
+        if (claim.getPrimaryCategoryCode() != null) {
+            Long resolvedCatId = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
                     .map(com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory::getId)
                     .orElse(null);
-            log.info("🎯 [MAPPER] Manual category override enabled: {} (ID: {})", 
-                    claim.getPrimaryCategoryCode(), categoryOverrideId);
+            contextCategoryId = resolvedCatId;
+            if (Boolean.TRUE.equals(claim.getManualCategoryEnabled())) {
+                categoryOverrideId = resolvedCatId;
+                log.info("\uD83C\uDFAF [MAPPER] Manual category override: {} (ID: {})",
+                        claim.getPrimaryCategoryCode(), categoryOverrideId);
+            }
         }
 
         BigDecimal totalRequestedAmount = BigDecimal.ZERO;
         List<ClaimLine> lines = new ArrayList<>();
 
         for (ClaimLineDto lineDto : dto.getLines()) {
-            MedicalService medicalService = lineDto.getMedicalServiceId() != null 
-                ? medicalServiceMap.get(lineDto.getMedicalServiceId()) 
-                : null;
+            MedicalService medicalService = lineDto.getMedicalServiceId() != null
+                    ? medicalServiceMap.get(lineDto.getMedicalServiceId())
+                    : null;
 
             // ARCHITECTURAL LAW: Capture what was requested vs what is allowed by contract.
             BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice() : BigDecimal.ZERO;
             BigDecimal resolvedUnitPrice = null;
 
             boolean isBacklog = visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG;
-            
+
             String serviceCode = lineDto.getServiceCode();
             String serviceName = lineDto.getServiceName();
 
@@ -106,8 +116,9 @@ public class ClaimMapper {
             } else {
                 // Resolve contract price - Use code if medicalService is null
                 String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
-                
-                // FALLBACK: If code is missing but pricingItemId is provided, fetch code from DB
+
+                // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
+                // DB
                 if (codeToLookup == null && lineDto.getPricingItemId() != null) {
                     codeToLookup = pricingItemRepository.findById(lineDto.getPricingItemId())
                             .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getServiceCode)
@@ -121,15 +132,16 @@ public class ClaimMapper {
                     if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
                         resolvedUnitPrice = priceResponse.getContractPrice();
                         resolvedPricingItemId = priceResponse.getPricingItemId();
-                        
+
                         // Capture canonical name/code for unmapped services if missing
-                        if (serviceCode == null || "N/A".equals(serviceCode)) 
+                        if (serviceCode == null || "N/A".equals(serviceCode))
                             serviceCode = priceResponse.getServiceCode();
-                        if (serviceName == null || "Unknown Service".equals(serviceName)) 
+                        if (serviceName == null || "Unknown Service".equals(serviceName))
                             serviceName = priceResponse.getServiceName();
                     } else if (medicalService != null) {
                         // FALLBACK: Use base price
-                        resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice() : BigDecimal.ZERO;
+                        resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
+                                : BigDecimal.ZERO;
                     }
                 }
 
@@ -143,38 +155,46 @@ public class ClaimMapper {
             boolean requiresPA = lineDto.getRequiresPA() != null ? lineDto.getRequiresPA() : false;
 
             // Resolve coverage (support unmapped services via category rules)
-            Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId 
-                : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
-                
+            Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId
+                    : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
+
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
-                claim.getMember().getBenefitPolicy().getId(),
-                medicalService != null ? medicalService.getId() : null,
-                medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId(),
-                categoryOverrideId,
-                claim.getMember().getId(),
-                claim.getServiceDate(),
-                claim.getId()
-            );
+                    claim.getMember().getBenefitPolicy().getId(),
+                    medicalService != null ? medicalService.getId() : null,
+                    medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId(),
+                    categoryOverrideId,
+                    claim.getMember().getId(),
+                    claim.getServiceDate(),
+                    claim.getId());
 
             if (coverageResult != null) {
                 requiresPA = coverageResult.isRequiresPreApproval();
                 coveragePercentSnapshot = coverageResult.getCoveragePercent();
-                
+
                 // POPULATE FINANCIAL SNAPSHOTS (Flyway V112)
                 lineDto.setBenefitLimit(coverageResult.getAmountLimit());
                 lineDto.setUsedAmount(coverageResult.getUsedAmount());
                 lineDto.setRemainingAmount(coverageResult.getRemainingAmount());
             }
 
-            // Fetch applied category info: Rule match is MOST specific and should be prioritized
-            // for correct limit tracking (e.g. tracking a physio limit even if in 'Outpatient' context)
+            // Fetch applied category info: Rule match is MOST specific and should be
+            // prioritized
+            // for correct limit tracking (e.g. tracking a physio limit even if in
+            // 'Outpatient' context)
+            // For UNMAPPED services (medicalService=null), fall back to contextCategoryId
+            // from
+            // primaryCategoryCode so that usage queries can always find these lines.
+            Long rawCategoryId = (medicalService != null)
+                    ? medicalService.getCategoryId()
+                    : (lineDto.getAppliedCategoryId() != null ? lineDto.getAppliedCategoryId() : contextCategoryId);
+
             Long appliedCategoryId = (coverageResult != null && coverageResult.getMatchingCategoryId() != null)
-                ? coverageResult.getMatchingCategoryId()
-                : (categoryOverrideId != null ? categoryOverrideId 
-                : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId()));
-            
-            String appliedCategoryName = (appliedCategoryId != null) 
-                    ? medicalCategoryRepository.findById(appliedCategoryId).map(c -> c.getName()).orElse("Unknown Category")
+                    ? coverageResult.getMatchingCategoryId()
+                    : (categoryOverrideId != null ? categoryOverrideId : rawCategoryId);
+
+            String appliedCategoryName = (appliedCategoryId != null)
+                    ? medicalCategoryRepository.findById(appliedCategoryId).map(c -> c.getName())
+                            .orElse("Unknown Category")
                     : lineDto.getServiceCategoryName();
 
             if (isBacklog && coveragePercentSnapshot == null) {
@@ -186,18 +206,19 @@ public class ClaimMapper {
 
             Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
             BigDecimal quantityBd = BigDecimal.valueOf(quantity);
-            
+
             BigDecimal lineRequestedTotal = enteredUnitPrice.multiply(quantityBd);
             BigDecimal lineApprovedBase = resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice;
-            
+
             BigDecimal priceExcessRefusal = BigDecimal.ZERO;
             if (enteredUnitPrice.compareTo(lineApprovedBase) > 0) {
                 priceExcessRefusal = enteredUnitPrice.subtract(lineApprovedBase).multiply(quantityBd);
             }
 
             boolean isRejected = Boolean.TRUE.equals(lineDto.getRejected());
-            BigDecimal lineRefused = isRejected ? lineRequestedTotal 
-                : (lineDto.getRefusedAmount() != null ? lineDto.getRefusedAmount().max(priceExcessRefusal) : priceExcessRefusal);
+            BigDecimal lineRefused = isRejected ? lineRequestedTotal
+                    : (lineDto.getRefusedAmount() != null ? lineDto.getRefusedAmount().max(priceExcessRefusal)
+                            : priceExcessRefusal);
 
             ClaimLine line = ClaimLine.builder()
                     .claim(claim)
@@ -232,8 +253,6 @@ public class ClaimMapper {
             totalRequestedAmount = totalRequestedAmount.add(lineRequestedTotal);
         }
 
-
-
         claim.setLines(lines);
         claim.setRequestedAmount(totalRequestedAmount);
 
@@ -253,11 +272,11 @@ public class ClaimMapper {
                     .map(l -> {
                         if (l.getPatientCopayPercentSnapshot() == null)
                             return BigDecimal.ZERO;
-                    BigDecimal requestedPrice = (l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice()
-                        : l.getUnitPrice()).multiply(BigDecimal.valueOf(l.getQuantity()));
-                    BigDecimal acceptedPrice = requestedPrice.subtract(
-                        l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO)
-                        .max(BigDecimal.ZERO);
+                        BigDecimal requestedPrice = (l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice()
+                                : l.getUnitPrice()).multiply(BigDecimal.valueOf(l.getQuantity()));
+                        BigDecimal acceptedPrice = requestedPrice.subtract(
+                                l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO)
+                                .max(BigDecimal.ZERO);
                         return acceptedPrice.multiply(BigDecimal.valueOf(l.getPatientCopayPercentSnapshot()))
                                 .divide(new BigDecimal(100), 2, java.math.RoundingMode.HALF_UP);
                     })
@@ -295,26 +314,33 @@ public class ClaimMapper {
         List<ClaimLine> newLines = new ArrayList<>();
         LocalDate serviceDate = claim.getServiceDate() != null ? claim.getServiceDate() : LocalDate.now();
 
-        // Resolve Manual Category Override ID
+        // Same logic as the create mapper: always derive contextCategoryId from
+        // primaryCategoryCode.
         Long categoryOverrideId = null;
-        if (Boolean.TRUE.equals(claim.getManualCategoryEnabled()) && claim.getPrimaryCategoryCode() != null) {
-            categoryOverrideId = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
+        Long contextCategoryId = null;
+        if (claim.getPrimaryCategoryCode() != null) {
+            Long resolvedCatId = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
                     .map(com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory::getId)
                     .orElse(null);
-            log.info("🎯 [REPLACE_DRAFT] Manual category override enabled: {} (ID: {})", 
-                    claim.getPrimaryCategoryCode(), categoryOverrideId);
+            contextCategoryId = resolvedCatId;
+            if (Boolean.TRUE.equals(claim.getManualCategoryEnabled())) {
+                categoryOverrideId = resolvedCatId;
+                log.info("\uD83C\uDFAF [REPLACE_DRAFT] Manual category override: {} (ID: {})",
+                        claim.getPrimaryCategoryCode(), categoryOverrideId);
+            }
         }
 
         for (ClaimLineDto lineDto : lineDtos) {
-            MedicalService medicalService = lineDto.getMedicalServiceId() != null 
-                ? medicalServiceMap.get(lineDto.getMedicalServiceId()) 
-                : null;
+            MedicalService medicalService = lineDto.getMedicalServiceId() != null
+                    ? medicalServiceMap.get(lineDto.getMedicalServiceId())
+                    : null;
 
             // ARCHITECTURAL LAW: Capture what was requested vs what is allowed by contract.
             BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice() : BigDecimal.ZERO;
             BigDecimal resolvedUnitPrice = null;
 
-            boolean isBacklog = claim.getVisit() != null && claim.getVisit().getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG;
+            boolean isBacklog = claim.getVisit() != null
+                    && claim.getVisit().getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG;
 
             String serviceCode = lineDto.getServiceCode();
             String serviceName = lineDto.getServiceName();
@@ -330,8 +356,9 @@ public class ClaimMapper {
                 resolvedUnitPrice = enteredUnitPrice;
             } else {
                 String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
-                
-                // FALLBACK: If code is missing but pricingItemId is provided, fetch code from DB
+
+                // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
+                // DB
                 if (codeToLookup == null && lineDto.getPricingItemId() != null) {
                     codeToLookup = pricingItemRepository.findById(lineDto.getPricingItemId())
                             .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getServiceCode)
@@ -345,15 +372,16 @@ public class ClaimMapper {
                     if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
                         resolvedUnitPrice = priceResponse.getContractPrice();
                         resolvedPricingItemId = priceResponse.getPricingItemId();
-                        
+
                         // Capture canonical name/code for unmapped services if missing
-                        if (serviceCode == null || "N/A".equals(serviceCode)) 
+                        if (serviceCode == null || "N/A".equals(serviceCode))
                             serviceCode = priceResponse.getServiceCode();
-                        if (serviceName == null || "Unknown Service".equals(serviceName)) 
+                        if (serviceName == null || "Unknown Service".equals(serviceName))
                             serviceName = priceResponse.getServiceName();
                     } else if (medicalService != null) {
                         // FALLBACK: If draft + no contract, try base price
-                        resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice() : BigDecimal.ZERO;
+                        resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
+                                : BigDecimal.ZERO;
                     }
                 }
 
@@ -369,39 +397,42 @@ public class ClaimMapper {
             // Refusal calculation
             BigDecimal lineRequestedTotal = enteredUnitPrice.multiply(quantityBd);
             BigDecimal lineApprovedTotal = lineApprovedBase.multiply(quantityBd);
-            
-            BigDecimal priceExcessRefusal = enteredUnitPrice.compareTo(lineApprovedBase) > 0 
-                ? enteredUnitPrice.subtract(lineApprovedBase).multiply(quantityBd)
-                : BigDecimal.ZERO;
+
+            BigDecimal priceExcessRefusal = enteredUnitPrice.compareTo(lineApprovedBase) > 0
+                    ? enteredUnitPrice.subtract(lineApprovedBase).multiply(quantityBd)
+                    : BigDecimal.ZERO;
 
             Integer coveragePercentSnapshot = lineDto.getCoveragePercent();
             boolean requiresPA = lineDto.getRequiresPA() != null ? lineDto.getRequiresPA() : false;
 
             // Resolve coverage (support unmapped services via category rules)
-            Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId 
-                : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
-                
+            Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId
+                    : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
+
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
-                claim.getMember().getBenefitPolicy().getId(),
-                medicalService != null ? medicalService.getId() : null,
-                medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId(),
-                categoryOverrideId,
-                claim.getMember().getId(),
-                claim.getServiceDate(),
-                claim.getId()
-            );
+                    claim.getMember().getBenefitPolicy().getId(),
+                    medicalService != null ? medicalService.getId() : null,
+                    medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId(),
+                    categoryOverrideId,
+                    claim.getMember().getId(),
+                    claim.getServiceDate(),
+                    claim.getId());
 
             if (coverageResult != null) {
                 requiresPA = coverageResult.isRequiresPreApproval();
                 coveragePercentSnapshot = coverageResult.getCoveragePercent();
             }
 
-            // Fetch applied category info (either manual or resolved)
-            Long appliedCategoryId = (categoryOverrideId != null) ? categoryOverrideId 
-                : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
-            
-            String appliedCategoryName = (categoryOverrideId != null) 
-                    ? medicalCategoryRepository.findById(categoryOverrideId).map(c -> c.getName()).orElse(null)
+            // Fetch applied category info (either manual or resolved).
+            // Same fallback chain as the create mapper.
+            Long rawCategoryId = (medicalService != null)
+                    ? medicalService.getCategoryId()
+                    : (lineDto.getAppliedCategoryId() != null ? lineDto.getAppliedCategoryId() : contextCategoryId);
+
+            Long appliedCategoryId = (categoryOverrideId != null) ? categoryOverrideId : rawCategoryId;
+
+            String appliedCategoryName = (appliedCategoryId != null)
+                    ? medicalCategoryRepository.findById(appliedCategoryId).map(c -> c.getName()).orElse(null)
                     : lineDto.getServiceCategoryName();
 
             // Fallback for backlog claims
@@ -422,12 +453,14 @@ public class ClaimMapper {
                 lineRefused = lineRequestedTotal;
             } else {
                 // Total refusal = Price Excess + (Other refusals like limits if provided)
-                lineRefused = lineDto.getRefusedAmount() != null 
-                    ? lineDto.getRefusedAmount().max(priceExcessRefusal)
-                    : priceExcessRefusal;
+                lineRefused = lineDto.getRefusedAmount() != null
+                        ? lineDto.getRefusedAmount().max(priceExcessRefusal)
+                        : priceExcessRefusal;
 
-                // Net Available (Allowed base) = resolvedTotal - (any other refusal beyond price)
-                BigDecimal netAvailable = lineApprovedTotal.subtract(lineRefused.subtract(priceExcessRefusal)).max(BigDecimal.ZERO);
+                // Net Available (Allowed base) = resolvedTotal - (any other refusal beyond
+                // price)
+                BigDecimal netAvailable = lineApprovedTotal.subtract(lineRefused.subtract(priceExcessRefusal))
+                        .max(BigDecimal.ZERO);
 
                 if (coveragePercentSnapshot != null) {
                     // Company Share (Approved) = Net Available * Coverage%
@@ -580,8 +613,9 @@ public class ClaimMapper {
                 .slaStatus(calculateSlaStatus(claim))
                 .manualCategoryEnabled(claim.getManualCategoryEnabled())
                 .primaryCategoryCode(claim.getPrimaryCategoryCode())
-                .primaryCategoryName(claim.getPrimaryCategoryCode() != null 
-                        ? medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode()).map(com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory::getName).orElse(null)
+                .primaryCategoryName(claim.getPrimaryCategoryCode() != null
+                        ? medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
+                                .map(com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory::getName).orElse(null)
                         : null)
                 .build();
 

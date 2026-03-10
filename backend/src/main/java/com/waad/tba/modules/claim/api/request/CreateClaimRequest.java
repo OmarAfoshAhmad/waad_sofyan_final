@@ -37,11 +37,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateClaimRequest {
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // MANDATORY FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
      * REQUIRED: Visit ID that this claim is linked to.
      * ARCHITECTURAL LAW: Claims can ONLY be created from an existing Visit.
@@ -49,7 +49,7 @@ public class CreateClaimRequest {
     @NotNull(message = "Visit ID is required - Claims must originate from a Visit")
     @Positive(message = "Visit ID must be positive")
     private Long visitId;
-    
+
     /**
      * REQUIRED: Claim lines with medical services
      * ARCHITECTURAL LAW: At least one service line is required - NO empty claims
@@ -57,62 +57,62 @@ public class CreateClaimRequest {
     @NotEmpty(message = "At least one claim line (service) is required")
     @Valid
     private List<ClaimLineRequest> lines;
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // OPTIONAL REFERENCE FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
      * Member ID - AUTO-DERIVED from Visit (can be provided for validation)
      */
     private Long memberId;
-    
+
     /**
      * Provider ID - AUTO-FILLED from JWT security context
      * ARCHITECTURAL LAW: Provider CANNOT override their identity
      */
     private Long providerId;
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // DIAGNOSIS (Selected from dropdown, not free-text)
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
      * Diagnosis ICD-10 code (selected from dropdown)
      */
     @Size(max = 20, message = "Diagnosis code must not exceed 20 characters")
     private String diagnosisCode;
-    
+
     /**
      * Diagnosis description (auto-populated from code)
      */
     @Size(max = 500, message = "Diagnosis description must not exceed 500 characters")
     private String diagnosisDescription;
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // PRE-AUTHORIZATION LINK
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
      * Pre-authorization ID (REQUIRED if any service requires PA)
      */
     private Long preAuthorizationId;
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // OPTIONAL METADATA
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
      * Doctor name who performed the service
      */
     @Size(max = 255, message = "Doctor name must not exceed 255 characters")
     private String doctorName;
-    
+
     /**
      * Service date (defaults to today)
      */
     private LocalDate serviceDate;
-    
+
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
 
@@ -131,22 +131,37 @@ public class CreateClaimRequest {
      * Optional: Global rejection reason for the entire claim
      */
     private String rejectionReason;
-    
+
+    /**
+     * Whether the user manually selected a coverage category context.
+     * If FALSE (default), coverage is determined from each service's own category.
+     * If TRUE, every service in the claim uses the rule from primaryCategoryCode.
+     */
+    private Boolean manualCategoryEnabled;
+
+    /**
+     * The primary category code used for coverage context.
+     * Always send this so unmapped services get appliedCategoryId set correctly.
+     * Example: "CAT-OUTPAT" (عيادات خارجية), "CAT-OPER" (عمليات)
+     */
+    @Size(max = 50, message = "Primary category code must not exceed 50 characters")
+    private String primaryCategoryCode;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ⛔ FORBIDDEN FIELDS - FINANCIAL SAFETY
     // ═══════════════════════════════════════════════════════════════════════════
     // The following fields are EXPLICITLY FORBIDDEN in API v1 contracts:
-    // 
+    //
     // ❌ requestedAmount - Calculated from contract pricing
     // ❌ approvedAmount - Calculated during approval workflow
     // ❌ totalAmount - Calculated from lines
     // ❌ netProviderAmount - Calculated by cost breakdown engine
     // ❌ patientCoPay - Calculated by benefit policy rules
     // ❌ deductibleApplied - Calculated by benefit policy rules
-    // 
+    //
     // Backend calculates ALL financial values to ensure integrity.
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
      * Nested request for claim line items
      */
@@ -155,7 +170,7 @@ public class CreateClaimRequest {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ClaimLineRequest {
-        
+
         /**
          * Medical service ID (from MedicalTaxonomy)
          * Optional if pricingItemId is provided
@@ -168,14 +183,14 @@ public class CreateClaimRequest {
          * Used for items that are verified in contract but not yet mapped to taxonomy
          */
         private Long pricingItemId;
-        
+
         /**
          * Quantity of service (e.g., number of sessions)
          */
         @NotNull(message = "Quantity is required")
         @Positive(message = "Quantity must be positive")
         private Integer quantity;
-        
+
         /**
          * Optional: Service category ID (for coverage resolution)
          */
@@ -188,7 +203,8 @@ public class CreateClaimRequest {
 
         /**
          * Optional: Unit Price (REQUIRED for LEGACY_BACKLOG claims)
-         * ARCHITECTURAL LAW: For regular claims, this is ignored and resolved from contract.
+         * ARCHITECTURAL LAW: For regular claims, this is ignored and resolved from
+         * contract.
          * For backlog claims, this is used as the source of truth.
          */
         private java.math.BigDecimal unitPrice;

@@ -19,7 +19,8 @@ export function useCoverageLogic({
     primaryCategoryCode,
     setLines,
     recompute,
-    currentClaimId
+    currentClaimId,
+    serviceYear
 }) {
     const linesRef = useRef([]);
 
@@ -66,7 +67,10 @@ export function useCoverageLogic({
             } : null;
 
             if (member?.id) {
-                const usage = await checkServiceUsageLimit(policyId, sid, member.id, categoryId, null, currentClaimId);
+                // Pass serviceYear so the query matches the batch's year (not current year)
+                // e.g. batch for Jan 2025 → serviceDate = 2025-01-01 → year must be 2025
+                const usageYear = serviceYear || null;
+                const usage = await checkServiceUsageLimit(policyId, sid, member.id, categoryId, usageYear, currentClaimId);
                 if (usage && usage.hasLimit) {
                     baseLimitDetails = { ...baseLimitDetails, ...usage };
                 }
@@ -83,7 +87,7 @@ export function useCoverageLogic({
             console.error('[fetchCoverage] error:', err);
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         }
-    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories]);
+    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear]);
 
     const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
         if (!policyId || !member?.id) return;

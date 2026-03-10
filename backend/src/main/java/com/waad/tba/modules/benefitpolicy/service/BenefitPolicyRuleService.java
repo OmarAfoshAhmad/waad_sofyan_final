@@ -151,7 +151,8 @@ public class BenefitPolicyRuleService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId, Long categoryOverrideId) {
+    public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId,
+            Long categoryOverrideId) {
         Long serviceCategoryId = null;
         Long sid = (serviceId != null && serviceId > 0) ? serviceId : null;
 
@@ -162,7 +163,8 @@ public class BenefitPolicyRuleService {
             serviceCategoryId = resolveCategoryIdForCoverage(service);
         }
 
-        // 2. Resolve parent of the override (or service cat if no override) for fallback
+        // 2. Resolve parent of the override (or service cat if no override) for
+        // fallback
         Long targetForParentRef = (categoryOverrideId != null) ? categoryOverrideId : serviceCategoryId;
         Long parentCategoryId = null;
         if (targetForParentRef != null) {
@@ -174,7 +176,7 @@ public class BenefitPolicyRuleService {
         // 3. Search for best rule with the new prioritized architecture
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
                 policyId, sid, serviceCategoryId, categoryOverrideId, parentCategoryId);
-        
+
         if (ruleOpt.isPresent()) {
             return ruleOpt.map(BenefitPolicyRuleResponseDto::fromEntity);
         }
@@ -237,13 +239,15 @@ public class BenefitPolicyRuleService {
      * Check if a member has exceeded usage limits for a service
      */
     @Transactional(readOnly = true)
-    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId, Integer year) {
+    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId,
+            Integer year) {
         return checkUsageLimit(policyId, serviceId, categoryId, memberId, year, null);
     }
 
     @Transactional(readOnly = true)
-    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId, Integer year, Long excludeClaimId) {
-        
+    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId,
+            Integer year, Long excludeClaimId) {
+
         Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId, categoryId);
         if (ruleOpt.isEmpty()) {
             return java.util.Map.of("covered", false);
@@ -256,13 +260,43 @@ public class BenefitPolicyRuleService {
 
         // Query usage from DB
         int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
-        
+
         // Decide whether to query by Service or Category based on the rule level
         boolean isCategoryRule = rule.getMedicalServiceId() == null;
-        String usageFilter = isCategoryRule ? "cl.appliedCategoryId = :catId" : "cl.medicalService.id = :serviceId";
-        
-        String q = "SELECT SUM(cl.quantity), SUM(cl.totalPrice) FROM ClaimLine cl " +
-                "JOIN cl.claim c " +
+
+        // ─────────────────────────────────────────────────────────────────────
+        // FIX: Handle NULL fields in historical claim lines
+        //
+        // Old claims may have:
+        // - appliedCategoryId = null → fall back to serviceCategoryId
+        // - medicalService = null → fall back to serviceCode match
+        //
+        // Using LEFT JOIN + COALESCE ensures those claims ARE counted.
+        // ─────────────────────────────────────────────────────────────────────
+        String usageFilter;
+        String serviceCode = null;
+
+        if (isCategoryRule) {
+            // COALESCE: if appliedCategoryId is null, use serviceCategoryId as fallback
+            usageFilter = "COALESCE(cl.appliedCategoryId, cl.serviceCategoryId) = :catId";
+        } else {
+            // LEFT JOIN on medicalService so lines with medicalService=null are not
+            // silently dropped
+            // Also match by serviceCode for unmapped/free-text entries
+            serviceCode = serviceRepository.findById(rule.getMedicalServiceId())
+                    .map(MedicalService::getCode).orElse(null);
+            if (serviceCode != null) {
+                usageFilter = "(ms.id = :serviceId OR cl.serviceCode = :serviceCode)";
+            } else {
+                usageFilter = "ms.id = :serviceId";
+            }
+        }
+
+        String joinClause = isCategoryRule
+                ? "FROM ClaimLine cl JOIN cl.claim c "
+                : "FROM ClaimLine cl LEFT JOIN cl.medicalService ms JOIN cl.claim c ";
+
+        String q = "SELECT SUM(cl.quantity), SUM(cl.totalPrice) " + joinClause +
                 "WHERE c.member.id = :memberId " +
                 "AND " + usageFilter + " " +
                 "AND c.status NOT IN :excludeStatuses " +
@@ -270,19 +304,25 @@ public class BenefitPolicyRuleService {
                 (excludeClaimId != null ? "AND c.id <> :excludeClaimId " : "") +
                 "AND YEAR(c.serviceDate) = :year";
 
+        log.debug("[checkUsageLimit] Query: {} | isCategoryRule={} | year={} | serviceCode={}",
+                q, isCategoryRule, targetYear, serviceCode);
+
         var query = em.createQuery(q)
                 .setParameter("memberId", memberId)
                 .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED))
                 .setParameter("year", targetYear);
-        
+
         if (excludeClaimId != null) {
             query.setParameter("excludeClaimId", excludeClaimId);
         }
-        
+
         if (isCategoryRule) {
             query.setParameter("catId", rule.getMedicalCategoryId());
         } else {
             query.setParameter("serviceId", rule.getMedicalServiceId());
+            if (serviceCode != null) {
+                query.setParameter("serviceCode", serviceCode);
+            }
         }
 
         Object[] result = (Object[]) query.getSingleResult();

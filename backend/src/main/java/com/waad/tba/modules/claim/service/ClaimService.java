@@ -2054,36 +2054,44 @@ public class ClaimService {
     @Transactional
     public void deleteClaim(Long id) {
         log.info("🗑️ Deleting claim id: {}", id);
-        
+
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
-        // 1. Business Validation: Cannot delete claims involved in financial settlement
-        if (claim.getStatus() == ClaimStatus.SETTLED || claim.getSettlementBatchId() != null) {
-            throw new BusinessRuleException("لا يمكن حذف مطالبة تمت تسويتها أو مرتبطة بدفعة سداد مفعلة");
+        // 1. Business Validation: Cannot delete claims that are part of a formal
+        // settlement batch
+        // Note: SETTLED status alone does NOT block deletion — batch-entry claims are
+        // created
+        // directly as SETTLED. Only a non-null settlementBatchId means the claim is
+        // locked
+        // inside a payment batch and must NOT be deleted.
+        if (claim.getSettlementBatchId() != null) {
+            throw new BusinessRuleException("لا يمكن حذف مطالبة مرتبطة بدفعة سداد مفعلة");
         }
 
         // 2. Manual Cleanup for RESTRICTED tables (bypass DB constraint fails)
-        // Note: These should ideally be ON DELETE CASCADE via V113 migration, 
-        // but manual cleanup ensures immediate success without waiting for server restart.
-        
+        // Note: These should ideally be ON DELETE CASCADE via V113 migration,
+        // but manual cleanup ensures immediate success without waiting for server
+        // restart.
+
         log.warn("🧹 Cleaning up constrained data for claim {}...", id);
-        
+
         // Delete Audit Logs
         em.createNativeQuery("DELETE FROM claim_audit_logs WHERE claim_id = :cid")
-          .setParameter("cid", id)
-          .executeUpdate();
-          
+                .setParameter("cid", id)
+                .executeUpdate();
+
         // Delete Settlement Batch Item References
         em.createNativeQuery("DELETE FROM settlement_batch_items WHERE claim_id = :cid")
-          .setParameter("cid", id)
-          .executeUpdate();
+                .setParameter("cid", id)
+                .executeUpdate();
 
         // 3. Execute main entity deletion
         // (lines, attachments, history will be deleted by DB-level CASCADE)
         claimRepository.delete(claim);
-        
-        // 4. Force synchronization NOW to ensure failure happens inside this method if any FK remains
+
+        // 4. Force synchronization NOW to ensure failure happens inside this method if
+        // any FK remains
         claimRepository.flush();
 
         log.info("✅ Claim {} and its associations successfully deleted. Limits recalculated.", id);

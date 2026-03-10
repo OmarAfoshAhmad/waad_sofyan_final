@@ -159,6 +159,7 @@ export default function ClaimBatchEntry() {
     const { fetchCoverage, refetchAllLinesCoverage } = useCoverageLogic({
         policyId, policyInfo, member, applyBenefits, rootCategories, primaryCategoryCode,
         setLines, recompute,
+        serviceYear: year || new Date().getFullYear(),
         currentClaimId: editingClaimId
     });
 
@@ -166,6 +167,14 @@ export default function ClaimBatchEntry() {
         const updated = await refetchAllLinesCoverage(newCategoryCode, linesRef.current);
         if (updated) setLines(updated);
     }, [refetchAllLinesCoverage]);
+
+    // ✅ FIX: Ref that always points to the LATEST refetchAllLinesCoverageCallback
+    // This prevents stale-closure bugs in setTimeout calls
+    const refetchCoverageOnEditRef = useRef(refetchAllLinesCoverageCallback);
+    useEffect(() => {
+        refetchCoverageOnEditRef.current = refetchAllLinesCoverageCallback;
+    });
+
     const isSavingRef = useRef(false);
 
     // ── الاستعلامات ──────────────────────────────────────────────────────────
@@ -242,6 +251,9 @@ export default function ClaimBatchEntry() {
         queryClient.invalidateQueries({ queryKey: ['batch-claims-entry'] });
         queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
         queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
+        // Invalidate cached claim detail so re-opening a claim always triggers a fresh
+        // coverage/usage fetch (ensures سقف المنفعة reflects the latest consumed amounts)
+        queryClient.invalidateQueries({ queryKey: ['claim'] });
     }, [queryClient]);
 
     // الوثيقة التأمينية والمنافع (PHASE 5.6 - Decoupled from Member)
@@ -321,9 +333,10 @@ export default function ClaimBatchEntry() {
             setIsDirty(false);
 
             // المرحلة 1.3: إعادة جلب التغطية والسقوف للمطالبة المحملة لضمان دقة العرض
+            // يستخدم الـ ref لضمان استخدام النسخة الأحدث دائماً (تجنّب stale closure)
             if (policyId && editingClaim.memberId) {
                 setTimeout(() => {
-                    refetchAllLinesCoverage(editingClaim.primaryCategoryCode || 'CAT-OUTPAT');
+                    refetchCoverageOnEditRef.current(editingClaim.primaryCategoryCode || 'CAT-OUTPAT');
                 }, 300);
             }
         }
@@ -414,6 +427,17 @@ export default function ClaimBatchEntry() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [policyId, member?.id, primaryCategoryCode]);
 
+    // ✅ FIX: Refetch coverage when editing a DIFFERENT claim of the SAME member
+    // The member useEffect above won't fire if member?.id didn't change, so we need this
+    useEffect(() => {
+        if (!editingClaimId || !policyId || !member?.id) return;
+        const timer = setTimeout(() => {
+            refetchCoverageOnEditRef.current(primaryCategoryCode);
+        }, 350);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingClaimId]);
+
     const addLine = useCallback(() => { setLines(p => [...p, newLine()]); setIsDirty(true); }, []);
     const removeLine = useCallback((idx) => {
         setLines(p => p.length === 1 ? [newLine()] : p.filter((_, i) => i !== idx));
@@ -488,7 +512,8 @@ export default function ClaimBatchEntry() {
                 rejectionReason: isClaimRejected ? rejectionInput : null,
                 preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
                 manualCategoryEnabled,
-                primaryCategoryCode: manualCategoryEnabled ? primaryCategoryCode : null,
+                // Always send context category so backend can set appliedCategoryId on unmapped services
+                primaryCategoryCode: primaryCategoryCode,
                 lines: lines.map(l => ({
                     medicalServiceId: l.service?.medicalServiceId || null,
                     pricingItemId: l.service?.pricingItemId || null,
@@ -603,6 +628,11 @@ export default function ClaimBatchEntry() {
             enqueueSnackbar(`✅ تم إلغاء المطالبة #${claimId}`, { variant: 'success' });
             setConfirmDeleteId(null);
             invalidateBatchData();
+            // ✅ FIX: Restore ceiling in current form after deletion
+            // If the deleted claim used the same service, the remaining should go back up
+            if (member?.id && policyId) {
+                setTimeout(() => refetchCoverageOnEditRef.current(primaryCategoryCode), 200);
+            }
         } catch (err) {
             enqueueSnackbar(err.message || 'فشل إلغاء المطالبة', { variant: 'error' });
         }

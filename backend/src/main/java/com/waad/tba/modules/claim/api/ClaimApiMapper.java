@@ -59,6 +59,8 @@ public class ClaimApiMapper {
                                 .status(request.getStatus())
                                 .complaint(request.getComplaint())
                                 .rejectionReason(request.getRejectionReason())
+                                .manualCategoryEnabled(request.getManualCategoryEnabled())
+                                .primaryCategoryCode(request.getPrimaryCategoryCode())
                                 .build();
         }
 
