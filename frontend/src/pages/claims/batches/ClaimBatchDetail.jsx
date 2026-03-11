@@ -20,7 +20,11 @@ import {
     Divider,
     MenuItem,
     FormControl,
-    alpha
+    alpha,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 
 import {
@@ -35,10 +39,12 @@ import {
     FileDownload as ExcelIcon,
     PictureAsPdf as PdfIcon,
     Refresh as RefreshIcon,
-    FilterAltOff as FilterAltOffIcon
+    FilterAltOff as FilterAltOffIcon,
+    PauseCircle as SuspendIcon
 } from '@mui/icons-material';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import ExcelJS from 'exceljs';
 
 // project components
@@ -81,12 +87,59 @@ export default function ClaimBatchDetail() {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+    const [suspendComment, setSuspendComment] = useState('');
+    const [suspendingClaimId, setSuspendingClaimId] = useState(null);
     const tableState = useTableState({
         initialPageSize: 10,
         defaultSort: { field: 'serviceDate', direction: 'desc' }
     });
     const batchReportRef = useRef(null);
     const rejectedReportRef = useRef(null);
+    const { enqueueSnackbar } = useSnackbar();
+    const queryClient = useQueryClient();
+
+    // Detect superadmin / reviewer role from session storage
+    const currentUserRole = (() => {
+        try {
+            const u = localStorage.getItem('user_details');
+            if (u) {
+                const parsed = JSON.parse(u);
+                return parsed?.role || (Array.isArray(parsed?.roles) ? parsed.roles[0] : null) || '';
+            }
+        } catch { /* ignore */ }
+        return '';
+    })();
+    const canSuspend = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'ACCOUNTANT';
+
+    const suspendMutation = useMutation({
+        mutationFn: ({ claimId, comment }) =>
+            claimsService.updateReview(claimId, { status: 'NEEDS_CORRECTION', reviewerComment: comment }),
+        onSuccess: () => {
+            enqueueSnackbar('تم تعليق المطالبة بنجاح', { variant: 'success' });
+            setSuspendDialogOpen(false);
+            setSuspendComment('');
+            setSuspendingClaimId(null);
+            queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
+        },
+        onError: (err) => {
+            enqueueSnackbar(err?.response?.data?.message || 'حدث خطأ أثناء تعليق المطالبة', { variant: 'error' });
+        }
+    });
+
+    const handleOpenSuspend = (claimId) => {
+        setSuspendingClaimId(claimId);
+        setSuspendComment('');
+        setSuspendDialogOpen(true);
+    };
+
+    const handleConfirmSuspend = () => {
+        if (!suspendComment.trim()) {
+            enqueueSnackbar('يجب إدخال سبب التعليق', { variant: 'warning' });
+            return;
+        }
+        suspendMutation.mutate({ claimId: suspendingClaimId, comment: suspendComment });
+    };
 
     // 0. Fetch real batch info
     const { data: realBatch } = useQuery({
@@ -312,10 +365,12 @@ export default function ClaimBatchDetail() {
             'APPROVED': { label: 'معتمدة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
             'SETTLED': { label: 'تمت التسوية', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
             'PAID': { label: 'مدفوعة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
+            'BATCHED': { label: 'في دفعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
+            'NEEDS_CORRECTION': { label: 'معلقة للمراجعة', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
             'PENDING': { label: 'قيد الانتظار', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
             'REJECTED': { label: 'مرفوضة', color: 'error', bgcolor: '#fff1f0', border: '#ffa39e' },
             'UNDER_REVIEW': { label: 'تحت المراجعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
-            'DRAFT': { label: 'تمت التسوية', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' }, // Mapped to Settled as per user request
+            'DRAFT': { label: 'مسودة', color: 'default', bgcolor: '#fafafa', border: '#d9d9d9' },
             'SUBMITTED': { label: 'مقدمة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' }
         };
 
@@ -409,6 +464,16 @@ export default function ClaimBatchDetail() {
                                 <ViewIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
                             </IconButton>
                         </Tooltip>
+                        {canSuspend && claim.status === 'APPROVED' && (
+                            <Tooltip title="تعليق للمراجعة">
+                                <IconButton
+                                    color="warning"
+                                    onClick={() => handleOpenSuspend(claim.id)}
+                                >
+                                    <SuspendIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                         <Tooltip title="طباعة">
                             <IconButton onClick={handlePrint}>
                                 <PrintIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
@@ -422,6 +487,7 @@ export default function ClaimBatchDetail() {
     };
 
     return (
+        <>
         <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 } }}>
 
             {/* INVISIBLE PRINT COMPONENT */}
@@ -658,5 +724,39 @@ export default function ClaimBatchDetail() {
                 </Stack>
             </Box>
         </Box>
+
+        {/* Suspend Dialog */}
+        <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ fontWeight: 700, borderBottom: '1px solid', borderColor: 'divider' }}>
+                تعليق المطالبة للمراجعة
+            </DialogTitle>
+            <DialogContent sx={{ pt: 2 }}>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                    سيتم تغيير حالة المطالبة إلى «يحتاج تصحيح». يجب إدخال سبب التعليق.
+                </Typography>
+                <TextField
+                    fullWidth
+                    multiline
+                    rows={3}
+                    label="سبب التعليق"
+                    value={suspendComment}
+                    onChange={(e) => setSuspendComment(e.target.value)}
+                    placeholder="اكتب سبب التعليق أو الخلل الذي وجدته..."
+                    autoFocus
+                />
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+                <Button variant="outlined" onClick={() => setSuspendDialogOpen(false)}>إلغاء</Button>
+                <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={handleConfirmSuspend}
+                    disabled={suspendMutation.isPending}
+                >
+                    تعليق المطالبة
+                </Button>
+            </DialogActions>
+        </Dialog>
+        </>
     );
 }

@@ -55,7 +55,7 @@ public class ClaimMapper {
                 .diagnosisCode(dto.getDiagnosisCode())
                 .diagnosisDescription(dto.getDiagnosisDescription())
                 .doctorName(dto.getDoctorName())
-                .status(dto.getStatus() != null ? dto.getStatus() : ClaimStatus.SETTLED)
+                .status(dto.getStatus() != null ? dto.getStatus() : ClaimStatus.APPROVED)
                 .complaint(dto.getComplaint())
                 .reviewerComment(dto.getRejectionReason())
                 .preAuthorization(preAuth)
@@ -256,8 +256,8 @@ public class ClaimMapper {
         claim.setLines(lines);
         claim.setRequestedAmount(totalRequestedAmount);
 
-        // Pre-calculate financial snapshots if created AS-SETTLED
-        if (claim.getStatus() == ClaimStatus.SETTLED) {
+        // Pre-calculate financial snapshots if created AS-APPROVED or AS-SETTLED
+        if (claim.getStatus() == ClaimStatus.APPROVED || claim.getStatus() == ClaimStatus.SETTLED) {
             BigDecimal totalRefused = lines.stream()
                     .map(l -> l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);

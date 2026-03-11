@@ -163,7 +163,8 @@ public class Claim {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
-    // ==================== COVERAGE CONTEXT (PHASE: DYNAMIC BENEFITS) ====================
+    // ==================== COVERAGE CONTEXT (PHASE: DYNAMIC BENEFITS)
+    // ====================
 
     /**
      * Whether the user manually selected a coverage category context.
@@ -392,9 +393,19 @@ public class Claim {
             throw new IllegalStateException("Approved amount cannot be negative");
         }
 
-        if (status == ClaimStatus.APPROVED || status == ClaimStatus.SETTLED) {
-            if (approvedAmount == null || approvedAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalStateException("Approved/Settled status requires approved amount greater than zero");
+        // In direct-entry mode (APPROVED status), approvedAmount is calculated
+        // automatically
+        // and can be 0 if patient covers 100% copay. Only require it to be non-null.
+        if (status == ClaimStatus.APPROVED) {
+            if (approvedAmount == null) {
+                throw new IllegalStateException("Approved status requires approved amount to be set");
+            }
+        }
+
+        // SETTLED requires non-negative approved amount
+        if (status == ClaimStatus.SETTLED) {
+            if (approvedAmount == null || approvedAmount.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("Settled status requires non-negative approved amount");
             }
         }
 
@@ -460,6 +471,7 @@ public class Claim {
 
             // 3. Status-Specific Financial Resolution
             if (status == ClaimStatus.DRAFT || status == ClaimStatus.SUBMITTED || status == ClaimStatus.NEEDS_CORRECTION
+                    || status == ClaimStatus.APPROVED
                     || (status == ClaimStatus.SETTLED && approvedAmount == null)) {
 
                 // Calculate total patient share from lines

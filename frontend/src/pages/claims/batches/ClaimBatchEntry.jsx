@@ -175,7 +175,7 @@ export default function ClaimBatchEntry() {
     const refetchCoverageOnEditRef = useRef(refetchAllLinesCoverageCallback);
     useEffect(() => {
         refetchCoverageOnEditRef.current = refetchAllLinesCoverageCallback;
-    });
+    }, [refetchAllLinesCoverageCallback]);
 
     const isSavingRef = useRef(false);
 
@@ -534,7 +534,7 @@ export default function ClaimBatchEntry() {
                 diagnosisDescription: diagnosis,
                 complaint,
                 notes,
-                status: isClaimRejected ? 'REJECTED' : 'SETTLED',
+                status: isClaimRejected ? 'REJECTED' : 'APPROVED',
                 rejectionReason: isClaimRejected ? rejectionInput : null,
                 preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
                 manualCategoryEnabled,
@@ -833,7 +833,7 @@ export default function ClaimBatchEntry() {
                                         sx={{ fontWeight: 800, fontSize: '0.75rem' }}
                                     />
                                 )}
-                                {(currentBatch?.status !== 'OPEN' || isExpiredBatch) && !loadingBatchMeta && (
+                                {(isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')) && !loadingBatchMeta && (
                                     <Chip icon={<LockIcon sx={{ fontSize: 12 }} />} size="small"
                                         label={isExpiredBatch ? "فترة منتهية (>3 أشهر)" : "الدفعة مغلقة — تعديل فقط"} 
                                         color="secondary" variant="filled"

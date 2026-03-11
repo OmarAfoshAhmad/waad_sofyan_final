@@ -325,7 +325,7 @@ public class ClaimService {
         }
 
         Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch, medicalServiceMap);
-        // Status is already SETTLED by mapper as per user request
+        // Status set to APPROVED by mapper — direct entry model (no review workflow)
         Claim savedClaim = claimRepository.save(claim);
 
         // Record creation in audit trail
@@ -333,7 +333,17 @@ public class ClaimService {
             claimAuditService.recordCreation(savedClaim, currentUser);
         }
 
-        log.info("✅ Claim {} created in SETTLED status (Direct Implementation)", savedClaim.getId());
+        log.info("✅ Claim {} created in APPROVED status (Direct Implementation)", savedClaim.getId());
+
+        // Credit provider account immediately upon creation (same as approval event)
+        if (savedClaim.getProviderId() != null && savedClaim.getApprovedAmount() != null) {
+            eventPublisher.publishEvent(new ClaimApprovedEvent(
+                    this,
+                    savedClaim.getId(),
+                    savedClaim.getProviderId(),
+                    currentUser != null ? currentUser.getId() : null));
+            log.info("📤 [EVENT] Published ClaimApprovedEvent for claim {} (direct entry)", savedClaim.getId());
+        }
 
         // ═══════════════════════════════════════════════════════════════════════════
         // PHASE 5: Auto-mark PreAuthorization as USED when linked to claim
@@ -402,9 +412,12 @@ public class ClaimService {
         ClaimStatus previousStatus = claim.getStatus();
 
         // PART 2 — CLAIM SAFETY: Protect Claim Modification After Submission
-        // PHASE 11 Update: Allow editing SETTLED/REJECTED for manual entry fixes
-        // (Backlog Flow)
+        // Allow editing: APPROVED (direct entry state), NEEDS_CORRECTION (suspended for
+        // review),
+        // SETTLED/REJECTED (manual entry fixes - Backlog Flow)
         if (claim.getStatus() != ClaimStatus.DRAFT &&
+                claim.getStatus() != ClaimStatus.APPROVED &&
+                claim.getStatus() != ClaimStatus.NEEDS_CORRECTION &&
                 claim.getStatus() != ClaimStatus.SETTLED &&
                 claim.getStatus() != ClaimStatus.REJECTED) {
             throw new IllegalStateException(
@@ -502,9 +515,11 @@ public class ClaimService {
         User currentUser = authorizationService.getCurrentUser();
 
         // PART 2 — CLAIM SAFETY: Protect Claim Modification After Submission
-        if (claim.getStatus() != ClaimStatus.DRAFT) {
+        if (claim.getStatus() != ClaimStatus.DRAFT &&
+                claim.getStatus() != ClaimStatus.APPROVED &&
+                claim.getStatus() != ClaimStatus.NEEDS_CORRECTION) {
             throw new IllegalStateException(
-                    "Claim cannot be modified after submission. Current status: " + claim.getStatus());
+                    "Claim cannot be modified in current status: " + claim.getStatus());
         }
 
         // SECURITY: Verify user can modify this claim
@@ -1877,10 +1892,18 @@ public class ClaimService {
         // Note: State transitions are now handled by ClaimStateMachine
         // These validations are kept for backwards compatibility with direct updates
 
-        if (newStatus == ClaimStatus.APPROVED || newStatus == ClaimStatus.SETTLED) {
-            if (newApprovedAmount == null || newApprovedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        if (newStatus == ClaimStatus.APPROVED) {
+            // Direct-entry: approvedAmount can be 0 (100% patient copay). Only require
+            // non-null and non-negative.
+            if (newApprovedAmount == null || newApprovedAmount.compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalArgumentException(
-                        "Approved/Settled status requires approved amount greater than zero");
+                        "Approved status requires a non-negative approved amount");
+            }
+        }
+        if (newStatus == ClaimStatus.SETTLED) {
+            if (newApprovedAmount == null || newApprovedAmount.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException(
+                        "Settled status requires a non-negative approved amount");
             }
         }
 

@@ -8,38 +8,38 @@ import java.util.Set;
  * 
  * LIFECYCLE FLOW:
  * ┌────────┐
- * │ DRAFT  │ ─── Initial state for newly created claims
+ * │ DRAFT │ ─── Initial state for newly created claims
  * └────┬───┘
- *      │ submit()
- *      ▼
+ * │ submit()
+ * ▼
  * ┌────────────┐
- * │ SUBMITTED  │ ─── Claim submitted for review
+ * │ SUBMITTED │ ─── Claim submitted for review
  * └─────┬──────┘
- *       │ startReview()
- *       ▼
- * ┌──────────────┐       ┌────────────────────┐
- * │ UNDER_REVIEW │──────▶│ NEEDS_CORRECTION   │ (provider must fix)
- * └──────┬───────┘       └─────────┬──────────┘
- *        │                         │ resubmit()
- *        │ ◄───────────────────────┘
- *        │
- *   ┌────┴────┐
- *   ▼         ▼
- * ┌──────────┐  ┌──────────┐
- * │ APPROVED │  │ REJECTED │ ─── Terminal (requires comment)
- * └────┬─────┘  └──────────┘
- *      │
- *      ├─────────────────────────┐
- *      │ addToBatch()            │ settle() (legacy direct)
- *      ▼                         │
- * ┌──────────┐                   │
- * │ BATCHED  │ ── In settlement  │
- * └────┬─────┘    batch          │
- *      │                         │
- *      │ batchPaid()             │
- *      ▼                         ▼
+ * │ startReview()
+ * ▼
+ * ┌──────────────┐ ┌────────────────────┐
+ * │ UNDER_REVIEW │──────▶│ NEEDS_CORRECTION │ (provider must fix)
+ * └──────┬───────┘ └─────────┬──────────┘
+ * │ │ resubmit()
+ * │ ◄───────────────────────┘
+ * │
+ * ┌────┴────┐
+ * ▼ ▼
+ * ┌──────────┐ ┌──────────┐
+ * │ APPROVED │ │ REJECTED │ ─── Terminal (requires comment)
+ * └────┬─────┘ └──────────┘
+ * │
+ * ├─────────────────────────┐
+ * │ addToBatch() │ settle() (legacy direct)
+ * ▼ │
+ * ┌──────────┐ │
+ * │ BATCHED │ ── In settlement │
+ * └────┬─────┘ batch │
+ * │ │
+ * │ batchPaid() │
+ * ▼ ▼
  * ┌──────────────────────────────┐
- * │         SETTLED              │ ─── Payment completed (Terminal)
+ * │ SETTLED │ ─── Payment completed (Terminal)
  * └──────────────────────────────┘
  * 
  * LEGACY MAPPING:
@@ -54,51 +54,51 @@ public enum ClaimStatus {
      * Can be edited freely. No review or approval possible.
      */
     DRAFT("مسودة", false, false),
-    
+
     /**
      * Claim submitted for review.
      * Waiting to be picked up by a reviewer.
      */
     SUBMITTED("مقدم", false, false),
-    
+
     /**
      * Claim is actively being reviewed.
      * Reviewer can approve, reject, or request more information.
      */
     UNDER_REVIEW("قيد المراجعة", false, false),
-    
+
     /**
      * Claim needs correction from provider.
      * Provider must fix data and resubmit.
      * Replaces RETURNED_FOR_INFO (Provider Portal Security Fix).
      */
     NEEDS_CORRECTION("يحتاج تصحيح", false, false),
-    
+
     /**
      * Approval in progress - async processing.
      * Financial calculations and validations are being executed in background.
      */
     APPROVAL_IN_PROGRESS("جاري معالجة الموافقة", false, false),
-    
+
     /**
      * Claim approved for payment.
      * May be full or partial approval (see approvedAmount).
      */
     APPROVED("موافق عليه", true, false),
-    
+
     /**
      * Claim added to a settlement batch.
      * Waiting for batch to be confirmed and paid.
      * NEW: Part of Provider Account Settlement model.
      */
     BATCHED("في دفعة تسوية", true, false),
-    
+
     /**
      * Claim rejected. Requires reviewerComment.
      * Terminal state - cannot be changed.
      */
     REJECTED("مرفوض", true, true),
-    
+
     /**
      * Payment has been processed and completed.
      * Terminal state - cannot be changed.
@@ -135,7 +135,7 @@ public enum ClaimStatus {
      * Only DRAFT and NEEDS_CORRECTION allow edits.
      */
     public boolean allowsEdit() {
-        return this == DRAFT || this == NEEDS_CORRECTION;
+        return this == DRAFT || this == APPROVED || this == NEEDS_CORRECTION;
     }
 
     /**
@@ -147,9 +147,9 @@ public enum ClaimStatus {
             case DRAFT -> Set.of(SUBMITTED);
             case SUBMITTED -> Set.of(UNDER_REVIEW);
             case UNDER_REVIEW -> Set.of(APPROVAL_IN_PROGRESS, REJECTED, NEEDS_CORRECTION);
-            case NEEDS_CORRECTION -> Set.of(SUBMITTED);
+            case NEEDS_CORRECTION -> Set.of(APPROVED); // Corrected → back to APPROVED
             case APPROVAL_IN_PROGRESS -> Set.of(APPROVED, REJECTED); // Async result
-            case APPROVED -> Set.of(BATCHED); // Finance handoff only (no direct settle)
+            case APPROVED -> Set.of(BATCHED, NEEDS_CORRECTION); // Finance handoff or reviewer suspension
             case BATCHED -> Set.of(SETTLED, APPROVED); // Settle from batch, or unbatch back to APPROVED
             case REJECTED, SETTLED -> Collections.emptySet(); // Terminal
         };
@@ -163,7 +163,7 @@ public enum ClaimStatus {
     }
 
     // ========== LEGACY COMPATIBILITY ==========
-    
+
     /**
      * @deprecated Use SUBMITTED or UNDER_REVIEW instead
      */
@@ -171,14 +171,15 @@ public enum ClaimStatus {
     public static ClaimStatus PENDING_REVIEW() {
         return SUBMITTED;
     }
-    
+
     /**
      * Map legacy status strings to new statuses.
      * Useful for data migration.
      */
     public static ClaimStatus fromLegacy(String legacyStatus) {
-        if (legacyStatus == null) return DRAFT;
-        
+        if (legacyStatus == null)
+            return DRAFT;
+
         return switch (legacyStatus.toUpperCase()) {
             case "PENDING_REVIEW" -> SUBMITTED;
             case "PREAPPROVED" -> SUBMITTED; // PreApproval is separate entity

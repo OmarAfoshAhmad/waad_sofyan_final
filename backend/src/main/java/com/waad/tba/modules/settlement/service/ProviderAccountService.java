@@ -22,6 +22,7 @@ import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.entity.ProviderAccount.AccountStatus;
 import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
+import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -52,6 +53,7 @@ public class ProviderAccountService {
     private final AccountTransactionService transactionService;
     private final ClaimRepository claimRepository;
     private final ProviderRepository providerRepository;
+    private final ProviderContractRepository contractRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ACCOUNT MANAGEMENT
@@ -147,11 +149,31 @@ public class ProviderAccountService {
                     "Claim " + claimId + " has already been credited. Cannot credit twice.");
         }
 
-        // 4. Get net amount to credit
-        BigDecimal amount = claim.getNetPayableAmount();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+        // 4. Get net amount to credit = نصيب المرفق بعد خصم العقد
+        BigDecimal grossAmount = claim.getNetPayableAmount();
+        if (grossAmount == null || grossAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException(
-                    "Invalid credit amount for claim " + claimId + ": " + amount);
+                    "Invalid net payable amount for claim " + claimId + ": " + grossAmount);
+        }
+
+        // Apply provider contract discount (نسبة الخصم) to get actual provider share
+        BigDecimal discountPercent = contractRepository.findActiveContractByProvider(claim.getProviderId())
+                .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent() : BigDecimal.ZERO)
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal amount = discountPercent.compareTo(BigDecimal.ZERO) > 0
+                ? grossAmount
+                        .multiply(BigDecimal.ONE.subtract(
+                                discountPercent.divide(new BigDecimal("100"), 4, java.math.RoundingMode.HALF_UP)))
+                        .setScale(2, java.math.RoundingMode.HALF_UP)
+                : grossAmount;
+
+        log.info("Credit calculation: claim={}, gross={}, discountPercent={}, providerShare={}",
+                claimId, grossAmount, discountPercent, amount);
+
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException(
+                    "Invalid credit amount after discount for claim " + claimId + ": " + amount);
         }
 
         // 5. Get account with lock (create if not exists)

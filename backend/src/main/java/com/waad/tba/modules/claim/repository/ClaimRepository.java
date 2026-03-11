@@ -70,10 +70,10 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "visit" })
         @Query(value = "SELECT c FROM Claim c " +
                         "WHERE c.active = true " +
-                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPaged(@Param("keyword") String keyword, Pageable pageable);
 
         /**
@@ -90,12 +90,12 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND (:status IS NULL OR c.status = :status) " +
                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
-                        "AND (:createdAtFrom IS NULL OR c.createdAt >= :createdAtFrom) " +
-                        "AND (:createdAtTo IS NULL OR c.createdAt < :createdAtTo) " +
-                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (:createdAtFrom IS NULL OR c.createdAt >= :createdAtFrom) AND (:createdAtTo IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+                        "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) " +
+                        "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
+                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND (:employerId IS NULL OR c.member.employer.id = :employerId) AND (:providerId IS NULL OR c.providerId = :providerId) AND (:status IS NULL OR c.status = :status) AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedWithFilters(
                         @Param("keyword") String keyword,
                         @Param("employerId") Long employerId,
@@ -117,10 +117,10 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @Query(value = "SELECT c FROM Claim c " +
                         "WHERE c.active = true " +
                         "AND c.providerId = :providerId " +
-                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.providerId = :providerId AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.providerId = :providerId AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) OR LOWER(c.member.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedByProviderId(@Param("keyword") String keyword, @Param("providerId") Long providerId,
                         Pageable pageable);
 
@@ -1177,16 +1177,16 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "LEFT JOIN FETCH c.preAuthorization pa " +
                         "WHERE c.active = true " +
                         "AND c.providerId IN :providerIds " +
-                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
+                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
                                         +
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
-                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedByReviewerProviders(
                         @Param("keyword") String keyword,
                         @Param("providerIds") List<Long> providerIds,
@@ -1218,24 +1218,24 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND (:status IS NULL OR c.status = :status) " +
                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
-                        "AND (:createdAtFrom IS NULL OR c.createdAt >= :createdAtFrom) " +
-                        "AND (:createdAtTo IS NULL OR c.createdAt < :createdAtTo) " +
-                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
+                        "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) " +
+                        "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
+                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
                                         +
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
                                         "AND (:employerId IS NULL OR m.employer.id = :employerId) " +
                                         "AND (:status IS NULL OR c.status = :status) " +
                                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
-                                        "AND (:createdAtFrom IS NULL OR c.createdAt >= :createdAtFrom) " +
-                                        "AND (:createdAtTo IS NULL OR c.createdAt < :createdAtTo) " +
-                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-                                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+                                        "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) " +
+                                        "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
+                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedWithFiltersAndReviewerProviders(
                         @Param("keyword") String keyword,
                         @Param("providerIds") List<Long> providerIds,

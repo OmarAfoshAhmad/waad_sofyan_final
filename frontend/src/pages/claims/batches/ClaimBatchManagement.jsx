@@ -144,7 +144,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                 position: 'relative',
                 overflow: 'hidden',
                 borderLeft: '6px solid',
-                borderLeftColor: '#76b880', // Exact green from image
+                borderLeftColor: '#76b880',
                 borderRadius: 3,
                 transition: 'all 0.2s',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
