@@ -153,8 +153,7 @@ const BenefitPolicyReport = Loadable(lazy(() => import('pages/reports/benefit-po
 const BeneficiariesReports = Loadable(lazy(() => import('pages/reports/BeneficiariesReports')));
 const FinancialReports = Loadable(lazy(() => import('pages/reports/FinancialReports')));
 const ProviderSettlementReport = Loadable(lazy(() => import('pages/reports/ProviderSettlementReport')));
-const ProviderAccountSummary = Loadable(lazy(() => import('pages/reports/ProviderAccountSummary')));
-const RejectionsReport = Loadable(lazy(() => import('pages/reports/RejectionsReport')));
+
 
 // ==============================|| LAZY LOADING - ERROR PAGES ||============================== //
 
@@ -169,11 +168,7 @@ const Error500 = Loadable(lazy(() => import('pages/errors/ServerError500')));
 const ProviderAccountsList = Loadable(lazy(() => import('pages/settlement/ProviderAccountsList')));
 const ProviderPaymentsList = Loadable(lazy(() => import('pages/settlement/ProviderPaymentsList')));
 const ProviderAccountView = Loadable(lazy(() => import('pages/settlement/ProviderAccountView')));
-const SettlementBatchesList = Loadable(lazy(() => import('pages/settlement/SettlementBatchesList')));
-const SettlementBatchView = Loadable(lazy(() => import('pages/settlement/SettlementBatchView')));
-const CreateSettlementBatch = Loadable(lazy(() => import('pages/settlement/CreateSettlementBatch')));
-const AddClaimsToBatch = Loadable(lazy(() => import('pages/settlement/AddClaimsToBatch')));
-const PaymentCenter = Loadable(lazy(() => import('pages/settlement/PaymentCenter')));
+
 
 // ==============================|| MAIN ROUTING ||============================== //
 
@@ -370,49 +365,7 @@ const MainRoutes = {
             </PermissionGuard>
           )
         },
-        // Settlement Batches - Batch management
-        {
-          path: 'batches',
-          element: (
-            <PermissionGuard resource="settlements" action="view" isRouteGuard>
-              <SettlementBatchesList />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'batches/create',
-          element: (
-            <PermissionGuard resource="settlements" action="create" isRouteGuard>
-              <CreateSettlementBatch />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'batches/:batchId',
-          element: (
-            <PermissionGuard resource="settlements" action="view" isRouteGuard>
-              <SettlementBatchView />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'batches/:batchId/add-claims',
-          element: (
-            <PermissionGuard resource="settlements" action="create" isRouteGuard>
-              <AddClaimsToBatch />
-            </PermissionGuard>
-          )
-        }
       ]
-    },
-
-    {
-      path: 'settlements/payments',
-      element: (
-        <PermissionGuard resource="settlements" action="pay" isRouteGuard>
-          <PaymentCenter />
-        </PermissionGuard>
-      )
     },
 
     // Providers Module
@@ -905,22 +858,6 @@ const MainRoutes = {
           element: (
             <PermissionGuard resource="claims" action="view" isRouteGuard>
               <ClaimsReport />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'provider-settlement-summary',
-          element: (
-            <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
-              <ProviderAccountSummary />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'rejections',
-          element: (
-            <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
-              <RejectionsReport />
             </PermissionGuard>
           )
         },

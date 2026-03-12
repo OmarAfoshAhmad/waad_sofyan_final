@@ -4,7 +4,6 @@ import {
   Business as BusinessIcon,
   LocalHospital as LocalHospitalIcon,
   Receipt as ReceiptIcon,
-  ReceiptLong as ReceiptLongIcon,
   Description as DescriptionIcon,
   PeopleAlt as PeopleAltIcon,
   Category as CategoryIcon,
@@ -21,9 +20,6 @@ import {
   Folder as FolderIcon,
   VerifiedUser as VerifiedUserIcon,
   History as HistoryIcon,
-  PriceCheck as PriceCheckIcon,
-  BarChart as BarChartIcon,
-  ErrorOutline as ErrorOutlineIcon,
   AccountBalanceWallet as AccountBalanceWalletIcon
 } from '@mui/icons-material';
 
@@ -496,61 +492,7 @@ const menuItem = [
               size: 'small'
             }
           },
-          {
-            id: 'settlement-batches',
-            title: 'دفعات التسوية',
-            titleEn: 'Settlement Batches',
-            type: 'item',
-            url: '/settlement/batches',
-            icon: ReceiptLongIcon,
-            resource: 'settlements',
-            action: 'view',
-            chip: {
-              label: 'جديد',
-              color: 'primary',
-              size: 'small'
-            }
-          },
-          {
-            id: 'payment-center',
-            title: 'مركز الدفع',
-            titleEn: 'Payment Center',
-            type: 'item',
-            url: '/settlement/payments',
-            icon: PriceCheckIcon,
-            resource: 'payments',
-            action: 'view'
-          },
-          {
-            id: 'settlement-summary-report',
-            title: 'كشف حساب المزودين (له/عليه)',
-            titleEn: 'Provider Account Summary',
-            type: 'item',
-            url: '/reports/provider-settlement-summary',
-            icon: BarChartIcon,
-            resource: 'report_provider_settlement',
-            action: 'view',
-            chip: {
-              label: 'محاسبة',
-              color: 'error',
-              size: 'small'
-            }
-          },
-          {
-            id: 'rejections-report',
-            title: 'تقرير المرفوضات التفصيلي',
-            titleEn: 'Detailed Rejections Report',
-            type: 'item',
-            url: '/reports/rejections',
-            icon: ErrorOutlineIcon,
-            resource: 'report_provider_settlement',
-            action: 'view',
-            chip: {
-              label: 'مهم',
-              color: 'error',
-              size: 'small'
-            }
-          }
+
         ]
       }
     ]
