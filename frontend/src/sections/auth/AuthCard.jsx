@@ -15,7 +15,8 @@ export default function AuthCard({ children, ...other }) {
     <MainCard
       sx={{
         maxWidth: { xs: 400, sm: 475 },
-        margin: { xs: 2.5, md: 3 },
+        mx: 'auto',
+        my: { xs: 2.5, md: 3 },
         '& > *': { flexGrow: 1, flexBasis: '50%' },
         backdropFilter: 'blur(20px)',
 

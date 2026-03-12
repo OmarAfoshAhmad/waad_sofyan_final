@@ -8,7 +8,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { Box, Grid, Card, CardContent, Typography, CardActionArea } from '@mui/material';
-import { BankOutlined, TeamOutlined, SettingOutlined } from '@ant-design/icons';
+import { TeamOutlined, SettingOutlined } from '@ant-design/icons';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import useAuth from 'hooks/useAuth';
 
@@ -63,19 +63,10 @@ const SettingsPage = () => {
 
   const settingsSections = [
     {
-      id: 'company',
-      icon: BankOutlined,
-      title: 'معلومات الشركة',
-      description: 'إدارة بيانات الشركة الأساسية والمعلومات العامة',
-      color: '#1890ff',
-      route: '/settings/company',
-      roles: ['SUPER_ADMIN', 'ADMIN']
-    },
-    {
       id: 'system',
       icon: SettingOutlined,
-      title: 'إعدادات النظام',
-      description: 'إعدادات SLA والتكوينات العامة للنظام',
+      title: 'إعدادات النظام الشاملة',
+      description: 'تشمل معلومات المؤسسة وإعدادات النظام وبوابة مقدم الخدمة',
       color: '#fa8c16',
       route: '/settings/system',
       roles: ['SUPER_ADMIN', 'ACCOUNTANT']

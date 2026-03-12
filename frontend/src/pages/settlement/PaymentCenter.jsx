@@ -31,7 +31,9 @@ import { openSnackbar } from 'api/snackbar';
 
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return '0 د.ل';
-  return `${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+  if (!Number.isFinite(num)) return '0 د.ل';
+  return `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
 };
 
 const formatDateTime = (value) => {
@@ -45,6 +47,7 @@ const PaymentCenter = () => {
   const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 20 });
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
   const [notes, setNotes] = useState('');
@@ -56,7 +59,7 @@ const PaymentCenter = () => {
         page: paginationModel.page,
         size: paginationModel.pageSize
       }),
-    staleTime: 1000 * 60
+    staleTime: 0
   });
 
   const confirmedBatches = useMemo(() => {
@@ -81,6 +84,8 @@ const PaymentCenter = () => {
       setNotes('');
       queryClient.invalidateQueries(['payment-center-confirmed-batches']);
       queryClient.invalidateQueries(['settlement-batches']);
+      // Also invalidate provider account cache so ProviderAccountView shows updated balance/transactions.
+      queryClient.invalidateQueries(['provider-account']);
       openSnackbar({ message: 'تم تسجيل الدفع بنجاح', variant: 'success' });
     },
     onError: (mutationError) => {
@@ -99,19 +104,25 @@ const PaymentCenter = () => {
     setDialogOpen(true);
   }, []);
 
-  const handleRecordPayment = useCallback(() => {
+  const handleOpenConfirm = useCallback(() => {
     if (!selectedBatch) return;
     const reference = String(paymentReference || '').trim();
     if (!reference) {
       openSnackbar({ message: 'مرجع الدفع مطلوب', variant: 'warning' });
       return;
     }
+    setConfirmOpen(true);
+  }, [selectedBatch, paymentReference]);
 
+  const handleConfirmPayment = useCallback(() => {
+    if (!selectedBatch) return;
+    setConfirmOpen(false);
+    setDialogOpen(false);
     recordPaymentMutation.mutate({
       batchId: selectedBatch.id,
       payload: {
         amount: selectedBatch.totalNetAmount,
-        paymentReference: reference,
+        paymentReference: String(paymentReference || '').trim(),
         paymentMethod,
         notes
       }
@@ -253,10 +264,30 @@ const PaymentCenter = () => {
             <Button
               variant="contained"
               color="success"
-              onClick={handleRecordPayment}
+              onClick={handleOpenConfirm}
               disabled={recordPaymentMutation.isPending || !String(paymentReference || '').trim()}
             >
-              {recordPaymentMutation.isPending ? 'جاري التسجيل...' : 'تأكيد التسجيل'}
+              التالي: تأكيد الدفع
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Irreversible action confirmation */}
+        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ color: 'error.main' }}>تأكيد نهائي — لا يمكن التراجع</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Alert severity="warning">هذا الإجراء نهائي ولا يمكن إلغاؤه بعد التأكيد.</Alert>
+              <Typography><strong>الدفعة:</strong> {selectedBatch?.batchNumber}</Typography>
+              <Typography><strong>المرفق:</strong> {selectedBatch?.providerName}</Typography>
+              <Typography><strong>المبلغ:</strong> {formatCurrency(selectedBatch?.totalNetAmount)}</Typography>
+              <Typography><strong>مرجع الدفع:</strong> {String(paymentReference || '').trim()}</Typography>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmOpen(false)}>إلغاء</Button>
+            <Button variant="contained" color="error" onClick={handleConfirmPayment}>
+              نعم، تأكيد الدفع نهائياً
             </Button>
           </DialogActions>
         </Dialog>

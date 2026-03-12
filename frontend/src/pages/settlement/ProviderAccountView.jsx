@@ -16,7 +16,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // MUI Components
 import {
@@ -390,6 +390,7 @@ const AccountSummaryCard = ({ account, isLoading }) => {
 const ProviderAccountView = () => {
   const { providerId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Guard: providerId must be a valid integer. If not (e.g. "actions" from a mismatched route),
   // skip all API calls and redirect back to the list page.
@@ -417,8 +418,7 @@ const ProviderAccountView = () => {
     data: accountData,
     isLoading: isLoadingAccount,
     isError: isAccountError,
-    error: accountError,
-    refetch: refetchAccount
+    error: accountError
   } = useQuery({
     queryKey: ['provider-account', providerId],
     queryFn: () => providerAccountsService.getByProviderId(providerId),
@@ -429,8 +429,7 @@ const ProviderAccountView = () => {
   // Fetch transactions
   const {
     data: transactionsData,
-    isLoading: isLoadingTransactions,
-    refetch: refetchTransactions
+    isLoading: isLoadingTransactions
   } = useQuery({
     queryKey: ['provider-account', providerId, 'transactions', paginationModel.page, paginationModel.pageSize],
     queryFn: () =>
@@ -503,13 +502,14 @@ const ProviderAccountView = () => {
   }, [navigate]);
 
   const handleRefresh = useCallback(() => {
-    refetchAccount();
-    refetchTransactions();
+    // Invalidate ALL queries related to this provider account in one call.
+    // This covers: account summary, paginated transactions, AND recent transactions.
+    queryClient.invalidateQueries({ queryKey: ['provider-account', providerId] });
     openSnackbar({
       message: 'جاري تحديث البيانات...',
       variant: 'info'
     });
-  }, [refetchAccount, refetchTransactions]);
+  }, [queryClient, providerId]);
 
   const handleVerifyBalance = useCallback(async () => {
     const accountId = accountData?.accountId || accountData?.id;
@@ -552,7 +552,8 @@ const ProviderAccountView = () => {
       openSnackbar({ message: 'تم تسجيل الدفعة بنجاح', variant: 'success' });
       setIsPaymentModalOpen(false);
       setPaymentForm({ amount: '', paymentReference: '', notes: '' });
-      handleRefresh(); // Refresh the datagrid
+      // Invalidate ALL provider-account related queries so balances and all transaction tabs update.
+      queryClient.invalidateQueries({ queryKey: ['provider-account', providerId] });
     } catch (error) {
       openSnackbar({ message: error?.message || 'حدث خطأ أثناء تسجيل الدفعة', variant: 'error' });
     } finally {
@@ -910,6 +911,13 @@ const ProviderAccountView = () => {
           icon={AccountBalanceWalletIcon}
           actions={pageActions}
         />
+
+        {/* Persistent balance mismatch warning (server-detected) */}
+        {accountData && accountData.balanceVerified === false && (
+          <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: 2 }}>
+            ⚠️ <strong>تحذير:</strong> الرصيد المحسوب لا يتطابق مع مجموع حركات الحساب. يرجى التحقق من الحركات المالية أو التواصل مع الدعم الفني.
+          </Alert>
+        )}
 
         {/* Verification Result */}
         {verificationResult && (

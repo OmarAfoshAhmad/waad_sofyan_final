@@ -77,6 +77,45 @@ public class ProviderPaymentService {
                     "Payment amount must exactly match batch total: " + batch.getTotalNetAmount());
         }
 
+        // --- Step 1: Load and verify items ---
+        List<SettlementBatchItem> items = settlementBatchItemRepository.findBySettlementBatchId(batchId);
+        if (items.isEmpty()) {
+            throw new IllegalStateException("Batch " + batchId + " has no items. Cannot process payment.");
+        }
+
+        List<Long> claimIds = items.stream()
+                .map(SettlementBatchItem::getClaimId)
+                .collect(java.util.stream.Collectors.toList());
+
+        // --- Step 2: Load claims with lock ---
+        List<com.waad.tba.modules.claim.entity.Claim> claims = claimRepository.findAllByIdWithLock(claimIds);
+        if (claims.size() != claimIds.size()) {
+            java.util.Set<Long> found = claims.stream()
+                    .map(com.waad.tba.modules.claim.entity.Claim::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            Long missing = claimIds.stream().filter(id -> !found.contains(id)).findFirst().orElse(null);
+            throw new EntityNotFoundException("Claim not found: " + missing);
+        }
+
+        // --- Step 3: Mark claims as SETTLED (fail fast before any financial change)
+        // ---
+        LocalDateTime settledAt = LocalDateTime.now();
+        String settlementNote = "تمت التسوية عبر دفعة #" + batch.getBatchNumber();
+        for (com.waad.tba.modules.claim.entity.Claim claim : claims) {
+            if (claim.getStatus() != ClaimStatus.APPROVED) {
+                throw new IllegalStateException(
+                        "Claim " + claim.getId() + " cannot be settled: expected APPROVED but found "
+                                + claim.getStatus() + ". Batch may contain stale or modified claims.");
+            }
+            claim.setStatus(ClaimStatus.SETTLED);
+            claim.setSettledAt(settledAt);
+            claim.setPaymentReference(reference);
+            claim.setSettlementNotes(settlementNote);
+            claim.setUpdatedAt(settledAt);
+        }
+        claimRepository.saveAll(claims);
+
+        // --- Step 4: Debit the provider account ---
         providerAccountService.debitOnBatchPayment(
                 batch.getProviderAccountId(),
                 batch.getId(),
@@ -84,6 +123,7 @@ public class ProviderPaymentService {
                 batch.getTotalNetAmount(),
                 userId);
 
+        // --- Step 5: Record the payment ---
         ProviderPayment payment = ProviderPayment.builder()
                 .settlementBatchId(batch.getId())
                 .providerId(batch.getProviderId())
@@ -94,33 +134,14 @@ public class ProviderPaymentService {
                 .notes(request.getNotes())
                 .createdBy(userId)
                 .build();
-        payment = providerPaymentRepository.save(payment);
-
-        List<SettlementBatchItem> items = settlementBatchItemRepository.findBySettlementBatchId(batchId);
-        LocalDateTime settledAt = LocalDateTime.now();
-
-        // Batch-load all claims in one query, update in memory, then saveAll in one
-        // query
-        List<Long> claimIds = items.stream().map(SettlementBatchItem::getClaimId)
-                .collect(java.util.stream.Collectors.toList());
-        List<com.waad.tba.modules.claim.entity.Claim> claims = claimRepository.findAllById(claimIds);
-        if (claims.size() != claimIds.size()) {
-            // Detect any missing claims before committing
-            java.util.Set<Long> found = claims.stream().map(com.waad.tba.modules.claim.entity.Claim::getId)
-                    .collect(java.util.stream.Collectors.toSet());
-            claimIds.stream().filter(id -> !found.contains(id)).findFirst().ifPresent(id -> {
-                throw new jakarta.persistence.EntityNotFoundException("Claim not found: " + id);
-            });
+        try {
+            payment = providerPaymentRepository.save(payment);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new IllegalStateException(
+                    "Payment reference '" + reference
+                            + "' was used by a concurrent request. Please try again with a unique reference.",
+                    e);
         }
-        String settlementNote = "Settled via payment #" + payment.getId() + " for batch " + batch.getBatchNumber();
-        for (com.waad.tba.modules.claim.entity.Claim claim : claims) {
-            claim.setStatus(ClaimStatus.SETTLED);
-            claim.setSettledAt(settledAt);
-            claim.setPaymentReference(reference);
-            claim.setSettlementNotes(settlementNote);
-            claim.setUpdatedAt(settledAt);
-        }
-        claimRepository.saveAll(claims);
 
         batch.pay(userId);
         settlementBatchRepository.save(batch);
@@ -176,18 +197,13 @@ public class ProviderPaymentService {
                             ", Payment amount: " + request.getAmount());
         }
 
-        account.setRunningBalance(runningBalance);
-        BigDecimal balanceBefore = runningBalance;
-        account.debit(request.getAmount());
-
-        accountTransactionService.createAdjustment(
-                account,
-                request.getAmount(),
-                false, // DEBIT
-                balanceBefore,
-                "Installment Payment Reference: " + reference
-                        + (request.getNotes() != null ? " - " + request.getNotes() : ""),
-                userId);
+        // Debit the provider account: validates balance, persists, and creates the
+        // account_transaction record in one atomic operation
+        String adjustmentNote = "دفعة قسطية - مرجع: " + reference
+                + (request.getNotes() != null && !request.getNotes().isBlank()
+                        ? " / " + request.getNotes()
+                        : "");
+        providerAccountService.debitOnInstallmentPayment(providerId, request.getAmount(), adjustmentNote, userId);
 
         ProviderPayment payment = ProviderPayment.builder()
                 .settlementBatchId(null) // Unlinked to a specific batch
@@ -199,7 +215,16 @@ public class ProviderPaymentService {
                 .notes(request.getNotes())
                 .createdBy(userId)
                 .build();
-        payment = providerPaymentRepository.save(payment);
+        try {
+            payment = providerPaymentRepository.save(payment);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.warn("Concurrent duplicate installment payment reference '{}' for provider {}. "
+                    + "Transaction rolled back cleanly — no financial change occurred.", reference, providerId);
+            throw new IllegalStateException(
+                    "Payment reference '" + reference
+                            + "' was used by a concurrent request. Please try again with a unique reference.",
+                    e);
+        }
 
         log.info("Provider installment recorded: paymentId={}, providerId={}, amount={}", payment.getId(), providerId,
                 payment.getAmount());

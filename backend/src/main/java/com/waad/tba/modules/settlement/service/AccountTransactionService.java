@@ -7,6 +7,7 @@ import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -65,7 +66,15 @@ public class AccountTransactionService {
                 userId
         );
         
-        transaction = transactionRepository.save(transaction);
+        try {
+            transaction = transactionRepository.save(transaction);
+        } catch (DataIntegrityViolationException e) {
+            // Race condition: another thread already created this transaction
+            log.warn("Duplicate credit transaction detected for claim {} — returning existing", claimId);
+            return transactionRepository.findByReferenceTypeAndReferenceId(ReferenceType.CLAIM_APPROVAL, claimId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Duplicate credit conflict but no existing transaction found for claim " + claimId));
+        }
         
         log.info("CREDIT transaction created: account={}, claim={}, amount={}, balanceAfter={}",
                 account.getId(), claimId, amount, transaction.getBalanceAfter());
@@ -99,8 +108,16 @@ public class AccountTransactionService {
                 balanceBefore,
                 userId
         );
-        
-        transaction = transactionRepository.save(transaction);
+
+        try {
+            transaction = transactionRepository.save(transaction);
+        } catch (DataIntegrityViolationException e) {
+            // Race condition: another thread already created this transaction
+            log.warn("Duplicate debit transaction detected for batch {} — returning existing", batchId);
+            return transactionRepository.findByReferenceTypeAndReferenceId(ReferenceType.SETTLEMENT_PAYMENT, batchId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Duplicate debit conflict but no existing transaction found for batch " + batchId));
+        }
         
         log.info("DEBIT transaction created: account={}, batch={}, amount={}, balanceAfter={}",
                 account.getId(), batchId, amount, transaction.getBalanceAfter());

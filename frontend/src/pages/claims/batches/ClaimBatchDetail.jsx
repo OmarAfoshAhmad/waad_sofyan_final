@@ -4,7 +4,7 @@
  * Matches Odoo layout but with system visual identity.
  */
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -61,6 +61,7 @@ import claimsService from 'services/api/claims.service';
 import employersService from 'services/api/employers.service';
 import providersService from 'services/api/providers.service';
 import claimBatchesService from 'services/api/claim-batches.service';
+import { settlementBatchesService } from 'services/api/settlement.service';
 
 const MONTHS_AR = [
     'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -87,6 +88,7 @@ export default function ClaimBatchDetail() {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [printClaims, setPrintClaims] = useState([]);
     const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
     const [suspendComment, setSuspendComment] = useState('');
     const [suspendingClaimId, setSuspendingClaimId] = useState(null);
@@ -195,6 +197,11 @@ export default function ClaimBatchDetail() {
 
         return items;
     }, [claimsResponse, searchTerm, statusFilter]);
+
+    // Keep print payload synced with current list until user requests detailed refresh.
+    useEffect(() => {
+        setPrintClaims(claims || []);
+    }, [claims]);
 
     const sortedClaims = useMemo(() => {
         const sorting = tableState.sorting?.[0];
@@ -317,16 +324,66 @@ export default function ClaimBatchDetail() {
         window.URL.revokeObjectURL(url);
     };
 
+    const loadDetailedClaimsForPrint = async () => {
+        if (!claims || claims.length === 0) {
+            setPrintClaims([]);
+            return;
+        }
+
+        const detailed = await Promise.all(
+            claims.map(async (claim) => {
+                try {
+                    if (!claim?.id) return claim;
+                    const fresh = await claimsService.getById(claim.id);
+                    return { ...claim, ...fresh };
+                } catch {
+                    return claim;
+                }
+            })
+        );
+
+        setPrintClaims(detailed);
+    };
+
     const handlePrint = useReactToPrint({
         contentRef: batchReportRef,
-        documentTitle: `دفعة_${batchCode}`,
+        documentTitle: `تقرير_المطالبات_${year}_${String(month).padStart(2, '0')}`,
         pageStyle: `@page { size: A4 portrait; margin: 15mm; } body { direction: rtl; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`,
+        onBeforePrint: async () => {
+            await loadDetailedClaimsForPrint();
+        }
     });
+
+    const handleDownloadPdf = async () => {
+        const batchId = realBatch?.id;
+        if (!batchId) {
+            enqueueSnackbar('لم يتم العثور على معرف الدفعة', { variant: 'error' });
+            return;
+        }
+        try {
+            enqueueSnackbar('جاري تحضير ملف PDF...', { variant: 'info' });
+            const { blob, filename } = await settlementBatchesService.downloadOfficialPdf(batchId);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            enqueueSnackbar('تم تحميل التقرير بنجاح', { variant: 'success' });
+        } catch (err) {
+            enqueueSnackbar('فشل تحميل التقرير: ' + (err?.message || ''), { variant: 'error' });
+        }
+    };
 
     const handleRejectedReport = useReactToPrint({
         contentRef: rejectedReportRef,
         documentTitle: `تقرير_المرفوضات_${batchCode}`,
         pageStyle: `@page { size: A4 portrait; margin: 15mm; } body { direction: rtl; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`,
+        onBeforePrint: async () => {
+            await loadDetailedClaimsForPrint();
+        }
     });
 
     // Table Columns
@@ -493,7 +550,7 @@ export default function ClaimBatchDetail() {
             {/* INVISIBLE PRINT COMPONENT */}
             <BatchPrintReport
                 ref={batchReportRef}
-                claims={claims}
+                claims={printClaims.length ? printClaims : claims}
                 batchCode={batchCode}
                 employer={employer}
                 provider={provider}
@@ -503,7 +560,7 @@ export default function ClaimBatchDetail() {
 
             <RejectedBatchPrintReport
                 ref={rejectedReportRef}
-                claims={claims}
+                claims={printClaims.length ? printClaims : claims}
                 batchCode={batchCode}
                 employer={employer}
                 provider={provider}

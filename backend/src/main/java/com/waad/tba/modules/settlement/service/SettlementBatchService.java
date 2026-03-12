@@ -69,7 +69,16 @@ public class SettlementBatchService {
                 .createdBy(userId)
                 .build();
 
-        batch = batchRepository.save(batch);
+        try {
+            batch = batchRepository.save(batch);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Two concurrent requests generated the same batch number sequence.
+            // Fail with a clear message; the user can retry and the sequence will advance.
+            log.warn("Batch number collision on '{}'. Concurrent batch creation detected.", batchNumber);
+            throw new IllegalStateException(
+                    "تعارض في رقم الدفعة بسبب طلب متزامن. يرجى المحاولة مرة أخرى لتلقّي رقم دفعة جديد.",
+                    e);
+        }
         log.info("Batch created: id={}, number={}, provider={}", batch.getId(), batchNumber, providerId);
         return batch;
     }
@@ -101,13 +110,21 @@ public class SettlementBatchService {
                 .orElseThrow(() -> new EntityNotFoundException("Provider account not found"));
         Long providerId = account.getProviderId();
 
+        if (claimIds.size() > MAX_CLAIMS_PER_BATCH) {
+            throw new IllegalArgumentException(
+                    "Cannot add more than " + MAX_CLAIMS_PER_BATCH + " claims per batch. Requested: "
+                            + claimIds.size());
+        }
+
         // 1. Filter out claims already in ANY batch
         List<Long> alreadyInBatch = itemRepository.findClaimIdsAlreadyInBatch(claimIds);
         List<Long> claimsToProcess = alreadyInBatch.isEmpty() ? claimIds
                 : claimIds.stream().filter(id -> !alreadyInBatch.contains(id)).collect(Collectors.toList());
 
         if (claimsToProcess.isEmpty()) {
-            return new ArrayList<>();
+            throw new IllegalStateException(
+                    "جميع المطالبات المطلوبة موجودة بالفعل في دفعات أخرى. عدد المطالبات المكررة: "
+                            + alreadyInBatch.size());
         }
 
         // 2. Fetch all claims in one query
@@ -119,6 +136,7 @@ public class SettlementBatchService {
         // 3. Validate and prepare items in bulk
         List<SettlementBatchItem> itemsToSave = new ArrayList<>();
         List<Long> addedClaimIds = new ArrayList<>();
+        List<String> rejectionReasons = new ArrayList<>();
 
         for (Claim claim : claims) {
             try {
@@ -136,8 +154,16 @@ public class SettlementBatchService {
                 addedClaimIds.add(claim.getId());
             } catch (Exception e) {
                 log.error("Failed to add claim {} to batch: {}", claim.getId(), e.getMessage());
-                // Skip invalid claims but continue with others
+                rejectionReasons.add("المطالبة #" + claim.getId() + ": " + e.getMessage());
             }
+        }
+
+        if (addedClaimIds.isEmpty()) {
+            if (!rejectionReasons.isEmpty()) {
+                throw new IllegalStateException(
+                        "لم يتم إضافة أي مطالبة للدفعة. الأسباب:\n" + String.join("\n", rejectionReasons));
+            }
+            return new ArrayList<>();
         }
 
         // 4. Batch save items and claims
@@ -180,21 +206,14 @@ public class SettlementBatchService {
             }
         }
 
-        // 2. Resolve 'No Physical Delete' rule for SettlementBatchItem
-        // Previous hardening restricted physical deletion of financial records.
-        // However, items in DRAFT batches must be removable.
-        // For compliance, we will mark them as removed if possible, or allow deletion
-        // only in DRAFT.
         if (!idsToRemoveFromBatchItems.isEmpty()) {
-            // FIX: Allow deletion ONLY for DRAFT/PENDING batches to preserve modifiability
-            // Financial hardening applies to CONFIRMED/PAID batches.
-            if (batch.getStatus() == BatchStatus.DRAFT) {
-                itemRepository.deleteByClaimIds(idsToRemoveFromBatchItems);
-            } else {
+            if (batch.getStatus() != BatchStatus.DRAFT) {
                 throw new IllegalStateException("Cannot remove items from non-DRAFT batch to maintain audit trail.");
             }
-
+            // Save claims FIRST (clear settlement_batch_id), THEN delete items
+            // Reverse order would leave claims pointing to a deleted item row
             claimRepository.saveAll(claims);
+            itemRepository.deleteByClaimIds(idsToRemoveFromBatchItems);
         }
 
         recalculateBatchTotals(batch);
@@ -216,6 +235,17 @@ public class SettlementBatchService {
         if (!batch.canConfirm()) {
             throw new IllegalStateException("Cannot confirm batch " + batchId + ". Status is: " + batch.getStatus()
                     + ", claims: " + batch.getTotalClaimsCount());
+        }
+
+        // Verify stored totals match actual item totals before locking in
+        BigDecimal calculatedTotal = itemRepository.getTotalNetAmountByBatch(batchId);
+        if (calculatedTotal == null)
+            calculatedTotal = BigDecimal.ZERO;
+        if (batch.getTotalNetAmount().compareTo(calculatedTotal) != 0) {
+            throw new IllegalStateException(
+                    "Batch totals mismatch before confirmation. Stored: " + batch.getTotalNetAmount()
+                            + ", Calculated from items: " + calculatedTotal
+                            + ". Re-open batch and recalculate.");
         }
 
         batch.confirm(userId);
@@ -293,6 +323,7 @@ public class SettlementBatchService {
      * thousands of approved claims
      */
     private static final int MAX_CLAIMS_FOR_BATCHING = 1000;
+    private static final int MAX_CLAIMS_PER_BATCH = 5000;
 
     @Transactional(readOnly = true)
     public List<Claim> getAvailableClaimsForBatching(Long providerId) {
@@ -363,10 +394,12 @@ public class SettlementBatchService {
         if (totals != null && !totals.isEmpty()) {
             Object[] row = totals.get(0);
             batch.setTotalClaimsCount(((Number) row[0]).intValue());
-            batch.setTotalGrossAmount((BigDecimal) row[1]);
-            batch.setTotalNetAmount((BigDecimal) row[2]);
-            batch.setTotalAmount((BigDecimal) row[2]);
-            batch.setTotalPatientShare((BigDecimal) row[3]);
+            // Use String.valueOf to safely handle numeric types returned by different DB
+            // drivers
+            batch.setTotalGrossAmount(new java.math.BigDecimal(String.valueOf(row[1])));
+            batch.setTotalNetAmount(new java.math.BigDecimal(String.valueOf(row[2])));
+            batch.setTotalAmount(new java.math.BigDecimal(String.valueOf(row[2])));
+            batch.setTotalPatientShare(new java.math.BigDecimal(String.valueOf(row[3])));
         } else {
             batch.setTotalClaimsCount(0);
             batch.setTotalGrossAmount(BigDecimal.ZERO);

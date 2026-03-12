@@ -158,7 +158,6 @@ const AdminMedicalReviewerProviders = Loadable(lazy(() => import('pages/admin/me
 
 const Settings = Loadable(lazy(() => import('pages/settings')));
 
-const CompanySettings = Loadable(lazy(() => import('pages/settings/company')));
 const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSettingsPage')));
 
 // ==============================|| LAZY LOADING - PROFILE ||============================== //
@@ -919,7 +918,7 @@ const MainRoutes = {
     // Companies — single TPA mode: redirect to company settings page
     {
       path: 'companies',
-      element: <Navigate to="/settings/company" replace />
+      element: <Navigate to="/settings/system" replace />
     },
 
     // Admin Module
@@ -997,11 +996,7 @@ const MainRoutes = {
         },
         {
           path: 'company',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <CompanySettings />
-            </PermissionGuard>
-          )
+          element: <Navigate to="/settings/system" replace />
         },
         {
           path: 'system',

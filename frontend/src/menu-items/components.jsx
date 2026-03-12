@@ -54,9 +54,20 @@ import { ROLE_RESOURCE_ACCESS } from 'config/roleAccessMap';
  */
 export const filterMenuItemsByRole = (items, role) => {
   const allowedResources = ROLE_RESOURCE_ACCESS[role] || [];
+  const providerPortalEnabled = (() => {
+    try {
+      const cached = sessionStorage.getItem('__sys_config__');
+      if (!cached) return false;
+      const parsed = JSON.parse(cached);
+      return Boolean(parsed?.data?.flags?.PROVIDER_PORTAL_ENABLED);
+    } catch {
+      return false;
+    }
+  })();
 
   const isAllowed = (resource) => {
     if (!resource) return true; // group headers without resource → always visible
+    if (resource === 'provider_portal' && !providerPortalEnabled) return false;
     if (resource.startsWith('__hidden_')) return false; // Explicitly hidden items
     if (allowedResources.includes('*')) return true; // SUPER_ADMIN wildcard
     return allowedResources.includes(resource);
@@ -183,7 +194,7 @@ const menuItem = [
         titleEn: 'Provider Portal',
         type: 'collapse',
         icon: LocalHospitalIcon,
-        resource: '__hidden_provider_portal', // Hidden per user request
+        resource: 'provider_portal',
         action: 'view',
         children: [
           {
@@ -686,24 +697,9 @@ const menuItem = [
         action: 'view',
         children: [
           {
-            id: 'company-settings',
-            title: 'معلومات المؤسسة',
-            titleEn: 'Organization Information',
-            type: 'item',
-            url: '/settings/company',
-            icon: BusinessIcon,
-            resource: 'system_settings',
-            action: 'view',
-            chip: {
-              label: '✅',
-              color: 'success',
-              size: 'small'
-            }
-          },
-          {
             id: 'system-configuration',
-            title: 'تكوين النظام',
-            titleEn: 'System Configuration',
+            title: 'تكوين النظام والمؤسسة',
+            titleEn: 'System & Organization Configuration',
             type: 'item',
             url: '/settings/system',
             icon: SettingsIcon,

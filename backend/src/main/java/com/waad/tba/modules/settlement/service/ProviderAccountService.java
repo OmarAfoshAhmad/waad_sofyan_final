@@ -48,468 +48,557 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ProviderAccountService {
 
-    private final ProviderAccountRepository accountRepository;
-    private final AccountTransactionRepository transactionRepository;
-    private final AccountTransactionService transactionService;
-    private final ClaimRepository claimRepository;
-    private final ProviderRepository providerRepository;
-    private final ProviderContractRepository contractRepository;
+        private final ProviderAccountRepository accountRepository;
+        private final AccountTransactionRepository transactionRepository;
+        private final AccountTransactionService transactionService;
+        private final ClaimRepository claimRepository;
+        private final ProviderRepository providerRepository;
+        private final ProviderContractRepository contractRepository;
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ACCOUNT MANAGEMENT
-    // ═══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ACCOUNT MANAGEMENT
+        // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Get or create a provider account.
-     * If no account exists for the provider, creates one with zero balance.
-     */
-    @Transactional
-    public ProviderAccount getOrCreateAccount(Long providerId) {
-        return accountRepository.findByProviderId(providerId)
-                .orElseGet(() -> {
-                    log.info("Creating new provider account for provider {}", providerId);
-                    ProviderAccount account = ProviderAccount.builder()
-                            .providerId(providerId)
-                            .runningBalance(BigDecimal.ZERO)
-                            .totalApproved(BigDecimal.ZERO)
-                            .totalPaid(BigDecimal.ZERO)
-                            .status(AccountStatus.ACTIVE)
-                            .build();
-                    try {
-                        return accountRepository.save(account);
-                    } catch (DataIntegrityViolationException e) {
-                        // Another thread created the account concurrently — fetch and return it
-                        log.info("Race condition on account creation for provider {} — fetching existing", providerId);
-                        return accountRepository.findByProviderId(providerId)
+        /**
+         * Get or create a provider account.
+         * If no account exists for the provider, creates one with zero balance.
+         */
+        @Transactional
+        public ProviderAccount getOrCreateAccount(Long providerId) {
+                return accountRepository.findByProviderId(providerId)
+                                .orElseGet(() -> {
+                                        log.info("Creating new provider account for provider {}", providerId);
+                                        ProviderAccount account = ProviderAccount.builder()
+                                                        .providerId(providerId)
+                                                        .runningBalance(BigDecimal.ZERO)
+                                                        .totalApproved(BigDecimal.ZERO)
+                                                        .totalPaid(BigDecimal.ZERO)
+                                                        .status(AccountStatus.ACTIVE)
+                                                        .build();
+                                        try {
+                                                return accountRepository.save(account);
+                                        } catch (DataIntegrityViolationException e) {
+                                                // Another thread created the account concurrently — fetch and return it
+                                                log.info("Race condition on account creation for provider {} — fetching existing",
+                                                                providerId);
+                                                return accountRepository.findByProviderId(providerId)
+                                                                .orElseThrow(() -> new EntityNotFoundException(
+                                                                                "Provider account not found for provider: "
+                                                                                                + providerId));
+                                        }
+                                });
+        }
+
+        /**
+         * Get account by provider ID (with pessimistic lock for updates)
+         */
+        @Transactional
+        public ProviderAccount getAccountForUpdate(Long providerId) {
+                return accountRepository.findByProviderIdForUpdate(providerId)
                                 .orElseThrow(() -> new EntityNotFoundException(
-                                        "Provider account not found for provider: " + providerId));
-                    }
-                });
-    }
-
-    /**
-     * Get account by provider ID (with pessimistic lock for updates)
-     */
-    @Transactional
-    public ProviderAccount getAccountForUpdate(Long providerId) {
-        return accountRepository.findByProviderIdForUpdate(providerId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Provider account not found for provider: " + providerId));
-    }
-
-    /**
-     * Get account by ID (read-only)
-     */
-    @Transactional(readOnly = true)
-    public ProviderAccount getAccountById(Long accountId) {
-        return accountRepository.findById(accountId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Provider account not found: " + accountId));
-    }
-
-    /**
-     * Get account by provider ID (read-only)
-     */
-    @Transactional(readOnly = true)
-    public ProviderAccount getAccountByProviderId(Long providerId) {
-        return accountRepository.findByProviderId(providerId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Provider account not found for provider: " + providerId));
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CLAIM APPROVAL - CREDIT OPERATION
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Credit the provider account when a claim is approved.
-     * 
-     * This is the ONLY way to increase a provider's balance.
-     * 
-     * @param claimId The approved claim ID
-     * @param userId  User performing the action
-     * @return The created credit transaction
-     * @throws IllegalStateException if claim is not APPROVED or already credited
-     */
-    @Transactional
-    public AccountTransaction creditOnClaimApproval(Long claimId, Long userId) {
-        // 1. Get claim and validate
-        Claim claim = claimRepository.findById(claimId)
-                .orElseThrow(() -> new EntityNotFoundException("Claim not found: " + claimId));
-
-        // 2. Validate claim status
-        if (claim.getStatus() != ClaimStatus.APPROVED) {
-            throw new IllegalStateException(
-                    "Cannot credit for claim " + claimId + ". Status must be APPROVED, but is: " + claim.getStatus());
+                                                "Provider account not found for provider: " + providerId));
         }
 
-        // 3. Check if already credited
-        if (transactionService.existsForReference(ReferenceType.CLAIM_APPROVAL, claimId)) {
-            throw new IllegalStateException(
-                    "Claim " + claimId + " has already been credited. Cannot credit twice.");
+        /**
+         * Get account by ID (read-only)
+         */
+        @Transactional(readOnly = true)
+        public ProviderAccount getAccountById(Long accountId) {
+                return accountRepository.findById(accountId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found: " + accountId));
         }
 
-        // 4. Get net amount to credit = نصيب المرفق بعد خصم العقد
-        BigDecimal grossAmount = claim.getNetPayableAmount();
-        if (grossAmount == null || grossAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException(
-                    "Invalid net payable amount for claim " + claimId + ": " + grossAmount);
+        /**
+         * Get account by provider ID (read-only)
+         */
+        @Transactional(readOnly = true)
+        public ProviderAccount getAccountByProviderId(Long providerId) {
+                return accountRepository.findByProviderId(providerId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found for provider: " + providerId));
         }
 
-        // Apply provider contract discount (نسبة الخصم) to get actual provider share
-        BigDecimal discountPercent = contractRepository.findActiveContractByProvider(claim.getProviderId())
-                .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent() : BigDecimal.ZERO)
-                .orElse(BigDecimal.ZERO);
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CLAIM APPROVAL - CREDIT OPERATION
+        // ═══════════════════════════════════════════════════════════════════════════
 
-        BigDecimal amount = discountPercent.compareTo(BigDecimal.ZERO) > 0
-                ? grossAmount
-                        .multiply(BigDecimal.ONE.subtract(
-                                discountPercent.divide(new BigDecimal("100"), 4, java.math.RoundingMode.HALF_UP)))
-                        .setScale(2, java.math.RoundingMode.HALF_UP)
-                : grossAmount;
+        /**
+         * Credit the provider account when a claim is approved.
+         * 
+         * This is the ONLY way to increase a provider's balance.
+         * 
+         * @param claimId The approved claim ID
+         * @param userId  User performing the action
+         * @return The created credit transaction
+         * @throws IllegalStateException if claim is not APPROVED or already credited
+         */
+        @Transactional
+        public AccountTransaction creditOnClaimApproval(Long claimId, Long userId) {
+                // 1. Get claim with exclusive lock to prevent concurrent settlement/re-approval
+                // races.
+                // Lock order (claim before account) must match createPayment to avoid
+                // deadlocks.
+                Claim claim = claimRepository.findByIdForUpdate(claimId)
+                                .orElseThrow(() -> new EntityNotFoundException("Claim not found: " + claimId));
 
-        log.info("Credit calculation: claim={}, gross={}, discountPercent={}, providerShare={}",
-                claimId, grossAmount, discountPercent, amount);
+                // 2. Validate claim status — safe now because we hold the lock
+                if (claim.getStatus() != ClaimStatus.APPROVED) {
+                        throw new IllegalStateException(
+                                        "Cannot credit for claim " + claimId + ". Status must be APPROVED, but is: "
+                                                        + claim.getStatus());
+                }
 
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException(
-                    "Invalid credit amount after discount for claim " + claimId + ": " + amount);
-        }
+                // 3. Early idempotency check (non-locked, best-effort fast exit)
+                if (transactionService.existsForReference(ReferenceType.CLAIM_APPROVAL, claimId)) {
+                        throw new IllegalStateException(
+                                        "Claim " + claimId + " has already been credited. Cannot credit twice.");
+                }
 
-        // 5. Get account with lock (create if not exists)
-        ProviderAccount account = accountRepository.findByProviderIdForUpdate(claim.getProviderId())
-                .orElseGet(() -> getOrCreateAccount(claim.getProviderId()));
+                // 4. Get net amount to credit = نصيب المرفق بعد خصم العقد
+                BigDecimal grossAmount = claim.getNetPayableAmount();
+                if (grossAmount == null || grossAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalStateException(
+                                        "Invalid net payable amount for claim " + claimId + ": " + grossAmount);
+                }
 
-        // 6. Validate account is active
-        if (!account.isActive()) {
-            throw new IllegalStateException(
-                    "Cannot credit inactive account for provider " + claim.getProviderId());
-        }
+                // Apply provider contract discount (نسبة الخصم) to get actual provider share.
+                // A missing active contract is a configuration error — fail loudly.
+                BigDecimal discountPercent = contractRepository.findActiveContractByProvider(claim.getProviderId())
+                                .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent() : BigDecimal.ZERO)
+                                .orElseThrow(() -> new IllegalStateException(
+                                                "لا يوجد عقد نشط لمقدم الخدمة " + claim.getProviderId()
+                                                                + ". تعذّر حساب نصيب المرفق — تأكد من إعداد العقد أولاً."));
 
-        // 7. Get balance before
-        BigDecimal balanceBefore = account.getRunningBalance();
+                // Validate discount is within [0, 100]
+                if (discountPercent.compareTo(BigDecimal.ZERO) < 0
+                                || discountPercent.compareTo(new BigDecimal("100")) > 0) {
+                        throw new IllegalStateException(
+                                        "نسبة الخصم غير صالحة لمقدم الخدمة " + claim.getProviderId()
+                                                        + ": " + discountPercent + ". يجب أن تكون بين 0 و 100.");
+                }
 
-        // 8. Credit the account
-        account.credit(amount);
-        accountRepository.save(account);
+                // One-step calculation with a single HALF_EVEN rounding to avoid cascading
+                // precision errors across thousands of claims.
+                BigDecimal amount;
+                if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal providerRatio = BigDecimal.ONE
+                                        .subtract(discountPercent.divide(new BigDecimal("100"), 10,
+                                                        java.math.RoundingMode.HALF_EVEN));
+                        amount = grossAmount.multiply(providerRatio).setScale(2, java.math.RoundingMode.HALF_EVEN);
+                } else {
+                        amount = grossAmount;
+                }
 
-        // 9. Create transaction record
-        AccountTransaction transaction = transactionService.createClaimApprovedCredit(
-                account,
-                claimId,
-                amount,
-                balanceBefore,
-                userId);
+                log.info("Credit calculation: claim={}, gross={}, discountPercent={}, providerShare={}",
+                                claimId, grossAmount, discountPercent, amount);
 
-        log.info("CREDIT SUCCESS: claim={}, provider={}, amount={}, newBalance={}",
-                claimId, claim.getProviderId(), amount, account.getRunningBalance());
+                if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalStateException(
+                                        "Invalid credit amount after discount for claim " + claimId + ": " + amount);
+                }
 
-        return transaction;
-    }
+                // 5. Get account with lock (create if not exists)
+                ProviderAccount account = accountRepository.findByProviderIdForUpdate(claim.getProviderId())
+                                .orElseGet(() -> getOrCreateAccount(claim.getProviderId()));
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BATCH PAYMENT - DEBIT OPERATION
-    // ═══════════════════════════════════════════════════════════════════════════
+                // 5a. Re-check for duplicate AFTER acquiring the lock — closes the TOCTOU
+                // window between the early check above and now.
+                if (transactionService.existsForReference(ReferenceType.CLAIM_APPROVAL, claimId)) {
+                        throw new IllegalStateException(
+                                        "Claim " + claimId
+                                                        + " has already been credited (concurrent request). Cannot credit twice.");
+                }
 
-    /**
-     * Debit the provider account when a batch is paid.
-     * 
-     * This is the ONLY way to decrease a provider's balance.
-     * Called internally by SettlementBatchService.
-     */
-    @Transactional
-    public AccountTransaction debitOnBatchPayment(Long accountId, Long batchId, String batchNumber,
-            BigDecimal amount, Long userId) {
-        // 1. Get account with lock
-        ProviderAccount account = accountRepository.findByIdForUpdate(accountId)
-                .orElseThrow(() -> new EntityNotFoundException("Provider account not found: " + accountId));
+                // 6. Validate account is active
+                if (!account.isActive()) {
+                        throw new IllegalStateException(
+                                        "Cannot credit inactive account for provider " + claim.getProviderId());
+                }
 
-        // 2. Validate account is active
-        if (!account.isActive()) {
-            throw new IllegalStateException(
-                    "Cannot debit inactive account: " + accountId);
-        }
+                // 7. Get balance before
+                BigDecimal balanceBefore = account.getRunningBalance();
 
-        // 3. Validate sufficient balance
-        if (account.getRunningBalance().compareTo(amount) < 0) {
-            throw new IllegalStateException(
-                    "Insufficient balance. Account: " + accountId +
-                            ", Balance: " + account.getRunningBalance() +
-                            ", Required: " + amount);
-        }
-
-        // 4. Get balance before
-        BigDecimal balanceBefore = account.getRunningBalance();
-
-        // 5. Debit the account
-        account.debit(amount);
-        accountRepository.save(account);
-
-        // 6. Create transaction record
-        AccountTransaction transaction = transactionService.createBatchPaidDebit(
-                account,
-                batchId,
-                batchNumber,
-                amount,
-                balanceBefore,
-                userId);
-
-        log.info("DEBIT SUCCESS: batch={}, account={}, amount={}, newBalance={}",
-                batchId, accountId, amount, account.getRunningBalance());
-
-        return transaction;
-    }
-
-    /**
-     * Settle the full remaining balance using a manual adjustment debit.
-     * Used for legacy outstanding balances when no claim-level settlement
-     * candidates exist.
-     */
-    @Transactional
-    public AccountTransaction settleRemainingBalanceByProvider(Long providerId, String reason, Long userId) {
-        ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Provider account not found for provider: " + providerId));
-
-        if (!account.isActive()) {
-            throw new IllegalStateException("Cannot settle inactive account for provider " + providerId);
-        }
-
-        BigDecimal remainingBalance = account.getRunningBalance();
-        if (remainingBalance == null || remainingBalance.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("No outstanding balance to settle for provider " + providerId);
-        }
-
-        BigDecimal balanceBefore = account.getRunningBalance();
-        account.debit(remainingBalance);
-        accountRepository.save(account);
-
-        String adjustmentReason = (reason == null || reason.trim().isEmpty())
-                ? "Manual settlement of remaining legacy balance"
-                : reason.trim();
-
-        AccountTransaction transaction = transactionService.createAdjustment(
-                account,
-                remainingBalance,
-                false,
-                balanceBefore,
-                adjustmentReason,
-                userId);
-
-        log.warn("MANUAL SETTLEMENT: provider={}, account={}, amount={}, reason={}",
-                providerId, account.getId(), remainingBalance, adjustmentReason);
-
-        return transaction;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ACCOUNT SUMMARY & REPORTING
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Get comprehensive account summary for a provider.
-     */
-    @Transactional(readOnly = true)
-    public AccountSummaryDTO getAccountSummary(Long providerId) {
-        ProviderAccount account = getAccountByProviderId(providerId);
-
-        // Get provider name
-        String providerName = providerRepository.findById(providerId)
-                .map(Provider::getName)
-                .orElse("مقدم خدمة #" + providerId);
-
-        // Verify balance integrity
-        BigDecimal calculatedBalance = transactionRepository.getCalculatedBalance(account.getId());
-        if (calculatedBalance == null) {
-            calculatedBalance = BigDecimal.ZERO;
-        }
-
-        boolean balanceVerified = account.getRunningBalance().compareTo(calculatedBalance) == 0;
-        if (!balanceVerified) {
-            log.error("BALANCE MISMATCH! Account {}: stored={}, calculated={}",
-                    account.getId(), account.getRunningBalance(), calculatedBalance);
-        }
-
-        long transactionCount = transactionRepository.countByProviderAccountId(account.getId());
-
-        return AccountSummaryDTO.builder()
-                .accountId(account.getId())
-                .providerId(providerId)
-                .providerName(providerName)
-                .runningBalance(account.getRunningBalance())
-                .totalApproved(account.getTotalApproved())
-                .totalPaid(account.getTotalPaid())
-                .status(account.getStatus().name())
-                .statusArabic(account.getStatus().getArabicLabel())
-                .transactionCount(transactionCount)
-                .balanceVerified(balanceVerified)
-                .createdAt(account.getCreatedAt())
-                .updatedAt(account.getUpdatedAt())
-                .build();
-    }
-
-    /**
-     * Get transactions for a provider account.
-     */
-    @Transactional(readOnly = true)
-    public Page<AccountTransaction> getTransactions(Long providerId, Pageable pageable) {
-        ProviderAccount account = getAccountByProviderId(providerId);
-        return transactionRepository.findByProviderAccountIdOrderByCreatedAtDesc(account.getId(), pageable);
-    }
-
-    /**
-     * Get transactions in date range (for account statements).
-     */
-    @Transactional(readOnly = true)
-    public List<AccountTransaction> getTransactionsInDateRange(
-            Long providerId,
-            LocalDateTime startDate,
-            LocalDateTime endDate) {
-        ProviderAccount account = getAccountByProviderId(providerId);
-        return transactionRepository.findByAccountAndDateRange(account.getId(), startDate, endDate);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ACCOUNT STATUS MANAGEMENT
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    @Transactional
-    public ProviderAccount suspendAccount(Long providerId, String reason) {
-        ProviderAccount account = getAccountForUpdate(providerId);
-        account.suspend();
-        log.warn("Account suspended: provider={}, reason={}", providerId, reason);
-        return accountRepository.save(account);
-    }
-
-    @Transactional
-    public ProviderAccount reactivateAccount(Long providerId) {
-        ProviderAccount account = getAccountForUpdate(providerId);
-        account.reactivate();
-        log.info("Account reactivated: provider={}", providerId);
-        return accountRepository.save(account);
-    }
-
-    @Transactional
-    public ProviderAccount closeAccount(Long providerId, String reason) {
-        ProviderAccount account = getAccountForUpdate(providerId);
-        account.close();
-        log.warn("Account closed: provider={}, reason={}", providerId, reason);
-        return accountRepository.save(account);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BALANCE VERIFICATION (FOR AUDITING)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Verify account balance matches transaction history.
-     * INVARIANT: running_balance = SUM(credits) - SUM(debits)
-     */
-    @Transactional(readOnly = true)
-    public boolean verifyAccountBalance(Long accountId) {
-        ProviderAccount account = getAccountById(accountId);
-
-        BigDecimal calculatedBalance = transactionRepository.getCalculatedBalance(accountId);
-        if (calculatedBalance == null) {
-            calculatedBalance = BigDecimal.ZERO;
-        }
-
-        boolean match = account.getRunningBalance().compareTo(calculatedBalance) == 0;
-
-        if (!match) {
-            log.error("CRITICAL: Balance verification FAILED for account {}. " +
-                    "Stored: {}, Calculated: {}",
-                    accountId, account.getRunningBalance(), calculatedBalance);
-        }
-
-        return match;
-    }
-
-    /**
-     * Get all providers with outstanding balance.
-     */
-    @Transactional(readOnly = true)
-    public List<ProviderAccount> getAccountsWithOutstandingBalance() {
-        return accountRepository.findWithOutstandingBalance(AccountStatus.ACTIVE);
-    }
-
-    /**
-     * Get all provider accounts as DTOs with provider names.
-     * Shows ALL active accounts (not just those with outstanding balance).
-     * Use hasBalance=true to filter for accounts with balance > 0 only.
-     */
-    @Transactional(readOnly = true)
-    public List<ProviderAccountListDTO> getAccountsWithProviderNames() {
-        return getAccountsWithProviderNames(false);
-    }
-
-    /**
-     * Get provider accounts as DTOs with provider names, with optional balance
-     * filter.
-     * Ensures ALL active providers appear in the list by lazily creating
-     * zero-balance
-     * accounts for providers that have no account yet.
-     * 
-     * @param hasBalanceOnly if true, only return accounts where running_balance > 0
-     */
-    @Transactional // NOT read-only - may create accounts for new providers
-    public List<ProviderAccountListDTO> getAccountsWithProviderNames(boolean hasBalanceOnly) {
-        // Get all active providers to ensure every provider shows in the list
-        List<Provider> allProviders = providerRepository.findAll();
-
-        // Ensure every active provider has an account (lazy creation)
-        for (Provider provider : allProviders) {
-            if (!accountRepository.existsByProviderId(provider.getId())) {
-                log.info("Auto-creating provider account for provider {}", provider.getId());
-                ProviderAccount account = ProviderAccount.builder()
-                        .providerId(provider.getId())
-                        .runningBalance(BigDecimal.ZERO)
-                        .totalApproved(BigDecimal.ZERO)
-                        .totalPaid(BigDecimal.ZERO)
-                        .status(AccountStatus.ACTIVE)
-                        .build();
+                // 8. Credit the account
+                account.credit(amount);
                 accountRepository.save(account);
-            }
+
+                // 9. Create transaction record
+                AccountTransaction transaction = transactionService.createClaimApprovedCredit(
+                                account,
+                                claimId,
+                                amount,
+                                balanceBefore,
+                                userId);
+
+                log.info("CREDIT SUCCESS: claim={}, provider={}, amount={}, newBalance={}",
+                                claimId, claim.getProviderId(), amount, account.getRunningBalance());
+
+                return transaction;
         }
 
-        // Now fetch all active accounts
-        List<ProviderAccount> accounts;
-        if (hasBalanceOnly) {
-            accounts = accountRepository.findWithOutstandingBalance(AccountStatus.ACTIVE);
-        } else {
-            accounts = accountRepository.findByStatus(AccountStatus.ACTIVE);
+        // ═══════════════════════════════════════════════════════════════════════════
+        // BATCH PAYMENT - DEBIT OPERATION
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Debit the provider account when a batch is paid.
+         * 
+         * This is the ONLY way to decrease a provider's balance.
+         * Called internally by SettlementBatchService.
+         */
+        @Transactional
+        public AccountTransaction debitOnBatchPayment(Long accountId, Long batchId, String batchNumber,
+                        BigDecimal amount, Long userId) {
+                // 1. Get account with lock
+                ProviderAccount account = accountRepository.findByIdForUpdate(accountId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found: " + accountId));
+
+                // 2. Validate account is active
+                if (!account.isActive()) {
+                        throw new IllegalStateException(
+                                        "Cannot debit inactive account: " + accountId);
+                }
+
+                // 3. Validate sufficient balance
+                if (account.getRunningBalance().compareTo(amount) < 0) {
+                        throw new IllegalStateException(
+                                        "Insufficient balance. Account: " + accountId +
+                                                        ", Balance: " + account.getRunningBalance() +
+                                                        ", Required: " + amount);
+                }
+
+                // 4. Get balance before
+                BigDecimal balanceBefore = account.getRunningBalance();
+
+                // 5. Debit the account
+                account.debit(amount);
+                accountRepository.save(account);
+
+                // 6. Create transaction record
+                AccountTransaction transaction = transactionService.createBatchPaidDebit(
+                                account,
+                                batchId,
+                                batchNumber,
+                                amount,
+                                balanceBefore,
+                                userId);
+
+                log.info("DEBIT SUCCESS: batch={}, account={}, amount={}, newBalance={}",
+                                batchId, accountId, amount, account.getRunningBalance());
+
+                return transaction;
         }
 
-        return accounts.stream().map(account -> {
-            // Get provider info
-            Provider provider = providerRepository.findById(account.getProviderId()).orElse(null);
-            String providerName = provider != null ? provider.getName() : "مقدم خدمة #" + account.getProviderId();
-            String providerType = provider != null && provider.getProviderType() != null
-                    ? provider.getProviderType().name()
-                    : null;
+        /**
+         * Debit the provider account for an installment (partial) payment.
+         * Validates balance, persists the account, and creates the transaction record.
+         *
+         * @param providerId Provider ID
+         * @param amount     Payment amount (must be <= running balance)
+         * @param note       Description / reference note
+         * @param userId     User performing the action
+         * @return The created debit transaction
+         */
+        @Transactional
+        public AccountTransaction debitOnInstallmentPayment(Long providerId, BigDecimal amount,
+                        String note, Long userId) {
+                ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found for provider: " + providerId));
 
-            return ProviderAccountListDTO.builder()
-                    .id(account.getId())
-                    .providerId(account.getProviderId())
-                    .providerName(providerName)
-                    .providerType(providerType)
-                    .runningBalance(account.getRunningBalance())
-                    .totalApproved(account.getTotalApproved())
-                    .totalPaid(account.getTotalPaid())
-                    .status(account.getStatus().name())
-                    .statusArabic(account.getStatus().getArabicLabel())
-                    .pendingClaimsCount((int) claimRepository.countOutstandingClaimsByProvider(account.getProviderId()))
-                    .createdAt(account.getCreatedAt())
-                    .updatedAt(account.getUpdatedAt())
-                    .build();
-        }).toList();
-    }
+                if (!account.isActive()) {
+                        throw new IllegalStateException(
+                                        "Cannot debit inactive account for provider " + providerId);
+                }
 
-    /**
-     * Get total outstanding balance across all providers.
-     */
-    @Transactional(readOnly = true)
-    public BigDecimal getTotalOutstandingBalance() {
-        return accountRepository.getTotalOutstandingBalance();
-    }
+                BigDecimal balance = account.getRunningBalance() != null ? account.getRunningBalance()
+                                : BigDecimal.ZERO;
+                if (balance.compareTo(amount) < 0) {
+                        throw new IllegalStateException(
+                                        "Insufficient balance for installment. Provider: " + providerId
+                                                        + ", Balance: " + balance + ", Requested: " + amount);
+                }
+
+                BigDecimal balanceBefore = balance;
+                account.debit(amount);
+                accountRepository.save(account);
+
+                AccountTransaction transaction = transactionService.createAdjustment(
+                                account,
+                                amount,
+                                false, // DEBIT
+                                balanceBefore,
+                                note != null && !note.isBlank() ? note : "دفعة قسطية",
+                                userId);
+
+                log.info("INSTALLMENT DEBIT: provider={}, amount={}, newBalance={}",
+                                providerId, amount, account.getRunningBalance());
+
+                return transaction;
+        }
+
+        /**
+         * Settle the full remaining balance using a manual adjustment debit.
+         * Used for legacy outstanding balances when no claim-level settlement
+         * candidates exist.
+         */
+        @Transactional
+        public AccountTransaction settleRemainingBalanceByProvider(Long providerId, String reason, Long userId) {
+                ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found for provider: " + providerId));
+
+                if (!account.isActive()) {
+                        throw new IllegalStateException("Cannot settle inactive account for provider " + providerId);
+                }
+
+                BigDecimal remainingBalance = account.getRunningBalance();
+                if (remainingBalance == null || remainingBalance.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalStateException("No outstanding balance to settle for provider " + providerId);
+                }
+
+                BigDecimal balanceBefore = account.getRunningBalance();
+                account.debit(remainingBalance);
+                accountRepository.save(account);
+
+                String adjustmentReason = (reason == null || reason.trim().isEmpty())
+                                ? "Manual settlement of remaining legacy balance"
+                                : reason.trim();
+
+                AccountTransaction transaction = transactionService.createAdjustment(
+                                account,
+                                remainingBalance,
+                                false,
+                                balanceBefore,
+                                adjustmentReason,
+                                userId);
+
+                log.warn("MANUAL SETTLEMENT: provider={}, account={}, amount={}, reason={}",
+                                providerId, account.getId(), remainingBalance, adjustmentReason);
+
+                return transaction;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ACCOUNT SUMMARY & REPORTING
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Get comprehensive account summary for a provider.
+         */
+        @Transactional(readOnly = true)
+        public AccountSummaryDTO getAccountSummary(Long providerId) {
+                ProviderAccount account = getAccountByProviderId(providerId);
+
+                // Get provider name
+                String providerName = providerRepository.findById(providerId)
+                                .map(Provider::getName)
+                                .orElse("مقدم خدمة #" + providerId);
+
+                // Verify balance integrity
+                BigDecimal calculatedBalance = transactionRepository.getCalculatedBalance(account.getId());
+                if (calculatedBalance == null) {
+                        calculatedBalance = BigDecimal.ZERO;
+                }
+
+                boolean balanceVerified = account.getRunningBalance().compareTo(calculatedBalance) == 0;
+                if (!balanceVerified) {
+                        log.error("BALANCE MISMATCH! Account {}: stored={}, calculated={}",
+                                        account.getId(), account.getRunningBalance(), calculatedBalance);
+                }
+
+                long transactionCount = transactionRepository.countByProviderAccountId(account.getId());
+
+                return AccountSummaryDTO.builder()
+                                .accountId(account.getId())
+                                .providerId(providerId)
+                                .providerName(providerName)
+                                .runningBalance(account.getRunningBalance())
+                                .totalApproved(account.getTotalApproved())
+                                .totalPaid(account.getTotalPaid())
+                                .status(account.getStatus().name())
+                                .statusArabic(account.getStatus().getArabicLabel())
+                                .transactionCount(transactionCount)
+                                .balanceVerified(balanceVerified)
+                                .createdAt(account.getCreatedAt())
+                                .updatedAt(account.getUpdatedAt())
+                                .build();
+        }
+
+        /**
+         * Get transactions for a provider account.
+         */
+        @Transactional(readOnly = true)
+        public Page<AccountTransaction> getTransactions(Long providerId, Pageable pageable) {
+                ProviderAccount account = getAccountByProviderId(providerId);
+                return transactionRepository.findByProviderAccountIdOrderByCreatedAtDesc(account.getId(), pageable);
+        }
+
+        /**
+         * Get transactions in date range (for account statements).
+         */
+        @Transactional(readOnly = true)
+        public List<AccountTransaction> getTransactionsInDateRange(
+                        Long providerId,
+                        LocalDateTime startDate,
+                        LocalDateTime endDate) {
+                ProviderAccount account = getAccountByProviderId(providerId);
+                return transactionRepository.findByAccountAndDateRange(account.getId(), startDate, endDate);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ACCOUNT STATUS MANAGEMENT
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        @Transactional
+        public ProviderAccount suspendAccount(Long providerId, String reason) {
+                ProviderAccount account = getAccountForUpdate(providerId);
+                account.suspend();
+                log.warn("Account suspended: provider={}, reason={}", providerId, reason);
+                return accountRepository.save(account);
+        }
+
+        @Transactional
+        public ProviderAccount reactivateAccount(Long providerId) {
+                ProviderAccount account = getAccountForUpdate(providerId);
+                account.reactivate();
+                log.info("Account reactivated: provider={}", providerId);
+                return accountRepository.save(account);
+        }
+
+        @Transactional
+        public ProviderAccount closeAccount(Long providerId, String reason) {
+                ProviderAccount account = getAccountForUpdate(providerId);
+                account.close();
+                log.warn("Account closed: provider={}, reason={}", providerId, reason);
+                return accountRepository.save(account);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // BALANCE VERIFICATION (FOR AUDITING)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Verify account balance matches transaction history.
+         * INVARIANT: running_balance = SUM(credits) - SUM(debits)
+         */
+        @Transactional(readOnly = true)
+        public boolean verifyAccountBalance(Long accountId) {
+                ProviderAccount account = getAccountById(accountId);
+
+                BigDecimal calculatedBalance = transactionRepository.getCalculatedBalance(accountId);
+                if (calculatedBalance == null) {
+                        calculatedBalance = BigDecimal.ZERO;
+                }
+
+                boolean match = account.getRunningBalance().compareTo(calculatedBalance) == 0;
+
+                if (!match) {
+                        log.error("CRITICAL: Balance verification FAILED for account {}. " +
+                                        "Stored: {}, Calculated: {}",
+                                        accountId, account.getRunningBalance(), calculatedBalance);
+                }
+
+                return match;
+        }
+
+        /**
+         * Get all providers with outstanding balance.
+         */
+        @Transactional(readOnly = true)
+        public List<ProviderAccount> getAccountsWithOutstandingBalance() {
+                return accountRepository.findWithOutstandingBalance(AccountStatus.ACTIVE);
+        }
+
+        /**
+         * Get all provider accounts as DTOs with provider names.
+         * Shows ALL active accounts (not just those with outstanding balance).
+         * Use hasBalance=true to filter for accounts with balance > 0 only.
+         */
+        @Transactional(readOnly = true)
+        public List<ProviderAccountListDTO> getAccountsWithProviderNames() {
+                return getAccountsWithProviderNames(false);
+        }
+
+        /**
+         * Get provider accounts as DTOs with provider names, with optional balance
+         * filter.
+         * Ensures ALL active providers appear in the list by lazily creating
+         * zero-balance
+         * accounts for providers that have no account yet.
+         * 
+         * @param hasBalanceOnly if true, only return accounts where running_balance > 0
+         */
+        @Transactional // NOT read-only - may create accounts for new providers
+        public List<ProviderAccountListDTO> getAccountsWithProviderNames(boolean hasBalanceOnly) {
+                // Get all active providers to ensure every provider shows in the list
+                List<Provider> allProviders = providerRepository.findAll();
+
+                // Ensure every active provider has an account (lazy creation)
+                for (Provider provider : allProviders) {
+                        if (!accountRepository.existsByProviderId(provider.getId())) {
+                                log.info("Auto-creating provider account for provider {}", provider.getId());
+                                ProviderAccount account = ProviderAccount.builder()
+                                                .providerId(provider.getId())
+                                                .runningBalance(BigDecimal.ZERO)
+                                                .totalApproved(BigDecimal.ZERO)
+                                                .totalPaid(BigDecimal.ZERO)
+                                                .status(AccountStatus.ACTIVE)
+                                                .build();
+                                accountRepository.save(account);
+                        }
+                }
+
+                // Now fetch all active accounts
+                List<ProviderAccount> accounts;
+                if (hasBalanceOnly) {
+                        accounts = accountRepository.findWithOutstandingBalance(AccountStatus.ACTIVE);
+                } else {
+                        accounts = accountRepository.findByStatus(AccountStatus.ACTIVE);
+                }
+
+                // Batch-load all providers in one query to avoid N+1 individual lookups
+                java.util.Set<Long> accountProviderIds = accounts.stream()
+                                .map(ProviderAccount::getProviderId)
+                                .collect(java.util.stream.Collectors.toSet());
+                java.util.Map<Long, com.waad.tba.modules.provider.entity.Provider> providerMap = providerRepository
+                                .findAllById(accountProviderIds).stream()
+                                .collect(java.util.stream.Collectors.toMap(
+                                                com.waad.tba.modules.provider.entity.Provider::getId, p -> p));
+
+                return accounts.stream().map(account -> {
+                        Provider provider = providerMap.get(account.getProviderId());
+                        String providerName = provider != null ? provider.getName()
+                                        : "مقدم خدمة #" + account.getProviderId();
+                        String providerType = provider != null && provider.getProviderType() != null
+                                        ? provider.getProviderType().name()
+                                        : null;
+
+                        return ProviderAccountListDTO.builder()
+                                        .id(account.getId())
+                                        .providerId(account.getProviderId())
+                                        .providerName(providerName)
+                                        .providerType(providerType)
+                                        .runningBalance(account.getRunningBalance())
+                                        .totalApproved(account.getTotalApproved())
+                                        .totalPaid(account.getTotalPaid())
+                                        .status(account.getStatus().name())
+                                        .statusArabic(account.getStatus().getArabicLabel())
+                                        .pendingClaimsCount((int) claimRepository
+                                                        .countOutstandingClaimsByProvider(account.getProviderId()))
+                                        .createdAt(account.getCreatedAt())
+                                        .updatedAt(account.getUpdatedAt())
+                                        .build();
+                }).toList();
+        }
+
+        /**
+         * Get total outstanding balance across all providers.
+         */
+        @Transactional(readOnly = true)
+        public BigDecimal getTotalOutstandingBalance() {
+                return accountRepository.getTotalOutstandingBalance();
+        }
 }

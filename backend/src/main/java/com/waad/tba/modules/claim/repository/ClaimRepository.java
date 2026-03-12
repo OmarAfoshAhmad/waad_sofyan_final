@@ -43,6 +43,18 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         java.util.Optional<Claim> findByIdForUpdate(@Param("id") Long id);
 
         /**
+         * Find multiple claims by IDs with pessimistic write lock (SELECT ... FOR
+         * UPDATE).
+         * MANDATORY for batch payment processing to prevent concurrent settlement.
+         *
+         * @param ids List of claim IDs
+         * @return Claims with exclusive locks held until transaction commits
+         */
+        @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT c FROM Claim c WHERE c.id IN :ids")
+        java.util.List<Claim> findAllByIdWithLock(@Param("ids") java.util.List<Long> ids);
+
+        /**
          * Find claim by ID with pessimistic write lock AND full fetch joins.
          * MANDATORY for approval operations that need member and benefit policy data.
          * Prevents N+1 queries while maintaining financial locking.
@@ -1183,8 +1195,10 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
                                         +
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
-                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
-                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
+                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
                                         "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                                         "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedByReviewerProviders(
@@ -1230,10 +1244,13 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                                         "AND (:status IS NULL OR c.status = :status) " +
                                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
                                         "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
-                                        "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) " +
+                                        "AND (CAST(:createdAtFrom AS timestamp) IS NULL OR c.createdAt >= :createdAtFrom) "
+                                        +
                                         "AND (CAST(:createdAtTo AS timestamp) IS NULL OR c.createdAt < :createdAtTo) " +
-                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
-                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
+                                        "AND (LOWER(c.providerName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
+                                        "OR LOWER(c.diagnosisDescription) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) "
+                                        +
                                         "OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')) " +
                                         "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))")
         Page<Claim> searchPagedWithFiltersAndReviewerProviders(

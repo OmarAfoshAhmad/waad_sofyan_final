@@ -1,847 +1,596 @@
-/**
- * System Settings Admin Page
- * Manage system-wide configurable settings
- *
- * Features:
- * - View all settings by category
- * - Edit editable settings
- * - SLA configuration
- * - SLA compliance report
- */
-
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
-  Typography,
-  Grid,
-  TextField,
-  MenuItem,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  Alert,
   CircularProgress,
-  Tabs,
-  Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Tooltip,
-  Switch,
+  Divider,
   FormControlLabel,
-  LinearProgress
+  Grid,
+  MenuItem,
+  Paper,
+  Slider,
+  Stack,
+  Switch,
+  Tab,
+  Tabs,
+  TextField,
+  Typography
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
-  Settings as SettingsIcon,
-  Edit as EditIcon,
+  Business as BusinessIcon,
+  CloudUpload as CloudUploadIcon,
+  LocalHospital as ProviderPortalIcon,
+  Lock as SecurityIcon,
+  Preview as PreviewIcon,
   Refresh as RefreshIcon,
   Save as SaveIcon,
-  RestartAlt as ResetIcon,
-  Assessment as ReportIcon,
-  Schedule as ScheduleIcon,
-  ToggleOn as ToggleOnIcon
+  Settings as SettingsIcon,
+  Speed as SpeedIcon
 } from '@mui/icons-material';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
-import systemSettingsService from 'services/api/systemSettings.service';
+import waadLogoFallback from 'assets/images/waad-logo.png';
 import featureFlagsService from 'services/api/featureFlags.service';
+import systemSettingsService from 'services/api/systemSettings.service';
+import { companyService } from 'services/api/company.service';
 import useSystemConfig from 'hooks/useSystemConfig';
+import useConfig from 'hooks/useConfig';
 
-const PASSWORD_RESET_METHOD_KEY = 'PASSWORD_RESET_METHOD';
-const PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY = 'PASSWORD_RESET_TOKEN_EXPIRY_MINUTES';
-const PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY = 'PASSWORD_RESET_OTP_EXPIRY_MINUTES';
-const PASSWORD_RESET_OTP_LENGTH_KEY = 'PASSWORD_RESET_OTP_LENGTH';
+const KEYS = {
+  systemNameAr: 'SYSTEM_NAME_AR',
+  systemNameEn: 'SYSTEM_NAME_EN',
+  logoUrl: 'LOGO_URL',
+  fontFamily: 'FONT_FAMILY',
+  fontSizeBase: 'FONT_SIZE_BASE',
+  claimSlaDays: 'CLAIM_SLA_DAYS',
+  preApprovalSlaDays: 'PRE_APPROVAL_SLA_DAYS',
+  beneficiaryNumberFormat: 'BENEFICIARY_NUMBER_FORMAT',
+  beneficiaryNumberPrefix: 'BENEFICIARY_NUMBER_PREFIX',
+  beneficiaryNumberDigits: 'BENEFICIARY_NUMBER_DIGITS',
+  eligibilityStrictMode: 'ELIGIBILITY_STRICT_MODE',
+  waitingPeriodDaysDefault: 'WAITING_PERIOD_DAYS_DEFAULT',
+  eligibilityGracePeriodDays: 'ELIGIBILITY_GRACE_PERIOD_DAYS'
+};
 
-const PASSWORD_RESET_SETTINGS_KEYS = new Set([
-  PASSWORD_RESET_METHOD_KEY,
-  PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY,
-  PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY,
-  PASSWORD_RESET_OTP_LENGTH_KEY
-]);
+const PROVIDER_PORTAL_FLAG_KEY = 'PROVIDER_PORTAL_ENABLED';
 
-// Tab panel component
-function TabPanel({ children, value, index, ...other }) {
-  return (
-    <div role="tabpanel" hidden={value !== index} id={`settings-tabpanel-${index}`} aria-labelledby={`settings-tab-${index}`} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+const TabPanel = ({ children, value, index }) => (
+  <Box role="tabpanel" hidden={value !== index} sx={{ height: '100%', display: value === index ? 'flex' : 'none', flexDirection: 'column' }}>
+    {children}
+  </Box>
+);
+
+const FieldGroup = ({ title, children, icon: Icon, color = 'primary.main' }) => (
+  <Box>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+      {Icon && <Icon sx={{ fontSize: 20, color }} />}
+      <Typography variant="subtitle2" fontWeight={700} color={color}>
+        {title}
+      </Typography>
+    </Box>
+    {children}
+  </Box>
+);
+
+const toBool = (value, fallback = false) => {
+  if (value === undefined || value === null) return fallback;
+  return String(value).toLowerCase() === 'true';
+};
+
+const toInt = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
 
 const SystemSettingsPage = () => {
+  const theme = useTheme();
+  const { setField } = useConfig();
   const { refresh: refreshSystemConfig } = useSystemConfig();
 
-  // State
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [activeTab, setActiveTab] = useState(0);
+  const [tabValue, setTabValue] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // SLA state
-  const [slaDays, setSlaDays] = useState(null);
-  const [newSlaDays, setNewSlaDays] = useState('');
-  const [slaUpdating, setSlaUpdating] = useState(false);
-  const [slaReport, setSlaReport] = useState(null);
-  const [reportLoading, setReportLoading] = useState(false);
+  const [rawSettings, setRawSettings] = useState([]);
+  const [providerPortalEnabled, setProviderPortalEnabled] = useState(false);
 
-  // Feature flags state
-  const [featureFlags, setFeatureFlags] = useState([]);
-  const [flagsLoading, setFlagsLoading] = useState(false);
-  const [flagTogglingKey, setFlagTogglingKey] = useState(null);
-
-  // Password reset settings state
-  const [passwordResetConfig, setPasswordResetConfig] = useState({
-    method: 'TOKEN',
-    tokenExpiryMinutes: '60',
-    otpExpiryMinutes: '10',
-    otpLength: '6'
+  const [formData, setFormData] = useState({
+    companyId: 1,
+    companyName: '',
+    companyCode: '',
+    companyActive: true,
+    businessType: '',
+    phone: '',
+    email: '',
+    address: '',
+    website: '',
+    taxNumber: '',
+    systemNameAr: '',
+    systemNameEn: '',
+    logoUrl: '',
+    fontFamily: 'Tajawal',
+    fontSizeBase: 14,
+    claimSlaDays: 10,
+    preApprovalSlaDays: 3,
+    beneficiaryNumberFormat: '[PRO]-[COMP]-[YEAR]-[EMP_NO][REL_SUFFIX]',
+    beneficiaryNumberPrefix: 'TD',
+    beneficiaryNumberDigits: 8,
+    eligibilityStrictMode: true,
+    waitingPeriodDaysDefault: 0,
+    eligibilityGracePeriodDays: 0
   });
-  const [passwordResetSaving, setPasswordResetSaving] = useState(false);
 
-  // Edit dialog state
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingSetting, setEditingSetting] = useState(null);
-  const [editValue, setEditValue] = useState('');
-  const [saving, setSaving] = useState(false);
+  const settingsMap = useMemo(() => {
+    const map = new Map();
+    for (const item of rawSettings) {
+      map.set(item.settingKey, item.settingValue);
+    }
+    return map;
+  }, [rawSettings]);
 
-  // Load settings
-  const loadSettings = useCallback(async () => {
+  const hasKey = useCallback((key) => settingsMap.has(key), [settingsMap]);
+
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
 
-      const data = await systemSettingsService.getAll();
-      setSettings(data || []);
+      const [settings, flags, companyResponse] = await Promise.all([
+        systemSettingsService.getAll(),
+        featureFlagsService.getAllFlags(),
+        companyService.getSystemCompany()
+      ]);
 
-      // Extract unique categories
-      const uniqueCategories = [...new Set((data || []).map((s) => s.category).filter(Boolean))];
-      setCategories(uniqueCategories);
-    } catch (err) {
-      console.error('Failed to load settings:', err);
-      setError('فشل تحميل الإعدادات');
+      const normalized = settings || [];
+      setRawSettings(normalized);
+
+      const company = companyResponse?.data || {};
+
+      const byKey = new Map(normalized.map((s) => [s.settingKey, s.settingValue]));
+      setFormData({
+        companyId: company.id || 1,
+        companyName: company.name || 'وعد',
+        companyCode: company.code || 'WAAD',
+        companyActive: company.active !== undefined ? Boolean(company.active) : true,
+        businessType: company.businessType || 'إدارة النفقات الطبية',
+        phone: company.phone || '',
+        email: company.email || '',
+        address: company.address || '',
+        website: company.website || '',
+        taxNumber: company.taxNumber || '',
+        systemNameAr: byKey.get(KEYS.systemNameAr) || 'نظام واعد الطبي',
+        systemNameEn: byKey.get(KEYS.systemNameEn) || 'TBA WAAD System',
+        logoUrl: byKey.get(KEYS.logoUrl) || company.logoUrl || '',
+        fontFamily: byKey.get(KEYS.fontFamily) || 'Tajawal',
+        fontSizeBase: toInt(byKey.get(KEYS.fontSizeBase), 14),
+        claimSlaDays: toInt(byKey.get(KEYS.claimSlaDays), 10),
+        preApprovalSlaDays: toInt(byKey.get(KEYS.preApprovalSlaDays), 3),
+        beneficiaryNumberFormat: byKey.get(KEYS.beneficiaryNumberFormat) || '[PRO]-[COMP]-[YEAR]-[EMP_NO][REL_SUFFIX]',
+        beneficiaryNumberPrefix: byKey.get(KEYS.beneficiaryNumberPrefix) || 'TD',
+        beneficiaryNumberDigits: toInt(byKey.get(KEYS.beneficiaryNumberDigits), 8),
+        eligibilityStrictMode: toBool(byKey.get(KEYS.eligibilityStrictMode), true),
+        waitingPeriodDaysDefault: toInt(byKey.get(KEYS.waitingPeriodDaysDefault), 0),
+        eligibilityGracePeriodDays: toInt(byKey.get(KEYS.eligibilityGracePeriodDays), 0)
+      });
+
+      const portalFlag = (flags || []).find((f) => f.flagKey === PROVIDER_PORTAL_FLAG_KEY);
+      setProviderPortalEnabled(Boolean(portalFlag?.enabled));
+    } catch (e) {
+      setError('فشل تحميل نافذة الإعدادات');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
-
-  // Load SLA info
-  const loadSlaInfo = useCallback(async () => {
-    try {
-      const data = await systemSettingsService.getClaimSlaDays();
-      setSlaDays(data.slaDays);
-      setNewSlaDays(data.slaDays.toString());
-    } catch (err) {
-      console.error('Failed to load SLA info:', err);
-    }
-  }, []);
-
-  // Load SLA report
-  const loadSlaReport = useCallback(async () => {
-    try {
-      setReportLoading(true);
-      const data = await systemSettingsService.getSlaComplianceReport();
-      setSlaReport(data);
-    } catch (err) {
-      console.error('Failed to load SLA report:', err);
-      setError('فشل تحميل تقرير SLA');
-    } finally {
-      setReportLoading(false);
-    }
-  }, []);
-
-  // Load feature flags
-  const loadFeatureFlags = useCallback(async () => {
-    try {
-      setFlagsLoading(true);
-      const data = await featureFlagsService.getAllFlags();
-      setFeatureFlags(data || []);
-    } catch (err) {
-      console.error('Failed to load feature flags:', err);
-    } finally {
-      setFlagsLoading(false);
-    }
-  }, []);
-
-  // Toggle a feature flag
-  const handleToggleFlag = async (flagKey, currentEnabled) => {
-    try {
-      setFlagTogglingKey(flagKey);
-      await featureFlagsService.toggleFlag(flagKey, !currentEnabled);
-      setFeatureFlags((prev) =>
-        prev.map((f) => (f.flagKey === flagKey ? { ...f, enabled: !currentEnabled } : f))
-      );
-      // Bust the sessionStorage cache so Navigation re-reads the updated flags
-      refreshSystemConfig();
-      setSuccess(`تم ${!currentEnabled ? 'تفعيل' : 'تعطيل'} الميزة بنجاح`);
-      setTimeout(() => setSuccess(null), 4000);
-    } catch (err) {
-      setError(err.response?.data?.message || 'فشل تغيير حالة الميزة');
-    } finally {
-      setFlagTogglingKey(null);
-    }
-  };
 
   useEffect(() => {
-    loadSettings();
-    loadSlaInfo();
-    loadFeatureFlags();
-  }, [loadSettings, loadSlaInfo, loadFeatureFlags]);
+    loadData();
+  }, [loadData]);
 
-  // Update SLA days
-  const handleUpdateSlaDays = async () => {
-    const newValue = parseInt(newSlaDays, 10);
-    if (isNaN(newValue) || newValue < 1 || newValue > 30) {
-      setError('يجب أن تكون أيام SLA بين 1 و 30');
-      return;
-    }
+  const updateField = (field) => (event) => {
+    setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+  };
 
+  const saveSettingIfExists = async (key, value) => {
+    if (!hasKey(key)) return;
+    await systemSettingsService.updateSetting(key, String(value));
+  };
+
+  const handleSaveAll = async () => {
     try {
-      setSlaUpdating(true);
-      setError(null);
-
-      const result = await systemSettingsService.updateClaimSlaDays(newValue);
-      setSlaDays(result.newValue);
-      setSuccess(`تم تحديث أيام SLA من ${result.oldValue} إلى ${result.newValue}`);
-
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err) {
-      console.error('Failed to update SLA days:', err);
-      setError(err.response?.data?.message || 'فشل تحديث أيام SLA');
-    } finally {
-      setSlaUpdating(false);
-    }
-  };
-
-  // Reset SLA days
-  const handleResetSlaDays = async () => {
-    try {
-      setSlaUpdating(true);
-      setError(null);
-
-      const result = await systemSettingsService.resetClaimSlaDays();
-      setSlaDays(result.newValue);
-      setNewSlaDays(result.newValue.toString());
-      setSuccess(`تم إعادة تعيين أيام SLA إلى القيمة الافتراضية (${result.newValue})`);
-
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err) {
-      console.error('Failed to reset SLA days:', err);
-      setError('فشل إعادة تعيين أيام SLA');
-    } finally {
-      setSlaUpdating(false);
-    }
-  };
-
-  // Open edit dialog
-  const handleEditSetting = (setting) => {
-    setEditingSetting(setting);
-    setEditValue(setting.settingValue);
-    setEditDialogOpen(true);
-  };
-
-  // Save setting
-  const handleSaveSetting = async () => {
-    if (!editingSetting) return;
-
-    try {
-      setSaving(true);
-      setError(null);
-
-      await systemSettingsService.updateSetting(editingSetting.settingKey, editValue);
-      setSuccess(`تم تحديث الإعداد: ${editingSetting.settingKey}`);
-      setEditDialogOpen(false);
-      loadSettings();
-
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err) {
-      console.error('Failed to save setting:', err);
-      setError(err.response?.data?.message || 'فشل حفظ الإعداد');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Get settings by category
-  const getSettingsByCategory = (category) => {
-    return settings.filter((s) => {
-      if (s.category !== category) {
-        return false;
-      }
-
-      // These settings are edited in the dedicated password reset tab.
-      if (category === 'SECURITY' && PASSWORD_RESET_SETTINGS_KEYS.has(s.settingKey)) {
-        return false;
-      }
-
-      return true;
-    });
-  };
-
-  const getSettingValue = (key, fallback) => {
-    const setting = settings.find((s) => s.settingKey === key);
-    return setting?.settingValue ?? fallback;
-  };
-
-  useEffect(() => {
-    if (!settings.length) {
-      return;
-    }
-
-    setPasswordResetConfig({
-      method: getSettingValue(PASSWORD_RESET_METHOD_KEY, 'TOKEN').toUpperCase() === 'OTP' ? 'OTP' : 'TOKEN',
-      tokenExpiryMinutes: getSettingValue(PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY, '60'),
-      otpExpiryMinutes: getSettingValue(PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY, '10'),
-      otpLength: getSettingValue(PASSWORD_RESET_OTP_LENGTH_KEY, '6')
-    });
-  }, [settings]);
-
-  const validatePasswordResetConfig = () => {
-    const tokenMinutes = Number(passwordResetConfig.tokenExpiryMinutes);
-    const otpMinutes = Number(passwordResetConfig.otpExpiryMinutes);
-    const otpLength = Number(passwordResetConfig.otpLength);
-
-    if (!['TOKEN', 'OTP'].includes(passwordResetConfig.method)) {
-      return 'طريقة الاسترجاع يجب أن تكون TOKEN أو OTP';
-    }
-    if (!Number.isInteger(tokenMinutes) || tokenMinutes < 5 || tokenMinutes > 1440) {
-      return 'مدة صلاحية رابط الاسترجاع يجب أن تكون بين 5 و 1440 دقيقة';
-    }
-    if (!Number.isInteger(otpMinutes) || otpMinutes < 1 || otpMinutes > 60) {
-      return 'مدة صلاحية OTP يجب أن تكون بين 1 و 60 دقيقة';
-    }
-    if (!Number.isInteger(otpLength) || otpLength < 4 || otpLength > 10) {
-      return 'طول OTP يجب أن يكون بين 4 و 10 أرقام';
-    }
-
-    return null;
-  };
-
-  const handleSavePasswordResetConfig = async () => {
-    const validationError = validatePasswordResetConfig();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    try {
-      setPasswordResetSaving(true);
+      setIsSaving(true);
       setError(null);
 
       await Promise.all([
-        systemSettingsService.updateSetting(PASSWORD_RESET_METHOD_KEY, passwordResetConfig.method),
-        systemSettingsService.updateSetting(PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY, String(passwordResetConfig.tokenExpiryMinutes)),
-        systemSettingsService.updateSetting(PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY, String(passwordResetConfig.otpExpiryMinutes)),
-        systemSettingsService.updateSetting(PASSWORD_RESET_OTP_LENGTH_KEY, String(passwordResetConfig.otpLength))
+        companyService.updateDefaultCompany({
+          id: formData.companyId,
+          name: formData.companyName,
+          code: formData.companyCode,
+          active: formData.companyActive,
+          logoUrl: formData.logoUrl || null,
+          businessType: formData.businessType,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          website: formData.website,
+          taxNumber: formData.taxNumber
+        }),
+        saveSettingIfExists(KEYS.systemNameAr, formData.systemNameAr),
+        saveSettingIfExists(KEYS.systemNameEn, formData.systemNameEn),
+        saveSettingIfExists(KEYS.logoUrl, formData.logoUrl),
+        saveSettingIfExists(KEYS.fontFamily, formData.fontFamily),
+        saveSettingIfExists(KEYS.fontSizeBase, formData.fontSizeBase),
+        saveSettingIfExists(KEYS.claimSlaDays, formData.claimSlaDays),
+        saveSettingIfExists(KEYS.preApprovalSlaDays, formData.preApprovalSlaDays),
+        saveSettingIfExists(KEYS.beneficiaryNumberFormat, formData.beneficiaryNumberFormat),
+        saveSettingIfExists(KEYS.beneficiaryNumberPrefix, formData.beneficiaryNumberPrefix),
+        saveSettingIfExists(KEYS.beneficiaryNumberDigits, formData.beneficiaryNumberDigits),
+        saveSettingIfExists(KEYS.eligibilityStrictMode, formData.eligibilityStrictMode),
+        saveSettingIfExists(KEYS.waitingPeriodDaysDefault, formData.waitingPeriodDaysDefault),
+        saveSettingIfExists(KEYS.eligibilityGracePeriodDays, formData.eligibilityGracePeriodDays)
       ]);
 
-      setSuccess('تم حفظ إعدادات استرجاع كلمة المرور بنجاح');
-      await loadSettings();
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err) {
-      console.error('Failed to save password reset settings:', err);
-      setError(err.response?.data?.message || 'فشل حفظ إعدادات استرجاع كلمة المرور');
+      if (formData.fontFamily) setField('fontFamily', formData.fontFamily);
+      if (formData.fontSizeBase) setField('fontSize', formData.fontSizeBase);
+
+      refreshSystemConfig();
+      setSuccess('تم حفظ الإعدادات بنجاح');
+      await loadData();
+    } catch (e) {
+      setError(e?.response?.data?.message || 'فشل حفظ الإعدادات');
     } finally {
-      setPasswordResetSaving(false);
+      setIsSaving(false);
     }
   };
 
-  const handleResetPasswordResetDefaults = () => {
-    setPasswordResetConfig({
-      method: 'TOKEN',
-      tokenExpiryMinutes: '60',
-      otpExpiryMinutes: '10',
-      otpLength: '6'
-    });
-  };
-
-  // Render value type chip
-  const renderTypeChip = (type) => {
-    const colors = {
-      INTEGER: 'primary',
-      DECIMAL: 'secondary',
-      BOOLEAN: 'success',
-      STRING: 'default',
-      JSON: 'warning'
-    };
-    return <Chip size="small" label={type} color={colors[type] || 'default'} />;
-  };
-
-  // Render setting value
-  const renderSettingValue = (setting) => {
-    if (setting.valueType === 'BOOLEAN') {
-      return (
-        <Chip
-          size="small"
-          label={setting.settingValue === 'true' ? 'نعم' : 'لا'}
-          color={setting.settingValue === 'true' ? 'success' : 'default'}
-        />
-      );
+  const handleToggleProviderPortal = async (event) => {
+    const next = event.target.checked;
+    try {
+      setIsSaving(true);
+      setError(null);
+      await featureFlagsService.toggleFlag(PROVIDER_PORTAL_FLAG_KEY, next);
+      setProviderPortalEnabled(next);
+      refreshSystemConfig();
+      setSuccess(next ? 'تم إظهار بوابة مقدم الخدمة' : 'تم إخفاء بوابة مقدم الخدمة');
+    } catch (e) {
+      setError(e?.response?.data?.message || 'فشل تحديث حالة بوابة مقدم الخدمة');
+    } finally {
+      setIsSaving(false);
     }
-    return setting.settingValue;
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight={320}>
         <CircularProgress />
-        <Typography sx={{ mt: 2 }}>جاري تحميل الإعدادات...</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <ModernPageHeader
-        title="إعدادات النظام"
-        subtitle="إدارة الإعدادات العامة للنظام"
-        icon={SettingsIcon}
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => {
-              loadSettings();
-              loadSlaInfo();
-              loadFeatureFlags();
-            }}
-          >
-            تحديث
-          </Button>
-        }
-      />
+    <Box sx={{ height: 'calc(100vh - 125px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', px: 0 }}>
+      <Box sx={{ px: 2, pt: 1, flexShrink: 0 }}>
+        <ModernPageHeader
+          title="إعدادات النظام"
+          subtitle="نسخة كاملة مع ميزة إظهار بوابة مقدم الخدمة"
+          icon={<SettingsIcon sx={{ fontSize: '3.2rem', color: 'primary.main' }} />}
+          noIconBox
+          actions={
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" onClick={loadData} startIcon={<RefreshIcon />} disabled={isSaving}>
+                تحديث
+              </Button>
+              <Button variant="contained" onClick={() => window.open('/provider/eligibility-check', '_blank')} startIcon={<PreviewIcon />}>
+                استعراض
+              </Button>
+            </Stack>
+          }
+          sx={{ mb: 1 }}
+        />
+      </Box>
 
-      {/* Alerts */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
+      <Box sx={{ px: 2 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setSuccess(null)}>
+            {success}
+          </Alert>
+        )}
+      </Box>
 
-      {/* Tabs */}
-      <MainCard>
-        <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto">
-          <Tab label="إعدادات SLA" icon={<ScheduleIcon />} iconPosition="start" />
-          <Tab label="تقرير الامتثال" icon={<ReportIcon />} iconPosition="start" />
-          <Tab label="الميزات والوحدات" icon={<ToggleOnIcon />} iconPosition="start" />
-          <Tab label="استرجاع كلمة المرور" icon={<SettingsIcon />} iconPosition="start" />
-          {categories.map((cat) => (
-            <Tab key={cat} label={cat} />
-          ))}
+      <Card
+        sx={{
+          flex: 1,
+          maxHeight: 'calc(100vh - 210px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          borderRadius: 0,
+          border: 'none',
+          bgcolor: 'transparent',
+          mx: 2,
+          mb: 1
+        }}
+      >
+        <Tabs
+          value={tabValue}
+          onChange={(e, val) => setTabValue(val)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            minHeight: 40,
+            bgcolor: 'background.paper',
+            borderRadius: '8px 8px 0 0',
+            '& .MuiTab-root': {
+              minHeight: 40,
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              textTransform: 'none',
+              py: 0
+            }
+          }}
+        >
+          <Tab icon={<BusinessIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="معلومات المؤسسة" />
+          <Tab icon={<SecurityIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="قواعد الاستحقاق" />
+          <Tab icon={<SpeedIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="المحرك التشغيلي" />
+          <Tab icon={<ProviderPortalIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="بوابة مقدم الخدمة" />
         </Tabs>
 
-        {/* SLA Settings Tab */}
-        <TabPanel value={activeTab} index={0}>
-          <Grid container spacing={3}>
-            {/* Current SLA */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    أيام SLA الحالية للمطالبات
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 3 }}>
-                    <Typography variant="h2" color="primary">
-                      {slaDays || '-'}
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                      يوم عمل
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    يجب معالجة المطالبات خلال هذه الفترة
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+        <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.paper', borderRadius: '0 0 8px 8px' }}>
+          <TabPanel value={tabValue} index={0}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Stack spacing={2}>
+                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                        <FieldGroup title="الهوية البصرية" icon={BusinessIcon}>
+                          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                            <Box
+                              sx={{
+                                width: 60,
+                                height: 60,
+                                borderRadius: 1.5,
+                                border: '1px dashed',
+                                borderColor: 'divider',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: alpha('#000', 0.02),
+                                flexShrink: 0
+                              }}
+                            >
+                              <img
+                                src={formData.logoUrl || waadLogoFallback}
+                                alt="Logo"
+                                style={{ maxWidth: '80%', maxHeight: '80%' }}
+                                onError={(e) => {
+                                  e.currentTarget.src = waadLogoFallback;
+                                }}
+                              />
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                              <Button variant="outlined" component="label" size="small" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 1 }}>
+                                تغيير الشعار
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => setFormData((p) => ({ ...p, logoUrl: reader.result || '' }));
+                                      reader.readAsDataURL(e.target.files[0]);
+                                    }
+                                  }}
+                                />
+                              </Button>
+                              <TextField fullWidth size="small" label="رابط الشعار" value={formData.logoUrl} onChange={updateField('logoUrl')} />
+                            </Box>
+                          </Box>
+                        </FieldGroup>
+                      </Paper>
 
-            {/* Update SLA */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    تحديث أيام SLA
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, my: 2 }}>
-                    <TextField
-                      label="أيام SLA الجديدة"
-                      type="number"
-                      value={newSlaDays}
-                      onChange={(e) => setNewSlaDays(e.target.value)}
-                      inputProps={{ min: 1, max: 30 }}
-                      size="small"
-                      sx={{ width: 150 }}
-                    />
-                    <Button
-                      variant="contained"
-                      startIcon={slaUpdating ? <CircularProgress size={16} /> : <SaveIcon />}
-                      onClick={handleUpdateSlaDays}
-                      disabled={slaUpdating}
-                    >
-                      تحديث
-                    </Button>
-                    <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleResetSlaDays} disabled={slaUpdating}>
-                      إعادة تعيين
-                    </Button>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">
-                    القيمة بين 1 و 30 يوم عمل. التغيير يؤثر على المطالبات الجديدة فقط.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </TabPanel>
-
-        {/* SLA Compliance Report Tab */}
-        <TabPanel value={activeTab} index={1}>
-          <Box sx={{ mb: 2 }}>
-            <Button
-              variant="contained"
-              startIcon={reportLoading ? <CircularProgress size={16} /> : <ReportIcon />}
-              onClick={loadSlaReport}
-              disabled={reportLoading}
-            >
-              تحميل التقرير
-            </Button>
-          </Box>
-
-          {slaReport && (
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card sx={{ bgcolor: 'success.lighter' }}>
-                  <CardContent>
-                    <Typography variant="h6" color="success.dark">
-                      ضمن SLA
-                    </Typography>
-                    <Typography variant="h3" color="success.main">
-                      {slaReport.withinSla || 0}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card sx={{ bgcolor: 'warning.lighter' }}>
-                  <CardContent>
-                    <Typography variant="h6" color="warning.dark">
-                      قريب من الموعد
-                    </Typography>
-                    <Typography variant="h3" color="warning.main">
-                      {slaReport.nearingSla || 0}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card sx={{ bgcolor: 'error.lighter' }}>
-                  <CardContent>
-                    <Typography variant="h6" color="error.dark">
-                      تجاوز SLA
-                    </Typography>
-                    <Typography variant="h3" color="error.main">
-                      {slaReport.breachedSla || 0}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              {slaReport.complianceRate !== undefined && (
-                <Grid size={12}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        نسبة الامتثال
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={slaReport.complianceRate}
-                          sx={{ flex: 1, height: 10, borderRadius: 5 }}
-                          color={slaReport.complianceRate >= 90 ? 'success' : slaReport.complianceRate >= 70 ? 'warning' : 'error'}
-                        />
-                        <Typography variant="h5">{slaReport.complianceRate}%</Typography>
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              )}
-            </Grid>
-          )}
-        </TabPanel>
-
-        {/* Feature Flags Tab */}
-        <TabPanel value={activeTab} index={2}>
-          {flagsLoading ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}><CircularProgress /></Box>
-          ) : (
-            <Grid container spacing={2}>
-              {featureFlags.length === 0 && (
-                <Grid size={12}>
-                  <Typography color="text.secondary" align="center">لا توجد إعدادات ميزات</Typography>
-                </Grid>
-              )}
-              {featureFlags.map((flag) => (
-                <Grid key={flag.flagKey} size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 2, borderColor: flag.enabled ? 'success.main' : 'divider', transition: 'border-color 0.3s' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="subtitle1" fontWeight={600}>{flag.flagName}</Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{flag.description}</Typography>
-                        <Typography variant="caption" color="text.disabled" fontFamily="monospace" sx={{ mt: 0.5, display: 'block' }}>{flag.flagKey}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                        {flagTogglingKey === flag.flagKey ? (
-                          <CircularProgress size={24} />
-                        ) : (
-                          <Switch
-                            checked={flag.enabled}
-                            onChange={() => handleToggleFlag(flag.flagKey, flag.enabled)}
-                            color="success"
-                          />
-                        )}
-                        <Chip
-                          size="small"
-                          label={flag.enabled ? 'مفعّل' : 'معطّل'}
-                          color={flag.enabled ? 'success' : 'default'}
-                        />
-                      </Box>
-                    </Box>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-          <Alert severity="info" sx={{ mt: 3 }}>
-            تسري التغييرات فوراً. قد يحتاج المستخدمون إلى إعادة تحميل الصفحة لرؤية التأثير.
-          </Alert>
-        </TabPanel>
-
-        {/* Password Reset Settings Tab */}
-        <TabPanel value={activeTab} index={3}>
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, md: 8 }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    إعدادات استرجاع كلمة المرور
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    اختر طريقة الاسترجاع الأساسية وحدد مدد الصلاحية. الإعدادات تطبق مباشرة على واجهة "نسيت كلمة المرور".
-                  </Typography>
-
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <TextField
-                        fullWidth
-                        select
-                        label="طريقة الاسترجاع"
-                        value={passwordResetConfig.method}
-                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, method: e.target.value }))}
-                      >
-                        <MenuItem value="TOKEN">رابط عبر البريد (TOKEN)</MenuItem>
-                        <MenuItem value="OTP">رمز تحقق (OTP)</MenuItem>
-                      </TextField>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="مدة صلاحية رابط الاسترجاع (دقيقة)"
-                        value={passwordResetConfig.tokenExpiryMinutes}
-                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, tokenExpiryMinutes: e.target.value }))}
-                        inputProps={{ min: 5, max: 1440 }}
-                      />
-                    </Grid>
-
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="مدة صلاحية OTP (دقيقة)"
-                        value={passwordResetConfig.otpExpiryMinutes}
-                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, otpExpiryMinutes: e.target.value }))}
-                        inputProps={{ min: 1, max: 60 }}
-                      />
-                    </Grid>
-
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="طول OTP"
-                        value={passwordResetConfig.otpLength}
-                        onChange={(e) => setPasswordResetConfig((prev) => ({ ...prev, otpLength: e.target.value }))}
-                        inputProps={{ min: 4, max: 10 }}
-                      />
-                    </Grid>
+                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                        <FieldGroup title="المظهر والخط" icon={SettingsIcon}>
+                          <Stack spacing={1.5}>
+                            <TextField select fullWidth size="small" label="نوع الخط" value={formData.fontFamily} onChange={updateField('fontFamily')}>
+                              <MenuItem value="Tajawal">Tajawal</MenuItem>
+                              <MenuItem value="Cairo">Cairo</MenuItem>
+                            </TextField>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                حجم الخط ({formData.fontSizeBase}px)
+                              </Typography>
+                              <Slider
+                                value={formData.fontSizeBase}
+                                onChange={(e, val) => setFormData((p) => ({ ...p, fontSizeBase: Number(val) }))}
+                                min={12}
+                                max={18}
+                                step={1}
+                                valueLabelDisplay="auto"
+                                size="small"
+                              />
+                            </Box>
+                          </Stack>
+                        </FieldGroup>
+                      </Paper>
+                    </Stack>
                   </Grid>
 
-                  <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-                    <Button
-                      variant="contained"
-                      startIcon={passwordResetSaving ? <CircularProgress size={16} /> : <SaveIcon />}
-                      onClick={handleSavePasswordResetConfig}
-                      disabled={passwordResetSaving}
-                    >
-                      حفظ الإعدادات
-                    </Button>
-                    <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleResetPasswordResetDefaults} disabled={passwordResetSaving}>
-                      إعادة القيم الافتراضية
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Card sx={{ bgcolor: 'info.lighter' }}>
-                <CardContent>
-                  <Typography variant="subtitle1" gutterBottom>
-                    ملاحظات مهمة
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    اختيار TOKEN يعني تعطيل مسار OTP في API.
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    اختيار OTP يعني تعطيل مسار رابط البريد في API.
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    القيم هنا مرتبطة مباشرة بمفاتيح SYSTEM_SETTINGS ضمن فئة SECURITY.
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </TabPanel>
-
-        {/* Category Settings Tabs */}
-        {categories.map((category, idx) => (
-          <TabPanel key={category} value={activeTab} index={idx + 4}>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>المفتاح</TableCell>
-                    <TableCell>القيمة</TableCell>
-                    <TableCell>النوع</TableCell>
-                    <TableCell>الوصف</TableCell>
-                    <TableCell>قابل للتعديل</TableCell>
-                    <TableCell>إجراءات</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {getSettingsByCategory(category).map((setting) => (
-                    <TableRow key={setting.id}>
-                      <TableCell>
-                        <Typography variant="body2" fontFamily="monospace">
-                          {setting.settingKey}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{renderSettingValue(setting)}</TableCell>
-                      <TableCell>{renderTypeChip(setting.valueType)}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {setting.description || '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={setting.isEditable ? 'نعم' : 'لا'} color={setting.isEditable ? 'success' : 'default'} />
-                      </TableCell>
-                      <TableCell>
-                        {setting.isEditable && (
-                          <Tooltip title="تعديل">
-                            <IconButton size="small" color="primary" onClick={() => handleEditSetting(setting)}>
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {getSettingsByCategory(category).length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} align="center">
-                        <Typography color="text.secondary">لا توجد إعدادات في هذه الفئة</Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </TabPanel>
-        ))}
-      </MainCard>
-
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>تعديل الإعداد</DialogTitle>
-        <DialogContent>
-          {editingSetting && (
-            <Box sx={{ pt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                المفتاح: <code>{editingSetting.settingKey}</code>
-              </Typography>
-              {editingSetting.description && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {editingSetting.description}
-                </Typography>
-              )}
-
-              {editingSetting.valueType === 'BOOLEAN' ? (
-                <FormControlLabel
-                  control={<Switch checked={editValue === 'true'} onChange={(e) => setEditValue(e.target.checked ? 'true' : 'false')} />}
-                  label={editValue === 'true' ? 'مفعل' : 'غير مفعل'}
-                />
-              ) : (
-                <TextField
-                  fullWidth
-                  label="القيمة"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  type={editingSetting.valueType === 'INTEGER' || editingSetting.valueType === 'DECIMAL' ? 'number' : 'text'}
-                  multiline={editingSetting.valueType === 'JSON'}
-                  rows={editingSetting.valueType === 'JSON' ? 4 : 1}
-                />
-              )}
-
-              {editingSetting.validationRules && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  قواعد التحقق: {editingSetting.validationRules}
-                </Typography>
-              )}
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                      <FieldGroup title="المعلومات الأساسية" icon={BusinessIcon}>
+                        <Grid container spacing={1.5}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="اسم الشركة" value={formData.companyName} onChange={updateField('companyName')} required />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 3 }}>
+                            <TextField fullWidth size="small" label="كود الشركة" value={formData.companyCode} onChange={updateField('companyCode')} required />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 3 }}>
+                            <FormControlLabel
+                              control={<Switch checked={formData.companyActive} onChange={(e) => setFormData((p) => ({ ...p, companyActive: e.target.checked }))} />}
+                              label={formData.companyActive ? 'الشركة نشطة' : 'الشركة غير نشطة'}
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="نوع النشاط" value={formData.businessType} onChange={updateField('businessType')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="اسم النظام (عربي)" value={formData.systemNameAr} onChange={updateField('systemNameAr')} required />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="اسم النظام (إنجليزي)" value={formData.systemNameEn} onChange={updateField('systemNameEn')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="الهاتف" value={formData.phone} onChange={updateField('phone')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="البريد الإلكتروني" value={formData.email} onChange={updateField('email')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="الموقع" value={formData.website} onChange={updateField('website')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" label="الرقم الضريبي" value={formData.taxNumber} onChange={updateField('taxNumber')} />
+                          </Grid>
+                          <Grid size={12}>
+                            <TextField fullWidth size="small" multiline rows={2} label="العنوان" value={formData.address} onChange={updateField('address')} />
+                          </Grid>
+                        </Grid>
+                      </FieldGroup>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Box>
+              <Divider />
+              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
+                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
+                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+                </Button>
+              </Box>
             </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>إلغاء</Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveSetting}
-            disabled={saving}
-            startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-          >
-            حفظ
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </TabPanel>
+
+          <TabPanel value={tabValue} index={1}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, maxWidth: 900 }}>
+                  <FieldGroup title="قواعد التحقق من الاستحقاق" icon={SecurityIcon}>
+                    <Stack spacing={1.5}>
+                      <FormControlLabel
+                        control={<Switch checked={formData.eligibilityStrictMode} onChange={(e) => setFormData((p) => ({ ...p, eligibilityStrictMode: e.target.checked }))} />}
+                        label="تفعيل وضع الاستحقاق الصارم"
+                      />
+
+                      <TextField
+                        type="number"
+                        fullWidth
+                        size="small"
+                        label="فترة الانتظار الافتراضية (يوم)"
+                        value={formData.waitingPeriodDaysDefault}
+                        onChange={(e) => setFormData((p) => ({ ...p, waitingPeriodDaysDefault: Number(e.target.value) }))}
+                      />
+
+                      <TextField
+                        type="number"
+                        fullWidth
+                        size="small"
+                        label="فترة السماح للاستحقاق (يوم)"
+                        value={formData.eligibilityGracePeriodDays}
+                        onChange={(e) => setFormData((p) => ({ ...p, eligibilityGracePeriodDays: Number(e.target.value) }))}
+                      />
+                    </Stack>
+                  </FieldGroup>
+                </Paper>
+              </Box>
+              <Divider />
+              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
+                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
+                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+                </Button>
+              </Box>
+            </Box>
+          </TabPanel>
+
+          <TabPanel value={tabValue} index={2}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 7 }}>
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                      <FieldGroup title="الإعدادات التشغيلية" icon={SpeedIcon}>
+                        <Grid container spacing={2}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" type="number" label="SLA المطالبات (يوم)" value={formData.claimSlaDays} onChange={(e) => setFormData((p) => ({ ...p, claimSlaDays: Number(e.target.value) }))} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField fullWidth size="small" type="number" label="SLA الموافقات (يوم)" value={formData.preApprovalSlaDays} onChange={(e) => setFormData((p) => ({ ...p, preApprovalSlaDays: Number(e.target.value) }))} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 8 }}>
+                            <TextField fullWidth size="small" label="تنسيق رقم المستفيد" value={formData.beneficiaryNumberFormat} onChange={updateField('beneficiaryNumberFormat')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 2 }}>
+                            <TextField fullWidth size="small" label="البادئة" value={formData.beneficiaryNumberPrefix} onChange={updateField('beneficiaryNumberPrefix')} />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 2 }}>
+                            <TextField fullWidth size="small" type="number" label="عدد الأرقام" value={formData.beneficiaryNumberDigits} onChange={(e) => setFormData((p) => ({ ...p, beneficiaryNumberDigits: Number(e.target.value) }))} />
+                          </Grid>
+                        </Grid>
+                      </FieldGroup>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Box>
+              <Divider />
+              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
+                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
+                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+                </Button>
+              </Box>
+            </Box>
+          </TabPanel>
+
+          <TabPanel value={tabValue} index={3}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, maxWidth: 760 }}>
+                  <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
+                    </Typography>
+
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isSaving} color="success" />
+                      <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'success.main' : 'text.primary'}>
+                        {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
+                      </Typography>
+                      {isSaving && <CircularProgress size={18} />}
+                    </Stack>
+
+                    <Button variant="outlined" sx={{ mt: 2 }} startIcon={<PreviewIcon />} onClick={() => window.open('/provider/eligibility-check', '_blank')}>
+                      استعراض بوابة مقدم الخدمة
+                    </Button>
+                  </FieldGroup>
+                </Paper>
+              </Box>
+            </Box>
+          </TabPanel>
+        </Box>
+      </Card>
     </Box>
   );
 };

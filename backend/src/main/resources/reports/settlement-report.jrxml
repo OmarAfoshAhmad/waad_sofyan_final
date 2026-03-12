@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
-              name="settlement_report"
-              pageWidth="842"
-              pageHeight="595"
-              orientation="Landscape"
-              columnWidth="802"
-              leftMargin="20"
-              rightMargin="20"
-              topMargin="20"
-              bottomMargin="20">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="settlement_report" pageWidth="842" pageHeight="595" orientation="Landscape" columnWidth="802" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
 
     <property name="net.sf.jasperreports.export.pdf.tagged" value="true"/>
 
@@ -74,67 +64,139 @@
                 <reportElement x="0" y="0" width="802" height="24" backcolor="#0A4D8C"/>
             </rectangle>
 
-            <staticText><reportElement x="730" y="0" width="72" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[رقم المطالبة]]></text></staticText>
-            <staticText><reportElement x="610" y="0" width="120" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[اسم المستفيد]]></text></staticText>
-            <staticText><reportElement x="500" y="0" width="110" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[الرقم الوطني]]></text></staticText>
-            <staticText><reportElement x="420" y="0" width="80" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[تاريخ الخدمة]]></text></staticText>
-            <staticText><reportElement x="290" y="0" width="130" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[التشخيص]]></text></staticText>
-            <staticText><reportElement x="220" y="0" width="70" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[الإجمالي]]></text></staticText>
-            <staticText><reportElement x="150" y="0" width="70" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[مساهمة]]></text></staticText>
-            <staticText><reportElement x="80" y="0" width="70" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[مرفوض]]></text></staticText>
-            <staticText><reportElement x="0" y="0" width="80" height="24" forecolor="#FFFFFF"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="10" isBold="true"/></textElement><text><![CDATA[صافي]]></text></staticText>
+            <staticText>
+                <reportElement x="730" y="0" width="72" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[رقم المطالبة]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="610" y="0" width="120" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[اسم المستفيد]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="500" y="0" width="110" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[الرقم الوطني]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="420" y="0" width="80" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[تاريخ الخدمة]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="290" y="0" width="130" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[التشخيص]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="220" y="0" width="70" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[الإجمالي]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="150" y="0" width="70" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[مساهمة]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="80" y="0" width="70" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[مرفوض]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="0" y="0" width="80" height="24" forecolor="#FFFFFF"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[صافي]]></text>
+            </staticText>
         </band>
     </columnHeader>
 
     <detail>
         <band height="22">
-            <textField><reportElement x="730" y="0" width="72" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{claimNumber}]]></textFieldExpression></textField>
-            <textField><reportElement x="610" y="0" width="120" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{memberName}]]></textFieldExpression></textField>
-            <textField><reportElement x="500" y="0" width="110" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{memberNationalNumber}]]></textFieldExpression></textField>
-            <textField><reportElement x="420" y="0" width="80" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{serviceDate} != null ? $F{serviceDate}.toString() : "-"]]></textFieldExpression></textField>
-            <textField><reportElement x="290" y="0" width="130" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{diagnosisDescription} != null ? $F{diagnosisDescription} : "-"]]></textFieldExpression></textField>
-            <textField pattern="# ,##0.00"><reportElement x="220" y="0" width="70" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{requestedAmount}]]></textFieldExpression></textField>
-            <textField pattern="# ,##0.00"><reportElement x="150" y="0" width="70" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{patientShare}]]></textFieldExpression></textField>
-            <textField pattern="# ,##0.00"><reportElement x="80" y="0" width="70" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement><textFieldExpression><![CDATA[$F{rejectedAmount}]]></textFieldExpression></textField>
-            <textField pattern="# ,##0.00"><reportElement x="0" y="0" width="80" height="22"/><textElement textAlignment="Center" verticalAlignment="Middle"><font size="9" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{approvedAmount}]]></textFieldExpression></textField>
+            <textField>
+                <reportElement x="730" y="0" width="72" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{claimNumber}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="610" y="0" width="120" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{memberName}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="500" y="0" width="110" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{memberNationalNumber}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="420" y="0" width="80" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{serviceDate} != null ? $F{serviceDate}.toString() : "-"]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="290" y="0" width="130" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{diagnosisDescription} != null ? $F{diagnosisDescription} : "-"]]></textFieldExpression>
+            </textField>
+            <textField pattern="# ,##0.00">
+                <reportElement x="220" y="0" width="70" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{requestedAmount}]]></textFieldExpression>
+            </textField>
+            <textField pattern="# ,##0.00">
+                <reportElement x="150" y="0" width="70" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{patientShare}]]></textFieldExpression>
+            </textField>
+            <textField pattern="# ,##0.00">
+                <reportElement x="80" y="0" width="70" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{rejectedAmount}]]></textFieldExpression>
+            </textField>
+            <textField pattern="# ,##0.00">
+                <reportElement x="0" y="0" width="80" height="22"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{approvedAmount}]]></textFieldExpression>
+            </textField>
         </band>
     </detail>
-
-    <summary>
-        <band height="78">
-            <rectangle>
-                <reportElement x="0" y="5" width="802" height="68" backcolor="#EEF4FB"/>
-            </rectangle>
-
-            <textField pattern="# ,##0.00">
-                <reportElement x="20" y="16" width="150" height="20"/>
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="11" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{TOTAL_GROSS}]]></textFieldExpression>
-            </textField>
-            <staticText><reportElement x="20" y="40" width="150" height="18"/><textElement textAlignment="Center"><font size="9" isBold="true"/></textElement><text><![CDATA[إجمالي المطالبات]]></text></staticText>
-
-            <textField pattern="# ,##0.00">
-                <reportElement x="190" y="16" width="150" height="20"/>
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="11" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{TOTAL_PATIENT_SHARE}]]></textFieldExpression>
-            </textField>
-            <staticText><reportElement x="190" y="40" width="150" height="18"/><textElement textAlignment="Center"><font size="9" isBold="true"/></textElement><text><![CDATA[إجمالي المساهمة]]></text></staticText>
-
-            <textField pattern="# ,##0.00">
-                <reportElement x="360" y="16" width="150" height="20"/>
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="11" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{TOTAL_REJECTED}]]></textFieldExpression>
-            </textField>
-            <staticText><reportElement x="360" y="40" width="150" height="18"/><textElement textAlignment="Center"><font size="9" isBold="true"/></textElement><text><![CDATA[إجمالي المرفوض]]></text></staticText>
-
-            <textField pattern="# ,##0.00">
-                <reportElement x="530" y="16" width="252" height="20"/>
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="12" isBold="true"/></textElement>
-                <textFieldExpression><![CDATA[$P{TOTAL_NET}]]></textFieldExpression>
-            </textField>
-            <staticText><reportElement x="530" y="40" width="252" height="18"/><textElement textAlignment="Center"><font size="10" isBold="true"/></textElement><text><![CDATA[الصافي المستحق للدفع]]></text></staticText>
-        </band>
-    </summary>
 
     <pageFooter>
         <band height="18">
@@ -147,5 +209,73 @@
             </textField>
         </band>
     </pageFooter>
+
+    <summary>
+        <band height="78">
+            <rectangle>
+                <reportElement x="0" y="5" width="802" height="68" backcolor="#EEF4FB"/>
+            </rectangle>
+
+            <textField pattern="#,##0.00">
+                <reportElement x="20" y="16" width="150" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="11" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{TOTAL_GROSS}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="20" y="40" width="150" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[إجمالي المطالبات]]></text>
+            </staticText>
+
+            <textField pattern="#,##0.00">
+                <reportElement x="190" y="16" width="150" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="11" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{TOTAL_PATIENT_SHARE}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="190" y="40" width="150" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[إجمالي المساهمة]]></text>
+            </staticText>
+
+            <textField pattern="#,##0.00">
+                <reportElement x="360" y="16" width="150" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="11" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{TOTAL_REJECTED}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="360" y="40" width="150" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[إجمالي المرفوض]]></text>
+            </staticText>
+
+            <textField pattern="#,##0.00">
+                <reportElement x="530" y="16" width="252" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{TOTAL_NET}]]></textFieldExpression>
+            </textField>
+            <staticText>
+                <reportElement x="530" y="40" width="252" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <text><![CDATA[الصافي المستحق للدفع]]></text>
+            </staticText>
+        </band>
+    </summary>
 
 </jasperReport>

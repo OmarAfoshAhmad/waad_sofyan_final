@@ -102,12 +102,21 @@ public class SettlementBatchItem {
             BigDecimal grossAmount,
             BigDecimal netAmount,
             BigDecimal patientShare) {
-        
+
+        if (netAmount == null || netAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Cannot add claim " + claimId + " to batch: net amount is null or zero: " + netAmount);
+        }
+        if (grossAmount == null || grossAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException(
+                    "Cannot add claim " + claimId + " to batch: gross amount is null or zero: " + grossAmount);
+        }
+
         return SettlementBatchItem.builder()
                 .settlementBatchId(batchId)
                 .claimId(claimId)
-                .grossAmountSnapshot(grossAmount != null ? grossAmount : BigDecimal.ZERO)
-                .netAmountSnapshot(netAmount != null ? netAmount : BigDecimal.ZERO)
+                .grossAmountSnapshot(grossAmount)
+                .netAmountSnapshot(netAmount)
                 .patientShareSnapshot(patientShare != null ? patientShare : BigDecimal.ZERO)
                 .build();
     }

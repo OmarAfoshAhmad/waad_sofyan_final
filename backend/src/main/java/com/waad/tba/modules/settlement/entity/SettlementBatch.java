@@ -183,18 +183,16 @@ public class SettlementBatch {
 
     @PrePersist
     protected void onCreate() {
-        if (totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            totalAmount = new BigDecimal("0.01");
-        }
+        // totalAmount mirrors totalNetAmount — kept in sync, never falsified
+        totalAmount = (totalNetAmount != null) ? totalNetAmount : BigDecimal.ZERO;
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        if (totalAmount == null || totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            totalAmount = new BigDecimal("0.01");
-        }
+        // totalAmount mirrors totalNetAmount — kept in sync, never falsified
+        totalAmount = (totalNetAmount != null) ? totalNetAmount : BigDecimal.ZERO;
         updatedAt = LocalDateTime.now();
     }
 
@@ -210,10 +208,14 @@ public class SettlementBatch {
     }
 
     /**
-     * Check if batch can be confirmed
+     * Check if batch can be confirmed.
+     * Requires at least one claim and a positive net amount.
      */
     public boolean canConfirm() {
-        return status == BatchStatus.DRAFT && totalClaimsCount > 0;
+        return status == BatchStatus.DRAFT
+                && totalClaimsCount > 0
+                && totalNetAmount != null
+                && totalNetAmount.compareTo(BigDecimal.ZERO) > 0;
     }
 
     /**
