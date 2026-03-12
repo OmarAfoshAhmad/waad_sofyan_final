@@ -69,14 +69,13 @@ public class RbacDataInitializer implements CommandLineRunner {
 
         String envPassword = System.getenv("ADMIN_DEFAULT_PASSWORD");
         if (envPassword == null || envPassword.isBlank()) {
-            // SECURITY: Warn only when creation is needed.
             log.error("╔═══════════════════════════════════════════════════════════════╗");
-            log.error("║  SECURITY WARNING: ADMIN_DEFAULT_PASSWORD env var is NOT set! ║");
-            log.error("║  Super admin will be created with the insecure default.        ║");
-            log.error("║  Set ADMIN_DEFAULT_PASSWORD in your .env before first run.     ║");
+            log.error("║  SECURITY CRITICAL: ADMIN_DEFAULT_PASSWORD is NOT SET!        ║");
+            log.error("║  New super admin creation is BLOCKED for security.             ║");
             log.error("╚═══════════════════════════════════════════════════════════════╝");
+            return; // BLOCKED: No hardcoded fallback
         }
-        String password = (envPassword != null && !envPassword.isBlank()) ? envPassword : "Admin@123";
+        String password = envPassword;
 
         User superAdmin = User.builder()
                 .username(username)

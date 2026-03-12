@@ -199,7 +199,7 @@ const UserCreate = () => {
     } catch (err) {
       console.error('[UserCreate] Submit error:', err);
       const errorMessage =
-        err?.response?.data?.message || err.message || 'فشل إنشاء المستخدم. يرجى المحاولة لاحقاً';
+        err?.response?.data?.messageAr || err?.response?.data?.message || err.message || 'فشل إنشاء المستخدم. يرجى المحاولة لاحقاً';
       setSubmitError(errorMessage);
 
       openSnackbar({

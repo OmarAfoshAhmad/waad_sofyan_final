@@ -27,6 +27,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
+
 /**
  * Security Configuration for the TBA-WAAD system.
  * 
@@ -45,6 +47,9 @@ public class SecurityConfig {
     private final SessionAuthenticationFilter sessionAuthenticationFilter; // Phase B: Session support
     private final UserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder; // Injected from PasswordEncoderConfig
+
+    @Value("${app.cors.allowed-origins:https://waadapp.ly,https://www.waadapp.ly}")
+    private List<String> corsAllowedOrigins;
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -153,11 +158,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // PRODUCTION: strictly allow only waadapp.ly domains
-        configuration.setAllowedOriginPatterns(List.of(
-                "https://waadapp.ly",
-                "https://www.waadapp.ly",
-                "http://localhost:3000"));
+        configuration.setAllowedOriginPatterns(corsAllowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Authorization", "X-Employer-ID", "X-XSRF-TOKEN"));

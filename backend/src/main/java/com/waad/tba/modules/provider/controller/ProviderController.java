@@ -521,7 +521,7 @@ public class ProviderController {
      * GET /api/v1/providers/by-employer/{employerId}
      */
     @GetMapping("/by-employer/{employerId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getProvidersByEmployer(
             @PathVariable("employerId") Long employerId) {
         log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", employerId);

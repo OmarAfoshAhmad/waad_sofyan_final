@@ -50,3 +50,8 @@ coverage/
 # Misc
 ############################
 *.retry
+
+############################
+# Local dev Docker overrides
+############################
+docker-compose.override.yml

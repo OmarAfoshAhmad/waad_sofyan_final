@@ -16,6 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+import java.nio.charset.StandardCharsets;
 
 /**
  * User Security Service
@@ -138,25 +142,28 @@ public class UserSecurityService {
         passwordResetTokenRepository.invalidateAllUserTokens(user.getId());
 
         // Generate new token
-        String token = UUID.randomUUID().toString();
+        String rawToken = UUID.randomUUID().toString();
+        String hashedToken = hashToken(rawToken);
+        
         int expiryMinutes = Math.max(5, Math.min(1440, systemSettingsService.getPasswordResetTokenExpiryMinutes()));
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(expiryMinutes);
 
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .userId(user.getId())
-                .token(token)
+                .email(user.getEmail()) // Required by entity
+                .token(hashedToken)
                 .expiresAt(expiresAt)
                 .used(false)
                 .build();
 
         passwordResetTokenRepository.save(resetToken);
 
-        // Send email
-        String resetUrl = config.getFrontend().getUrl() + "/auth/reset-password?token=" + token;
+        // Send email with RAW token
+        String resetUrl = config.getFrontend().getUrl() + "/auth/reset-password?token=" + rawToken;
         PasswordResetData emailData = new PasswordResetData(
                 user.getEmail(),
                 user.getFullName(),
-                token,
+                rawToken,
                 resetUrl);
         emailService.sendPasswordReset(emailData);
 
@@ -183,9 +190,10 @@ public class UserSecurityService {
             throw new IllegalArgumentException("Passwords do not match");
         }
 
-        // Find token
-        PasswordResetToken token = passwordResetTokenRepository.findByToken(dto.getToken())
-                .orElseThrow(() -> new InvalidResetTokenException("Invalid or expired reset token", dto.getToken()));
+        // Find token (look up by HASH)
+        String hashedToken = hashToken(dto.getToken());
+        PasswordResetToken token = passwordResetTokenRepository.findByToken(hashedToken)
+                .orElseThrow(() -> new InvalidResetTokenException("Invalid or expired reset token", "TOKEN_NOT_FOUND"));
 
         // Validate token
         if (!token.isValid()) {
@@ -232,25 +240,27 @@ public class UserSecurityService {
         log.info("Sending email verification for user: {}", user.getEmail());
 
         // Generate token
-        String token = UUID.randomUUID().toString();
+        String rawToken = UUID.randomUUID().toString();
+        String hashedToken = hashToken(rawToken);
+        
         LocalDateTime expiresAt = LocalDateTime.now()
                 .plusHours(config.getSecurity().getEmailVerificationTokenValidityHours());
 
         EmailVerificationToken verificationToken = EmailVerificationToken.builder()
                 .userId(user.getId())
-                .token(token)
+                .token(hashedToken)
                 .expiresAt(expiresAt)
                 .verified(false)
                 .build();
 
         emailVerificationTokenRepository.save(verificationToken);
 
-        // Send email
-        String verificationUrl = config.getFrontend().getUrl() + "/auth/verify-email?token=" + token;
+        // Send email with RAW token
+        String verificationUrl = config.getFrontend().getUrl() + "/auth/verify-email?token=" + rawToken;
         EmailVerificationData emailData = new EmailVerificationData(
                 user.getEmail(),
                 user.getFullName(),
-                token,
+                rawToken,
                 verificationUrl);
         emailService.sendEmailVerification(emailData);
 
@@ -266,12 +276,13 @@ public class UserSecurityService {
      */
     @Transactional
     public void verifyEmail(VerifyEmailDto dto, String ipAddress, String userAgent) {
-        log.info("Email verification with token: {}", dto.getToken().substring(0, 8) + "...");
+        log.info("Email verification triggered");
 
-        // Find token
-        EmailVerificationToken token = emailVerificationTokenRepository.findByToken(dto.getToken())
+        // Find token (look up by HASH)
+        String hashedToken = hashToken(dto.getToken());
+        EmailVerificationToken token = emailVerificationTokenRepository.findByToken(hashedToken)
                 .orElseThrow(
-                        () -> new InvalidResetTokenException("Invalid or expired verification token", dto.getToken()));
+                        () -> new InvalidResetTokenException("Invalid or expired verification token", "TOKEN_NOT_FOUND"));
 
         // Validate token
         if (!token.isValid()) {
@@ -547,5 +558,21 @@ public class UserSecurityService {
 
         log.info("Cleanup: Deleted {} password reset tokens and {} verification tokens",
                 deletedResetTokens, deletedVerificationTokens);
+    }
+
+    /**
+     * Hashing helper for tokens and code-based identifiers.
+     * Uses SHA-256 with Base64 encoding.
+     */
+    private String hashToken(String token) {
+        if (token == null) return null;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            log.error("Failed to hash token: SHA-256 algorithm not found", e);
+            throw new RuntimeException("Security configuration error: MessageDigest SHA-256 missing");
+        }
     }
 }

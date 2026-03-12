@@ -417,9 +417,7 @@ public class ClaimService {
         // SETTLED/REJECTED (manual entry fixes - Backlog Flow)
         if (claim.getStatus() != ClaimStatus.DRAFT &&
                 claim.getStatus() != ClaimStatus.APPROVED &&
-                claim.getStatus() != ClaimStatus.NEEDS_CORRECTION &&
-                claim.getStatus() != ClaimStatus.SETTLED &&
-                claim.getStatus() != ClaimStatus.REJECTED) {
+                claim.getStatus() != ClaimStatus.NEEDS_CORRECTION) {
             throw new IllegalStateException(
                     "لا يمكن تعديل المطالبة في حالتها الحالية: " + claim.getStatus());
         }
@@ -1077,7 +1075,7 @@ public class ClaimService {
         // Step 5: Validate coverage limits using BenefitPolicy (Single Source of Truth)
         // CRITICAL: Fetch member with lock to ensure atomic limit validation
         Member member = memberRepository.findByIdWithLock(claim.getMember().getId())
-                .orElse(claim.getMember());
+                .orElseThrow(() -> new BusinessRuleException("العضو غير موجود أو تم حذفه"));
 
         LocalDate serviceDate = claim.getServiceDate() != null ? claim.getServiceDate() : LocalDate.now();
 
@@ -1385,11 +1383,13 @@ public class ClaimService {
             try {
                 Claim failedClaim = claimRepository.findById(id).orElse(null);
                 if (failedClaim != null && failedClaim.getStatus() == ClaimStatus.APPROVAL_IN_PROGRESS) {
-                    failedClaim.setReviewerComment("فشل في المعالجة: " + e.getMessage());
-                    failedClaim.setStatus(ClaimStatus.REJECTED);
+                    failedClaim.setReviewerComment("فشل تقني في المعالجة: " + e.getMessage());
+                    // Transition back to UNDER_REVIEW so it can be retried, instead of
+                    // auto-rejecting
+                    failedClaim.setStatus(ClaimStatus.UNDER_REVIEW);
                     failedClaim.setUpdatedBy("system-async");
                     claimRepository.save(failedClaim);
-                    log.info("🔄 Claim {} transitioned to REJECTED due to processing failure", id);
+                    log.info("🔄 Claim {} reverted to UNDER_REVIEW due to technical processing failure", id);
                 }
             } catch (Exception rollbackError) {
                 log.error("❌ Failed to rollback claim {} to REJECTED: {}", id, rollbackError.getMessage());
@@ -2017,8 +2017,17 @@ public class ClaimService {
      */
     public List<ClaimViewDto> getClaimsByVisit(Long visitId) {
         log.info("🔍 Fetching claims for visit: {}", visitId);
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+
         List<Claim> claims = claimRepository.findByVisitId(visitId);
+
+        // SECURITY: Verify user can access each claim in this visit (FIXED 2026-03-12)
         return claims.stream()
+                .filter(claim -> authorizationService.canAccessClaim(currentUser, claim.getId()))
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());
     }
@@ -2031,8 +2040,22 @@ public class ClaimService {
         log.info("🔍 Fetching claim by number: {}", claimNumber);
 
         User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+
         Claim claim = claimRepository.findByClaimNumber(claimNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim not found with number: " + claimNumber));
+
+        // SECURITY: Verify access authorization (FIXED 2026-03-12)
+        if (!authorizationService.canAccessClaim(currentUser, claim.getId())) {
+            log.warn("❌ Access denied: user {} attempted to access claim number {}",
+                    currentUser.getUsername(), claimNumber);
+            throw new AccessDeniedException("Access denied to this claim");
+        }
+
+        // MEDICAL REVIEWER ISOLATION: Validate read access
+        reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
 
         ClaimViewDto dto = claimMapper.toViewDto(claim);
 
@@ -2126,31 +2149,19 @@ public class ClaimService {
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
-        // 1. Business Validation: Cannot delete claims that are part of a formal
-        // settlement batch
-        // Note: SETTLED status alone does NOT block deletion — batch-entry claims are
-        // created
-        // directly as SETTLED. Only a non-null settlementBatchId means the claim is
-        // locked
-        // inside a payment batch and must NOT be deleted.
-        if (claim.getSettlementBatchId() != null) {
-            throw new BusinessRuleException("لا يمكن حذف مطالبة مرتبطة بدفعة سداد مفعلة");
+        // 1. Business Validation: Cannot delete BATCHED or SETTLED claims
+        // (settlement_batch_items and settlement_batches were dropped by V117)
+        if (claim.getStatus() == ClaimStatus.BATCHED || claim.getStatus() == ClaimStatus.SETTLED) {
+            throw new BusinessRuleException("لا يمكن حذف مطالبة في حالة مفعلة أو مسواة");
         }
 
         // 2. Manual Cleanup for RESTRICTED tables (bypass DB constraint fails)
-        // Note: These should ideally be ON DELETE CASCADE via V113 migration,
-        // but manual cleanup ensures immediate success without waiting for server
-        // restart.
+        // Note: audit logs have ON DELETE RESTRICT, so purge them first.
 
         log.warn("🧹 Cleaning up constrained data for claim {}...", id);
 
         // Delete Audit Logs
         em.createNativeQuery("DELETE FROM claim_audit_logs WHERE claim_id = :cid")
-                .setParameter("cid", id)
-                .executeUpdate();
-
-        // Delete Settlement Batch Item References
-        em.createNativeQuery("DELETE FROM settlement_batch_items WHERE claim_id = :cid")
                 .setParameter("cid", id)
                 .executeUpdate();
 

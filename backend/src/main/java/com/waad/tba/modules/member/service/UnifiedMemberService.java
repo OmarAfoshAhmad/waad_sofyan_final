@@ -1115,8 +1115,7 @@ public class UnifiedMemberService {
         String claimsSubquery = "(SELECT id FROM claims WHERE member_id IN (" + idList + "))";
         // claim_audit_logs.claim_id REFERENCES claims(id) ON DELETE RESTRICT
         jdbcTemplate.update("DELETE FROM claim_audit_logs WHERE claim_id IN " + claimsSubquery);
-        // settlement_batch_items.claim_id REFERENCES claims(id) ON DELETE RESTRICT
-        jdbcTemplate.update("DELETE FROM settlement_batch_items WHERE claim_id IN " + claimsSubquery);
+        // settlement_batch_items was dropped by V117 — no cleanup needed here
         jdbcTemplate.update("DELETE FROM claims WHERE member_id IN (" + idList + ")");
         jdbcTemplate.update("DELETE FROM preauthorization_requests WHERE member_id IN (" + idList + ")");
         jdbcTemplate.update("DELETE FROM visits WHERE member_id IN (" + idList + ")");

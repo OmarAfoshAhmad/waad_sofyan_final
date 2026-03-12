@@ -263,7 +263,7 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
       // Clear fields after success
       setForm((prev) => ({ ...prev, newPassword: '', confirmPassword: '' }));
     } catch (err) {
-      const errorMessage = err?.response?.data?.message || 'فشل إعادة تعيين كلمة المرور';
+      const errorMessage = err?.response?.data?.messageAr || err?.response?.data?.message || 'فشل إعادة تعيين كلمة المرور';
       openSnackbar({
         open: true,
         message: errorMessage,
@@ -786,7 +786,7 @@ const UserEdit = () => {
       );
     } catch (err) {
       console.error('[UserEdit] Load error:', err);
-      setSubmitError(err?.response?.data?.message || 'فشل تحميل بيانات المستخدم');
+      setSubmitError(err?.response?.data?.messageAr || err?.response?.data?.message || 'فشل تحميل بيانات المستخدم');
     } finally {
       setLoading(false);
       setRolesLoading(false);
@@ -878,7 +878,7 @@ const UserEdit = () => {
       navigate('/admin/users');
     } catch (err) {
       console.error('[UserEdit] Submit error:', err);
-      const errorMessage = err?.response?.data?.message || 'فشل تحديث المستخدم. يرجى المحاولة لاحقاً';
+      const errorMessage = err?.response?.data?.messageAr || err?.response?.data?.message || 'فشل تحديث المستخدم. يرجى المحاولة لاحقاً';
       setSubmitError(errorMessage);
 
       openSnackbar({

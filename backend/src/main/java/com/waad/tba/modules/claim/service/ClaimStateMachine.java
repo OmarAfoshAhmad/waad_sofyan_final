@@ -180,7 +180,7 @@ public class ClaimStateMachine {
                 default -> Set.of();
             };
             case APPROVAL_IN_PROGRESS -> switch (to) {
-                case APPROVED, REJECTED -> Set.of(ROLE_ACCOUNTANT, ROLE_REVIEWER);
+                case APPROVED, REJECTED, UNDER_REVIEW -> Set.of(ROLE_ACCOUNTANT, ROLE_REVIEWER);
                 default -> Set.of();
             };
             case NEEDS_CORRECTION -> switch (to) {

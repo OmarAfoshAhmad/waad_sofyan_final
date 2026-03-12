@@ -146,7 +146,8 @@ export const unwrapApiResponse = (response) => {
  * @returns {string} - User-friendly error message
  */
 export const extractErrorMessage = (error) => {
-  // Axios error with response
+  // Axios error with response — prefer Arabic message (messageAr) first
+  if (error?.response?.data?.messageAr) return error.response.data.messageAr;
   if (error?.response?.data?.message) return error.response.data.message;
 
   // Direct error message

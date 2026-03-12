@@ -1,5 +1,7 @@
 package com.waad.tba.modules.preauthorization.service;
 
+import com.waad.tba.common.file.FileUploadResult;
+import com.waad.tba.common.file.LocalFileStorageService;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorizationAttachment;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationAttachmentRepository;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
@@ -29,9 +31,7 @@ public class PreAuthorizationAttachmentService {
 
     private final PreAuthorizationAttachmentRepository attachmentRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
-
-    @Value("${app.upload.path:uploads}")
-    private String uploadPath;
+    private final LocalFileStorageService fileStorageService;
 
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private static final List<String> ALLOWED_TYPES = List.of(
@@ -68,28 +68,15 @@ public class PreAuthorizationAttachmentService {
         }
 
         try {
-            // Create directory structure
-            String directoryPath = uploadPath + "/pre-authorizations/" + preAuthorizationId;
-            Path directory = Paths.get(directoryPath);
-            Files.createDirectories(directory);
-
-            // Generate unique filename
-            String originalFileName = file.getOriginalFilename();
-            String extension = originalFileName != null && originalFileName.contains(".") 
-                    ? originalFileName.substring(originalFileName.lastIndexOf("."))
-                    : "";
-            String storedFileName = UUID.randomUUID().toString() + extension;
-            
-            // Save file
-            Path filePath = directory.resolve(storedFileName);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            // Use centralized file storage service
+            FileUploadResult uploadResult = fileStorageService.upload(file, "pre-authorizations/" + preAuthorizationId);
 
             // Create attachment record
             PreAuthorizationAttachment attachment = PreAuthorizationAttachment.builder()
                     .preAuthorizationId(preAuthorizationId)
-                    .originalFileName(originalFileName)
-                    .storedFileName(storedFileName)
-                    .filePath(filePath.toString())
+                    .originalFileName(file.getOriginalFilename())
+                    .storedFileName(uploadResult.getFileName())
+                    .filePath(uploadResult.getFilePath()) // Absolute path on disk
                     .fileType(contentType)
                     .fileSize(file.getSize())
                     .attachmentType(attachmentType)
@@ -101,7 +88,7 @@ public class PreAuthorizationAttachmentService {
             
             return saved;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Failed to upload attachment: {}", e.getMessage());
             throw new RuntimeException("Failed to save file: " + e.getMessage());
         }
@@ -129,12 +116,15 @@ public class PreAuthorizationAttachmentService {
         PreAuthorizationAttachment attachment = getAttachment(attachmentId);
         
         try {
-            Path filePath = Paths.get(attachment.getFilePath());
-            if (!Files.exists(filePath)) {
-                throw new RuntimeException("File not found on disk: " + attachment.getOriginalFileName());
+            // Extract fileKey from filePath for centralized download
+            String filePath = attachment.getFilePath();
+            String fileKey = filePath;
+            if (filePath.contains("/uploads/")) {
+                fileKey = filePath.substring(filePath.indexOf("/uploads/") + 9);
             }
-            return Files.readAllBytes(filePath);
-        } catch (IOException e) {
+            
+            return fileStorageService.download(fileKey);
+        } catch (Exception e) {
             log.error("Failed to read attachment {}: {}", attachmentId, e.getMessage());
             throw new RuntimeException("Failed to read file: " + e.getMessage());
         }
@@ -148,17 +138,23 @@ public class PreAuthorizationAttachmentService {
         PreAuthorizationAttachment attachment = getAttachment(attachmentId);
         
         try {
-            // Delete physical file
-            Path filePath = Paths.get(attachment.getFilePath());
-            Files.deleteIfExists(filePath);
+            // Extract fileKey from filePath
+            String filePath = attachment.getFilePath();
+            if (filePath != null) {
+                String fileKey = filePath;
+                if (filePath.contains("/uploads/")) {
+                    fileKey = filePath.substring(filePath.indexOf("/uploads/") + 9);
+                }
+                fileStorageService.delete(fileKey);
+            }
             
             // Delete record
             attachmentRepository.delete(attachment);
             log.info("✅ Deleted attachment {} from pre-authorization {}", 
                     attachmentId, attachment.getPreAuthorizationId());
             
-        } catch (IOException e) {
-            log.error("Failed to delete attachment file: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Failed to delete attachment: {}", e.getMessage());
             // Still delete the record even if file deletion fails
             attachmentRepository.delete(attachment);
         }

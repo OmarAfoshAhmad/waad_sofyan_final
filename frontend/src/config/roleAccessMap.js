@@ -51,7 +51,6 @@ export const ROLE_RESOURCE_ACCESS = Object.freeze({
     'providers',
     'claims',
     'documents',
-    'provider_mapping',
     'medical_catalog'
   ],
 

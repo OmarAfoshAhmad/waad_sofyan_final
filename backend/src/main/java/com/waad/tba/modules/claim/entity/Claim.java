@@ -232,22 +232,6 @@ public class Claim {
     // ========== Provider Account Settlement (Phase: Settlement Refactor)
     // ==========
 
-    /**
-     * Settlement batch reference (NEW Provider Account Settlement model)
-     * 
-     * Links claim to a settlement batch when status = BATCHED.
-     * Set when claim is added to a batch, cleared if removed from batch.
-     * 
-     * Workflow:
-     * - APPROVED → addToBatch() → BATCHED (settlementBatchId set)
-     * - BATCHED → removeFromBatch() → APPROVED (settlementBatchId cleared)
-     * - BATCHED → batchPaid() → SETTLED (settlementBatchId retained for audit)
-     * 
-     * @since Provider Account Settlement Phase 1
-     */
-    @Column(name = "settlement_batch_id")
-    private Long settlementBatchId;
-
     // ========== SLA Tracking Fields (Phase 1: SLA Implementation) ==========
 
     /**
@@ -556,51 +540,8 @@ public class Claim {
         attachment.setClaim(null);
     }
 
-    // ========== Provider Account Settlement Helper Methods ==========
-
-    /**
-     * Check if claim is currently in a settlement batch
-     */
-    public boolean isInBatch() {
-        return settlementBatchId != null && status == ClaimStatus.BATCHED;
-    }
-
-    /**
-     * Check if claim can be added to a batch
-     * Only APPROVED claims can be batched
-     */
-    public boolean canBeAddedToBatch() {
-        return status == ClaimStatus.APPROVED && settlementBatchId == null;
-    }
-
-    /**
-     * Add claim to a batch (state transition helper)
-     */
-    public void addToBatch(Long batchId) {
-        if (!canBeAddedToBatch()) {
-            throw new IllegalStateException(
-                    "Cannot add claim to batch. Status must be APPROVED and not already in a batch. " +
-                            "Current status: " + status + ", batchId: " + settlementBatchId);
-        }
-        this.settlementBatchId = batchId;
-        this.status = ClaimStatus.BATCHED;
-    }
-
-    /**
-     * Remove claim from batch (state transition helper)
-     */
-    public void removeFromBatch() {
-        if (status != ClaimStatus.BATCHED) {
-            throw new IllegalStateException(
-                    "Cannot remove claim from batch. Status must be BATCHED. Current status: " + status);
-        }
-        this.settlementBatchId = null;
-        this.status = ClaimStatus.APPROVED;
-    }
-
     /**
      * Get the net amount payable to provider
-     * Used when adding to batch for amount snapshot
      */
     public BigDecimal getNetPayableAmount() {
         return netProviderAmount != null ? netProviderAmount

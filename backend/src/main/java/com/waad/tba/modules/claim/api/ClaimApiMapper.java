@@ -252,8 +252,6 @@ public class ClaimApiMapper {
                                 .paymentReference(dto.getPaymentReference())
                                 .settledAt(dto.getSettledAt())
                                 .settlementNotes(dto.getSettlementNotes())
-                                .settlementBatchId(dto.getSettlementBatchId())
-                                .settlementBatchNumber(dto.getSettlementBatchNumber())
 
                                 // SLA tracking (READ-ONLY)
                                 .expectedCompletionDate(dto.getExpectedCompletionDate())

@@ -69,7 +69,7 @@ public class ProviderContractController {
      * List all contracts (paginated)
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     @Operation(summary = "List all contracts", description = "Get paginated list of all provider contracts")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getAll(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {

@@ -178,18 +178,6 @@ public class ClaimResponse {
      */
     private String settlementNotes;
 
-    /**
-     * Settlement batch ID (if settled via batch)
-     * READ-ONLY - Link to settlement batch
-     */
-    private Long settlementBatchId;
-
-    /**
-     * Settlement batch number (for display)
-     * READ-ONLY - Formatted reference from settlement batch
-     */
-    private String settlementBatchNumber;
-
     // ═══════════════════════════════════════════════════════════════════════════
     // SLA TRACKING (READ-ONLY)
     // ═══════════════════════════════════════════════════════════════════════════
@@ -379,7 +367,7 @@ public class ClaimResponse {
         private Integer coveragePercent;
         private Integer patientSharePercent;
         private BigDecimal benefitLimit; // Added for UI display
-        private BigDecimal usedAmount;   // Added for UI display
+        private BigDecimal usedAmount; // Added for UI display
         private BigDecimal remainingAmount; // Added for UI display
 
         // Detailed Audit Fields

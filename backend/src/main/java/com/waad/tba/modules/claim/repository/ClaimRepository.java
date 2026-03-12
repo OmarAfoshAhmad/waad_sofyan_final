@@ -347,22 +347,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("fromDate") java.time.LocalDate fromDate,
                         @Param("toDate") java.time.LocalDate toDate);
 
-        @Query("SELECT DISTINCT c FROM Claim c " +
-                        "LEFT JOIN FETCH c.member m " +
-                        "LEFT JOIN FETCH m.benefitPolicy bp " +
-                        "LEFT JOIN FETCH c.preAuthorization pa " +
-                        "LEFT JOIN FETCH c.lines cl " +
-                        "LEFT JOIN FETCH cl.medicalService ms " +
-                        "WHERE c.active = true " +
-                        "AND c.providerId = :providerId " +
-                        "AND c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED " +
-                        "AND c.settlementBatchId IN :batchIds " +
-                        "AND (:employerOrgId IS NULL OR c.member.employer.id = :employerOrgId)")
-        List<Claim> findSettledClaimsByBatches(
-                        @Param("providerId") Long providerId,
-                        @Param("batchIds") List<Long> batchIds,
-                        @Param("employerOrgId") Long employerOrgId);
-
         /**
          * Count claims by provider ID.
          */
@@ -1138,24 +1122,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         // ═══════════════════════════════════════════════════════════════════════════════
 
         /**
-         * Find APPROVED claims for a provider that are not in any batch.
-         * Used to get available claims for settlement batching.
-         * Uses JOIN FETCH to load member data for display.
-         */
-        @Query("SELECT c FROM Claim c " +
-                        "LEFT JOIN FETCH c.member " +
-                        "WHERE c.active = true " +
-                        "AND c.providerId = :providerId " +
-                        "AND c.status = :status " +
-                        "AND c.settlementBatchId IS NULL " +
-                        "ORDER BY c.createdAt ASC")
-        List<Claim> findByProviderIdAndStatusAndSettlementBatchIdIsNull(
-                        @Param("providerId") Long providerId,
-                        @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status);
-
-        /**
          * Find claims by provider and status for settlement candidate evaluation.
-         * Settlement batch linkage is evaluated at service layer to handle legacy data.
          */
         @Query("SELECT c FROM Claim c " +
                         "LEFT JOIN FETCH c.member " +

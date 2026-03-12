@@ -29,18 +29,17 @@ import java.util.Set;
  * │ APPROVED │ │ REJECTED │ ─── Terminal (requires comment)
  * └────┬─────┘ └──────────┘
  * │
- * ├─────────────────────────┐
- * │ addToBatch() │ settle() (legacy direct)
- * ▼ │
- * ┌──────────┐ │
- * │ BATCHED │ ── In settlement │
- * └────┬─────┘ batch │
- * │ │
- * │ batchPaid() │
- * ▼ ▼
+ * │ settle()
+ * ▼
  * ┌──────────────────────────────┐
  * │ SETTLED │ ─── Payment completed (Terminal)
  * └──────────────────────────────┘
+ * 
+ * NOTE: BATCHED status is retained for historical data compatibility.
+ * The settlement batch system (tables: settlement_batches,
+ * settlement_batch_items)
+ * was removed in V117. Any claim in BATCHED state from legacy data is treated
+ * as APPROVED for all practical purposes.
  * 
  * LEGACY MAPPING:
  * - PENDING_REVIEW → now SUBMITTED or UNDER_REVIEW
@@ -132,7 +131,7 @@ public enum ClaimStatus {
 
     /**
      * Check if this status allows editing claim details.
-     * Only DRAFT and NEEDS_CORRECTION allow edits.
+     * Allowed: DRAFT, NEEDS_CORRECTION, and APPROVED (for manual entry model).
      */
     public boolean allowsEdit() {
         return this == DRAFT || this == APPROVED || this == NEEDS_CORRECTION;
@@ -148,7 +147,7 @@ public enum ClaimStatus {
             case SUBMITTED -> Set.of(UNDER_REVIEW);
             case UNDER_REVIEW -> Set.of(APPROVAL_IN_PROGRESS, REJECTED, NEEDS_CORRECTION);
             case NEEDS_CORRECTION -> Set.of(APPROVED); // Corrected → back to APPROVED
-            case APPROVAL_IN_PROGRESS -> Set.of(APPROVED, REJECTED); // Async result
+            case APPROVAL_IN_PROGRESS -> Set.of(APPROVED, REJECTED, UNDER_REVIEW); // Async result + Recovery
             case APPROVED -> Set.of(BATCHED, NEEDS_CORRECTION); // Finance handoff or reviewer suspension
             case BATCHED -> Set.of(SETTLED, APPROVED); // Settle from batch, or unbatch back to APPROVED
             case REJECTED, SETTLED -> Collections.emptySet(); // Terminal

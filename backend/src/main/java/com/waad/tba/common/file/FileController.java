@@ -72,7 +72,9 @@ import org.springframework.web.multipart.MultipartFile;
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {
         
-        String fileKey = folder + "/" + filename;
+        String sanitizedFolder = sanitizePathPart(folder);
+        String sanitizedFilename = sanitizePathPart(filename);
+        String fileKey = sanitizedFolder + "/" + sanitizedFilename;
         log.info("Downloading file: {}", fileKey);
         
         try {
@@ -106,7 +108,9 @@ import org.springframework.web.multipart.MultipartFile;
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {
         
-        String fileKey = folder + "/" + filename;
+        String sanitizedFolder = sanitizePathPart(folder);
+        String sanitizedFilename = sanitizePathPart(filename);
+        String fileKey = sanitizedFolder + "/" + sanitizedFilename;
         log.info("Previewing file: {}", fileKey);
         
         try {
@@ -170,7 +174,9 @@ import org.springframework.web.multipart.MultipartFile;
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {
         
-        String fileKey = folder + "/" + filename;
+        String sanitizedFolder = sanitizePathPart(folder);
+        String sanitizedFilename = sanitizePathPart(filename);
+        String fileKey = sanitizedFolder + "/" + sanitizedFilename;
         log.info("Deleting file: {}", fileKey);
         
         try {
@@ -199,12 +205,16 @@ import org.springframework.web.multipart.MultipartFile;
             @PathVariable("filename") String filename,
             @RequestParam(value = "expiryMinutes", defaultValue = "60") int expiryMinutes) {
         
-        String fileKey = folder + "/" + filename;
+        String sanitizedFolder = sanitizePathPart(folder);
+        String sanitizedFilename = sanitizePathPart(filename);
+        String fileKey = sanitizedFolder + "/" + sanitizedFilename;
         log.info("Generating presigned URL for: {}", fileKey);
         
         try {
             String url = fileStorageService.getPresignedUrl(fileKey, expiryMinutes);
-            return ResponseEntity.ok(url);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_PLAIN) // Fix potential XSS by specifying text/plain
+                    .body(url);
             
         } catch (FileStorageException e) {
             log.error("URL generation failed: {}", e.getMessage());
@@ -225,9 +235,17 @@ import org.springframework.web.multipart.MultipartFile;
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {
         
-        String fileKey = folder + "/" + filename;
+        String sanitizedFolder = sanitizePathPart(folder);
+        String sanitizedFilename = sanitizePathPart(filename);
+        String fileKey = sanitizedFolder + "/" + sanitizedFilename;
         boolean exists = fileStorageService.exists(fileKey);
         return ResponseEntity.ok(exists);
+    }
+
+    private String sanitizePathPart(String part) {
+        if (part == null) return "";
+        // Remove path traversal and directory separators
+        return part.replace("..", "").replace("/", "").replace("\\", "");
     }
 }
 

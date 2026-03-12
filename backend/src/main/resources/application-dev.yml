@@ -1,9 +1,9 @@
 spring:
   datasource:
-    url: jdbc:postgresql://db:5432/tba_waad_system
-    username: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tba_waad_system}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${DB_PASSWORD:12345}
-  
+
   jpa:
     show-sql: true
     hibernate:
@@ -19,6 +19,10 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET:waad_tba_system_secure_secret_long_string_2026_9dda11e5_28fd_4086_a6c7}
+
+app:
+  cors:
+    allowed-origins: "https://waadapp.ly,https://www.waadapp.ly,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000"
 
 logging:
   level:

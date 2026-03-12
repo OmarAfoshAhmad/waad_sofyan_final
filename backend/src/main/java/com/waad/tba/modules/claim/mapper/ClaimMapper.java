@@ -549,14 +549,6 @@ public class ClaimMapper {
     }
 
     public ClaimViewDto toViewDto(Claim claim) {
-        return toViewDto(claim, null);
-    }
-
-    /**
-     * PURE TRANSFORMATION: Maps Claim to View DTO.
-     * Related data must be pre-loaded or passed as arguments.
-     */
-    public ClaimViewDto toViewDto(Claim claim, String settlementBatchNumber) {
         ClaimViewDto dto = ClaimViewDto.builder()
                 .id(claim.getId())
                 .claimNumber("CLM-" + claim.getId())
@@ -601,8 +593,6 @@ public class ClaimMapper {
                 .paymentReference(claim.getPaymentReference())
                 .settledAt(claim.getSettledAt())
                 .settlementNotes(claim.getSettlementNotes())
-                .settlementBatchId(claim.getSettlementBatchId())
-                .settlementBatchNumber(settlementBatchNumber)
                 .expectedCompletionDate(claim.getExpectedCompletionDate())
                 .actualCompletionDate(claim.getActualCompletionDate())
                 .withinSla(claim.getWithinSla())
