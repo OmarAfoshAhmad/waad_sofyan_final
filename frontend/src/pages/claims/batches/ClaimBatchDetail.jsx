@@ -24,7 +24,8 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions
+    DialogActions,
+    Checkbox
 } from '@mui/material';
 
 import {
@@ -90,6 +91,7 @@ export default function ClaimBatchDetail() {
     const [statusFilter, setStatusFilter] = useState('');
     const [printClaims, setPrintClaims] = useState([]);
     const [selectedClaimIds, setSelectedClaimIds] = useState([]);
+    const [singleClaimForPrint, setSingleClaimForPrint] = useState(null);
     const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
     const [suspendComment, setSuspendComment] = useState('');
     const [suspendingClaimId, setSuspendingClaimId] = useState(null);
@@ -99,6 +101,7 @@ export default function ClaimBatchDetail() {
     });
     const batchReportRef = useRef(null);
     const rejectedReportRef = useRef(null);
+    const singleClaimPrintRef = useRef(null);
     const { enqueueSnackbar } = useSnackbar();
     const queryClient = useQueryClient();
 
@@ -355,8 +358,16 @@ export default function ClaimBatchDetail() {
         }
     });
 
+    const handlePrintSingle = useReactToPrint({
+        contentRef: singleClaimPrintRef,
+        documentTitle: `مطالبة_${batchCode}`,
+        pageStyle: `@page { size: A4 portrait; margin: 15mm; } body { direction: rtl; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`,
+    });
+
     const handleDownloadPdf = async () => {
-        const batchId = realBatch?.id;
+        // Validate batchId: extract only numeric/UUID-safe chars to prevent injection
+        const rawBatchId = realBatch?.id;
+        const batchId = rawBatchId != null ? String(rawBatchId).replace(/[^a-zA-Z0-9\-_]/g, '') : null;
         if (!batchId) {
             enqueueSnackbar('لم يتم العثور على معرف الدفعة', { variant: 'error' });
             return;
@@ -364,14 +375,21 @@ export default function ClaimBatchDetail() {
         try {
             enqueueSnackbar('جاري تحضير ملف PDF...', { variant: 'info' });
             const { blob, filename } = await settlementBatchesService.downloadOfficialPdf(batchId);
-            const url = URL.createObjectURL(blob);
+            // Sanitize filename: allow only letters, digits, dash, underscore, dot
+            const safeFilename = String(filename || 'report.pdf').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+            // Build a safe blob URL — createObjectURL always returns 'blob:origin/...'
+            // We use setAttribute to avoid direct property XSS sink
+            const objectUrl = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]));
             const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', filename);
+            link.setAttribute('href', objectUrl);
+            link.setAttribute('download', safeFilename);
+            link.style.display = 'none';
             document.body.appendChild(link);
             link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(objectUrl);
+            }, 100);
             enqueueSnackbar('تم تحميل التقرير بنجاح', { variant: 'success' });
         } catch (err) {
             enqueueSnackbar('فشل تحميل التقرير: ' + (err?.message || ''), { variant: 'error' });
@@ -387,8 +405,28 @@ export default function ClaimBatchDetail() {
         }
     });
 
+    // Row selection helpers
+    const allCurrentIds = useMemo(() => sortedClaims.map(c => c.id), [sortedClaims]);
+    const allSelected = allCurrentIds.length > 0 && allCurrentIds.every(id => selectedClaimIds.includes(id));
+    const someSelected = allCurrentIds.some(id => selectedClaimIds.includes(id)) && !allSelected;
+
+    const handleToggleAll = () => {
+        if (allSelected) {
+            setSelectedClaimIds([]);
+        } else {
+            setSelectedClaimIds(allCurrentIds);
+        }
+    };
+
+    const handleToggleClaim = (id) => {
+        setSelectedClaimIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
     // Table Columns
     const columns = [
+        { id: 'select', label: '', minWidth: 40, align: 'center', sortable: false },
         { id: 'index', label: '#', minWidth: 30, align: 'center', sortable: false },
         { id: 'ref', label: 'المرجع', minWidth: 50, sortable: false },
         { id: 'provider', label: 'مقدم الخدمة', minWidth: 150, sortable: false },
@@ -400,7 +438,7 @@ export default function ClaimBatchDetail() {
         { id: 'refused', label: 'المرفوض', minWidth: 100, align: 'right', sortable: true },
         { id: 'copay', label: 'نصيب المؤمن', minWidth: 100, align: 'right', sortable: true },
         { id: 'paid', label: 'المستحق', minWidth: 110, align: 'right', sortable: true },
-        { id: 'actions', label: 'إجراءات', minWidth: 100, align: 'center', sortable: false }
+        { id: 'actions', label: 'إجراءات', minWidth: 110, align: 'center', sortable: false }
     ];
 
     // Totals for footer
@@ -452,6 +490,15 @@ export default function ClaimBatchDetail() {
 
     const renderCell = (claim, column, index) => {
         switch (column.id) {
+            case 'select':
+                return (
+                    <Checkbox
+                        size="small"
+                        checked={selectedClaimIds.includes(claim.id)}
+                        onChange={() => handleToggleClaim(claim.id)}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                );
             case 'index':
                 return <Typography variant="body2" sx={{ color: 'text.disabled' }}>{index + 1}</Typography>;
             case 'ref':
@@ -514,7 +561,7 @@ export default function ClaimBatchDetail() {
             case 'actions':
                 return (
                     <Stack direction="row" spacing={0.5} justifyContent="center">
-                        <Tooltip title="تعديل / عرض التفاصيل">
+                        <Tooltip title="عرض / تعديل">
                             <IconButton
                                 color="primary"
                                 onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}&claimId=${claim.id}`)}
@@ -532,8 +579,21 @@ export default function ClaimBatchDetail() {
                                 </IconButton>
                             </Tooltip>
                         )}
-                        <Tooltip title="طباعة">
-                            <IconButton onClick={handlePrint}>
+                        <Tooltip title="طباعة مطالبة واحدة">
+                            <IconButton
+                                color="info"
+                                onClick={async () => {
+                                    try {
+                                        const fresh = await claimsService.getById(claim.id);
+                                        setSingleClaimForPrint({ ...claim, ...fresh });
+                                        // wait for state + DOM update then trigger print
+                                        setTimeout(() => handlePrintSingle(), 300);
+                                    } catch {
+                                        setSingleClaimForPrint(claim);
+                                        setTimeout(() => handlePrintSingle(), 300);
+                                    }
+                                }}
+                            >
                                 <PrintIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
                             </IconButton>
                         </Tooltip>
@@ -548,10 +608,13 @@ export default function ClaimBatchDetail() {
         <>
         <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 } }}>
 
-            {/* INVISIBLE PRINT COMPONENT */}
+            {/* INVISIBLE PRINT COMPONENT - Batch (all or selected) */}
             <BatchPrintReport
                 ref={batchReportRef}
-                claims={printClaims.length ? printClaims : claims}
+                claims={selectedClaimIds.length > 0
+                    ? (printClaims.length ? printClaims : claims).filter(c => selectedClaimIds.includes(c.id))
+                    : (printClaims.length ? printClaims : claims)
+                }
                 batchCode={batchCode}
                 employer={employer}
                 provider={provider}
@@ -568,6 +631,19 @@ export default function ClaimBatchDetail() {
                 month={month}
                 year={year}
             />
+
+            {/* INVISIBLE PRINT COMPONENT - Single claim */}
+            {singleClaimForPrint && (
+                <BatchPrintReport
+                    ref={singleClaimPrintRef}
+                    claims={[singleClaimForPrint]}
+                    batchCode={batchCode}
+                    employer={employer}
+                    provider={provider}
+                    month={month}
+                    year={year}
+                />
+            )}
 
             <ModernPageHeader
                 title={<span dir="ltr">{batchCode}</span>}
@@ -601,22 +677,28 @@ export default function ClaimBatchDetail() {
                                     enqueueSnackbar('الرجاء تحديد مطالبة واحدة على الأقل للمعاينة', { variant: 'warning' });
                                     return;
                                 }
-                                navigate(`/claims/statement-preview?ids=${selectedClaimIds.join(',')}`);
+                                navigate(`/reports/claims/statement-preview?ids=${selectedClaimIds.join(',')}`);
                             }}
                             sx={{ borderRadius: 1.5, height: 40 }}
-                            // disabled={selectedClaimIds.length === 0}
                         >
-                            معاينة
+                            معاينة المحددة
                         </Button>
 
                         <Button
                             variant="outlined"
                             color="info"
                             startIcon={<PrintIcon />}
-                            onClick={handlePrint}
+                            onClick={async () => {
+                                if (selectedClaimIds.length > 0) {
+                                    await loadDetailedClaimsForPrint();
+                                }
+                                handlePrint();
+                            }}
                             sx={{ borderRadius: 1.5, height: 40 }}
                         >
-                            طباعة
+                            {selectedClaimIds.length > 0
+                                ? `طباعة (${selectedClaimIds.length})`
+                                : 'طباعة الكل'}
                         </Button>
 
                         <Button
@@ -644,15 +726,6 @@ export default function ClaimBatchDetail() {
                             إكسل
                         </Button>
 
-                        <Button
-                            variant="outlined"
-                            color="error"
-                            startIcon={<PdfIcon />}
-                            onClick={handlePrint}
-                            sx={{ borderRadius: 1.5, height: 40 }}
-                        >
-                            PDF
-                        </Button>
 
                         <Button
                             variant="contained"
@@ -748,6 +821,19 @@ export default function ClaimBatchDetail() {
                             >
                                 إعادة ضبط
                             </Button>
+
+                            {/* Select-all control */}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', height: 40, bgcolor: 'background.paper' }}>
+                                <Checkbox
+                                    size="small"
+                                    checked={allSelected}
+                                    indeterminate={someSelected}
+                                    onChange={handleToggleAll}
+                                />
+                                <Typography variant="caption" fontWeight={700} sx={{ whiteSpace: 'nowrap', color: selectedClaimIds.length > 0 ? 'primary.main' : 'text.secondary' }}>
+                                    {selectedClaimIds.length > 0 ? `${selectedClaimIds.length} محددة` : 'تحديد الكل'}
+                                </Typography>
+                            </Box>
                         </Stack>
                     </MainCard>
 
@@ -771,10 +857,6 @@ export default function ClaimBatchDetail() {
                         enableFiltering={false}
                         enableSorting={true}
                         enablePagination={true}
-                        enableRowSelection={true}
-                        onRowSelectionChange={(selectedRows) => {
-                            setSelectedClaimIds(selectedRows.map(row => row.id));
-                        }}
                         compact={true}
                         tableSize="small"
                         stickyHeader={false}

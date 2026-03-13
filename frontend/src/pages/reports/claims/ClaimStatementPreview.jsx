@@ -37,8 +37,8 @@ const ClaimStatementPreview = () => {
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState(100);
 
-  const previewUrl = `${config.apiUrl || 'http://localhost:8080'}/api/reports/claims/html?claimIds=${claimIds}`;
-  const pdfUrl = `${config.apiUrl || 'http://localhost:8080'}/api/reports/claims/pdf?claimIds=${claimIds}`;
+  const previewUrl = `/api/reports/claims/html?claimIds=${claimIds}`;
+  const pdfUrl = `/api/reports/claims/pdf?claimIds=${claimIds}`;
 
   useEffect(() => {
     if (!claimIds) {

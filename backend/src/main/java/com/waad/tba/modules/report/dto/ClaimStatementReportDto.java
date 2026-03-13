@@ -19,9 +19,11 @@ public class ClaimStatementReportDto {
     
     // Patient Information
     private String patientName;
-    private String insuranceNumber;
+    private String insuranceNumber;      // National ID / Civil ID
+    private String patientRef;           // Beneficiary Number (رقم المستفيد)
     private String currentContract;      // Provider Name
-    private String originNumber;         // Claim File Number / Batch
+    private String batchCode;            // Batch Code (رقم الدفعة)
+    private Long claimId;                // Internal Claim ID (Origin No)
     private String diagnosis;
     
     // Grouping: The list of items belonging to this claim/patient

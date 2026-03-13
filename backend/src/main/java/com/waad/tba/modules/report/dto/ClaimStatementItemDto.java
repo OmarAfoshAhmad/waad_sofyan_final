@@ -19,4 +19,5 @@ public class ClaimStatementItemDto {
     private BigDecimal netAmount;        // الصافي (المعتمد)
     private BigDecimal rejectedAmount;   // المرفوض
     private String rejectionReason;    // سبب الرفض
+    private String rejectionReasonArabic;
 }

@@ -2,308 +2,364 @@
 <html lang="ar" dir="rtl" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>تقرير مطالبة طبية | Claim Statement</title>
+    <title>تقرير المطالبات الطبية | Medical Claims Report</title>
     <style>
-        /* General Setup */
+        /* PDF Print Setup */
         @page {
             size: A4;
             margin: 15mm;
             @bottom-center {
                 content: "الصفحة " counter(page) " من " counter(pages);
                 font-family: Arial, sans-serif;
-                font-size: 10pt;
+                font-size: 9pt;
                 color: #555;
             }
         }
+        
+        * { box-sizing: border-box; }
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
             background-color: #fff;
             color: #333;
-            font-size: 12px;
+            font-size: 11px;
+            line-height: 1.4;
             direction: rtl;
         }
 
-        /* Container for web preview */
-        .report-preview-container {
-            max-width: 210mm;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        /* Cover Page / Summary Page */
+        .cover-page {
+            page-break-after: always;
+            height: 260mm; /* Force full page */
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
         }
 
-        @media print {
-            .report-preview-container {
-                box-shadow: none;
-                margin: 0;
-                padding: 0;
-            }
-            body {
-                background: white;
-            }
+        .cover-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 60px;
         }
 
-        /* Header Section */
-        .header {
+        .logo-box {
+            text-align: center;
+            width: 100%;
+        }
+
+        .logo-box img {
+            max-width: 180px;
+            max-height: 80px;
+            display: block;
+            margin: 0 auto 10px;
+        }
+
+        .company-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #005f73;
+            text-align: center;
+        }
+
+        .doc-tracking {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            font-size: 13px;
+        }
+
+        .summary-address {
+            margin-bottom: 30px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .summary-text {
+            margin-bottom: 40px;
+            font-size: 14px;
+            text-align: justify;
+        }
+
+        .finance-summary-list {
+            margin: 20px auto;
+            width: 80%;
+            border-top: 2px solid #eee;
+            padding-top: 20px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #f5f5f5;
+            font-size: 15px;
+        }
+
+        .summary-label {
+            color: #555;
+        }
+
+        .summary-value {
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 16px;
+        }
+
+        .footer-note {
+            margin-top: auto;
+            padding-top: 40px;
+            text-align: center;
+        }
+
+        .signature-section {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 60px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        /* Detail Pages */
+        .detail-page {
+            margin-top: 20px;
+        }
+
+        .page-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #005f73;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .header-logo {
-            flex: 1;
-            text-align: right;
-        }
-        .header-logo img {
-            max-width: 150px;
-            max-height: 60px;
-        }
-        .header-title {
-            flex: 2;
-            text-align: center;
-        }
-        .header-title h1 {
-            margin: 0;
-            font-size: 20px;
-            color: #005f73;
-            text-transform: uppercase;
-        }
-        .header-info {
-            flex: 1;
-            text-align: left;
-            font-size: 11px;
-            line-height: 1.5;
+            border-bottom: 1px solid #005f73;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
         }
 
-        /* Patient Information Block */
-        .info-block {
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 10px;
-            margin-bottom: 20px;
-            background-color: #fcfcfc;
-        }
-        .info-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .info-table td {
-            padding: 4px 8px;
-            vertical-align: top;
-        }
-        .info-label {
-            font-weight: bold;
-            color: #555;
-            width: 15%;
-            white-space: nowrap;
-        }
-        .info-value {
-            width: 35%;
-            color: #000;
+        .page-header-logo img {
+            max-width: 100px;
+            max-height: 40px;
         }
 
-        /* Claims Table */
-        .claim-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 5px;
+        /* Claim Detail Block */
+        .claim-block {
+            margin-bottom: 25px;
+            border: 1px solid #eee;
+        }
+
+        .claim-info-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
             font-size: 11px;
         }
-        .claim-table th, .claim-table td {
+
+        .info-cell b { color: #555; width: 100px; display: inline-block; }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        .items-table th, .items-table td {
             border: 1px solid #ddd;
-            padding: 6px;
+            padding: 4px 6px;
             text-align: right;
         }
-        .claim-table th {
-            background-color: #f1f1f1;
-            color: #333;
-            font-weight: bold;
-            white-space: nowrap;
+
+        .items-table th {
+            background-color: #e9ecef;
+            color: #495057;
         }
-        .claim-table tbody tr:nth-child(even) {
-            background-color: #fcfcfc;
-        }
-        
+
         .numeric {
             text-align: left !important;
             font-family: monospace;
-            font-size: 11px;
         }
 
-        /* Subtotal Rows */
-        .subtotal-row {
+        .row-subtotal {
+            background-color: #f1f3f5;
             font-weight: bold;
-            background-color: #e9ecef !important;
         }
 
-        /* Coloring Totals */
-        .color-gross { color: #0056b3; font-weight: bold; }
-        .color-net { color: #0ca678; font-weight: bold; }
-        .color-rejected { color: #e03131; font-weight: bold; }
-        
-        .bg-gross { background-color: #e7f5ff; }
-        .bg-net { background-color: #e6fcf5; }
-        .bg-rejected { background-color: #fff5f5; }
+        .total-badge {
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
 
-        /* Multi-page setup */
-        table { page-break-inside: auto; }
-        tr    { page-break-inside: avoid; page-break-after: auto; }
-        thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        
-        /* Grand Total Section */
-        .grand-total-section {
+        .bg-gross { background: #e7f5ff; }
+        .bg-net { background: #e6fcf5; color: #087f5b; }
+        .bg-rejected { background: #fff5f5; color: #c92a2a; }
+
+        /* Report Grand Total */
+        .report-total-box {
             margin-top: 30px;
-            page-break-inside: avoid;
-            border: 2px solid #343a40;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .grand-total-title {
-            background-color: #343a40;
-            color: white;
-            padding: 8px;
+            border: 2px solid #333;
+            display: flex;
+            text-align: center;
             font-weight: bold;
-            text-align: center;
             font-size: 14px;
         }
-        .grand-total-table {
-            width: 100%;
-            border-collapse: collapse;
+
+        .report-total-cell {
+            flex: 1;
+            padding: 15px;
+            border-right: 1px solid #333;
         }
-        .grand-total-table th, .grand-total-table td {
-            padding: 10px;
-            text-align: center;
-            border-right: 1px solid #ddd;
-        }
-        .grand-total-table th {
-            background-color: #f8f9fa;
-            border-bottom: 2px solid #ddd;
-        }
-        .grand-total-table td {
-            font-size: 14px;
-            font-family: monospace;
-        }
-        
-        /* Spacing */
-        .claim-group {
-            margin-bottom: 30px;
-        }
+
+        .report-total-cell:last-child { border-right: none; }
+        .total-val { display: block; margin-top: 5px; font-family: monospace; font-size: 18px; }
+
     </style>
 </head>
 <body>
 
-<div class="report-preview-container">
-
-    <!-- Header -->
-    <div class="header">
-        <div class="header-logo">
-            <!-- Replace with actual logo URL or inline Base64 -->
-            <img th:if="${report.companyLogoBase64 != null and report.companyLogoBase64 != ''}" th:src="${report.companyLogoBase64}" alt="Company Logo"/>
-            <div th:unless="${report.companyLogoBase64 != null and report.companyLogoBase64 != ''}" style="font-weight: bold; color: #005f73; font-size: 18px;">
-                <span th:text="${report.companyName}">شركة الوعد للتأمين</span>
+    <!-- PAGE 1: COVER / SUMMARY -->
+    <div class="cover-page">
+        <div class="cover-header">
+            <div class="logo-box">
+                <img th:if="${report.companyLogoBase64 != ''}" th:src="${report.companyLogoBase64}" />
+                <div class="company-name" th:text="${report.companyName}">شركة وعد لإدارة النفقات الطبية</div>
             </div>
         </div>
-        
-        <div class="header-title">
-            <h1>كشف مطالبة طبية</h1>
-            <h3>Medical Claim Statement</h3>
+
+        <div class="doc-tracking">
+            <div>
+                <b>التاريخ:</b> <span th:text="${report.reportDate}">2026-03-12</span><br/>
+                <b>الصفحة:</b> 1
+            </div>
+            <div>
+                <b>رقم التتبع:</b> <span th:text="${report.batchCode}">JFZ25-00225</span>
+            </div>
         </div>
-        
-        <div class="header-info">
-            <div>التاريخ: <span th:text="${report.reportDate}">2026-03-12</span></div>
-            <div>الصفحة: <script>document.write(document.location.search.replace(/.*page=/, ''))</script></div>
+
+        <div class="summary-address">
+            السادة: <span th:text="${report.providerName}">مقدم الخدمة</span> المحترمين
+        </div>
+
+        <div class="summary-text">
+            نود إفادتكم بأن المطالبات المالية المستلمة من سيادتكم ضمن إيصال رقم (<span th:text="${report.batchCode}">...</span>) قد تمت مراجعتها وتدقيقها وفق البرامج الصحية المعتمدة بالخصوص، حيث تبين ما يلي:
+        </div>
+
+        <div class="finance-summary-list">
+            <div class="summary-item">
+                <span class="summary-label">اجمالي القيمة المقدمة من المرفق:</span>
+                <span class="summary-value"><span th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')}">0.000</span> د.ل</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">اجمالي القيمة الغير مستحقة:</span>
+                <span class="summary-value"><span th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')}">0.000</span> د.ل</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">اجمالي القيمة المدفوعة من المؤمن:</span>
+                <span class="summary-value"><span th:text="${#numbers.formatDecimal(report.grandTotalPatientShare, 1, 'COMMA', 3, 'POINT')}">0.000</span> د.ل</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">صافي القيمة المستحق للمرفق:</span>
+                <span class="summary-value" style="color: #087f5b;"><span th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')}">0.000</span> د.ل</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">عدد المطالبات المستلمة:</span>
+                <span class="summary-value"><span th:text="${report.claimCount}">0</span></span>
+            </div>
+        </div>
+
+        <div class="summary-text" style="margin-top: 30px;">
+            عليه يرجى من سيادتكم تسوية الملاحظات والنواقص خلال مدة أقصاها أسبوعين من تاريخ الاستلام لتسوية القيمة المستحقة نهائياً.
+        </div>
+
+        <div class="footer-note">
+            <div class="signature-section">
+                <div>قسم المراجعة والتدقيق</div>
+                <div>والسلام عليكم</div>
+            </div>
         </div>
     </div>
 
-    <!-- Iterate through Claims -->
-    <div th:each="claimData : ${report.groupedClaims}" class="claim-group">
-        
-        <!-- Patient Info Block -->
-        <div class="info-block">
-            <table class="info-table">
-                <tr>
-                    <td class="info-label">المريض (Patient):</td>
-                    <td class="info-value" th:text="${claimData.patientName}">Ahmed Ali</td>
-                    
-                    <td class="info-label">رقم التأمين (Ins No):</td>
-                    <td class="info-value" th:text="${claimData.insuranceNumber}">123456789</td>
-                </tr>
-                <tr>
-                    <td class="info-label">مقدم الخدمة (Provider):</td>
-                    <td class="info-value" th:text="${claimData.currentContract}">مستشفى الأندلس</td>
-                    
-                    <td class="info-label">رقم الملف (File No):</td>
-                    <td class="info-value" th:text="${claimData.originNumber}">CLM-1002</td>
-                </tr>
-                <tr>
-                    <td class="info-label">التشخيص (Diagnosis):</td>
-                    <td class="info-value" colspan="3" th:text="${claimData.diagnosis}">Z00.0 - General Medical Examination</td>
-                </tr>
-            </table>
+    <!-- PAGE 2+: DETAILS -->
+    <div class="detail-page">
+        <div th:each="claim, claimStat : ${report.groupedClaims}">
+            
+            <!-- Page Header on each claim (shorter) -->
+            <div class="page-header" th:if="${claimStat.index % 2 == 0}">
+                <div class="page-header-logo">
+                    <img th:if="${report.companyLogoBase64 != ''}" th:src="${report.companyLogoBase64}" />
+                </div>
+                <div><b>التاريخ:</b> <span th:text="${report.reportDate}"></span></div>
+            </div>
+
+            <div class="claim-block">
+                <div class="claim-info-header">
+                    <div class="info-grid">
+                        <div class="info-cell"><b>No:</b> <span th:text="${report.batchCode}"></span></div>
+                        <div class="info-cell"><b>Origin No:</b> <span th:text="${claim.originNumber}"></span></div>
+                        <div class="info-cell"><b>Patient Name:</b> <span th:text="${claim.patientName}"></span></div>
+                        <div class="info-cell"><b>Insurance No:</b> <span th:text="${claim.insuranceNumber}"></span></div>
+                    </div>
+                    <div style="margin-top: 5px;">
+                        <b>Diagnosis:</b> <span th:text="${claim.diagnosis}"></span>
+                    </div>
+                </div>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 35%;">Medical Service</th>
+                            <th style="width: 15%;">Date</th>
+                            <th style="width: 12%;">Gross</th>
+                            <th style="width: 12%;">Net</th>
+                            <th style="width: 12%;">Rejected</th>
+                            <th style="width: 14%;">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="item : ${claim.items}">
+                            <td th:text="${item.medicalService}"></td>
+                            <td th:text="${item.serviceDate}"></td>
+                            <td class="numeric" th:text="${#numbers.formatDecimal(item.grossAmount, 1, 'COMMA', 3, 'POINT')}"></td>
+                            <td class="numeric" th:text="${#numbers.formatDecimal(item.netAmount, 1, 'COMMA', 3, 'POINT')}"></td>
+                            <td class="numeric" style="color: #c92a2a;" th:text="${#numbers.formatDecimal(item.rejectedAmount, 1, 'COMMA', 3, 'POINT')}"></td>
+                            <td th:text="${item.rejectionReason ?: '-'}"></td>
+                        </tr>
+                        <tr class="row-subtotal">
+                            <td colspan="2">SUBTOTAL</td>
+                            <td class="numeric" th:text="${#numbers.formatDecimal(claim.subTotalGross, 1, 'COMMA', 3, 'POINT')}"></td>
+                            <td class="numeric bg-net" th:text="${#numbers.formatDecimal(claim.subTotalNet, 1, 'COMMA', 3, 'POINT')}"></td>
+                            <td class="numeric bg-rejected" th:text="${#numbers.formatDecimal(claim.subTotalRejected, 1, 'COMMA', 3, 'POINT')}"></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Optional: Page break after few claims if they take space, but table avoid break handles most -->
         </div>
 
-        <!-- Claims Details Table -->
-        <table class="claim-table">
-            <thead>
-                <tr>
-                    <th style="width: 5%;">#</th>
-                    <th style="width: 30%;">الخدمة الطبية (Medical Service)</th>
-                    <th style="width: 15%;">تاريخ الخدمة (Date)</th>
-                    <th style="width: 12%;">الإجمالي (Gross)</th>
-                    <th style="width: 12%;">الصافي (Net)</th>
-                    <th style="width: 12%;">المرفوض (Rejected)</th>
-                    <th style="width: 14%;">سبب الرفض (Reason)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="item, stat : ${claimData.items}">
-                    <td th:text="${stat.count}">1</td>
-                    <td th:text="${item.medicalService}">Consultation</td>
-                    <td th:text="${item.serviceDate}">2026-03-01</td>
-                    <td class="numeric color-gross" th:text="${#numbers.formatDecimal(item.grossAmount, 1, 'COMMA', 2, 'POINT')}">100.00</td>
-                    <td class="numeric color-net" th:text="${#numbers.formatDecimal(item.netAmount, 1, 'COMMA', 2, 'POINT')}">80.00</td>
-                    <td class="numeric color-rejected" th:text="${#numbers.formatDecimal(item.rejectedAmount, 1, 'COMMA', 2, 'POINT')}">20.00</td>
-                    <td th:text="${item.rejectionReason != null ? item.rejectionReason : '-'}">Not Covered</td>
-                </tr>
-                <!-- Subtotal -->
-                <tr class="subtotal-row">
-                    <td colspan="3" style="text-align: left;">المجموع الفرعي (Subtotal):</td>
-                    <td class="numeric bg-gross color-gross" th:text="${#numbers.formatDecimal(claimData.subTotalGross, 1, 'COMMA', 2, 'POINT')}">0.00</td>
-                    <td class="numeric bg-net color-net" th:text="${#numbers.formatDecimal(claimData.subTotalNet, 1, 'COMMA', 2, 'POINT')}">0.00</td>
-                    <td class="numeric bg-rejected color-rejected" th:text="${#numbers.formatDecimal(claimData.subTotalRejected, 1, 'COMMA', 2, 'POINT')}">0.00</td>
-                    <td></td>
-                </tr>
-            </tbody>
-        </table>
+        <!-- Last Page: Grand Total Box -->
+        <div class="report-total-box">
+            <div class="report-total-cell" style="background: #f8f9fa;">TOTAL</div>
+            <div class="report-total-cell">
+                Gross Total
+                <span class="total-val" th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')}"></span>
+            </div>
+            <div class="report-total-cell" style="background: #e6fcf5;">
+                Net Total
+                <span class="total-val" th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')}"></span>
+            </div>
+            <div class="report-total-cell" style="background: #fff5f5;">
+                Rejected Total
+                <span class="total-val" th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')}"></span>
+            </div>
+        </div>
     </div>
-
-    <!-- Grand Totals Section -->
-    <div class="grand-total-section">
-        <div class="grand-total-title">الملخص المالي للإجمالي (Grand Total Summary)</div>
-        <table class="grand-total-table">
-            <thead>
-                <tr>
-                    <th>إجمالي المطالبات (Gross Total)</th>
-                    <th>إجمالي الصافي (Net Total)</th>
-                    <th>إجمالي المرفوض (Rejected Total)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="color-gross bg-gross" th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 2, 'POINT')} + ' د.ل'">0.00 د.ل</td>
-                    <td class="color-net bg-net" th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 2, 'POINT')} + ' د.ل'">0.00 د.ل</td>
-                    <td class="color-rejected bg-rejected" th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 2, 'POINT')} + ' د.ل'">0.00 د.ل</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-</div>
 
 </body>
 </html>
+

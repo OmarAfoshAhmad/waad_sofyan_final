@@ -87,13 +87,15 @@ public class SecurityConfig {
                 // See: STEP_3_CSRF_PROTECTION_COMPLETE.md for testing and validation
                 .csrf(AbstractHttpConfigurer::disable)
 
-                // CORS configuration with credentials support (required for session cookies)
+                // CORS configuration with credentials support
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 // Authorization rules
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints - Authentication (v1 API)
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        // Public access to reports for preview (iframe friendly)
+                        .requestMatchers("/api/reports/**").permitAll()
                         // Swagger / OpenAPI endpoints
                         .requestMatchers(
                                 "/v3/api-docs/**",
@@ -106,6 +108,9 @@ public class SecurityConfig {
                         .permitAll()
                         // All other endpoints require authentication
                         .anyRequest().authenticated())
+
+                // Allow framing for report previews
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
 
                 // Session management configuration
                 .sessionManagement(session -> session

@@ -18,8 +18,14 @@ public class ClaimReportDto {
     private String companyLogoBase64; 
     private List<ClaimStatementReportDto> groupedClaims;
     
+    // Summary info for the cover page
+    private String batchCode;
+    private String providerName;
+    private int claimCount;
+    
     // Grand Totals at the end of the report
     private BigDecimal grandTotalGross;
     private BigDecimal grandTotalNet;
     private BigDecimal grandTotalRejected;
+    private BigDecimal grandTotalPatientShare; // New field for Summary Page
 }
