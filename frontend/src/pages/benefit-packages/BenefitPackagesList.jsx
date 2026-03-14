@@ -157,7 +157,7 @@ const BenefitPackagesList = () => {
         size: 200,
         enableSorting: false,
         Cell: ({ row }) => (
-          <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 180 }}>
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: '11.25rem' }}>
             {row.original?.description || '-'}
           </Typography>
         )

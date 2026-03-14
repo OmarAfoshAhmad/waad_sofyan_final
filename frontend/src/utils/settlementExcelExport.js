@@ -29,13 +29,13 @@ export const exportProviderAccountTransactionsToExcel = async ({ providerName, t
   });
 
   worksheet.columns = [
-    { header: 'التاريخ', key: 'createdAt', width: 24 },
-    { header: 'نوع الحركة', key: 'transactionTypeLabel', width: 16 },
-    { header: 'الدائن', key: 'creditAmount', width: 14 },
-    { header: 'المدين', key: 'debitAmount', width: 14 },
-    { header: 'رصيد الحركة', key: 'runningBalanceAfter', width: 16 },
-    { header: 'المرجع', key: 'reference', width: 18 },
-    { header: 'الوصف', key: 'description', width: 70 }
+    { header: 'التاريخ', key: 'createdAt', width: '1.5rem' },
+    { header: 'نوع الحركة', key: 'transactionTypeLabel', width: '1.0rem' },
+    { header: 'الدائن', key: 'creditAmount', width: '0.875rem' },
+    { header: 'المدين', key: 'debitAmount', width: '0.875rem' },
+    { header: 'رصيد الحركة', key: 'runningBalanceAfter', width: '1.0rem' },
+    { header: 'المرجع', key: 'reference', width: '1.125rem' },
+    { header: 'الوصف', key: 'description', width: '4.375rem' }
   ];
 
   worksheet.mergeCells('A1:G1');
@@ -140,15 +140,15 @@ export const exportAccountsListToExcel = async ({ accounts = [] }) => {
   });
 
   worksheet.columns = [
-    { header: 'مقدم الخدمة', key: 'providerName', width: 30 },
-    { header: 'النوع', key: 'providerType', width: 16 },
-    { header: 'الرصيد الحالي', key: 'runningBalance', width: 18 },
-    { header: 'إجمالي المعتمد', key: 'totalApproved', width: 18 },
-    { header: 'إجمالي المدفوع', key: 'totalPaid', width: 18 },
-    { header: 'فجوة السداد', key: 'gapAmount', width: 16 },
-    { header: 'نسبة السداد %', key: 'coveragePercent', width: 14 },
-    { header: 'آخر حركة', key: 'lastActivityAt', width: 16 },
-    { header: 'مطالبات معلقة', key: 'pendingClaimsCount', width: 14 }
+    { header: 'مقدم الخدمة', key: 'providerName', width: '1.875rem' },
+    { header: 'النوع', key: 'providerType', width: '1.0rem' },
+    { header: 'الرصيد الحالي', key: 'runningBalance', width: '1.125rem' },
+    { header: 'إجمالي المعتمد', key: 'totalApproved', width: '1.125rem' },
+    { header: 'إجمالي المدفوع', key: 'totalPaid', width: '1.125rem' },
+    { header: 'فجوة السداد', key: 'gapAmount', width: '1.0rem' },
+    { header: 'نسبة السداد %', key: 'coveragePercent', width: '0.875rem' },
+    { header: 'آخر حركة', key: 'lastActivityAt', width: '1.0rem' },
+    { header: 'مطالبات معلقة', key: 'pendingClaimsCount', width: '0.875rem' }
   ];
 
   worksheet.mergeCells('A1:I1');

@@ -70,9 +70,9 @@ export default function ProductCard({ id, color, name, brand, offer, isStock, im
         <SkeletonProductPlaceholder />
       ) : (
         <MainCard content={false} boxShadow sx={{ '&:hover': { transform: 'scale3d(1.02, 1.02, 1)', transition: 'all .4s ease-in-out' } }}>
-          <Box sx={{ width: 250, m: 'auto' }}>
+          <Box sx={{ width: '15.625rem', m: 'auto' }}>
             <CardMedia
-              sx={{ height: 250, textDecoration: 'none', opacity: isStock ? 1 : 0.25 }}
+              sx={{ height: '15.625rem', textDecoration: 'none', opacity: isStock ? 1 : 0.25 }}
               image={image && getImageUrl(`${image}`, ImagePath.ECOMMERCE)}
               component={Link}
               to={`/apps/e-commerce/product-details/${id}`}
@@ -80,7 +80,7 @@ export default function ProductCard({ id, color, name, brand, offer, isStock, im
           </Box>
           <Stack
             direction="row"
-            sx={{ alignItems: 'center', justifyContent: 'space-between', width: 1, position: 'absolute', top: 0, pt: 1.75, pl: 2, pr: 1 }}
+            sx={{ alignItems: 'center', justifyContent: 'space-between', width: '0.0625rem', position: 'absolute', top: 0, pt: '0.875rem', pl: '1.0rem', pr: 1 }}
           >
             {!isStock && <Chip variant="light" color="error" size="small" label="Sold out" />}
             {offer && <Chip label={offer} variant="combined" color="success" size="small" />}
@@ -93,7 +93,7 @@ export default function ProductCard({ id, color, name, brand, offer, isStock, im
             </IconButton>
           </Stack>
           <Divider />
-          <CardContent sx={{ p: 2 }}>
+          <CardContent sx={{ p: '1.0rem' }}>
             <Grid container spacing={2}>
               <Grid size={12}>
                 <Stack>
@@ -112,7 +112,7 @@ export default function ProductCard({ id, color, name, brand, offer, isStock, im
                 </Stack>
               </Grid>
               <Grid size={12}>
-                <Stack direction="row" sx={{ gap: 1.75, alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <Stack direction="row" sx={{ gap: '0.875rem', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                   <Stack>
                     <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}>
                       <Typography variant="h5">${offerPrice}</Typography>

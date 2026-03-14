@@ -48,7 +48,7 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
     <Icon
       style={{
         fontSize: drawerOpen ? '1rem' : '1.25rem',
-        ...(state.menuOrientation === MenuOrientation.HORIZONTAL && isParents && { fontSize: 20, stroke: '1.5' })
+        ...(state.menuOrientation === MenuOrientation.HORIZONTAL && isParents && { fontSize: '1.25rem', stroke: '1.5' })
       }}
     />
   ) : (
@@ -80,7 +80,7 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
               py: 1,
               mb: 0.5, // Spacing between items
               mx: 1, // Side margins for button look
-              borderRadius: '8px', // Rounded corners
+              borderRadius: '0.375rem', // Rounded corners
               color: textColor,
               transition: 'all 0.2s ease-in-out',
 
@@ -104,12 +104,12 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
             {itemIcon && (
               <ListItemIcon
                 sx={(theme) => ({
-                  minWidth: 28,
+                  minWidth: '1.75rem',
                   color: isSelected ? iconSelectedColor : textColor,
                   ...(!drawerOpen && {
-                    borderRadius: 1.5,
-                    width: 36,
-                    height: 36,
+                    borderRadius: '0.375rem',
+                    width: '2.25rem',
+                    height: '2.25rem',
                     alignItems: 'center',
                     justifyContent: 'center',
                     '&:hover': { bgcolor: 'secondary.lighter', ...theme.applyStyles('dark', { bgcolor: 'secondary.light' }) }
@@ -167,11 +167,11 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
                   variant="outlined"
                   sx={{
                     position: 'absolute',
-                    top: 12,
-                    right: 20,
+                    top: '6.0rem',
+                    right: '1.25rem',
                     zIndex: 1202,
-                    width: 20,
-                    height: 20,
+                    width: '1.25rem',
+                    height: '1.25rem',
                     mr: -1,
                     ml: 1,
                     color: 'secondary.dark',
@@ -179,7 +179,7 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
                     '&:hover': { borderColor: isSelected ? 'primary.main' : 'secondary.main' }
                   }}
                 >
-                  <ActionIcon style={{ fontSize: '0.625rem' }} />
+                  <ActionIcon style={{ fontSize: '0.75rem' }} />
                 </IconButton>
               );
             })}
@@ -194,9 +194,9 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
           onClick={() => itemHandler()}
           sx={{
             zIndex: 1201,
-            borderRadius: '8px', // Rounded Button
+            borderRadius: '0.375rem', // Rounded Button
             mx: 0.5, // Spacing between buttons
-            px: 2,
+            px: '1.0rem',
             py: 1,
             color: isSelected ? '#fff' : 'text.secondary',
             bgcolor: isSelected ? '#0066e6' : 'transparent', // Blue when selected
@@ -219,12 +219,12 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
           {itemIcon && (
             <ListItemIcon
               sx={{
-                minWidth: 28,
+                minWidth: '1.75rem',
                 color: isSelected ? '#fff' : 'inherit', // Icon color fix
                 ...(!drawerOpen && {
-                  borderRadius: 1.5,
-                  width: 28,
-                  height: 28,
+                  borderRadius: '0.375rem',
+                  width: '1.75rem',
+                  height: '1.75rem',
                   alignItems: 'center',
                   justifyContent: 'flex-start',
                   '&:hover': { bgcolor: 'transparent' }
@@ -241,7 +241,7 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
               sx={{
                 color: isSelected ? 'primary.main' : 'secondary.dark',
                 ...(!drawerOpen && {
-                  borderRadius: 1.5,
+                  borderRadius: '0.375rem',
                   alignItems: 'center',
                   justifyContent: 'flex-start',
                   '&:hover': { bgcolor: 'transparent' }
@@ -280,3 +280,7 @@ NavItem.propTypes = {
   isParents: PropTypes.bool,
   setSelectedID: PropTypes.oneOfType([PropTypes.any, PropTypes.func])
 };
+
+
+
+

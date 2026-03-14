@@ -79,7 +79,7 @@ const STATUS_LABELS = {
 
 // Helper Info Row Component
 const InfoRow = ({ label, value, valueColor }) => (
-  <Grid container spacing={2} sx={{ mb: 1.5 }}>
+  <Grid container spacing={2} sx={{ mb: '0.75rem' }}>
     <Grid size={{ xs: 12, sm: 4 }}>
       <Typography variant="subtitle2" color="text.secondary">
         {label}
@@ -320,7 +320,7 @@ const PreApprovalView = () => {
               {/* ===================== WORKFLOW TIMELINE ===================== */}
               <Card variant="outlined">
                 <CardContent>
-                  <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                  <Typography variant="h6" gutterBottom sx={{ mb: '1.0rem' }}>
                     مسار الطلب
                   </Typography>
                   {/* Insurance UX - StatusTimeline */}
@@ -342,7 +342,7 @@ const PreApprovalView = () => {
                     <Typography variant="h6" gutterBottom>
                       صلاحية الموافقة
                     </Typography>
-                    <Divider sx={{ mb: 2 }} />
+                    <Divider sx={{ mb: '1.0rem' }} />
                     {/* Insurance UX - ValidityCountdown */}
                     <ValidityCountdown
                       approvalDate={preApproval?.reviewedAt ?? preApproval?.updatedAt ?? preApproval?.createdAt}
@@ -366,7 +366,7 @@ const PreApprovalView = () => {
                       <Typography variant="h6" gutterBottom>
                         المعلومات الأساسية
                       </Typography>
-                      <Divider sx={{ mb: 2 }} />
+                      <Divider sx={{ mb: '1.0rem' }} />
                       <InfoRow label="رقم الطلب" value={preApproval?.referenceNumber || `PA-${preApproval?.id}`} />
                       <InfoRow label="المؤمَّن عليه" value={preApproval?.memberName ?? preApproval?.member?.fullName} />
                       <InfoRow label="الرقم الوطني" value={preApproval?.memberNationalNumber ?? preApproval?.member?.nationalNumber} />
@@ -385,7 +385,7 @@ const PreApprovalView = () => {
                         <MedicalIcon color="primary" fontSize="small" />
                         <Typography variant="h6">المعلومات الطبية</Typography>
                       </Stack>
-                      <Divider sx={{ mb: 2 }} />
+                      <Divider sx={{ mb: '1.0rem' }} />
                       <InfoRow label="مقدم الخدمة" value={preApproval?.providerName} />
                       <InfoRow label="الخدمة" value={preApproval?.serviceName ?? preApproval?.serviceCode ?? '-'} />
                       <InfoRow label="التشخيص" value={preApproval?.diagnosisDescription ?? preApproval?.diagnosisCode ?? '-'} />
@@ -401,12 +401,12 @@ const PreApprovalView = () => {
                         <AttachmentIcon color="primary" fontSize="small" />
                         <Typography variant="h6">المرفقات والمستندات</Typography>
                       </Stack>
-                      <Divider sx={{ mb: 2 }} />
+                      <Divider sx={{ mb: '1.0rem' }} />
 
                       {/* Upload Section - Only for non-finalized statuses */}
                       {preApproval?.status !== 'APPROVED' && preApproval?.status !== 'REJECTED' && preApproval?.status !== 'CANCELLED' && (
-                        <Box sx={{ mb: 3 }}>
-                          <Alert severity="info" sx={{ mb: 2 }}>
+                        <Box sx={{ mb: '1.5rem' }}>
+                          <Alert severity="info" sx={{ mb: '1.0rem' }}>
                             <Typography variant="body2">
                               يمكنك رفع المستندات الداعمة مثل التقارير الطبية، الفحوصات، الأشعة وغيرها
                             </Typography>
@@ -459,7 +459,7 @@ const PreApprovalView = () => {
                       <Typography variant="h6" gutterBottom>
                         المعلومات المالية والموافقة
                       </Typography>
-                      <Divider sx={{ mb: 3 }} />
+                      <Divider sx={{ mb: '1.5rem' }} />
 
                        <Alert severity="info">
                         هذه الموافقة المسبقة إدارية وطبية فقط ولا تترتب عليها التزامات مالية في هذه المرحلة.
@@ -469,8 +469,8 @@ const PreApprovalView = () => {
                       {preApproval?.reviewerComment && (
                         <Box
                           sx={{
-                            mt: 3,
-                            p: 2,
+                            mt: '1.5rem',
+                            p: '1.0rem',
                             borderRadius: 1,
                             bgcolor: preApproval?.status === 'REJECTED' ? 'error.lighter' : 'success.lighter'
                           }}
@@ -486,7 +486,7 @@ const PreApprovalView = () => {
 
                       {/* Review Date */}
                       {preApproval?.reviewedAt && (
-                        <Box sx={{ mt: 2 }}>
+                        <Box sx={{ mt: '1.0rem' }}>
                           <InfoRow label="تاريخ المراجعة" value={new Date(preApproval.reviewedAt).toLocaleString('ar-KW')} />
                         </Box>
                       )}
@@ -525,7 +525,7 @@ const PreApprovalView = () => {
                       <Typography variant="h6" gutterBottom>
                         معلومات التدقيق
                       </Typography>
-                      <Divider sx={{ mb: 2 }} />
+                      <Divider sx={{ mb: '1.0rem' }} />
                       <Grid container spacing={2}>
                         <Grid size={{ xs: 12, md: 6 }}>
                           <InfoRow
@@ -561,7 +561,7 @@ const PreApprovalView = () => {
         {/* ===================== DOCUMENT SIDE PANEL (SPLIT LAYOUT) ===================== */}
         {showDocumentPanel && (
           <Grid size={{ xs: 12, md: 5 }}>
-            <Box sx={{ position: 'sticky', top: 16, height: 'calc(100vh - 100px)' }}>
+            <Box sx={{ position: 'sticky', top: '8.0rem', height: 'calc(100vh - 100px)' }}>
               {/* If no document selected, show list or empty state */}
               {!previewDocument ? (
                 <DocumentSidePanel
@@ -602,3 +602,6 @@ const PreApprovalView = () => {
 };
 
 export default PreApprovalView;
+
+
+

@@ -162,7 +162,7 @@ const MedicalCategoriesList = () => {
         header: 'الرمز',
         enableSorting: true,
         enableColumnFilter: false,
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'right',
         cell: ({ getValue }) => (
           <Typography variant="body2" fontWeight="medium">
@@ -175,7 +175,7 @@ const MedicalCategoriesList = () => {
         header: 'الاسم',
         enableSorting: true,
         enableColumnFilter: false,
-        minWidth: 180,
+        minWidth: '11.25rem',
         align: 'right',
         cell: ({ getValue }) => <Typography variant="body2">{getValue() || '-'}</Typography>
       },
@@ -184,7 +184,7 @@ const MedicalCategoriesList = () => {
         header: 'التصنيف الأب',
         enableSorting: true,
         enableColumnFilter: false,
-        minWidth: 150,
+        minWidth: '9.375rem',
         align: 'right',
         cell: ({ getValue }) => (
           <Typography variant="body2" color="text.secondary">
@@ -197,7 +197,7 @@ const MedicalCategoriesList = () => {
         header: 'الحالة',
         enableSorting: true,
         enableColumnFilter: false,
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         cell: ({ row }) => (
           <Chip
@@ -213,7 +213,7 @@ const MedicalCategoriesList = () => {
         header: 'الإجراءات',
         enableSorting: false,
         enableColumnFilter: false,
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'center',
         cell: ({ row }) => (
           <Stack direction="row" spacing={0.5} justifyContent="center">
@@ -286,10 +286,10 @@ const MedicalCategoriesList = () => {
       </PermissionGuard>
 
       {/* ====== FILTER BAR ====== */}
-      <MainCard sx={{ mb: 2 }}>
+      <MainCard sx={{ mb: '1.0rem' }}>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
           {/* Parent Category Filter */}
-          <FormControl size="small" sx={{ minWidth: 250 }}>
+          <FormControl size="small" sx={{ minWidth: '15.625rem' }}>
             <InputLabel id="parent-filter-label">فلترة حسب التصنيف الأب</InputLabel>
             <Select
               labelId="parent-filter-label"

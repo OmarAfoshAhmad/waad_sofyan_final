@@ -29,8 +29,8 @@ export default function LogoIcon() {
         src={logoSrc}
         alt={companyName || 'Waad TPA'}
         sx={{
-          width: 40,
-          height: 40,
+          width: '2.5rem',
+          height: '2.5rem',
           objectFit: 'contain'
         }}
       />
@@ -42,8 +42,8 @@ export default function LogoIcon() {
     <Avatar
       sx={{
         bgcolor: primaryColor || '#1976d2',
-        width: 40,
-        height: 40,
+        width: '2.5rem',
+        height: '2.5rem',
         fontWeight: 700,
         fontSize: '1.2rem'
       }}

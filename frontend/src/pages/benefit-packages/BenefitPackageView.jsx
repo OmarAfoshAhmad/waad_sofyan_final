@@ -66,7 +66,7 @@ const BenefitPackageView = () => {
         <MainCard>
           <Alert severity="error">
             {error?.message || 'لم يتم العثور على الباقة'}
-            <Button onClick={handleBack} sx={{ mt: 2 }}>
+            <Button onClick={handleBack} sx={{ mt: '1.0rem' }}>
               العودة إلى القائمة
             </Button>
           </Alert>
@@ -101,11 +101,11 @@ const BenefitPackageView = () => {
             <Typography variant="h5" gutterBottom>
               المعلومات الأساسية
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 الكود
               </Typography>
@@ -116,7 +116,7 @@ const BenefitPackageView = () => {
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 الاسم
               </Typography>
@@ -127,7 +127,7 @@ const BenefitPackageView = () => {
           </Grid>
 
           <Grid size={12}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 الوصف
               </Typography>
@@ -137,14 +137,14 @@ const BenefitPackageView = () => {
 
           {/* Coverage & Validity */}
           <Grid size={12}>
-            <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+            <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
               التغطية والصلاحية
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 حد التغطية
               </Typography>
@@ -155,7 +155,7 @@ const BenefitPackageView = () => {
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 صلاحية الباقة
               </Typography>
@@ -167,10 +167,10 @@ const BenefitPackageView = () => {
 
           {/* Medical Packages */}
           <Grid size={12}>
-            <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+            <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
               الباقات الطبية المشمولة
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           <Grid size={12}>
@@ -214,14 +214,14 @@ const BenefitPackageView = () => {
 
           {/* Status */}
           <Grid size={12}>
-            <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+            <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
               الحالة
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 حالة الباقة
               </Typography>
@@ -233,14 +233,14 @@ const BenefitPackageView = () => {
 
           {/* System Metadata */}
           <Grid size={12}>
-            <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+            <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
               معلومات النظام
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 تاريخ الإنشاء
               </Typography>
@@ -249,7 +249,7 @@ const BenefitPackageView = () => {
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 تاريخ آخر تحديث
               </Typography>
@@ -258,7 +258,7 @@ const BenefitPackageView = () => {
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 أنشئ بواسطة
               </Typography>
@@ -267,7 +267,7 @@ const BenefitPackageView = () => {
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary">
                 آخر تحديث بواسطة
               </Typography>

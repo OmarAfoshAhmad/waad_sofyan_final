@@ -247,7 +247,7 @@ const UnifiedMemberView = () => {
     return (
       <Box>
         <Alert severity="error">لم يتم العثور على المنتفع</Alert>
-        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/members')} sx={{ mt: 2 }}>
+        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/members')} sx={{ mt: '1.0rem' }}>
           رجوع للقائمة
         </Button>
       </Box>
@@ -294,14 +294,14 @@ const UnifiedMemberView = () => {
             variant="scrollable"
             scrollButtons="auto"
             sx={{
-              minHeight: 48,
+              minHeight: '3.0rem',
               '& .MuiTab-root': {
-                minHeight: 48,
+                minHeight: '3.0rem',
                 fontSize: theme.typography.body2.fontSize,
                 fontWeight: 500,
                 color: 'text.secondary',
                 transition: 'all 0.2s',
-                px: 3,
+                px: '1.5rem',
                 '&.Mui-selected': {
                   color: 'primary.main',
                   bgcolor: 'primary.lighter',
@@ -309,7 +309,7 @@ const UnifiedMemberView = () => {
                 }
               },
               '& .MuiTabs-indicator': {
-                height: 3,
+                height: '0.1875rem',
                 borderRadius: '3px 3px 0 0'
               }
             }}
@@ -320,7 +320,7 @@ const UnifiedMemberView = () => {
         </Box>
 
         {/* Scrollable Content Area */}
-        <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: '1.5rem' }}>
           {/* Tab 0: Personal Info */}
           <div role="tabpanel" hidden={tabValue !== 0}>
             {tabValue === 0 && (
@@ -330,7 +330,7 @@ const UnifiedMemberView = () => {
                   <Paper
                     variant="outlined"
                     sx={{
-                      p: 1.5,
+                      p: '0.75rem',
                       flex: 1,
                       bgcolor: 'grey.50',
                       display: 'flex',
@@ -339,7 +339,7 @@ const UnifiedMemberView = () => {
                       justifyContent: 'center'
                     }}
                   >
-                    <MemberAvatar member={member} size={110} sx={{ mb: 1.5 }} />
+                    <MemberAvatar member={member} size={110} sx={{ mb: '0.75rem' }} />
 
                     <Stack spacing={1.5} alignItems="center" width="100%">
                       <Stack direction="row" spacing={1.5} justifyContent="center" width="100%">
@@ -347,13 +347,13 @@ const UnifiedMemberView = () => {
                           label={isPrincipal ? 'رئيسي' : 'تابع'}
                           color={isPrincipal ? 'primary' : 'secondary'}
                           size="small"
-                          sx={{ height: 24, fontSize: '0.75rem' }}
+                          sx={{ height: '1.5rem', fontSize: '0.75rem' }}
                         />
                         <Chip
                           label={{ ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[member.status] || member.status}
                           color={{ ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[member.status] || 'default'}
                           size="small"
-                          sx={{ height: 24, fontSize: '0.75rem' }}
+                          sx={{ height: '1.5rem', fontSize: '0.75rem' }}
                         />
                       </Stack>
 
@@ -391,7 +391,7 @@ const UnifiedMemberView = () => {
                           }}
                         >
                           <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ mb: 0.5 }}>
-                            <QrCodeIcon color="primary" sx={{ fontSize: 18 }} />
+                            <QrCodeIcon color="primary" sx={{ fontSize: '1.125rem' }} />
                             <Typography variant="caption" color="primary.main" fontWeight="600">
                               Barcode
                             </Typography>
@@ -409,7 +409,7 @@ const UnifiedMemberView = () => {
                 <Grid size={{ xs: 12, md: 9 }}>
                   <Stack spacing={2}>
                     {/* Personal Info Card */}
-                    <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem' }}>
                       <Typography variant="subtitle2" color="primary" fontWeight="bold" gutterBottom>
                         البيانات الشخصية
                       </Typography>
@@ -467,8 +467,8 @@ const UnifiedMemberView = () => {
                     <Grid container spacing={2}>
                       {isPrincipal && (
                         <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-                          <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-                            <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+                          <Paper variant="outlined" sx={{ p: '1.0rem', flex: 1 }}>
+                            <Stack direction="row" spacing={1} sx={{ mb: '0.75rem' }}>
                               <BadgeIcon fontSize="small" color="action" />
                               <Typography variant="subtitle2" fontWeight="bold">
                                 بيانات العمل
@@ -505,8 +505,8 @@ const UnifiedMemberView = () => {
                       )}
 
                       <Grid size={{ xs: 12, md: isPrincipal ? 6 : 12 }} sx={{ display: 'flex' }}>
-                        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-                          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+                        <Paper variant="outlined" sx={{ p: '1.0rem', flex: 1 }}>
+                          <Stack direction="row" spacing={1} sx={{ mb: '0.75rem' }}>
                             <ContactPhoneIcon fontSize="small" color="action" />
                             <Typography variant="subtitle2" fontWeight="bold">
                               معلومات الاتصال
@@ -552,7 +552,7 @@ const UnifiedMemberView = () => {
             {tabValue === 1 && isPrincipal && (
               <Stack spacing={3}>
                 {/* Header Actions */}
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: '1.0rem' }}>
                   <Stack direction="row" spacing={2} alignItems="center">
                     <Typography variant="subtitle1" fontWeight="bold">
                       التابعون المسجلون
@@ -583,12 +583,12 @@ const UnifiedMemberView = () => {
                 {/* Dependents List */}
                 <Box>
                   {dependents.length === 0 ? (
-                    <Typography variant="body2" align="center" color="text.secondary" sx={{ py: 3 }}>
+                    <Typography variant="body2" align="center" color="text.secondary" sx={{ py: '1.5rem' }}>
                       لا يوجد تابعين مسجلين حالياً.
                     </Typography>
                   ) : (
                     <>
-                      <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ minHeight: 230 }}>
+                      <TableContainer component={Paper} elevation={0} variant="outlined" sx={{ minHeight: '14.375rem' }}>
                         <Table size="small">
                           <TableHead>
                             <TableRow>
@@ -644,7 +644,7 @@ const UnifiedMemberView = () => {
                                       label={{ ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[dep.status] || dep.status}
                                       color={{ ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[dep.status] || 'default'}
                                       size="small"
-                                      sx={{ height: 24 }}
+                                      sx={{ height: '1.5rem' }}
                                     />
                                   </TableCell>
                                   <TableCell align="center">
@@ -719,7 +719,7 @@ const UnifiedMemberView = () => {
         <DialogContent>
           <DialogContentText>
             سيتم حذف التابع <strong>{hardDeletingDep?.fullName}</strong> نهائياً من قاعدة البيانات. هذا الإجراء لا يمكن التراجع عنه!
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mt: '1.0rem' }}>
               <strong>تنبيه:</strong> إذا كان للتابع مطالبات أو زيارات مرتبطة سيفشل الحذف.
             </Alert>
           </DialogContentText>
@@ -740,7 +740,7 @@ const UnifiedMemberView = () => {
             {deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? (
               <>
                 هل أنت متأكد من حذف المنتفع الرئيسي <strong>{deletingMember?.fullName}</strong>؟
-                <Alert severity="warning" sx={{ mt: 2 }}>
+                <Alert severity="warning" sx={{ mt: '1.0rem' }}>
                   <strong>تنبيه:</strong> سيتم حذف جميع التابعين ({member.dependentsCount || 0}) تلقائياً (CASCADE DELETE).
                 </Alert>
               </>
@@ -763,3 +763,5 @@ const UnifiedMemberView = () => {
 };
 
 export default UnifiedMemberView;
+
+

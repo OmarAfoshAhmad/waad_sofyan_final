@@ -149,15 +149,15 @@ const EmailSettingsPage = () => {
         icon={MailOutlined} 
       />
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
+      <Grid container spacing={3} sx={{ mt: '1.0rem' }}>
         {/* Basic Settings */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                <SettingOutlined style={{ marginRight: 8 }} /> الإعدادات الأساسية
+                <SettingOutlined style={{ marginRight: '0.375rem' }} /> الإعدادات الأساسية
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Stack spacing={2}>
                 <TextField
                   fullWidth
@@ -198,9 +198,9 @@ const EmailSettingsPage = () => {
           <Card>
             <CardContent>
               <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                <CheckCircleOutlined style={{ marginRight: 8 }} /> حالة المزامنة والنشاط
+                <CheckCircleOutlined style={{ marginRight: '0.375rem' }} /> حالة المزامنة والنشاط
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Stack spacing={3}>
                 <FormControlLabel
                   control={
@@ -248,7 +248,7 @@ const EmailSettingsPage = () => {
                   فحص الإرسال
                 </Button>
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Stack spacing={2}>
                 <TextField
                   fullWidth
@@ -303,7 +303,7 @@ const EmailSettingsPage = () => {
                   فحص الاستقبال
                 </Button>
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Stack spacing={2}>
                 <TextField
                   fullWidth
@@ -344,7 +344,7 @@ const EmailSettingsPage = () => {
 
         {/* Action Buttons */}
         <Grid item xs={12}>
-          <Box display="flex" justifyContent="flex-end" sx={{ gap: 2, mb: 4 }}>
+          <Box display="flex" justifyContent="flex-end" sx={{ gap: '1.0rem', mb: '2.0rem' }}>
             <Button variant="outlined" color="secondary" onClick={fetchSettings}>
               إلغاء التعديلات
             </Button>
@@ -359,3 +359,5 @@ const EmailSettingsPage = () => {
 };
 
 export default EmailSettingsPage;
+
+

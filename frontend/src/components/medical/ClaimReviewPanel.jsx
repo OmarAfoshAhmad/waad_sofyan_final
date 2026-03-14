@@ -159,7 +159,7 @@ const ClaimReviewPanel = ({ claim, type = 'claim' }) => {
         <Card elevation={0} sx={{ border: `1px solid ${MEDICAL_THEME.colors.border.light}` }}>
           <CardContent>
             <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-              <PersonIcon sx={{ color: MEDICAL_THEME.colors.primary.main, fontSize: 32 }} />
+              <PersonIcon sx={{ color: MEDICAL_THEME.colors.primary.main, fontSize: '2.0rem' }} />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   {claim.memberName || claim.member?.name || 'غير محدد'}
@@ -392,7 +392,7 @@ const ClaimReviewPanel = ({ claim, type = 'claim' }) => {
               {claim.netPayable !== undefined && (
                 <Box
                   sx={{
-                    mt: 2,
+                    mt: '1.0rem',
                     padding: MEDICAL_THEME.spacing.md,
                     background: MEDICAL_THEME.colors.background.selected,
                     borderRadius: MEDICAL_THEME.radius.base,

@@ -106,13 +106,13 @@ const BenefitPolicyLifecycleBar = ({
   return (
     <Box sx={{ width: '100%' }}>
       {/* Header */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: '0.75rem' }}>
         <Stack direction="row" spacing={1} alignItems="center">
-          <CalendarTodayIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+          <CalendarTodayIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
           <Typography variant="subtitle2" fontWeight={600}>
             {t.policyPeriod}
           </Typography>
-          <Chip label={policyTypeLabels[policyType]} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
+          <Chip label={policyTypeLabels[policyType]} size="small" variant="outlined" sx={{ height: '1.25rem', fontSize: '0.7rem' }} />
         </Stack>
 
         <Stack direction="row" spacing={1} alignItems="center">
@@ -142,7 +142,7 @@ const BenefitPolicyLifecycleBar = ({
       </Stack>
 
       {/* Timeline Bar */}
-      <Box sx={{ position: 'relative', mb: 3 }}>
+      <Box sx={{ position: 'relative', mb: '1.5rem' }}>
         {/* Background track */}
         <Box
           sx={{
@@ -255,8 +255,8 @@ const BenefitPolicyLifecycleBar = ({
       {showRenewalReminder && isRenewalSoon && (
         <Box
           sx={{
-            mt: 2,
-            p: 1.5,
+            mt: '1.0rem',
+            p: '0.75rem',
             borderRadius: 1,
             bgcolor: 'warning.lighter',
             border: 1,
@@ -288,3 +288,5 @@ BenefitPolicyLifecycleBar.propTypes = {
 };
 
 export default BenefitPolicyLifecycleBar;
+
+

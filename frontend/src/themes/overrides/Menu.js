@@ -8,11 +8,11 @@ export default function Menu(theme) {
             },
             styleOverrides: {
                 paper: {
-                    minWidth: 160,
+                    minWidth: 160.0,
                     boxShadow: theme.customShadows?.z1
                 },
                 list: {
-                    padding: 4
+                    padding: '0.375rem'
                 }
             }
         },
@@ -21,7 +21,7 @@ export default function Menu(theme) {
                 root: {
                     fontSize: '0.875rem',
                     padding: '8px 12px',
-                    borderRadius: 4,
+                    borderRadius: 4.0,
                     '&:hover': {
                         backgroundColor: theme.palette?.primary?.lighter ?? (theme.palette && theme.palette.primary ? theme.palette.primary.light + '20' : '#f5f5f5')
                     },
@@ -36,3 +36,4 @@ export default function Menu(theme) {
         }
     };
 }
+

@@ -227,8 +227,8 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
           justifyContent: 'space-between',
           bgcolor: 'primary.main',
           color: 'primary.contrastText',
-          px: 3,
-          py: 2
+          px: '1.5rem',
+          py: '1.0rem'
         }}
       >
         <Typography variant="h6" component="span" fontWeight="bold">
@@ -239,11 +239,11 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ p: 3 }}>
+      <DialogContent dividers sx={{ p: '1.5rem' }}>
         <Grid container spacing={3}>
           {/* Left Column: Photo & Status (3 columns) */}
           <Grid size={{ xs: 12, sm: 4 }} sx={{ textAlign: 'center' }}>
-            <Box sx={{ position: 'relative', display: 'inline-block', mb: 2 }}>
+            <Box sx={{ position: 'relative', display: 'inline-block', mb: '1.0rem' }}>
               <Badge
                 overlap="circular"
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
@@ -256,13 +256,13 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
                       bgcolor: 'background.paper',
                       boxShadow: 2,
                       '&:hover': { bgcolor: 'background.paper' },
-                      width: 36,
-                      height: 36,
+                      width: '2.25rem',
+                      height: '2.25rem',
                       border: '2px solid white'
                     }}
                   >
                     <input hidden accept="image/*" type="file" onChange={handlePhotoChange} />
-                    <CloudUploadIcon sx={{ fontSize: 20 }} />
+                    <CloudUploadIcon sx={{ fontSize: '1.25rem' }} />
                   </IconButton>
                 }
               >
@@ -365,7 +365,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
         </Grid>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, bgcolor: 'background.neutral' }}>
+      <DialogActions sx={{ p: '1.0rem', bgcolor: 'background.neutral' }}>
         <Button onClick={onClose} variant="outlined" color="inherit">
           إلغاء
         </Button>
@@ -383,3 +383,4 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
 };
 
 export default DependentModal;
+

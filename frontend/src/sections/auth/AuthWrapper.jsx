@@ -61,7 +61,7 @@ export default function AuthWrapper({ children }) {
         </Box>
 
         {/* Footer */}
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: '1.5rem' }}>
           <AuthFooter />
         </Box>
       </Stack>
@@ -70,3 +70,4 @@ export default function AuthWrapper({ children }) {
 }
 
 AuthWrapper.propTypes = { children: PropTypes.node };
+

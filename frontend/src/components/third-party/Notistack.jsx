@@ -47,7 +47,7 @@ const StyledSnackbarProvider = styled(SnackbarProvider)(({ theme }) => {
 
 export default function Notistack({ children }) {
   const snackbar = useGetSnackbar();
-  const iconSX = { marginRight: 8, fontSize: '1.15rem' };
+  const iconSX = { marginRight: '0.375rem', fontSize: '1.15rem' };
 
   if (snackbar === undefined) return <Loader />;
 
@@ -73,3 +73,5 @@ export default function Notistack({ children }) {
 }
 
 Notistack.propTypes = { children: PropTypes.any };
+
+

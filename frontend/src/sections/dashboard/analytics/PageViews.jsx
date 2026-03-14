@@ -20,8 +20,8 @@ export default function PageViews() {
         </Grid>
         <Grid />
       </Grid>
-      <MainCard sx={{ mt: 2 }} content={false}>
-        <List sx={{ p: 0, '& .MuiListItemButton-root': { py: 2 } }}>
+      <MainCard sx={{ mt: '1.0rem' }} content={false}>
+        <List sx={{ p: 0, '& .MuiListItemButton-root': { py: '1.0rem' } }}>
           <ListItemButton divider>
             <ListItemText
               primary="Admin Home"

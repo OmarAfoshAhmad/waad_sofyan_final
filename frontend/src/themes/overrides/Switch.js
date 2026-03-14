@@ -1,12 +1,12 @@
 function getSizeStyle(size) {
   switch (size) {
     case 'small':
-      return { width: 28, height: 16, base: 12, thumb: 10, trackRadius: 8 };
+      return { width: 28, height: 16, base: 12, thumb: 12, trackRadius: 8 };
     case 'large':
-      return { width: 60, height: 28, base: 32, thumb: 22, trackRadius: 24 };
+      return { width: 60, height: 28, base: 32, thumb: 24, trackRadius: 24 };
     case 'medium':
     default:
-      return { width: 44, height: 22, base: 22, thumb: 16, trackRadius: 16 };
+      return { width: 44, height: 22, base: 22, thumb: 18, trackRadius: 16 };
   }
 }
 
@@ -17,7 +17,7 @@ function switchStyle(theme, size) {
     width: sizes.width,
     height: sizes.height,
     '& .MuiSwitch-switchBase': {
-      padding: 3,
+      padding: '0.1875rem',
       '&.Mui-checked': {
         transform: `translateX(${sizes.base}px)`
       }
@@ -74,10 +74,10 @@ export default function Switch(theme) {
         root: {
           color: varsPalette.text?.primary ?? theme.palette.text?.primary,
           padding: 0,
-          margin: 8,
+          margin: '0.375rem',
           display: 'flex',
           '& ~ .MuiFormControlLabel-label': {
-            margin: 6
+            margin: '0.375rem'
           },
           ...switchStyle(theme, 'medium')
         },
@@ -89,3 +89,5 @@ export default function Switch(theme) {
     }
   };
 }
+
+

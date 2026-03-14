@@ -8,7 +8,7 @@ export default function ChartTooltip(theme) {
         container: {
           overflow: 'hidden'
         },
-        root: { '& div.MuiChartsTooltip-markContainer': { width: 24 } },
+        root: { '& div.MuiChartsTooltip-markContainer': { width: 24.0 } },
         table: {
           borderSpacing: '0 8px',
           '& caption': {

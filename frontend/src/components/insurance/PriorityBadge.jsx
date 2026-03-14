@@ -71,10 +71,10 @@ const PriorityBadge = ({
         sx={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 1.5,
-          px: 2,
+          gap: '0.75rem',
+          px: '1.0rem',
           py: 1,
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           bgcolor: `${config.color}.lighter`,
           border: 1,
           borderColor: `${config.color}.light`
@@ -85,14 +85,14 @@ const PriorityBadge = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 36,
-            height: 36,
+            width: '2.25rem',
+            height: '2.25rem',
             borderRadius: '50%',
             bgcolor: `${config.color}.main`,
             color: 'white'
           }}
         >
-          <IconComponent sx={{ fontSize: 20 }} />
+          <IconComponent sx={{ fontSize: '1.25rem' }} />
         </Box>
         <Box>
           <Typography variant="body2" fontWeight={600} color={`${config.color}.dark`}>
@@ -140,3 +140,5 @@ export default PriorityBadge;
 
 // Export config for use in other components
 export { PRIORITY_CONFIG };
+
+

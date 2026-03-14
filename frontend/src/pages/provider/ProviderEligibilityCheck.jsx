@@ -252,7 +252,7 @@ export default function ProviderEligibilityCheck() {
         { facingMode: 'environment' },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 }
+          qrbox: { width: '15.625rem', height: '15.625rem' }
         },
         (decodedText) => {
           stopQrScanner();
@@ -389,35 +389,35 @@ export default function ProviderEligibilityCheck() {
   // ========================================
 
   return (
-    <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 80px)', p: { xs: 1, md: 2 }, borderRadius: 2 }}>
+    <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 80px)', p: { xs: 1, md: 2 }, borderRadius: '0.125rem' }}>
       <ModernPageHeader title="فحص الأهلية" subtitle="التحقق من أهلية المؤمن عليه وتسجيل الزيارة" icon={LocalHospitalIcon} />
 
 
-      <Box sx={{ display: 'flex', gap: 3, mt: 1 }}>
+      <Box sx={{ display: 'flex', gap: '1.5rem', mt: 1 }}>
         {/* LEFT COLUMN: Member Profile Panel (Fixed Width - Desktop Only) */}
         {selectedMember && (
           <Paper
             elevation={2}
             sx={{
-              width: 300,
+              width: '18.75rem',
               flexShrink: 0,
               bgcolor: 'background.paper',
-              borderRadius: 2,
+              borderRadius: '0.125rem',
               overflow: 'hidden',
               height: 'fit-content',
               position: 'sticky',
-              top: 80,
+              top: '40.0rem',
               display: { xs: 'none', lg: 'block' }
             }}
           >
             {/* Header */}
-            <Box sx={{ bgcolor: 'primary.main', color: 'white', p: 2, textAlign: 'center' }}>
+            <Box sx={{ bgcolor: 'primary.main', color: 'white', p: '1.0rem', textAlign: 'center' }}>
               <Typography variant="h6" fontWeight={600}>
                 ملف المنتفع
               </Typography>
             </Box>
 
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: '1.5rem' }}>
               <Stack spacing={2} alignItems="center">
                 {/* Profile Image */}
                 <MemberAvatar
@@ -432,7 +432,7 @@ export default function ProviderEligibilityCheck() {
                     border: 4,
                     borderColor: selectedMember.eligible ? 'success.main' : 'error.main',
                     bgcolor: 'grey.300',
-                    fontSize: 48,
+                    fontSize: '3.0rem',
                     fontWeight: 600
                   }}
                 />
@@ -518,7 +518,7 @@ export default function ProviderEligibilityCheck() {
                         variant="determinate"
                         value={selectedMember.usagePercentage || 0}
                         color={getUsageColor(selectedMember.usagePercentage || 0)}
-                        sx={{ height: 8, borderRadius: 1, flex: 1 }}
+                        sx={{ height: '0.375rem', borderRadius: 1, flex: 1 }}
                       />
                       <Typography variant="body2" fontWeight={500}>
                         {(selectedMember.usagePercentage || 0).toFixed(0)}%
@@ -539,9 +539,9 @@ export default function ProviderEligibilityCheck() {
                 elevation={0}
                 sx={{
                   width: '100%',
-                  maxWidth: 1000,
+                  maxWidth: '62.5rem',
                   p: { xs: 2, md: 3 },
-                  borderRadius: 3,
+                  borderRadius: '0.1875rem',
                   bgcolor: 'common.white',
                   border: '1px solid',
                   borderColor: 'divider',
@@ -576,9 +576,9 @@ export default function ProviderEligibilityCheck() {
                         sx={{
                           direction: 'ltr',
                           '& .MuiOutlinedInput-root': {
-                            borderRadius: 1.5,
+                            borderRadius: '0.375rem',
                             bgcolor: 'common.white',
-                            minHeight: 56,
+                            minHeight: '3.5rem',
                             transition: 'all 0.2s ease',
                             '& fieldset': {
                               borderColor: 'divider'
@@ -603,7 +603,7 @@ export default function ProviderEligibilityCheck() {
                       startIcon={<QrCodeScannerIcon />}
                       onClick={handleOpenScannerDialog}
                       disabled={loading}
-                      sx={{ minWidth: { md: 150 }, borderRadius: 1.5, whiteSpace: 'nowrap' }}
+                      sx={{ minWidth: { md: 150 }, borderRadius: '0.375rem', whiteSpace: 'nowrap' }}
                     >
                       مسح الكاميرا
                     </Button>
@@ -614,7 +614,7 @@ export default function ProviderEligibilityCheck() {
                       onClick={handleSubmit}
                       disabled={loading || !searchValue.trim()}
                       startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircleIcon />}
-                      sx={{ minWidth: { md: 120 }, borderRadius: 1.5, fontWeight: 700 }}
+                      sx={{ minWidth: { md: 120 }, borderRadius: '0.375rem', fontWeight: 700 }}
                     >
                       فحص
                     </Button>
@@ -640,7 +640,7 @@ export default function ProviderEligibilityCheck() {
             {!result && (
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: '100%', bgcolor: 'common.white' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', height: '100%', bgcolor: 'common.white' }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <HistoryIcon color="primary" />
                       <Box>
@@ -651,7 +651,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: '100%', bgcolor: 'common.white' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', height: '100%', bgcolor: 'common.white' }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TaskAltIcon color="success" />
                       <Box>
@@ -662,7 +662,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: '100%', bgcolor: 'common.white' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', height: '100%', bgcolor: 'common.white' }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TipsAndUpdatesIcon color="warning" />
                       <Box>
@@ -673,7 +673,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'success.lighter', border: '1px solid', borderColor: 'success.light' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'success.lighter', border: '1px solid', borderColor: 'success.light' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Typography variant="subtitle2" color="success.dark" fontWeight={700}>حالات مقبولة اليوم</Typography>
                       <Typography variant="h4" color="success.dark" fontWeight={800}>{todayAcceptedCount}</Typography>
@@ -681,7 +681,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Typography variant="subtitle2" color="error.dark" fontWeight={700}>حالات مرفوضة اليوم</Typography>
                       <Typography variant="h4" color="error.dark" fontWeight={800}>{todayRejectedCount}</Typography>
@@ -702,26 +702,26 @@ export default function ProviderEligibilityCheck() {
                     </IconButton>
                   </Box>
                 }
-                contentSX={{ p: 2 }}
+                contentSX={{ p: '1.0rem' }}
               >
                 <Stack spacing={2}>
                   {/* Eligibility Status */}
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 1.5,
+                      p: '0.75rem',
                       bgcolor: result.eligible ? 'success.lighter' : 'error.lighter',
                       border: 1,
                       borderColor: result.eligible ? 'success.main' : 'error.main',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 2
+                      gap: '1.0rem'
                     }}
                   >
                     {result.eligible ? (
-                      <CheckCircleIcon sx={{ fontSize: 28, color: 'success.main' }} />
+                      <CheckCircleIcon sx={{ fontSize: '1.75rem', color: 'success.main' }} />
                     ) : (
-                      <CancelIcon sx={{ fontSize: 28, color: 'error.main' }} />
+                      <CancelIcon sx={{ fontSize: '1.75rem', color: 'error.main' }} />
                     )}
                     <Box flex={1}>
                       <Typography variant="h6" color={result.eligible ? 'success.dark' : 'error.dark'}>
@@ -745,7 +745,7 @@ export default function ProviderEligibilityCheck() {
 
                   {/* Warnings */}
                   {result.warnings && result.warnings.length > 0 && (
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={{ mt: '1.0rem' }}>
                       {result.warnings.map((warning, index) => (
                         <Alert key={index} severity="warning" sx={{ mb: 1 }}>
                           {warning}
@@ -756,7 +756,7 @@ export default function ProviderEligibilityCheck() {
 
                   {/* Principal Member Info */}
                   {result.principalMember && (
-                    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
+                    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50' }}>
                       <Stack direction="row" alignItems="center" spacing={2}>
                         <PersonIcon color="primary" />
                         <Box>
@@ -774,7 +774,7 @@ export default function ProviderEligibilityCheck() {
                   {/* Coverage Info */}
                   <Grid container spacing={2}>
                     <Grid xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.lighter' }}>
+                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'primary.lighter' }}>
                         <Typography variant="body2" color="text.secondary">
                           الحد السنوي
                         </Typography>
@@ -784,7 +784,7 @@ export default function ProviderEligibilityCheck() {
                       </Paper>
                     </Grid>
                     <Grid xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.lighter' }}>
+                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'warning.lighter' }}>
                         <Typography variant="body2" color="text.secondary">
                           المستخدم
                         </Typography>
@@ -794,7 +794,7 @@ export default function ProviderEligibilityCheck() {
                       </Paper>
                     </Grid>
                     <Grid xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'success.lighter' }}>
+                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'success.lighter' }}>
                         <Typography variant="body2" color="text.secondary">
                           المتبقي
                         </Typography>
@@ -804,7 +804,7 @@ export default function ProviderEligibilityCheck() {
                       </Paper>
                     </Grid>
                     <Grid xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.100' }}>
+                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'grey.100' }}>
                         <Typography variant="body2" color="text.secondary">
                           نسبة الاستخدام
                         </Typography>
@@ -816,11 +816,11 @@ export default function ProviderEligibilityCheck() {
                   {/* Family Members Table */}
                   {result.familyMembers && result.familyMembers.length > 0 && (
                     <Box>
-                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: '1.0rem' }}>
                         <FamilyRestroomIcon color="primary" />
                         <Typography variant="h6">أفراد العائلة ({result.totalFamilyMembers || result.familyMembers.length})</Typography>
                       </Stack>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
                         يرجى اختيار المنتفع من القائمة أدناه للمتابعة
                       </Typography>
 
@@ -860,7 +860,7 @@ export default function ProviderEligibilityCheck() {
                                         {member.fullName}
                                       </Typography>
                                       {member.isPrincipal && (
-                                        <Chip label="رئيسي" size="small" color="primary" sx={{ height: 18, fontSize: 10 }} />
+                                        <Chip label="رئيسي" size="small" color="primary" sx={{ height: '1.125rem', fontSize: '0.75rem' }} />
                                       )}
                                     </Box>
                                   </Stack>
@@ -881,7 +881,7 @@ export default function ProviderEligibilityCheck() {
                                       variant="determinate"
                                       value={member.usagePercentage || 0}
                                       color={getUsageColor(member.usagePercentage || 0)}
-                                      sx={{ height: 6, borderRadius: 1, flex: 1, minWidth: 50 }}
+                                      sx={{ height: '0.375rem', borderRadius: 1, flex: 1, minWidth: '3.125rem' }}
                                     />
                                     <Typography variant="caption">{(member.usagePercentage || 0).toFixed(0)}%</Typography>
                                   </Box>
@@ -910,11 +910,11 @@ export default function ProviderEligibilityCheck() {
 
                   {/* Selected Member Action - Register Visit */}
                   {selectedMember && (
-                    <Paper elevation={0} sx={{ p: 3, bgcolor: 'info.lighter', border: 1, borderColor: 'info.main' }}>
+                    <Paper elevation={0} sx={{ p: '1.5rem', bgcolor: 'info.lighter', border: 1, borderColor: 'info.main' }}>
                       <Stack spacing={2}>
                         {/* Mobile Member Summary (visible on small screens) */}
                         <Box sx={{ display: { xs: 'block', lg: 'none' } }}>
-                          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+                          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: '1.0rem' }}>
                             <MemberAvatar
                               member={{
                                 id: selectedMember.memberId,
@@ -937,7 +937,7 @@ export default function ProviderEligibilityCheck() {
                               </Typography>
                             </Box>
                           </Stack>
-                          <Divider sx={{ mb: 2 }} />
+                          <Divider sx={{ mb: '1.0rem' }} />
                         </Box>
 
                         {/* Visit Type Selection */}
@@ -995,19 +995,19 @@ export default function ProviderEligibilityCheck() {
             ) : (
               <Paper
                 sx={{
-                  p: 4,
+                  p: '2.0rem',
                   textAlign: 'center',
                   bgcolor: 'common.white',
                   border: '1px dashed',
                   borderColor: 'divider',
-                  minHeight: 140,
+                  minHeight: '8.75rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
               >
                 <Box>
-                  <LocalHospitalIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 1.5 }} />
+                  <LocalHospitalIcon sx={{ fontSize: '4.0rem', color: 'text.disabled', mb: '0.75rem' }} />
                   <Typography variant="h6" color="text.secondary" gutterBottom>
                     في انتظار الفحص
                   </Typography>
@@ -1024,13 +1024,13 @@ export default function ProviderEligibilityCheck() {
       <Paper
         variant="outlined"
         sx={{
-          mt: 2,
-          p: 1.5,
-          borderRadius: 2,
+          mt: '1.0rem',
+          p: '0.75rem',
+          borderRadius: '0.125rem',
           bgcolor: 'common.white',
           display: 'flex',
           alignItems: 'center',
-          gap: 1.25,
+          gap: '0.625rem',
           overflowX: 'auto'
         }}
       >
@@ -1060,18 +1060,18 @@ export default function ProviderEligibilityCheck() {
       <Dialog open={scannerOpen} onClose={handleCloseScannerDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
           مسح الباركود / QR Code
-          <IconButton onClick={handleCloseScannerDialog} sx={{ position: 'absolute', right: 8, top: 8 }}>
+          <IconButton onClick={handleCloseScannerDialog} sx={{ position: 'absolute', right: '0.375rem', top: '4.0rem' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent>
           {cameraError ? (
-            <Alert severity="warning" sx={{ mb: 2 }}>
+            <Alert severity="warning" sx={{ mb: '1.0rem' }}>
               {cameraError}
             </Alert>
           ) : (
             <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
                 وجّه الكاميرا نحو الباركود أو QR Code
               </Typography>
               <Box
@@ -1094,3 +1094,7 @@ export default function ProviderEligibilityCheck() {
     </Box>
   );
 }
+
+
+
+

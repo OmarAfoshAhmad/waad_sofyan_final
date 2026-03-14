@@ -39,18 +39,18 @@ import RightOutlined from '@ant-design/icons/RightOutlined';
 const PopperStyled = styled(Popper)(({ theme }) => ({
   overflow: 'visible',
   zIndex: 1202,
-  minWidth: 180,
+  minWidth: '11.25rem',
   '& > .MuiBox-root': {
     position: 'relative',
     '&:before': {
       content: '""',
       display: 'block',
       position: 'absolute',
-      top: 25,
+      top: '12.5rem',
       ...(theme.direction !== 'rtl' && { left: -5 }),
       ...(theme.direction === 'rtl' && { right: -5 }),
-      width: 10,
-      height: 10,
+      width: '0.625rem',
+      height: '0.625rem',
       background: theme.vars.palette.background.paper,
       transform: 'translateY(-50%) rotate(45deg)',
       zIndex: 120,
@@ -66,7 +66,7 @@ const PopperStyled = styled(Popper)(({ theme }) => ({
     },
     '&:before': {
       top: 'auto',
-      bottom: 5
+      bottom: '2.5rem'
     }
   }
 }));
@@ -237,7 +237,7 @@ export default function NavCollapse({ menu, level, parentId, setSelectedItems, s
   const popperId = miniMenuOpened ? `collapse-pop-${menu.id}` : undefined;
   const FlexBox = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' };
 
-  const collapsedIconStyle = { fontSize: '0.625rem' };
+  const collapsedIconStyle = { fontSize: '0.75rem' };
   const collapsedIcon = miniMenuOpened || open ? <UpOutlined style={collapsedIconStyle} /> : <DownOutlined style={collapsedIconStyle} />;
 
   return (
@@ -278,12 +278,12 @@ export default function NavCollapse({ menu, level, parentId, setSelectedItems, s
               <ListItemIcon
                 onClick={handlerIconLink}
                 sx={(theme) => ({
-                  minWidth: 28,
+                  minWidth: '1.75rem',
                   color: selected === menu.id ? 'primary.main' : textColor,
                   ...(!drawerOpen && {
-                    borderRadius: 1.5,
-                    width: 36,
-                    height: 36,
+                    borderRadius: '0.375rem',
+                    width: '2.25rem',
+                    height: '2.25rem',
                     alignItems: 'center',
                     justifyContent: 'center',
                     '&:hover': { bgcolor: 'secondary.lighter', ...theme.applyStyles('dark', { bgcolor: 'secondary.light' }) }
@@ -326,8 +326,8 @@ export default function NavCollapse({ menu, level, parentId, setSelectedItems, s
                   color="secondary"
                   variant="outlined"
                   sx={{
-                    width: 20,
-                    height: 20,
+                    width: '1.25rem',
+                    height: '1.25rem',
                     mr: '-5px',
                     color: 'secondary.dark',
                     borderColor: open ? 'primary.light' : 'secondary.light',
@@ -384,7 +384,7 @@ export default function NavCollapse({ menu, level, parentId, setSelectedItems, s
               onClick={handleCloseCollapse}
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              sx={{ '& .MuiListItemButton-root': { pl: 2 } }}
+              sx={{ '& .MuiListItemButton-root': { pl: '1.0rem' } }}
               slotProps={{ paper: { sx: { boxShadow: theme.shadows[2] } } }}
             >
               {navCollapse}
@@ -451,3 +451,7 @@ NavCollapse.propTypes = {
   setSelectedLevel: PropTypes.func,
   selectedLevel: PropTypes.number
 };
+
+
+
+

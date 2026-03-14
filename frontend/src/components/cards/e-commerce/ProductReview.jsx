@@ -19,7 +19,7 @@ export default function ProductReview({ avatar, date, name, rating, review }) {
     <Grid size={12}>
       <Stack direction="row" sx={{ gap: 1 }}>
         <Avatar alt={name} src={avatar && getImageUrl(`${avatar}`, ImagePath.USERS)} />
-        <Stack sx={{ gap: 2 }}>
+        <Stack sx={{ gap: '1.0rem' }}>
           <Stack sx={{ gap: 0.5 }}>
             <Typography variant="subtitle1" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
               {name}

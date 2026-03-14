@@ -20,14 +20,14 @@ export default function ComponentLayout() {
 
   return (
     <Suspense fallback={<Loader />}>
-      <Container maxWidth="lg" sx={{ px: { xs: 0, sm: 2 } }}>
+      <Container maxWidth="lg" sx={{ px: { xs: 0, sm: '1.0rem' } }}>
         <Header
           variant="component"
           enableComponentDrawer={true}
           onComponentDrawerToggle={handlerComponentDrawer}
           isComponentDrawerOpened={menuMaster.isComponentDrawerOpened}
         />
-        <Toolbar sx={{ my: 2 }} />
+        <Toolbar sx={{ my: '1.0rem' }} />
         <ComponentLayoutPage />
       </Container>
       <Footer />

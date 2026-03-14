@@ -19,10 +19,10 @@ export default function PlaceholderContent({ type }) {
       {type !== DropzoneType.STANDARD && (
         <Stack
           direction={{ xs: 'column', md: 'row' }}
-          sx={{ gap: 2, alignItems: 'center', justifyContent: 'center', width: 1, textAlign: { xs: 'center', md: 'left' } }}
+          sx={{ gap: '1.0rem', alignItems: 'center', justifyContent: 'center', width: '0.0625rem', textAlign: { xs: 'center', md: 'left' } }}
         >
-          <CardMedia component="img" image={UploadCover} sx={{ width: 150 }} />
-          <Stack sx={{ gap: 1, p: 3 }}>
+          <CardMedia component="img" image={UploadCover} sx={{ width: '9.375rem' }} />
+          <Stack sx={{ gap: 1, p: '1.5rem' }}>
             <Typography variant="h5">Drag & Drop or Select file</Typography>
 
             <Typography color="secondary">
@@ -36,7 +36,7 @@ export default function PlaceholderContent({ type }) {
         </Stack>
       )}
       {type === DropzoneType.STANDARD && (
-        <Stack sx={{ alignItems: 'center', justifyContent: 'center', height: 1, gap: 1 }}>
+        <Stack sx={{ alignItems: 'center', justifyContent: 'center', height: '0.0625rem', gap: 1 }}>
           <PlusOutlined />
           <Typography color="textSecondary" sx={{ lineHeight: 1.3 }}>
             Upload

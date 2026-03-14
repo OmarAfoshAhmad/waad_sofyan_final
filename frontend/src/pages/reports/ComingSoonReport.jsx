@@ -111,8 +111,8 @@ const ComingSoonReport = () => {
             <Box position="relative" mb={4}>
               <Box
                 sx={{
-                  width: 120,
-                  height: 120,
+                  width: '7.5rem',
+                  height: '7.5rem',
                   borderRadius: '50%',
                   bgcolor: `${config.color}15`,
                   display: 'flex',
@@ -120,7 +120,7 @@ const ComingSoonReport = () => {
                   justifyContent: 'center'
                 }}
               >
-                <IconComponent sx={{ fontSize: 60, color: config.color }} />
+                <IconComponent sx={{ fontSize: '3.75rem', color: config.color }} />
               </Box>
               <Chip
                 icon={<ConstructionIcon />}
@@ -142,12 +142,12 @@ const ComingSoonReport = () => {
               {config.title}
             </Typography>
 
-            <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" color="text.secondary" sx={{ mb: '1.5rem' }}>
               {config.titleEn}
             </Typography>
 
             {/* Description */}
-            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600, mb: 4, lineHeight: 1.8 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: '37.5rem', mb: '2.0rem', lineHeight: 1.8 }}>
               {config.description}
             </Typography>
 
@@ -156,10 +156,10 @@ const ComingSoonReport = () => {
               <Paper
                 variant="outlined"
                 sx={{
-                  p: 3,
-                  maxWidth: 500,
+                  p: '1.5rem',
+                  maxWidth: '31.25rem',
                   width: '100%',
-                  mb: 4,
+                  mb: '2.0rem',
                   bgcolor: 'grey.50'
                 }}
               >
@@ -171,8 +171,8 @@ const ComingSoonReport = () => {
                     <Stack key={idx} direction="row" spacing={1} alignItems="center">
                       <Box
                         sx={{
-                          width: 6,
-                          height: 6,
+                          width: '0.375rem',
+                          height: '0.375rem',
                           borderRadius: '50%',
                           bgcolor: config.color
                         }}
@@ -189,13 +189,13 @@ const ComingSoonReport = () => {
             {/* Status Message */}
             <Paper
               sx={{
-                p: 2,
+                p: '1.0rem',
                 bgcolor: 'warning.lighter',
                 border: '1px solid',
                 borderColor: 'warning.light',
-                borderRadius: 2,
-                maxWidth: 500,
-                mb: 4
+                borderRadius: '0.125rem',
+                maxWidth: '31.25rem',
+                mb: '2.0rem'
               }}
             >
               <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">

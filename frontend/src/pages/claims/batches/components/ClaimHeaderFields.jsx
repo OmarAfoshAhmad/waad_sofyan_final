@@ -1,7 +1,8 @@
 import React from 'react';
 import {
-    Grid, Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox
+    Grid, Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Chip
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 
 const inlineSx = {
     '& .MuiInputBase-root': { fontSize: '0.8rem' }
@@ -30,122 +31,183 @@ export const ClaimHeaderFields = ({
     complaint,
     setComplaint,
     setIsDirty,
+    financialSummary,
+    loadingSummary,
     t
 }) => {
     return (
-        <Grid container spacing={2}>
-            {/* Row 1: Patient, Diagnosis, Context */}
-            <Grid size={{ xs: 12, sm: 3 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                    {t('claimEntry.patient')} <Typography component="span" color="error.main">*</Typography>
-                </Typography>
-                <Autocomplete size="small" fullWidth options={memberOptions} loading={searchingMember}
-                    value={member}
-                    onChange={(_, v) => { 
-                        setMember(v); 
-                        setIsDirty(true); 
-                        if (v?.id) {
-                            // Fetch all lines coverage for THE NEW MEMBER
-                            refetchAllLinesCoverage(primaryCategoryCode, linesRef.current);
-                        }
-                    }}
-                    onInputChange={(_, v) => setMemberInput(v)}
-                    getOptionLabel={o => `${o.fullName || ''} · ${o.cardNumber || o.nationalNumber || ''}`}
-                    isOptionEqualToValue={(o, v) => o.id === v?.id}
-                    renderInput={params => (
-                        <TextField {...params} inputRef={memberRef} variant="standard" autoFocus
-                            placeholder={t('claimEntry.searchPatient')} sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-                    )}
-                />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 3 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                    {t('claimEntry.diagnosis')}
-                </Typography>
-                <TextField fullWidth size="small" variant="standard" value={diagnosis}
-                    onChange={e => { setDiagnosis(e.target.value); setIsDirty(true); }} sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
-            </Grid>
-
-            <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                    سياق التغطية (Context)
-                </Typography>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                size="small"
-                                checked={primaryCategoryCode === 'CAT-OUTPAT'}
-                                onChange={(e) => {
-                                    const checked = e.target.checked;
-                                    const newCode = checked ? 'CAT-OUTPAT' : '';
-                                    setPrimaryCategoryCode(newCode);
-                                    setManualCategoryEnabled(true);
-                                    setIsDirty(true);
-                                    refetchAllLinesCoverage(newCode, linesRef.current);
-                                }}
-                            />
-                        }
-                        label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 900, whiteSpace: 'nowrap' }}>عيادات خارجية</Typography>}
-                    />
-                    {primaryCategoryCode !== 'CAT-OUTPAT' && (
-                        <Autocomplete
-                            size="small"
-                            sx={{ flexGrow: 1 }}
-                            options={rootCategories?.filter(c => c.code !== 'CAT-OUTPAT') || []}
-                            getOptionLabel={(o) => o.name || o.nameAr || ''}
-                            value={rootCategories?.find(c => c.code === primaryCategoryCode) || null}
-                            onChange={(_, v) => {
-                                const newCode = v?.code || '';
-                                setPrimaryCategoryCode(newCode);
-                                setManualCategoryEnabled(!!v);
-                                setIsDirty(true);
-                                refetchAllLinesCoverage(newCode, linesRef.current);
+        <Grid container spacing={3} sx={{ width: '100%', m: 0 }}>
+            {/* Column 1: Patient & Pre-approval */}
+            <Grid item xs={12} sm={4}>
+                <Stack spacing={2}>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                            {t('claimEntry.patient')} <Typography component="span" color="error.main">*</Typography>
+                        </Typography>
+                        <Autocomplete 
+                            size="small" 
+                            fullWidth 
+                            options={memberOptions} 
+                            loading={searchingMember}
+                            value={member}
+                            onChange={(_, v) => { 
+                                setMember(v); 
+                                setIsDirty(true); 
+                                if (v?.id) {
+                                    refetchAllLinesCoverage(primaryCategoryCode, linesRef.current);
+                                }
                             }}
-                            renderInput={(params) => (
-                                <TextField {...params} variant="standard" placeholder="اختر التصنيف..."
-                                    sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
+                            onInputChange={(_, v) => setMemberInput(v)}
+                            filterOptions={(x) => x}
+                            getOptionLabel={o => `${o.fullName || ''} · ${o.cardNumber || o.nationalNumber || ''}`}
+                            isOptionEqualToValue={(o, v) => o.id === v?.id}
+                            renderInput={params => (
+                                <TextField {...params} inputRef={memberRef} variant="standard" autoFocus
+                                    placeholder="ابحث بالاسم، رقم البطاقة..." 
+                                    sx={inlineSx} />
                             )}
                         />
-                    )}
+                    </Box>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                            رقم الموافقة المسبقة (PA Selection)
+                        </Typography>
+                        <Autocomplete
+                            size="small"
+                            fullWidth
+                            options={preAuthResults?.items || []}
+                            loading={searchingPreAuth}
+                            value={preAuthResults?.items?.find(pa => pa.id === parseInt(preAuthId)) || null}
+                            onInputChange={(_, v) => setPreAuthSearch(v)}
+                            onChange={(_, v) => {
+                                setPreAuthId(v?.id || '');
+                                setIsDirty(true);
+                            }}
+                            getOptionLabel={o => `[${o.preAuthNumber || o.id}] ${o.medicalServiceName || ''}`}
+                            renderInput={params => (
+                                <TextField {...params} variant="standard"
+                                    placeholder="ابحث برقم الموافقة..."
+                                    sx={inlineSx}
+                                />
+                            )}
+                            noOptionsText="لا توجد موافقات مسبقة"
+                        />
+                    </Box>
                 </Stack>
             </Grid>
 
-            {/* Row 2: Pre-approval, Complaint, Notes */}
-            <Grid size={{ xs: 12, sm: 4 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                    رقم الموافقة المسبقة (PA Selection)
-                </Typography>
-                <Autocomplete
-                    size="small"
-                    fullWidth
-                    options={preAuthResults?.items || []}
-                    loading={searchingPreAuth}
-                    value={preAuthResults?.items?.find(pa => pa.id === parseInt(preAuthId)) || null}
-                    onInputChange={(_, v) => setPreAuthSearch(v)}
-                    onChange={(_, v) => {
-                        setPreAuthId(v?.id || '');
-                        setIsDirty(true);
-                    }}
-                    getOptionLabel={o => `[${o.preAuthNumber || o.referenceNumber || o.id}] ${o.medicalServiceName || ''}`}
-                    renderInput={params => (
-                        <TextField {...params} variant="standard"
-                            placeholder="ابحث برقم الموافقة..."
-                            sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }}
+            {/* Column 2: Diagnosis & Complaint */}
+            <Grid item xs={12} sm={4}>
+                <Stack spacing={2}>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                            {t('claimEntry.diagnosis')}
+                        </Typography>
+                        <TextField fullWidth size="small" variant="standard" value={diagnosis}
+                            placeholder="التشخيص الطبي..."
+                            onChange={e => { setDiagnosis(e.target.value); setIsDirty(true); }} 
+                            sx={inlineSx} 
                         />
-                    )}
-                    noOptionsText="لا توجد موافقات مسبقة"
-                />
+                    </Box>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                            {t('claimEntry.complaint')}
+                        </Typography>
+                        <TextField fullWidth size="small" variant="standard" value={complaint}
+                            placeholder="الشكوى أو الملاحظات..."
+                            onChange={e => { setComplaint(e.target.value); setIsDirty(true); }} 
+                            sx={inlineSx} 
+                        />
+                    </Box>
+                </Stack>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 4 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, display: 'block', mb: 0.5, fontSize: '0.7rem' }}>
-                    {t('claimEntry.complaint')}
-                </Typography>
-                <TextField fullWidth size="small" variant="standard" value={complaint}
-                    onChange={e => { setComplaint(e.target.value); setIsDirty(true); }} sx={{ ...inlineSx, '& .MuiInputBase-input': { fontSize: '0.8rem' } }} />
+            {/* Column 3: Coverage Context & Annual Summary */}
+            <Grid item xs={12} sm={4}>
+                <Stack spacing={1.5}>
+                    <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                            سياق التغطية (Context)
+                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        size="small"
+                                        checked={primaryCategoryCode === 'CAT-OUTPAT'}
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            const newCode = checked ? 'CAT-OUTPAT' : '';
+                                            setPrimaryCategoryCode(newCode);
+                                            setManualCategoryEnabled(true);
+                                            setIsDirty(true);
+                                            refetchAllLinesCoverage(newCode, linesRef.current);
+                                        }}
+                                    />
+                                }
+                                label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>عيادات خارجية</Typography>}
+                            />
+                            {primaryCategoryCode !== 'CAT-OUTPAT' && (
+                                <Autocomplete
+                                    size="small"
+                                    sx={{ flexGrow: 1 }}
+                                    options={rootCategories?.filter(c => c.code !== 'CAT-OUTPAT') || []}
+                                    getOptionLabel={(o) => o.name || o.nameAr || ''}
+                                    value={rootCategories?.find(c => c.code === primaryCategoryCode) || null}
+                                    onChange={(_, v) => {
+                                        const newCode = v?.code || '';
+                                        setPrimaryCategoryCode(newCode);
+                                        setManualCategoryEnabled(!!v);
+                                        setIsDirty(true);
+                                        refetchAllLinesCoverage(newCode, linesRef.current);
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField {...params} variant="standard" placeholder="اختر التصنيف..."
+                                            sx={inlineSx} />
+                                    )}
+                                />
+                            )}
+                        </Stack>
+                    </Box>
+
+                    <Box sx={{ 
+                        p: 1.5, 
+                        borderRadius: 1, 
+                        bgcolor: alpha('#00867d', 0.05),
+                        border: '1px solid',
+                        borderColor: alpha('#00867d', 0.1),
+                        minHeight: '65px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                    }}>
+                        <Typography variant="caption" sx={{ color: '#004d40', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
+                            التغطية السنوية المتبقية
+                        </Typography>
+                        {loadingSummary ? (
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 400, color: 'text.disabled' }}>جاري التحميل...</Typography>
+                        ) : financialSummary ? (
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#00695c', fontSize: '1.05rem' }}>
+                                    {financialSummary.remainingCoverage?.toFixed(2) || '0.00'} د.ل
+                                </Typography>
+                                <Chip 
+                                    size="small" 
+                                    label={`${financialSummary.utilizationPercent?.toFixed(1) || '0.0'}% مستهلك`}
+                                    color={financialSummary.utilizationPercent > 80 ? 'error' : 'success'}
+                                    sx={{ height: '1.2rem', fontSize: '0.75rem', fontWeight: 500 }}
+                                />
+                            </Stack>
+                        ) : (
+                            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 400, color: 'text.disabled' }}>— اختر مستفيداً —</Typography>
+                        )}
+                    </Box>
+                </Stack>
             </Grid>
         </Grid>
     );
 };
+
+
+
+

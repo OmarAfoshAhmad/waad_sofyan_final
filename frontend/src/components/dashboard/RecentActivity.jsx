@@ -9,7 +9,7 @@ import { PersonAdd, Receipt, Assignment, Warning, CheckCircle, Cancel, Info } fr
  */
 const RecentActivity = ({ data, loading }) => {
   const getActivityIcon = (type) => {
-    const iconProps = { sx: { fontSize: 20 } };
+    const iconProps = { sx: { fontSize: '1.25rem' } };
     switch (type) {
       case 'MEMBER_ADDED':
         return <PersonAdd {...iconProps} />;
@@ -85,7 +85,7 @@ const RecentActivity = ({ data, loading }) => {
         <CardHeader title="الأنشطة الأخيرة" />
         <CardContent>
           {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} variant="rectangular" height={60} sx={{ mb: 2 }} />
+            <Skeleton key={i} variant="rectangular" height={60} sx={{ mb: '1.0rem' }} />
           ))}
         </CardContent>
       </Card>

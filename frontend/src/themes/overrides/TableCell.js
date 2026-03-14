@@ -21,7 +21,7 @@ export default function TableCell(theme) {
         root: ({ ownerState }) => {
           const baseStyle = {
             fontSize: '0.9375rem', // 15px - increased from 14px for body cells
-            padding: 16, // increased from 12px for better spacing
+            padding: '1.0rem', // increased from 12px for better spacing
             borderColor: varsPalette.divider ?? theme.palette.divider,
             lineHeight: 1.6 // improved line height for Arabic text
           };
@@ -58,7 +58,7 @@ export default function TableCell(theme) {
           return baseStyle;
         },
         sizeSmall: {
-          padding: 12, // increased from 8px
+          padding: '0.75rem', // increased from 8px
           fontSize: '0.875rem' // 14px for small cells
         },
         head: {
@@ -71,3 +71,5 @@ export default function TableCell(theme) {
     }
   };
 }
+
+

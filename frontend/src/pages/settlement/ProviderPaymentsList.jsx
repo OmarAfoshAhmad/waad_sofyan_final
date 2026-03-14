@@ -204,9 +204,9 @@ export default function ProviderPaymentsList() {
   const renderSummaryCard = (title, value, icon, borderColor = 'primary.main') => (
     <Box
       sx={{
-        minWidth: 160,
-        height: 48,
-        px: 1.25,
+        minWidth: '10.0rem',
+        height: '3.0rem',
+        px: '0.625rem',
         py: 0.5,
         border: 1,
         borderColor,
@@ -240,13 +240,13 @@ export default function ProviderPaymentsList() {
       {
         id: 'providerName',
         label: 'مقدم الخدمة',
-        minWidth: 180,
+        minWidth: '11.25rem',
         renderCell: ({ row }) => (
           row.isTotalsRow ? (
             <Typography variant="body2" fontWeight={800} color="primary.main">الإجمالي</Typography>
           ) : (
           <Stack direction="row" alignItems="center" spacing={1.5}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main' }} />
+            <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: 'primary.main' }} />
             <Typography variant="body2" fontWeight={600}>
               {row.providerName || `مقدم خدمة #${row.providerId || row.id}`}
             </Typography>
@@ -257,20 +257,20 @@ export default function ProviderPaymentsList() {
       {
         id: 'providerType',
         label: 'النوع',
-        minWidth: 90,
+        minWidth: '5.625rem',
         renderCell: ({ row }) => row.providerType || 'غير متوفر'
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 90,
+        minWidth: '5.625rem',
         align: 'center',
         renderCell: ({ row }) => (row.isTotalsRow ? '-' : STATUS_LABELS[row.status] || row.status || '-')
       },
       {
         id: 'runningBalance',
         label: 'الرصيد الحالي',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         renderCell: ({ row }) => {
           const balance = Number(row.runningBalance) || 0;
@@ -284,21 +284,21 @@ export default function ProviderPaymentsList() {
       {
         id: 'totalApproved',
         label: 'إجمالي المعتمد',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'right',
         renderCell: ({ row }) => formatCurrency(row.totalApproved)
       },
       {
         id: 'totalPaid',
         label: 'إجمالي المدفوع',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'right',
         renderCell: ({ row }) => formatCurrency(row.totalPaid)
       },
       {
         id: 'gapAmount',
         label: 'فجوة السداد',
-        minWidth: 110,
+        minWidth: '6.875rem',
         align: 'right',
         renderCell: ({ row }) => {
           const gap = Number(row.gapAmount || 0);
@@ -308,7 +308,7 @@ export default function ProviderPaymentsList() {
       {
         id: 'coveragePercent',
         label: 'نسبة السداد',
-        minWidth: 95,
+        minWidth: '5.9375rem',
         align: 'center',
         renderCell: ({ row }) => {
           const value = Number(row.coveragePercent || 0);
@@ -318,7 +318,7 @@ export default function ProviderPaymentsList() {
       {
         id: 'lastActivityAt',
         label: 'آخر حركة',
-        minWidth: 110,
+        minWidth: '6.875rem',
         align: 'center',
         renderCell: ({ row }) => {
           if (row.isTotalsRow) return '-';
@@ -329,14 +329,14 @@ export default function ProviderPaymentsList() {
       {
         id: 'pendingClaimsCount',
         label: 'مطالبات معلقة',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         renderCell: ({ row }) => row.pendingClaimsCount || 0
       },
       {
         id: 'actions',
         label: 'إجراءات',
-        minWidth: 105,
+        minWidth: '6.5625rem',
         align: 'center',
         sortable: false,
         renderCell: ({ row }) => (
@@ -347,7 +347,7 @@ export default function ProviderPaymentsList() {
             color="primary"
             startIcon={<AccountBalanceWalletIcon />}
             onClick={() => handleViewTransactions(row)}
-            sx={{ borderRadius: 2 }}
+            sx={{ borderRadius: '0.125rem' }}
           >
             الدفعات
           </Button>
@@ -379,7 +379,7 @@ export default function ProviderPaymentsList() {
               alignItems: 'stretch',
               overflowX: 'auto',
               pb: 0.25,
-              '&::-webkit-scrollbar': { height: 6 }
+              '&::-webkit-scrollbar': { height: '0.375rem' }
             }}
           >
             {renderSummaryCard('إجمالي المرافق', String(withComputed.length), <ReceiptIcon fontSize="small" color="primary" />, 'primary.main')}
@@ -400,7 +400,7 @@ export default function ProviderPaymentsList() {
               label="بحث باسم مقدم الخدمة أو الرقم"
               value={filters.search}
               onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+              sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={2} lg={1.8}>
@@ -410,7 +410,7 @@ export default function ProviderPaymentsList() {
               label="حالة الحساب"
               value={filters.status}
               onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+              sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             >
               {STATUS_OPTIONS.map((option) => (
                 <MenuItem key={option.value} value={option.value}>
@@ -431,7 +431,7 @@ export default function ProviderPaymentsList() {
                   hasBalance: e.target.value === 'HAS_BALANCE'
                 }))
               }
-              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+              sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             >
               <MenuItem value="ALL">الكل</MenuItem>
               <MenuItem value="HAS_BALANCE">فقط بحسابات مستحقة</MenuItem>
@@ -444,7 +444,7 @@ export default function ProviderPaymentsList() {
               label="نوع مقدم الخدمة"
               value={filters.providerType}
               onChange={(e) => setFilters((prev) => ({ ...prev, providerType: e.target.value }))}
-              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+              sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             >
               {providerTypeOptions.map((type) => (
                 <MenuItem key={type} value={type}>
@@ -461,7 +461,7 @@ export default function ProviderPaymentsList() {
               value={filters.dateFrom}
               onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
               InputLabelProps={{ shrink: true }}
-              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+              sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={2} lg={1.6}>
@@ -472,16 +472,16 @@ export default function ProviderPaymentsList() {
               value={filters.dateTo}
               onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
               InputLabelProps={{ shrink: true }}
-              sx={{ '& .MuiInputBase-root': { height: 40 } }}
+              sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             />
           </Grid>
           <Grid item xs={12} md={2} lg={1.8}>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="contained" startIcon={<SearchIcon />} onClick={handleApplyFilters} sx={{ height: 40, minHeight: 40 }}>
+              <Button variant="contained" startIcon={<SearchIcon />} onClick={handleApplyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem' }}>
                 بحث
               </Button>
               <Tooltip title="مسح الفلاتر">
-                <IconButton color="default" onClick={handleClearFilters} sx={{ height: 40, width: 40, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <IconButton color="default" onClick={handleClearFilters} sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                   <ClearIcon />
                 </IconButton>
               </Tooltip>
@@ -491,12 +491,12 @@ export default function ProviderPaymentsList() {
           <Grid item xs={12} md={3} lg={1.7}>
             <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-start' }} sx={{ direction: 'ltr' }}>
               <Tooltip title="تحديث">
-                <IconButton onClick={refetch} color="primary" disabled={isLoading} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}>
+                <IconButton onClick={refetch} color="primary" disabled={isLoading} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
                   <RefreshIcon />
                 </IconButton>
               </Tooltip>
 
-              <Button variant="outlined" color="primary" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ height: 40, minHeight: 40, whiteSpace: 'nowrap', px: 1.5, borderRadius: 1 }}>
+              <Button variant="outlined" color="primary" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}>
                 طباعة
               </Button>
 
@@ -506,7 +506,7 @@ export default function ProviderPaymentsList() {
                 startIcon={<FileDownloadIcon />}
                 onClick={handleExportExcel}
                 disabled={!withComputed.length}
-                sx={{ height: 40, minHeight: 40, whiteSpace: 'nowrap', px: 1.5, borderRadius: 1 }}
+                sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
               >
                 تصدير
               </Button>
@@ -518,8 +518,8 @@ export default function ProviderPaymentsList() {
       <MainCard content={false} sx={{ flexGrow: 1, overflow: 'hidden' }}>
         <Box sx={{ p: 0, height: '100%' }}>
           {isError && (
-            <Box sx={{ p: 2 }}>
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
+            <Box sx={{ p: '1.0rem' }}>
+              <Alert severity="error" sx={{ borderRadius: '0.125rem' }}>
                 {error?.message || 'فشل جلب بيانات الدفعات'}
               </Alert>
             </Box>
@@ -555,3 +555,5 @@ export default function ProviderPaymentsList() {
     </Box>
   );
 }
+
+

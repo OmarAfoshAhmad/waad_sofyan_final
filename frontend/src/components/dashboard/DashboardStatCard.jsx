@@ -25,8 +25,8 @@ const DashboardStatCard = ({ title, value, change, icon: Icon, color = 'primary'
             {Icon && (
               <Box
                 sx={{
-                  p: 1.5,
-                  borderRadius: 2,
+                  p: '0.75rem',
+                  borderRadius: '0.125rem',
                   bgcolor: `${color}.lighter`,
                   color: `${color}.main`
                 }}
@@ -59,3 +59,5 @@ const DashboardStatCard = ({ title, value, change, icon: Icon, color = 'primary'
 };
 
 export default DashboardStatCard;
+
+

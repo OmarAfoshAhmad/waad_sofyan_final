@@ -15,7 +15,7 @@ const MenuProps = {
   PaperProps: {
     style: {
       maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
-      width: 200
+      width: '12.5rem'
     }
   }
 };
@@ -24,7 +24,7 @@ const MenuProps = {
 
 export default function SelectColumnSorting({ getState, getAllColumns, setSorting, size = 'medium', formControlProps }) {
   return (
-    <FormControl {...formControlProps} sx={{ width: 200, ...formControlProps?.sx }}>
+    <FormControl {...formControlProps} sx={{ width: '12.5rem', ...formControlProps?.sx }}>
       <Select
         id="column-sorting"
         multiple

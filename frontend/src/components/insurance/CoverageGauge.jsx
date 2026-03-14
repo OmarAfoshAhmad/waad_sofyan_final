@@ -123,7 +123,7 @@ const CoverageGauge = ({
           </Stack>
         </Stack>
 
-        <Box sx={{ position: 'relative', height: 8, borderRadius: 1, bgcolor: 'grey.200' }}>
+        <Box sx={{ position: 'relative', height: '0.375rem', borderRadius: 1, bgcolor: 'grey.200' }}>
           <Box
             sx={{
               position: 'absolute',
@@ -222,7 +222,7 @@ const CoverageGauge = ({
           size="small"
           label={isExpired ? t.expired : isCritical ? t.renewNow : isWarning ? t.renewingSoon : t.active}
           sx={{
-            mt: 1.5,
+            mt: '0.75rem',
             bgcolor: isExpired ? 'error.lighter' : isCritical ? 'error.lighter' : isWarning ? 'warning.lighter' : 'success.lighter',
             color: isExpired ? 'error.dark' : isCritical ? 'error.dark' : isWarning ? 'warning.dark' : 'success.dark',
             fontWeight: 500
@@ -245,3 +245,5 @@ CoverageGauge.propTypes = {
 };
 
 export default CoverageGauge;
+
+

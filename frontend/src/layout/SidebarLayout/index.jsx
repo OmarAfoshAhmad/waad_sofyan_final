@@ -60,7 +60,7 @@ import Profile from 'layout/Dashboard/Header/HeaderContent/Profile';
 // CONSTANTS & STYLES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const TOPBAR_HEIGHT = 64;
+const TOPBAR_HEIGHT = '4rem'; // Relative to root font size
 
 const MainContent = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -102,7 +102,7 @@ const DesktopNavItem = ({ item, onClick }) => {
   return (
     <MenuItem onClick={handleClick} selected={isActive} sx={{ borderRadius: 1, mb: 0.5, mx: 1 }}>
       {Icon && (
-        <ListItemIcon sx={{ minWidth: 32 }}>
+        <ListItemIcon sx={{ minWidth: '2.0rem' }}>
           <Icon fontSize="small" color={isActive ? "primary" : "inherit"} />
         </ListItemIcon>
       )}
@@ -122,7 +122,7 @@ const DesktopNavCollapseItems = ({ collapse, onClick }) => {
   return (
     <Box>
       {collapse.title && (
-        <Typography variant="overline" sx={{ px: 2, pt: 1, pb: 0.5, color: 'text.secondary', display: 'block', lineHeight: 1, fontWeight: 700 }}>
+        <Typography variant="overline" sx={{ px: '1.0rem', pt: 1, pb: 0.5, color: 'text.secondary', display: 'block', lineHeight: 1, fontWeight: 700 }}>
           {collapse.title}
         </Typography>
       )}
@@ -169,14 +169,14 @@ const DesktopNavGroupButton = ({ group }) => {
       <Button
         onClick={handleClick}
         color={isActive ? "primary" : "inherit"}
-        endIcon={!isDirectLink ? <ExpandMoreIcon /> : null}
+        endIcon={!isDirectLink ? <ExpandMoreIcon sx={{ fontSize: '1.25rem' }} /> : null}
         sx={{
           fontWeight: isActive ? 700 : 500,
           opacity: isActive ? 1 : 0.8,
           '&:hover': { opacity: 1, backgroundColor: 'action.hover' },
           mx: 0.5,
           whiteSpace: 'nowrap',
-          fontSize: '0.9rem'
+          fontSize: '0.95rem'
         }}
       >
         {group.title}
@@ -188,7 +188,7 @@ const DesktopNavGroupButton = ({ group }) => {
           onClose={handleClose}
           PaperProps={{
             elevation: 3,
-            sx: { mt: 1.5, minWidth: 220, borderRadius: 2, p: 1 }
+            sx: { mt: '0.75rem', minWidth: '13.75rem', borderRadius: '0.125rem', p: 1 }
           }}
         >
           {group.children?.map(child => {
@@ -219,7 +219,7 @@ const MobileNavItem = ({ item, level = 0, onClose }) => {
   const theme = useTheme();
 
   if (!item || item.type === 'divider') {
-    return <Divider sx={{ my: 1, mx: 2 }} />;
+    return <Divider sx={{ my: 1, mx: '1.0rem' }} />;
   }
 
   const isActive = item.url === location.pathname || (item.url && location.pathname.startsWith(item.url + '/'));
@@ -238,9 +238,9 @@ const MobileNavItem = ({ item, level = 0, onClose }) => {
       <ListItemButton
         onClick={handleClick}
         sx={{
-          minHeight: 40,
-          px: 1.5,
-          pl: `${paddingLeft}px`,
+          minHeight: '2.5rem',
+          px: '0.75rem',
+          pl: `${paddingLeft / 16}rem`,
           borderRadius: 1,
           mx: 1,
           my: 0.125,
@@ -252,14 +252,14 @@ const MobileNavItem = ({ item, level = 0, onClose }) => {
         }}
       >
         {Icon && (
-          <ListItemIcon sx={{ minWidth: 40, color: isActive ? 'primary.main' : 'text.secondary' }}>
-            <Icon sx={{ fontSize: 22 }} />
+          <ListItemIcon sx={{ minWidth: '2.5rem', color: isActive ? 'primary.main' : 'text.secondary' }}>
+            <Icon sx={{ fontSize: '1.4rem' }} />
           </ListItemIcon>
         )}
         <ListItemText
           primary={item.title}
           primaryTypographyProps={{
-            fontSize: level === 0 ? '0.875rem' : '0.8125rem',
+            fontSize: level === 0 ? '0.875rem' : '0.82rem',
             fontWeight: isActive ? 600 : 400
           }}
         />
@@ -282,9 +282,9 @@ const MobileNavCollapse = ({ item, level = 0, onClose }) => {
         <ListItemButton
           onClick={handleToggle}
           sx={{
-            minHeight: 40,
-            px: 1.5,
-            pl: `${paddingLeft}px`,
+            minHeight: '2.5rem',
+            px: '0.75rem',
+            pl: `${paddingLeft / 16}rem`,
             borderRadius: 1,
             mx: 1,
             my: 0.125,
@@ -292,12 +292,12 @@ const MobileNavCollapse = ({ item, level = 0, onClose }) => {
           }}
         >
           {Icon && (
-            <ListItemIcon sx={{ minWidth: 40, color: 'text.secondary' }}>
-              <Icon sx={{ fontSize: 22 }} />
+            <ListItemIcon sx={{ minWidth: '2.5rem', color: 'text.secondary' }}>
+              <Icon sx={{ fontSize: '1.4rem' }} />
             </ListItemIcon>
           )}
           <ListItemText primary={item.title} primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }} />
-          <ExpandMoreIcon sx={{ fontSize: 18, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s' }} />
+          <ExpandMoreIcon sx={{ fontSize: '1.15rem', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s' }} />
         </ListItemButton>
       </ListItem>
       <Collapse in={open} timeout="auto" unmountOnExit>
@@ -317,7 +317,7 @@ const MobileNavGroup = ({ item, onClose }) => {
   return (
     <Box component="nav" sx={{ mb: 1 }}>
       {item.title && (
-        <Typography sx={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary', px: 2, py: 1, mt: 1 }}>
+        <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary', px: '1.0rem', py: 1, mt: 1 }}>
           {item.title}
         </Typography>
       )}
@@ -336,7 +336,7 @@ const MobileNavItemRenderer = ({ item, level, onClose }) => {
     case 'group': return <MobileNavGroup item={item} onClose={onClose} />;
     case 'collapse': return <MobileNavCollapse item={item} level={level} onClose={onClose} />;
     case 'item': return <MobileNavItem item={item} level={level} onClose={onClose} />;
-    case 'divider': return <Divider sx={{ my: 1, mx: 2 }} />;
+    case 'divider': return <Divider sx={{ my: 1, mx: '1.0rem' }} />;
     default: return null;
   }
 };
@@ -386,9 +386,9 @@ export default function SidebarLayout() {
             open={mobileOpen}
             onClose={toggleMobile}
             ModalProps={{ keepMounted: true }}
-            sx={{ '& .MuiDrawer-paper': { width: 280, boxSizing: 'border-box' } }}
+            sx={{ '& .MuiDrawer-paper': { width: '17.5rem', boxSizing: 'border-box' } }}
           >
-            <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
+            <Box sx={{ p: '1.0rem', display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
               <Typography variant="h6" fontWeight={700} color="primary">القائمة الرئيسية</Typography>
             </Box>
             <SimpleBar style={{ height: 'calc(100vh - 140px)' }}>
@@ -398,9 +398,9 @@ export default function SidebarLayout() {
                 ))}
               </Box>
             </SimpleBar>
-            <Box sx={{ position: 'absolute', bottom: 0, width: '100%', p: 2, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Box sx={{ position: 'absolute', bottom: 0, width: '100%', p: '1.0rem', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
               <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Avatar sx={{ width: 36, height: 36, bgcolor: isProvider ? 'success.main' : 'primary.main' }}>
+                <Avatar sx={{ width: '2.25rem', height: '2.25rem', bgcolor: isProvider ? 'success.main' : 'primary.main' }}>
                   {user.fullName?.[0] || user.username?.[0] || 'U'}
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -408,7 +408,7 @@ export default function SidebarLayout() {
                   <Typography variant="caption" color="text.secondary" noWrap>{primaryRole}</Typography>
                 </Box>
                 <IconButton size="small" onClick={logout} color="error">
-                  <LogoutIcon fontSize="small" />
+                  <LogoutIcon sx={{ fontSize: '1.2rem' }} />
                 </IconButton>
               </Stack>
             </Box>
@@ -418,19 +418,19 @@ export default function SidebarLayout() {
         {/* Main Content Area */}
         <MainContent>
           <TopBar>
-            <Box sx={{ width: '100%', maxWidth: '1600px', mx: 'auto', px: { xs: 2, sm: 3 }, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ width: '100%', maxWidth: '100rem', mx: 'auto', px: { xs: 2, sm: 3 }, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               {/* Left Section: Logo & Mobile Menu */}
-              <Stack direction="row" alignItems="center" spacing={2} sx={{ minWidth: 200 }}>
+              <Stack direction="row" alignItems="center" spacing={2} sx={{ minWidth: '12.5em' }}>
                 {isMobile && (
                   <IconButton onClick={toggleMobile} edge="start">
-                    <MenuIcon />
+                    <MenuIcon sx={{ fontSize: '1.5rem' }} />
                   </IconButton>
                 )}
                 <Box
                   component="img"
                   src={getLogoSrc()}
                   alt={displayName}
-                  sx={{ height: 38, width: 'auto', maxWidth: 120, objectFit: 'contain' }}
+                  sx={{ height: '2.4rem', width: 'auto', maxWidth: '8rem', objectFit: 'contain' }}
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
                 {!isMobile && (
@@ -442,7 +442,7 @@ export default function SidebarLayout() {
                       variant="caption" 
                       sx={{ 
                         display: 'block', 
-                        fontSize: '0.7rem', 
+                        fontSize: '0.75rem', 
                         color: 'text.secondary', 
                         mt: -0.2,
                         opacity: 0.85
@@ -464,7 +464,7 @@ export default function SidebarLayout() {
               )}
 
               {/* Right Section: User & Profile */}
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 200, justifyContent: 'flex-end' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: '12.5rem', justifyContent: 'flex-end' }}>
                 {!isMobile && (
                   <Box sx={{ textAlign: 'left', mr: 1, display: { xs: 'none', lg: 'block' } }}>
                     <Typography variant="body2" fontWeight={600} color="text.primary" lineHeight={1.2}>
@@ -487,7 +487,7 @@ export default function SidebarLayout() {
               flex: 1,
               width: '100%',
               minWidth: 0,
-              height: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
+              height: `calc(100vh - ${TOPBAR_HEIGHT})`,
               display: 'flex',
               flexDirection: 'column',
               backgroundColor: (theme) => (theme.palette.mode === 'dark' ? 'background.default' : alpha(theme.palette.grey[100], 0.5))
@@ -495,7 +495,7 @@ export default function SidebarLayout() {
           >
             {/* Scrollable Content Container */}
             <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ width: '100%', maxWidth: '1600px', mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 1, sm: 1.5 }, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ width: '100%', maxWidth: '100rem', mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 1, sm: '0.75rem' }, flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <PageErrorBoundary pageName="Dashboard Content">
                   <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <Outlet />
@@ -510,7 +510,7 @@ export default function SidebarLayout() {
                 textAlign: 'center',
                 py: 0.5,
                 color: 'text.secondary',
-                fontSize: '12px',
+                fontSize: '0.75rem',
                 flexShrink: 0,
                 bgcolor: 'background.paper',
                 borderTop: 1,
@@ -526,3 +526,6 @@ export default function SidebarLayout() {
     </SidebarContext.Provider>
   );
 }
+
+
+

@@ -44,7 +44,7 @@ export default function Navigation() {
   // Handle empty menu gracefully
   if (items.length === 0) {
     return (
-      <Box sx={{ p: 2, textAlign: 'center' }}>
+      <Box sx={{ p: '1.0rem', textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
           No menu items available
         </Typography>

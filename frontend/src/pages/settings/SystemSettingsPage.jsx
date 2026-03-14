@@ -72,8 +72,8 @@ const TabPanel = ({ children, value, index }) => (
 
 const FieldGroup = ({ title, children, icon: Icon, color = 'primary.main' }) => (
   <Box>
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-      {Icon && <Icon sx={{ fontSize: 20, color }} />}
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '0.75rem' }}>
+      {Icon && <Icon sx={{ fontSize: '1.25rem', color }} />}
       <Typography variant="subtitle2" fontWeight={700} color={color}>
         {title}
       </Typography>
@@ -349,7 +349,7 @@ const SystemSettingsPage = () => {
 
   return (
     <Box sx={{ height: 'calc(100vh - 125px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', px: 0 }}>
-      <Box sx={{ px: 2, pt: 1, flexShrink: 0 }}>
+      <Box sx={{ px: '1.0rem', pt: 1, flexShrink: 0 }}>
         <ModernPageHeader
           title="إعدادات النظام"
           subtitle="تحكم كامل في مظهر وأداء النظام"
@@ -379,14 +379,14 @@ const SystemSettingsPage = () => {
         />
       </Box>
 
-      <Box sx={{ px: 2 }}>
+      <Box sx={{ px: '1.0rem' }}>
         {error && (
-          <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mb: '0.75rem' }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
         {success && (
-          <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setSuccess(null)}>
+          <Alert severity="success" sx={{ mb: '0.75rem' }} onClose={() => setSuccess(null)}>
             {success}
           </Alert>
         )}
@@ -402,7 +402,7 @@ const SystemSettingsPage = () => {
           borderRadius: 0,
           border: 'none',
           bgcolor: 'transparent',
-          mx: 2,
+          mx: '1.0rem',
           mb: 1
         }}
       >
@@ -414,11 +414,11 @@ const SystemSettingsPage = () => {
           sx={{
             borderBottom: 1,
             borderColor: 'divider',
-            minHeight: 40,
+            minHeight: '2.5rem',
             bgcolor: 'background.paper',
             borderRadius: '8px 8px 0 0',
             '& .MuiTab-root': {
-              minHeight: 40,
+              minHeight: '2.5rem',
               fontSize: '0.85rem',
               fontWeight: 700,
               textTransform: 'none',
@@ -437,18 +437,18 @@ const SystemSettingsPage = () => {
         <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.paper', borderRadius: '0 0 8px 8px' }}>
           <TabPanel value={tabValue} index={0}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 4 }}>
                     <Stack spacing={2}>
-                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem' }}>
                         <FieldGroup title="الهوية البصرية" icon={BusinessIcon}>
-                          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                          <Box sx={{ display: 'flex', gap: '1.0rem', alignItems: 'center' }}>
                             <Box
                               sx={{
-                                width: 60,
-                                height: 60,
-                                borderRadius: 1.5,
+                                width: '3.75rem',
+                                height: '3.75rem',
+                                borderRadius: '0.375rem',
                                 border: '1px dashed',
                                 borderColor: 'divider',
                                 display: 'flex',
@@ -483,19 +483,31 @@ const SystemSettingsPage = () => {
                                   }}
                                 />
                               </Button>
-                              <TextField fullWidth size="small" label="رابط الشعار" value={formData.logoUrl} onChange={updateField('logoUrl')} />
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">رابط الشعار</Typography>
+                                <TextField 
+                                  fullWidth 
+                                  size="small" 
+                                  placeholder="https://..."
+                                  value={formData.logoUrl} 
+                                  onChange={updateField('logoUrl')} 
+                                />
+                              </Stack>
                             </Box>
                           </Box>
                         </FieldGroup>
                       </Paper>
 
-                      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem' }}>
                         <FieldGroup title="المظهر والخط" icon={SettingsIcon}>
                           <Stack spacing={1.5}>
-                            <TextField select fullWidth size="small" label="نوع الخط" value={formData.fontFamily} onChange={updateField('fontFamily')}>
-                              <MenuItem value="Tajawal">Tajawal</MenuItem>
-                              <MenuItem value="Cairo">Cairo</MenuItem>
-                            </TextField>
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">نوع الخط</Typography>
+                              <TextField select fullWidth size="small" value={formData.fontFamily} onChange={updateField('fontFamily')}>
+                                <MenuItem value="Tajawal">Tajawal</MenuItem>
+                                <MenuItem value="Cairo">Cairo</MenuItem>
+                              </TextField>
+                            </Stack>
                             <Box>
                               <Typography variant="caption" color="text.secondary" display="block">
                                 حجم الخط ({formData.fontSizeBase}px)
@@ -517,33 +529,109 @@ const SystemSettingsPage = () => {
                   </Grid>
 
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
                       <FieldGroup title="المعلومات الأساسية" icon={BusinessIcon}>
-                        <Grid container spacing={1.5}>
+                        <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 8 }}>
-                            <TextField fullWidth size="small" label="اسم الشركة (الاسم المؤثر في النظام)" value={formData.companyName} onChange={updateField('companyName')} required />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">اسم الشركة (الاسم المؤثر فى النظام)</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="أدخل اسم الشركة..."
+                                value={formData.companyName} 
+                                onChange={updateField('companyName')} 
+                                required 
+                              />
+                            </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 4 }}>
-                            <TextField fullWidth size="small" label="كود الشركة" value={formData.companyCode} onChange={updateField('companyCode')} required />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">كود الشركة</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="كود فريد للشركة..."
+                                value={formData.companyCode} 
+                                onChange={updateField('companyCode')} 
+                                required 
+                              />
+                            </Stack>
                           </Grid>
                           
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="نوع النشاط" value={formData.businessType} onChange={updateField('businessType')} />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">نوع النشاط</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="مثلاً: شركة طبية، مستشفى..."
+                                value={formData.businessType} 
+                                onChange={updateField('businessType')} 
+                              />
+                            </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="الهاتف" value={formData.phone} onChange={updateField('phone')} />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">الهاتف</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="رقم الهاتف الأساسي..."
+                                value={formData.phone} 
+                                onChange={updateField('phone')} 
+                              />
+                            </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="البريد الإلكتروني" value={formData.email} onChange={updateField('email')} />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">البريد الإلكتروني</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="example@waad.ly"
+                                value={formData.email} 
+                                onChange={updateField('email')} 
+                              />
+                            </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="الموقع" value={formData.website} onChange={updateField('website')} />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">الموقع</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="www.example.com"
+                                value={formData.website} 
+                                onChange={updateField('website')} 
+                              />
+                            </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="الرقم الضريبي" value={formData.taxNumber} onChange={updateField('taxNumber')} />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">الرقم الضريبي</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                placeholder="الرقم الضريبي الرسمي..."
+                                value={formData.taxNumber} 
+                                onChange={updateField('taxNumber')} 
+                              />
+                            </Stack>
                           </Grid>
                           <Grid size={12}>
-                            <TextField fullWidth size="small" multiline rows={2} label="العنوان" value={formData.address} onChange={updateField('address')} />
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">العنوان</Typography>
+                              <TextField 
+                                fullWidth 
+                                size="small" 
+                                multiline 
+                                rows={2} 
+                                placeholder="شارع، مدينة، دولة..."
+                                value={formData.address} 
+                                onChange={updateField('address')} 
+                              />
+                            </Stack>
                           </Grid>
                         </Grid>
                       </FieldGroup>
@@ -556,8 +644,8 @@ const SystemSettingsPage = () => {
 
           <TabPanel value={tabValue} index={1}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, maxWidth: 900 }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', maxWidth: '56.25rem' }}>
                   <FieldGroup title="قواعد التحقق من الاستحقاق" icon={SecurityIcon}>
                     <Stack spacing={1.5}>
                       <FormControlLabel
@@ -565,23 +653,29 @@ const SystemSettingsPage = () => {
                         label="تفعيل وضع الاستحقاق الصارم"
                       />
 
-                      <TextField
-                        type="number"
-                        fullWidth
-                        size="small"
-                        label="فترة الانتظار الافتراضية (يوم)"
-                        value={formData.waitingPeriodDaysDefault}
-                        onChange={(e) => setFormData((p) => ({ ...p, waitingPeriodDaysDefault: Number(e.target.value) }))}
-                      />
+                      <Stack spacing={0.5}>
+                        <Typography variant="subtitle2" color="text.secondary">فترة الانتظار الافتراضية (يوم)</Typography>
+                        <TextField
+                          type="number"
+                          fullWidth
+                          size="small"
+                          placeholder="مثلاً: 30"
+                          value={formData.waitingPeriodDaysDefault}
+                          onChange={(e) => setFormData((p) => ({ ...p, waitingPeriodDaysDefault: Number(e.target.value) }))}
+                        />
+                      </Stack>
 
-                      <TextField
-                        type="number"
-                        fullWidth
-                        size="small"
-                        label="فترة السماح للاستحقاق (يوم)"
-                        value={formData.eligibilityGracePeriodDays}
-                        onChange={(e) => setFormData((p) => ({ ...p, eligibilityGracePeriodDays: Number(e.target.value) }))}
-                      />
+                      <Stack spacing={0.5}>
+                        <Typography variant="subtitle2" color="text.secondary">فترة السماح للاستحقاق (يوم)</Typography>
+                        <TextField
+                          type="number"
+                          fullWidth
+                          size="small"
+                          placeholder="مثلاً: 7"
+                          value={formData.eligibilityGracePeriodDays}
+                          onChange={(e) => setFormData((p) => ({ ...p, eligibilityGracePeriodDays: Number(e.target.value) }))}
+                        />
+                      </Stack>
                     </Stack>
                   </FieldGroup>
                 </Paper>
@@ -591,10 +685,10 @@ const SystemSettingsPage = () => {
 
           <TabPanel value={tabValue} index={2}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 7 }}>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
                       <FieldGroup title="الإعدادات التشغيلية" icon={SpeedIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 6 }}>
@@ -606,10 +700,10 @@ const SystemSettingsPage = () => {
                           <Grid size={{ xs: 12, sm: 8 }}>
                             <TextField fullWidth size="small" label="تنسيق رقم المستفيد" value={formData.beneficiaryNumberFormat} onChange={updateField('beneficiaryNumberFormat')} />
                           </Grid>
-                          <Grid size={{ xs: 12, sm: 2 }}>
+                          <Grid size={{ xs: 12, sm: '1.0rem' }}>
                             <TextField fullWidth size="small" label="البادئة" value={formData.beneficiaryNumberPrefix} onChange={updateField('beneficiaryNumberPrefix')} />
                           </Grid>
-                          <Grid size={{ xs: 12, sm: 2 }}>
+                          <Grid size={{ xs: 12, sm: '1.0rem' }}>
                             <TextField fullWidth size="small" type="number" label="عدد الأرقام" value={formData.beneficiaryNumberDigits} onChange={(e) => setFormData((p) => ({ ...p, beneficiaryNumberDigits: Number(e.target.value) }))} />
                           </Grid>
                         </Grid>
@@ -623,10 +717,10 @@ const SystemSettingsPage = () => {
 
           <TabPanel value={tabValue} index={3}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
                       <FieldGroup title="تخصيص تقرير المطالبات" icon={ReportIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 8 }}>
@@ -635,7 +729,7 @@ const SystemSettingsPage = () => {
                           <Grid size={{ xs: 12, sm: 4 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <TextField fullWidth size="small" label="اللون الرئيسي" value={formData.claimReportPrimaryColor} onChange={updateField('claimReportPrimaryColor')} />
-                              <Box sx={{ width: 36, height: 36, bgcolor: formData.claimReportPrimaryColor, border: '1px solid #ddd', borderRadius: 1, flexShrink: 0 }} />
+                              <Box sx={{ width: '2.25rem', height: '2.25rem', bgcolor: formData.claimReportPrimaryColor, border: '1px solid #ddd', borderRadius: 1, flexShrink: 0 }} />
                             </Box>
                           </Grid>
                           <Grid size={12}>
@@ -645,7 +739,7 @@ const SystemSettingsPage = () => {
                             <TextField fullWidth size="small" multiline rows={2} label="ملاحظة التذييل" value={formData.claimReportFooterNote} onChange={updateField('claimReportFooterNote')} />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                            <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
                               <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>التوقيع الأيمن</Typography>
                               <Stack spacing={1}>
                                 <TextField fullWidth size="small" label="السطر العلوي" value={formData.claimReportSigRightTop} onChange={updateField('claimReportSigRightTop')} />
@@ -654,7 +748,7 @@ const SystemSettingsPage = () => {
                             </Paper>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                            <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
                               <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>التوقيع الأيسر</Typography>
                               <Stack spacing={1}>
                                 <TextField fullWidth size="small" label="السطر العلوي" value={formData.claimReportSigLeftTop} onChange={updateField('claimReportSigLeftTop')} />
@@ -667,7 +761,7 @@ const SystemSettingsPage = () => {
                     </Paper>
                   </Grid>
                   <Grid size={{ xs: 12, md: 4 }}>
-                     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.05), height: '100%' }}>
+                     <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: alpha(theme.palette.info.main, 0.05), height: '100%' }}>
                         <Typography variant="subtitle2" fontWeight={700} gutterBottom>تلميحات التقرير</Typography>
                         <Typography variant="body2" sx={{ mb: 1 }}>• يمكنك استخدام الرمز <b>{'{batchCode}'}</b> في حقل المقدمة ليتم استبداله برقم الدفعة الحقيقي.</Typography>
                         <Typography variant="body2" sx={{ mb: 1 }}>• اللون الرئيسي يتحكم في لون العناوين والخطوط الفاصلة وصافي القيمة.</Typography>
@@ -681,10 +775,10 @@ const SystemSettingsPage = () => {
 
           <TabPanel value={tabValue} index={4}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, maxWidth: 760 }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', maxWidth: '47.5rem' }}>
                   <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
                     </Typography>
 
@@ -696,7 +790,7 @@ const SystemSettingsPage = () => {
                       {isSaving && <CircularProgress size={18} />}
                     </Stack>
 
-                    <Button variant="outlined" sx={{ mt: 2 }} startIcon={<PreviewIcon />} onClick={() => window.open('/provider/eligibility-check', '_blank')}>
+                    <Button variant="outlined" sx={{ mt: '1.0rem' }} startIcon={<PreviewIcon />} onClick={() => window.open('/provider/eligibility-check', '_blank')}>
                       استعراض بوابة مقدم الخدمة
                     </Button>
                   </FieldGroup>
@@ -716,14 +810,14 @@ const SystemSettingsPage = () => {
       </Card>
       
       {/* Footer Save Button - Prominent for Global Action */}
-      <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.default', borderTop: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ p: '0.75rem', display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.default', borderTop: '1px solid', borderColor: 'divider' }}>
         <Button 
           variant="contained" 
           color="primary"
           onClick={() => handleSaveAll()} 
           startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
           disabled={isSaving}
-          sx={{ px: 4, fontWeight: 700 }}
+          sx={{ px: '2.0rem', fontWeight: 700 }}
         >
           {isSaving ? 'جاري الحفظ والتحميل...' : 'حفظ وتطبيق التغييرات على النظام'}
         </Button>
@@ -733,3 +827,6 @@ const SystemSettingsPage = () => {
 };
 
 export default SystemSettingsPage;
+
+
+

@@ -90,7 +90,7 @@ export default function MobileSection() {
               <ClickAwayListener onClickAway={handleClose}>
                 <AppBar color="inherit">
                   <Toolbar>
-                    <Stack direction="row" sx={{ gap: 2, alignItems: 'center', width: 1, justifyContent: 'flex-end' }}>
+                    <Stack direction="row" sx={{ gap: '1.0rem', alignItems: 'center', width: '0.0625rem', justifyContent: 'flex-end' }}>
                       <Profile />
                     </Stack>
                   </Toolbar>

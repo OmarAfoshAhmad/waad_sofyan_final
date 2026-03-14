@@ -56,7 +56,7 @@ export default function MembersByEmployerChart({ height = 365 }) {
         breakpoint: 480,
         options: {
           chart: {
-            width: 280
+            width: '17.5rem'
           },
           legend: {
             position: 'bottom'
@@ -80,15 +80,15 @@ export default function MembersByEmployerChart({ height = 365 }) {
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: '1.5rem' }}>
         <Skeleton variant="circular" width={height} height={height} sx={{ mx: 'auto' }} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Stack spacing={1} sx={{ mb: 2 }}>
+    <Box sx={{ p: '1.0rem' }}>
+      <Stack spacing={1} sx={{ mb: '1.0rem' }}>
         <Typography variant="h6">Members by Employer</Typography>
         <Typography variant="caption" color="text.secondary">
           الأعضاء حسب جهة العمل

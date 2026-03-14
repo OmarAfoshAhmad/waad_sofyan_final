@@ -263,14 +263,14 @@ const ProviderContractCreate = () => {
             {/* SECTION 1: Provider Selection */}
             {/* ═════════════════════════════════════════════════════════════ */}
             <Grid size={12}>
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+              <Paper elevation={0} sx={{ p: '1.5rem', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
                   <Business color="primary" />
                   <Typography variant="h5">اختيار مقدم الخدمة</Typography>
                 </Box>
 
                 {providersLoading && (
-                  <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 2 }}>
+                  <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: '1.0rem' }}>
                     جاري تحميل قائمة مقدمي الخدمة...
                   </Alert>
                 )}
@@ -278,7 +278,7 @@ const ProviderContractCreate = () => {
                 {providersError && (
                   <Alert
                     severity="error"
-                    sx={{ mb: 2 }}
+                    sx={{ mb: '1.0rem' }}
                     action={
                       <Button color="inherit" size="small" onClick={refetchProviders}>
                         إعادة المحاولة
@@ -290,7 +290,7 @@ const ProviderContractCreate = () => {
                 )}
 
                 {!providersError && (
-                  <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Box sx={{ mb: '1.0rem', display: 'flex', justifyContent: 'flex-end' }}>
                     <Button size="small" startIcon={<Refresh />} onClick={refetchProviders} disabled={providersLoading}>
                       تحديث قائمة مقدمي الخدمة
                     </Button>
@@ -342,7 +342,7 @@ const ProviderContractCreate = () => {
                           <Typography variant="caption" color="text.secondary">
                             رخصة: {option.licenseNumber}
                           </Typography>
-                          {option.city && <Chip label={option.city} size="small" variant="outlined" sx={{ height: 18 }} />}
+                          {option.city && <Chip label={option.city} size="small" variant="outlined" sx={{ height: '1.125rem' }} />}
                           {option.providerType && (
                             <Chip
                               label={
@@ -357,7 +357,7 @@ const ProviderContractCreate = () => {
                               size="small"
                               color="primary"
                               variant="outlined"
-                              sx={{ height: 18 }}
+                              sx={{ height: '1.125rem' }}
                             />
                           )}
                         </Box>
@@ -373,8 +373,8 @@ const ProviderContractCreate = () => {
             {/* SECTION 2: Contract Details */}
             {/* ═════════════════════════════════════════════════════════════ */}
             <Grid size={12}>
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+              <Paper elevation={0} sx={{ p: '1.5rem', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
                   <DateRange color="primary" />
                   <Typography variant="h5">تفاصيل العقد</Typography>
                 </Box>
@@ -382,7 +382,7 @@ const ProviderContractCreate = () => {
                 <Grid container spacing={3}>
                   {/* Auto-Generated Contract Code */}
                   <Grid size={12}>
-                    <Alert severity="info" sx={{ mb: 2 }}>
+                    <Alert severity="info" sx={{ mb: '1.0rem' }}>
                       <Typography variant="body2">
                         <strong>رمز العقد:</strong> سيتم إنشاء رمز تلقائي للعقد عند الحفظ
                       </Typography>
@@ -461,8 +461,8 @@ const ProviderContractCreate = () => {
             {/* SECTION 3: Pricing Model */}
             {/* ═════════════════════════════════════════════════════════════ */}
             <Grid size={12}>
-              <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+              <Paper elevation={0} sx={{ p: '1.5rem', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
                   <AttachMoney color="primary" />
                   <Typography variant="h5">نموذج التسعير</Typography>
                 </Box>
@@ -547,7 +547,7 @@ const ProviderContractCreate = () => {
             {/* Action Buttons */}
             {/* ═════════════════════════════════════════════════════════════ */}
             <Grid size={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, pt: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '1.0rem', pt: '1.0rem' }}>
                 <Button variant="outlined" onClick={() => navigate('/provider-contracts')} disabled={createMutation.isLoading}>
                   إلغاء
                 </Button>

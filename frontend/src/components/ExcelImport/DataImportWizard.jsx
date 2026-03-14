@@ -203,14 +203,14 @@ const DataImportWizard = ({
     switch (step) {
       case 0:
         return (
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Box sx={{ mt: '1.0rem', textAlign: 'center' }}>
             <Box
               {...getRootProps()}
               sx={{
                 border: '2px dashed',
                 borderColor: isDragActive ? 'primary.main' : 'grey.400',
-                borderRadius: 2,
-                p: 4,
+                borderRadius: '0.125rem',
+                p: '2.0rem',
                 cursor: 'pointer',
                 bgcolor: isDragActive ? 'action.hover' : 'background.paper',
                 transition: 'all 0.2s',
@@ -218,7 +218,7 @@ const DataImportWizard = ({
               }}
             >
               <input {...getInputProps()} />
-              <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+              <CloudUpload sx={{ fontSize: '3.0rem', color: 'text.secondary', mb: 1 }} />
               <Typography variant="h6" gutterBottom>
                 {isDragActive ? 'افلت الملف هنا' : 'اسحب وافلت ملف Excel هنا'}
               </Typography>
@@ -226,14 +226,14 @@ const DataImportWizard = ({
                 أو اضغط لاختيار ملف (.xlsx, .xls)
               </Typography>
               {file && (
-                <Box sx={{ mt: 2, p: 1, bgcolor: 'primary.lighter', borderRadius: 1, display: 'inline-block' }}>
+                <Box sx={{ mt: '1.0rem', p: 1, bgcolor: 'primary.lighter', borderRadius: 1, display: 'inline-block' }}>
                   <Typography variant="subtitle2" color="primary.main">
                     {file.name}
                   </Typography>
                 </Box>
               )}
             </Box>
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+            <Box sx={{ mt: '1.0rem', display: 'flex', justifyContent: 'center' }}>
               <Button variant="text" size="small" startIcon={<Code />} onClick={downloadTemplate}>
                 تحميل النموذج القياسي
               </Button>
@@ -256,11 +256,11 @@ const DataImportWizard = ({
           });
 
         return (
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: '1.0rem' }}>
             {/* Smart Analysis Summary */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Paper variant="outlined" sx={{ p: 2 }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem' }}>
                   <Typography variant="subtitle2" color="textSecondary" gutterBottom>
                     تحليل السياق (Smart Context)
                   </Typography>
@@ -281,7 +281,7 @@ const DataImportWizard = ({
               </Grid>
               {!hideContextSelectors && (
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem' }}>
                     <Typography variant="subtitle2" color="textSecondary" gutterBottom>
                       إعدادات الاستيراد
                     </Typography>
@@ -299,7 +299,7 @@ const DataImportWizard = ({
                           helperText="اختر جهة فقط إذا كان الملف لا يحتوي على عمود 'جهة العمل'"
                         />
                       )}
-                      sx={{ mb: 2 }}
+                      sx={{ mb: '1.0rem' }}
                     />
                     {selectedEmployer && (
                       <Autocomplete
@@ -320,7 +320,7 @@ const DataImportWizard = ({
             <Typography variant="subtitle2" gutterBottom>
               معاينة البيانات ({previewData?.totalRows} صفوف)
             </Typography>
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 300 }}>
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: '18.75rem' }}>
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
@@ -355,7 +355,7 @@ const DataImportWizard = ({
 
             {/* Errors Summary */}
             {previewData?.errorCount > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box sx={{ mt: '1.0rem' }}>
                 <Typography color="error" variant="caption">
                   يوجد {previewData.errorCount} صفوف بها أخطاء حرجة لن يتم استيرادها.
                 </Typography>
@@ -381,13 +381,13 @@ const DataImportWizard = ({
         </Stepper>
 
         {error && (
-          <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mt: '1.0rem' }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: '2.5rem' }}>
             <CircularProgress />
           </Box>
         ) : (

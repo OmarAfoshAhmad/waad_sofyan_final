@@ -14,7 +14,7 @@ const SoftDeleteToggle = ({ showDeleted, onToggle }) => {
             startIcon={showDeleted ? <VisibilityIcon /> : <DeleteIcon />}
             onClick={onToggle}
             sx={{
-                minWidth: '155px',
+                minWidth: '9.6875rem',
                 ...(showDeleted
                     ? { bgcolor: '#d32f2f', color: '#fff', borderColor: '#d32f2f', '&:hover': { bgcolor: '#b71c1c' } }
                     : { color: '#b71c1c', borderColor: '#b71c1c', '&:hover': { bgcolor: '#fdecea', borderColor: '#d32f2f' } })

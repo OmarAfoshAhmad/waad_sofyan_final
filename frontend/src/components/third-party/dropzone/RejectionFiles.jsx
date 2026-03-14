@@ -14,8 +14,8 @@ export default function RejectionFiles({ fileRejections }) {
       variant="outlined"
       sx={{
         py: 1,
-        px: 2,
-        mt: 3,
+        px: '1.0rem',
+        mt: '1.5rem',
         borderColor: 'error.light',
         bgcolor: (theme) => {
           const varsPalette = (theme?.vars && theme.vars.palette) || theme.palette || {};

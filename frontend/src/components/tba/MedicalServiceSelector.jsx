@@ -188,8 +188,8 @@ const MedicalServiceSelector = ({
           sx={{
             opacity: isExcluded ? 0.4 : 1,
             pointerEvents: isExcluded ? 'none' : 'auto',
-            py: 1.5,
-            px: 2,
+            py: '0.75rem',
+            px: '1.0rem',
             '&:hover': {
               bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08)
             }
@@ -207,7 +207,7 @@ const MedicalServiceSelector = ({
                 justifyContent: 'center'
               }}
             >
-              <MedicalIcon sx={{ fontSize: 24, color: 'warning.main' }} />
+              <MedicalIcon sx={{ fontSize: '1.5rem', color: 'warning.main' }} />
             </Box>
 
             {/* Service Info */}
@@ -225,7 +225,7 @@ const MedicalServiceSelector = ({
                     fontSize: '0.75rem'
                   }}
                 />
-                <Typography variant="body1" fontWeight={600} noWrap sx={{ maxWidth: 400 }}>
+                <Typography variant="body1" fontWeight={600} noWrap sx={{ maxWidth: '25.0rem' }}>
                   {option.nameAr || option.name}
                   {option.nameEn && (
                     <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 400 }}>
@@ -237,7 +237,7 @@ const MedicalServiceSelector = ({
 
               {/* Category Label */}
               <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.5 }}>
-                <CategoryIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                <CategoryIcon sx={{ fontSize: '0.875rem', color: 'text.secondary' }} />
                 <Typography variant="caption" color="text.secondary">
                   {LABELS.categoryLabel}: {option.categoryNameAr || option.categoryName || LABELS.uncategorized}
                   {option.categoryNameEn && ` (${option.categoryNameEn})`}
@@ -246,7 +246,7 @@ const MedicalServiceSelector = ({
             </Box>
 
             {/* Selected Indicator */}
-            {selected && <CheckIcon sx={{ color: 'success.main', fontSize: 20 }} />}
+            {selected && <CheckIcon sx={{ color: 'success.main', fontSize: '1.25rem' }} />}
           </Stack>
         </Box>
       );
@@ -297,7 +297,7 @@ const MedicalServiceSelector = ({
         elevation={8}
         sx={{
           mt: 1,
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           border: '1px solid',
           borderColor: 'divider'
         }}
@@ -376,3 +376,5 @@ MedicalServiceSelector.propTypes = {
 };
 
 export default MedicalServiceSelector;
+
+

@@ -132,7 +132,7 @@ export default function TabSecurity() {
   return (
     <Grid container spacing={3}>
       <Grid size={12}>
-        <MainCard title="Security Settings" avatar={<LockOutlined style={{ fontSize: 24 }} />}>
+        <MainCard title="Security Settings" avatar={<LockOutlined style={{ fontSize: '1.5rem' }} />}>
           <Grid container spacing={3}>
             {/* Password Policy */}
             <Grid size={12}>
@@ -213,7 +213,7 @@ export default function TabSecurity() {
 
             {/* Authentication Settings */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Authentication Settings
               </Divider>
             </Grid>
@@ -223,7 +223,7 @@ export default function TabSecurity() {
                 control={<Switch checked={formData.enable2FA} onChange={handleChange('enable2FA')} color="success" />}
                 label="Enable Two-Factor Authentication (2FA)"
               />
-              <Typography variant="caption" display="block" color="textSecondary" sx={{ ml: 4 }}>
+              <Typography variant="caption" display="block" color="textSecondary" sx={{ ml: '2.0rem' }}>
                 Require users to verify their identity using a second factor
               </Typography>
             </Grid>
@@ -247,7 +247,7 @@ export default function TabSecurity() {
 
             {/* Login Security */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Login Security
               </Divider>
             </Grid>
@@ -288,7 +288,7 @@ export default function TabSecurity() {
 
             {/* Save Button */}
             <Grid size={12}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="outlined" startIcon={<ReloadOutlined />} onClick={handleReset} disabled={loading}>
                   Reset
                 </Button>

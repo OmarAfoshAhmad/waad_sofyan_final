@@ -27,7 +27,7 @@ const ProviderLoader = () => (
       justifyContent: 'center',
       alignItems: 'center',
       height: '100vh',
-      gap: 2
+      gap: '1.0rem'
     }}
   >
     <CircularProgress size={48} color="primary" />
@@ -52,28 +52,28 @@ const ProviderNotLinkedPage = () => {
         alignItems: 'center',
         height: '100vh',
         bgcolor: 'grey.100',
-        p: 2
+        p: '1.0rem'
       }}
     >
       <Paper
         elevation={3}
         sx={{
-          p: 4,
-          maxWidth: 450,
+          p: '2.0rem',
+          maxWidth: '28.125rem',
           textAlign: 'center'
         }}
       >
-        <ErrorIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+        <ErrorIcon sx={{ fontSize: '4.0rem', color: 'error.main', mb: '1.0rem' }} />
 
         <Typography variant="h5" gutterBottom color="error">
           حساب مقدم الخدمة غير مكتمل
         </Typography>
 
-        <Alert severity="error" sx={{ mb: 2, textAlign: 'right' }}>
+        <Alert severity="error" sx={{ mb: '1.0rem', textAlign: 'right' }}>
           لم يتم ربط حسابك بمقدم خدمة. يرجى التواصل مع مدير النظام لإكمال إعداد الحساب.
         </Alert>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: '1.5rem' }}>
           Provider Account Incomplete: Your account is not linked to a provider entity.
         </Typography>
 

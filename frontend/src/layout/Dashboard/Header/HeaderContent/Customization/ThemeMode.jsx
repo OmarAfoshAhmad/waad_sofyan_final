@@ -50,8 +50,8 @@ export default function ThemeModeLayout() {
                   ...(mode === ThemeMode.LIGHT && { ...activeCardStyle(theme) })
                 })}
               >
-                <Stack sx={{ gap: 1.25, alignItems: 'center' }}>
-                  <CardMedia component="img" src={defaultLayout} alt="Vertical" sx={{ borderRadius: 1, width: 64, height: 64 }} />
+                <Stack sx={{ gap: '0.625rem', alignItems: 'center' }}>
+                  <CardMedia component="img" src={defaultLayout} alt="Vertical" sx={{ borderRadius: 1, width: '4.0rem', height: '4.0rem' }} />
                   <Typography variant="caption">فاتح</Typography>
                 </Stack>
               </MainCard>
@@ -73,8 +73,8 @@ export default function ThemeModeLayout() {
                   ...(mode == ThemeMode.DARK && { ...activeCardStyle(theme) })
                 })}
               >
-                <Stack sx={{ gap: 1.25, alignItems: 'center' }}>
-                  <CardMedia component="img" src={darkLayout} alt="Vertical" sx={{ borderRadius: 1, width: 64, height: 64 }} />
+                <Stack sx={{ gap: '0.625rem', alignItems: 'center' }}>
+                  <CardMedia component="img" src={darkLayout} alt="Vertical" sx={{ borderRadius: 1, width: '4.0rem', height: '4.0rem' }} />
                   <Typography variant="caption">داكن</Typography>
                 </Stack>
               </MainCard>
@@ -96,8 +96,8 @@ export default function ThemeModeLayout() {
                   ...(mode == ThemeMode.SYSTEM && { ...activeCardStyle(theme) })
                 })}
               >
-                <Stack sx={{ gap: 1.25, alignItems: 'center' }}>
-                  <CardMedia component="img" src={systemLayout} alt="Vertical" sx={{ borderRadius: 1, width: 64, height: 64 }} />
+                <Stack sx={{ gap: '0.625rem', alignItems: 'center' }}>
+                  <CardMedia component="img" src={systemLayout} alt="Vertical" sx={{ borderRadius: 1, width: '4.0rem', height: '4.0rem' }} />
                   <Typography variant="caption">النظام</Typography>
                 </Stack>
               </MainCard>

@@ -46,15 +46,15 @@ const formatDate = (dateString) => {
  * All columns are null-safe with fallback rendering
  */
 const COLUMNS = [
-  { id: 'id', label: 'رقم الزيارة', minWidth: 90, align: 'center', format: safeString, sortable: false },
-  { id: 'visitDate', label: 'تاريخ الزيارة', minWidth: 110, align: 'center', format: formatDate, sortable: true },
-  { id: 'memberName', label: 'اسم العضو', minWidth: 140, format: safeString, sortable: true },
-  { id: 'employerName', label: 'الشريك', minWidth: 140, format: safeString, sortable: true },
-  { id: 'providerName', label: 'مقدم الخدمة', minWidth: 140, format: safeString, sortable: true },
-  { id: 'servicesCount', label: 'عدد الخدمات', minWidth: 90, align: 'center', format: safeString, sortable: true },
-  { id: 'diagnosis', label: 'التشخيص', minWidth: 150, format: safeString, sortable: false },
-  { id: 'hasClaim', label: 'مطالبة', minWidth: 80, align: 'center', sortable: false },
-  { id: 'createdAt', label: 'تاريخ الإنشاء', minWidth: 110, align: 'center', format: formatDate, sortable: true }
+  { id: 'id', label: 'رقم الزيارة', minWidth: '5.625rem', align: 'center', format: safeString, sortable: false },
+  { id: 'visitDate', label: 'تاريخ الزيارة', minWidth: '6.875rem', align: 'center', format: formatDate, sortable: true },
+  { id: 'memberName', label: 'اسم العضو', minWidth: '8.75rem', format: safeString, sortable: true },
+  { id: 'employerName', label: 'الشريك', minWidth: '8.75rem', format: safeString, sortable: true },
+  { id: 'providerName', label: 'مقدم الخدمة', minWidth: '8.75rem', format: safeString, sortable: true },
+  { id: 'servicesCount', label: 'عدد الخدمات', minWidth: '5.625rem', align: 'center', format: safeString, sortable: true },
+  { id: 'diagnosis', label: 'التشخيص', minWidth: '9.375rem', format: safeString, sortable: false },
+  { id: 'hasClaim', label: 'مطالبة', minWidth: '5.0rem', align: 'center', sortable: false },
+  { id: 'createdAt', label: 'تاريخ الإنشاء', minWidth: '6.875rem', align: 'center', format: formatDate, sortable: true }
 ];
 
 /**
@@ -79,9 +79,9 @@ const SkeletonRows = ({ count = 5 }) => (
  */
 const EmptyState = () => (
   <TableRow>
-    <TableCell colSpan={COLUMNS.length} align="center" sx={{ py: 8 }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <EventIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
+    <TableCell colSpan={COLUMNS.length} align="center" sx={{ py: '4.0rem' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.0rem' }}>
+        <EventIcon sx={{ fontSize: '4.0rem', color: 'text.disabled' }} />
         <Typography variant="h6" color="text.secondary">
           لا توجد زيارات
         </Typography>
@@ -164,7 +164,7 @@ const VisitsTable = ({ visits, loading, totalCount, page, rowsPerPage, onPageCha
 
   return (
     <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-      <TableContainer sx={{ maxHeight: 500 }}>
+      <TableContainer sx={{ maxHeight: '31.25rem' }}>
         <Table stickyHeader aria-label="visits table" size="small">
           <TableHead>
             <TableRow>
@@ -176,7 +176,7 @@ const VisitsTable = ({ visits, loading, totalCount, page, rowsPerPage, onPageCha
                     minWidth: column.minWidth,
                     fontWeight: 600,
                     backgroundColor: 'background.paper',
-                    borderBottom: 2,
+                    borderBottom: '1.0rem',
                     borderColor: 'divider'
                   }}
                 >

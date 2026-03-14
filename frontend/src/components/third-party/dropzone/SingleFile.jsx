@@ -60,9 +60,9 @@ export default function SingleFileUpload({ error, file, setFieldValue, sx }) {
         component="img"
         src={item.preview}
         sx={{
-          top: 8,
-          left: 8,
-          borderRadius: 2,
+          top: '4.0rem',
+          left: '0.375rem',
+          borderRadius: '0.125rem',
           position: 'absolute',
           width: 'calc(100% - 16px)',
           height: 'calc(100% - 16px)',
@@ -94,7 +94,7 @@ export default function SingleFileUpload({ error, file, setFieldValue, sx }) {
       </DropzoneWrapper>
       {fileRejections.length > 0 && <RejectionFiles fileRejections={fileRejections} />}
       {file && file.length > 0 && (
-        <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 1.5 }}>
+        <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: '0.75rem' }}>
           <Button variant="contained" color="error" onClick={onRemove}>
             Remove
           </Button>
@@ -105,3 +105,5 @@ export default function SingleFileUpload({ error, file, setFieldValue, sx }) {
 }
 
 SingleFileUpload.propTypes = { error: PropTypes.any, file: PropTypes.any, setFieldValue: PropTypes.any, sx: PropTypes.any };
+
+

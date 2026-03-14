@@ -19,7 +19,7 @@ const iconSX = { fontSize: '0.75rem', color: 'inherit', marginLeft: 0, marginRig
 export default function AnalyticsDataCard({ color = 'primary', title, count, percentage, isLoss = false, children }) {
   return (
     <MainCard content={false}>
-      <Box sx={{ p: 2.25 }}>
+      <Box sx={{ p: '1.125rem' }}>
         <Stack sx={{ gap: 0.5 }}>
           <Typography variant="h6" color="text.secondary">
             {title}
@@ -34,7 +34,7 @@ export default function AnalyticsDataCard({ color = 'primary', title, count, per
                 color={color}
                 icon={isLoss ? <FallOutlined style={iconSX} /> : <RiseOutlined style={iconSX} />}
                 label={`${percentage}%`}
-                sx={{ ml: 1.25, pl: 1 }}
+                sx={{ ml: '0.625rem', pl: 1 }}
                 size="small"
               />
             )}
@@ -54,3 +54,5 @@ AnalyticsDataCard.propTypes = {
   isLoss: PropTypes.bool,
   children: PropTypes.any
 };
+
+

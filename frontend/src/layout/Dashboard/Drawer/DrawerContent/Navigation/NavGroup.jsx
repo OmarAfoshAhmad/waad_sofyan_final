@@ -34,15 +34,15 @@ import RightOutlined from '@ant-design/icons/RightOutlined';
 const PopperStyled = styled(Popper)(({ theme }) => ({
   overflow: 'visible',
   zIndex: 1202,
-  minWidth: 180,
+  minWidth: '11.25rem',
   '&:before': {
     content: '""',
     display: 'block',
     position: 'absolute',
-    top: 5,
-    left: 32,
-    width: 12,
-    height: 12,
+    top: '2.5rem',
+    left: '2.0rem',
+    width: '0.75rem',
+    height: '0.75rem',
     transform: 'translateY(-50%) rotate(45deg)',
     zIndex: 120,
     borderWidth: '6px',
@@ -166,7 +166,7 @@ export default function NavGroup({
   const isSelected = selectedID === currentItem.id;
 
   const Icon = currentItem?.icon ? currentItem.icon : null;
-  const itemIcon = Icon ? <Icon style={{ fontSize: 20, stroke: '1.5' }} /> : null;
+  const itemIcon = Icon ? <Icon style={{ fontSize: '1.25rem', stroke: '1.5' }} /> : null;
 
   const navCollapse = item.children?.map((menuItem, index) => {
     switch (menuItem.type) {
@@ -200,7 +200,7 @@ export default function NavGroup({
         <NavItem item={itemRem} level={1} />
       ) : (
         itemRem.title && (
-          <Typography variant="caption" sx={{ pl: 2 }}>
+          <Typography variant="caption" sx={{ pl: '1.0rem' }}>
             {itemRem.title} {itemRem.url}
           </Typography>
         )
@@ -271,7 +271,7 @@ export default function NavGroup({
             <>
               {item.translationKey || item.title ? (
                 drawerOpen && (
-                  <Box sx={{ pl: 3, mb: 1.5 }}>
+                  <Box sx={{ pl: '1.5rem', mb: '0.75rem' }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       {item.title}
                     </Typography>
@@ -310,8 +310,8 @@ export default function NavGroup({
             className={anchorEl ? 'Mui-selected' : ''}
           >
             {(itemIcon || currentItem.id === lastItemId) && (
-              <ListItemIcon sx={{ minWidth: 28 }}>
-                {currentItem.id === lastItemId ? <GroupOutlined style={{ fontSize: 20, stroke: '1.5' }} /> : itemIcon}
+              <ListItemIcon sx={{ minWidth: '1.75rem' }}>
+                {currentItem.id === lastItemId ? <GroupOutlined style={{ fontSize: '1.25rem', stroke: '1.5' }} /> : itemIcon}
               </ListItemIcon>
             )}
             <ListItemText
@@ -323,17 +323,17 @@ export default function NavGroup({
               }
             />
             {openMini ? (
-              <DownOutlined style={{ fontSize: 16, stroke: '1.5' }} />
+              <DownOutlined style={{ fontSize: '1.0rem', stroke: '1.5' }} />
             ) : (
-              <RightOutlined style={{ fontSize: 16, stroke: '1.5' }} />
+              <RightOutlined style={{ fontSize: '1.0rem', stroke: '1.5' }} />
             )}
             {anchorEl && (
               <PopperStyled id={popperId} open={openMini} anchorEl={anchorEl} placement="bottom-start" style={{ zIndex: 2001 }}>
                 {({ TransitionProps }) => (
                   <Transitions in={openMini} {...TransitionProps}>
-                    <Paper sx={(theme) => ({ mt: 0.5, py: 1.25, boxShadow: theme.shadows[8], backgroundImage: 'none' })}>
+                    <Paper sx={(theme) => ({ mt: 0.5, py: '0.625rem', boxShadow: theme.shadows[8], backgroundImage: 'none' })}>
                       <ClickAwayListener onClickAway={handleClose}>
-                        <SimpleBar sx={{ minWidth: 200, overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 170px)' }}>
+                        <SimpleBar sx={{ minWidth: '12.5rem', overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 170px)' }}>
                           {currentItem.id !== lastItemId ? items : moreItems}
                         </SimpleBar>
                       </ClickAwayListener>
@@ -361,3 +361,5 @@ NavGroup.propTypes = {
   setSelectedLevel: PropTypes.func,
   selectedLevel: PropTypes.number
 };
+
+

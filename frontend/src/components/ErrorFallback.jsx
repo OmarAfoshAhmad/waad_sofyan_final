@@ -7,11 +7,11 @@ import MainCard from './MainCard';
 export default function ErrorFallback({ error, resetErrorBoundary }) {
   return (
     <MainCard>
-      <Box sx={{ textAlign: 'center', py: 5 }}>
+      <Box sx={{ textAlign: 'center', py: '2.5rem' }}>
         <Typography variant="h3" color="error" gutterBottom>
           Something went wrong
         </Typography>
-        <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
+        <Typography variant="body1" color="textSecondary" sx={{ mb: '1.5rem' }}>
           {error?.message || 'عذراً، حدث خطأ غير متوقع'}
         </Typography>
         {resetErrorBoundary && (

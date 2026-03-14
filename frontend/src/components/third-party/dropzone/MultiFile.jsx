@@ -63,7 +63,7 @@ export default function MultiFileUpload({ error, showList = false, files, type, 
           <DropzoneWrapper
             {...getRootProps()}
             sx={{
-              ...(type === DropzoneType.STANDARD && { p: 0, mb: 1, mr: 0.5, width: 86, height: 84 }),
+              ...(type === DropzoneType.STANDARD && { p: 0, mb: 1, mr: 0.5, width: '5.375rem', height: '5.25rem' }),
               ...(isDragActive && { opacity: 0.72 }),
               ...((isDragReject || error) && {
                 color: 'error.main',
@@ -86,7 +86,7 @@ export default function MultiFileUpload({ error, showList = false, files, type, 
       </Box>
 
       {type !== DropzoneType.STANDARD && files && files.length > 0 && (
-        <Stack direction="row" sx={{ gap: 1.5, justifyContent: 'flex-end' }}>
+        <Stack direction="row" sx={{ gap: '0.75rem', justifyContent: 'flex-end' }}>
           <Button color="inherit" size="small" onClick={onRemoveAll}>
             Remove all
           </Button>
@@ -108,3 +108,5 @@ MultiFileUpload.propTypes = {
   sx: PropTypes.any,
   onUpload: PropTypes.any
 };
+
+

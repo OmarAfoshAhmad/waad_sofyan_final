@@ -126,7 +126,7 @@ const BenefitPolicyReport = () => {
 
       <MainCard>
         {/* Documentation Banner */}
-        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3 }}>
+        <Alert severity="info" icon={<InfoIcon />} sx={{ mb: '1.5rem' }}>
           <AlertTitle>تقرير قراري - Decision Making Report</AlertTitle>
           <Typography variant="body2" paragraph sx={{ mb: 1 }}>
             هذا التقرير يساعد الإدارة في اتخاذ قرارات تتعلق بتصميم وثائق المنافع:
@@ -141,7 +141,7 @@ const BenefitPolicyReport = () => {
 
         {/* Large Dataset Warning */}
         {showLargeDatasetWarning && (
-          <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 3 }}>
+          <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: '1.5rem' }}>
             <AlertTitle>تحذير: كمية بيانات كبيرة</AlertTitle>
             <Typography variant="body2">
               يتم عرض {formatNumber(policies.length)} وثيقة. استخدم الفلاتر لتضييق النتائج وتحسين الأداء.
@@ -151,7 +151,7 @@ const BenefitPolicyReport = () => {
 
         {/* Error Display */}
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }}>
             <AlertTitle>خطأ في تحميل البيانات</AlertTitle>
             {error}
           </Alert>
@@ -159,103 +159,103 @@ const BenefitPolicyReport = () => {
 
         {/* Employer Filter */}
         {canSelectEmployer && (
-          <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: '1.5rem' }}>
             <EmployerFilterSelector />
           </Box>
         )}
 
         {/* Locked Employer Notice */}
         {isEmployerLocked && (
-          <Alert severity="info" variant="outlined" sx={{ mb: 3 }}>
+          <Alert severity="info" variant="outlined" sx={{ mb: '1.5rem' }}>
             <Typography variant="body2">تم تحديد نطاق التقرير للشريك الخاص بك تلقائياً.</Typography>
           </Alert>
         )}
 
         {/* KPIs Section 1 - Policy Overview */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: '2.0rem' }}>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <PolicyIcon fontSize="small" />
             القسم 1: نظرة عامة على الوثائق
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Section 1: BenefitPolicy Overview
           </Typography>
           <BenefitPolicyKPIs kpis={kpis} loading={loading} />
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
 
         {/* KPIs Section 2 - Coverage Utilization */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: '2.0rem' }}>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <UtilizationIcon fontSize="small" />
             القسم 2: الاستهلاك والاستخدام
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Section 2: Coverage Utilization
           </Typography>
           <UtilizationKPIs utilizationKpis={utilizationKpis} loading={loading} />
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
 
         {/* Section 3 - Limits Pressure Analysis */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: '2.0rem' }}>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <StressIcon fontSize="small" />
             القسم 3: تحليل ضغط الحدود
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Section 3: Limits Pressure Analysis
           </Typography>
           <LimitsStressTable data={limitsStressData} loading={loading} />
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
 
         {/* Section 4 - Rejections Analysis */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: '2.0rem' }}>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <RejectIcon fontSize="small" />
             القسم 4: تحليل الرفض
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Section 4: Rejections Analysis
           </Typography>
           <RejectionsAnalysis rejectionsAnalysis={rejectionsAnalysis} loading={loading} />
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
 
         {/* Section 5 - Policy Effectiveness Ranking */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: '2.0rem' }}>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <RankingIcon fontSize="small" />
             القسم 5: ترتيب فعالية الوثائق
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Section 5: BenefitPolicy Effectiveness Ranking
           </Typography>
           <PolicyEffectivenessTable data={policyEffectivenessRanking} loading={loading} />
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
 
         {/* Insights Section */}
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: '2.0rem' }}>
           <Typography variant="h6" gutterBottom>
             التحليلات والرؤى
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Insights & Analytics
           </Typography>
           <BenefitPolicyInsights insights={insights} loading={loading} />
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
 
         {/* Filters Section */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: '1.5rem' }}>
           <Typography variant="h6" gutterBottom>
             الفلاتر
           </Typography>
@@ -272,7 +272,7 @@ const BenefitPolicyReport = () => {
           <Typography variant="h6" gutterBottom>
             قائمة وثائق المنافع
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
             Benefit Policies List • {formatNumber(policies.length)} وثيقة
           </Typography>
           <BenefitPolicyTable policies={policies} loading={loading} />

@@ -77,7 +77,7 @@ const AmountComparisonBar = ({
   return (
     <Box sx={{ width: '100%' }}>
       {/* Requested Amount Bar */}
-      <Stack spacing={0.5} sx={{ mb: 2 }}>
+      <Stack spacing={0.5} sx={{ mb: '1.0rem' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant={size === 'small' ? 'caption' : 'body2'} color="text.secondary">
             {t.requested}
@@ -102,7 +102,7 @@ const AmountComparisonBar = ({
       </Stack>
 
       {/* Approved Amount Bar */}
-      <Stack spacing={0.5} sx={{ mb: 2 }}>
+      <Stack spacing={0.5} sx={{ mb: '1.0rem' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant={size === 'small' ? 'caption' : 'body2'} color="text.secondary">
             {t.approved}
@@ -142,14 +142,14 @@ const AmountComparisonBar = ({
 
       {/* Financial Breakdown */}
       {showBreakdown && (
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+        <Box sx={{ mt: '1.5rem', p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem' }}>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: '1.0rem' }}>
             {t.financialSummary}
           </Typography>
 
           {/* Show pending message if not processed */}
           {!isProcessed ? (
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: '1.0rem' }}>
               {t.pendingReview}
             </Typography>
           ) : (
@@ -157,7 +157,7 @@ const AmountComparisonBar = ({
               {/* Insurer Pays */}
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'success.main' }} />
+                  <Box sx={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', bgcolor: 'success.main' }} />
                   <Typography variant="body2">{t.insurerPays}</Typography>
                 </Stack>
                 <Typography variant="body2" fontWeight={600} color="success.main">
@@ -169,7 +169,7 @@ const AmountComparisonBar = ({
               {copayPercentage > 0 && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'warning.main' }} />
+                    <Box sx={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', bgcolor: 'warning.main' }} />
                     <Typography variant="body2">{t.copay}</Typography>
                   </Stack>
                   <Typography variant="body2" fontWeight={500} color="warning.dark">
@@ -182,7 +182,7 @@ const AmountComparisonBar = ({
               {deductible > 0 && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'info.main' }} />
+                    <Box sx={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', bgcolor: 'info.main' }} />
                     <Typography variant="body2">{t.deductible}</Typography>
                   </Stack>
                   <Typography variant="body2" fontWeight={500} color="info.dark">
@@ -195,7 +195,7 @@ const AmountComparisonBar = ({
               {rejectedAmount > 0 && (
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'error.main' }} />
+                    <Box sx={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', bgcolor: 'error.main' }} />
                     <Typography variant="body2">{t.rejected}</Typography>
                   </Stack>
                   <Typography variant="body2" fontWeight={500} color="error.main">
@@ -236,3 +236,5 @@ AmountComparisonBar.propTypes = {
 };
 
 export default AmountComparisonBar;
+
+

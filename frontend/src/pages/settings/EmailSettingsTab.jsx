@@ -67,15 +67,15 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
   if (!settings) return null;
 
   return (
-    <Box sx={{ p: 2, height: '100%' }}>
+    <Box sx={{ p: '1.0rem', height: '100%' }}>
       <Grid container spacing={2}>
         {/* Basic Settings */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <SettingOutlined /> الإعدادات الأساسية
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={2}>
               <TextField
                 fullWidth
@@ -112,11 +112,11 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
 
         {/* Sync Settings */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CheckCircleOutlined /> المزامنة والنشاط
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={2}>
               <FormControlLabel
                 control={
@@ -168,14 +168,14 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
 
         {/* SMTP */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Typography variant="subtitle1" fontWeight={700}>خادم الإرسال (SMTP)</Typography>
               <Button size="small" variant="outlined" onClick={() => handleTestConnection('smtp')} disabled={testing}>
                 فحص الإرسال
               </Button>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={1.5}>
               <TextField fullWidth size="small" label="خادم SMTP" name="smtpHost" value={settings.smtpHost || ''} onChange={handleChange} />
               <TextField fullWidth size="small" type="number" label="المنفذ" name="smtpPort" value={settings.smtpPort || 587} onChange={handleChange} />
@@ -187,14 +187,14 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
 
         {/* IMAP */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Typography variant="subtitle1" fontWeight={700}>خادم الاستقبال (IMAP)</Typography>
               <Button size="small" variant="outlined" onClick={() => handleTestConnection('imap')} disabled={testing}>
                 فحص الاستقبال
               </Button>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={1.5}>
               <TextField fullWidth size="small" label="خادم IMAP" name="imapHost" value={settings.imapHost || ''} onChange={handleChange} />
               <TextField fullWidth size="small" type="number" label="المنفذ" name="imapPort" value={settings.imapPort || 993} onChange={handleChange} />

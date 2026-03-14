@@ -276,7 +276,7 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
   };
 
   return (
-    <TbaFormSection title="إعادة تعيين كلمة المرور" icon={KeyIcon} sx={{ mt: 3 }}>
+    <TbaFormSection title="إعادة تعيين كلمة المرور" icon={KeyIcon} sx={{ mt: '1.5rem' }}>
       <Grid container spacing={2.5} alignItems="flex-start">
         <Grid size={{ xs: 12 }}>
           <Alert severity="warning" sx={{ mb: 1 }}>
@@ -285,7 +285,7 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
         </Grid>
 
         {/* New Password */}
-        <Grid size={{ xs: 12, sm: 5 }}>
+        <Grid size={{ xs: 12, sm: '2.5rem' }}>
           <TextField
             fullWidth
             label="كلمة المرور الجديدة"
@@ -307,7 +307,7 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
         </Grid>
 
         {/* Confirm Password */}
-        <Grid size={{ xs: 12, sm: 5 }}>
+        <Grid size={{ xs: 12, sm: '2.5rem' }}>
           <TextField
             fullWidth
             label="تأكيد كلمة المرور"
@@ -329,7 +329,7 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
         </Grid>
 
         {/* Action Button */}
-        <Grid size={{ xs: 12, sm: 2 }} sx={{ display: 'flex', mt: 1 }}>
+        <Grid size={{ xs: 12, sm: '1.0rem' }} sx={{ display: 'flex', mt: 1 }}>
           <Button
             variant="contained"
             color="warning"
@@ -337,7 +337,7 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
             onClick={handleResetPassword}
             disabled={isResetting || !form.newPassword || !form.confirmPassword}
             startIcon={isResetting ? <CircularProgress size={20} color="inherit" /> : <LockIcon />}
-            sx={{ height: 48 }}
+            sx={{ height: '3.0rem' }}
           >
             إعادة تعيين
           </Button>
@@ -386,7 +386,7 @@ const Step2Roles = ({
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: '2.0rem' }}>
         <CircularProgress />
       </Box>
     );
@@ -394,7 +394,7 @@ const Step2Roles = ({
 
   return (
     <TbaFormSection title="تعيين الأدوار للمستخدم" subtitle="اختر دوراً واحداً أو أكثر" icon={AdminPanelSettingsIcon}>
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" sx={{ mb: '1.0rem' }}>
         الأدوار تحدد صلاحيات المستخدم في النظام. يمكنك تعيين أكثر من دور للمستخدم.
       </Alert>
 
@@ -410,11 +410,11 @@ const Step2Roles = ({
                 onClick={() => !isProtected && handleToggleRole(role?.id)}
                 elevation={isSelected ? 3 : 0}
                 sx={{
-                  p: 2,
+                  p: '1.0rem',
                   cursor: isProtected ? 'not-allowed' : 'pointer',
                   border: '2px solid',
                   borderColor: isSelected ? 'primary.main' : 'divider',
-                  borderRadius: 2,
+                  borderRadius: '0.125rem',
                   bgcolor: isSelected ? 'primary.lighter' : 'background.paper',
                   opacity: isProtected ? 0.6 : 1,
                   transition: 'all 0.2s ease',
@@ -441,7 +441,7 @@ const Step2Roles = ({
                         size="small"
                         color={getRoleColor(roleName)}
                         variant="light"
-                        sx={{ height: 20, fontSize: '0.7rem' }}
+                        sx={{ height: '1.25rem', fontSize: '0.7rem' }}
                       />
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -459,8 +459,8 @@ const Step2Roles = ({
       {allRoles.length === 0 && <Alert severity="warning">لا توجد أدوار متاحة في النظام</Alert>}
 
       {hasProviderStaffRole && (
-        <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed', borderColor: 'info.main' }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
+        <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px dashed', borderColor: 'info.main' }}>
+          <Alert severity="info" sx={{ mb: '1.0rem' }}>
             يجب اختيار مقدم خدمة عند تعيين دور <strong>PROVIDER_STAFF</strong>.
           </Alert>
           <Grid container spacing={2}>
@@ -494,8 +494,8 @@ const Step2Roles = ({
       )}
 
       {hasEmployerAdminRole && (
-        <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed', borderColor: 'primary.main' }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
+        <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px dashed', borderColor: 'primary.main' }}>
+          <Alert severity="info" sx={{ mb: '1.0rem' }}>
             يجب اختيار صاحب عمل عند تعيين دور <strong>EMPLOYER_ADMIN</strong>.
           </Alert>
           <Grid container spacing={2}>
@@ -530,8 +530,8 @@ const Step2Roles = ({
 
       {/* Custom Permissions for EMPLOYER users */}
       {hasEmployerAdminRole && (
-        <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed', borderColor: 'warning.main' }}>
-          <Alert severity="info" icon={<AdminPanelSettingsIcon />} sx={{ mb: 2 }}>
+        <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px dashed', borderColor: 'warning.main' }}>
+          <Alert severity="info" icon={<AdminPanelSettingsIcon />} sx={{ mb: '1.0rem' }}>
             <Typography variant="body2" fontWeight="medium" gutterBottom>
               صلاحيات مخصصة لمستخدم الشريك
             </Typography>
@@ -654,7 +654,7 @@ const Step2Roles = ({
 
       {/* Selected roles summary */}
       {selectedRoles.length > 0 && (
-        <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
             الأدوار المختارة ({selectedRoles.length}):
           </Typography>
@@ -898,7 +898,7 @@ const UserEdit = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '25.0rem' }}>
         <CircularLoader />
       </Box>
     );
@@ -928,7 +928,7 @@ const UserEdit = () => {
       />
 
       {/* Stepper */}
-      <MainCard sx={{ mb: 3 }}>
+      <MainCard sx={{ mb: '1.5rem' }}>
         <Stepper activeStep={activeStep} alternativeLabel>
           {STEPS.map((label, index) => (
             <Step key={label} completed={activeStep > index}>
@@ -940,7 +940,7 @@ const UserEdit = () => {
 
       {/* Error Alert */}
       {submitError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError(null)}>
+        <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setSubmitError(null)}>
           {submitError}
         </Alert>
       )}
@@ -965,7 +965,7 @@ const UserEdit = () => {
         )}
 
         {/* Navigation Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}>
           <Button variant="outlined" onClick={handleBack} disabled={activeStep === 0 || saving} startIcon={<ArrowForwardIcon />}>
             السابق
           </Button>
@@ -991,3 +991,4 @@ const UserEdit = () => {
 };
 
 export default UserEdit;
+

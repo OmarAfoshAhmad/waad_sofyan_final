@@ -69,13 +69,13 @@ const DashboardTable = ({ title, subtitle, data = [], columns = [], loading = fa
             {canSort && (
               <Box sx={{ ml: 1, display: 'flex', flexDirection: 'column' }}>
                 {sortDirection === 'asc' ? (
-                  <ArrowUpward sx={{ fontSize: 16, color: 'primary.main' }} />
+                  <ArrowUpward sx={{ fontSize: '1.0rem', color: 'primary.main' }} />
                 ) : sortDirection === 'desc' ? (
-                  <ArrowDownward sx={{ fontSize: 16, color: 'primary.main' }} />
+                  <ArrowDownward sx={{ fontSize: '1.0rem', color: 'primary.main' }} />
                 ) : (
                   <Box sx={{ display: 'flex', flexDirection: 'column', opacity: 0.3 }}>
-                    <ArrowUpward sx={{ fontSize: 12 }} />
-                    <ArrowDownward sx={{ fontSize: 12, mt: -0.5 }} />
+                    <ArrowUpward sx={{ fontSize: '0.75rem' }} />
+                    <ArrowDownward sx={{ fontSize: '0.75rem', mt: -0.5 }} />
                   </Box>
                 )}
               </Box>
@@ -134,7 +134,7 @@ const DashboardTable = ({ title, subtitle, data = [], columns = [], loading = fa
       />
       <CardContent sx={{ p: 0 }}>
         {/* Global Search */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ p: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
           <Stack direction="row" spacing={2} alignItems="center">
             <TextField
               fullWidth
@@ -146,7 +146,7 @@ const DashboardTable = ({ title, subtitle, data = [], columns = [], loading = fa
                 startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
               }}
             />
-            <FormControl size="small" sx={{ minWidth: 120 }}>
+            <FormControl size="small" sx={{ minWidth: '7.5rem' }}>
               <InputLabel>عدد الصفوف</InputLabel>
               <Select
                 value={pagination.pageSize}
@@ -181,7 +181,7 @@ const DashboardTable = ({ title, subtitle, data = [], columns = [], loading = fa
             <TableBody>
               {table.getRowModel().rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={columns.length} align="center" sx={{ py: '2.0rem' }}>
                     <Typography variant="body2" color="text.secondary">
                       لا توجد بيانات
                     </Typography>
@@ -209,7 +209,7 @@ const DashboardTable = ({ title, subtitle, data = [], columns = [], loading = fa
         </TableContainer>
 
         {/* Pagination */}
-        <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
+        <Box sx={{ p: '1.0rem', borderTop: 1, borderColor: 'divider' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Typography variant="body2" color="text.secondary">
               عرض {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} -{' '}
@@ -251,3 +251,5 @@ DashboardTable.propTypes = {
 };
 
 export default DashboardTable;
+
+

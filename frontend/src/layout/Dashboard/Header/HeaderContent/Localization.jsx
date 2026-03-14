@@ -88,7 +88,7 @@ export default function Localization() {
                   sx={{
                     p: 0,
                     width: '100%',
-                    minWidth: 200,
+                    minWidth: '12.5rem',
                     maxWidth: { xs: 250, md: 290 },
                     bgcolor: 'background.paper',
                     borderRadius: 0.5
@@ -99,7 +99,7 @@ export default function Localization() {
                       primary={
                         <Grid container>
                           <Typography color="text.primary">English</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ ml: '8px' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ ml: '0.375rem' }}>
                             (US)
                           </Typography>
                         </Grid>
@@ -111,7 +111,7 @@ export default function Localization() {
                       primary={
                         <Grid container>
                           <Typography color="text.primary">العربية</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ ml: '8px' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ ml: '0.375rem' }}>
                             (Arabic)
                           </Typography>
                         </Grid>
@@ -127,3 +127,5 @@ export default function Localization() {
     </Box>
   );
 }
+
+

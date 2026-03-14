@@ -55,7 +55,7 @@ export default function MainCard({
           left: '50%',
           transform: 'translate(-50%, -50%)',
           width: { xs: `calc(100% - 50px)`, sm: 'auto' },
-          maxWidth: 768
+          maxWidth: '48.0rem'
         }),
         ...(typeof sx === 'function' ? sx(theme) : sx || {})
       })}
@@ -65,7 +65,7 @@ export default function MainCard({
       {/* card header and action */}
       {title && (
         <CardHeader
-          sx={{ p: 2.5 }}
+          sx={{ p: '1.25rem' }}
           slotProps={{ title: { variant: darkTitle ? 'h4' : 'subtitle1' }, action: { sx: { m: '0px auto', alignSelf: 'center' } } }}
           title={title}
           action={secondary}
@@ -118,3 +118,5 @@ MainCard.propTypes = {
   ref: PropTypes.object,
   others: PropTypes.any
 };
+
+

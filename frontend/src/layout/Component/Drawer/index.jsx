@@ -49,11 +49,11 @@ export default function Drawer() {
       onClose={() => handlerComponentDrawer(false)}
     >
       <MainCard sx={{ height: '100%' }} content={false}>
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: '1.0rem' }}>
           <TextField
             fullWidth
             sx={(theme) => ({
-              borderRadius: '4px',
+              borderRadius: '0.375rem',
               bgcolor: 'background.paper',
               boxShadow: theme.vars.customShadows.primary,
               border: '1px solid',
@@ -74,3 +74,4 @@ export default function Drawer() {
     </MuiDrawer>
   );
 }
+

@@ -143,7 +143,7 @@ export default function DataTable({
       }
     >
       {enableFiltering && (
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: '1.0rem' }}>
           <TextField
             value={globalFilter ?? ''}
             onChange={(e) => setGlobalFilter(e.target.value)}
@@ -255,3 +255,5 @@ DataTable.propTypes = {
   enablePagination: PropTypes.bool,
   pageSize: PropTypes.number
 };
+
+

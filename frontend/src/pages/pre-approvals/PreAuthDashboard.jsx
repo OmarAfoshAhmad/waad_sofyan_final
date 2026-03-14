@@ -88,7 +88,7 @@ const PreAuthDashboard = () => {
   // Show error if any
   if (dashboardError) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: '1.5rem' }}>
         <Alert
           severity="error"
           action={
@@ -154,7 +154,7 @@ const PreAuthDashboard = () => {
         {/* Row 2: Amount Stats */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Card variant="outlined">
-            <CardContent sx={{ py: 2 }}>
+            <CardContent sx={{ py: '1.0rem' }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -164,14 +164,14 @@ const PreAuthDashboard = () => {
                     {(stats?.totalRequestedAmount || 0).toLocaleString('en-US')} د.ل
                   </Typography>
                 </Box>
-                <AttachMoney color="primary" sx={{ fontSize: 32, opacity: 0.7 }} />
+                <AttachMoney color="primary" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
               </Stack>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Card variant="outlined">
-            <CardContent sx={{ py: 2 }}>
+            <CardContent sx={{ py: '1.0rem' }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -181,14 +181,14 @@ const PreAuthDashboard = () => {
                     {(stats?.totalApprovedAmount || 0).toLocaleString('en-US')} د.ل
                   </Typography>
                 </Box>
-                <AttachMoney color="success" sx={{ fontSize: 32, opacity: 0.7 }} />
+                <AttachMoney color="success" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
               </Stack>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Card variant="outlined">
-            <CardContent sx={{ py: 2 }}>
+            <CardContent sx={{ py: '1.0rem' }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography variant="caption" color="text.secondary">
@@ -198,7 +198,7 @@ const PreAuthDashboard = () => {
                     {(stats?.averageRequestedAmount || 0).toLocaleString('en-US')} د.ل
                   </Typography>
                 </Box>
-                <AttachMoney color="info" sx={{ fontSize: 32, opacity: 0.7 }} />
+                <AttachMoney color="info" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
               </Stack>
             </CardContent>
           </Card>
@@ -230,7 +230,7 @@ const PreAuthDashboard = () => {
       </Grid>
 
       {/* Info Footer */}
-      <Box sx={{ mt: 2, py: 1, px: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+      <Box sx={{ mt: '1.0rem', py: 1, px: '1.0rem', bgcolor: 'grey.100', borderRadius: 1 }}>
         <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
           📊 تحديث تلقائي كل دقيقتين | {new Date().toLocaleTimeString('en-US')}
         </Typography>
@@ -240,3 +240,4 @@ const PreAuthDashboard = () => {
 };
 
 export default PreAuthDashboard;
+

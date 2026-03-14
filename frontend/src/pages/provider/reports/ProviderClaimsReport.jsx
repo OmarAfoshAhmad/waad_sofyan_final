@@ -134,65 +134,65 @@ const ProviderClaimsReport = () => {
       {
         id: 'claimNumber',
         label: 'رقم المطالبة',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'serviceDate',
         label: 'تاريخ الخدمة',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'memberName',
         label: 'اسم المنتفع',
-        minWidth: 180,
+        minWidth: '11.25rem',
         sortable: false
       },
       {
         id: 'memberBarcode',
         label: 'الباركود',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'employerName',
         label: 'الشركة',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'claimedAmount',
         label: 'المبلغ المطلوب',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'approvedAmount',
         label: 'المبلغ الموافق',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'netAmount',
         label: 'الصافي',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 140,
+        minWidth: '8.75rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'servicesCount',
         label: 'عدد الخدمات',
-        minWidth: 110,
+        minWidth: '6.875rem',
         align: 'center',
         sortable: false
       }
@@ -308,13 +308,13 @@ const ProviderClaimsReport = () => {
 
         {/* Error Alert */}
         {isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }}>
             {error?.message || 'حدث خطأ أثناء تحميل البيانات'}
           </Alert>
         )}
 
         {/* Filters */}
-        <MainCard sx={{ mb: 3 }}>
+        <MainCard sx={{ mb: '1.5rem' }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: showFilters ? 2 : 0 }}>
             <Stack direction="row" alignItems="center" spacing={1}>
               <FilterListIcon color="action" />

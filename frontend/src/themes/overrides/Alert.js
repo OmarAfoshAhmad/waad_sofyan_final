@@ -78,7 +78,7 @@ export default function Alert(theme) {
         },
         message: {
           padding: 0,
-          marginTop: 3
+          marginTop: '1.5rem'
         },
         border: {
           padding: '10px 16px',
@@ -93,7 +93,7 @@ export default function Alert(theme) {
         },
         action: {
           '& .MuiButton-root': {
-            padding: 2,
+            padding: '0.125rem',
             height: 'auto',
             fontSize: '0.75rem',
             marginTop: -2
@@ -101,8 +101,8 @@ export default function Alert(theme) {
           '& .MuiIconButton-root': {
             width: 'auto',
             height: 'auto',
-            padding: 2,
-            marginRight: 6,
+            padding: '0.125rem',
+            marginRight: '0.375rem',
             '& .MuiSvgIcon-root': {
               fontSize: '1rem'
             }
@@ -112,3 +112,5 @@ export default function Alert(theme) {
     }
   };
 }
+
+

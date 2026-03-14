@@ -19,8 +19,8 @@ import FileTextOutlined from '@ant-design/icons/FileTextOutlined';
 
 // avatar style
 const avatarSX = {
-  width: 36,
-  height: 36,
+  width: '2.25rem',
+  height: '2.25rem',
   fontSize: '1rem'
 };
 
@@ -40,7 +40,7 @@ export default function AcquisitionChannels() {
   return (
     <MainCard content={false}>
       <Stack>
-        <List sx={{ p: 0, '& .MuiListItemButton-root': { pt: 2, pb: 0 } }}>
+        <List sx={{ p: 0, '& .MuiListItemButton-root': { pt: '1.0rem', pb: 0 } }}>
           <ListItemButton sx={{ '&:hover': { bgcolor: 'transparent' }, cursor: 'text' }}>
             <ListItemText
               primary={<Typography variant="subtitle1">Acquisition Channels</Typography>}
@@ -64,8 +64,8 @@ export default function AcquisitionChannels() {
           sx={{
             p: 0,
             '& .MuiListItemButton-root': {
-              py: 1.5,
-              px: 2,
+              py: '0.75rem',
+              px: '1.0rem',
               '& .MuiAvatar-root': avatarSX,
               '& .MuiListItemSecondaryAction-root': { ...actionSX, position: 'relative' }
             }
@@ -118,3 +118,5 @@ export default function AcquisitionChannels() {
     </MainCard>
   );
 }
+
+

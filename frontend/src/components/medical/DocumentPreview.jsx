@@ -165,7 +165,7 @@ const DocumentPreview = ({ document, onClose }) => {
             </IconButton>
           </Tooltip>
 
-          <Typography variant="body2" sx={{ color: MEDICAL_THEME.colors.neutral.white, minWidth: '50px', textAlign: 'center' }}>
+          <Typography variant="body2" sx={{ color: MEDICAL_THEME.colors.neutral.white, minWidth: '3.125rem', textAlign: 'center' }}>
             {zoom}%
           </Typography>
 
@@ -233,7 +233,7 @@ const DocumentPreview = ({ document, onClose }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        minHeight: '400px',
+        minHeight: '25.0rem',
         background: MEDICAL_THEME.colors.neutral.darkest,
         overflow: 'auto',
         padding: MEDICAL_THEME.spacing.lg
@@ -265,7 +265,7 @@ const DocumentPreview = ({ document, onClose }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        minHeight: '400px',
+        minHeight: '25.0rem',
         background: MEDICAL_THEME.colors.neutral.darkest,
         padding: MEDICAL_THEME.spacing.lg
       }}
@@ -296,16 +296,16 @@ const DocumentPreview = ({ document, onClose }) => {
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        minHeight: '400px',
+        minHeight: '25.0rem',
         background: MEDICAL_THEME.colors.neutral.darkest,
         padding: MEDICAL_THEME.spacing.lg
       }}
     >
-      <ErrorIcon sx={{ fontSize: 64, color: MEDICAL_THEME.colors.neutral.medium, mb: 2 }} />
+      <ErrorIcon sx={{ fontSize: '4.0rem', color: MEDICAL_THEME.colors.neutral.medium, mb: '1.0rem' }} />
       <Typography variant="h6" sx={{ color: MEDICAL_THEME.colors.neutral.white, mb: 1 }}>
         نوع الملف غير مدعوم للمعاينة
       </Typography>
-      <Typography variant="body2" sx={{ color: MEDICAL_THEME.colors.neutral.medium, mb: 2 }}>
+      <Typography variant="body2" sx={{ color: MEDICAL_THEME.colors.neutral.medium, mb: '1.0rem' }}>
         {document?.fileName}
       </Typography>
       <IconButton

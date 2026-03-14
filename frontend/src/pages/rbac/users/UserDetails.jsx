@@ -82,7 +82,7 @@ const getRoleColor = (roleName) => {
 const RolesDisplay = ({ user, allRoles, userRoleIds }) => {
   return (
     <Box>
-      <Alert severity="info" sx={{ mb: 3 }}>
+      <Alert severity="info" sx={{ mb: '1.5rem' }}>
         نوع المستخدم والدور المعيّن. لتغيير الدور، استخدم صفحة تعديل المستخدم.
       </Alert>
 
@@ -96,10 +96,10 @@ const RolesDisplay = ({ user, allRoles, userRoleIds }) => {
               <Paper
                 elevation={isAssigned ? 3 : 0}
                 sx={{
-                  p: 2,
+                  p: '1.0rem',
                   border: '1px solid',
                   borderColor: isAssigned ? 'primary.main' : 'divider',
-                  borderRadius: 2,
+                  borderRadius: '0.125rem',
                   bgcolor: isAssigned ? 'primary.lighter' : 'background.paper',
                   opacity: isAssigned ? 1 : 0.5
                 }}
@@ -107,8 +107,8 @@ const RolesDisplay = ({ user, allRoles, userRoleIds }) => {
                 <Stack direction="row" spacing={1.5} alignItems="center">
                   <Avatar
                     sx={{
-                      width: 40,
-                      height: 40,
+                      width: '2.5rem',
+                      height: '2.5rem',
                       bgcolor: isAssigned ? `${getRoleColor(roleName)}.main` : 'grey.300'
                     }}
                   >
@@ -206,7 +206,7 @@ const UserDetails = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '25.0rem' }}>
         <CircularLoader />
       </Box>
     );
@@ -228,7 +228,7 @@ const UserDetails = () => {
             { label: 'تفاصيل' }
           ]}
         />
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mt: '1.0rem' }}>
           {error}
         </Alert>
       </Box>
@@ -259,9 +259,9 @@ const UserDetails = () => {
       />
 
       {/* ====== USER INFO CARD ====== */}
-      <MainCard sx={{ mb: 3 }}>
+      <MainCard sx={{ mb: '1.5rem' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} alignItems={{ sm: 'center' }}>
-          <Avatar sx={{ width: 80, height: 80, bgcolor: 'primary.main', fontSize: '2rem' }}>
+          <Avatar sx={{ width: '5.0rem', height: '5.0rem', bgcolor: 'primary.main', fontSize: '2rem' }}>
             {getInitials(user?.fullName || user?.username)}
           </Avatar>
 
@@ -304,3 +304,4 @@ const UserDetails = () => {
 };
 
 export default UserDetails;
+

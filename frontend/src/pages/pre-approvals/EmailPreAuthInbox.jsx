@@ -241,42 +241,42 @@ const EmailPreAuthInbox = () => {
       {
         id: 'receivedAt',
         label: 'تاريخ الاستلام',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: true
       },
       {
         id: 'sender',
         label: 'المرسل',
-        minWidth: 200,
+        minWidth: '12.5rem',
         icon: <EmailIcon fontSize="small" />
       },
       {
         id: 'subject',
         label: 'الموضوع',
-        minWidth: 250
+        minWidth: '15.625rem'
       },
       {
         id: 'provider',
         label: 'مقدم الخدمة',
-        minWidth: 150,
+        minWidth: '9.375rem',
         icon: <LocalHospitalIcon fontSize="small" />
       },
       {
         id: 'member',
         label: 'المؤمن عليه',
-        minWidth: 150,
+        minWidth: '9.375rem',
         icon: <PersonIcon fontSize="small" />
       },
       {
         id: 'attachments',
         label: 'المرفقات',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center'
       },
       {
         id: 'actions',
         label: 'الإجراءات',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center'
       }
     ],
@@ -311,7 +311,7 @@ const EmailPreAuthInbox = () => {
 
         case 'subject':
           return (
-            <Typography variant="body2" noWrap sx={{ maxWidth: 300 }}>
+            <Typography variant="body2" noWrap sx={{ maxWidth: '18.75rem' }}>
               {request.subject || '(بدون عنوان)'}
             </Typography>
           );
@@ -405,7 +405,7 @@ const EmailPreAuthInbox = () => {
 
       <MainCard title="صندوق الطلبات الجديدة (غير المعالجة)">
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
@@ -453,14 +453,14 @@ const EmailPreAuthInbox = () => {
         </DialogTitle>
         <DialogContent dividers>
           {detailsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: '2.5rem' }}>
               <CircularProgress />
             </Box>
           ) : selectedRequest ? (
             <Grid container spacing={3}>
               {/* Header Info */}
               <Grid item xs={12}>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem', bgcolor: 'grey.50' }}>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <Typography variant="caption" color="text.secondary">من:</Typography>
@@ -502,7 +502,7 @@ const EmailPreAuthInbox = () => {
               {/* Quick Approval Section */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 1 }}><Chip label="إجراءات المراجعة والموافقة" size="small" /></Divider>
-                <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: '#f0f7ff' }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem', mt: 1, bgcolor: '#f0f7ff' }}>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
                       <TextField
@@ -547,9 +547,9 @@ const EmailPreAuthInbox = () => {
                 <Paper 
                   variant="outlined" 
                   sx={{ 
-                    p: 2, 
-                    minHeight: 200, 
-                    maxHeight: 400, 
+                    p: '1.0rem', 
+                    minHeight: '12.5rem', 
+                    maxHeight: '25.0rem', 
                     overflowY: 'auto',
                     direction: 'rtl',
                     bgcolor: '#fff'
@@ -594,7 +594,7 @@ const EmailPreAuthInbox = () => {
             <Typography>لم يتم العثور على بيانات</Typography>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: '1.0rem' }}>
           <Button variant="outlined" onClick={handleCloseDetails}>إغلاق</Button>
           {selectedRequest && (
             <Stack direction="row" spacing={1}>

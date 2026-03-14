@@ -78,7 +78,7 @@ const TbaSelectField = ({
         label={label}
         sx={{
           bgcolor: readOnly ? 'action.hover' : 'background.paper',
-          borderRadius: 1.5,
+          borderRadius: '0.375rem',
           '&:hover:not(.Mui-disabled)': {
             bgcolor: 'grey.50'
           },
@@ -151,3 +151,6 @@ TbaSelectField.propTypes = {
 };
 
 export default TbaSelectField;
+
+
+

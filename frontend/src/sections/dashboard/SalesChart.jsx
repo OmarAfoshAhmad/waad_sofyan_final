@@ -71,16 +71,16 @@ export default function SalesChart() {
 
   return (
     <MainCard sx={{ mt: 1 }} content={false}>
-      <Box sx={{ p: 2.5, pb: 0 }}>
+      <Box sx={{ p: '1.25rem', pb: 0 }}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
-            <Typography sx={{ fontSize: 14 }} color="text.secondary" gutterBottom>
+            <Typography sx={{ fontSize: '0.875rem' }} color="text.secondary" gutterBottom>
               Net Profit
             </Typography>
             <Typography variant="h4">$1560</Typography>
           </Box>
 
-          <Stack direction="row" sx={{ gap: 3 }}>
+          <Stack direction="row" sx={{ gap: '1.5rem' }}>
             {initialSeriesCopy.map((series) => (
               <Stack
                 key={series.label}
@@ -96,7 +96,7 @@ export default function SalesChart() {
                   transition: 'opacity 0.2s ease-in-out'
                 }}
               >
-                <Box sx={{ height: 10, width: 10, borderRadius: '50%', backgroundColor: series.color }} />
+                <Box sx={{ height: '0.625rem', width: '0.625rem', borderRadius: '50%', backgroundColor: series.color }} />
                 <Typography>{series.label}</Typography>
               </Stack>
             ))}
@@ -117,18 +117,18 @@ export default function SalesChart() {
               barGapRatio: downSM ? 0.4 : 0.7
             }
           ]}
-          yAxis={[{ disableLine: true, tickSize: 7, tickMaxStep: 50 }]}
+          yAxis={[{ disableLine: true, tickSize: 7, tickMaxStep: '25.0rem' }]}
           series={initialSeries
             .map((series) => ({ ...series, type: 'bar', color: withAlpha(series.color, 0.85), visible: seriesVisibility[series.label] }))
             .filter((series) => series.visible)}
           highlightedItem={highlightedItem}
           slotProps={{ bar: { rx: 4, ry: 4 }, tooltip: { trigger: 'item' } }}
           axisHighlight={{ x: 'none' }}
-          margin={{ top: 30, left: -5, bottom: 25, right: 10 }}
+          margin={{ top: '15.0rem', left: -5, bottom: '12.5rem', right: '0.625rem' }}
           sx={{
             '& .MuiBarElement-root:hover': { opacity: 0.6 },
             '& .MuiChartsGrid-line': { strokeDasharray: '4 4', stroke: theme.vars.palette.divider },
-            '& .MuiBarElement-series-auto-generated-id-0, & .MuiBarElement-series-auto-generated-id-1': { width: 15 },
+            '& .MuiBarElement-series-auto-generated-id-0, & .MuiBarElement-series-auto-generated-id-1': { width: '0.9375rem' },
             '& .MuiChartsAxis-root.MuiChartsAxis-directionX .MuiChartsAxis-tick': { stroke: 'transparent' },
             '& .MuiChartsAxis-root.MuiChartsAxis-directionY .MuiChartsAxis-tick': { stroke: 'transparent' }
           }}

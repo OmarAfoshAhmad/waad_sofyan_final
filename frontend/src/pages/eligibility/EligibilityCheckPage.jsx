@@ -165,7 +165,7 @@ const EligibilityCheckPage = () => {
         { facingMode: 'environment' }, // Use back camera
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 }
+          qrbox: { width: '15.625rem', height: '15.625rem' }
         },
         (decodedText) => {
           // QR Code successfully scanned
@@ -279,9 +279,9 @@ const EligibilityCheckPage = () => {
   // ========================================
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: '1.5rem' }}>
       {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: '2.0rem' }}>
         <Typography variant="h4" gutterBottom>
           فحص أهلية المنتفع
         </Typography>
@@ -297,7 +297,7 @@ const EligibilityCheckPage = () => {
             <Stack spacing={3}>
               {/* Method 1: QR/Barcode Scanner */}
               <Box>
-                <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ mb: '1.0rem' }}>
                   1. مسح الباركود / QR Code
                 </Typography>
 
@@ -339,7 +339,7 @@ const EligibilityCheckPage = () => {
 
               {/* Method 2: Card Number */}
               <Box>
-                <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" gutterBottom sx={{ mb: '1.0rem' }}>
                   2. إدخال رقم البطاقة يدوياً
                 </Typography>
 
@@ -383,7 +383,7 @@ const EligibilityCheckPage = () => {
 
               {/* Error Display */}
               {error && (
-                <Alert severity="error" onClose={() => setError(null)} sx={{ mt: 2 }}>
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mt: '1.0rem' }}>
                   {error}
                 </Alert>
               )}
@@ -417,7 +417,7 @@ const EligibilityCheckPage = () => {
                 <Paper
                   elevation={0}
                   sx={{
-                    p: 3,
+                    p: '1.5rem',
                     bgcolor: result.eligible ? 'success.lighter' : 'error.lighter',
                     border: 1,
                     borderColor: result.eligible ? 'success.main' : 'error.main'
@@ -477,7 +477,7 @@ const EligibilityCheckPage = () => {
                   )}
 
                   {/* Status Details */}
-                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2 }}>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: '1.0rem' }}>
                     <Chip
                       label={`حالة العضو: ${result.memberStatus}`}
                       size="small"
@@ -498,7 +498,7 @@ const EligibilityCheckPage = () => {
           ) : (
             <Paper
               sx={{
-                p: 6,
+                p: '3.0rem',
                 textAlign: 'center',
                 bgcolor: 'background.default',
                 border: '1px dashed',
@@ -510,7 +510,7 @@ const EligibilityCheckPage = () => {
               }}
             >
               <Box>
-                <QrIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+                <QrIcon sx={{ fontSize: '5.0rem', color: 'text.disabled', mb: '1.0rem' }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
                   في انتظار الفحص
                 </Typography>
@@ -527,18 +527,18 @@ const EligibilityCheckPage = () => {
       <Dialog open={scannerOpen} onClose={handleCloseScannerDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
           مسح الباركود / QR Code
-          <IconButton onClick={handleCloseScannerDialog} sx={{ position: 'absolute', right: 8, top: 8 }}>
+          <IconButton onClick={handleCloseScannerDialog} sx={{ position: 'absolute', right: '0.375rem', top: '4.0rem' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent>
           {cameraError ? (
-            <Alert severity="warning" sx={{ mb: 2 }}>
+            <Alert severity="warning" sx={{ mb: '1.0rem' }}>
               {cameraError}
             </Alert>
           ) : (
             <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
                 وجّه الكاميرا نحو الباركود أو QR Code
               </Typography>
               <Box
@@ -563,3 +563,5 @@ const EligibilityCheckPage = () => {
 };
 
 export default EligibilityCheckPage;
+
+

@@ -32,7 +32,7 @@ import { formatCurrencyLYD as formatCurrency } from 'utils/formatters';
 const KPICard = ({ title, value, subtitle, icon: Icon, color = 'error', loading }) => {
   if (loading) {
     return (
-      <Paper sx={{ p: 2, height: '100%' }}>
+      <Paper sx={{ p: '1.0rem', height: '100%' }}>
         <Skeleton variant="text" width="60%" />
         <Skeleton variant="text" width="40%" height={40} />
         <Skeleton variant="text" width="80%" />
@@ -43,7 +43,7 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color = 'error', loading 
   return (
     <Paper
       sx={{
-        p: 2,
+        p: '1.0rem',
         height: '100%',
         borderRight: 4,
         borderColor: `${color}.main`
@@ -82,7 +82,7 @@ KPICard.propTypes = {
 const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
   if (loading) {
     return (
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: '1.0rem' }}>
         <Skeleton variant="text" width="40%" />
         {[1, 2, 3].map((i) => (
           <Skeleton key={i} variant="rectangular" height={40} sx={{ mb: 0.5 }} />
@@ -93,8 +93,8 @@ const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
 
   if (!data || data.length === 0) {
     return (
-      <Paper sx={{ p: 2 }}>
-        <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Paper sx={{ p: '1.0rem' }}>
+        <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.0rem' }}>
           <Icon fontSize="small" color="action" />
           {title}
         </Typography>
@@ -106,8 +106,8 @@ const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
   }
 
   return (
-    <Paper sx={{ p: 2 }}>
-      <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+    <Paper sx={{ p: '1.0rem' }}>
+      <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.0rem' }}>
         <Icon fontSize="small" color="action" />
         {title}
       </Typography>
@@ -122,7 +122,7 @@ const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                 المبلغ
               </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 120 }}>
+              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: '7.5rem' }}>
                 النسبة
               </TableCell>
             </TableRow>
@@ -131,7 +131,7 @@ const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
             {data.slice(0, 10).map((row, index) => (
               <TableRow key={index} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
                 <TableCell>
-                  <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                  <Typography variant="body2" noWrap sx={{ maxWidth: '12.5rem' }}>
                     {row[nameKey]}
                   </Typography>
                 </TableCell>
@@ -144,9 +144,9 @@ const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
                 <TableCell align="center">
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box sx={{ flexGrow: 1 }}>
-                      <LinearProgress variant="determinate" value={row.percentage} color="error" sx={{ height: 6, borderRadius: 3 }} />
+                      <LinearProgress variant="determinate" value={row.percentage} color="error" sx={{ height: '0.375rem', borderRadius: '0.1875rem' }} />
                     </Box>
-                    <Typography variant="caption" sx={{ minWidth: 40 }}>
+                    <Typography variant="caption" sx={{ minWidth: '2.5rem' }}>
                       {row.percentage.toFixed(1)}%
                     </Typography>
                   </Box>
@@ -193,10 +193,10 @@ const RejectionsAnalysis = ({ rejectionsAnalysis = {}, loading = false }) => {
   if (loading) {
     return (
       <Box>
-        <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
           {[1, 2, 3].map((i) => (
             <Grid key={i} size={{ xs: 12, sm: 4 }}>
-              <Paper sx={{ p: 2 }}>
+              <Paper sx={{ p: '1.0rem' }}>
                 <Skeleton variant="text" width="60%" />
                 <Skeleton variant="text" width="40%" height={40} />
               </Paper>
@@ -219,7 +219,7 @@ const RejectionsAnalysis = ({ rejectionsAnalysis = {}, loading = false }) => {
   return (
     <Box>
       {/* KPIs Row */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
         <Grid size={{ xs: 12, sm: 4 }}>
           <KPICard
             title="إجمالي المطالبات المرفوضة"
@@ -254,17 +254,17 @@ const RejectionsAnalysis = ({ rejectionsAnalysis = {}, loading = false }) => {
 
       {/* High Rejection Warning */}
       {kpis.rejectionRate > 15 && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
+        <Alert severity="warning" sx={{ mb: '1.5rem' }}>
           <Typography variant="body2">
             ⚠️ نسبة الرفض مرتفعة ({kpis.rejectionRate.toFixed(1)}%) - يُنصح بمراجعة أسباب الرفض وتحسين إجراءات التقديم
           </Typography>
         </Alert>
       )}
 
-      <Divider sx={{ my: 2 }} />
+      <Divider sx={{ my: '1.0rem' }} />
 
       {/* Breakdowns */}
-      <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
+      <Typography variant="subtitle1" gutterBottom sx={{ mb: '1.0rem' }}>
         تحليل تفصيلي للرفض
       </Typography>
 
@@ -286,7 +286,7 @@ const RejectionsAnalysis = ({ rejectionsAnalysis = {}, loading = false }) => {
       </Grid>
 
       {/* Note */}
-      <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+      <Box sx={{ mt: '1.0rem', p: '0.75rem', bgcolor: 'action.hover', borderRadius: 1 }}>
         <Typography variant="caption" color="text.secondary">
           ⚠️ السبب يُستخرج من حقل "تعليق المراجع" (reviewerComment). إذا لم يتوفر السبب يظهر "غير محدد"
         </Typography>
@@ -331,3 +331,6 @@ RejectionsAnalysis.propTypes = {
 };
 
 export default RejectionsAnalysis;
+
+
+

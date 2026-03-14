@@ -6,7 +6,7 @@ export default function ListItemIcon(theme) {
     MuiListItemIcon: {
       styleOverrides: {
         root: {
-          minWidth: 24,
+          minWidth: 24.0,
           color: varsPalette.text?.primary ?? theme.palette.text?.primary
         }
       }

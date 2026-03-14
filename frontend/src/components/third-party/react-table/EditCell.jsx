@@ -192,7 +192,7 @@ export default function EditCell({ cell, onSave }) {
       break;
     case 'progress':
       cellContent = isEditMode ? (
-        <Stack direction="row" sx={{ gap: 1, alignItems: 'center', pl: 1, minWidth: 120 }}>
+        <Stack direction="row" sx={{ gap: 1, alignItems: 'center', pl: 1, minWidth: '7.5rem' }}>
           <Slider
             value={formik.values[columnId]}
             min={0}
@@ -221,7 +221,7 @@ export default function EditCell({ cell, onSave }) {
         </Stack>
       ) : (
         <Box onClick={() => setEditMode(true)}>
-          <LinearWithLabel value={formik.values[columnId]} sx={{ minWidth: 75 }} />
+          <LinearWithLabel value={formik.values[columnId]} sx={{ minWidth: '4.6875rem' }} />
         </Box>
       );
       break;

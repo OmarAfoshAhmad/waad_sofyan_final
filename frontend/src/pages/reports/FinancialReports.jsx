@@ -451,13 +451,13 @@ const FinancialReports = () => {
   };
 
   const summaryColumns = [
-    { field: 'id', headerName: 'رقم المطالبة', width: 120, sortable: true },
-    { field: 'memberFullName', headerName: 'المنتفع', minWidth: 180, sortable: true },
-    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: 150, sortable: true },
+    { field: 'id', headerName: 'رقم المطالبة', width: '7.5rem', sortable: true },
+    { field: 'memberFullName', headerName: 'المنتفع', minWidth: '11.25rem', sortable: true },
+    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: '9.375rem', sortable: true },
     {
       field: 'requestedAmount',
       headerName: 'المبلغ المطلوب',
-      width: 140,
+      width: '8.75rem',
       align: 'left',
       sortable: true,
       format: formatAmount
@@ -465,7 +465,7 @@ const FinancialReports = () => {
     {
       field: 'approvedAmount',
       headerName: 'المبلغ المعتمد',
-      width: 140,
+      width: '8.75rem',
       align: 'left',
       sortable: true,
       format: formatAmount
@@ -473,7 +473,7 @@ const FinancialReports = () => {
     {
       field: 'status',
       headerName: 'الحالة',
-      width: 120,
+      width: '7.5rem',
       sortable: true,
       renderCell: (value) => (
         <Chip
@@ -486,14 +486,14 @@ const FinancialReports = () => {
   ];
 
   const invoicesColumns = [
-    { field: 'invoiceNo', headerName: 'رقم الفاتورة', width: 150, sortable: true },
-    { field: 'employerName', headerName: 'الشركة', minWidth: 150, sortable: true },
-    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: 150, sortable: true },
-    { field: 'claimNumber', headerName: 'رقم المطالبة', width: 120, sortable: true },
+    { field: 'invoiceNo', headerName: 'رقم الفاتورة', width: '9.375rem', sortable: true },
+    { field: 'employerName', headerName: 'الشركة', minWidth: '9.375rem', sortable: true },
+    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: '9.375rem', sortable: true },
+    { field: 'claimNumber', headerName: 'رقم المطالبة', width: '7.5rem', sortable: true },
     {
       field: 'amount',
       headerName: 'المبلغ',
-      width: 140,
+      width: '8.75rem',
       align: 'left',
       sortable: true,
       format: formatAmount,
@@ -502,28 +502,28 @@ const FinancialReports = () => {
     {
       field: 'settledAt',
       headerName: 'تاريخ التسوية',
-      width: 130,
+      width: '8.125rem',
       sortable: true,
       format: formatDate
     },
-    { field: 'paymentReference', headerName: 'مرجع الدفع', width: 140, sortable: true },
+    { field: 'paymentReference', headerName: 'مرجع الدفع', width: '8.75rem', sortable: true },
     {
       field: 'status',
       headerName: 'الحالة',
-      width: 100,
+      width: '6.25rem',
       renderCell: () => <Chip label="مدفوع" size="small" color="success" />
     }
   ];
 
   const paymentsColumns = [
-    { field: 'paymentRef', headerName: 'مرجع الدفع', width: 150, sortable: true },
-    { field: 'employerName', headerName: 'الشركة', minWidth: 150, sortable: true },
-    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: 150, sortable: true },
-    { field: 'memberName', headerName: 'المنتفع', minWidth: 150, sortable: true },
+    { field: 'paymentRef', headerName: 'مرجع الدفع', width: '9.375rem', sortable: true },
+    { field: 'employerName', headerName: 'الشركة', minWidth: '9.375rem', sortable: true },
+    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: '9.375rem', sortable: true },
+    { field: 'memberName', headerName: 'المنتفع', minWidth: '9.375rem', sortable: true },
     {
       field: 'amount',
       headerName: 'المبلغ',
-      width: 140,
+      width: '8.75rem',
       align: 'left',
       sortable: true,
       format: formatAmount,
@@ -532,28 +532,28 @@ const FinancialReports = () => {
     {
       field: 'paymentDate',
       headerName: 'تاريخ الدفع',
-      width: 130,
+      width: '8.125rem',
       sortable: true,
       format: formatDate
     },
-    { field: 'method', headerName: 'طريقة الدفع', width: 120 },
+    { field: 'method', headerName: 'طريقة الدفع', width: '7.5rem' },
     {
       field: 'status',
       headerName: 'الحالة',
-      width: 100,
+      width: '6.25rem',
       renderCell: () => <Chip label="مكتمل" size="small" color="success" />
     }
   ];
 
   const settlementsColumns = [
-    { field: 'claimNumber', headerName: 'رقم المطالبة', width: 130, sortable: true },
-    { field: 'memberName', headerName: 'المنتفع', minWidth: 150, sortable: true },
-    { field: 'employerName', headerName: 'الشركة', minWidth: 150, sortable: true },
-    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: 150, sortable: true },
+    { field: 'claimNumber', headerName: 'رقم المطالبة', width: '8.125rem', sortable: true },
+    { field: 'memberName', headerName: 'المنتفع', minWidth: '9.375rem', sortable: true },
+    { field: 'employerName', headerName: 'الشركة', minWidth: '9.375rem', sortable: true },
+    { field: 'providerName', headerName: 'مقدم الخدمة', minWidth: '9.375rem', sortable: true },
     {
       field: 'approvedAmount',
       headerName: 'المبلغ المعتمد',
-      width: 140,
+      width: '8.75rem',
       align: 'left',
       sortable: true,
       format: formatAmount
@@ -561,7 +561,7 @@ const FinancialReports = () => {
     {
       field: 'settledAmount',
       headerName: 'المبلغ المسدد',
-      width: 140,
+      width: '8.75rem',
       align: 'left',
       sortable: true,
       format: formatAmount,
@@ -570,14 +570,14 @@ const FinancialReports = () => {
     {
       field: 'settlementDate',
       headerName: 'تاريخ التسوية',
-      width: 130,
+      width: '8.125rem',
       sortable: true,
       format: formatDate
     },
     {
       field: 'status',
       headerName: 'الحالة',
-      width: 100,
+      width: '6.25rem',
       renderCell: () => <Chip label="مسدد" size="small" color="success" />
     }
   ];
@@ -612,7 +612,7 @@ const FinancialReports = () => {
         <ModernPageHeader title="التقارير المالية" subtitle="تقارير شاملة للمطالبات والتسويات والمدفوعات" icon={<MoneyIcon />} />
 
         {/* Enhanced Filters Card */}
-        <MainCard sx={{ mb: 3 }}>
+        <MainCard sx={{ mb: '1.5rem' }}>
           <Stack spacing={2}>
             {/* Filters Row 1: Provider (Primary) + Status */}
             <Grid container spacing={2} alignItems="center">
@@ -707,7 +707,7 @@ const FinancialReports = () => {
 
         {/* Error Alert */}
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} icon={<ErrorOutlineIcon />}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }} icon={<ErrorOutlineIcon />}>
             {error}
           </Alert>
         )}
@@ -716,7 +716,7 @@ const FinancialReports = () => {
         {viewMode === 'TABLE' ? (
           <MainCard>
             {/* Tabs */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '1.5rem' }}>
               <Tabs value={activeTab} onChange={handleTabChange}>
                 <Tab label="الملخص المالي" icon={<TrendingIcon />} iconPosition="start" />
                 <Tab label="تقرير الفواتير" icon={<ReceiptIcon />} iconPosition="start" />
@@ -726,7 +726,7 @@ const FinancialReports = () => {
             </Box>
 
             {/* Action Buttons */}
-            <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
+            <Stack direction="row" spacing={2} sx={{ mb: '1.5rem' }} flexWrap="wrap">
               <Button variant="outlined" startIcon={<ExcelIcon />} onClick={handleExportExcel} disabled={loading || claims.length === 0}>
                 تصدير Excel
               </Button>
@@ -756,7 +756,7 @@ const FinancialReports = () => {
 
             {/* Financial Summary KPIs (Tab 0) */}
             {activeTab === 0 && (
-              <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid container spacing={3} sx={{ mb: '1.5rem' }}>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Card elevation={2} sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
                     <CardContent>
@@ -823,14 +823,14 @@ const FinancialReports = () => {
             {/* Data Table */}
             <Box sx={{ width: '100%' }}>
               {loading ? (
-                <Box sx={{ p: 2 }}>
+                <Box sx={{ p: '1.0rem' }}>
                   {[...Array(5)].map((_, i) => (
                     <Skeleton key={i} variant="rectangular" height={50} sx={{ mb: 1, borderRadius: 1 }} />
                   ))}
                 </Box>
               ) : claims.length === 0 ? (
                 <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" py={8} gap={2}>
-                  <ReceiptIcon sx={{ fontSize: 80, color: 'text.secondary', opacity: 0.5 }} />
+                  <ReceiptIcon sx={{ fontSize: '5.0rem', color: 'text.secondary', opacity: 0.5 }} />
                   <Typography variant="h5" color="text.secondary">
                     لا توجد بيانات مالية
                   </Typography>
@@ -840,7 +840,7 @@ const FinancialReports = () => {
                 </Box>
               ) : (
                 <>
-                  <TableContainer component={Paper} ref={printRef} sx={{ maxHeight: 500 }}>
+                  <TableContainer component={Paper} ref={printRef} sx={{ maxHeight: '31.25rem' }}>
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow sx={{ '& th': { fontWeight: 'bold', bgcolor: 'grey.100' } }}>
@@ -931,9 +931,9 @@ const FinancialReports = () => {
               </Stack>
             }
           >
-            <Box ref={printRef} sx={{ p: 2 }}>
+            <Box ref={printRef} sx={{ p: '1.0rem' }}>
               {/* Print Header */}
-              <Box sx={{ textAlign: 'center', mb: 3, pb: 2, borderBottom: '2px solid #1976d2' }}>
+              <Box sx={{ textAlign: 'center', mb: '1.5rem', pb: '1.0rem', borderBottom: '2px solid #1976d2' }}>
                 <Typography variant="h5" fontWeight="bold" color="primary">
                   {tabNames[activeTab]}
                 </Typography>
@@ -952,9 +952,9 @@ const FinancialReports = () => {
 
               {/* KPI Summary for Tab 0 */}
               {activeTab === 0 && (
-                <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
                   <Grid size={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Paper sx={{ p: '1.0rem', textAlign: 'center' }}>
                       <Typography variant="caption">إجمالي المطالبات</Typography>
                       <Typography variant="h6" fontWeight="bold">
                         {formatAmount(summaryData.totalClaimsAmount)}
@@ -962,7 +962,7 @@ const FinancialReports = () => {
                     </Paper>
                   </Grid>
                   <Grid size={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Paper sx={{ p: '1.0rem', textAlign: 'center' }}>
                       <Typography variant="caption">إجمالي المعتمد</Typography>
                       <Typography variant="h6" fontWeight="bold">
                         {formatAmount(summaryData.totalApprovedAmount)}
@@ -970,7 +970,7 @@ const FinancialReports = () => {
                     </Paper>
                   </Grid>
                   <Grid size={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Paper sx={{ p: '1.0rem', textAlign: 'center' }}>
                       <Typography variant="caption">إجمالي المدفوع</Typography>
                       <Typography variant="h6" fontWeight="bold">
                         {formatAmount(summaryData.totalPaidAmount)}
@@ -978,7 +978,7 @@ const FinancialReports = () => {
                     </Paper>
                   </Grid>
                   <Grid size={3}>
-                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                    <Paper sx={{ p: '1.0rem', textAlign: 'center' }}>
                       <Typography variant="caption">المعلق</Typography>
                       <Typography variant="h6" fontWeight="bold">
                         {formatAmount(summaryData.outstandingAmount)}
@@ -1027,7 +1027,7 @@ const FinancialReports = () => {
               </TableContainer>
 
               {/* Print Footer */}
-              <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #ddd', textAlign: 'center' }}>
+              <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid #ddd', textAlign: 'center' }}>
                 <Typography variant="caption" color="text.secondary">
                   نظام إدارة التأمين الصحي - تقرير مُنشأ آلياً
                 </Typography>
@@ -1041,3 +1041,4 @@ const FinancialReports = () => {
 };
 
 export default FinancialReports;
+

@@ -553,7 +553,7 @@ const ProviderEdit = () => {
   // ============================================================================
   const renderBasicInfo = () => (
     <Box sx={{ p: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
         <Business color="primary" />
         <Typography variant="h5">البيانات الأساسية</Typography>
       </Box>
@@ -629,7 +629,7 @@ const ProviderEdit = () => {
 
   const renderLocationContact = () => (
     <Box sx={{ p: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
         <LocationOn color="primary" />
         <Typography variant="h5">الموقع والتواصل</Typography>
       </Box>
@@ -662,7 +662,7 @@ const ProviderEdit = () => {
 
   const renderContractInfo = () => (
     <Box sx={{ p: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
         <VerifiedUser color="primary" />
         <Typography variant="h5">معلومات العقد</Typography>
       </Box>
@@ -724,7 +724,7 @@ const ProviderEdit = () => {
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
-          mb: 3
+          mb: '1.5rem'
         }}
       >
         <Box sx={{ display: 'flex' }}>
@@ -788,7 +788,7 @@ const ProviderEdit = () => {
 
   const renderResponsibleUser = () => (
     <Box sx={{ p: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
         <People color="primary" />
         <Typography variant="h5">المستخدم المسؤول</Typography>
       </Box>
@@ -798,7 +798,7 @@ const ProviderEdit = () => {
         <Card variant="outlined">
           <CardContent>
             <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main' }}>
+              <Avatar sx={{ width: '3.5rem', height: '3.5rem', bgcolor: 'primary.main' }}>
                 {activeUser.fullName?.charAt(0) || activeUser.username?.charAt(0)}
               </Avatar>
               <Box sx={{ flex: 1 }}>
@@ -820,14 +820,14 @@ const ProviderEdit = () => {
           </CardActions>
         </Card>
       ) : (
-        <Paper variant="outlined" sx={{ p: 3 }}>
-          <Alert severity="warning" sx={{ mb: 3 }}>
+        <Paper variant="outlined" sx={{ p: '1.5rem' }}>
+          <Alert severity="warning" sx={{ mb: '1.5rem' }}>
             لا يوجد مستخدم مرتبط حالياً
           </Alert>
           <Typography variant="subtitle1" gutterBottom>
             اختر طريقة الربط:
           </Typography>
-          <RadioGroup value={linkMode} onChange={(e) => setLinkMode(e.target.value)} sx={{ mb: 3 }}>
+          <RadioGroup value={linkMode} onChange={(e) => setLinkMode(e.target.value)} sx={{ mb: '1.5rem' }}>
             <FormControlLabel value="LINK" control={<Radio />} label="ربط مستخدم موجود" />
             <FormControlLabel value="CREATE" control={<Radio />} label="إنشاء مستخدم جديد" />
           </RadioGroup>
@@ -842,7 +842,7 @@ const ProviderEdit = () => {
                 loading={loadingUnassigned}
                 disabled={loadingUnassigned}
                 renderInput={(params) => <TextField {...params} label="اختر مستخدم" placeholder="ابحث..." />}
-                sx={{ mb: 2 }}
+                sx={{ mb: '1.0rem' }}
               />
               <Button fullWidth variant="contained" onClick={handleLinkExistingUser} disabled={!selectedUserToLink}>
                 ربط المستخدم
@@ -945,7 +945,7 @@ const ProviderEdit = () => {
                           ? 'warning'
                           : 'success'
                     }
-                    sx={{ height: 6, borderRadius: 3 }}
+                    sx={{ height: '0.375rem', borderRadius: '0.1875rem' }}
                   />
                 </Grid>
               )}
@@ -963,7 +963,7 @@ const ProviderEdit = () => {
 
   const renderDocuments = () => (
     <Box sx={{ p: 1 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: '1.5rem' }}>
         <Box sx={{ display: 'flex' }}>
           <Description color="primary" sx={{ mr: 1 }} />
           <Typography variant="h5">المستندات</Typography>
@@ -1055,12 +1055,12 @@ const ProviderEdit = () => {
       <MainCard>
         {/* ✅ Saving Progress Indicator */}
         {submitting && savingStep && (
-          <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 3 }}>
+          <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: '1.5rem' }}>
             <Typography variant="body2">{savingStep}</Typography>
           </Alert>
         )}
 
-        <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider', mb: '1.5rem' }}>
           {/* ✅ Tabs with error badges */}
           <Tab
             icon={
@@ -1093,7 +1093,7 @@ const ProviderEdit = () => {
           <Tab icon={<People />} label="مدير الحساب" iconPosition="start" />
           <Tab icon={<Description />} label="مستندات" iconPosition="start" />
         </Tabs>
-        <Box sx={{ minHeight: 400 }}>
+        <Box sx={{ minHeight: '25.0rem' }}>
           {activeTab === 0 && renderBasicInfo()}
           {activeTab === 1 && renderLocationContact()}
           {activeTab === 2 && renderContractInfo()}
@@ -1110,10 +1110,10 @@ const ProviderEdit = () => {
           تأكيد فك ارتباط المسؤول
         </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={{ mb: '1.0rem' }}>
             هل أنت متأكد من رغبتك في فك ارتباط المستخدم <strong>{activeUser?.fullName}</strong> ({activeUser?.username})؟
           </DialogContentText>
-          <Alert severity="warning" sx={{ mb: 2 }}>
+          <Alert severity="warning" sx={{ mb: '1.0rem' }}>
             للتأكيد، يرجى كتابة اسم المستخدم: <strong>{activeUser?.username}</strong>
           </Alert>
           <TextField
@@ -1161,7 +1161,7 @@ const ProviderEdit = () => {
       <Dialog open={docDialog.open} onClose={() => setDocDialog({ ...docDialog, open: false })}>
         <DialogTitle>إضافة مستند</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1, minWidth: 400 }}>
+          <Stack spacing={2} sx={{ mt: 1, minWidth: '25.0rem' }}>
             <TextField select label="النوع" value={docDialog.type} onChange={(e) => setDocDialog({ ...docDialog, type: e.target.value })}>
               {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
                 <MenuItem key={k} value={k}>

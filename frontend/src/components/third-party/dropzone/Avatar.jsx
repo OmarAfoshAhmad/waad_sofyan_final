@@ -85,8 +85,8 @@ export default function AvatarUpload({ error, file, setFieldValue, sx }) {
       <Box
         sx={{
           ...((isDragReject || error) && { borderColor: 'error.light' }),
-          width: 124,
-          height: 124,
+          width: '7.75rem',
+          height: '7.75rem',
           borderRadius: '50%',
           border: '1px dashed',
           borderColor: 'primary.main',

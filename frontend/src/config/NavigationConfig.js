@@ -35,7 +35,7 @@ export const SIDEBAR_CONFIG = {
   breakpoints: {
     mobile: 768,
     tablet: 1024,
-    desktop: 1200
+    desktop: '600.0rem'
   },
 
   // Default state

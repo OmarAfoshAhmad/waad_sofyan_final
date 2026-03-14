@@ -33,7 +33,7 @@ export default function LoginProvider({ currentLoginWith }) {
     <Stack
       direction="row"
       sx={{
-        gap: { xs: 1, sm: 2 },
+        gap: { xs: 1, sm: '1.0rem' },
         justifyContent: { xs: 'space-around', sm: 'space-between' },
         '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 }, ml: { xs: 0, sm: -0.5 } }
       }}
@@ -52,7 +52,7 @@ export default function LoginProvider({ currentLoginWith }) {
               variant="outlined"
               color="secondary"
               fullWidth
-              startIcon={<CardMedia component="img" sx={{ width: 26 }} src={button.icon} alt={button.name} />}
+              startIcon={<CardMedia component="img" sx={{ width: '1.625rem' }} src={button.icon} alt={button.name} />}
               onClick={button.handler}
             >
               {!downSM && button.name}

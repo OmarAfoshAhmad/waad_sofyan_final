@@ -5,7 +5,7 @@ export default function AlertTitle() {
     MuiAlertTitle: {
       styleOverrides: {
         root: {
-          marginBottom: 4,
+          marginBottom: '0.375rem',
           marginTop: 0,
           fontWeight: 400
         }
@@ -13,3 +13,4 @@ export default function AlertTitle() {
     }
   };
 }
+

@@ -58,7 +58,7 @@ const COLUMNS = [
   {
     id: 'id',
     label: 'رقم المطالبة',
-    minWidth: 120,
+    minWidth: '7.5rem',
     align: 'center',
     format: safeString,
     sortable: true,
@@ -67,7 +67,7 @@ const COLUMNS = [
   {
     id: 'memberName',
     label: 'اسم المؤمن عليه',
-    minWidth: 180,
+    minWidth: '11.25rem',
     format: safeString,
     sortable: true,
     icon: <PersonIcon fontSize="small" />
@@ -75,7 +75,7 @@ const COLUMNS = [
   {
     id: 'employerName',
     label: 'الشريك',
-    minWidth: 170,
+    minWidth: '10.625rem',
     format: safeString,
     sortable: true,
     icon: <BusinessIcon fontSize="small" />
@@ -83,16 +83,16 @@ const COLUMNS = [
   {
     id: 'providerName',
     label: 'مقدم الخدمة',
-    minWidth: 170,
+    minWidth: '10.625rem',
     format: safeString,
     sortable: true,
     icon: <LocalHospitalIcon fontSize="small" />
   },
-  { id: 'status', label: 'الحالة', minWidth: 130, align: 'center', sortable: true },
+  { id: 'status', label: 'الحالة', minWidth: '8.125rem', align: 'center', sortable: true },
   {
     id: 'requestedAmount',
     label: 'المبلغ المطلوب',
-    minWidth: 140,
+    minWidth: '8.75rem',
     align: 'right',
     format: formatCurrency,
     sortable: true,
@@ -101,7 +101,7 @@ const COLUMNS = [
   {
     id: 'approvedAmount',
     label: 'المبلغ المعتمد',
-    minWidth: 140,
+    minWidth: '8.75rem',
     align: 'right',
     format: formatCurrency,
     sortable: true,
@@ -110,7 +110,7 @@ const COLUMNS = [
   {
     id: 'visitDate',
     label: 'تاريخ الزيارة',
-    minWidth: 130,
+    minWidth: '8.125rem',
     align: 'center',
     format: formatDate,
     sortable: true,
@@ -119,7 +119,7 @@ const COLUMNS = [
   {
     id: 'updatedAt',
     label: 'آخر تحديث',
-    minWidth: 130,
+    minWidth: '8.125rem',
     align: 'center',
     format: formatDate,
     sortable: true,
@@ -194,7 +194,7 @@ const ClaimsTable = ({ claims, loading, totalCount, page, rowsPerPage, onPageCha
     return (
       <Box sx={{ width: '100%', mb: 1, border: '1px solid rgba(0,0,0,0.05)', borderRadius: 1, overflow: 'hidden' }}>
           <Box sx={{
-              flexShrink: 0, px: 2.5, py: 0.75, bgcolor: '#E8F5F1',
+              flexShrink: 0, px: '1.25rem', py: 0.75, bgcolor: '#E8F5F1',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               borderBottom: `1px solid rgba(0,0,0,0.12)`
           }}>
@@ -203,7 +203,7 @@ const ClaimsTable = ({ claims, loading, totalCount, page, rowsPerPage, onPageCha
               </Typography>
               <Chip size="small" variant="outlined" label={`${lines.length} بند`} sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
           </Box>
-          <Table size="small" sx={{ minWidth: 700 }}>
+          <Table size="small" sx={{ minWidth: '43.75rem' }}>
               <TableHead>
                   <TableRow>
                       <TableCell align="right" width={280} sx={{ fontWeight: 800, py: 1, bgcolor: '#fcfcfc' }}>الخدمة الطبية</TableCell>
@@ -219,19 +219,19 @@ const ClaimsTable = ({ claims, loading, totalCount, page, rowsPerPage, onPageCha
               </TableHead>
               <TableBody>
                   {lines.map((line) => (
-                      <TableRow key={line.id} hover sx={{ '& td': { py: 0.6, px: 1.5 }, ...(line.rejected && { bgcolor: 'rgba(211, 47, 47, 0.05)' }) }}>
+                      <TableRow key={line.id} hover sx={{ '& td': { py: 0.6, px: '0.75rem' }, ...(line.rejected && { bgcolor: 'rgba(211, 47, 47, 0.05)' }) }}>
                           <TableCell align="right">
                               <Stack spacing={0.5} alignItems="flex-start">
                                   <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.8rem', color: line.rejected ? 'error.main' : 'text.primary' }}>
                                       {line.serviceName}
                                   </Typography>
                                   {line.serviceCategoryName && (
-                                      <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 700 }}>
+                                      <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 700 }}>
                                           {line.serviceCategoryName}
                                       </Typography>
                                   )}
                                   {line.rejectionReason && (
-                                       <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'error.main', fontWeight: 800 }}>
+                                       <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'error.main', fontWeight: 800 }}>
                                            السبب: {line.rejectionReason}
                                        </Typography>
                                   )}
@@ -325,3 +325,6 @@ ClaimsTable.propTypes = {
 };
 
 export default ClaimsTable;
+
+
+

@@ -38,7 +38,7 @@ export default function VisitsOverTimeChart({ height = 365 }) {
     },
     stroke: {
       curve: 'smooth',
-      width: 2
+      width: '0.125rem'
     },
     fill: {
       type: 'gradient',
@@ -100,15 +100,15 @@ export default function VisitsOverTimeChart({ height = 365 }) {
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: '1.5rem' }}>
         <Skeleton variant="rectangular" height={height} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Stack spacing={1} sx={{ mb: 2 }}>
+    <Box sx={{ p: '1.0rem' }}>
+      <Stack spacing={1} sx={{ mb: '1.0rem' }}>
         <Typography variant="h6">Visits Over Time</Typography>
         <Typography variant="caption" color="text.secondary">
           الزيارات عبر الزمن

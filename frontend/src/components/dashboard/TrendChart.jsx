@@ -31,7 +31,7 @@ const TrendChart = ({ data, loading, days = 30 }) => {
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" style={{ fontSize: '12px', direction: 'rtl' }} />
+            <XAxis dataKey="date" style={{ fontSize: '0.75rem', direction: 'rtl' }} />
             <YAxis />
             <Tooltip formatter={(value) => [value.toLocaleString('en-US'), 'العدد']} contentStyle={{ direction: 'rtl' }} />
             <Legend wrapperStyle={{ direction: 'rtl' }} />
@@ -44,3 +44,5 @@ const TrendChart = ({ data, loading, days = 30 }) => {
 };
 
 export default TrendChart;
+
+

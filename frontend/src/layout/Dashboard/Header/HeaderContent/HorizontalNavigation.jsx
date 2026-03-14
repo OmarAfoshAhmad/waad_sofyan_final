@@ -157,8 +157,8 @@ export default function HorizontalNavigation() {
         onClick={() => handleNavigate(item.url, groupId)}
         sx={{
           py: 1,
-          px: 2,
-          minWidth: 220,
+          px: '1.0rem',
+          minWidth: '13.75rem',
           borderRadius: 1,
           mx: 0.5,
           my: 0.25,
@@ -170,7 +170,7 @@ export default function HorizontalNavigation() {
         }}
       >
         {Icon && (
-          <ListItemIcon sx={{ minWidth: 36, color: active ? 'primary.main' : 'text.secondary' }}>
+          <ListItemIcon sx={{ minWidth: '2.25rem', color: active ? 'primary.main' : 'text.secondary' }}>
             <Icon sx={{ fontSize: '1.25rem' }} />
           </ListItemIcon>
         )}
@@ -194,7 +194,7 @@ export default function HorizontalNavigation() {
     return (
       <Box key={collapse.id} sx={{ mb: 0.5 }}>
         {/* عنوان المجموعة الفرعية */}
-        <Box sx={{ px: 2, py: 1 }}>
+        <Box sx={{ px: '1.0rem', py: 1 }}>
           <Stack direction="row" spacing={1} alignItems="center">
             {Icon && <Icon sx={{ fontSize: '1rem', color: 'text.secondary' }} />}
             <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase' }}>
@@ -262,7 +262,7 @@ export default function HorizontalNavigation() {
               sx={{
                 color: groupActive ? 'primary.main' : 'text.primary',
                 backgroundColor: open ? alpha('#1976d2', 0.12) : groupActive ? alpha('#1976d2', 0.08) : 'transparent',
-                px: 1.5,
+                px: '0.75rem',
                 py: 0.5,
                 fontWeight: groupActive ? 600 : 500,
                 fontSize: '0.75rem',
@@ -316,10 +316,10 @@ export default function HorizontalNavigation() {
                 sx={{
                   '& .MuiPaper-root': {
                     mt: 0.5,
-                    minWidth: 240,
-                    maxWidth: 360,
+                    minWidth: '15.0rem',
+                    maxWidth: '22.5rem',
                     boxShadow: (theme) => theme.shadows[8],
-                    borderRadius: 2,
+                    borderRadius: '0.125rem',
                     border: '1px solid',
                     borderColor: 'divider'
                   }
@@ -344,3 +344,5 @@ export default function HorizontalNavigation() {
     </Box>
   );
 }
+
+

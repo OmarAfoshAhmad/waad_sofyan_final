@@ -147,72 +147,72 @@ const ProviderPreAuthReport = () => {
       {
         id: 'preAuthNumber',
         label: 'رقم الموافقة',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'requestDate',
         label: 'تاريخ الطلب',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'memberName',
         label: 'اسم المنتفع',
-        minWidth: 180,
+        minWidth: '11.25rem',
         sortable: false
       },
       {
         id: 'memberBarcode',
         label: 'الباركود',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'serviceName',
         label: 'الخدمة',
-        minWidth: 200,
+        minWidth: '12.5rem',
         sortable: false
       },
       {
         id: 'sessionsRequested',
         label: 'الجلسات المطلوبة',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'sessionsApproved',
         label: 'الجلسات الموافقة',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'sessionsUsed',
         label: 'المستخدم',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'requestedAmount',
         label: 'المبلغ المطلوب',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'approvedAmount',
         label: 'المبلغ الموافق',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 140,
+        minWidth: '8.75rem',
         align: 'center',
         sortable: false
       }
@@ -278,7 +278,7 @@ const ProviderPreAuthReport = () => {
             <Typography variant="caption" display="block" align="center">
               {used} / {approved}
             </Typography>
-            <LinearProgress variant="determinate" value={percentage} sx={{ height: 4, borderRadius: 2 }} />
+            <LinearProgress variant="determinate" value={percentage} sx={{ height: '0.375rem', borderRadius: '0.125rem' }} />
           </Box>
         );
 
@@ -342,13 +342,13 @@ const ProviderPreAuthReport = () => {
 
         {/* Error Alert */}
         {isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }}>
             {error?.message || 'حدث خطأ أثناء تحميل البيانات'}
           </Alert>
         )}
 
         {/* Filters */}
-        <MainCard sx={{ mb: 3 }}>
+        <MainCard sx={{ mb: '1.5rem' }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: showFilters ? 2 : 0 }}>
             <Stack direction="row" alignItems="center" spacing={1}>
               <FilterListIcon color="action" />
@@ -461,3 +461,4 @@ const ProviderPreAuthReport = () => {
 };
 
 export default ProviderPreAuthReport;
+

@@ -399,7 +399,7 @@ const MemberChronicConditionsTab = ({ memberId, readOnly = false }) => {
                               variant="determinate"
                               value={Math.min(((condition.usedAmount || 0) / condition.annualLimit) * 100, 100)}
                               color={(condition.usedAmount || 0) / condition.annualLimit > 0.8 ? 'error' : 'primary'}
-                              sx={{ mt: 0.5, height: 6, borderRadius: 1 }}
+                              sx={{ mt: 0.5, height: '0.375rem', borderRadius: 1 }}
                             />
                           </Box>
                         ) : (
@@ -437,7 +437,7 @@ const MemberChronicConditionsTab = ({ memberId, readOnly = false }) => {
                     <TableRow>
                       <TableCell colSpan={8} sx={{ py: 0 }}>
                         <Collapse in={expandedRow === condition.id} timeout="auto" unmountOnExit>
-                          <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
+                          <Box sx={{ p: '1.0rem', bgcolor: 'grey.50' }}>
                             <Grid container spacing={2}>
                               <Grid size={{ xs: 12, md: 6 }}>
                                 <Card variant="outlined">

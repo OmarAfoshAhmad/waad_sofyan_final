@@ -283,7 +283,7 @@ const ProviderCreate = () => {
   };
 
   const renderFooterActions = (currentTab) => (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: '2.0rem', pt: '1.0rem', borderTop: 1, borderColor: 'divider' }}>
       {currentTab > 0 ? (
         <Button onClick={handleBack} startIcon={<ArrowBack sx={{ transform: 'rotate(180deg)' }} />}>
           السابق
@@ -401,7 +401,7 @@ const ProviderCreate = () => {
   const renderBasicInfo = () => (
     <Box sx={{ p: 1 }}>
       {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
         <Business color="primary" fontSize="large" />
         <Box>
           <Typography variant="h5" fontWeight={600}>
@@ -415,7 +415,7 @@ const ProviderCreate = () => {
       <Grid container spacing={3}>
         {/* Auto-generated Code */}
         <Grid size={12}>
-          <Alert severity="info" sx={{ mb: 2 }}>
+          <Alert severity="info" sx={{ mb: '1.0rem' }}>
             <Typography variant="body2">
               <strong>الرمز التلقائي:</strong> سيتم إنشاء رمز تلقائي لمقدم الخدمة عند الحفظ
             </Typography>
@@ -520,7 +520,7 @@ const ProviderCreate = () => {
   const renderLocationContact = () => (
     <Box sx={{ p: 1 }}>
       {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
         <LocationOn color="primary" fontSize="large" />
         <Box>
           <Typography variant="h5" fontWeight={600}>
@@ -597,7 +597,7 @@ const ProviderCreate = () => {
   const renderContractInfo = () => (
     <Box sx={{ p: 1 }}>
       {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
         <VerifiedUser color="primary" fontSize="large" />
         <Box>
           <Typography variant="h5" fontWeight={600}>
@@ -608,7 +608,7 @@ const ProviderCreate = () => {
           </Typography>
         </Box>
       </Stack>
-      <Alert severity="info" sx={{ mb: 3 }}>
+      <Alert severity="info" sx={{ mb: '1.5rem' }}>
         إدخال بيانات العقد الآن يساعد في تفعيل مقدم الخدمة مباشرة على النظام.
       </Alert>
       <Grid container spacing={3}>
@@ -683,7 +683,7 @@ const ProviderCreate = () => {
   const renderPartners = () => (
     <Box sx={{ p: 1 }}>
       {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
         <Handshake color="primary" fontSize="large" />
         <Box sx={{ flex: 1 }}>
           <Typography variant="h5" fontWeight={600}>
@@ -696,13 +696,13 @@ const ProviderCreate = () => {
       </Stack>
 
       {loadingPayers ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: '2.0rem' }}>
           <CircularProgress />
         </Box>
       ) : payers.length === 0 ? (
         /* ✅ Empty State */
-        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
-          <Info sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+        <Paper variant="outlined" sx={{ p: '2.0rem', textAlign: 'center', bgcolor: 'grey.50' }}>
+          <Info sx={{ fontSize: '3.0rem', color: 'text.secondary', mb: '1.0rem' }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
             لا توجد جهات تأمين متاحة
           </Typography>
@@ -717,7 +717,7 @@ const ProviderCreate = () => {
               <Paper
                 variant="outlined"
                 sx={{
-                  p: 2,
+                  p: '1.0rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -752,7 +752,7 @@ const ProviderCreate = () => {
   const renderAccountManager = () => (
     <Box sx={{ p: 1 }}>
       {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3, pb: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
         <People color="primary" fontSize="large" />
         <Box>
           <Typography variant="h5" fontWeight={600}>
@@ -764,7 +764,7 @@ const ProviderCreate = () => {
         </Box>
       </Stack>
 
-      <Paper variant="outlined" sx={{ p: 3, mb: 3, bgcolor: 'primary.50' }}>
+      <Paper variant="outlined" sx={{ p: '1.5rem', mb: '1.5rem', bgcolor: 'primary.50' }}>
         <Typography variant="subtitle2" gutterBottom fontWeight={600}>
           اختر طريقة ربط المسؤول:
         </Typography>
@@ -778,7 +778,7 @@ const ProviderCreate = () => {
                 <Typography>إنشاء حساب جديد</Typography>
               </Box>
             }
-            sx={{ mr: 4 }}
+            sx={{ mr: '2.0rem' }}
           />
           <FormControlLabel
             value="LINK"
@@ -789,7 +789,7 @@ const ProviderCreate = () => {
                 <Typography>ربط مستخدم موجود (حر)</Typography>
               </Box>
             }
-            sx={{ mr: 4 }}
+            sx={{ mr: '2.0rem' }}
           />
           <FormControlLabel value="SKIP" control={<Radio />} label="تخطي (بدون مسؤول حالياً)" />
         </RadioGroup>
@@ -896,7 +896,7 @@ const ProviderCreate = () => {
                 variant="determinate"
                 value={passwordStrength.strength}
                 color={passwordStrength.strength < 40 ? 'error' : passwordStrength.strength < 80 ? 'warning' : 'success'}
-                sx={{ height: 6, borderRadius: 3 }}
+                sx={{ height: '0.375rem', borderRadius: '0.1875rem' }}
               />
             </Grid>
           )}
@@ -912,12 +912,12 @@ const ProviderCreate = () => {
 
           {/* ✅ Empty State when loading */}
           {loadingUsers ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: '2.0rem' }}>
               <CircularProgress />
             </Box>
           ) : unassignedUsers.length === 0 ? (
-            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
-              <Info sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+            <Paper variant="outlined" sx={{ p: '2.0rem', textAlign: 'center', bgcolor: 'grey.50' }}>
+              <Info sx={{ fontSize: '3.0rem', color: 'text.secondary', mb: '1.0rem' }} />
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 لا توجد مستخدمين متاحين
               </Typography>
@@ -943,8 +943,8 @@ const ProviderCreate = () => {
               )}
               renderOption={(props, option) => (
                 <li {...props} key={option.id}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
-                    <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.light' }}>{option.fullName?.charAt(0)}</Avatar>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
+                    <Avatar sx={{ width: '2.0rem', height: '2.0rem', bgcolor: 'primary.light' }}>{option.fullName?.charAt(0)}</Avatar>
                     <Box>
                       <Typography variant="body1">{option.fullName}</Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -1000,12 +1000,12 @@ const ProviderCreate = () => {
       <MainCard>
         {/* ✅ Saving Progress Indicator */}
         {submitting && savingStep && (
-          <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 3 }}>
+          <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: '1.5rem' }}>
             <Typography variant="body2">{savingStep}</Typography>
           </Alert>
         )}
 
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '1.5rem' }}>
           <Tabs value={activeTab} onChange={handleTabChange}>
             {/* ✅ Tab with error badge */}
             <Tab
@@ -1039,7 +1039,7 @@ const ProviderCreate = () => {
           </Tabs>
         </Box>
 
-        <Box sx={{ mb: 4, minHeight: 400 }}>
+        <Box sx={{ mb: '2.0rem', minHeight: '25.0rem' }}>
           <Box role="tabpanel" hidden={activeTab !== 0}>
             {activeTab === 0 && renderBasicInfo()}
           </Box>
@@ -1062,3 +1062,6 @@ const ProviderCreate = () => {
 };
 
 export default ProviderCreate;
+
+
+

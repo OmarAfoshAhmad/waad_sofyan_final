@@ -159,7 +159,7 @@ const ColumnMappingDialog = ({ open, onClose, onConfirm, detectionData }) => {
       <DialogContent dividers>
         {/* Warnings */}
         {detectionData.warnings && detectionData.warnings.length > 0 && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
+          <Alert severity="warning" sx={{ mb: '1.0rem' }}>
             {detectionData.warnings.map((warning, idx) => (
               <Typography key={idx} variant="body2">
                 • {warning}
@@ -170,7 +170,7 @@ const ColumnMappingDialog = ({ open, onClose, onConfirm, detectionData }) => {
 
         {/* Validation Errors */}
         {errors.length > 0 && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }}>
             {errors.map((error, idx) => (
               <Typography key={idx} variant="body2">
                 • {error}
@@ -180,7 +180,7 @@ const ColumnMappingDialog = ({ open, onClose, onConfirm, detectionData }) => {
         )}
 
         {/* Info */}
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Alert severity="info" sx={{ mb: '1.0rem' }}>
           <Typography variant="body2">
             تم اكتشاف {detectionData.totalColumns} عمود.
             {detectionData.autoAcceptedCount > 0 && ` ${detectionData.autoAcceptedCount} عمود تم تعيينه تلقائياً.`}

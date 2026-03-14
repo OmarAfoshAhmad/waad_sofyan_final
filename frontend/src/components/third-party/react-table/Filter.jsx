@@ -11,7 +11,7 @@ import DebouncedInput from './DebouncedInput';
 // assets
 import MinusOutlined from '@ant-design/icons/MinusOutlined';
 
-const filterStyle = { fontSize: 12 };
+const filterStyle = { fontSize: '0.75rem' };
 
 // ==============================|| FILTER - NUMBER FIELD ||============================== //
 
@@ -94,7 +94,7 @@ export default function Filter({ column }) {
           value={Array.isArray(columnFilterValue) ? columnFilterValue : [facetedMin, facetedMax]}
           onChange={(_, value) => column.setFilterValue(value)}
           valueLabelDisplay="auto"
-          sx={{ width: 150 }}
+          sx={{ width: '9.375rem' }}
         />
       );
     }
@@ -138,3 +138,5 @@ TextInput.propTypes = {
 };
 
 Filter.propTypes = { column: PropTypes.any };
+
+

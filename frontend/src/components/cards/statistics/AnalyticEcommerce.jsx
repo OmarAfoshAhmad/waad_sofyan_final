@@ -17,7 +17,7 @@ const iconSX = { fontSize: '0.75rem', color: 'inherit', marginLeft: 0, marginRig
 
 export default function AnalyticEcommerce({ color = 'primary', title, count, percentage, isLoss, extra }) {
   return (
-    <MainCard contentSX={{ p: 2.25 }}>
+    <MainCard contentSX={{ p: '1.125rem' }}>
       <Stack sx={{ gap: 0.5 }}>
         <Typography variant="h6" color="text.secondary">
           {title}
@@ -35,14 +35,14 @@ export default function AnalyticEcommerce({ color = 'primary', title, count, per
                 color={color}
                 icon={isLoss ? <FallOutlined style={iconSX} /> : <RiseOutlined style={iconSX} />}
                 label={`${percentage}%`}
-                sx={{ ml: 1.25, pl: 1 }}
+                sx={{ ml: '0.625rem', pl: 1 }}
                 size="small"
               />
             </Grid>
           )}
         </Grid>
       </Stack>
-      <Box sx={{ pt: 2.25 }}>
+      <Box sx={{ pt: '1.125rem' }}>
         <Typography variant="caption" color="text.secondary">
           You made an extra{' '}
           <Typography variant="caption" sx={{ color: `${color || 'primary'}.main` }}>
@@ -63,3 +63,5 @@ AnalyticEcommerce.propTypes = {
   isLoss: PropTypes.bool,
   extra: PropTypes.string
 };
+
+

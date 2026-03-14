@@ -166,12 +166,12 @@ export default function Profile() {
       >
         {({ TransitionProps }) => (
           <Transitions type="grow" position="top-right" in={open} {...TransitionProps}>
-            <Paper sx={(theme) => ({ boxShadow: theme.vars.customShadows.z1, width: 290, minWidth: 240, maxWidth: { xs: 250, md: 290 } })}>
+            <Paper sx={(theme) => ({ boxShadow: theme.vars.customShadows.z1, width: '18rem', minWidth: '15rem', maxWidth: { xs: '15.5rem', md: '18rem' } })}>
               <ClickAwayListener onClickAway={handleClose}>
                 <MainCard elevation={0} border={false} content={false}>
-                  <CardContent sx={{ px: 2.5, pt: 3, pb: 2 }}>
-                    <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', mb: 2 }}>
-                      <Avatar alt="profile user" {...avatarProps} sx={{ width: 48, height: 48, ...avatarProps.sx }} />
+                  <CardContent sx={{ px: '1.25rem', pt: '1.5rem', pb: '1.0rem' }}>
+                    <Stack direction="row" sx={{ gap: '0.75rem', alignItems: 'center', mb: '1.0rem' }}>
+                      <Avatar alt="profile user" {...avatarProps} sx={{ width: '3rem', height: '3rem', ...avatarProps.sx }} />
                       <Stack>
                         <Typography variant="h6">{user?.fullName || user?.name || user?.username}</Typography>
                         {user?.providerName && (
@@ -196,3 +196,5 @@ export default function Profile() {
     </Box>
   );
 }
+
+

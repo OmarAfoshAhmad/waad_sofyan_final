@@ -43,7 +43,7 @@ const BenefitPolicyFilters = ({ filters = DEFAULT_FILTERS, onFilterChange, showE
   });
 
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box sx={{ mb: '1.5rem' }}>
       {/* Primary Filters Row */}
       <Grid container spacing={2} alignItems="center">
         {/* Policy Search */}
@@ -91,7 +91,7 @@ const BenefitPolicyFilters = ({ filters = DEFAULT_FILTERS, onFilterChange, showE
             size="small"
             startIcon={<FilterIcon />}
             onClick={() => setExpanded(!expanded)}
-            sx={{ height: 40 }}
+            sx={{ height: '2.5rem' }}
           >
             {expanded ? 'إخفاء الفلاتر' : 'فلاتر إضافية'}
           </Button>
@@ -107,7 +107,7 @@ const BenefitPolicyFilters = ({ filters = DEFAULT_FILTERS, onFilterChange, showE
               startIcon={<ClearIcon />}
               onClick={handleClearAll}
               disabled={loading}
-              sx={{ height: 40 }}
+              sx={{ height: '2.5rem' }}
             >
               مسح الكل
             </Button>
@@ -117,7 +117,7 @@ const BenefitPolicyFilters = ({ filters = DEFAULT_FILTERS, onFilterChange, showE
 
       {/* Advanced Filters (Collapsible) */}
       <Collapse in={expanded}>
-        <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed', borderColor: 'divider' }}>
+        <Box sx={{ mt: '1.0rem', pt: '1.0rem', borderTop: '1px dashed', borderColor: 'divider' }}>
           <Grid container spacing={2}>
             {/* Employer Search (Admin only) */}
             {showEmployerFilter && (
@@ -189,3 +189,4 @@ BenefitPolicyFilters.propTypes = {
 };
 
 export default BenefitPolicyFilters;
+

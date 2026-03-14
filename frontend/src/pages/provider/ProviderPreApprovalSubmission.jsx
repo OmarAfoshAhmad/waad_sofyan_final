@@ -142,14 +142,14 @@ const createEmptyServiceRow = () => ({
  * Section Header Component
  */
 const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary', action }) => (
-  <Box sx={{ mb: 2.5 }}>
+  <Box sx={{ mb: '1.25rem' }}>
     <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Box
           sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
+            width: '2.5rem',
+            height: '2.5rem',
+            borderRadius: '0.125rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -179,7 +179,7 @@ const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary', action 
  * Read-Only Info Field
  */
 const ReadOnlyField = ({ icon: Icon, label, value, highlight = false }) => (
-  <Box sx={{ mb: 2 }}>
+  <Box sx={{ mb: '1.0rem' }}>
     <Typography
       variant="caption"
       color="text.secondary"
@@ -213,14 +213,14 @@ const InfoCard = ({ children, bgcolor = 'grey.50' }) => (
       height: '100%',
       bgcolor,
       borderColor: 'divider',
-      borderRadius: 2,
+      borderRadius: '0.125rem',
       transition: 'box-shadow 0.2s',
       '&:hover': {
         boxShadow: 1
       }
     }}
   >
-    <CardContent sx={{ p: 3 }}>{children}</CardContent>
+    <CardContent sx={{ p: '1.5rem' }}>{children}</CardContent>
   </Card>
 );
 
@@ -231,13 +231,13 @@ const FormSection = ({ children, highlighted = false }) => (
   <Card
     variant="outlined"
     sx={{
-      borderRadius: 2,
+      borderRadius: '0.125rem',
       borderColor: highlighted ? 'primary.main' : 'divider',
       borderWidth: highlighted ? 2 : 1,
       bgcolor: highlighted ? (theme) => alpha(theme.palette.primary.main, 0.02) : 'background.paper'
     }}
   >
-    <CardContent sx={{ p: 3 }}>{children}</CardContent>
+    <CardContent sx={{ p: '1.5rem' }}>{children}</CardContent>
   </Card>
 );
 
@@ -677,27 +677,27 @@ const ProviderPreApprovalSubmission = () => {
   // ══════════════════════════════════════════════════════════════════════════════
   if (!visitData.fromVisitLog || !visitData.visitId) {
     return (
-      <Box sx={{ maxWidth: 600, mx: 'auto', mt: 8 }}>
-        <Card variant="outlined" sx={{ borderRadius: 3, textAlign: 'center', p: 4 }}>
+      <Box sx={{ maxWidth: '37.5rem', mx: 'auto', mt: '4.0rem' }}>
+        <Card variant="outlined" sx={{ borderRadius: '0.1875rem', textAlign: 'center', p: '2.0rem' }}>
           <Box
             sx={{
-              width: 80,
-              height: 80,
+              width: '5.0rem',
+              height: '5.0rem',
               borderRadius: '50%',
               bgcolor: 'warning.lighter',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               mx: 'auto',
-              mb: 3
+              mb: '1.5rem'
             }}
           >
-            <LockIcon sx={{ fontSize: 40, color: 'warning.main' }} />
+            <LockIcon sx={{ fontSize: '2.5rem', color: 'warning.main' }} />
           </Box>
           <Typography variant="h5" fontWeight={600} gutterBottom>
             الوصول المباشر غير مسموح
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: '2.0rem' }}>
             {LABELS.visitRequired}
             <br />
             يرجى الانتقال إلى سجل الزيارات واختيار زيارة لإنشاء موافقة مسبقة منها.
@@ -707,7 +707,7 @@ const ProviderPreApprovalSubmission = () => {
             size="large"
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate('/provider/visits')}
-            sx={{ borderRadius: 2, px: 4 }}
+            sx={{ borderRadius: '0.125rem', px: '2.0rem' }}
           >
             الذهاب إلى سجل الزيارات
           </Button>
@@ -720,7 +720,7 @@ const ProviderPreApprovalSubmission = () => {
   // RENDER - MAIN FORM (Desktop-First Layout)
   // ══════════════════════════════════════════════════════════════════════════════
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+    <Box sx={{ maxWidth: '87.5rem', mx: 'auto' }}>
       {/* ═══════════════════════ PAGE HEADER ═══════════════════════ */}
       <ModernPageHeader
         title={LABELS.pageTitle}
@@ -730,18 +730,18 @@ const ProviderPreApprovalSubmission = () => {
       />
 
       {/* ═══════════════════════ LOADING BAR ═══════════════════════ */}
-      {loading && <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />}
+      {loading && <LinearProgress sx={{ mb: '1.0rem', borderRadius: 1 }} />}
 
       {/* ═══════════════════════ ERROR ALERT ═══════════════════════ */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: '1.5rem', borderRadius: '0.125rem' }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {/* ═══════════════════════ CONTRACT WARNING ═══════════════════════ */}
       {!contract && !loading && (
-        <Alert severity="warning" sx={{ mb: 3, borderRadius: 2 }}>
+        <Alert severity="warning" sx={{ mb: '1.5rem', borderRadius: '0.125rem' }}>
           <Typography fontWeight={600}>{LABELS.noContract}</Typography>
           <Typography variant="body2">تواصل مع إدارة النظام للتحقق من حالة عقد مقدم الخدمة.</Typography>
         </Alert>
@@ -754,7 +754,7 @@ const ProviderPreApprovalSubmission = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <InfoCard bgcolor={(theme) => alpha(theme.palette.info.main, 0.04)}>
               <SectionHeader icon={VisitIcon} title={LABELS.visitInfo} subtitle="معلومات الزيارة المرتبطة (للقراءة فقط)" color="info" />
-              <Divider sx={{ mb: 2.5 }} />
+              <Divider sx={{ mb: '1.25rem' }} />
 
               <Grid container spacing={2}>
                 <Grid size={6}>
@@ -764,7 +764,7 @@ const ProviderPreApprovalSubmission = () => {
                   <ReadOnlyField icon={CalendarIcon} label="تاريخ الزيارة" value={visitData.visitDate} />
                 </Grid>
                 <Grid size={6}>
-                  <Box sx={{ mb: 2 }}>
+                  <Box sx={{ mb: '1.0rem' }}>
                     <Typography
                       variant="caption"
                       color="text.secondary"
@@ -807,7 +807,7 @@ const ProviderPreApprovalSubmission = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <InfoCard bgcolor={(theme) => alpha(theme.palette.success.main, 0.04)}>
               <SectionHeader icon={PersonIcon} title={LABELS.memberInfo} subtitle="بيانات المؤمن عليه (للقراءة فقط)" color="success" />
-              <Divider sx={{ mb: 2.5 }} />
+              <Divider sx={{ mb: '1.25rem' }} />
 
               <Grid container spacing={2}>
                 <Grid size={12}>
@@ -841,13 +841,13 @@ const ProviderPreApprovalSubmission = () => {
                 startIcon={<AddIcon />}
                 onClick={handleAddServiceRow}
                 disabled={submitting}
-                sx={{ borderRadius: 2 }}
+                sx={{ borderRadius: '0.125rem' }}
               >
                 إضافة خدمة
               </Button>
             }
           />
-          <Divider sx={{ mb: 3 }} />
+          <Divider sx={{ mb: '1.5rem' }} />
 
           {/* 💡 Diagnosis Context Banner (New) */}
           {(diagnosisCode || diagnosisDescription) && (
@@ -855,8 +855,8 @@ const ProviderPreApprovalSubmission = () => {
               severity="info"
               icon={<DiagnosisIcon />}
               sx={{
-                mb: 2.5,
-                borderRadius: 2,
+                mb: '1.25rem',
+                borderRadius: '0.125rem',
                 border: '1px solid',
                 borderColor: 'info.light',
                 bgcolor: (theme) => alpha(theme.palette.info.main, 0.02),
@@ -886,13 +886,13 @@ const ProviderPreApprovalSubmission = () => {
           )}
 
           {!loadingServices && services.length === 0 && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
+            <Alert severity="warning" sx={{ mb: '1.0rem' }}>
               لا توجد خدمات في عقد مقدم الخدمة تتطلب موافقة مسبقة حالياً.
             </Alert>
           )}
 
           {/* Service Selection Table */}
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '0.125rem' }}>
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: tableHeaderBg }}>
@@ -904,8 +904,8 @@ const ProviderPreApprovalSubmission = () => {
                         sx={{
                           bgcolor: 'white',
                           color: MEDICAL_COLORS.primary.main,
-                          width: 22,
-                          height: 22,
+                          width: '1.375rem',
+                          height: '1.375rem',
                           fontSize: '0.7rem',
                           fontWeight: 700
                         }}
@@ -921,8 +921,8 @@ const ProviderPreApprovalSubmission = () => {
                         sx={{
                           bgcolor: 'rgba(255,255,255,0.3)',
                           color: 'white',
-                          width: 22,
-                          height: 22,
+                          width: '1.375rem',
+                          height: '1.375rem',
                           fontSize: '0.7rem',
                           fontWeight: 700
                         }}
@@ -1053,7 +1053,7 @@ const ProviderPreApprovalSubmission = () => {
                                         size="small"
                                         color="warning"
                                         variant="outlined"
-                                        sx={{ fontSize: '0.65rem', height: 20 }}
+                                        sx={{ fontSize: '0.75rem', height: '1.25rem' }}
                                       />
                                     </Tooltip>
                                   )}
@@ -1078,7 +1078,7 @@ const ProviderPreApprovalSubmission = () => {
                         inputProps={{ min: 1, max: 99 }}
                         value={row.quantity ?? 1}
                         onChange={(event) => handleQuantityChange(row.rowId, event.target.value)}
-                        sx={{ width: 90 }}
+                        sx={{ width: '5.625rem' }}
                         disabled={submitting}
                       />
                     </TableCell>
@@ -1127,7 +1127,7 @@ const ProviderPreApprovalSubmission = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <FormSection>
               <SectionHeader icon={DiagnosisIcon} title={LABELS.diagnosis} subtitle="رمز ووصف التشخيص الطبي" />
-              <Divider sx={{ mb: 3 }} />
+              <Divider sx={{ mb: '1.5rem' }} />
 
               <Stack spacing={2.5}>
                 <TextField
@@ -1158,7 +1158,7 @@ const ProviderPreApprovalSubmission = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <FormSection>
               <SectionHeader icon={PriorityIcon} title={LABELS.requestDetails} subtitle="أولوية الطلب والملاحظات الطبية" />
-              <Divider sx={{ mb: 3 }} />
+              <Divider sx={{ mb: '1.5rem' }} />
 
               <Stack spacing={2.5}>
                 <FormControl fullWidth>
@@ -1167,7 +1167,7 @@ const ProviderPreApprovalSubmission = () => {
                     {PRIORITY_OPTIONS.map((opt) => (
                       <MenuItem key={opt.value} value={opt.value}>
                         <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
-                          <Chip label={opt.label} size="small" color={opt.color} sx={{ minWidth: 70 }} />
+                          <Chip label={opt.label} size="small" color={opt.color} sx={{ minWidth: '4.375rem' }} />
                           <Typography variant="body2" color="text.secondary">
                             {opt.description}
                           </Typography>
@@ -1195,9 +1195,9 @@ const ProviderPreApprovalSubmission = () => {
 
         <FormSection>
           <SectionHeader icon={AttachFileIcon} title="المستندات المرفقة" subtitle="يمكن رفع ملفات طبية داعمة للطلب" color="secondary" />
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: '1.0rem' }} />
           <Stack spacing={2}>
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
+            <Alert severity="info" sx={{ borderRadius: '0.125rem' }}>
               الامتدادات المسموحة: PDF, JPG, JPEG, PNG, GIF, DOC, DOCX — الحد الأقصى للحجم: {MAX_UPLOAD_SIZE_MB}MB لكل ملف.
             </Alert>
             <Button component="label" variant="outlined" startIcon={<UploadFileIcon />} disabled={submitting} sx={{ width: 'fit-content' }}>
@@ -1230,11 +1230,11 @@ const ProviderPreApprovalSubmission = () => {
         <Paper
           elevation={3}
           sx={{
-            p: 2.5,
-            borderRadius: 2,
+            p: '1.25rem',
+            borderRadius: '0.125rem',
             bgcolor: 'background.paper',
             position: 'sticky',
-            bottom: 16,
+            bottom: '8.0rem',
             zIndex: 10,
             border: '1px solid',
             borderColor: 'divider'
@@ -1263,7 +1263,7 @@ const ProviderPreApprovalSubmission = () => {
                 startIcon={<ArrowBackIcon />}
                 onClick={handleBack}
                 disabled={submitting}
-                sx={{ borderRadius: 2, px: 3 }}
+                sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
               >
                 {LABELS.cancel}
               </Button>
@@ -1274,7 +1274,7 @@ const ProviderPreApprovalSubmission = () => {
                 startIcon={submitting && submitMode === 'draft' ? <CircularProgress size={20} color="inherit" /> : <NotesIcon />}
                 onClick={() => handleCreatePreApproval(false)}
                 disabled={submitting || !isFormValid}
-                sx={{ borderRadius: 2, px: 3 }}
+                sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
               >
                 {submitting && submitMode === 'draft' ? LABELS.savingDraft : LABELS.saveDraft}
               </Button>
@@ -1286,8 +1286,8 @@ const ProviderPreApprovalSubmission = () => {
                 onClick={() => handleCreatePreApproval(true)}
                 disabled={submitting || !isFormValid}
                 sx={{
-                  borderRadius: 2,
-                  px: 4,
+                  borderRadius: '0.125rem',
+                  px: '2.0rem',
                   boxShadow: 2,
                   '&:hover': { boxShadow: 4 }
                 }}
@@ -1319,3 +1319,6 @@ const ProviderPreApprovalSubmission = () => {
 };
 
 export default ProviderPreApprovalSubmission;
+
+
+

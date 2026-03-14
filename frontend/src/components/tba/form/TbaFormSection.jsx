@@ -29,23 +29,23 @@ const TbaFormSection = ({ title, subtitle, icon: Icon, children, noPaper = false
     <Box sx={{ p: noPaper ? 0 : 2.5, ...sx }}>
       {/* Section Header */}
       {title && (
-        <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mb: 1.5 }}>
+        <Stack direction="row" alignItems="flex-start" spacing={1.5} sx={{ mb: '0.75rem' }}>
           {Icon && (
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 32,
-                height: 32,
-                borderRadius: 1.5,
+                width: '2.0rem',
+                height: '2.0rem',
+                borderRadius: '0.375rem',
                 bgcolor: 'primary.lighter',
                 color: 'primary.main',
                 flexShrink: 0,
                 mt: 0.25
               }}
             >
-              <Icon sx={{ fontSize: 18 }} />
+              <Icon sx={{ fontSize: '1.125rem' }} />
             </Box>
           )}
           <Box sx={{ flex: 1 }}>
@@ -62,7 +62,7 @@ const TbaFormSection = ({ title, subtitle, icon: Icon, children, noPaper = false
       )}
 
       {/* Divider after header */}
-      {title && <Divider sx={{ mb: 2 }} />}
+      {title && <Divider sx={{ mb: '1.0rem' }} />}
 
       {/* Section Content */}
       {children}
@@ -77,8 +77,8 @@ const TbaFormSection = ({ title, subtitle, icon: Icon, children, noPaper = false
     <Paper
       variant="outlined"
       sx={{
-        mb: 2,
-        borderRadius: 2,
+        mb: '1.0rem',
+        borderRadius: '0.125rem',
         overflow: 'hidden',
         borderColor: 'divider'
       }}
@@ -104,3 +104,6 @@ TbaFormSection.propTypes = {
 };
 
 export default TbaFormSection;
+
+
+

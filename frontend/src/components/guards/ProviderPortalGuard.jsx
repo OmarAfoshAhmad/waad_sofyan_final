@@ -38,17 +38,17 @@ const ProviderPortalGuard = ({ children }) => {
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: '60vh',
-          gap: 3,
-          p: 4
+          gap: '1.5rem',
+          p: '2.0rem'
         }}
       >
-        <LocalHospitalIcon sx={{ fontSize: 72, color: 'text.disabled' }} />
+        <LocalHospitalIcon sx={{ fontSize: '4.5rem', color: 'text.disabled' }} />
 
         <Typography variant="h4" fontWeight={700} color="text.secondary" align="center">
           بوابة مقدم الخدمة غير متاحة حالياً
         </Typography>
 
-        <Alert severity="info" sx={{ maxWidth: 520 }}>
+        <Alert severity="info" sx={{ maxWidth: '32.5rem' }}>
           تعتمد الشركة حالياً على نظام <strong>الدفعات الشهرية</strong> كمسار رئيسي لإدخال المطالبات.
           سيتم إعلامكم عند تفعيل البوابة المباشرة.
         </Alert>

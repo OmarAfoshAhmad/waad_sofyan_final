@@ -238,7 +238,7 @@ const appendTotalsRow = (transactions, totals, suffix) => {
 
 const TabPanel = ({ children, value, index, ...other }) => (
   <Box role="tabpanel" hidden={value !== index} id={`account-tabpanel-${index}`} aria-labelledby={`account-tab-${index}`} {...other}>
-    {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
+    {value === index && <Box sx={{ pt: '1.0rem' }}>{children}</Box>}
   </Box>
 );
 
@@ -249,7 +249,7 @@ const TabPanel = ({ children, value, index, ...other }) => (
 const AccountSummaryCard = ({ account, isLoading }) => {
   if (isLoading) {
     return (
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: '1.5rem' }}>
         <CardContent>
           <Stack spacing={2}>
             <Skeleton variant="text" width="60%" height={40} />
@@ -268,7 +268,7 @@ const AccountSummaryCard = ({ account, isLoading }) => {
 
   if (!account) {
     return (
-      <Alert severity="warning" sx={{ mb: 3 }}>
+      <Alert severity="warning" sx={{ mb: '1.5rem' }}>
         لم يتم العثور على بيانات الحساب
       </Alert>
     );
@@ -282,11 +282,11 @@ const AccountSummaryCard = ({ account, isLoading }) => {
   const transactionCount = Number(account?.transactionCount) || 0;
 
   return (
-    <Card sx={{ mb: 3 }}>
+    <Card sx={{ mb: '1.5rem' }}>
       <CardContent>
         {/* Provider Name */}
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
-          <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: '1.5rem' }}>
+          <AccountBalanceWalletIcon sx={{ fontSize: '2.5rem', color: 'primary.main' }} />
           <Box>
             <Typography variant="h4" fontWeight={600}>
               {String(providerName)}
@@ -297,7 +297,7 @@ const AccountSummaryCard = ({ account, isLoading }) => {
           </Box>
         </Stack>
 
-        <Divider sx={{ mb: 3 }} />
+        <Divider sx={{ mb: '1.5rem' }} />
 
         {/* Financial Summary */}
         <Grid container spacing={3}>
@@ -306,9 +306,9 @@ const AccountSummaryCard = ({ account, isLoading }) => {
             <Paper
               elevation={0}
               sx={{
-                p: 2,
+                p: '1.0rem',
                 bgcolor: runningBalance > 0 ? 'error.lighter' : 'success.lighter',
-                borderRadius: 2,
+                borderRadius: '0.125rem',
                 textAlign: 'center'
               }}
             >
@@ -326,7 +326,7 @@ const AccountSummaryCard = ({ account, isLoading }) => {
 
           {/* Total Approved */}
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Paper elevation={0} sx={{ p: 2, bgcolor: 'primary.lighter', borderRadius: 2, textAlign: 'center' }}>
+            <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'primary.lighter', borderRadius: '0.125rem', textAlign: 'center' }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 إجمالي المعتمد
               </Typography>
@@ -344,7 +344,7 @@ const AccountSummaryCard = ({ account, isLoading }) => {
 
           {/* Total Paid */}
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Paper elevation={0} sx={{ p: 2, bgcolor: 'success.lighter', borderRadius: 2, textAlign: 'center' }}>
+            <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'success.lighter', borderRadius: '0.125rem', textAlign: 'center' }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 إجمالي المدفوع
               </Typography>
@@ -362,7 +362,7 @@ const AccountSummaryCard = ({ account, isLoading }) => {
 
           {/* Transaction Count */}
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 2, textAlign: 'center' }}>
+            <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.100', borderRadius: '0.125rem', textAlign: 'center' }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 عدد الحركات
               </Typography>
@@ -603,7 +603,7 @@ const ProviderAccountView = () => {
         <style>
           body { font-family: Arial, sans-serif; margin: 16px; direction: rtl; }
           h2, p { margin: 0 0 10px 0; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+          table { width: '6.25rem'%; border-collapse: collapse; table-layout: fixed; }
           th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; vertical-align: top; }
           th { background: #e6f4f1; }
           td.desc { white-space: normal; word-break: break-word; }
@@ -693,49 +693,49 @@ const ProviderAccountView = () => {
       {
         id: 'createdAt',
         label: 'التاريخ',
-        minWidth: 145,
+        minWidth: '9.0625rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'transactionType',
         label: 'نوع الحركة',
-        minWidth: 110,
+        minWidth: '6.875rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'creditAmount',
         label: 'الدائن',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'debitAmount',
         label: 'المدين',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'runningBalanceAfter',
         label: 'رصيد الحركة',
-        minWidth: 125,
+        minWidth: '7.8125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'referenceType',
         label: 'المرجع',
-        minWidth: 105,
+        minWidth: '6.5625rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'description',
         label: 'الوصف',
-        minWidth: 380,
+        minWidth: '23.75rem',
         width: '40%',
         sortable: false
       }
@@ -914,7 +914,7 @@ const ProviderAccountView = () => {
 
         {/* Persistent balance mismatch warning (server-detected) */}
         {accountData && accountData.balanceVerified === false && (
-          <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: 2 }}>
+          <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: '1.0rem' }}>
             ⚠️ <strong>تحذير:</strong> الرصيد المحسوب لا يتطابق مع مجموع حركات الحساب. يرجى التحقق من الحركات المالية أو التواصل مع الدعم الفني.
           </Alert>
         )}
@@ -927,7 +927,7 @@ const ProviderAccountView = () => {
           <Alert
             severity={isValid ? 'success' : 'warning'}
             icon={isValid ? <CheckCircleIcon /> : <ErrorIcon />}
-            sx={{ mb: 2 }}
+            sx={{ mb: '1.0rem' }}
             onClose={() => setVerificationResult(null)}
           >
             {isValid ? 'الرصيد متطابق مع مجموع الحركات' : 'يوجد عدم تطابق في الرصيد، يرجى مراجعة الحركات المالية.'}
@@ -991,7 +991,7 @@ const ProviderAccountView = () => {
         <Dialog open={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle>تسجيل دفعة لمقدم الخدمة</DialogTitle>
           <DialogContent>
-            <Stack spacing={2} sx={{ mt: 2 }}>
+            <Stack spacing={2} sx={{ mt: '1.0rem' }}>
               <Typography variant="body2" color="text.secondary">
                 الرصيد المستحق: <strong>{formatCurrency(accountData?.runningBalance)}</strong>
               </Typography>
@@ -1036,3 +1036,4 @@ const ProviderAccountView = () => {
 };
 
 export default ProviderAccountView;
+

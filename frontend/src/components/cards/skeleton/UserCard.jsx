@@ -19,16 +19,16 @@ export default function UserCard() {
       border={false}
       content={false}
       boxShadow
-      sx={{ boxShadow: `rgba(50, 50, 93, 0.25) 0px 13px 27px -5px, rgba(0, 0, 0, 0.3) 0px 8px 16px -8px`, borderRadius: 2 }}
+      sx={{ boxShadow: `rgba(50, 50, 93, 0.25) 0px 13px 27px -5px, rgba(0, 0, 0, 0.3) 0px 8px 16px -8px`, borderRadius: '0.125rem' }}
     >
-      <CardContent sx={{ p: 2 }}>
+      <CardContent sx={{ p: '1.0rem' }}>
         <Grid container spacing={2}>
           <Grid size={12}>
             <Stack direction="row" sx={{ alignItems: 'center' }}>
               <Avatar>
                 <ContactsOutlined style={{ visibility: 'inherit' }} />
               </Avatar>
-              <Stack sx={{ width: 1, pl: 2.5 }}>
+              <Stack sx={{ width: '0.0625rem', pl: '1.25rem' }}>
                 <Skeleton animation={false} height={20} width="80%" />
                 <Skeleton animation={false} height={20} width="40%" />
               </Stack>

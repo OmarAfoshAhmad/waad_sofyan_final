@@ -31,7 +31,7 @@ export default function NotificationItem({ notification }) {
           color="secondary"
           variant="rounded"
           type="combined"
-          sx={{ p: 0.125, width: 24, height: 24 }}
+          sx={{ p: 0.125, width: '1.5rem', height: '1.5rem' }}
         />
         <Typography variant="body2">{file.name}</Typography>
         <Typography variant="body2" color="secondary">
@@ -57,7 +57,7 @@ export default function NotificationItem({ notification }) {
   };
 
   return (
-    <ListItemButton key={notification.id} sx={{ p: { xs: 1.25, sm: 2.25 }, alignItems: 'flex-start' }} divider>
+    <ListItemButton key={notification.id} sx={{ p: { xs: 1.25, sm: '1.125rem' }, alignItems: 'flex-start' }} divider>
       <ListItemAvatar>
         <Avatar alt={user?.name} src={user?.avatar && getImageUrl(`${user?.avatar}`, ImagePath.USERS)} />
       </ListItemAvatar>
@@ -74,7 +74,7 @@ export default function NotificationItem({ notification }) {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              maxWidth: { xs: 180, sm: 320 }
+              maxWidth: { xs: 180, sm: '160.0rem' }
             }}
           >
             {user?.name}
@@ -83,7 +83,7 @@ export default function NotificationItem({ notification }) {
           </Typography>
         }
         secondary={
-          <Stack component="span" sx={{ gap: 1.5 }}>
+          <Stack component="span" sx={{ gap: '0.75rem' }}>
             <Typography
               component="span"
               variant="caption"
@@ -99,9 +99,11 @@ export default function NotificationItem({ notification }) {
         }
         sx={{ my: 0 }}
       />
-      {!read && <Dot size={6} style={{ marginTop: 20 }} />}
+      {!read && <Dot size={6} style={{ marginTop: '10.0rem' }} />}
     </ListItemButton>
   );
 }
 
 NotificationItem.propTypes = { notification: PropTypes.any };
+
+

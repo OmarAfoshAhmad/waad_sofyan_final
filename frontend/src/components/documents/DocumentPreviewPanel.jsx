@@ -31,7 +31,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
           justifyContent: 'center',
           height: '100%',
           bgcolor: 'background.paper',
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           border: '1px dashed'
         }}
       >
@@ -56,7 +56,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
         justifyContent="space-between"
         sx={{ p: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default' }}
       >
-        <Typography variant="subtitle2" noWrap sx={{ maxWidth: 200 }}>
+        <Typography variant="subtitle2" noWrap sx={{ maxWidth: '12.5rem' }}>
           {fileName || 'معاينة المستند'}
         </Typography>
 
@@ -68,7 +68,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
                   <ZoomOut fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Typography variant="caption" sx={{ minWidth: 30, textAlign: 'center', pt: 0.8 }}>
+              <Typography variant="caption" sx={{ minWidth: '1.875rem', textAlign: 'center', pt: 0.8 }}>
                 {Math.round(scale * 100)}%
               </Typography>
               <Tooltip title="تكبير">
@@ -77,7 +77,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
                 </IconButton>
               </Tooltip>
 
-              <Box sx={{ borderRight: 1, borderColor: 'divider', height: 20, mx: 1 }} />
+              <Box sx={{ borderRight: 1, borderColor: 'divider', height: '1.25rem', mx: 1 }} />
 
               <Tooltip title="السابق">
                 <span>
@@ -86,7 +86,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
                   </IconButton>
                 </span>
               </Tooltip>
-              <Typography variant="caption" sx={{ minWidth: 40, textAlign: 'center', pt: 0.8 }}>
+              <Typography variant="caption" sx={{ minWidth: '2.5rem', textAlign: 'center', pt: 0.8 }}>
                 {page} / {numPages || '-'}
               </Typography>
               <Tooltip title="التالي">
@@ -97,7 +97,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
                 </span>
               </Tooltip>
 
-              <Box sx={{ borderRight: 1, borderColor: 'divider', height: 20, mx: 1 }} />
+              <Box sx={{ borderRight: 1, borderColor: 'divider', height: '1.25rem', mx: 1 }} />
 
               <Tooltip title="تدوير">
                 <IconButton size="small" onClick={() => setRotation((r) => (r + 90) % 360)}>
@@ -131,7 +131,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
           bgcolor: 'grey.100',
           display: 'flex',
           justifyContent: 'center',
-          p: 2,
+          p: '1.0rem',
           position: 'relative'
         }}
       >

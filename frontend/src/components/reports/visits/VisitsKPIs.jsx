@@ -26,14 +26,14 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, loading }) => {
           position: 'absolute',
           top: 0,
           right: 0,
-          width: 80,
-          height: 80,
+          width: '5.0rem',
+          height: '5.0rem',
           background: `radial-gradient(circle at top right, ${theme.palette[color]?.light || theme.palette.primary.light}40, transparent)`,
           borderRadius: '0 0 0 100%'
         }
       }}
     >
-      <CardContent sx={{ p: 2 }}>
+      <CardContent sx={{ p: '1.0rem' }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
           <Box>
             <Typography variant="caption" color="text.secondary" gutterBottom display="block">
@@ -59,13 +59,13 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, loading }) => {
           <Box
             sx={{
               p: 1,
-              borderRadius: 2,
+              borderRadius: '0.125rem',
               bgcolor: `${theme.palette[color]?.main || theme.palette.primary.main}15`
             }}
           >
             <Icon
               sx={{
-                fontSize: 24,
+                fontSize: '1.5rem',
                 color: theme.palette[color]?.main || theme.palette.primary.main
               }}
             />
@@ -119,7 +119,7 @@ const VisitsKPIs = ({ kpis, loading }) => {
   ];
 
   return (
-    <Grid container spacing={2} sx={{ mb: 3 }}>
+    <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
       {kpiCards.map((kpi, index) => (
         <Grid key={index} size={{ xs: 6, sm: 4, md: 2.4 }}>
           <KPICard title={kpi.title} value={kpi.value} subtitle={kpi.subtitle} icon={kpi.icon} color={kpi.color} loading={loading} />
@@ -145,3 +145,4 @@ VisitsKPIs.defaultProps = {
 };
 
 export default VisitsKPIs;
+

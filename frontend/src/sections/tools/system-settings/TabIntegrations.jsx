@@ -118,7 +118,7 @@ export default function TabIntegrations() {
   return (
     <Grid container spacing={3}>
       <Grid size={12}>
-        <MainCard title="Integration Settings" avatar={<ApiOutlined style={{ fontSize: 24 }} />}>
+        <MainCard title="Integration Settings" avatar={<ApiOutlined style={{ fontSize: '1.5rem' }} />}>
           <Grid container spacing={3}>
             {/* API Configuration */}
             <Grid size={12}>
@@ -159,7 +159,7 @@ export default function TabIntegrations() {
 
             {/* Webhook URLs */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Webhook URLs
               </Divider>
             </Grid>
@@ -197,7 +197,7 @@ export default function TabIntegrations() {
 
             {/* Payment Gateway */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Payment Gateway Integration
               </Divider>
             </Grid>
@@ -208,8 +208,8 @@ export default function TabIntegrations() {
                   control={<Switch checked={formData.enablePaymentGateway} onChange={handleChange('enablePaymentGateway')} />}
                   label="Enable Payment Gateway"
                 />
-                {testResults.payment === 'success' && <CheckCircleOutlined style={{ color: 'green', fontSize: 20 }} />}
-                {testResults.payment === 'error' && <CloseCircleOutlined style={{ color: 'red', fontSize: 20 }} />}
+                {testResults.payment === 'success' && <CheckCircleOutlined style={{ color: 'green', fontSize: '1.25rem' }} />}
+                {testResults.payment === 'error' && <CloseCircleOutlined style={{ color: 'red', fontSize: '1.25rem' }} />}
               </Stack>
             </Grid>
 
@@ -263,7 +263,7 @@ export default function TabIntegrations() {
                 variant="outlined"
                 onClick={() => handleTestConnection('payment')}
                 disabled={!formData.enablePaymentGateway}
-                sx={{ height: '56px' }}
+                sx={{ height: '3.5rem' }}
               >
                 Test Connection
               </Button>
@@ -271,7 +271,7 @@ export default function TabIntegrations() {
 
             {/* SMS Gateway */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 SMS Gateway Integration
               </Divider>
             </Grid>
@@ -282,8 +282,8 @@ export default function TabIntegrations() {
                   control={<Switch checked={formData.enableSMSGateway} onChange={handleChange('enableSMSGateway')} />}
                   label="Enable SMS Gateway"
                 />
-                {testResults.sms === 'success' && <CheckCircleOutlined style={{ color: 'green', fontSize: 20 }} />}
-                {testResults.sms === 'error' && <CloseCircleOutlined style={{ color: 'red', fontSize: 20 }} />}
+                {testResults.sms === 'success' && <CheckCircleOutlined style={{ color: 'green', fontSize: '1.25rem' }} />}
+                {testResults.sms === 'error' && <CloseCircleOutlined style={{ color: 'red', fontSize: '1.25rem' }} />}
               </Stack>
             </Grid>
 
@@ -337,7 +337,7 @@ export default function TabIntegrations() {
                 variant="outlined"
                 onClick={() => handleTestConnection('sms')}
                 disabled={!formData.enableSMSGateway}
-                sx={{ height: '56px' }}
+                sx={{ height: '3.5rem' }}
               >
                 Test SMS Connection
               </Button>
@@ -345,7 +345,7 @@ export default function TabIntegrations() {
 
             {/* Save Button */}
             <Grid size={12}>
-              <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="contained" startIcon={<SaveOutlined />} onClick={handleSave} disabled={loading}>
                   {loading ? 'Saving...' : 'Save Changes'}
                 </Button>

@@ -116,17 +116,17 @@ const ApiErrorDisplay = ({ config, onRetry, onGoHome, onLogin, compact = false }
     return (
       <Box
         sx={{
-          p: 3,
+          p: '1.5rem',
           textAlign: 'center',
           bgcolor: (theme) => alpha(theme.palette[config.color].light, 0.1),
-          borderRadius: 2
+          borderRadius: '0.125rem'
         }}
       >
-        <IconComponent sx={{ fontSize: 48, color: `${config.color}.main`, mb: 1 }} />
+        <IconComponent sx={{ fontSize: '3.0rem', color: `${config.color}.main`, mb: 1 }} />
         <Typography variant="h6" color={`${config.color}.main`} gutterBottom>
           {config.title}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
           {config.message}
         </Typography>
         <Stack direction="row" spacing={1} justifyContent="center">
@@ -151,24 +151,24 @@ const ApiErrorDisplay = ({ config, onRetry, onGoHome, onLogin, compact = false }
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 400,
-        p: 3
+        minHeight: '25.0rem',
+        p: '1.5rem'
       }}
     >
       <Card
         sx={{
-          maxWidth: 450,
+          maxWidth: '28.125rem',
           width: '100%',
           textAlign: 'center',
           boxShadow: (theme) => `0 4px 20px ${alpha(theme.palette[config.color].main, 0.15)}`
         }}
       >
-        <CardContent sx={{ p: 4 }}>
+        <CardContent sx={{ p: '2.0rem' }}>
           <IconComponent
             sx={{
-              fontSize: 72,
+              fontSize: '4.5rem',
               color: `${config.color}.main`,
-              mb: 2
+              mb: '1.0rem'
             }}
           />
 
@@ -176,7 +176,7 @@ const ApiErrorDisplay = ({ config, onRetry, onGoHome, onLogin, compact = false }
             {config.title}
           </Typography>
 
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: '1.5rem' }}>
             {config.message}
           </Typography>
 

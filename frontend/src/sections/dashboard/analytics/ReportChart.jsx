@@ -28,7 +28,7 @@ export default function ReportChart() {
         }
       ]}
       height={340}
-      margin={{ top: 30, bottom: 25, left: 20, right: 20 }}
+      margin={{ top: '15.0rem', bottom: '12.5rem', left: '1.25rem', right: '1.25rem' }}
       sx={{
         '& .MuiLineElement-root': { strokeWidth: 2 },
         [`& .${chartsGridClasses.line}`]: { strokeDasharray: '4 4' },

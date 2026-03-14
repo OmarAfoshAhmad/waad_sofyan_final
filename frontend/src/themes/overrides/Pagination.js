@@ -6,7 +6,7 @@ export default function Pagination() {
       defaultProps: {
         shape: 'rounded'
       },
-      styleOverrides: { ul: { rowGap: 6 } }
+      styleOverrides: { ul: { rowGap: '3.0rem' } }
     }
   };
 }

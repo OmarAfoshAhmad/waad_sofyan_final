@@ -25,7 +25,7 @@ export default function CheckMail() {
         <Grid size={12}>
           <Box sx={{ mb: { xs: -0.5, sm: 0.5 } }}>
             <Typography variant="h3">Hi, Check Your Mail</Typography>
-            <Typography color="secondary" sx={{ mb: 0.5, mt: 1.25 }}>
+            <Typography color="secondary" sx={{ mb: 0.5, mt: '0.625rem' }}>
               We have sent a password recover instructions to your email.
             </Typography>
           </Box>

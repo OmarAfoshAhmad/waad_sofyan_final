@@ -484,19 +484,19 @@ const CategoryCoverageModal = ({
       </Stack>
     </DialogTitle>
     <DialogContent dividers sx={{ p: 0 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ px: 2, py: 1 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ px: '1.0rem', py: 1 }}>
         حدّد نسبة التغطية لكل تصنيف. هذه النسبة تُطبّق على جميع خدمات التصنيف ما لم توجد قاعدة خدمة خاصة.
       </Typography>
-      <TableContainer sx={{ maxHeight: 520 }}>
+      <TableContainer sx={{ maxHeight: '32.5rem' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>التصنيف</TableCell>
-              <TableCell align="center" sx={{ width: 120 }}>النسبة الحالية</TableCell>
-              <TableCell align="center" sx={{ width: 140 }}>نسبة التغطية (اختياري)</TableCell>
-              <TableCell align="center" sx={{ width: 140 }}>عدد المرات</TableCell>
-              <TableCell align="center" sx={{ width: 150 }}>سقف التصنيف</TableCell>
-              <TableCell align="center" sx={{ width: 140 }}>الإجراءات</TableCell>
+              <TableCell align="center" sx={{ width: '7.5rem' }}>النسبة الحالية</TableCell>
+              <TableCell align="center" sx={{ width: '8.75rem' }}>نسبة التغطية (اختياري)</TableCell>
+              <TableCell align="center" sx={{ width: '8.75rem' }}>عدد المرات</TableCell>
+              <TableCell align="center" sx={{ width: '9.375rem' }}>سقف التصنيف</TableCell>
+              <TableCell align="center" sx={{ width: '8.75rem' }}>الإجراءات</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -529,7 +529,7 @@ const CategoryCoverageModal = ({
                       ? `${row.effectiveCoveragePercent}%`
                       : 'افتراضي الوثيقة'}
                   </TableCell>
-                  <TableCell align="center" sx={{ width: 140 }}>
+                  <TableCell align="center" sx={{ width: '8.75rem' }}>
                     <TextField
                       size="small"
                       type="number"
@@ -542,7 +542,7 @@ const CategoryCoverageModal = ({
                       disabled={!canEdit || bulkSavingCoverage}
                     />
                   </TableCell>
-                  <TableCell align="center" sx={{ width: 140 }}>
+                  <TableCell align="center" sx={{ width: '8.75rem' }}>
                     <TextField
                       size="small"
                       type="number"
@@ -553,7 +553,7 @@ const CategoryCoverageModal = ({
                       disabled={!canEdit || bulkSavingCoverage}
                     />
                   </TableCell>
-                  <TableCell align="center" sx={{ width: 150 }}>
+                  <TableCell align="center" sx={{ width: '9.375rem' }}>
                     <TextField
                       size="small"
                       type="number"
@@ -565,7 +565,7 @@ const CategoryCoverageModal = ({
                       disabled={!canEdit || bulkSavingCoverage}
                     />
                   </TableCell>
-                  <TableCell align="center" sx={{ width: 140 }}>
+                  <TableCell align="center" sx={{ width: '8.75rem' }}>
                     <Stack direction="row" spacing={0.5} justifyContent="center">
                       <Button
                         size="small"
@@ -1046,7 +1046,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           )
         }
       >
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }} alignItems={{ xs: 'stretch', md: 'center' }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: '1.0rem' }} alignItems={{ xs: 'stretch', md: 'center' }}>
           <TextField
             placeholder="بحث بالكود أو الاسم أو النوع..."
             value={ruleSearch}
@@ -1072,7 +1072,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           <Chip size="small" variant="outlined" color="success" label={`${activeRulesCount} نشطة`} sx={{ width: 'fit-content' }} />
         </Stack>
 
-        <TableContainer sx={{ maxHeight: 560 }}>
+        <TableContainer sx={{ maxHeight: '35.0rem' }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow sx={{ backgroundColor: 'grey.50' }}>
@@ -1091,7 +1091,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             <TableBody>
               {rules.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: '2.0rem' }}>
                     <Typography color="text.secondary">
                       لا توجد قواعد تغطية. استخدم &quot;القواعد الأساسية&quot; لتعيين التغطية لكل تصنيف، أو &quot;إضافة قاعدة&quot; لإضافة قاعدة مخصصة.
                     </Typography>
@@ -1099,7 +1099,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 </TableRow>
               ) : filteredRules.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: '2.0rem' }}>
                     <Typography color="text.secondary">لا توجد نتائج مطابقة للبحث</Typography>
                   </TableCell>
                 </TableRow>

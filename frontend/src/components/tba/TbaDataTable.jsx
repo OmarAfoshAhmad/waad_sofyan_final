@@ -141,7 +141,7 @@ const printTable = (data, columns, title = 'تقرير') => {
       <style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; direction: rtl; }
         h1 { text-align: center; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
+        table { width: '6.25rem'%; border-collapse: collapse; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
         th { background-color: #f5f5f5; font-weight: bold; }
         tr:nth-child(even) { background-color: #fafafa; }
@@ -503,7 +503,7 @@ const TbaDataTable = ({
 
     // Empty state
     renderEmptyRowsFallback: () => (
-      <Box sx={{ textAlign: 'center', py: 4 }}>
+      <Box sx={{ textAlign: 'center', py: '2.0rem' }}>
         <ModernEmptyState icon={SearchOffIcon} title="لا توجد بيانات" description="لم يتم العثور على أي بيانات مطابقة للبحث" />
       </Box>
     ),

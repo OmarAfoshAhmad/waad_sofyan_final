@@ -211,7 +211,7 @@ const CompanySettingsPage = () => {
     return (
       <Box>
         <ModernPageHeader title="إعدادات الشركة" subtitle="إدارة معلومات شركة TBA للمراجعة الطبية" />
-        <Alert severity="error" sx={{ mt: 3 }}>
+        <Alert severity="error" sx={{ mt: '1.5rem' }}>
           حدث خطأ أثناء تحميل بيانات الشركة. يرجى المحاولة مرة أخرى.
         </Alert>
       </Box>
@@ -228,10 +228,10 @@ const CompanySettingsPage = () => {
       <ModernPageHeader title="إعدادات الشركة" subtitle="إدارة معلومات شركة TBA للمراجعة الطبية" />
 
       {/* Company Settings Form */}
-      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: '1.5rem' }}>
         <Card>
           <CardContent>
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: '1.5rem' }}>
               <Typography variant="h6" gutterBottom>
                 معلومات الشركة الأساسية
               </Typography>
@@ -359,7 +359,7 @@ const CompanySettingsPage = () => {
 
               {/* Submit Button */}
               <Grid size={12}>
-                <Box display="flex" justifyContent="center" sx={{ mt: 2 }}>
+                <Box display="flex" justifyContent="center" sx={{ mt: '1.0rem' }}>
                   <Button
                     type="submit"
                     variant="contained"
@@ -367,7 +367,7 @@ const CompanySettingsPage = () => {
                     size="large"
                     startIcon={updateCompanyMutation.isPending ? <CircularProgress size={20} /> : <SaveIcon />}
                     disabled={updateCompanyMutation.isPending}
-                    sx={{ minWidth: 200 }}
+                    sx={{ minWidth: '12.5rem' }}
                   >
                     {updateCompanyMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
                   </Button>
@@ -381,27 +381,27 @@ const CompanySettingsPage = () => {
       {/* ================================================================ */}
       {/* LOGO MANAGEMENT CARD                                             */}
       {/* ================================================================ */}
-      <Card sx={{ mt: 3 }}>
+      <Card sx={{ mt: '1.5rem' }}>
         <CardContent>
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: '1.0rem' }}>
             <Typography variant="h6" gutterBottom>شعار الشركة</Typography>
             <Divider />
           </Box>
 
           {/* Preview */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, mb: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', mb: '1.5rem' }}>
             <Box
               component="img"
               src={getLogoSrc()}
               alt="شعار الشركة"
               sx={{
-                maxHeight: 130,
-                maxWidth: 300,
+                maxHeight: '8.125rem',
+                maxWidth: '18.75rem',
                 objectFit: 'contain',
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: 2,
-                p: 2,
+                borderRadius: '0.125rem',
+                p: '1.0rem',
                 bgcolor: '#fafafa'
               }}
             />
@@ -413,7 +413,7 @@ const CompanySettingsPage = () => {
           </Box>
 
           {/* Buttons */}
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: '1.0rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <input
               ref={fileInputRef}
               type="file"
@@ -440,7 +440,7 @@ const CompanySettingsPage = () => {
             )}
           </Box>
 
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: '1.0rem' }}>
             يظهر الشعار في جميع التقارير والطباعة — يُخزَّن محلياً في المتصفح
           </Typography>
         </CardContent>
@@ -450,3 +450,5 @@ const CompanySettingsPage = () => {
 };
 
 export default CompanySettingsPage;
+
+

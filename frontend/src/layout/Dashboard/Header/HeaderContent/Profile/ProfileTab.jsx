@@ -22,7 +22,7 @@ export default function ProfileTab({ handleLogout }) {
   };
 
   return (
-    <List component="nav" sx={{ p: 0, '& .MuiListItemIcon-root': { minWidth: 32 } }}>
+    <List component="nav" sx={{ p: 0, '& .MuiListItemIcon-root': { minWidth: '2.0rem' } }}>
       <ListItemButton onClick={handleProfileClick}>
         <ListItemIcon>
           <UserOutlined />

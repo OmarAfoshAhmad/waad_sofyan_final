@@ -220,9 +220,9 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
         }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 2 } }}
+        PaperProps={{ sx: { borderRadius: '0.125rem' } }}
       >
-        <DialogTitle sx={{ m: 0, p: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle sx={{ m: 0, p: '1.0rem', pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>
             <Typography variant="h6" fontWeight="bold">
               جهات العمل المتعاقدة
@@ -236,7 +236,7 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
           </IconButton>
         </DialogTitle>
 
-        <Box sx={{ px: 2, pb: 2 }}>
+        <Box sx={{ px: '1.0rem', pb: '1.0rem' }}>
           <TextField
             fullWidth
             size="small"
@@ -256,13 +256,13 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
 
         <Divider />
 
-        <DialogContent sx={{ p: 0, maxHeight: 400, overflowY: 'auto' }}>
+        <DialogContent sx={{ p: 0, maxHeight: '25.0rem', overflowY: 'auto' }}>
           <List dense sx={{ py: 0 }}>
             {filteredNames.length > 0 ? (
               filteredNames.map((name, index) => (
-                <ListItem key={index} divider={index < filteredNames.length - 1} sx={{ py: 1.5, px: 2 }}>
+                <ListItem key={index} divider={index < filteredNames.length - 1} sx={{ py: '0.75rem', px: '1.0rem' }}>
                   <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: 'primary.light', color: 'primary.main', width: 32, height: 32 }}>
+                    <Avatar sx={{ bgcolor: 'primary.light', color: 'primary.main', width: '2.0rem', height: '2.0rem' }}>
                       <BusinessIcon fontSize="small" />
                     </Avatar>
                   </ListItemAvatar>
@@ -270,7 +270,7 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
                 </ListItem>
               ))
             ) : (
-              <Box sx={{ p: 4, textAlign: 'center' }}>
+              <Box sx={{ p: '2.0rem', textAlign: 'center' }}>
                 <Typography color="text.secondary" variant="body2">
                   {dialogSearchTerm ? 'لا توجد نتائج مطابقة' : 'لا توجد جهات متعاقدة'}
                 </Typography>
@@ -281,7 +281,7 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
 
         <Divider />
 
-        <DialogActions sx={{ p: 1.5, justifyContent: 'center' }}>
+        <DialogActions sx={{ p: '0.75rem', justifyContent: 'center' }}>
           <Button onClick={() => setShowDialog(false)} color="inherit">
             إغلاق
           </Button>
@@ -383,67 +383,67 @@ export default function ProvidersList() {
       {
         id: 'name',
         label: 'اسم مقدم الخدمة',
-        minWidth: 200,
+        minWidth: '12.5rem',
         sortable: false
       },
       {
         id: 'providerType',
         label: 'النوع',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'code',
         label: 'الرمز',
-        minWidth: 80,
+        minWidth: '5.0rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'city',
         label: 'المدينة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         sortable: false
       },
       {
         id: 'phone',
         label: 'الهاتف',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'network',
         label: 'الشبكة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'employers',
         label: 'جهات العمل المتعاقدة',
-        minWidth: 200,
+        minWidth: '12.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'documents',
         label: 'المستندات',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'actions',
         label: 'الإجراءات',
-        minWidth: 160,
+        minWidth: '10.0rem',
         align: 'center',
         sortable: false
       }
@@ -521,7 +521,7 @@ export default function ProvidersList() {
                     <CheckCircleIcon
                       color="success"
                       sx={{
-                        fontSize: 12,
+                        fontSize: '0.75rem',
                         position: 'absolute',
                         bottom: -2,
                         right: -2,
@@ -678,3 +678,5 @@ export default function ProvidersList() {
     </Box>
   );
 }
+
+

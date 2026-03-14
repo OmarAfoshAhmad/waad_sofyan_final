@@ -40,7 +40,7 @@ export default function DebouncedInput({
       {...props}
       value={value}
       onChange={handleInputChange}
-      sx={{ minWidth: 100, ...props.sx }}
+      sx={{ minWidth: '6.25rem', ...props.sx }}
       {...(startIcon && { startAdornment: <InputAdornment position="start">{startIcon}</InputAdornment> })}
       size={size}
     />

@@ -196,7 +196,7 @@ export default function EditRow({ row, onSave, groupedColumns }) {
             break;
           case 'progress':
             cellContent = isEditMode ? (
-              <Stack direction="row" sx={{ alignItems: 'center', pl: 1, minWidth: 120 }}>
+              <Stack direction="row" sx={{ alignItems: 'center', pl: 1, minWidth: '7.5rem' }}>
                 <Slider
                   value={values[columnId]}
                   min={0}
@@ -208,7 +208,7 @@ export default function EditRow({ row, onSave, groupedColumns }) {
                 />
               </Stack>
             ) : (
-              <LinearWithLabel value={value} sx={{ minWidth: 75 }} />
+              <LinearWithLabel value={value} sx={{ minWidth: '4.6875rem' }} />
             );
             break;
           case 'actions':

@@ -34,7 +34,7 @@ export default function Header() {
 
   // common header - ✅ Reduced height to not cover page titles
   const mainHeader = (
-    <Toolbar sx={{ px: { xs: 2, sm: 3 }, minHeight: { xs: 48, sm: 56 }, height: { xs: 48, sm: 56 } }}>
+    <Toolbar sx={{ px: { xs: 2, sm: 3 }, minHeight: { xs: 48, sm: '28.0rem' }, height: { xs: 48, sm: '28.0rem' } }}>
       {/* ✅ Sidebar toggle button removed - using horizontal navigation */}
       {headerContent}
     </Toolbar>
@@ -65,3 +65,4 @@ export default function Header() {
     </>
   );
 }
+

@@ -27,7 +27,7 @@ export default function Loader() {
         alignItems: 'center',
         backgroundColor: 'background.default',
         zIndex: 2001,
-        gap: 3
+        gap: '1.5rem'
       }}
     >
       <CircularProgress size={60} thickness={4} />

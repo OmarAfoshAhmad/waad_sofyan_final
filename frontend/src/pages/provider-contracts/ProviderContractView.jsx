@@ -220,8 +220,8 @@ const getCategoryObject = (item) => item?.medicalCategory || item?.effectiveCate
  */
 const InfoRow = ({ label, value, valueColor, icon: Icon }) => (
   <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 0.5 }}>
-    {Icon && <Icon sx={{ fontSize: 18, color: 'text.secondary' }} />}
-    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80 }}>
+    {Icon && <Icon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />}
+    <Typography variant="caption" color="text.secondary" sx={{ minWidth: '5.0rem' }}>
       {label}:
     </Typography>
     <Typography variant="body2" fontWeight={600} color={valueColor || 'text.primary'} noWrap>
@@ -236,7 +236,7 @@ const InfoRow = ({ label, value, valueColor, icon: Icon }) => (
 function TabPanel({ children, value, index, ...other }) {
   return (
     <div role="tabpanel" hidden={value !== index} id={`contract-tabpanel-${index}`} aria-labelledby={`contract-tab-${index}`} {...other}>
-      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: '1.0rem' }}>{children}</Box>}
     </div>
   );
 }
@@ -750,12 +750,12 @@ const ProviderContractView = () => {
   if (isError || !contract) {
     return (
       <MainCard>
-        <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight={300} sx={{ py: 4 }}>
-          <ContractIcon sx={{ fontSize: 64, color: 'error.main', mb: 2, opacity: 0.5 }} />
+        <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight={300} sx={{ py: '2.0rem' }}>
+          <ContractIcon sx={{ fontSize: '4.0rem', color: 'error.main', mb: '1.0rem', opacity: 0.5 }} />
           <Typography variant="h6" color="error" gutterBottom>
             {isError ? 'خطأ في تحميل العقد' : 'العقد غير موجود'}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
             {error?.message || 'لم يتم العثور على العقد المطلوب'}
           </Typography>
           <Stack direction="row" spacing={2}>
@@ -852,7 +852,7 @@ const ProviderContractView = () => {
       />
 
       {/* Contract Summary Card - Ultra Slim & Horizontal */}
-      <MainCard sx={{ mb: 2, py: 0.5 }}>
+      <MainCard sx={{ mb: '1.0rem', py: 0.5 }}>
         <Stack direction="row" spacing={4} alignItems="center" justifyContent="center" flexWrap="wrap">
           <InfoRow label="نموذج السعر" value={pricingModelConfig.label} icon={PriceIcon} />
           <InfoRow label="نسبة التخفيض" value={contract.discountPercent ? `${contract.discountPercent}%` : '-'} icon={PriceIcon} />
@@ -866,7 +866,7 @@ const ProviderContractView = () => {
 
       {/* Notes Section */}
       {contract.notes && (
-        <MainCard title="ملاحظات" secondary={<NotesIcon color="action" />} sx={{ mb: 3 }}>
+        <MainCard title="ملاحظات" secondary={<NotesIcon color="action" />} sx={{ mb: '1.5rem' }}>
           <Typography variant="body1" color="text.secondary">
             {contract.notes}
           </Typography>
@@ -883,7 +883,7 @@ const ProviderContractView = () => {
         {/* Pricing Items Tab */}
         <TabPanel value={activeTab} index={0}>
           {/* Search and Excel Upload */}
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }} alignItems={{ xs: 'stretch', md: 'center' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: '1.0rem' }} alignItems={{ xs: 'stretch', md: 'center' }}>
             <TextField
               placeholder="بحث في بنود التسعير..."
               value={pricingSearch}
@@ -918,7 +918,7 @@ const ProviderContractView = () => {
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Autocomplete
                 size="small"
-                sx={{ minWidth: 200 }}
+                sx={{ minWidth: '12.5rem' }}
                 options={medicalCategories?.data || []}
                 getOptionLabel={(option) => option.nameAr || option.name || option.code || ''}
                 value={medicalCategories?.data?.find(c => c.id === selectedCategoryId) || null}
@@ -985,28 +985,28 @@ const ProviderContractView = () => {
           </Stack>
 
           {/* Pricing Table */}
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 560 }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: '35.0rem' }}>
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                  <TableCell sx={{ width: 120 }}>كود الخدمة</TableCell>
-                  <TableCell sx={{ minWidth: 250 }}>اسم الخدمة</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>التصنيف الرئيسي</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>البند (التصنيف الفرعي)</TableCell>
-                  <TableCell align="right" sx={{ width: 120 }}>سعر العقد</TableCell>
-                  <TableCell align="center" sx={{ width: 100 }}>الإجراءات</TableCell>
+                  <TableCell sx={{ width: '7.5rem' }}>كود الخدمة</TableCell>
+                  <TableCell sx={{ minWidth: '15.625rem' }}>اسم الخدمة</TableCell>
+                  <TableCell sx={{ minWidth: '11.25rem' }}>التصنيف الرئيسي</TableCell>
+                  <TableCell sx={{ minWidth: '11.25rem' }}>البند (التصنيف الفرعي)</TableCell>
+                  <TableCell align="right" sx={{ width: '7.5rem' }}>سعر العقد</TableCell>
+                  <TableCell align="center" sx={{ width: '6.25rem' }}>الإجراءات</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {pricingLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={9} align="center" sx={{ py: '2.0rem' }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : pricingItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={9} align="center" sx={{ py: '2.0rem' }}>
                       <Typography color="text.secondary">
                         {pricingSearch ? 'لم يتم العثور على بنود مطابقة' : 'لا توجد بنود تسعير'}
                       </Typography>
@@ -1038,7 +1038,7 @@ const ProviderContractView = () => {
                         })()}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 350 }}>
+                        <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: '21.875rem' }}>
                           {getServiceDisplay(item).nameAr}
                         </Typography>
                       </TableCell>
@@ -1135,7 +1135,7 @@ const ProviderContractView = () => {
               <TableBody>
                 {pricingTimeline.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={5} align="center" sx={{ py: '2.0rem' }}>
                       <Typography color="text.secondary">لا يوجد سجل متاح حالياً</Typography>
                     </TableCell>
                   </TableRow>
@@ -1180,7 +1180,7 @@ const ProviderContractView = () => {
       <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>إيقاف العقد</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>هل أنت متأكد من إيقاف العقد؟ يرجى إدخال سبب الإيقاف.</DialogContentText>
+          <DialogContentText sx={{ mb: '1.0rem' }}>هل أنت متأكد من إيقاف العقد؟ يرجى إدخال سبب الإيقاف.</DialogContentText>
           <TextField
             autoFocus
             label="سبب الإيقاف"
@@ -1209,7 +1209,7 @@ const ProviderContractView = () => {
       <Dialog open={terminateDialogOpen} onClose={() => setTerminateDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle color="error">إلغاء العقد</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
+          <DialogContentText sx={{ mb: '1.0rem' }}>
             <strong>تحذير:</strong> إلغاء العقد إجراء نهائي ولا يمكن التراجع عنه. يرجى إدخال سبب الإلغاء.
           </DialogContentText>
           <TextField
@@ -1240,7 +1240,7 @@ const ProviderContractView = () => {
       <Dialog open={addPricingDialogOpen} onClose={() => setAddPricingDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>إضافة خدمة طبية للتسعير</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 3 }}>
+          <DialogContentText sx={{ mb: '1.5rem' }}>
             اختر التصنيف أولاً ثم الخدمة من القاموس وأدخل السعر المتفق عليه.
           </DialogContentText>
           <Stack spacing={3}>
@@ -1288,7 +1288,7 @@ const ProviderContractView = () => {
                     ? '+ إضافة خدمة جديدة'
                     : `[${option.code || ''}] ${option.nameAr || option.name || ''}`
                 }
-                ListboxProps={{ style: { maxHeight: 320, minHeight: 120 } }}
+                ListboxProps={{ style: { maxHeight: '20.0rem', minHeight: '7.5rem' } }}
                 loading={servicesLoading}
                 value={pricingForm.isAddingNewService ? { isNew: true } : pricingForm.medicalServiceId}
                 renderOption={(props, option) => (
@@ -1393,7 +1393,7 @@ const ProviderContractView = () => {
       <Dialog open={editPricingDialogOpen} onClose={() => setEditPricingDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>تعديل سعر الخدمة</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: 3 }}>
+          <DialogContentText sx={{ mb: '1.5rem' }}>
             {selectedPricingItem
               ? `تعديل السعر للخدمة: ${getServiceCode(selectedPricingItem)} - ${getServiceNameAr(selectedPricingItem)} - ${getServiceNameEn(selectedPricingItem)}`
               : 'تعديل السعر'}
@@ -1546,8 +1546,8 @@ const ProviderContractView = () => {
               sx={{
                 border: '2px dashed',
                 borderColor: selectedPricingFile ? 'success.main' : 'divider',
-                borderRadius: 2,
-                p: 4,
+                borderRadius: '0.125rem',
+                p: '2.0rem',
                 textAlign: 'center',
                 backgroundColor: selectedPricingFile ? 'success.lighter' : 'background.paper',
                 cursor: uploadingPricingFile ? 'default' : 'pointer'
@@ -1568,14 +1568,14 @@ const ProviderContractView = () => {
               <Stack spacing={1} alignItems="center">
                 {selectedPricingFile ? (
                   <>
-                    <FileIcon color="success" sx={{ fontSize: 42 }} />
+                    <FileIcon color="success" sx={{ fontSize: '2.625rem' }} />
                     <Typography variant="body1" fontWeight={600}>
                       {selectedPricingFile.name}
                     </Typography>
                   </>
                 ) : (
                   <>
-                    <CloudUploadIcon color="action" sx={{ fontSize: 42 }} />
+                    <CloudUploadIcon color="action" sx={{ fontSize: '2.625rem' }} />
                     <Typography variant="body2" color="text.secondary">
                       اضغط لاختيار ملف Excel المعبأ
                     </Typography>
@@ -1610,3 +1610,5 @@ const ProviderContractView = () => {
 };
 
 export default ProviderContractView;
+
+

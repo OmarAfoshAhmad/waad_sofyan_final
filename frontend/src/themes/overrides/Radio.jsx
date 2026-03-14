@@ -64,13 +64,13 @@ export default function Radio(theme) {
     MuiRadio: {
       defaultProps: {
         className: 'size-small',
-        icon: <Box className="icon" sx={{ width: 16, height: 16, border: '1px solid', borderColor: 'inherit', borderRadius: '50%' }} />,
+        icon: <Box className="icon" sx={{ width: 16.0, height: 16.0, border: '1px solid', borderColor: 'inherit', borderRadius: '50%' }} />,
         checkedIcon: (
           <Box
             className="icon"
             sx={{
-              width: 16,
-              height: 16,
+              width: 16.0,
+              height: 16.0,
               border: '1px solid',
               borderColor: 'inherit',
               borderRadius: '50%',
@@ -80,13 +80,13 @@ export default function Radio(theme) {
             <Box
               className="dot"
               sx={{
-                width: 8,
-                height: 8,
+                width: 8.0,
+                height: 8.0,
                 backgroundColor: 'inherit',
                 borderRadius: '50%',
                 position: 'absolute',
-                top: 3,
-                left: 3
+                top: 24.0,
+                left: 3.0
               }}
             />
           </Box>

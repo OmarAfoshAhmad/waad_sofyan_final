@@ -92,13 +92,13 @@ export default function MegaMenuSection() {
             <Paper
               sx={(theme) => ({
                 boxShadow: theme.vars.customShadows.z1,
-                minWidth: 750,
+                minWidth: '46.875rem',
                 width: {
-                  md: `calc(100vw - 100px)`,
-                  lg: `calc(100vw - ${DRAWER_WIDTH + 100}px)`,
-                  xl: `calc(100vw - ${DRAWER_WIDTH + 140}px)`
+                  md: `calc(100vw - 6.25rem)`,
+                  lg: `calc(100vw - (${DRAWER_WIDTH} + 6.25rem))`,
+                  xl: `calc(100vw - (${DRAWER_WIDTH} + 8.75rem))`
                 },
-                maxWidth: 1024
+                maxWidth: '64.0rem'
               })}
             >
               <ClickAwayListener onClickAway={handleClose}>
@@ -110,7 +110,7 @@ export default function MegaMenuSection() {
                       })}
                       size={{ md: 4 }}
                     >
-                      <Box sx={{ p: 4.5, pb: 3 }}>
+                      <Box sx={{ p: '2.25rem', pb: '1.5rem' }}>
                         <Stack sx={(theme) => ({ color: 'background.paper', ...theme.applyStyles('dark', { color: 'text.primary' }) })}>
                           <Typography variant="h2" sx={{ fontSize: '1.875rem', mb: 1 }}>
                             Explore Components
@@ -136,7 +136,7 @@ export default function MegaMenuSection() {
                                 View All
                               </Button>
                             </AnimateButton>
-                            <CardMedia component="img" src={imageChart} alt="Chart" sx={{ mr: -2.5, mb: -2.5, width: 124 }} />
+                            <CardMedia component="img" src={imageChart} alt="Chart" sx={{ mr: -2.5, mb: -2.5, width: '7.75rem' }} />
                           </Stack>
                         </Stack>
                       </Box>
@@ -144,9 +144,9 @@ export default function MegaMenuSection() {
                     <Grid size={{ md: 8 }}>
                       <Box
                         sx={{
-                          p: 4,
+                          p: '2.0rem',
                           '& .MuiList-root': { pb: 0 },
-                          '& .MuiListSubheader-root': { p: 0, pb: 1.5 },
+                          '& .MuiListSubheader-root': { p: 0, pb: '0.75rem' },
                           '& .MuiListItemButton-root': {
                             p: 0.5,
                             '&:hover': { bgcolor: 'transparent', '& .MuiTypography-root': { color: 'primary.main' } }
@@ -287,3 +287,5 @@ export default function MegaMenuSection() {
     </Box>
   );
 }
+
+

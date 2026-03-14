@@ -395,7 +395,7 @@ export const exportToPDF = (arg1, arg2, arg3, arg4, arg5) => {
           margin-bottom: 20px;
         }
         table {
-          width: 100%;
+          width: '6.25rem'%;
           border-collapse: collapse;
           margin-bottom: 20px;
         }

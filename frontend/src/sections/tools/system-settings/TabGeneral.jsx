@@ -156,7 +156,7 @@ export default function TabGeneral() {
 
                   {/* Regional Settings */}
                   <Grid size={12}>
-                    <Divider textAlign="left" sx={{ mt: 2 }}>
+                    <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                       Regional Settings
                     </Divider>
                   </Grid>
@@ -205,7 +205,7 @@ export default function TabGeneral() {
 
                   {/* Display Settings */}
                   <Grid size={12}>
-                    <Divider textAlign="left" sx={{ mt: 2 }}>
+                    <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                       Display Settings
                     </Divider>
                   </Grid>
@@ -248,7 +248,7 @@ export default function TabGeneral() {
 
                   {/* Action Buttons */}
                   <Grid size={12}>
-                    <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+                    <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                       <Button variant="outlined" startIcon={<ReloadOutlined />} onClick={() => resetForm()} disabled={isSubmitting}>
                         Reset
                       </Button>

@@ -27,7 +27,7 @@ const MembersAreaChart = ({ data, loading }) => {
     dataLabels: { enabled: false },
     stroke: {
       curve: 'smooth',
-      width: 2
+      width: '0.125rem'
     },
     fill: {
       type: 'gradient',

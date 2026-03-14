@@ -179,7 +179,7 @@ const EmployerFilterSelector = ({
         loading={loading}
         disabled={disabled}
         size={size}
-        sx={{ minWidth: 300 }}
+        sx={{ minWidth: '18.75rem' }}
         renderInput={(params) => (
           <TextField
             {...params}

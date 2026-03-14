@@ -14,7 +14,7 @@ export default function AuthCard({ children, ...other }) {
   return (
     <MainCard
       sx={{
-        maxWidth: { xs: 400, sm: 475 },
+        maxWidth: { xs: 400, sm: '237.5rem' },
         mx: 'auto',
         my: { xs: 2.5, md: 3 },
         '& > *': { flexGrow: 1, flexBasis: '50%' },
@@ -23,7 +23,7 @@ export default function AuthCard({ children, ...other }) {
         // Modern Medical Aesthetic
         background: alpha(theme.palette.background.paper, 0.95),
         border: `1px solid ${alpha(theme.palette.primary.light, 0.2)}`, // Soft medical teal border
-        borderRadius: 4,
+        borderRadius: '0.375rem',
         boxShadow: `0 12px 40px ${alpha(theme.palette.primary.main, 0.08)}`,
 
         transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease',
@@ -44,3 +44,5 @@ export default function AuthCard({ children, ...other }) {
 }
 
 AuthCard.propTypes = { children: PropTypes.any, other: PropTypes.any };
+
+

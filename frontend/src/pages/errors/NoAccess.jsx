@@ -19,16 +19,16 @@ const NoAccess = () => {
         <Paper
           elevation={3}
           sx={{
-            p: 5,
+            p: '2.5rem',
             textAlign: 'center',
-            borderRadius: 3
+            borderRadius: '0.1875rem'
           }}
         >
           {/* Icon */}
-          <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: '1.5rem' }}>
             <BlockIcon
               sx={{
-                fontSize: 120,
+                fontSize: '7.5rem',
                 color: 'error.main',
                 opacity: 0.8
               }}
@@ -42,7 +42,7 @@ const NoAccess = () => {
               fontSize: '5rem',
               fontWeight: 700,
               color: 'error.main',
-              mb: 2
+              mb: '1.0rem'
             }}
           >
             403
@@ -53,7 +53,7 @@ const NoAccess = () => {
             variant="h4"
             sx={{
               fontWeight: 600,
-              mb: 2,
+              mb: '1.0rem',
               color: 'text.primary'
             }}
           >
@@ -65,7 +65,7 @@ const NoAccess = () => {
             variant="body1"
             sx={{
               color: 'text.secondary',
-              mb: 4,
+              mb: '2.0rem',
               lineHeight: 1.8
             }}
           >
@@ -82,9 +82,9 @@ const NoAccess = () => {
             size="large"
             startIcon={<HomeIcon />}
             sx={{
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
+              px: '2.0rem',
+              py: '0.75rem',
+              borderRadius: '0.125rem',
               textTransform: 'none',
               fontSize: '1rem'
             }}
@@ -97,7 +97,7 @@ const NoAccess = () => {
             variant="caption"
             sx={{
               display: 'block',
-              mt: 4,
+              mt: '2.0rem',
               color: 'text.disabled'
             }}
           >
@@ -110,3 +110,5 @@ const NoAccess = () => {
 };
 
 export default NoAccess;
+
+

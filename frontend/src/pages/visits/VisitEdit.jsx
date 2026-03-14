@@ -173,7 +173,7 @@ const VisitEdit = () => {
         <MainCard>
           <Alert severity="error">
             {visitError?.message || 'لم يتم العثور على الزيارة'}
-            <Button onClick={() => navigate('/visits')} sx={{ mt: 2 }}>
+            <Button onClick={() => navigate('/visits')} sx={{ mt: '1.0rem' }}>
               العودة إلى القائمة
             </Button>
           </Alert>
@@ -188,7 +188,7 @@ const VisitEdit = () => {
 
       <MainCard>
         {apiError && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setApiError(null)}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }} onClose={() => setApiError(null)}>
             {apiError}
           </Alert>
         )}
@@ -215,7 +215,7 @@ const VisitEdit = () => {
                   ))}
                 </Select>
                 {errors.memberId && (
-                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 2 }}>
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: '1.0rem' }}>
                     {errors.memberId}
                   </Typography>
                 )}
@@ -293,7 +293,7 @@ const VisitEdit = () => {
 
             {/* Section: Medical Info */}
             <Grid size={12}>
-              <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+              <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
                 المعلومات الطبية
               </Typography>
             </Grid>
@@ -354,7 +354,7 @@ const VisitEdit = () => {
 
             {/* Actions */}
             <Grid size={12}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="outlined" startIcon={<CancelIcon />} onClick={handleCancel} disabled={loading}>
                   إلغاء
                 </Button>

@@ -35,7 +35,7 @@ export default function MembersGrowthChart({ height = 365 }) {
     },
     plotOptions: {
       bar: {
-        borderRadius: 4,
+        borderRadius: '0.375rem',
         columnWidth: '45%'
       }
     },
@@ -93,15 +93,15 @@ export default function MembersGrowthChart({ height = 365 }) {
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: '1.5rem' }}>
         <Skeleton variant="rectangular" height={height} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Stack spacing={1} sx={{ mb: 2 }}>
+    <Box sx={{ p: '1.0rem' }}>
+      <Stack spacing={1} sx={{ mb: '1.0rem' }}>
         <Typography variant="h6">Members Growth</Typography>
         <Typography variant="caption" color="text.secondary">
           نمو الأعضاء الشهري
@@ -115,3 +115,4 @@ export default function MembersGrowthChart({ height = 365 }) {
 MembersGrowthChart.propTypes = {
   height: PropTypes.number
 };
+

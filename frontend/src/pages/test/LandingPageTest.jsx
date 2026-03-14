@@ -117,9 +117,9 @@ export default function LandingPageTest() {
   const currentRoleLanding = user ? getDefaultRouteForRole(user.role) : null;
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: '1.5rem' }}>
       {/* Header */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: '1.5rem' }}>
         <CardContent>
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
             <Box>
@@ -141,12 +141,12 @@ export default function LandingPageTest() {
       </Card>
 
       {/* Role Configuration Table */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: '1.5rem' }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             📋 تكوين صفحات الهبوط
           </Typography>
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: '1.0rem' }} />
 
           <TableContainer component={Paper} variant="outlined">
             <Table>
@@ -182,12 +182,12 @@ export default function LandingPageTest() {
       </Card>
 
       {/* Test Controls */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: '1.5rem' }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             🔬 إجراء الاختبارات
           </Typography>
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: '1.0rem' }} />
 
           <Stack direction="row" spacing={2}>
             <Button variant="contained" color="primary" onClick={runAllTests} startIcon={<CheckCircleIcon />}>
@@ -207,16 +207,16 @@ export default function LandingPageTest() {
             <Typography variant="h6" gutterBottom>
               📊 نتائج الاختبارات
             </Typography>
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ my: '1.0rem' }} />
 
             {testResults.every((r) => r.passed) && (
-              <Alert severity="success" sx={{ mb: 2 }}>
+              <Alert severity="success" sx={{ mb: '1.0rem' }}>
                 ✅ جميع الاختبارات نجحت! ({testResults.length}/{testResults.length})
               </Alert>
             )}
 
             {testResults.some((r) => !r.passed) && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: '1.0rem' }}>
                 ❌ بعض الاختبارات فشلت! ({testResults.filter((r) => r.passed).length}/{testResults.length} نجحت)
               </Alert>
             )}

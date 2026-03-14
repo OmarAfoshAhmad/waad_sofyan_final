@@ -24,7 +24,7 @@ export default function NavGroup({ item }) {
     <List
       subheader={
         item.title && (
-          <Typography variant="subtitle1" color="text.primary" sx={{ pl: 3, mb: 1.5 }}>
+          <Typography variant="subtitle1" color="text.primary" sx={{ pl: '1.5rem', mb: '0.75rem' }}>
             {item.title}
           </Typography>
         )
@@ -37,3 +37,5 @@ export default function NavGroup({ item }) {
 }
 
 NavGroup.propTypes = { item: PropTypes.any };
+
+

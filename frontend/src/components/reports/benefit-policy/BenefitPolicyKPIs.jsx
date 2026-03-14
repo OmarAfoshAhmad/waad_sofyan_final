@@ -74,14 +74,14 @@ const KPICard = ({ config, value, loading }) => {
         height: '100%',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2,
+        borderRadius: '0.125rem',
         transition: 'box-shadow 0.2s',
         '&:hover': {
           boxShadow: 2
         }
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent sx={{ p: '1.25rem' }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Box sx={{ flex: 1 }}>
             <Typography
@@ -112,21 +112,21 @@ const KPICard = ({ config, value, loading }) => {
                   {config.format(value)}
                 </Typography>
                 {config.showWarning && value > 0 && (
-                  <Chip label="يحتاج مراجعة" size="small" color="warning" sx={{ fontSize: '0.65rem', height: 20 }} />
+                  <Chip label="يحتاج مراجعة" size="small" color="warning" sx={{ fontSize: '0.75rem', height: '1.25rem' }} />
                 )}
               </Box>
             )}
 
-            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.75rem' }}>
               {config.titleEn}
             </Typography>
           </Box>
 
           <Box
             sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 2,
+              width: '3.0rem',
+              height: '3.0rem',
+              borderRadius: '0.125rem',
               backgroundColor: config.bgColor,
               display: 'flex',
               alignItems: 'center',
@@ -134,7 +134,7 @@ const KPICard = ({ config, value, loading }) => {
               flexShrink: 0
             }}
           >
-            <Icon sx={{ color: config.color, fontSize: 24 }} />
+            <Icon sx={{ color: config.color, fontSize: '1.5rem' }} />
           </Box>
         </Box>
       </CardContent>
@@ -191,3 +191,7 @@ BenefitPolicyKPIs.propTypes = {
 };
 
 export default BenefitPolicyKPIs;
+
+
+
+

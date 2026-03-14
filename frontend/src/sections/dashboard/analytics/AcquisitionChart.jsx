@@ -113,10 +113,10 @@ export default function AcquisitionChart() {
         yAxis={[{ position: 'none' }]}
         axisHighlight={{ x: 'none' }}
         slotProps={{ tooltip: { trigger: 'item' } }}
-        margin={{ left: 20, right: -5, top: 30, bottom: 15 }}
+        margin={{ left: '1.25rem', right: -5, top: '15.0rem', bottom: '7.5rem' }}
         sx={{ '& .MuiBarElement-root:hover': { opacity: 0.6 } }}
       />
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-around', width: 1, maxWidth: 250, ml: 2, mb: 2 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-around', width: '0.0625rem', maxWidth: '15.625rem', ml: '1.0rem', mb: '1.0rem' }}>
         {initialSeries.map((series) => (
           <Stack
             key={series.label}
@@ -126,7 +126,7 @@ export default function AcquisitionChart() {
             onMouseLeave={() => setHighLightedItem(null)}
             sx={{ gap: 1, alignItems: 'center', opacity: seriesVisibility[series.label] ? 1 : 0.45, cursor: 'pointer' }}
           >
-            <Box sx={{ height: 10, width: 10, borderRadius: '50%', backgroundColor: series.color }} />
+            <Box sx={{ height: '0.625rem', width: '0.625rem', borderRadius: '50%', backgroundColor: series.color }} />
             <Typography>{series.label}</Typography>
           </Stack>
         ))}

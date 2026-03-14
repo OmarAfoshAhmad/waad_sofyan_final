@@ -238,7 +238,7 @@ const UserCreate = () => {
 
       {/* Error Alert */}
       {submitError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSubmitError(null)}>
+        <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setSubmitError(null)}>
           {submitError}
         </Alert>
       )}
@@ -425,7 +425,7 @@ const UserCreate = () => {
         </TbaFormSection>
 
         {/* Submit */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}>
           <Button
             variant="contained"
             onClick={handleSubmit}
@@ -442,3 +442,4 @@ const UserCreate = () => {
 };
 
 export default UserCreate;
+

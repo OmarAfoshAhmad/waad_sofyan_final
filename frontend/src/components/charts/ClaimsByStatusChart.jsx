@@ -67,15 +67,15 @@ export default function ClaimsByStatusChart({ height = 365 }) {
 
   if (isLoading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: '1.5rem' }}>
         <Skeleton variant="circular" width={height} height={height} sx={{ mx: 'auto' }} />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Stack spacing={1} sx={{ mb: 2 }}>
+    <Box sx={{ p: '1.0rem' }}>
+      <Stack spacing={1} sx={{ mb: '1.0rem' }}>
         <Typography variant="h6">Claims by Status</Typography>
         <Typography variant="caption" color="text.secondary">
           المطالبات حسب الحالة

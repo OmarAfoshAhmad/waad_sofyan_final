@@ -24,7 +24,7 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
     if (rejectedClaims.length === 0) {
         return (
             <div ref={ref} style={{ position: 'fixed', bottom: '-9999px', left: 0, zIndex: -1, overflow: 'hidden' }} className="print-content-wrapper-rejected">
-                <Typography variant="h6" sx={{ textAlign: 'center', p: 5 }}>لا توجد مطالبات مرفوضة في هذه الدفعة</Typography>
+                <Typography variant="h6" sx={{ textAlign: 'center', p: '2.5rem' }}>لا توجد مطالبات مرفوضة في هذه الدفعة</Typography>
             </div>
         );
     }
@@ -105,7 +105,7 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
                     .print-title { font-size: 18px; font-weight: bold; }
                     .meta-info { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 20px; }
                     
-                    table.print-table { width: 100%; border-collapse: collapse; font-size: 10px; text-align: center; }
+                    table.print-table { width: '6.25rem'%; border-collapse: collapse; font-size: 10px; text-align: center; }
                     table.print-table th { padding: 6px; border: 1px solid #000; font-weight: bold; background: #eee !important; }
                     table.print-table td { padding: 5px; border: 1px solid #000; }
                     .subtotal-row td { font-weight: bold; background: #f5f5f5 !important; }
@@ -117,13 +117,13 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
                     @media print {
                         body * { visibility: hidden; }
                         .print-content-wrapper-rejected, .print-content-wrapper-rejected * { visibility: visible; }
-                        .print-content-wrapper-rejected { position: absolute; left: 0; top: 0; width: 100%; }
+                        .print-content-wrapper-rejected { position: absolute; left: 0; top: 0; width: '6.25rem'%; }
                     }
                 `}
             </style>
 
             <div className="print-header">
-                <img src={logoSrc} alt="logo" style={{ height: 65, width: 'auto', objectFit: 'contain', marginBottom: 8 }} />
+                <img src={logoSrc} alt="logo" style={{ height: '4.0625rem', width: 'auto', objectFit: 'contain', marginBottom: '0.375rem' }} />
                 <Typography className="print-title">{displayName}</Typography>
                 <Typography className="print-title">تقرير المطالبات المرفوضة (كلياً وجزئياً)</Typography>
                 <Typography variant="subtitle2">{provider?.name} - {employer?.name}</Typography>
@@ -171,7 +171,7 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
                 </div>
             ))}
 
-            <Box sx={{ mt: 3, p: 2, border: '2px solid #000', textAlign: 'center', bgcolor: '#fdf2f2' }}>
+            <Box sx={{ mt: '1.5rem', p: '1.0rem', border: '2px solid #000', textAlign: 'center', bgcolor: '#fdf2f2' }}>
                 <Typography variant="h6" fontWeight="bold">
                     إجمالي القيمة المرفوضة في هذه الدفعة: {formatLYD(totalRejected)}
                 </Typography>
@@ -181,3 +181,5 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
 });
 
 export default RejectedBatchPrintReport;
+
+

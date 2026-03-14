@@ -242,7 +242,7 @@ const BenefitPolicyEdit = () => {
   // Show error if policy not found
   if (!policy && !loadingPolicy) {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
+      <Alert severity="error" sx={{ mt: '1.0rem' }}>
         الوثيقة غير موجودة أو حدث خطأ في التحميل
       </Alert>
     );
@@ -282,7 +282,7 @@ const BenefitPolicyEdit = () => {
           }}
         >
           {generalError && (
-            <Box sx={{ p: 2, pb: 0 }}>
+            <Box sx={{ p: '1.0rem', pb: 0 }}>
               <Alert severity="error" variant="outlined" onClose={() => setGeneralError(null)}>
                 {generalError}
               </Alert>
@@ -290,7 +290,7 @@ const BenefitPolicyEdit = () => {
           )}
 
           {overlapWarning && (
-            <Box sx={{ p: 2, pb: 0 }}>
+            <Box sx={{ p: '1.0rem', pb: 0 }}>
               <Alert severity="warning" variant="outlined" onClose={() => setOverlapWarning(null)}>
                 {overlapWarning}
               </Alert>
@@ -302,7 +302,7 @@ const BenefitPolicyEdit = () => {
               <Form autoComplete="off" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <FormValuesEffect checkOverlap={checkOverlap} policyId={policy?.id} />
 
-                <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '1.0rem' }}>
                   <Grid container spacing={2}>
 
                     {/* ── Section 1: هوية الوثيقة ── */}
@@ -371,7 +371,7 @@ const BenefitPolicyEdit = () => {
                           </MenuItem>
                         ) : employers.length > 0 ? (
                           employers.map((emp) => (
-                            <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '13px' }}>
+                            <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '0.8125rem' }}>
                               {emp.label || emp.name}
                             </MenuItem>
                           ))
@@ -392,9 +392,9 @@ const BenefitPolicyEdit = () => {
                         onChange={handleChange}
                         onBlur={handleBlur}
                       >
-                        <MenuItem value="DRAFT" sx={{ fontSize: '13px' }}>مسودة (Draft)</MenuItem>
-                        <MenuItem value="ACTIVE" sx={{ fontSize: '13px' }}>نشط (Active)</MenuItem>
-                        <MenuItem value="INACTIVE" sx={{ fontSize: '13px' }}>غير نشط (Inactive)</MenuItem>
+                        <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>مسودة (Draft)</MenuItem>
+                        <MenuItem value="ACTIVE" sx={{ fontSize: '0.8125rem' }}>نشط (Active)</MenuItem>
+                        <MenuItem value="INACTIVE" sx={{ fontSize: '0.8125rem' }}>غير نشط (Inactive)</MenuItem>
                       </TextField>
                     </Grid>
 
@@ -542,7 +542,7 @@ const BenefitPolicyEdit = () => {
 
                 {/* Sticky Footer Actions */}
                 <Divider />
-                <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, bgcolor: 'background.default' }}>
+                <Box sx={{ p: '1.0rem', display: 'flex', justifyContent: 'flex-end', gap: '1.0rem', bgcolor: 'background.default' }}>
                   <Button
                     variant="outlined"
                     color="inherit"
@@ -558,7 +558,7 @@ const BenefitPolicyEdit = () => {
                     loading={isSubmitting}
                     loadingPosition="start"
                     startIcon={<SaveIcon />}
-                    sx={{ minWidth: 140 }}
+                    sx={{ minWidth: '8.75rem' }}
                   >
                     حفظ التعديلات
                   </LoadingButton>

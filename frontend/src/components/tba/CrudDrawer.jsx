@@ -44,7 +44,7 @@ export default function CrudDrawer({
     >
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <Box sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ p: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Typography variant="h5">{title}</Typography>
           <IconButton onClick={onClose} size="small" color="secondary">
             <CloseOutlined />
@@ -74,13 +74,13 @@ export default function CrudDrawer({
           >
             {({ isSubmitting, dirty }) => (
               <Form>
-                <Box sx={{ p: 2.5 }}>
+                <Box sx={{ p: '1.25rem' }}>
                   <Stack spacing={2.5}>{typeof children === 'function' ? children({ isSubmitting }) : children}</Stack>
                 </Box>
 
                 {/* Footer */}
                 <Divider />
-                <Box sx={{ p: 2.5 }}>
+                <Box sx={{ p: '1.25rem' }}>
                   <Stack direction="row" spacing={2} justifyContent="flex-end">
                     <Button variant="outlined" color="secondary" onClick={onClose} disabled={isSubmitting}>
                       {cancelLabel}

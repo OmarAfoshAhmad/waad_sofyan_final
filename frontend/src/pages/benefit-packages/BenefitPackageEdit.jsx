@@ -150,7 +150,7 @@ const BenefitPackageEdit = () => {
         <MainCard>
           <Alert severity="error">
             {packageError?.message || 'لم يتم العثور على الباقة'}
-            <Button onClick={() => navigate('/benefit-packages')} sx={{ mt: 2 }}>
+            <Button onClick={() => navigate('/benefit-packages')} sx={{ mt: '1.0rem' }}>
               العودة إلى القائمة
             </Button>
           </Alert>
@@ -165,7 +165,7 @@ const BenefitPackageEdit = () => {
 
       <MainCard>
         {apiError && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setApiError(null)}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }} onClose={() => setApiError(null)}>
             {apiError}
           </Alert>
         )}
@@ -209,7 +209,7 @@ const BenefitPackageEdit = () => {
 
             {/* Medical Packages Selection */}
             <Grid size={12}>
-              <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+              <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
                 الباقات الطبية المشمولة
               </Typography>
             </Grid>
@@ -242,7 +242,7 @@ const BenefitPackageEdit = () => {
                   ))}
                 </Select>
                 {errors.medicalPackageIds && (
-                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 2 }}>
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: '1.0rem' }}>
                     {errors.medicalPackageIds}
                   </Typography>
                 )}
@@ -251,7 +251,7 @@ const BenefitPackageEdit = () => {
 
             {/* Coverage & Validity */}
             <Grid size={12}>
-              <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+              <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
                 التغطية والصلاحية
               </Typography>
             </Grid>
@@ -287,7 +287,7 @@ const BenefitPackageEdit = () => {
 
             {/* Status */}
             <Grid size={12}>
-              <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+              <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
                 الحالة
               </Typography>
             </Grid>
@@ -301,7 +301,7 @@ const BenefitPackageEdit = () => {
 
             {/* Action Buttons */}
             <Grid size={12}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="outlined" startIcon={<CancelIcon />} onClick={handleCancel} disabled={loading}>
                   إلغاء
                 </Button>

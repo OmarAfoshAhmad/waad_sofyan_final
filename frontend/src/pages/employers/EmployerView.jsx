@@ -141,7 +141,7 @@ const EmployerView = () => {
         />
         <MainCard>
           <Alert severity="error">{error}</Alert>
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: '1.0rem' }}>
             <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/employers')}>
               {LABELS.backToList}
             </Button>
@@ -156,7 +156,7 @@ const EmployerView = () => {
   }
 
   const InfoRow = ({ label, value, fullWidth = false }) => (
-    <Grid container spacing={2} sx={{ py: 1.5 }}>
+    <Grid container spacing={2} sx={{ py: '0.75rem' }}>
       <Grid size={{ xs: 12, sm: fullWidth ? 12 : 4 }}>
         <Typography variant="body2" color="text.secondary" fontWeight={600}>
           {label}
@@ -169,12 +169,12 @@ const EmployerView = () => {
   );
 
   const SectionCard = ({ title, children }) => (
-    <Card sx={{ mb: 3 }}>
+    <Card sx={{ mb: '1.5rem' }}>
       <CardContent>
-        <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+        <Typography variant="h5" sx={{ mb: '1.0rem', fontWeight: 600 }}>
           {title}
         </Typography>
-        <Divider sx={{ mb: 2 }} />
+        <Divider sx={{ mb: '1.0rem' }} />
         {children}
       </CardContent>
     </Card>
@@ -206,7 +206,7 @@ const EmployerView = () => {
 
       <MainCard>
         {/* Status Badge */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: '1.5rem' }}>
           <Chip
             icon={employer.active ? <CheckCircleIcon /> : <CancelIcon />}
             label={employer.active ? LABELS.active : LABELS.inactive}
@@ -291,7 +291,7 @@ const EmployerView = () => {
         )}
 
         {/* Action Buttons at Bottom */}
-        <Divider sx={{ my: 3 }} />
+        <Divider sx={{ my: '1.5rem' }} />
         <Stack direction="row" spacing={2} justifyContent="flex-end">
           {/* Bulk Refresh Benefit Policies Button */}
           
@@ -313,7 +313,7 @@ const EmployerView = () => {
         <DialogTitle>{LABELS.refreshPoliciesTitle}</DialogTitle>
         <DialogContent>
           <DialogContentText>{LABELS.refreshPoliciesConfirm}</DialogContentText>
-          <Alert severity="info" sx={{ mt: 2 }}>
+          <Alert severity="info" sx={{ mt: '1.0rem' }}>
             سيتم تعيين الوثيقة النشطة الحالية لجميع أعضاء الشريك هذا.
           </Alert>
         </DialogContent>
@@ -337,3 +337,6 @@ const EmployerView = () => {
 };
 
 export default EmployerView;
+
+
+

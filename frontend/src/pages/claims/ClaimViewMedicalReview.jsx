@@ -84,7 +84,7 @@ import { formatCurrency, formatDate } from 'utils/formatters';
 const InfoRow = ({ label, value, icon: Icon }) => (
   <Box sx={{ mb: 1 }}>
     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-      {Icon && <Icon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+      {Icon && <Icon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />}
       <Typography variant="caption" color="text.secondary" fontWeight={500}>
         {label}
       </Typography>
@@ -142,13 +142,13 @@ const SectionCard = ({ title, icon: Icon, children, defaultExpanded = true }) =>
   return (
     <Card
       sx={{
-        mb: 1.5,
+        mb: '0.75rem',
         border: 1,
         borderColor: 'divider',
         boxShadow: 1
       }}
     >
-      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+      <CardContent sx={{ p: '1.0rem', '&:last-child': { pb: '1.0rem' } }}>
         <Stack
           direction="row"
           alignItems="center"
@@ -740,7 +740,7 @@ const ClaimViewMedicalReview = () => {
   // Loading state
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '25.0rem' }}>
         <CircularProgress />
       </Box>
     );
@@ -754,18 +754,18 @@ const ClaimViewMedicalReview = () => {
   // CENTER PANEL - MEDICAL DATA
   // ═══════════════════════════════════════════════════════════════════════
   const centerPanel = (
-    <Box sx={{ maxWidth: 1040, mx: 'auto', width: '100%', pb: 14 }}>
+    <Box sx={{ maxWidth: '65.0rem', mx: 'auto', width: '100%', pb: '7.0rem' }}>
       <Stack spacing={1.5}>
         <Card
           sx={{
-            borderRadius: 2,
+            borderRadius: '0.125rem',
             border: 1,
             borderColor: 'divider',
             bgcolor: (theme) => alpha(theme.palette.info.main, 0.08),
             boxShadow: 1
           }}
         >
-          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <CardContent sx={{ py: '0.75rem', '&:last-child': { pb: '0.75rem' } }}>
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }}>
               <Box>
                 <Typography variant="subtitle1" fontWeight={700}>
@@ -892,7 +892,7 @@ const ClaimViewMedicalReview = () => {
                 </Stack>
               </Alert>
 
-              <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5 }}>
+              <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: '0.375rem' }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'grey.100' }}>
@@ -920,7 +920,7 @@ const ClaimViewMedicalReview = () => {
                                 {service.serviceName}
                               </Typography>
                               {!service.medicalServiceId && service.pricingItemId && (
-                                <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700 }} />
+                                <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: '1.125rem', fontSize: '0.75rem', fontWeight: 700 }} />
                               )}
                             </Box>
                             <Typography variant="caption" color="text.secondary">
@@ -1071,12 +1071,12 @@ const ClaimViewMedicalReview = () => {
           <Stack spacing={1.5}>
             <Box
               sx={{
-                maxHeight: 220,
+                maxHeight: '13.75rem',
                 overflowY: 'auto',
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1,
-                p: 1.5,
+                p: '0.75rem',
                 bgcolor: 'background.default'
               }}
             >
@@ -1190,7 +1190,7 @@ const ClaimViewMedicalReview = () => {
           zIndex: (theme) => theme.zIndex.drawer
         }}
       >
-        <Box sx={{ maxWidth: 1400, mx: 'auto', px: 2, py: 1.25 }}>
+        <Box sx={{ maxWidth: '87.5rem', mx: 'auto', px: '1.0rem', py: '0.625rem' }}>
           <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between" spacing={1.5}>
             <Typography variant="body2" fontWeight={700}>
               إجمالي المبلغ الموافق عليه: {formatCurrency(selectedApprovedAmount || 0)}
@@ -1243,3 +1243,7 @@ const ClaimViewMedicalReview = () => {
 };
 
 export default ClaimViewMedicalReview;
+
+
+
+

@@ -232,7 +232,7 @@ const MedicalDecisionPanel = ({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           border: 1,
           borderColor: 'divider'
         }}
@@ -240,8 +240,8 @@ const MedicalDecisionPanel = ({
         {/* Header */}
         <Box
           sx={{
-            px: 2,
-            py: 1.5,
+            px: '1.0rem',
+            py: '0.75rem',
             bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
             borderBottom: 1,
             borderColor: 'divider'
@@ -253,7 +253,7 @@ const MedicalDecisionPanel = ({
         </Box>
 
         {/* Status */}
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ p: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
             الحالة الحالية
           </Typography>
@@ -261,7 +261,7 @@ const MedicalDecisionPanel = ({
         </Box>
 
         {/* Notes */}
-        <Box sx={{ p: 2, flex: 1, overflow: 'auto' }}>
+        <Box sx={{ p: '1.0rem', flex: 1, overflow: 'auto' }}>
           <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
             {notesLabel}
           </Typography>
@@ -287,7 +287,7 @@ const MedicalDecisionPanel = ({
         <Divider />
 
         {/* Decision Buttons */}
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: '1.0rem' }}>
           <Stack spacing={1.5}>
             {/* Approve */}
             {canApprove && (
@@ -301,7 +301,7 @@ const MedicalDecisionPanel = ({
                 disabled={disabled || loading}
                 sx={{
                   fontWeight: 600,
-                  py: 1.5,
+                  py: '0.75rem',
                   boxShadow: 2,
                   '&:hover': {
                     boxShadow: 4
@@ -324,7 +324,7 @@ const MedicalDecisionPanel = ({
                 disabled={disabled || loading}
                 sx={{
                   fontWeight: 600,
-                  py: 1.5,
+                  py: '0.75rem',
                   boxShadow: 2,
                   '&:hover': {
                     boxShadow: 4
@@ -347,7 +347,7 @@ const MedicalDecisionPanel = ({
                 disabled={disabled || loading}
                 sx={{
                   fontWeight: 600,
-                  py: 1.5
+                  py: '0.75rem'
                 }}
               >
                 {requestInfoLabel}
@@ -356,7 +356,7 @@ const MedicalDecisionPanel = ({
           </Stack>
 
           {/* Helper text */}
-          <Alert severity="info" sx={{ mt: 2 }} icon={false}>
+          <Alert severity="info" sx={{ mt: '1.0rem' }} icon={false}>
             <Typography variant="caption">جميع القرارات يتم حفظها تلقائياً ولا يمكن التراجع عنها</Typography>
           </Alert>
         </Box>
@@ -368,7 +368,7 @@ const MedicalDecisionPanel = ({
         <DialogContent>
           <DialogContentText>{dialogContent.message}</DialogContentText>
           {notes && (
-            <Alert severity="info" sx={{ mt: 2 }}>
+            <Alert severity="info" sx={{ mt: '1.0rem' }}>
               <Typography variant="caption" fontWeight={600}>
                 الملاحظات:
               </Typography>
@@ -378,7 +378,7 @@ const MedicalDecisionPanel = ({
             </Alert>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={{ px: '1.5rem', pb: '1.0rem' }}>
           <Button onClick={handleCancel} disabled={loading}>
             إلغاء
           </Button>
@@ -443,3 +443,5 @@ MedicalDecisionPanel.propTypes = {
 };
 
 export default memo(MedicalDecisionPanel);
+
+

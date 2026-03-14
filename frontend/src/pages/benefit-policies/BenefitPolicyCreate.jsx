@@ -184,7 +184,7 @@ const BenefitPolicyCreate = () => {
           }}
         >
           {generalError && (
-            <Box sx={{ p: 2, pb: 0 }}>
+            <Box sx={{ p: '1.0rem', pb: 0 }}>
               <Alert severity="error" variant="outlined" onClose={() => setGeneralError(null)}>
                 {generalError}
               </Alert>
@@ -194,7 +194,7 @@ const BenefitPolicyCreate = () => {
           <Formik initialValues={initialValues} validationSchema={validationSchema} onSubmit={handleSubmit}>
             {({ values, errors, touched, handleChange, handleBlur, setFieldValue, isSubmitting }) => (
               <Form autoComplete="off" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '1.0rem' }}>
                   <Grid container spacing={2}>
 
                     {/* ── Section 1: هوية الوثيقة ── */}
@@ -263,7 +263,7 @@ const BenefitPolicyCreate = () => {
                             </MenuItem>
                           ) : employers.length > 0 ? (
                             employers.map((emp) => (
-                              <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '13px' }}>
+                              <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '0.8125rem' }}>
                                 {emp.label || emp.name}
                               </MenuItem>
                             ))
@@ -277,7 +277,7 @@ const BenefitPolicyCreate = () => {
                           size="small"
                           onClick={handleRefreshEmployers}
                           disabled={loadingEmployers || refreshingEmployers}
-                          sx={{ minWidth: 40, height: 40 }}
+                          sx={{ minWidth: '2.5rem', height: '2.5rem' }}
                           title="تحديث قائمة الشركاء"
                         >
                           {refreshingEmployers ? <CircularProgress size={16} /> : <RefreshIcon size="small" />}
@@ -296,9 +296,9 @@ const BenefitPolicyCreate = () => {
                         onChange={handleChange}
                         onBlur={handleBlur}
                       >
-                        <MenuItem value="DRAFT" sx={{ fontSize: '13px' }}>مسودة (Draft)</MenuItem>
-                        <MenuItem value="ACTIVE" sx={{ fontSize: '13px' }}>نشط (Active)</MenuItem>
-                        <MenuItem value="INACTIVE" sx={{ fontSize: '13px' }}>غير نشط (Inactive)</MenuItem>
+                        <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>مسودة (Draft)</MenuItem>
+                        <MenuItem value="ACTIVE" sx={{ fontSize: '0.8125rem' }}>نشط (Active)</MenuItem>
+                        <MenuItem value="INACTIVE" sx={{ fontSize: '0.8125rem' }}>غير نشط (Inactive)</MenuItem>
                       </TextField>
                     </Grid>
 
@@ -414,7 +414,7 @@ const BenefitPolicyCreate = () => {
 
                 {/* Sticky Footer Actions */}
                 <Divider />
-                <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, bgcolor: 'background.default' }}>
+                <Box sx={{ p: '1.0rem', display: 'flex', justifyContent: 'flex-end', gap: '1.0rem', bgcolor: 'background.default' }}>
                   <Button
                     variant="outlined"
                     color="inherit"
@@ -430,7 +430,7 @@ const BenefitPolicyCreate = () => {
                     loading={isSubmitting}
                     loadingPosition="start"
                     startIcon={<SaveIcon />}
-                    sx={{ minWidth: 140 }}
+                    sx={{ minWidth: '8.75rem' }}
                   >
                     حفظ الوثيقة
                   </LoadingButton>

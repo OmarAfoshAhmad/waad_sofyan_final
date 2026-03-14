@@ -152,9 +152,9 @@ const MemberTypeIndicator = ({
           display: 'inline-flex',
           alignItems: 'center',
           gap: 1,
-          px: 1.5,
+          px: '0.75rem',
           py: 0.75,
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           bgcolor: isPrincipal ? 'primary.lighter' : `${relationshipConfig.color}.lighter`,
           border: 1,
           borderColor: isPrincipal ? 'primary.light' : `${relationshipConfig.color}.light`
@@ -219,3 +219,5 @@ export default MemberTypeIndicator;
 
 // Export relationship config for use in other components
 export { RELATIONSHIP_CONFIG };
+
+

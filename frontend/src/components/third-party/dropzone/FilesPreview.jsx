@@ -27,7 +27,7 @@ export default function FilesPreview({ showList = false, files, onRemove, type }
     <List
       disablePadding
       sx={{
-        ...(hasFile && type !== DropzoneType.STANDARD && { my: 3 }),
+        ...(hasFile && type !== DropzoneType.STANDARD && { my: '1.5rem' }),
         ...(type === DropzoneType.STANDARD && { width: 'calc(100% - 84px)' })
       }}
     >
@@ -43,9 +43,9 @@ export default function FilesPreview({ showList = false, files, onRemove, type }
                 mx: 0.5,
                 mt: -0.25,
                 mb: 0.5,
-                width: 80,
-                height: 84,
-                borderRadius: 1.25,
+                width: '5.0rem',
+                height: '5.25rem',
+                borderRadius: '0.078125rem',
                 position: 'relative',
                 display: 'inline-flex',
                 verticalAlign: 'text-top',
@@ -71,8 +71,8 @@ export default function FilesPreview({ showList = false, files, onRemove, type }
                     p: 0,
                     width: 'auto',
                     height: 'auto',
-                    top: 2,
-                    right: 2,
+                    top: '1.0rem',
+                    right: '0.125rem',
                     position: 'absolute'
                   }}
                 >
@@ -84,8 +84,8 @@ export default function FilesPreview({ showList = false, files, onRemove, type }
         }
 
         return (
-          <ListItem key={key} sx={{ my: 1, px: 2, py: 0.75, borderRadius: 0.75, border: 'solid 1px', borderColor: 'divider' }}>
-            <FileFilled style={{ width: '30px', height: '30px', fontSize: '1.15rem', marginRight: 4 }} />
+          <ListItem key={key} sx={{ my: 1, px: '1.0rem', py: 0.75, borderRadius: 0.75, border: 'solid 1px', borderColor: 'divider' }}>
+            <FileFilled style={{ width: '1.875rem', height: '1.875rem', fontSize: '1.15rem', marginRight: '0.375rem' }} />
             <ListItemText
               primary={typeof file === 'string' ? file : name}
               secondary={typeof file === 'string' ? '' : size}
@@ -104,3 +104,4 @@ export default function FilesPreview({ showList = false, files, onRemove, type }
 }
 
 FilesPreview.propTypes = { showList: PropTypes.bool, files: PropTypes.any, onRemove: PropTypes.any, type: PropTypes.any };
+

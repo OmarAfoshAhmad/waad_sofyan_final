@@ -68,15 +68,15 @@ const StatusTimeline = ({ steps = [], currentStep, variant = 'horizontal', size 
           const isLast = index === steps.length - 1;
 
           return (
-            <Box key={step.key} sx={{ display: 'flex', gap: 2 }}>
+            <Box key={step.key} sx={{ display: 'flex', gap: '1.0rem' }}>
               {/* Icon and Line */}
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 {getStepIcon(status)}
                 {!isLast && (
                   <Box
                     sx={{
-                      width: 2,
-                      height: 40,
+                      width: '0.125rem',
+                      height: '2.5rem',
                       bgcolor: getLineColor(index),
                       my: 0.5
                     }}
@@ -117,7 +117,7 @@ const StatusTimeline = ({ steps = [], currentStep, variant = 'horizontal', size 
             top: '50%',
             left: 0,
             right: 0,
-            height: 2,
+            height: '0.125rem',
             bgcolor: theme.palette.grey[300],
             transform: 'translateY(-50%)',
             zIndex: 0
@@ -131,7 +131,7 @@ const StatusTimeline = ({ steps = [], currentStep, variant = 'horizontal', size 
             top: '50%',
             left: 0,
             width: `${(currentIndex / (steps.length - 1)) * 100}%`,
-            height: 2,
+            height: '0.125rem',
             bgcolor: theme.palette.success.main,
             transform: 'translateY(-50%)',
             zIndex: 1,
@@ -159,7 +159,7 @@ const StatusTimeline = ({ steps = [], currentStep, variant = 'horizontal', size 
                 variant={size === 'small' ? 'caption' : 'body2'}
                 fontWeight={status === 'current' ? 600 : 400}
                 color={status === 'pending' ? 'text.secondary' : 'text.primary'}
-                sx={{ mt: 0.5, textAlign: 'center', minWidth: 60 }}
+                sx={{ mt: 0.5, textAlign: 'center', minWidth: '3.75rem' }}
               >
                 {language === 'ar' ? step.label : step.labelEn}
               </Typography>

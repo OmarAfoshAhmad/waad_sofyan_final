@@ -56,8 +56,8 @@ export default function ThemeLayout() {
               ...(state.menuOrientation === layoutValue && { ...activeCardStyle(theme) })
             })}
           >
-            <Stack sx={{ gap: 1.25, alignItems: 'center' }}>
-              <CardMedia component="img" src={img} alt={label} sx={{ borderRadius: 1, width: 60, height: 60 }} />
+            <Stack sx={{ gap: '0.625rem', alignItems: 'center' }}>
+              <CardMedia component="img" src={img} alt={label} sx={{ borderRadius: 1, width: '3.75rem', height: '3.75rem' }} />
               <Typography variant="caption">{label}</Typography>
             </Stack>
           </MainCard>

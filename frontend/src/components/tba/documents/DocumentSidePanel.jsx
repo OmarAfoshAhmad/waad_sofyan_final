@@ -164,9 +164,9 @@ const StatusBadge = memo(({ status }) => {
       size="small"
       label={config.label}
       color={config.color}
-      icon={<StatusIcon sx={{ fontSize: 14 }} />}
+      icon={<StatusIcon sx={{ fontSize: '0.875rem' }} />}
       sx={{
-        height: 24,
+        height: '1.5rem',
         '& .MuiChip-label': { px: 1, fontSize: '0.7rem' },
         '& .MuiChip-icon': { ml: 0.5 }
       }}
@@ -205,12 +205,12 @@ const DocumentListItem = memo(({ document, isSelected, onSelect }) => {
           opacity: hasFile ? 1 : 0.6
         }}
       >
-        <ListItemIcon sx={{ minWidth: 40 }}>
+        <ListItemIcon sx={{ minWidth: '2.5rem' }}>
           <Badge badgeContent={document.status === 'REJECTED' ? '!' : null} color="error" overlap="circular">
             <FileTypeIcon
               sx={{
                 color: hasFile ? 'primary.main' : 'text.disabled',
-                fontSize: 24
+                fontSize: '1.5rem'
               }}
             />
           </Badge>
@@ -219,7 +219,7 @@ const DocumentListItem = memo(({ document, isSelected, onSelect }) => {
         <ListItemText
           primary={
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="body2" fontWeight={isSelected ? 600 : 400} noWrap sx={{ maxWidth: 150 }}>
+              <Typography variant="body2" fontWeight={isSelected ? 600 : 400} noWrap sx={{ maxWidth: '9.375rem' }}>
                 {document.documentTypeLabel || DOCUMENT_TYPE_LABELS[document.documentType] || document.fileName || 'مستند'}
               </Typography>
               <StatusBadge status={document.status} />
@@ -242,7 +242,7 @@ const DocumentListItem = memo(({ document, isSelected, onSelect }) => {
                     gap: 0.5
                   }}
                 >
-                  <RejectedIcon sx={{ fontSize: 12 }} />
+                  <RejectedIcon sx={{ fontSize: '0.75rem' }} />
                   {document.rejectionReason}
                 </Typography>
               )}
@@ -362,15 +362,15 @@ const DocumentSidePanel = memo(
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           overflow: 'hidden'
         }}
       >
         {/* Header */}
         <Box
           sx={{
-            px: 2,
-            py: 1.5,
+            px: '1.0rem',
+            py: '0.75rem',
             bgcolor: 'primary.main',
             color: 'primary.contrastText',
             display: 'flex',
@@ -389,7 +389,7 @@ const DocumentSidePanel = memo(
               sx={{
                 bgcolor: 'rgba(255,255,255,0.2)',
                 color: 'inherit',
-                height: 22,
+                height: '1.375rem',
                 fontSize: '0.75rem'
               }}
             />
@@ -421,7 +421,7 @@ const DocumentSidePanel = memo(
         </Box>
 
         {/* Status Summary Bar */}
-        <Box sx={{ px: 2, py: 1, bgcolor: 'grey.50', borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ px: '1.0rem', py: 1, bgcolor: 'grey.50', borderBottom: 1, borderColor: 'divider' }}>
           <Stack direction="row" spacing={1} flexWrap="wrap">
             {Object.entries(DOCUMENT_STATUS).map(([key, config]) => {
               const count = statusCounts[key] || 0;
@@ -433,7 +433,7 @@ const DocumentSidePanel = memo(
                   label={`${config.label}: ${count}`}
                   color={config.color}
                   variant="outlined"
-                  sx={{ height: 22, fontSize: '0.7rem' }}
+                  sx={{ height: '1.375rem', fontSize: '0.7rem' }}
                 />
               );
             })}
@@ -445,7 +445,7 @@ const DocumentSidePanel = memo(
           <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Error State */}
             {error && (
-              <Alert severity="error" sx={{ m: 2 }}>
+              <Alert severity="error" sx={{ m: '1.0rem' }}>
                 {error}
               </Alert>
             )}
@@ -458,7 +458,7 @@ const DocumentSidePanel = memo(
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  p: 3
+                  p: '1.5rem'
                 }}
               >
                 <CircularProgress size={32} />
@@ -474,11 +474,11 @@ const DocumentSidePanel = memo(
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  p: 3,
+                  p: '1.5rem',
                   color: 'text.secondary'
                 }}
               >
-                <AttachmentIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                <AttachmentIcon sx={{ fontSize: '3.0rem', color: 'text.disabled', mb: 1 }} />
                 <Typography variant="body2">{emptyMessage}</Typography>
               </Box>
             )}
@@ -584,3 +584,5 @@ DocumentSidePanel.propTypes = {
 DocumentSidePanel.displayName = 'DocumentSidePanel';
 
 export default DocumentSidePanel;
+
+

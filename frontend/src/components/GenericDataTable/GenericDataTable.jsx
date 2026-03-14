@@ -289,7 +289,7 @@ const GenericDataTable = ({
           {enableFiltering && (
             <TableRow sx={{ backgroundColor: 'grey.50' }}>
               {headerGroup.headers.map((header) => (
-                <TableCell key={`filter-${header.id}`} sx={{ py: 1, px: 2 }}>
+                <TableCell key={`filter-${header.id}`} sx={{ py: 1, px: '1.0rem' }}>
                   {header.column.getCanFilter() ? (
                     <ColumnFilter
                       column={header.column.columnDef}
@@ -311,9 +311,9 @@ const GenericDataTable = ({
       return (
         <TableBody>
           <TableRow>
-            <TableCell colSpan={columns.length} align="center" sx={{ py: 10 }}>
+            <TableCell colSpan={columns.length} align="center" sx={{ py: '5.0rem' }}>
               <CircularProgress />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: '1.0rem' }}>
                 جاري التحميل...
               </Typography>
             </TableCell>
@@ -326,7 +326,7 @@ const GenericDataTable = ({
       return (
         <TableBody>
           <TableRow>
-            <TableCell colSpan={columns.length} align="center" sx={{ py: 10 }}>
+            <TableCell colSpan={columns.length} align="center" sx={{ py: '5.0rem' }}>
               <Typography variant="h6" color="text.secondary">
                 {emptyMessage}
               </Typography>
@@ -378,7 +378,7 @@ const GenericDataTable = ({
     <Box>
       {/* Active Filters Display */}
       {enableFiltering && tableState.hasActiveFilters && (
-        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: '1.0rem', flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
             الفلاتر النشطة:
           </Typography>
@@ -408,12 +408,12 @@ const GenericDataTable = ({
           overflowX: 'hidden',
           overflowY: disableInternalScroll ? 'visible' : 'auto',
           '&::-webkit-scrollbar': {
-            width: 8,
-            height: 8
+            width: '0.375rem',
+            height: '0.375rem'
           },
           '&::-webkit-scrollbar-thumb': {
             backgroundColor: 'grey.400',
-            borderRadius: 4
+            borderRadius: '0.375rem'
           }
         }}
       >
@@ -501,3 +501,5 @@ GenericDataTable.propTypes = {
 };
 
 export default GenericDataTable;
+
+

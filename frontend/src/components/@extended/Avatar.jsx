@@ -46,40 +46,40 @@ function getSizeStyle(size) {
     case 'badge':
       return {
         border: '2px solid',
-        fontSize: '0.675rem',
-        width: 20,
-        height: 20
+        fontSize: '0.75rem',
+        width: '1.25rem',
+        height: '1.25rem'
       };
     case 'xs':
       return {
         fontSize: '0.75rem',
-        width: 24,
-        height: 24
+        width: '1.5rem',
+        height: '1.5rem'
       };
     case 'sm':
       return {
         fontSize: '0.875rem',
-        width: 32,
-        height: 32
+        width: '2.0rem',
+        height: '2.0rem'
       };
     case 'lg':
       return {
         fontSize: '1.2rem',
-        width: 52,
-        height: 52
+        width: '3.25rem',
+        height: '3.25rem'
       };
     case 'xl':
       return {
         fontSize: '1.5rem',
-        width: 64,
-        height: 64
+        width: '4.0rem',
+        height: '4.0rem'
       };
     case 'md':
     default:
       return {
         fontSize: '1rem',
-        width: 40,
-        height: 40
+        width: '2.5rem',
+        height: '2.5rem'
       };
   }
 }
@@ -116,3 +116,6 @@ Avatar.propTypes = {
   size: PropTypes.string,
   others: PropTypes.any
 };
+
+
+

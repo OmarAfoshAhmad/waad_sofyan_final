@@ -32,11 +32,11 @@ export default function IncomeOverviewCard() {
   };
 
   return (
-    <MainCard content={false} sx={{ mt: 1.5 }}>
+    <MainCard content={false} sx={{ mt: '0.75rem' }}>
       <Grid>
         <Grid container>
           <Grid size={{ xs: 12, sm: 6 }}>
-            <Stack sx={{ alignItems: { xs: 'center', sm: 'flex-start' }, ml: { xs: 0, sm: 2 }, mt: 3 }}>
+            <Stack sx={{ alignItems: { xs: 'center', sm: 'flex-start' }, ml: { xs: 0, sm: '1.0rem' }, mt: '1.5rem' }}>
               <Stack direction="row" sx={{ gap: 0.5, alignItems: 'center', color: 'error.main' }}>
                 <CaretDownOutlined />
                 <Typography>$1,12,900 (45.67%)</Typography>
@@ -49,13 +49,13 @@ export default function IncomeOverviewCard() {
           <Grid size={{ xs: 12, sm: 6 }}>
             <Stack
               direction="row"
-              sx={{ gap: 1, alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-end' }, mt: 3, mr: { xs: 0, sm: 2 } }}
+              sx={{ gap: 1, alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-end' }, mt: '1.5rem', mr: { xs: 0, sm: '1.0rem' } }}
             >
               <ToggleButtonGroup exclusive onChange={handleChange} size="small" value={slot}>
-                <ToggleButton disabled={slot === 'week'} value="week" sx={{ px: 2, py: 0.5 }}>
+                <ToggleButton disabled={slot === 'week'} value="week" sx={{ px: '1.0rem', py: 0.5 }}>
                   Week
                 </ToggleButton>
-                <ToggleButton disabled={slot === 'month'} value="month" sx={{ px: 2, py: 0.5 }}>
+                <ToggleButton disabled={slot === 'month'} value="month" sx={{ px: '1.0rem', py: 0.5 }}>
                   Month
                 </ToggleButton>
               </ToggleButtonGroup>
@@ -75,9 +75,12 @@ export default function IncomeOverviewCard() {
           </Grid>
         </Grid>
       </Grid>
-      <Box sx={{ width: 1, pt: 1 }}>
+      <Box sx={{ width: '0.0625rem', pt: 1 }}>
         <IncomeChart slot={slot} quantity={quantity} />
       </Box>
     </MainCard>
   );
 }
+
+
+

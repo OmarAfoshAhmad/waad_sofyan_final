@@ -173,7 +173,7 @@ export default function TabAuditLog() {
         >
           {/* Loading / Error states */}
           {isLoading && (
-            <Stack alignItems="center" justifyContent="center" sx={{ p: 6 }}>
+            <Stack alignItems="center" justifyContent="center" sx={{ p: '3.0rem' }}>
               <CircularProgress size={32} />
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 جارٍ تحميل سجل التدقيق...
@@ -181,7 +181,7 @@ export default function TabAuditLog() {
             </Stack>
           )}
           {isError && (
-            <Stack alignItems="center" sx={{ p: 4 }}>
+            <Stack alignItems="center" sx={{ p: '2.0rem' }}>
               <Typography variant="body2" color="error">
                 تعذّر تحميل سجل التدقيق. تحقق من الصلاحيات أو اتصل بالمسؤول.
               </Typography>
@@ -190,7 +190,7 @@ export default function TabAuditLog() {
           {!isLoading && !isError && (
             <>
           {/* Filters */}
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ p: 3, pb: 0 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ p: '1.5rem', pb: 0 }}>
             <TextField
               fullWidth
               select
@@ -264,7 +264,7 @@ export default function TabAuditLog() {
                 <tbody>
                   {table.getRowModel().rows.length === 0 ? (
                     <tr>
-                      <td colSpan={columns.length} style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+                      <td colSpan={columns.length} style={{ padding: '2.5rem', textAlign: 'center', color: '#999' }}>
                         No audit log entries found
                       </td>
                     </tr>
@@ -283,7 +283,7 @@ export default function TabAuditLog() {
               </table>
 
               {/* Pagination */}
-              <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center" sx={{ p: 2 }}>
+              <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center" sx={{ p: '1.0rem' }}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <span>
                     Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
@@ -299,7 +299,7 @@ export default function TabAuditLog() {
                     size="small"
                     value={table.getState().pagination.pageSize}
                     onChange={(e) => table.setPageSize(Number(e.target.value))}
-                    sx={{ width: '120px' }}
+                    sx={{ width: '7.5rem' }}
                   >
                     {[10, 25, 50, 100].map((size) => (
                       <MenuItem key={size} value={size}>
@@ -317,7 +317,7 @@ export default function TabAuditLog() {
                         border: '1px solid #ddd',
                         background: '#fff',
                         cursor: table.getCanPreviousPage() ? 'pointer' : 'not-allowed',
-                        borderRadius: '4px'
+                        borderRadius: '0.375rem'
                       }}
                     >
                       Previous
@@ -330,7 +330,7 @@ export default function TabAuditLog() {
                         border: '1px solid #ddd',
                         background: '#fff',
                         cursor: table.getCanNextPage() ? 'pointer' : 'not-allowed',
-                        borderRadius: '4px'
+                        borderRadius: '0.375rem'
                       }}
                     >
                       Next
@@ -347,3 +347,5 @@ export default function TabAuditLog() {
     </Grid>
   );
 }
+
+

@@ -18,7 +18,7 @@ function SortToggler({ type }) {
   return (
     <Stack
       sx={{
-        fontSize: '0.625rem',
+        fontSize: '0.75rem',
         color: 'secondary.light',
         ...(type === SortType.ASC && { '& .caret-up': { color: 'secondary.main' } }),
         ...(type === SortType.DESC && { '& .caret-down': { color: 'secondary.main' } })
@@ -46,3 +46,4 @@ export default function HeaderSort({ column, sort = true }) {
 SortToggler.propTypes = { type: PropTypes.any };
 
 HeaderSort.propTypes = { column: PropTypes.object, sort: PropTypes.bool };
+

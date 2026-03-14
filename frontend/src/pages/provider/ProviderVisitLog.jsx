@@ -350,16 +350,16 @@ const ProviderVisitLog = () => {
   // TABLE COLUMNS DEFINITION
   // ═══════════════════════════════════════════════════════════════════════════
   const columns = [
-    { id: 'visitId', label: LABELS.visitId, minWidth: 80, icon: <BadgeIcon fontSize="small" />, sortable: true },
-    { id: 'memberName', label: LABELS.memberName, minWidth: 160, icon: <PersonIcon fontSize="small" /> },
-    { id: 'memberCivilId', label: LABELS.civilId, minWidth: 110, icon: <CreditCardIcon fontSize="small" /> },
-    { id: 'memberCardNumber', label: LABELS.cardNumber, minWidth: 100, icon: <CreditCardIcon fontSize="small" /> },
-    { id: 'visitDate', label: LABELS.visitDate, minWidth: 100, icon: <EventIcon fontSize="small" />, sortable: true },
-    { id: 'visitType', label: LABELS.visitType, minWidth: 100, sortable: true },
-    { id: 'status', label: LABELS.status, minWidth: 90, sortable: true },
-    { id: 'claimStatus', label: LABELS.claimStatus, minWidth: 110 },
-    { id: 'preAuthStatus', label: LABELS.preAuthStatus, minWidth: 110 },
-    { id: 'actions', label: LABELS.actions, minWidth: 140 }
+    { id: 'visitId', label: LABELS.visitId, minWidth: '5.0rem', icon: <BadgeIcon fontSize="small" />, sortable: true },
+    { id: 'memberName', label: LABELS.memberName, minWidth: '10.0rem', icon: <PersonIcon fontSize="small" /> },
+    { id: 'memberCivilId', label: LABELS.civilId, minWidth: '6.875rem', icon: <CreditCardIcon fontSize="small" /> },
+    { id: 'memberCardNumber', label: LABELS.cardNumber, minWidth: '6.25rem', icon: <CreditCardIcon fontSize="small" /> },
+    { id: 'visitDate', label: LABELS.visitDate, minWidth: '6.25rem', icon: <EventIcon fontSize="small" />, sortable: true },
+    { id: 'visitType', label: LABELS.visitType, minWidth: '6.25rem', sortable: true },
+    { id: 'status', label: LABELS.status, minWidth: '5.625rem', sortable: true },
+    { id: 'claimStatus', label: LABELS.claimStatus, minWidth: '6.875rem' },
+    { id: 'preAuthStatus', label: LABELS.preAuthStatus, minWidth: '6.875rem' },
+    { id: 'actions', label: LABELS.actions, minWidth: '8.75rem' }
   ];
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -512,7 +512,7 @@ const ProviderVisitLog = () => {
                   <Chip
                     size="small"
                     label={`${visit.claimCount} مطالبة`}
-                    sx={{ fontSize: '0.65rem', height: 18 }}
+                    sx={{ fontSize: '0.75rem', height: '1.125rem' }}
                     color="success"
                     variant="outlined"
                   />
@@ -521,7 +521,7 @@ const ProviderVisitLog = () => {
                   <Chip
                     size="small"
                     label={`${visit.preAuthCount} موافقة`}
-                    sx={{ fontSize: '0.65rem', height: 18 }}
+                    sx={{ fontSize: '0.75rem', height: '1.125rem' }}
                     color="info"
                     variant="outlined"
                   />
@@ -580,13 +580,13 @@ const ProviderVisitLog = () => {
       <MainCard>
         {/* Error Alert */}
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
 
         {/* Quick Search Bar */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: '1.0rem' }}>
           <TextField
             fullWidth
             placeholder={LABELS.searchByName}
@@ -622,7 +622,7 @@ const ProviderVisitLog = () => {
 
         {/* Advanced Filters */}
         <Collapse in={showFilters}>
-          <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: '#fafafa' }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', mb: '1.0rem', bgcolor: '#fafafa' }}>
             <Grid container spacing={2} alignItems="center">
               <Grid xs={12} sm={6} md={3}>
                 <DatePicker
@@ -635,7 +635,7 @@ const ProviderVisitLog = () => {
                       size: 'medium',
                       sx: {
                         '& .MuiOutlinedInput-root': {
-                          minHeight: 46
+                          minHeight: '2.875rem'
                         }
                       },
                       InputProps: {
@@ -656,7 +656,7 @@ const ProviderVisitLog = () => {
                       size: 'medium',
                       sx: {
                         '& .MuiOutlinedInput-root': {
-                          minHeight: 46
+                          minHeight: '2.875rem'
                         }
                       },
                       InputProps: {
@@ -672,7 +672,7 @@ const ProviderVisitLog = () => {
                   size="medium"
                   sx={{
                     '& .MuiOutlinedInput-root': {
-                      minHeight: 46
+                      minHeight: '2.875rem'
                     }
                   }}
                 >
@@ -700,7 +700,7 @@ const ProviderVisitLog = () => {
                   size="medium"
                   sx={{
                     '& .MuiOutlinedInput-root': {
-                      minHeight: 46
+                      minHeight: '2.875rem'
                     }
                   }}
                 >
@@ -732,7 +732,7 @@ const ProviderVisitLog = () => {
         </Collapse>
 
         {/* Stats Summary */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: '1.0rem' }}>
           <Stack direction="row" spacing={2} flexWrap="wrap">
             <Chip icon={<LocalHospitalIcon />} label={`إجمالي: ${totalCount} زيارة`} variant="outlined" color="primary" />
             {searchQuery && <Chip label={`نتائج البحث: "${searchQuery}"`} onDelete={() => setSearchQuery('')} color="info" size="small" />}
@@ -774,3 +774,4 @@ const ProviderVisitLog = () => {
 };
 
 export default ProviderVisitLog;
+

@@ -29,12 +29,12 @@ export default function HoverSocialCard({ primary, secondary, iconPrimary, color
         <Box
           sx={{
             position: 'absolute',
-            right: 15,
-            top: 25,
+            right: '0.9375rem',
+            top: '12.5rem',
             color: '#fff',
             '& svg': {
-              width: 36,
-              height: 36,
+              width: '2.25rem',
+              height: '2.25rem',
               opacity: 0.5,
               transition: 'all .3s ease-in-out'
             }

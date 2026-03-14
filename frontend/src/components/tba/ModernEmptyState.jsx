@@ -17,18 +17,18 @@ const ModernEmptyState = ({ icon: Icon = InboxOutlined, title = 'لا توجد �
         bgcolor: 'background.paper',
         border: '1px dashed',
         borderColor: 'divider',
-        borderRadius: 2
+        borderRadius: '0.125rem'
       }}
     >
-      <Stack spacing={2} alignItems="center" sx={{ maxWidth: 400, px: 3, py: 4, textAlign: 'center' }}>
+      <Stack spacing={2} alignItems="center" sx={{ maxWidth: '25.0rem', px: '1.5rem', py: '2.0rem', textAlign: 'center' }}>
         {/* Icon */}
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 80,
-            height: 80,
+            width: '5.0rem',
+            height: '5.0rem',
             borderRadius: '50%',
             bgcolor: 'primary.lighter',
             color: 'primary.main',
@@ -51,7 +51,7 @@ const ModernEmptyState = ({ icon: Icon = InboxOutlined, title = 'لا توجد �
         )}
 
         {/* Action Button */}
-        {action && <Box sx={{ mt: 2 }}>{action}</Box>}
+        {action && <Box sx={{ mt: '1.0rem' }}>{action}</Box>}
       </Stack>
     </Paper>
   );

@@ -109,8 +109,8 @@ const MedicalServicePicker = ({
       >
         <Stack direction="row" alignItems="center" spacing={2} sx={{ width: '100%', py: 0.5 }}>
           {/* Service Icon */}
-          <Avatar sx={{ bgcolor: 'warning.lighter', width: 40, height: 40 }}>
-            <MedicalIcon sx={{ fontSize: 20, color: 'warning.main' }} />
+          <Avatar sx={{ bgcolor: 'warning.lighter', width: '2.5rem', height: '2.5rem' }}>
+            <MedicalIcon sx={{ fontSize: '1.25rem', color: 'warning.main' }} />
           </Avatar>
 
           {/* Service Info */}
@@ -173,13 +173,13 @@ const MedicalServicePicker = ({
 
   // ========================= RENDER =========================
   return (
-    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2, mb: 2 }}>
+    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem', mb: '1.0rem' }}>
       <Stack spacing={2}>
         {/* Category Filter Row */}
         {showCategoryFilter && categories.length > 0 && (
           <Stack direction="row" spacing={2} alignItems="center">
             <FilterIcon color="action" />
-            <FormControl size={size} sx={{ minWidth: 200 }}>
+            <FormControl size={size} sx={{ minWidth: '12.5rem' }}>
               <InputLabel>فلترة بالتصنيف</InputLabel>
               <Select value={categoryFilter} onChange={handleCategoryChange} label="فلترة بالتصنيف">
                 <MenuItem value="">
@@ -268,9 +268,9 @@ const MedicalServicePicker = ({
           <Typography variant="caption" color="text.secondary">
             💡 نصائح البحث:
           </Typography>
-          <Chip label="ابحث بالكود مباشرة" size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} />
-          <Chip label="أو اكتب جزء من الاسم" size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} />
-          <Chip label="أو فلتر بالتصنيف أولاً" size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} />
+          <Chip label="ابحث بالكود مباشرة" size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
+          <Chip label="أو اكتب جزء من الاسم" size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
+          <Chip label="أو فلتر بالتصنيف أولاً" size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
         </Stack>
       </Stack>
     </Paper>
@@ -278,3 +278,4 @@ const MedicalServicePicker = ({
 };
 
 export default MedicalServicePicker;
+

@@ -138,7 +138,7 @@ const VisitCreate = () => {
 
       <MainCard>
         {apiError && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setApiError(null)}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }} onClose={() => setApiError(null)}>
             {apiError}
           </Alert>
         )}
@@ -165,7 +165,7 @@ const VisitCreate = () => {
                   ))}
                 </Select>
                 {errors.memberId && (
-                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 2 }}>
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: '1.0rem' }}>
                     {errors.memberId}
                   </Typography>
                 )}
@@ -243,7 +243,7 @@ const VisitCreate = () => {
 
             {/* Section: Medical Info */}
             <Grid size={12}>
-              <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+              <Typography variant="h5" gutterBottom sx={{ mt: '1.0rem' }}>
                 المعلومات الطبية
               </Typography>
             </Grid>
@@ -304,7 +304,7 @@ const VisitCreate = () => {
 
             {/* Actions */}
             <Grid size={12}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="outlined" startIcon={<CancelIcon />} onClick={handleCancel} disabled={loading}>
                   إلغاء
                 </Button>

@@ -52,12 +52,12 @@ export default function HeaderContent() {
 
       {/* ✅ System Logo/Title - Different for Provider */}
       {!downLG && (
-        <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mr: '1.0rem' }}>
           {isProvider ? (
             // Provider Portal branding
             <Stack direction="row" spacing={1} alignItems="center">
-              <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-                <LocalHospitalIcon sx={{ fontSize: 18 }} />
+              <Avatar sx={{ bgcolor: 'primary.main', width: '2.0rem', height: '2.0rem' }}>
+                <LocalHospitalIcon sx={{ fontSize: '1.125rem' }} />
               </Avatar>
               <Box>
                 <Typography
@@ -92,9 +92,9 @@ export default function HeaderContent() {
                 src={getLogoSrc()}
                 alt={displayName}
                 sx={{
-                  height: 32,
+                  height: '2.0rem',
                   width: 'auto',
-                  maxWidth: 100,
+                  maxWidth: '6.25rem',
                   objectFit: 'contain'
                 }}
                 onError={(e) => {
@@ -119,7 +119,7 @@ export default function HeaderContent() {
                   variant="caption"
                   sx={{
                     color: 'text.secondary',
-                    fontSize: '0.6rem',
+                    fontSize: '0.75rem',
                     lineHeight: 1,
                     whiteSpace: 'nowrap'
                   }}
@@ -135,7 +135,7 @@ export default function HeaderContent() {
       {/* ✅ Navigation Horizontal - القائمة الأفقية */}
       {!downLG && <HorizontalNavigation />}
 
-      <Box sx={{ width: 1, ml: 1 }} />
+      <Box sx={{ width: '0.0625rem', ml: 1 }} />
 
       <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
         {/* ✅ Welcome Message with Username */}
@@ -146,7 +146,7 @@ export default function HeaderContent() {
             variant="outlined"
             color={isProvider ? 'success' : 'primary'}
             sx={{
-              borderRadius: 2,
+              borderRadius: '0.125rem',
               fontWeight: 500,
               '& .MuiChip-icon': { color: isProvider ? 'success.main' : 'primary.main' }
             }}
@@ -165,3 +165,4 @@ export default function HeaderContent() {
     </>
   );
 }
+

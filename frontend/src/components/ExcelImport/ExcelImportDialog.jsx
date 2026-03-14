@@ -117,7 +117,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
 
       <DialogContent dividers>
         {/* Warning Alert */}
-        <Alert severity="warning" sx={{ mb: 3 }}>
+        <Alert severity="warning" sx={{ mb: '1.5rem' }}>
           <AlertTitle>⚠️ تحذير مهم</AlertTitle>
           <Typography variant="body2">
             يتم قبول الملفات المُنزَّلة من هذا النظام فقط.
@@ -127,7 +127,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
         </Alert>
 
         {/* Step 1: Download Template */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: '1.5rem' }}>
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
             الخطوة 1: تنزيل القالب
           </Typography>
@@ -137,7 +137,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
         </Box>
 
         {/* Step 2: Upload File */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: '1.5rem' }}>
           <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
             الخطوة 2: رفع الملف المُعبّأ
           </Typography>
@@ -145,8 +145,8 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
             sx={{
               border: '2px dashed',
               borderColor: file ? 'success.main' : 'divider',
-              borderRadius: 2,
-              p: 3,
+              borderRadius: '0.125rem',
+              p: '1.5rem',
               textAlign: 'center',
               cursor: 'pointer',
               '&:hover': {
@@ -157,7 +157,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
             onClick={() => document.getElementById('excel-file-input').click()}
           >
             <input id="excel-file-input" type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileChange} />
-            <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+            <CloudUpload sx={{ fontSize: '3.0rem', color: 'text.secondary', mb: 1 }} />
             <Typography variant="body1">{file ? file.name : 'انقر لاختيار الملف'}</Typography>
             <Typography variant="caption" color="text.secondary">
               Excel files only (.xlsx, .xls)
@@ -167,7 +167,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
 
         {/* Loading */}
         {loading && (
-          <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: '1.5rem' }}>
             <LinearProgress />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               جاري المعالجة...
@@ -177,21 +177,21 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
 
         {/* Error Message */}
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }}>
             {error}
           </Alert>
         )}
 
         {/* Results */}
         {result && (
-          <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: '1.5rem' }}>
             {/* Summary */}
-            <Alert severity={result.success ? 'success' : 'error'} icon={result.success ? <CheckCircle /> : <Error />} sx={{ mb: 2 }}>
+            <Alert severity={result.success ? 'success' : 'error'} icon={result.success ? <CheckCircle /> : <Error />} sx={{ mb: '1.0rem' }}>
               <AlertTitle>{result.message || (result.success ? 'تم الاستيراد بنجاح' : 'فشل الاستيراد')}</AlertTitle>
             </Alert>
 
             {/* Statistics */}
-            <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem', mb: '1.0rem' }}>
               <Box display="flex" gap={2} flexWrap="wrap">
                 <Chip label={`إجمالي الصفوف: ${result.summary?.total || 0}`} color="default" size="small" />
                 <Chip label={`تم الإنشاء: ${result.summary?.inserted || 0}`} color="success" size="small" />

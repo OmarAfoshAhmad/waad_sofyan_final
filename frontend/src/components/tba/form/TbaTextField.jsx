@@ -79,7 +79,7 @@ const TbaTextField = ({
       sx={{
         '& .MuiOutlinedInput-root': {
           bgcolor: readOnly ? 'action.hover' : 'background.paper',
-          borderRadius: 1.5,
+          borderRadius: '0.375rem',
           transition: 'all 0.2s ease-in-out',
           '&:hover:not(.Mui-disabled):not(.Mui-error)': {
             bgcolor: 'grey.50'
@@ -133,3 +133,5 @@ TbaTextField.propTypes = {
 };
 
 export default TbaTextField;
+
+

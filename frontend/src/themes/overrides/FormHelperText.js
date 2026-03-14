@@ -5,7 +5,7 @@ export default function FormHelperText() {
     MuiFormHelperText: {
       styleOverrides: {
         root: {
-          marginTop: 4,
+          marginTop: '2.0rem',
           marginLeft: 0
         }
       }

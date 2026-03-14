@@ -186,8 +186,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                 sx={{
                   border: '2px dashed',
                   borderColor: selectedFile ? 'success.main' : 'divider',
-                  borderRadius: 2,
-                  p: 4,
+                  borderRadius: '0.125rem',
+                  p: '2.0rem',
                   textAlign: 'center',
                   backgroundColor: selectedFile ? 'success.lighter' : 'background.paper',
                   cursor: uploading ? 'default' : 'pointer',
@@ -204,7 +204,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                 <Stack spacing={2} alignItems="center">
                   {selectedFile ? (
                     <>
-                      <FileIcon color="success" sx={{ fontSize: 48 }} />
+                      <FileIcon color="success" sx={{ fontSize: '3.0rem' }} />
                       <Typography variant="h6" color="success.dark">
                         {selectedFile.name}
                       </Typography>
@@ -214,7 +214,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                     </>
                   ) : (
                     <>
-                      <CloudUploadIcon color="action" sx={{ fontSize: 48 }} />
+                      <CloudUploadIcon color="action" sx={{ fontSize: '3.0rem' }} />
                       <Typography variant="body1" color="textSecondary">
                         {LABELS.clickToUpload}
                       </Typography>
@@ -231,27 +231,27 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
           {result && ( // Show import summary and errors if result is available
             <Box>
               <Typography variant="h6" gutterBottom>ملخص الاستيراد</Typography>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
                 <Grid size={3}>
-                  <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.lighter' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'primary.lighter' }}>
                     <Typography variant="h4" color="primary.main">{result.summary?.totalRows || 0}</Typography>
                     <Typography variant="caption">إجمالي الصفوف</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
-                  <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', bgcolor: 'success.lighter' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'success.lighter' }}>
                     <Typography variant="h4" color="success.main">{result.summary?.created || 0}</Typography>
                     <Typography variant="caption">تم استيرادها</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
-                  <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.lighter' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'warning.lighter' }}>
                     <Typography variant="h4" color="warning.main">{result.summary?.skipped || 0}</Typography>
                     <Typography variant="caption">تكرار/تخطي</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
-                  <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', bgcolor: 'error.lighter' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'error.lighter' }}>
                     <Typography variant="h4" color="error.main">{(result.summary?.rejected || 0) + (result.summary?.failed || 0)}</Typography>
                     <Typography variant="caption">فشل</Typography>
                   </Paper>
@@ -263,23 +263,23 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   <Typography variant="subtitle1" color="error" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     تفاصيل الأخطاء ({result.errors.length})
                   </Typography>
-                  <Box sx={{ maxHeight: 300, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                  <Box sx={{ maxHeight: '18.75rem', overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                       <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f5f5f5' }}>
                         <tr>
-                          <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الصف</th>
-                          <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المعرف/الاسم</th>
-                          <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>السبب</th>
-                          <th style={{ padding: '8px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>القيمة</th>
+                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>الصف</th>
+                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>المعرف/الاسم</th>
+                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>السبب</th>
+                          <th style={{ padding: '0.375rem', textAlign: 'right', borderBottom: '2px solid #ddd' }}>القيمة</th>
                         </tr>
                       </thead>
                       <tbody>
                         {result.errors.map((err, idx) => (
                           <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
-                            <td style={{ padding: '8px', textAlign: 'center' }}>{err.rowNumber}</td>
-                            <td style={{ padding: '8px' }}>{err.rowIdentifier || '-'}</td>
-                            <td style={{ padding: '8px', color: '#d32f2f' }}>{err.messageAr}</td>
-                            <td style={{ padding: '8px', fontFamily: 'monospace' }}>{err.value || '-'}</td>
+                            <td style={{ padding: '0.375rem', textAlign: 'center' }}>{err.rowNumber}</td>
+                            <td style={{ padding: '0.375rem' }}>{err.rowIdentifier || '-'}</td>
+                            <td style={{ padding: '0.375rem', color: '#d32f2f' }}>{err.messageAr}</td>
+                            <td style={{ padding: '0.375rem', fontFamily: 'monospace' }}>{err.value || '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -291,7 +291,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
           )}
 
           {uploading && (
-            <Box sx={{ width: '100%', py: 2 }}>
+            <Box sx={{ width: '100%', py: '1.0rem' }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                 <Typography variant="body1">{LABELS.uploading}</Typography>
                 <Typography variant="body2" color="primary" fontWeight="bold">{progress}%</Typography>
@@ -299,7 +299,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
               <LinearProgress
                 variant="determinate"
                 value={progress}
-                sx={{ height: 10, borderRadius: 5, mb: 1 }}
+                sx={{ height: '0.625rem', borderRadius: '0.3125rem', mb: 1 }}
               />
               <Typography variant="caption" color="textSecondary">قد تستغرق معالجة الملفات الكبيرة عدة دقائق...</Typography>
             </Box>
@@ -307,7 +307,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
         </Stack>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2 }}>
+      <DialogActions sx={{ px: '1.5rem', py: '1.0rem' }}>
         <Button onClick={handleClose} disabled={uploading} color="inherit">
           {result ? LABELS.close : LABELS.cancel}
         </Button>
@@ -328,3 +328,5 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 };
 
 export default MembersBulkUploadDialog;
+
+

@@ -77,7 +77,7 @@ export default function AuthCodeVerification() {
             <Grid size={12}>
               <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
                 <Typography>Did not receive the email? Check your spam filter, or</Typography>
-                <Typography variant="body1" sx={{ minWidth: 85, ml: 2, textDecoration: 'none', cursor: 'pointer' }} color="primary">
+                <Typography variant="body1" sx={{ minWidth: '5.3125rem', ml: '1.0rem', textDecoration: 'none', cursor: 'pointer' }} color="primary">
                   Resend code
                 </Typography>
               </Stack>

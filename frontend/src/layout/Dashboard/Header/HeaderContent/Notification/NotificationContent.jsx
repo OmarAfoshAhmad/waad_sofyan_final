@@ -21,7 +21,7 @@ export default function NotificationContent({ notifications, filter, setFilter, 
   return (
     <MainCard
       title={<Typography variant="h5">Notification</Typography>}
-      sx={{ border: 'none', borderRadius: 0, height: '100vh', '& .MuiCardHeader-root': { p: 2.25 } }}
+      sx={{ border: 'none', borderRadius: 0, height: '100vh', '& .MuiCardHeader-root': { p: '1.125rem' } }}
       content={false}
       secondary={
         <Link href="#" underline="hover" typography="caption" sx={{ textTransform: 'none' }} onClick={onMarkAllRead}>
@@ -32,7 +32,7 @@ export default function NotificationContent({ notifications, filter, setFilter, 
       {/* Notification Filter Chips */}
       <Stack
         direction="row"
-        sx={{ py: 1.5, px: 2.5, gap: 1.25, alignItems: 'center', borderBottom: '1px solid', borderBottomColor: 'divider' }}
+        sx={{ py: '0.75rem', px: '1.25rem', gap: '0.625rem', alignItems: 'center', borderBottom: '1px solid', borderBottomColor: 'divider' }}
       >
         {notificationFilterOptions.map((opt, index) => (
           <Chip
@@ -44,7 +44,7 @@ export default function NotificationContent({ notifications, filter, setFilter, 
             onClick={setFilter(opt.key)}
             sx={{
               flexDirection: 'row-reverse',
-              '& .MuiChip-avatar': { width: 20, height: 20, ml: -0.5, mr: 0.5 },
+              '& .MuiChip-avatar': { width: '1.25rem', height: '1.25rem', ml: -0.5, mr: 0.5 },
               ...(filter !== opt.key && { border: '1px solid transparent !important' })
             }}
             {...{
@@ -58,7 +58,7 @@ export default function NotificationContent({ notifications, filter, setFilter, 
 
       {/* Notification List */}
       <Box>
-        <SimpleBar sx={{ overflowX: 'hidden', height: 'calc(100vh - 175px)', minHeight: 420 }}>
+        <SimpleBar sx={{ overflowX: 'hidden', height: 'calc(100vh - 175px)', minHeight: '26.25rem' }}>
           <List component="nav" disablePadding>
             {notifications.map((notification, index) => (
               <NotificationItem key={index} notification={notification} />
@@ -68,7 +68,7 @@ export default function NotificationContent({ notifications, filter, setFilter, 
       </Box>
 
       {/* Footer Button */}
-      <Stack sx={{ py: 1.25, borderTop: '1px solid', borderColor: 'divider' }}>
+      <Stack sx={{ py: '0.625rem', borderTop: '1px solid', borderColor: 'divider' }}>
         <Button sx={{ alignSelf: 'center' }}>View All Notifications</Button>
       </Stack>
     </MainCard>
@@ -81,3 +81,5 @@ NotificationContent.propTypes = {
   setFilter: PropTypes.func,
   onMarkAllRead: PropTypes.func
 };
+
+

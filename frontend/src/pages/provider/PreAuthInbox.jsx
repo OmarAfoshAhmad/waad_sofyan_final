@@ -144,7 +144,7 @@ const ProviderPreAuthInbox = () => {
           {items.length === 0 ? (
             <TableRow>
               <TableCell colSpan={showAcknowledgeButton ? 8 : 7} align="center">
-                <Typography variant="body2" color="textSecondary" sx={{ py: 3 }}>
+                <Typography variant="body2" color="textSecondary" sx={{ py: '1.5rem' }}>
                   لا توجد موافقات مسبقة
                 </Typography>
               </TableCell>
@@ -215,7 +215,7 @@ const ProviderPreAuthInbox = () => {
   return (
     <MainCard title="صندوق الموافقات المسبقة">
       <Box>
-        <Alert severity="info" sx={{ mb: 3 }}>
+        <Alert severity="info" sx={{ mb: '1.5rem' }}>
           <Typography variant="body2">
             هنا تظهر الموافقات المسبقة التي تمت الموافقة عليها من قبل المراجع. يرجى الضغط على "تم الاطلاع" لتأكيد استلام الموافقة.
           </Typography>
@@ -224,7 +224,7 @@ const ProviderPreAuthInbox = () => {
         <Tabs
           value={currentTab}
           onChange={(e, newValue) => setCurrentTab(newValue)}
-          sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+          sx={{ mb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab
             label={

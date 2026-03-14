@@ -19,7 +19,7 @@ const InsightCard = ({ title, icon: Icon, items, loading, color, maxItems = 5 })
   return (
     <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: '1.0rem' }}>
           <Icon sx={{ color: theme.palette[color]?.main || theme.palette.primary.main }} />
           <Typography variant="subtitle1" fontWeight={600}>
             {title}
@@ -33,7 +33,7 @@ const InsightCard = ({ title, icon: Icon, items, loading, color, maxItems = 5 })
             ))}
           </Stack>
         ) : items.length === 0 ? (
-          <Box sx={{ py: 3, textAlign: 'center' }}>
+          <Box sx={{ py: '1.5rem', textAlign: 'center' }}>
             <Typography variant="body2" color="text.disabled">
               لا توجد بيانات
             </Typography>
@@ -61,11 +61,11 @@ const InsightCard = ({ title, icon: Icon, items, loading, color, maxItems = 5 })
                   variant="determinate"
                   value={(item.count / maxCount) * 100}
                   sx={{
-                    height: 6,
-                    borderRadius: 3,
+                    height: '0.375rem',
+                    borderRadius: '0.1875rem',
                     backgroundColor: `${theme.palette[color]?.main || theme.palette.primary.main}20`,
                     '& .MuiLinearProgress-bar': {
-                      borderRadius: 3,
+                      borderRadius: '0.1875rem',
                       backgroundColor: theme.palette[color]?.main || theme.palette.primary.main
                     }
                   }}
@@ -89,7 +89,7 @@ const InsightCard = ({ title, icon: Icon, items, loading, color, maxItems = 5 })
  */
 const VisitsInsights = ({ insights, loading }) => {
   return (
-    <Grid container spacing={2} sx={{ mt: 2 }}>
+    <Grid container spacing={2} sx={{ mt: '1.0rem' }}>
       {/* Top 5 Providers */}
       <Grid size={{ xs: 12, md: 4 }}>
         <InsightCard

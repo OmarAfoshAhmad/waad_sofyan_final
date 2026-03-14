@@ -10,7 +10,7 @@ export default function Autocomplete() {
           }
         },
         paper: {
-          minWidth: 200,
+          minWidth: 200.0,
           boxShadow: '0px 8px 24px -4px rgba(0, 0, 0, 0.12)'
         },
         listbox: {

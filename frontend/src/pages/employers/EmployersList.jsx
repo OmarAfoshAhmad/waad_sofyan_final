@@ -223,14 +223,14 @@ const EmployersList = () => {
 
   const columns = useMemo(
     () => [
-      { id: 'code', label: 'الرمز', minWidth: 100, align: 'center', sortable: true },
-      { id: 'name', label: 'جهة العمل', minWidth: 250, align: 'right', sortable: true },
-      { id: 'email', label: 'البريد الإلكتروني', minWidth: 200, align: 'right', sortable: true },
-      { id: 'phone', label: 'رقم الهاتف', minWidth: 150, align: 'right', sortable: true },
-      { id: 'address', label: 'العنوان', minWidth: 200, align: 'right', sortable: true },
-      { id: 'membersCount', label: 'المستفيدون', minWidth: 110, align: 'center', sortable: true },
-      { id: 'active', label: 'الحالة', minWidth: 100, align: 'center', sortable: true },
-      { id: 'actions', label: 'الإجراءات', minWidth: 130, align: 'center', sortable: false }
+      { id: 'code', label: 'الرمز', minWidth: '6.25rem', align: 'center', sortable: true },
+      { id: 'name', label: 'جهة العمل', minWidth: '15.625rem', align: 'right', sortable: true },
+      { id: 'email', label: 'البريد الإلكتروني', minWidth: '12.5rem', align: 'right', sortable: true },
+      { id: 'phone', label: 'رقم الهاتف', minWidth: '9.375rem', align: 'right', sortable: true },
+      { id: 'address', label: 'العنوان', minWidth: '12.5rem', align: 'right', sortable: true },
+      { id: 'membersCount', label: 'المستفيدون', minWidth: '6.875rem', align: 'center', sortable: true },
+      { id: 'active', label: 'الحالة', minWidth: '6.25rem', align: 'center', sortable: true },
+      { id: 'actions', label: 'الإجراءات', minWidth: '8.125rem', align: 'center', sortable: false }
     ],
     []
   );
@@ -349,7 +349,7 @@ const EmployersList = () => {
                 onClick={() => setExportWizardOpen(true)}
                 startIcon={<FileDownloadIcon />}
                 sx={{
-                  minWidth: '130px',
+                  minWidth: '8.125rem',
                   color: '#1b5e20',
                   borderColor: '#1b5e20',
                   '&:hover': {
@@ -380,7 +380,7 @@ const EmployersList = () => {
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
               {/* Refresh */}
               <Tooltip title="تحديث">
-                <IconButton onClick={() => refetch()} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}>
+                <IconButton onClick={() => refetch()} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
                   <RefreshIcon />
                 </IconButton>
               </Tooltip>
@@ -391,7 +391,7 @@ const EmployersList = () => {
                 label={`${processedData.totalCount} جهة عمل`}
                 variant="outlined"
                 color="primary"
-                sx={{ height: 40, borderRadius: 1, fontWeight: 'bold', fontSize: '14px', px: 1 }}
+                sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
               />
 
               {/* Search Input */}
@@ -420,7 +420,7 @@ const EmployersList = () => {
                       </IconButton>
                     </InputAdornment>
                   ),
-                  sx: { height: 40 }
+                  sx: { height: '2.5rem' }
                 }}
               />
 
@@ -434,8 +434,8 @@ const EmployersList = () => {
                   setFilters((prev) => ({ ...prev, active: e.target.value }));
                   setPage(0);
                 }}
-                sx={{ minWidth: 110, bgcolor: 'background.paper' }}
-                InputProps={{ sx: { height: 40 } }}
+                sx={{ minWidth: '6.875rem', bgcolor: 'background.paper' }}
+                InputProps={{ sx: { height: '2.5rem' } }}
                 InputLabelProps={{ shrink: true }}
               >
                 <MenuItem value="">
@@ -446,7 +446,7 @@ const EmployersList = () => {
               </TextField>
 
               {/* Reset Button */}
-              <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: 120, height: 40 }}>
+              <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: '7.5rem', height: '2.5rem' }}>
                 إعادة ضبط
               </Button>
             </Stack>
@@ -506,3 +506,4 @@ const EmployersList = () => {
 };
 
 export default EmployersList;
+

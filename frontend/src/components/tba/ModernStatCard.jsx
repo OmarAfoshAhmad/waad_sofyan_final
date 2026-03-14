@@ -48,9 +48,9 @@ const ModernStatCard = ({ title, value, trend, trendValue, icon: Icon, color = '
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 48,
-                  height: 48,
-                  borderRadius: 1.5,
+                  width: '3.0rem',
+                  height: '3.0rem',
+                  borderRadius: '0.375rem',
                   bgcolor: `${color}.lighter`,
                   color: `${color}.main`
                 }}
@@ -103,3 +103,5 @@ ModernStatCard.propTypes = {
 };
 
 export default ModernStatCard;
+
+

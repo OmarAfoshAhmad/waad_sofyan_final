@@ -27,7 +27,7 @@ const CostsBarChart = ({ data, loading }) => {
     plotOptions: {
       bar: {
         horizontal: true,
-        borderRadius: 4,
+        borderRadius: '0.375rem',
         dataLabels: {
           position: 'right'
         }
@@ -137,3 +137,4 @@ CostsBarChart.propTypes = {
 };
 
 export default CostsBarChart;
+

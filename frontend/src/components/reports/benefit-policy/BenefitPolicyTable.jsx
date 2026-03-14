@@ -24,14 +24,14 @@ import { STATUS_CONFIG } from 'hooks/useBenefitPolicyReport';
  * Table Column Configuration
  */
 const COLUMNS = [
-  { id: 'policyCode', label: 'رمز الوثيقة', labelEn: 'Code', minWidth: 100 },
-  { id: 'name', label: 'اسم الوثيقة', labelEn: 'Policy Name', minWidth: 180 },
-  { id: 'employerName', label: 'الشريك', labelEn: 'Employer', minWidth: 150 },
-  { id: 'status', label: 'الحالة', labelEn: 'Status', minWidth: 100 },
-  { id: 'memberCount', label: 'عدد الأعضاء', labelEn: 'Members', minWidth: 100, align: 'center' },
-  { id: 'defaultCoveragePercent', label: 'نسبة التغطية', labelEn: 'Coverage %', minWidth: 100, align: 'center' },
-  { id: 'startDate', label: 'تاريخ البدء', labelEn: 'Start Date', minWidth: 120 },
-  { id: 'endDate', label: 'تاريخ الانتهاء', labelEn: 'End Date', minWidth: 120 }
+  { id: 'policyCode', label: 'رمز الوثيقة', labelEn: 'Code', minWidth: '6.25rem' },
+  { id: 'name', label: 'اسم الوثيقة', labelEn: 'Policy Name', minWidth: '11.25rem' },
+  { id: 'employerName', label: 'الشريك', labelEn: 'Employer', minWidth: '9.375rem' },
+  { id: 'status', label: 'الحالة', labelEn: 'Status', minWidth: '6.25rem' },
+  { id: 'memberCount', label: 'عدد الأعضاء', labelEn: 'Members', minWidth: '6.25rem', align: 'center' },
+  { id: 'defaultCoveragePercent', label: 'نسبة التغطية', labelEn: 'Coverage %', minWidth: '6.25rem', align: 'center' },
+  { id: 'startDate', label: 'تاريخ البدء', labelEn: 'Start Date', minWidth: '7.5rem' },
+  { id: 'endDate', label: 'تاريخ الانتهاء', labelEn: 'End Date', minWidth: '7.5rem' }
 ];
 
 /**
@@ -161,11 +161,11 @@ const BenefitPolicyTable = ({ policies = [], loading = false }) => {
       <Paper
         elevation={0}
         sx={{
-          p: 4,
+          p: '2.0rem',
           textAlign: 'center',
           border: '1px solid',
           borderColor: 'divider',
-          borderRadius: 2
+          borderRadius: '0.125rem'
         }}
       >
         <Typography variant="body1" color="text.secondary">
@@ -186,10 +186,10 @@ const BenefitPolicyTable = ({ policies = [], loading = false }) => {
         overflow: 'hidden',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: 2
+        borderRadius: '0.125rem'
       }}
     >
-      <TableContainer sx={{ maxHeight: 500 }}>
+      <TableContainer sx={{ maxHeight: '31.25rem' }}>
         <Table stickyHeader size="small" aria-label="benefit policies table">
           <TableHead>
             <TableRow>
@@ -215,7 +215,7 @@ const BenefitPolicyTable = ({ policies = [], loading = false }) => {
                       <Typography variant="caption" fontWeight={600}>
                         {column.label}
                       </Typography>
-                      <Typography variant="caption" display="block" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+                      <Typography variant="caption" display="block" color="text.disabled" sx={{ fontSize: '0.75rem' }}>
                         {column.labelEn}
                       </Typography>
                     </Box>
@@ -287,3 +287,4 @@ BenefitPolicyTable.propTypes = {
 };
 
 export default BenefitPolicyTable;
+

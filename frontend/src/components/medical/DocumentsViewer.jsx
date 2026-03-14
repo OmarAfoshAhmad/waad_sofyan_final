@@ -193,14 +193,14 @@ const DocumentsViewer = ({ documents = [], entityId, entityType, onRefresh }) =>
       {/* Documents List */}
       <Box
         sx={{
-          maxHeight: '300px',
+          maxHeight: '18.75rem',
           overflow: 'auto',
           borderBottom: `1px solid ${MEDICAL_THEME.colors.border.light}`
         }}
       >
         {!documents || documents.length === 0 ? (
           <Box sx={{ padding: MEDICAL_THEME.spacing.lg, textAlign: 'center' }}>
-            <FileIcon sx={{ fontSize: 48, color: MEDICAL_THEME.colors.neutral.medium, mb: 1 }} />
+            <FileIcon sx={{ fontSize: '3.0rem', color: MEDICAL_THEME.colors.neutral.medium, mb: 1 }} />
             <Typography variant="body2" color="text.secondary">
               لا توجد مستندات مرفقة
             </Typography>
@@ -296,3 +296,5 @@ const DocumentsViewer = ({ documents = [], entityId, entityType, onRefresh }) =>
 };
 
 export default DocumentsViewer;
+
+

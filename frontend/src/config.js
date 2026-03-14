@@ -6,8 +6,8 @@ export const linkedInColor = '#0e76a8';
 
 export const APP_DEFAULT_PATH = '/dashboard';
 export const HORIZONTAL_MAX_ITEM = 7;
-export const DRAWER_WIDTH = 260;
-export const MINI_DRAWER_WIDTH = 60;
+export const DRAWER_WIDTH = '16.25rem';
+export const MINI_DRAWER_WIDTH = '3.75rem';
 
 export const CSS_VAR_PREFIX = '';
 

@@ -73,9 +73,9 @@ const UnifiedMemberEdit = () => {
   const menuProps = {
     PaperProps: {
       sx: {
-        '& .MuiMenuItem-root': { fontSize: '12px' },
-        maxHeight: 300,
-        minWidth: 200
+        '& .MuiMenuItem-root': { fontSize: '0.75rem' },
+        maxHeight: '18.75rem',
+        minWidth: '12.5rem'
       }
     }
   };
@@ -363,7 +363,7 @@ const UnifiedMemberEdit = () => {
     return (
       <MainCard>
         <Alert severity="error">{fetchError}</Alert>
-        <Button variant="outlined" sx={{ mt: 2 }} onClick={() => navigate('/members')}>
+        <Button variant="outlined" sx={{ mt: '1.0rem' }} onClick={() => navigate('/members')}>
           رجوع
         </Button>
       </MainCard>
@@ -397,11 +397,11 @@ const UnifiedMemberEdit = () => {
             variant="scrollable"
             scrollButtons="auto"
             sx={{
-              minHeight: 48,
+              minHeight: '3.0rem',
               '& .MuiTab-root': {
-                minHeight: 48,
-                fontSize: '13px',
-                px: 3,
+                minHeight: '3.0rem',
+                fontSize: '0.8125rem',
+                px: '1.5rem',
                 '&.Mui-selected': { color: 'primary.main', bgcolor: 'primary.lighter', fontWeight: 600 }
               }
             }}
@@ -410,7 +410,7 @@ const UnifiedMemberEdit = () => {
               label={
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <span>البيانات الشخصية</span>
-                  {getTabErrorCount(0) > 0 && <span style={{ color: '#f44336', fontSize: '16px' }}>●</span>}
+                  {getTabErrorCount(0) > 0 && <span style={{ color: '#f44336', fontSize: '1.0rem' }}>●</span>}
                 </Stack>
               }
               icon={<PersonIcon />}
@@ -421,7 +421,7 @@ const UnifiedMemberEdit = () => {
               label={
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <span>{isPrincipal ? 'بيانات العمل' : 'صلة القرابة'}</span>
-                  {getTabErrorCount(1) > 0 && <span style={{ color: '#f44336', fontSize: '16px' }}>●</span>}
+                  {getTabErrorCount(1) > 0 && <span style={{ color: '#f44336', fontSize: '1.0rem' }}>●</span>}
                 </Stack>
               }
               icon={isPrincipal ? <BadgeIcon /> : <FamilyRestroomIcon />}
@@ -432,7 +432,7 @@ const UnifiedMemberEdit = () => {
               label={
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <span>معلومات الاتصال</span>
-                  {getTabErrorCount(2) > 0 && <span style={{ color: '#f44336', fontSize: '16px' }}>●</span>}
+                  {getTabErrorCount(2) > 0 && <span style={{ color: '#f44336', fontSize: '1.0rem' }}>●</span>}
                 </Stack>
               }
               icon={<ContactPhoneIcon />}
@@ -443,14 +443,14 @@ const UnifiedMemberEdit = () => {
         </Box>
 
         {Object.keys(errors).length > 0 && (
-          <Box sx={{ px: 3, pt: 2 }}>
+          <Box sx={{ px: '1.5rem', pt: '1.0rem' }}>
             <Alert
               severity="error"
               variant="outlined"
               sx={{
                 bgcolor: 'error.lighter',
                 borderColor: 'error.light',
-                '& .MuiAlert-message': { fontWeight: 600, fontSize: '13px' }
+                '& .MuiAlert-message': { fontWeight: 600, fontSize: '0.8125rem' }
               }}
             >
               توجد أخطاء في المدخلات؛ يرجى مراجعة التبويبات المميزة باللون الأحمر (عدد الحقول المعيبة: {Object.keys(errors).length})
@@ -458,7 +458,7 @@ const UnifiedMemberEdit = () => {
           </Box>
         )}
 
-        <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: '1.5rem' }}>
           {/* Tab 0: Personal Info */}
           <div role="tabpanel" hidden={tabValue !== 0}>
             {tabValue === 0 && (
@@ -467,7 +467,7 @@ const UnifiedMemberEdit = () => {
                 <Grid size={{ xs: 12, md: 9 }}>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
-                      <Alert severity="info" sx={{ mb: 2, '& .MuiAlert-message': { fontSize: '12px' } }}>
+                      <Alert severity="info" sx={{ mb: '1.0rem', '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
                         يتم تحديث رقم البطاقة والباركود آلياً عند الحفظ إذا لزم الأمر.
                       </Alert>
                     </Grid>
@@ -568,7 +568,7 @@ const UnifiedMemberEdit = () => {
 
                 {/* Left Column: Photo Upload (Sticky behavior) */}
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', height: '100%', bgcolor: 'grey.50', borderStyle: 'dashed' }}>
+                  <Paper variant="outlined" sx={{ p: '1.5rem', textAlign: 'center', height: '100%', bgcolor: 'grey.50', borderStyle: 'dashed' }}>
                     <Box
                       position="relative"
                       sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}
@@ -585,13 +585,13 @@ const UnifiedMemberEdit = () => {
                               bgcolor: 'background.paper',
                               boxShadow: 2,
                               '&:hover': { bgcolor: 'background.paper' },
-                              width: 36,
-                              height: 36,
+                              width: '2.25rem',
+                              height: '2.25rem',
                               border: '2px solid white'
                             }}
                             onClick={() => document.getElementById('photo-upload').click()}
                           >
-                            <CloudUploadIcon sx={{ fontSize: 20 }} />
+                            <CloudUploadIcon sx={{ fontSize: '1.25rem' }} />
                           </IconButton>
                         }
                       >
@@ -613,7 +613,7 @@ const UnifiedMemberEdit = () => {
                       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                         الصورة الشخصية
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: '1.0rem' }}>
                         اضغط على الدائرة للرفع
                       </Typography>
                       <Button variant="outlined" size="small" onClick={() => document.getElementById('photo-upload').click()}>
@@ -627,7 +627,7 @@ const UnifiedMemberEdit = () => {
                           variant="text"
                           startIcon={<DeleteIcon />}
                           onClick={handleDeletePhoto}
-                          sx={{ mt: 1, fontSize: '11px' }}
+                          sx={{ mt: 1, fontSize: '0.75rem' }}
                         >
                           حذف الصورة
                         </Button>
@@ -722,7 +722,7 @@ const UnifiedMemberEdit = () => {
                     </Grid>
                   </>
                 ) : (
-                  <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1, width: '100%' }}>
+                  <Box sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: 1, width: '100%' }}>
                     <Typography variant="body2" color="text.secondary">
                       لا توجد بيانات عمل للمنتفع التابع. صلة القرابة موجودة في "البيانات الشخصية".
                     </Typography>
@@ -777,7 +777,7 @@ const UnifiedMemberEdit = () => {
         </Box>
 
         <Divider />
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, bgcolor: 'background.default' }}>
+        <Box sx={{ p: '1.0rem', display: 'flex', justifyContent: 'flex-end', gap: '1.0rem', bgcolor: 'background.default' }}>
           <Button variant="outlined" onClick={() => navigate(`/members/${id}`)}>
             إلغاء
           </Button>
@@ -796,3 +796,6 @@ const UnifiedMemberEdit = () => {
 };
 
 export default UnifiedMemberEdit;
+
+
+

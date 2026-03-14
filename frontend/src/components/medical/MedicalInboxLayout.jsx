@@ -267,7 +267,7 @@ const MedicalInboxLayout = ({
               startIcon={<RequestDocsIcon />}
               onClick={() => setRequestDocsDialogOpen(true)}
               disabled={loading}
-              sx={{ minWidth: '140px' }}
+              sx={{ minWidth: '8.75rem' }}
             >
               طلب مستندات
               <KeyboardHint keys="D" />
@@ -281,7 +281,7 @@ const MedicalInboxLayout = ({
               startIcon={<HoldIcon />}
               onClick={() => setHoldDialogOpen(true)}
               disabled={loading}
-              sx={{ minWidth: '120px' }}
+              sx={{ minWidth: '7.5rem' }}
             >
               تعليق
               <KeyboardHint keys="H" />
@@ -295,7 +295,7 @@ const MedicalInboxLayout = ({
               startIcon={<RejectIcon />}
               onClick={() => setRejectDialogOpen(true)}
               disabled={loading}
-              sx={{ minWidth: '120px' }}
+              sx={{ minWidth: '7.5rem' }}
             >
               رفض
               <KeyboardHint keys="R" />
@@ -310,7 +310,7 @@ const MedicalInboxLayout = ({
               onClick={handleApproveClick}
               disabled={loading}
               sx={{
-                minWidth: '140px',
+                minWidth: '8.75rem',
                 fontWeight: 700,
                 fontSize: '1rem'
               }}
@@ -330,7 +330,7 @@ const MedicalInboxLayout = ({
       <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700 }}>رفض {isPreAuth ? 'الموافقة المسبقة' : 'المطالبة'}</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
+          <Alert severity="warning" sx={{ mb: '1.0rem' }}>
             يرجى تحديد سبب الرفض بوضوح
           </Alert>
           <TextField

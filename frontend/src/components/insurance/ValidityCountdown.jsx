@@ -164,8 +164,8 @@ const ValidityCountdown = ({
   return (
     <Box
       sx={{
-        p: 2,
-        borderRadius: 2,
+        p: '1.0rem',
+        borderRadius: '0.125rem',
         bgcolor:
           isExpired || isRejected
             ? 'error.lighter'
@@ -197,7 +197,7 @@ const ValidityCountdown = ({
         {/* Header */}
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Stack direction="row" spacing={1} alignItems="center">
-            <AccessTimeIcon sx={{ color: getStatusColor(), fontSize: 20 }} />
+            <AccessTimeIcon sx={{ color: getStatusColor(), fontSize: '1.25rem' }} />
             <Typography variant="subtitle2" fontWeight={600}>
               {t.validUntil}
             </Typography>
@@ -220,7 +220,7 @@ const ValidityCountdown = ({
               variant="determinate"
               value={percentageUsed}
               sx={{
-                height: 6,
+                height: '0.375rem',
                 borderRadius: 1,
                 bgcolor: 'rgba(255,255,255,0.5)',
                 '& .MuiLinearProgress-bar': {

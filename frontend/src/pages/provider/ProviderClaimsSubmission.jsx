@@ -147,14 +147,14 @@ const FILE_ACCEPT_ATTR = '.pdf,.jpg,.jpeg,.png,.gif,.doc,.docx';
  * Section Header Component
  */
 const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary', action }) => (
-  <Box sx={{ mb: 2.5 }}>
+  <Box sx={{ mb: '1.25rem' }}>
     <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Box
           sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
+            width: '2.5rem',
+            height: '2.5rem',
+            borderRadius: '0.125rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -184,7 +184,7 @@ const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary', action 
  * Read-Only Info Field
  */
 const ReadOnlyField = ({ icon: Icon, label, value, highlight = false }) => (
-  <Box sx={{ mb: 2 }}>
+  <Box sx={{ mb: '1.0rem' }}>
     <Typography
       variant="caption"
       color="text.secondary"
@@ -218,14 +218,14 @@ const InfoCard = ({ children, bgcolor = 'grey.50' }) => (
       height: '100%',
       bgcolor,
       borderColor: 'divider',
-      borderRadius: 2,
+      borderRadius: '0.125rem',
       transition: 'box-shadow 0.2s',
       '&:hover': {
         boxShadow: 1
       }
     }}
   >
-    <CardContent sx={{ p: 3 }}>{children}</CardContent>
+    <CardContent sx={{ p: '1.5rem' }}>{children}</CardContent>
   </Card>
 );
 
@@ -236,13 +236,13 @@ const FormSection = ({ children, highlighted = false }) => (
   <Card
     variant="outlined"
     sx={{
-      borderRadius: 2,
+      borderRadius: '0.125rem',
       borderColor: highlighted ? 'primary.main' : 'divider',
       borderWidth: highlighted ? 2 : 1,
       bgcolor: highlighted ? (theme) => alpha(theme.palette.primary.main, 0.02) : 'background.paper'
     }}
   >
-    <CardContent sx={{ p: 3 }}>{children}</CardContent>
+    <CardContent sx={{ p: '1.5rem' }}>{children}</CardContent>
   </Card>
 );
 
@@ -268,32 +268,32 @@ const ContractPriceChip = ({ loading, price, hasContract, error }) => {
 // BLOCKED ACCESS PAGE
 // ══════════════════════════════════════════════════════════════════════════════
 const BlockedAccessPage = ({ onBack }) => (
-  <Box sx={{ maxWidth: 600, mx: 'auto', mt: 8 }}>
-    <Card variant="outlined" sx={{ borderRadius: 3, textAlign: 'center', p: 4 }}>
+  <Box sx={{ maxWidth: '37.5rem', mx: 'auto', mt: '4.0rem' }}>
+    <Card variant="outlined" sx={{ borderRadius: '0.1875rem', textAlign: 'center', p: '2.0rem' }}>
       <Box
         sx={{
-          width: 80,
-          height: 80,
+          width: '5.0rem',
+          height: '5.0rem',
           borderRadius: '50%',
           bgcolor: 'warning.lighter',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           mx: 'auto',
-          mb: 3
+          mb: '1.5rem'
         }}
       >
-        <LockIcon sx={{ fontSize: 40, color: 'warning.main' }} />
+        <LockIcon sx={{ fontSize: '2.5rem', color: 'warning.main' }} />
       </Box>
       <Typography variant="h5" fontWeight={600} gutterBottom>
         الوصول المباشر غير مسموح
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: '2.0rem' }}>
         {LABELS.visitRequired}
         <br />
         يرجى الانتقال إلى سجل الزيارات واختيار زيارة لإنشاء مطالبة منها.
       </Typography>
-      <Button variant="contained" size="large" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ borderRadius: 2, px: 4 }}>
+      <Button variant="contained" size="large" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ borderRadius: '0.125rem', px: '2.0rem' }}>
         الذهاب إلى سجل الزيارات
       </Button>
     </Card>
@@ -1338,7 +1338,7 @@ export default function ProviderClaimsSubmission() {
   return (
     <Box
       sx={{
-        maxWidth: 1600,
+        maxWidth: '100.0rem',
         mx: 'auto',
         px: { xs: 1, md: 2 },
         py: 1,
@@ -1354,7 +1354,7 @@ export default function ProviderClaimsSubmission() {
         breadcrumbs={[{ label: 'بوابة مقدم الخدمة' }, { label: 'سجل الزيارات', href: '/provider/visits' }, { label: LABELS.pageTitle }]}
       />
 
-      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'common.white', mb: 2 }}>
+      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'common.white', mb: '1.0rem' }}>
         <Stepper activeStep={workflowActiveStep} alternativeLabel>
           {workflowSteps.map((step, index) => {
             const completed = (index === 0 && hasVisitAndDiagnosis) || (index === 1 && hasServicesReady) || (index === 2 && hasAttachmentsReady);
@@ -1368,11 +1368,11 @@ export default function ProviderClaimsSubmission() {
       </Paper>
 
       {/* ═══════════════════════ LOADING BAR ═══════════════════════ */}
-      {loading && <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />}
+      {loading && <LinearProgress sx={{ mb: '1.0rem', borderRadius: 1 }} />}
 
       {/* ═══════════════════════ ERROR ALERT ═══════════════════════ */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: '1.5rem', borderRadius: '0.125rem' }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
@@ -1399,7 +1399,7 @@ export default function ProviderClaimsSubmission() {
         <Grid size={{ xs: 12, lg: 8.5 }}>
           <Stack spacing={3}>
             {/* ═══════════════════════ ROW 1: COMPACT READ-ONLY HEADER ═══════════════════════ */}
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'common.white' }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'common.white' }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'flex-start', md: 'center' }} flexWrap="wrap">
                 <Chip label={`المؤمن عليه: ${linkedMemberName || '—'}`} color="primary" variant="outlined" />
                 <Chip label={`الرقم المدني: ${linkedMemberCivilId || '—'}`} variant="outlined" />
@@ -1425,7 +1425,7 @@ export default function ProviderClaimsSubmission() {
                     startIcon={<AddIcon />}
                     onClick={addClaimLine}
                     disabled={submitting || success}
-                    sx={{ borderRadius: 2 }}
+                    sx={{ borderRadius: '0.125rem' }}
                   >
                     {LABELS.addService}
                   </Button>
@@ -1438,8 +1438,8 @@ export default function ProviderClaimsSubmission() {
                   severity="info"
                   icon={<DiagnosisIcon />}
                   sx={{
-                    mb: 2.5,
-                    borderRadius: 2,
+                    mb: '1.25rem',
+                    borderRadius: '0.125rem',
                     border: '1px solid',
                     borderColor: 'info.light',
                     bgcolor: (theme) => alpha(theme.palette.info.main, 0.02),
@@ -1477,19 +1477,19 @@ export default function ProviderClaimsSubmission() {
                 </Alert>
               )}
 
-              <Divider sx={{ mb: 3 }} />
+              <Divider sx={{ mb: '1.5rem' }} />
 
               {/* Category Violation Warning */}
               {hasCategoryViolation && claimLines.length > 0 && (
-                <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2, borderRadius: 2 }}>
+                <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: '1.0rem', borderRadius: '0.125rem' }}>
                   ⚠️ يجب اختيار التصنيف الطبي لكل خدمة قبل اختيار الخدمة نفسها
                 </Alert>
               )}
 
               {claimLines.length === 0 ? (
-                <Box sx={{ minHeight: 8 }} />
+                <Box sx={{ minHeight: '0.375rem' }} />
               ) : (
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '0.125rem' }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ bgcolor: tableHeaderBg }}>
@@ -1501,8 +1501,8 @@ export default function ProviderClaimsSubmission() {
                               sx={{
                                 bgcolor: 'white',
                                 color: MEDICAL_COLORS.primary.main,
-                                width: 22,
-                                height: 22,
+                                width: '1.375rem',
+                                height: '1.375rem',
                                 fontSize: '0.7rem',
                                 fontWeight: 700
                               }}
@@ -1518,8 +1518,8 @@ export default function ProviderClaimsSubmission() {
                               sx={{
                                 bgcolor: 'rgba(255,255,255,0.3)',
                                 color: 'white',
-                                width: 22,
-                                height: 22,
+                                width: '1.375rem',
+                                height: '1.375rem',
                                 fontSize: '0.7rem',
                                 fontWeight: 700
                               }}
@@ -1658,7 +1658,7 @@ export default function ProviderClaimsSubmission() {
                                               size="small"
                                               color="error"
                                               variant="outlined"
-                                              sx={{ fontSize: '0.65rem', height: 20 }}
+                                              sx={{ fontSize: '0.75rem', height: '1.25rem' }}
                                             />
                                           </Tooltip>
                                         )}
@@ -1711,7 +1711,7 @@ export default function ProviderClaimsSubmission() {
                               onChange={(e) => updateClaimLine(line.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
                               disabled={submitting || success}
                               inputProps={{ min: 1, style: { textAlign: 'center' } }}
-                              sx={{ width: 70 }}
+                              sx={{ width: '4.375rem' }}
                             />
                           </TableCell>
 
@@ -1770,11 +1770,11 @@ export default function ProviderClaimsSubmission() {
             {/* ═══════════════════════ ROW 3: CLINICAL DATA (DIAGNOSIS + PRE-AUTH) ═══════════════════════ */}
             <FormSection>
               <SectionHeader icon={DiagnosisIcon} title="البيانات السريرية" subtitle="التشخيص وربط الموافقة المسبقة" color="info" />
-              <Divider sx={{ mb: 3 }} />
+              <Divider sx={{ mb: '1.5rem' }} />
 
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, lg: 7 }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: '0.75rem' }}>
                     {LABELS.diagnosis}
                   </Typography>
                   <Stack spacing={2.5}>
@@ -1819,10 +1819,10 @@ export default function ProviderClaimsSubmission() {
                 </Grid>
 
                 <Grid size={{ xs: 12, lg: 5 }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: '0.75rem' }}>
                     {LABELS.preAuth}
                   </Typography>
-                  <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+                  <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.125rem' }}>
                     {LABELS.preAuthOptional}
                   </Alert>
 
@@ -1874,7 +1874,7 @@ export default function ProviderClaimsSubmission() {
                   />
 
                   {formData.preAuthorizationId && (
-                    <Alert severity="success" sx={{ mt: 2, borderRadius: 2 }}>
+                    <Alert severity="success" sx={{ mt: '1.0rem', borderRadius: '0.125rem' }}>
                       تم اختيار موافقة مسبقة - سيتم ربطها بالمطالبة وتحديث حالتها إلى "مستخدم" تلقائياً
                     </Alert>
                   )}
@@ -1885,9 +1885,9 @@ export default function ProviderClaimsSubmission() {
             {/* ═══════════════════════ ROW 4: ATTACHMENTS + CLAIM CHAT ═══════════════════════ */}
             <FormSection>
               <SectionHeader icon={AttachmentIcon} title={LABELS.attachments} subtitle="المستندات الداعمة للمطالبة" color="warning" />
-              <Divider sx={{ mb: 3 }} />
+              <Divider sx={{ mb: '1.5rem' }} />
 
-              <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+              <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.125rem' }}>
                 {LABELS.attachmentHint}
                 <br />
                 <strong>الامتدادات المسموحة:</strong> PDF, JPG, JPEG, PNG, GIF, DOC, DOCX — <strong>الحد الأقصى:</strong> {MAX_UPLOAD_SIZE_MB}MB لكل ملف.
@@ -1900,12 +1900,12 @@ export default function ProviderClaimsSubmission() {
                 startIcon={<UploadIcon />}
                 disabled={submitting || success}
                 sx={{
-                  height: 80,
+                  height: '5.0rem',
                   borderStyle: 'dashed',
                   borderWidth: 2,
                   borderColor: attemptedSubmit && !hasAttachmentsReady ? 'error.main' : undefined,
-                  borderRadius: 2,
-                  mb: 2
+                  borderRadius: '0.125rem',
+                  mb: '1.0rem'
                 }}
               >
                 {LABELS.selectFiles}
@@ -1913,12 +1913,12 @@ export default function ProviderClaimsSubmission() {
               </Button>
 
               {existingAttachments.length > 0 && (
-                <Stack spacing={1} sx={{ mb: 2 }}>
+                <Stack spacing={1} sx={{ mb: '1.0rem' }}>
                   <Typography variant="subtitle2" fontWeight={600} color="text.secondary">
                     المرفقات المحفوظة في المسودة ({existingAttachments.length})
                   </Typography>
                   {existingAttachments.map((item) => (
-                    <Paper key={item.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: (theme) => alpha(theme.palette.success.main, 0.04) }}>
+                    <Paper key={item.id} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.04) }}>
                       <Stack direction="row" alignItems="center" spacing={2}>
                         <AttachmentIcon color="success" />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1939,9 +1939,9 @@ export default function ProviderClaimsSubmission() {
               )}
 
               {pendingFiles.length > 0 && (
-                <Stack spacing={1} sx={{ mb: 2 }}>
+                <Stack spacing={1} sx={{ mb: '1.0rem' }}>
                   {pendingFiles.map((item, index) => (
-                    <Paper key={index} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                    <Paper key={index} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem' }}>
                       <Stack direction="row" alignItems="center" spacing={2}>
                         <AttachmentIcon color="action" />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1958,7 +1958,7 @@ export default function ProviderClaimsSubmission() {
                           value={item.type}
                           onChange={(e) => handleFileTypeChange(index, e.target.value)}
                           SelectProps={{ native: true }}
-                          sx={{ width: 130 }}
+                          sx={{ width: '8.125rem' }}
                         >
                           <option value="MEDICAL_REPORT">تقرير طبي</option>
                           <option value="INVOICE">فاتورة</option>
@@ -1980,7 +1980,7 @@ export default function ProviderClaimsSubmission() {
               )}
 
               {uploading && (
-                <Box sx={{ mt: 2 }}>
+                <Box sx={{ mt: '1.0rem' }}>
                   <LinearProgress variant="determinate" value={uploadProgress} sx={{ borderRadius: 1 }} />
                   <Typography variant="caption" color="text.secondary" textAlign="center" display="block" mt={0.5}>
                     {LABELS.uploadingFiles} {uploadProgress}%
@@ -1988,19 +1988,19 @@ export default function ProviderClaimsSubmission() {
                 </Box>
               )}
 
-              <Divider sx={{ my: 3 }} />
+              <Divider sx={{ my: '1.5rem' }} />
 
               <SectionHeader icon={ChatIcon} title="محادثة المطالبة" subtitle="تواصل داخلي حول المطالبة" color="info" />
               <Box
                 sx={{
                   border: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: 2,
-                  p: 1.5,
+                  borderRadius: '0.125rem',
+                  p: '0.75rem',
                   bgcolor: 'background.default',
-                  maxHeight: 220,
+                  maxHeight: '13.75rem',
                   overflowY: 'auto',
-                  mb: 2
+                  mb: '1.0rem'
                 }}
               >
                 {providerChatMessages.length === 0 ? (
@@ -2010,7 +2010,7 @@ export default function ProviderClaimsSubmission() {
                 ) : (
                   <Stack spacing={1}>
                     {providerChatMessages.map((message) => (
-                      <Paper key={message.id} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
+                      <Paper key={message.id} variant="outlined" sx={{ p: '0.625rem', borderRadius: '0.125rem' }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
                           <Typography variant="caption" fontWeight={600}>
                             {message.senderName}
@@ -2051,12 +2051,12 @@ export default function ProviderClaimsSubmission() {
 
         <Grid size={{ xs: 12, lg: 3.5 }}>
           <Stack spacing={1.5} sx={{ position: { lg: 'sticky' }, top: { lg: 85 }, zIndex: 5 }}>
-            <InfoCard bgcolor={(theme) => alpha(theme.palette.success.main, 0.05)} sx={{ p: 1.5 }}>
+            <InfoCard bgcolor={(theme) => alpha(theme.palette.success.main, 0.05)} sx={{ p: '0.75rem' }}>
               <SectionHeader icon={LimitIcon} title={LABELS.coverageInfo} subtitle="تغطية المؤمن عليه" color="success" />
-              <Divider sx={{ mb: 1.5, mt: 1 }} />
+              <Divider sx={{ mb: '0.75rem', mt: 1 }} />
               {memberLimit ? (
                 <Stack spacing={1}>
-                  <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08) }}>
+                  <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.warning.main, 0.08) }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {LABELS.annualLimit}
                     </Typography>
@@ -2064,7 +2064,7 @@ export default function ProviderClaimsSubmission() {
                       {Number(memberLimit.annualLimit || 0).toLocaleString()} د.ل
                     </Typography>
                   </Box>
-                  <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: (theme) => alpha(theme.palette.error.main, 0.08) }}>
+                  <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.error.main, 0.08) }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {LABELS.usedAmount}
                     </Typography>
@@ -2072,7 +2072,7 @@ export default function ProviderClaimsSubmission() {
                       {Number(memberLimit.usedAmount || 0).toLocaleString()} د.ل
                     </Typography>
                   </Box>
-                  <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: (theme) => alpha(theme.palette.success.main, 0.1) }}>
+                  <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.1) }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {LABELS.remainingLimit}
                     </Typography>
@@ -2080,7 +2080,7 @@ export default function ProviderClaimsSubmission() {
                       {Number(memberLimit.remainingLimit || 0).toLocaleString()} د.ل
                     </Typography>
                   </Box>
-                  <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1) }}>
+                  <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1) }}>
                     <Typography variant="caption" color="text.secondary" display="block">
                       {LABELS.totalClaimAmount}
                     </Typography>
@@ -2092,17 +2092,17 @@ export default function ProviderClaimsSubmission() {
                     variant="determinate"
                     value={memberLimit.usagePercentage || 0}
                     color={memberLimit.usagePercentage >= 80 ? 'error' : 'success'}
-                    sx={{ mt: 0.5, height: 8, borderRadius: 1 }}
+                    sx={{ mt: 0.5, height: '0.375rem', borderRadius: 1 }}
                   />
                 </Stack>
               ) : (
-                <Alert severity="info" sx={{ borderRadius: 2 }}>
+                <Alert severity="info" sx={{ borderRadius: '0.125rem' }}>
                   لا تتوفر بيانات التغطية حالياً
                 </Alert>
               )}
             </InfoCard>
 
-            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: 'common.white' }}>
+            <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem', bgcolor: 'common.white' }}>
               <Typography variant="body2" fontWeight={700} sx={{ mb: 1 }}>
                 حالة الجاهزية
               </Typography>
@@ -2120,11 +2120,11 @@ export default function ProviderClaimsSubmission() {
       <Paper
         elevation={3}
         sx={{
-          p: 2.5,
-          borderRadius: 2,
+          p: '1.25rem',
+          borderRadius: '0.125rem',
           bgcolor: 'background.paper',
           position: 'sticky',
-          bottom: 12,
+          bottom: '6.0rem',
           zIndex: 10,
           border: '1px solid',
           borderColor: 'divider'
@@ -2188,9 +2188,9 @@ export default function ProviderClaimsSubmission() {
                   onClick={() => handleSubmit(true)}
                   disabled={submitting || claimLines.length === 0}
                   sx={{
-                    borderRadius: 2,
-                    px: 5,
-                    minWidth: 210,
+                    borderRadius: '0.125rem',
+                    px: '2.5rem',
+                    minWidth: '13.125rem',
                     boxShadow: 4,
                     fontWeight: 800,
                     '&:hover': { boxShadow: 6 }
@@ -2205,7 +2205,7 @@ export default function ProviderClaimsSubmission() {
                   startIcon={submitting && submitMode === 'draft' ? <CircularProgress size={20} color="inherit" /> : <NotesIcon />}
                   onClick={() => handleSubmit(false)}
                   disabled={submitting || claimLines.length === 0}
-                  sx={{ borderRadius: 2, px: 3 }}
+                  sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
                 >
                   {submitting && submitMode === 'draft' ? LABELS.savingDraft : LABELS.saveDraft}
                 </Button>
@@ -2217,7 +2217,7 @@ export default function ProviderClaimsSubmission() {
               startIcon={<ArrowBackIcon />}
               onClick={handleBack}
               disabled={submitting}
-              sx={{ borderRadius: 2, px: 3 }}
+              sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
             >
               {LABELS.cancel}
             </Button>
@@ -2227,3 +2227,7 @@ export default function ProviderClaimsSubmission() {
     </Box>
   );
 }
+
+
+
+

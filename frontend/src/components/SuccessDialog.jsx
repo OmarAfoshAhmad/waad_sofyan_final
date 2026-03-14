@@ -136,7 +136,7 @@ const SuccessDialog = ({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: 3,
+          borderRadius: '0.1875rem',
           overflow: 'hidden'
         }
       }}
@@ -144,19 +144,19 @@ const SuccessDialog = ({
       transitionDuration={300}
     >
       {/* Progress bar for countdown */}
-      <LinearProgress variant="determinate" value={progress} color={config.color} sx={{ height: 4 }} />
+      <LinearProgress variant="determinate" value={progress} color={config.color} sx={{ height: '0.375rem' }} />
 
       <DialogContent sx={{ p: 0 }}>
-        <Box sx={{ textAlign: 'center', py: 5, px: 3 }}>
+        <Box sx={{ textAlign: 'center', py: '2.5rem', px: '1.5rem' }}>
           {/* Success Icon with Animation */}
           <Fade in={open} timeout={500}>
             <Avatar
               sx={{
-                width: 100,
-                height: 100,
+                width: '6.25rem',
+                height: '6.25rem',
                 bgcolor: config.bgColor,
                 mx: 'auto',
-                mb: 3,
+                mb: '1.5rem',
                 animation: 'pulse 1.5s ease-in-out infinite',
                 '@keyframes pulse': {
                   '0%': { transform: 'scale(1)', boxShadow: `0 0 0 0 rgba(76, 175, 80, 0.4)` },
@@ -165,7 +165,7 @@ const SuccessDialog = ({
                 }
               }}
             >
-              <Icon sx={{ fontSize: 56, color: config.iconColor }} />
+              <Icon sx={{ fontSize: '3.5rem', color: config.iconColor }} />
             </Avatar>
           </Fade>
 
@@ -175,7 +175,7 @@ const SuccessDialog = ({
           </Typography>
 
           {/* Subtitle */}
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: '1.0rem' }}>
             {subtitle}
           </Typography>
 
@@ -187,11 +187,11 @@ const SuccessDialog = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 1,
-                px: 3,
-                py: 1.5,
+                px: '1.5rem',
+                py: '0.75rem',
                 bgcolor: 'grey.100',
-                borderRadius: 2,
-                mb: 3
+                borderRadius: '0.125rem',
+                mb: '1.5rem'
               }}
             >
               <Typography variant="body2" color="text.secondary">
@@ -205,7 +205,7 @@ const SuccessDialog = ({
 
           {/* Attachments Chip */}
           {attachmentsCount > 0 && (
-            <Box sx={{ mb: 3 }}>
+            <Box sx={{ mb: '1.5rem' }}>
               <Chip icon={<AttachmentIcon />} label={`تم رفع ${attachmentsCount} مرفق`} color="info" variant="outlined" />
             </Box>
           )}
@@ -215,11 +215,11 @@ const SuccessDialog = ({
             <Paper
               elevation={0}
               sx={{
-                p: 2,
+                p: '1.0rem',
                 bgcolor: 'grey.50',
-                borderRadius: 2,
-                mb: 3,
-                maxWidth: 400,
+                borderRadius: '0.125rem',
+                mb: '1.5rem',
+                maxWidth: '25.0rem',
                 mx: 'auto'
               }}
             >
@@ -243,9 +243,9 @@ const SuccessDialog = ({
             variant="body2"
             color="text.secondary"
             sx={{
-              mb: 3,
+              mb: '1.5rem',
               py: 1,
-              px: 2,
+              px: '1.0rem',
               bgcolor: paused ? 'warning.lighter' : 'grey.100',
               borderRadius: 1,
               display: 'inline-block'
@@ -273,7 +273,7 @@ const SuccessDialog = ({
               color={config.color}
               startIcon={<VisitIcon />}
               onClick={handleRedirectNow}
-              sx={{ minWidth: 200 }}
+              sx={{ minWidth: '12.5rem' }}
             >
               {redirectLabel}
             </Button>
@@ -281,7 +281,7 @@ const SuccessDialog = ({
 
           {/* Pause hint */}
           {!paused && (
-            <Typography variant="caption" color="text.disabled" sx={{ mt: 2, display: 'block', cursor: 'pointer' }} onClick={handlePause}>
+            <Typography variant="caption" color="text.disabled" sx={{ mt: '1.0rem', display: 'block', cursor: 'pointer' }} onClick={handlePause}>
               (انقر لإيقاف العد التنازلي)
             </Typography>
           )}
@@ -292,3 +292,5 @@ const SuccessDialog = ({
 };
 
 export default SuccessDialog;
+
+

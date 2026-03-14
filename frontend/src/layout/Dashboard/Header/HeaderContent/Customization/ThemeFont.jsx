@@ -64,7 +64,7 @@ export default function ThemeFont() {
                     })
                   })}
                 >
-                  <Box sx={{ minWidth: 60, bgcolor: 'background.paper', p: 1, '&:hover': { bgcolor: 'background.paper' } }}>
+                  <Box sx={{ minWidth: '3.75rem', bgcolor: 'background.paper', p: 1, '&:hover': { bgcolor: 'background.paper' } }}>
                     <Stack sx={{ gap: 0.5, alignItems: 'center' }}>
                       <Typography variant="h5" color="text.primary" sx={{ fontFamily: item.value }}>
                         Aa

@@ -103,6 +103,7 @@ export default function Button(theme) {
       styleOverrides: {
         root: {
           fontWeight: 400,
+          borderRadius: 4,
           '&::after': {
             content: '""',
             display: 'block',
@@ -200,8 +201,8 @@ export default function Button(theme) {
         textInfo: getColorStyle({ variant: 'text', color: 'info', theme }),
         textWarning: getColorStyle({ variant: 'text', color: 'warning', theme }),
         sizeExtraSmall: {
-          minWidth: 56,
-          fontSize: '0.625rem',
+          minWidth: 56.0,
+          fontSize: '0.75rem',
           padding: '2px 8px'
         },
         loading: {
@@ -218,3 +219,4 @@ export default function Button(theme) {
     }
   };
 }
+

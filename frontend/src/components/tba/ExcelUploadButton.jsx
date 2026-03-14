@@ -244,8 +244,8 @@ const ExcelUploadButton = ({
       <Paper
         variant="outlined"
         sx={{
-          p: 2,
-          borderRadius: 2,
+          p: '1.0rem',
+          borderRadius: '0.125rem',
           borderStyle: 'dashed',
           borderColor: validationErrors.length > 0 ? 'error.main' : 'primary.main',
           bgcolor: validationErrors.length > 0 ? 'error.lighter' : 'primary.lighter'
@@ -254,7 +254,7 @@ const ExcelUploadButton = ({
         <Stack spacing={2}>
           {/* File Icon & Name */}
           <Stack direction="row" spacing={2} alignItems="center">
-            <DescriptionIcon sx={{ fontSize: 40, color: validationErrors.length > 0 ? 'error.main' : 'primary.main' }} />
+            <DescriptionIcon sx={{ fontSize: '2.5rem', color: validationErrors.length > 0 ? 'error.main' : 'primary.main' }} />
             <Box flex={1}>
               <Typography variant="subtitle1" fontWeight="medium" noWrap>
                 {selectedFile.name}
@@ -263,7 +263,7 @@ const ExcelUploadButton = ({
                 {formatFileSize(selectedFile.size)}
               </Typography>
             </Box>
-            {validationErrors.length === 0 && <CheckCircleIcon sx={{ color: 'success.main', fontSize: 28 }} />}
+            {validationErrors.length === 0 && <CheckCircleIcon sx={{ color: 'success.main', fontSize: '1.75rem' }} />}
           </Stack>
 
           {/* File Type */}
@@ -290,8 +290,8 @@ const ExcelUploadButton = ({
         position: 'relative',
         border: '2px dashed',
         borderColor: dragActive ? 'primary.main' : 'divider',
-        borderRadius: 2,
-        p: 4,
+        borderRadius: '0.125rem',
+        p: '2.0rem',
         textAlign: 'center',
         bgcolor: dragActive ? 'primary.lighter' : 'background.paper',
         cursor: 'pointer',
@@ -303,7 +303,7 @@ const ExcelUploadButton = ({
       }}
       onClick={handleButtonClick}
     >
-      <CloudUploadIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+      <CloudUploadIcon sx={{ fontSize: '3.75rem', color: 'text.secondary', mb: '1.0rem' }} />
       <Typography variant="h6" gutterBottom>
         اسحب الملف هنا أو انقر للاختيار
       </Typography>
@@ -350,8 +350,8 @@ const ExcelUploadButton = ({
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 2,
-            minHeight: 300
+            borderRadius: '0.125rem',
+            minHeight: '18.75rem'
           }
         }}
       >
@@ -410,7 +410,7 @@ const ExcelUploadButton = ({
 
         {/* Dialog Actions */}
         {!uploadSuccess && (
-          <DialogActions sx={{ px: 3, pb: 2 }}>
+          <DialogActions sx={{ px: '1.5rem', pb: '1.0rem' }}>
             <Button onClick={handleCloseDialog} disabled={uploading}>
               إلغاء
             </Button>

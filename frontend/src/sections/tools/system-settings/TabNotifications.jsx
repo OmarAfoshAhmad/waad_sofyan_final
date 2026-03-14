@@ -84,7 +84,7 @@ export default function TabNotifications() {
   return (
     <Grid container spacing={3}>
       <Grid size={12}>
-        <MainCard title="Notification Settings" avatar={<BellOutlined style={{ fontSize: 24 }} />}>
+        <MainCard title="Notification Settings" avatar={<BellOutlined style={{ fontSize: '1.5rem' }} />}>
           <Grid container spacing={3}>
             {/* Notification Channels */}
             <Grid size={12}>
@@ -138,7 +138,7 @@ export default function TabNotifications() {
 
             {/* Claims Notifications */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Claims Notifications
               </Divider>
             </Grid>
@@ -173,7 +173,7 @@ export default function TabNotifications() {
 
             {/* PreAuth Notifications */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Pre-authorization Notifications
               </Divider>
             </Grid>
@@ -208,7 +208,7 @@ export default function TabNotifications() {
 
             {/* Members Notifications */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Members Notifications
               </Divider>
             </Grid>
@@ -236,7 +236,7 @@ export default function TabNotifications() {
 
             {/* Visits Notifications */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Visits Notifications
               </Divider>
             </Grid>
@@ -257,7 +257,7 @@ export default function TabNotifications() {
 
             {/* System Alerts */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 System Alerts
               </Divider>
             </Grid>
@@ -285,7 +285,7 @@ export default function TabNotifications() {
 
             {/* Save Button */}
             <Grid size={12}>
-              <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="contained" startIcon={<SaveOutlined />} onClick={handleSave} disabled={loading}>
                   {loading ? 'Saving...' : 'Save Changes'}
                 </Button>

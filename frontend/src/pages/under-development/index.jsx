@@ -14,14 +14,14 @@ const UnderDevelopment = () => {
   const theme = useTheme();
 
   return (
-    <Container maxWidth="md" sx={{ mt: 8, mb: 4 }}>
+    <Container maxWidth="md" sx={{ mt: '4.0rem', mb: '2.0rem' }}>
       <Paper
         elevation={0}
         sx={{
-          p: 6,
+          p: '3.0rem',
           textAlign: 'center',
           border: `2px dashed ${theme.palette.divider}`,
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           background: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[50]
         }}
       >
@@ -29,8 +29,8 @@ const UnderDevelopment = () => {
           {/* Icon */}
           <Box
             sx={{
-              width: 120,
-              height: 120,
+              width: '7.5rem',
+              height: '7.5rem',
               borderRadius: '50%',
               backgroundColor: theme.palette.warning.lighter || theme.palette.warning.light,
               display: 'flex',
@@ -40,7 +40,7 @@ const UnderDevelopment = () => {
           >
             <Construction
               sx={{
-                fontSize: 64,
+                fontSize: '4.0rem',
                 color: theme.palette.warning.main
               }}
             />
@@ -53,7 +53,7 @@ const UnderDevelopment = () => {
             color="warning"
             variant="outlined"
             size="medium"
-            sx={{ px: 2, py: 0.5, fontSize: '0.95rem' }}
+            sx={{ px: '1.0rem', py: 0.5, fontSize: '0.95rem' }}
           />
 
           {/* Main Message - Arabic */}
@@ -61,7 +61,7 @@ const UnderDevelopment = () => {
             <Typography variant="h3" fontWeight="bold" color="text.primary" gutterBottom>
               هذه الميزة قيد التطوير
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mt: 2, fontSize: '1.1rem', lineHeight: 1.8 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ mt: '1.0rem', fontSize: '1.1rem', lineHeight: 1.8 }}>
               نعمل حالياً على تطوير هذه الصفحة.
               <br />
               سيتم إطلاقها في التحديثات القادمة.
@@ -69,7 +69,7 @@ const UnderDevelopment = () => {
           </Box>
 
           {/* Main Message - English */}
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: '1.5rem' }}>
             <Typography variant="h4" fontWeight="600" color="text.primary" gutterBottom>
               This feature is under development
             </Typography>
@@ -84,8 +84,8 @@ const UnderDevelopment = () => {
           <Paper
             elevation={0}
             sx={{
-              mt: 4,
-              p: 3,
+              mt: '2.0rem',
+              p: '1.5rem',
               backgroundColor: theme.palette.info.lighter || theme.palette.info.light,
               border: `1px solid ${theme.palette.info.main}`,
               borderRadius: 1,
@@ -96,7 +96,7 @@ const UnderDevelopment = () => {
               <Info
                 sx={{
                   color: theme.palette.info.main,
-                  fontSize: 28,
+                  fontSize: '1.75rem',
                   mt: 0.5
                 }}
               />
@@ -115,7 +115,7 @@ const UnderDevelopment = () => {
           </Paper>
 
           {/* Roadmap Hint */}
-          <Typography variant="caption" color="text.disabled" sx={{ mt: 3, fontSize: '0.85rem' }}>
+          <Typography variant="caption" color="text.disabled" sx={{ mt: '1.5rem', fontSize: '0.85rem' }}>
             معظم الميزات الأساسية متاحة حالياً. هذه الصفحة من الميزات الاختيارية المخطط لها مستقبلاً.
             <br />
             Most core features are currently available. This page is an optional feature planned for the future.

@@ -114,17 +114,17 @@ const FamilyEligibilityPage = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: '1.5rem' }}>
         {/* Header */}
         <Typography variant="h5" gutterBottom>
           فحص أهلية العائلة
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: '1.5rem' }}>
           تحقق من أهلية المشترك وجميع أفراد عائلته
         </Typography>
 
         {/* Search Form */}
-        <Card sx={{ mb: 3 }}>
+        <Card sx={{ mb: '1.5rem' }}>
           <CardContent>
             <Grid container spacing={2} alignItems="flex-end">
               <Grid size={{ xs: 12, sm: 4 }}>
@@ -171,7 +171,7 @@ const FamilyEligibilityPage = () => {
 
         {/* Error */}
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
@@ -180,9 +180,9 @@ const FamilyEligibilityPage = () => {
         {result && (
           <>
             {/* Summary Card */}
-            <Card sx={{ mb: 3 }}>
+            <Card sx={{ mb: '1.5rem' }}>
               <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: '1.0rem' }}>
                   <Typography variant="h6">ملخص الأهلية</Typography>
                   <Chip label={getSummaryLabel(result.summary?.familyStatus)} color={getSummaryColor(result.summary?.familyStatus)} />
                 </Box>
@@ -218,9 +218,9 @@ const FamilyEligibilityPage = () => {
 
             {/* Primary Member Card */}
             {result.primaryMember && (
-              <Card sx={{ mb: 3, border: 2, borderColor: result.primaryMember.eligible ? 'success.main' : 'error.main' }}>
+              <Card sx={{ mb: '1.5rem', border: 2, borderColor: result.primaryMember.eligible ? 'success.main' : 'error.main' }}>
                 <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '1.0rem' }}>
                     <MemberAvatar
                       member={{
                         photoUrl: result.primaryMember.photoUrl,
@@ -248,13 +248,13 @@ const FamilyEligibilityPage = () => {
                   </Box>
 
                   {!result.primaryMember.eligible && result.primaryMember.reasonAr && (
-                    <Alert severity="error" sx={{ mt: 2 }}>
+                    <Alert severity="error" sx={{ mt: '1.0rem' }}>
                       {result.primaryMember.reasonAr}
                     </Alert>
                   )}
 
                   {result.primaryMember.policyNumber && (
-                    <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+                    <Box sx={{ mt: '1.0rem', p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
                       <Typography variant="caption">
                         رقم الوثيقة: {result.primaryMember.policyNumber} | فترة التغطية: {result.primaryMember.coverageStart} -{' '}
                         {result.primaryMember.coverageEnd}
@@ -336,3 +336,4 @@ const FamilyEligibilityPage = () => {
 };
 
 export default FamilyEligibilityPage;
+

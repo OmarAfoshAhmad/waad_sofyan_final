@@ -38,24 +38,24 @@ const PageErrorFallback = ({ pageName, errorId, onRetry, onGoHome }) => (
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 400,
-      p: 3
+      minHeight: '25.0rem',
+      p: '1.5rem'
     }}
   >
     <Card
       sx={{
-        maxWidth: 500,
+        maxWidth: '31.25rem',
         width: '100%',
         textAlign: 'center',
         boxShadow: (theme) => `0 4px 20px ${alpha(theme.palette.error.main, 0.1)}`
       }}
     >
-      <CardContent sx={{ p: 4 }}>
+      <CardContent sx={{ p: '2.0rem' }}>
         <ErrorOutlineIcon
           sx={{
-            fontSize: 64,
+            fontSize: '4.0rem',
             color: 'error.main',
-            mb: 2
+            mb: '1.0rem'
           }}
         />
 
@@ -69,11 +69,11 @@ const PageErrorFallback = ({ pageName, errorId, onRetry, onGoHome }) => (
           </Typography>
         )}
 
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: '1.5rem' }}>
           عذراً، واجه النظام مشكلة أثناء تحميل هذه الصفحة. يمكنك الإنتقال للصفحة الرئيسية أو إعادة المحاولة.
         </Typography>
 
-        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: '1.0rem' }}>
           <Button variant="contained" color="primary" startIcon={<RefreshIcon />} onClick={onRetry}>
             إعادة المحاولة
           </Button>
@@ -83,10 +83,10 @@ const PageErrorFallback = ({ pageName, errorId, onRetry, onGoHome }) => (
           </Button>
         </Stack>
 
-        <Divider sx={{ my: 2 }} />
+        <Divider sx={{ my: '1.0rem' }} />
 
         <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-          <BugReportIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+          <BugReportIcon sx={{ fontSize: '0.875rem', color: 'text.disabled' }} />
           <Typography variant="caption" color="text.disabled">
             معرف الخطأ: {errorId}
           </Typography>

@@ -93,8 +93,8 @@ const MEDICAL_TABLE_THEME = {
  * @example
  * <UnifiedMedicalTable
  *   columns={[
- *     { id: 'id', label: 'الرقم', minWidth: 80, icon: <BadgeIcon /> },
- *     { id: 'name', label: 'الاسم', minWidth: 160, icon: <PersonIcon /> }
+ *     { id: 'id', label: 'الرقم', minWidth: '5.0rem', icon: <BadgeIcon /> },
+ *     { id: 'name', label: 'الاسم', minWidth: '10.0rem', icon: <PersonIcon /> }
  *   ]}
  *   rows={data}
  *   loading={false}
@@ -259,7 +259,7 @@ const UnifiedMedicalTable = ({
         component={Paper}
         variant="outlined"
         sx={{
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           overflow: 'auto',
           border: `1px solid ${theme.palette.divider}`,
           boxShadow: 'none', // NO shadows
@@ -293,7 +293,7 @@ const UnifiedMedicalTable = ({
                       bgcolor: headerBg,
                       color: headerText,
                       fontWeight: 600,
-                      py: 1.5,
+                      py: '0.75rem',
                       minWidth: column.minWidth || 80,
                       width: column.width,
                       whiteSpace: 'nowrap',
@@ -345,7 +345,7 @@ const UnifiedMedicalTable = ({
             {/* Loading State */}
             {resolvedLoading ? (
               <TableRow>
-                <TableCell colSpan={colSpan} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={colSpan} align="center" sx={{ py: '2.0rem' }}>
                   <CircularProgress size={40} />
                   <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
                     {loadingMessage}
@@ -355,8 +355,8 @@ const UnifiedMedicalTable = ({
             ) : !rows || rows.length === 0 ? (
               /* Empty State */
               <TableRow>
-                <TableCell colSpan={colSpan} align="center" sx={{ py: 4 }}>
-                  <ResolvedEmptyIcon sx={{ fontSize: 48, color: 'action.disabled', mb: 1 }} />
+                <TableCell colSpan={colSpan} align="center" sx={{ py: '2.0rem' }}>
+                  <ResolvedEmptyIcon sx={{ fontSize: '3.0rem', color: 'action.disabled', mb: 1 }} />
                   <Typography variant="body1" color="textSecondary">
                     {resolvedEmptyMessage}
                   </Typography>
@@ -384,7 +384,7 @@ const UnifiedMedicalTable = ({
                       }}
                     >
                       {renderExpandedRow && (
-                        <TableCell padding="checkbox" sx={{ py: 1.5, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}` }}>
+                        <TableCell padding="checkbox" sx={{ py: '0.75rem', borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}` }}>
                           {expandable && (
                             <IconButton size="small" onClick={() => toggleRowExpansion(rowKey)}>
                               {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
@@ -397,7 +397,7 @@ const UnifiedMedicalTable = ({
                           key={column.id}
                           align={column.align || 'left'}
                           sx={{
-                            py: 1.5,
+                            py: '0.75rem',
                             borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}`
                           }}
                         >
@@ -413,7 +413,7 @@ const UnifiedMedicalTable = ({
                       <TableRow sx={{ '& td': { padding: 0, borderBottom: isExpanded ? `1px solid ${alpha(theme.palette.divider, 0.8)}` : 'none' } }}>
                         <TableCell colSpan={colSpan}>
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                            <Box sx={{ p: 2, bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                            <Box sx={{ p: '1.0rem', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
                               {renderExpandedRow(row, rowIndex)}
                             </Box>
                           </Collapse>
@@ -508,3 +508,5 @@ UnifiedMedicalTable.propTypes = {
 };
 
 export default UnifiedMedicalTable;
+
+

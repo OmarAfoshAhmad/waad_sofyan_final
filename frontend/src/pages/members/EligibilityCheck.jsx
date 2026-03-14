@@ -251,7 +251,7 @@ const EligibilityCheck = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 6 }}>
-                      <Paper elevation={1} sx={{ p: 2, bgcolor: 'primary.lighter' }}>
+                      <Paper elevation={1} sx={{ p: '1.0rem', bgcolor: 'primary.lighter' }}>
                         <Stack direction="row" spacing={2} alignItems="center">
                           <QrCodeIcon color="primary" />
                           <Box>
@@ -267,7 +267,7 @@ const EligibilityCheck = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 6 }}>
-                      <Paper elevation={1} sx={{ p: 2 }}>
+                      <Paper elevation={1} sx={{ p: '1.0rem' }}>
                         <Stack direction="row" spacing={2} alignItems="center">
                           <CreditCardIcon color="secondary" />
                           <Box>
@@ -291,7 +291,7 @@ const EligibilityCheck = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <Paper elevation={0} variant="outlined" sx={{ p: 1.5, bgcolor: 'success.lighter', borderLeft: '4px solid', borderLeftColor: 'success.main' }}>
+                      <Paper elevation={0} variant="outlined" sx={{ p: '0.75rem', bgcolor: 'success.lighter', borderLeft: '4px solid', borderLeftColor: 'success.main' }}>
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <SavingsIcon color="success" />
                           <Box>
@@ -307,7 +307,7 @@ const EligibilityCheck = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <Paper elevation={0} variant="outlined" sx={{ p: 1.5, bgcolor: 'warning.lighter', borderLeft: '4px solid', borderLeftColor: 'warning.main' }}>
+                      <Paper elevation={0} variant="outlined" sx={{ p: '0.75rem', bgcolor: 'warning.lighter', borderLeft: '4px solid', borderLeftColor: 'warning.main' }}>
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <PaymentsIcon color="warning" />
                           <Box>
@@ -323,7 +323,7 @@ const EligibilityCheck = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <Paper elevation={0} variant="outlined" sx={{ p: 1.5, bgcolor: 'info.lighter', borderLeft: '4px solid', borderLeftColor: 'info.main' }}>
+                      <Paper elevation={0} variant="outlined" sx={{ p: '0.75rem', bgcolor: 'info.lighter', borderLeft: '4px solid', borderLeftColor: 'info.main' }}>
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <TrendingUpIcon color="info" />
                           <Box>
@@ -535,3 +535,5 @@ const EligibilityCheck = () => {
 };
 
 export default EligibilityCheck;
+
+

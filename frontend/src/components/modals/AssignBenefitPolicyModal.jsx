@@ -255,7 +255,7 @@ const AssignBenefitPolicyModal = ({ open, onClose, onSuccess }) => {
 
       {/* Dialog Content */}
       <DialogContent>
-        <Stack spacing={3} sx={{ mt: 2 }}>
+        <Stack spacing={3} sx={{ mt: '1.0rem' }}>
           {/* Info Alert */}
           <Alert severity="info" icon={<AssignmentIcon />}>
             سيتم ربط جميع أعضاء الشريك المحدد بوثيقة المنافع المختارة دفعة واحدة
@@ -264,7 +264,7 @@ const AssignBenefitPolicyModal = ({ open, onClose, onSuccess }) => {
           {/* Employer Selection */}
           <Box>
             <Typography variant="subtitle2" fontWeight="medium" mb={1}>
-              <PeopleIcon sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+              <PeopleIcon sx={{ fontSize: '1.0rem', verticalAlign: 'middle', mr: 0.5 }} />
               الشريك
             </Typography>
             <Autocomplete
@@ -297,7 +297,7 @@ const AssignBenefitPolicyModal = ({ open, onClose, onSuccess }) => {
           {selectedEmployer && (
             <Box
               sx={{
-                p: 2,
+                p: '1.0rem',
                 bgcolor: 'primary.lighter',
                 borderRadius: 1,
                 border: '1px solid',
@@ -320,7 +320,7 @@ const AssignBenefitPolicyModal = ({ open, onClose, onSuccess }) => {
           {/* Benefit Policy Selection */}
           <Box>
             <Typography variant="subtitle2" fontWeight="medium" mb={1}>
-              <DescriptionIcon sx={{ fontSize: 16, verticalAlign: 'middle', mr: 0.5 }} />
+              <DescriptionIcon sx={{ fontSize: '1.0rem', verticalAlign: 'middle', mr: 0.5 }} />
               وثيقة المنافع
             </Typography>
             <Autocomplete
@@ -375,7 +375,7 @@ const AssignBenefitPolicyModal = ({ open, onClose, onSuccess }) => {
       <Divider />
 
       {/* Dialog Actions */}
-      <DialogActions sx={{ p: 2 }}>
+      <DialogActions sx={{ p: '1.0rem' }}>
         <Button onClick={handleClose} variant="outlined" disabled={submitting}>
           إلغاء
         </Button>

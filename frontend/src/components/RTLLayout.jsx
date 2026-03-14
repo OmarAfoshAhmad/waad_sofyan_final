@@ -27,7 +27,9 @@ export default function RTLLayout({ children }) {
   useEffect(() => {
     document.documentElement.dir = state.themeDirection;
     document.body.dir = state.themeDirection;
-  }, [state.themeDirection]);
+    // Set global font size for rem scaling
+    document.documentElement.style.fontSize = `${state.fontSize}px`;
+  }, [state.themeDirection, state.fontSize]);
 
   // Sync direction with language changes
   useEffect(() => {

@@ -17,7 +17,7 @@ export default function AccordionSummary(theme) {
         root: {
           backgroundColor: paletteSecondary.lighter ?? varsPalette.primary?.lighter ?? theme.palette.primary?.lighter,
           flexDirection: 'row-reverse',
-          minHeight: 46
+          minHeight: 46.0
         },
         expandIconWrapper: {
           '&.Mui-expanded': {
@@ -33,3 +33,5 @@ export default function AccordionSummary(theme) {
     }
   };
 }
+
+

@@ -41,7 +41,7 @@ export default function Chip(theme) {
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 4,
+          borderRadius: 4.0,
           '&:active': {
             boxShadow: 'none'
           },
@@ -54,7 +54,7 @@ export default function Chip(theme) {
         },
         sizeLarge: {
           fontSize: '1rem',
-          height: 40
+          height: 40.0
         },
         light: {
           ...defaultLightChip,

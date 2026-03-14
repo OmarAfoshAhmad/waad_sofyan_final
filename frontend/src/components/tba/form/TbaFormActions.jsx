@@ -47,7 +47,7 @@ const TbaFormActions = ({
   return (
     <Box
       sx={{
-        pt: 2.5,
+        pt: '1.25rem',
         mt: 1,
         borderTop: '1px solid',
         borderColor: 'divider',
@@ -69,12 +69,12 @@ const TbaFormActions = ({
             color="inherit"
             onClick={onCancel}
             disabled={loading}
-            startIcon={CancelIcon && <CancelIcon sx={{ fontSize: 18 }} />}
+            startIcon={CancelIcon && <CancelIcon sx={{ fontSize: '1.125rem' }} />}
             fullWidth={fullWidth}
             sx={{
-              px: 2.5,
+              px: '1.25rem',
               py: 0.75,
-              borderRadius: 1.5,
+              borderRadius: '0.4rem',
               borderColor: 'grey.300',
               '&:hover': {
                 borderColor: 'grey.400',
@@ -94,13 +94,13 @@ const TbaFormActions = ({
           onClick={onSubmit}
           disabled={loading || disabled}
           startIcon={
-            loading ? <CircularProgress size={16} color="inherit" /> : SubmitIcon ? <SubmitIcon sx={{ fontSize: 18 }} /> : undefined
+            loading ? <CircularProgress size={16} color="inherit" /> : SubmitIcon ? <SubmitIcon sx={{ fontSize: '1.125rem' }} /> : undefined
           }
           fullWidth={fullWidth}
           sx={{
-            px: 3,
+            px: '1.5rem',
             py: 0.75,
-            borderRadius: 1.5,
+            borderRadius: '0.4rem',
             boxShadow: 'none',
             '&:hover': {
               boxShadow: '0 2px 8px rgba(24, 144, 255, 0.25)'

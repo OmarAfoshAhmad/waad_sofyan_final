@@ -150,16 +150,16 @@ const PreAuthAuditPage = () => {
     await exportToExcel(exportData, filename.replace('.xlsx', ''), {
       reportTitle: 'سجل تدقيق الموافقة المسبقة',
       columns: [
-        { key: 'index', header: '#', width: 8, type: 'number' },
-        { key: 'reference', header: 'الرقم المرجعي', width: 22, type: 'string' },
-        { key: 'action', header: 'الإجراء', width: 16, type: 'string' },
-        { key: 'user', header: 'المستخدم', width: 20, type: 'string' },
-        { key: 'date', header: 'التاريخ', width: 20, type: 'string' },
-        { key: 'field', header: 'الحقل', width: 18, type: 'string' },
-        { key: 'oldValue', header: 'القيمة القديمة', width: 24, type: 'string' },
-        { key: 'newValue', header: 'القيمة الجديدة', width: 24, type: 'string' },
-        { key: 'notes', header: 'الملاحظات', width: 34, type: 'string' },
-        { key: 'ip', header: 'IP', width: 16, type: 'string' }
+        { key: 'index', header: '#', width: '0.375rem', type: 'number' },
+        { key: 'reference', header: 'الرقم المرجعي', width: '1.375rem', type: 'string' },
+        { key: 'action', header: 'الإجراء', width: '1.0rem', type: 'string' },
+        { key: 'user', header: 'المستخدم', width: '1.25rem', type: 'string' },
+        { key: 'date', header: 'التاريخ', width: '1.25rem', type: 'string' },
+        { key: 'field', header: 'الحقل', width: '1.125rem', type: 'string' },
+        { key: 'oldValue', header: 'القيمة القديمة', width: '1.5rem', type: 'string' },
+        { key: 'newValue', header: 'القيمة الجديدة', width: '1.5rem', type: 'string' },
+        { key: 'notes', header: 'الملاحظات', width: '2.125rem', type: 'string' },
+        { key: 'ip', header: 'IP', width: '1.0rem', type: 'string' }
       ]
     });
   };
@@ -198,7 +198,7 @@ const PreAuthAuditPage = () => {
         />
 
         {/* Filters Section */}
-        <Card sx={{ mb: 3 }}>
+        <Card sx={{ mb: '1.5rem' }}>
           <CardContent>
             {/* Search and Filter Toggle */}
             <Stack direction="row" spacing={2} sx={{ mb: showFilters ? 3 : 0 }}>
@@ -215,7 +215,7 @@ const PreAuthAuditPage = () => {
                 variant={showFilters ? 'contained' : 'outlined'}
                 startIcon={<FilterIcon />}
                 onClick={() => setShowFilters(!showFilters)}
-                sx={{ minWidth: 120 }}
+                sx={{ minWidth: '7.5rem' }}
               >
                 فلاتر
               </Button>
@@ -224,7 +224,7 @@ const PreAuthAuditPage = () => {
             {/* Filter Fields */}
             {showFilters && (
               <>
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: '1.0rem' }} />
                 <Grid container spacing={2}>
                   {/* Action Type Filter */}
                   <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -282,7 +282,7 @@ const PreAuthAuditPage = () => {
 
                 {/* Active Filters Summary */}
                 {(filters.action || filters.user || filters.startDate || filters.endDate || searchQuery) && (
-                  <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap">
+                  <Stack direction="row" spacing={1} sx={{ mt: '1.0rem' }} flexWrap="wrap">
                     <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 2.5 }}>
                       الفلاتر النشطة:
                     </Typography>
@@ -343,7 +343,7 @@ const PreAuthAuditPage = () => {
 
         {/* Results Count */}
         {!isLoading && (
-          <Paper sx={{ p: 2, mb: 2, bgcolor: 'primary.lighter' }}>
+          <Paper sx={{ p: '1.0rem', mb: '1.0rem', bgcolor: 'primary.lighter' }}>
             <Typography variant="body2" color="primary.dark">
               عرض <strong>{filteredData.length}</strong> سجل تدقيق
               {searchQuery && ` (نتائج البحث عن "${searchQuery}")`}
@@ -353,7 +353,7 @@ const PreAuthAuditPage = () => {
 
         {/* Error Alert */}
         {auditsError && (
-          <Alert severity="error" sx={{ mb: 3 }}>
+          <Alert severity="error" sx={{ mb: '1.5rem' }}>
             {auditsError}
           </Alert>
         )}
@@ -368,3 +368,6 @@ const PreAuthAuditPage = () => {
 };
 
 export default PreAuthAuditPage;
+
+
+

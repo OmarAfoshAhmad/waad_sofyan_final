@@ -202,62 +202,62 @@ const PreApprovalsList = () => {
       {
         id: 'referenceNumber',
         label: '#',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'member',
         label: 'المؤمَّن عليه',
-        minWidth: 180,
+        minWidth: '11.25rem',
         icon: <PersonIcon fontSize="small" />,
         sortable: false
       },
       {
         id: 'provider',
         label: 'مقدم الخدمة',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'service',
         label: 'الخدمة',
-        minWidth: 150,
+        minWidth: '9.375rem',
         icon: <MedicalServicesIcon fontSize="small" />,
         sortable: false
       },
       {
         id: 'priority',
         label: 'الأولوية',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'contractPrice',
         label: 'سعر العقد',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'approvedAmount',
         label: 'المبلغ الموافق عليه',
-        minWidth: 140,
+        minWidth: '8.75rem',
         align: 'right',
         sortable: false
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'actions',
         label: 'الإجراءات',
-        minWidth: 80,
+        minWidth: '5.0rem',
         align: 'center',
         sortable: false
       }
@@ -280,7 +280,7 @@ const PreApprovalsList = () => {
         case 'member':
           return (
             <Stack direction="row" spacing={1} alignItems="center">
-              <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+              <PersonIcon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />
               <Typography variant="body2">{preApproval?.memberName ?? preApproval?.memberFullName ?? '-'}</Typography>
             </Stack>
           );
@@ -354,13 +354,13 @@ const PreApprovalsList = () => {
       <MainCard
         title="قائمة الموافقات المسبقة"
         secondary={
-          <Alert severity="info" variant="outlined" sx={{ py: 0.5, px: 1.5, border: 'none', bgcolor: 'transparent' }} icon={false}>
+          <Alert severity="info" variant="outlined" sx={{ py: 0.5, px: '0.75rem', border: 'none', bgcolor: 'transparent' }} icon={false}>
             💡 لإنشاء موافقة جديدة، استخدم <strong>سجل الزيارات</strong> في بوابة مقدم الخدمة
           </Alert>
         }
       >
         {/* Search Bar */}
-        <Stack direction="row" spacing={2} sx={{ mb: 3 }} alignItems="center">
+        <Stack direction="row" spacing={2} sx={{ mb: '1.5rem' }} alignItems="center">
           <TextField
             placeholder="بحث..."
             value={searchTerm}
@@ -373,7 +373,7 @@ const PreApprovalsList = () => {
                 </InputAdornment>
               )
             }}
-            sx={{ minWidth: 300 }}
+            sx={{ minWidth: '18.75rem' }}
           />
           <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch}>
             بحث
@@ -406,3 +406,5 @@ const PreApprovalsList = () => {
 };
 
 export default PreApprovalsList;
+
+

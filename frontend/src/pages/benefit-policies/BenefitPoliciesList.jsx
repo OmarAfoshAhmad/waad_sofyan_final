@@ -240,13 +240,13 @@ const BenefitPoliciesList = () => {
 
   const columns = useMemo(
     () => [
-      { id: 'policyCode', label: 'رمز السياسة', minWidth: 140, align: 'center', sortable: true },
-      { id: 'name', label: 'اسم السياسة', minWidth: 260, align: 'right', sortable: true },
-      { id: 'employerName', label: 'الشريك', minWidth: 220, align: 'right', sortable: true },
-      { id: 'startDate', label: 'تاريخ البدء', minWidth: 130, align: 'center', sortable: true },
-      { id: 'endDate', label: 'تاريخ الانتهاء', minWidth: 130, align: 'center', sortable: true },
-      { id: 'status', label: 'الحالة', minWidth: 120, align: 'center', sortable: true },
-      { id: 'actions', label: 'الإجراءات', minWidth: 130, align: 'center', sortable: false }
+      { id: 'policyCode', label: 'رمز السياسة', minWidth: '8.75rem', align: 'center', sortable: true },
+      { id: 'name', label: 'اسم السياسة', minWidth: '16.25rem', align: 'right', sortable: true },
+      { id: 'employerName', label: 'الشريك', minWidth: '13.75rem', align: 'right', sortable: true },
+      { id: 'startDate', label: 'تاريخ البدء', minWidth: '8.125rem', align: 'center', sortable: true },
+      { id: 'endDate', label: 'تاريخ الانتهاء', minWidth: '8.125rem', align: 'center', sortable: true },
+      { id: 'status', label: 'الحالة', minWidth: '7.5rem', align: 'center', sortable: true },
+      { id: 'actions', label: 'الإجراءات', minWidth: '8.125rem', align: 'center', sortable: false }
     ],
     []
   );
@@ -349,7 +349,7 @@ const BenefitPoliciesList = () => {
         <MainCard sx={{ mb: 1, flexShrink: 0 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
             <Tooltip title="تحديث">
-              <IconButton onClick={fetchPolicies} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}>
+              <IconButton onClick={fetchPolicies} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -359,7 +359,7 @@ const BenefitPoliciesList = () => {
               label={`${totalCount} سياسة`}
               variant="outlined"
               color="primary"
-              sx={{ height: 40, borderRadius: 1, fontWeight: 'bold', fontSize: '14px', px: 1 }}
+              sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
             />
 
             <TextField
@@ -387,7 +387,7 @@ const BenefitPoliciesList = () => {
                     </IconButton>
                   </InputAdornment>
                 ) : null,
-                sx: { height: 40 }
+                sx: { height: '2.5rem' }
               }}
             />
 
@@ -400,8 +400,8 @@ const BenefitPoliciesList = () => {
                 setFilters((prev) => ({ ...prev, employerId: event.target.value }));
                 setPage(0);
               }}
-              sx={{ minWidth: 180, bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: 40 } }}
+              sx={{ minWidth: '11.25rem', bgcolor: 'background.paper' }}
+              InputProps={{ sx: { height: '2.5rem' } }}
               InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
@@ -423,8 +423,8 @@ const BenefitPoliciesList = () => {
                 setFilters((prev) => ({ ...prev, status: event.target.value }));
                 setPage(0);
               }}
-              sx={{ minWidth: 130, bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: 40 } }}
+              sx={{ minWidth: '8.125rem', bgcolor: 'background.paper' }}
+              InputProps={{ sx: { height: '2.5rem' } }}
               InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
@@ -437,7 +437,7 @@ const BenefitPoliciesList = () => {
               ))}
             </TextField>
 
-            <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: 120, height: 40 }}>
+            <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: '7.5rem', height: '2.5rem' }}>
               إعادة ضبط
             </Button>
           </Stack>
@@ -479,3 +479,4 @@ const BenefitPoliciesList = () => {
 };
 
 export default BenefitPoliciesList;
+

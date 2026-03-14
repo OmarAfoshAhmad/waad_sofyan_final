@@ -120,7 +120,7 @@ export default function ColorScheme() {
                     })
                   }}
                 >
-                  <Stack sx={{ gap: 1.5, alignItems: 'center' }}>
+                  <Stack sx={{ gap: '0.75rem', alignItems: 'center' }}>
                     <CardMedia
                       component="img"
                       src={colorLayout}
@@ -130,8 +130,8 @@ export default function ColorScheme() {
                         borderColor: color.primary,
                         borderRadius: 1,
                         bgcolor: color.primary,
-                        width: 40,
-                        height: 40
+                        width: '2.5rem',
+                        height: '2.5rem'
                       }}
                     />
                     <Typography variant="caption">{color.label}</Typography>
@@ -146,3 +146,5 @@ export default function ColorScheme() {
     </RadioGroup>
   );
 }
+
+

@@ -98,7 +98,7 @@ const MedicalReviewLayout = ({
     return (
       <Box sx={{ minHeight }}>
         {/* Mobile Tabs */}
-        <Paper square elevation={1} sx={{ mb: 2 }}>
+        <Paper square elevation={1} sx={{ mb: '1.0rem' }}>
           <Tabs
             value={mobileTab}
             onChange={(_, value) => setMobileTab(value)}
@@ -189,8 +189,8 @@ const MedicalReviewLayout = ({
                 onClick={() => setLeftCollapsed(true)}
                 sx={{
                   position: 'absolute',
-                  top: 8,
-                  right: 8,
+                  top: '4.0rem',
+                  right: '0.375rem',
                   zIndex: 1,
                   bgcolor: 'background.paper',
                   '&:hover': {
@@ -241,7 +241,7 @@ const MedicalReviewLayout = ({
                 size="small"
                 sx={{
                   position: 'absolute',
-                  top: 8,
+                  top: '4.0rem',
                   right: -12,
                   bgcolor: 'background.paper',
                   boxShadow: 2,
@@ -341,3 +341,5 @@ MedicalReviewLayout.propTypes = {
 };
 
 export default memo(MedicalReviewLayout);
+
+

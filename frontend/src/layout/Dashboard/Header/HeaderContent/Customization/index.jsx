@@ -80,7 +80,7 @@ export default function Customization() {
           </IconButton>
         </Tooltip>
       </Box>
-      <Drawer sx={{ zIndex: 2001 }} anchor="right" onClose={handleToggle} open={open} slotProps={{ paper: { sx: { width: 340 } } }}>
+      <Drawer sx={{ zIndex: 2001 }} anchor="right" onClose={handleToggle} open={open} slotProps={{ paper: { sx: { width: '21.25rem' } } }}>
         {open && (
           <MainCard
             title="تخصيص المظهر"
@@ -107,7 +107,7 @@ export default function Customization() {
               <AccordionGroup variant="settings">
                 <Accordion defaultExpanded sx={{ borderTop: 'none' }}>
                   <AccordionSummary aria-controls="panel1d-content" id="panel1d-header">
-                    <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center' }}>
+                    <Stack direction="row" sx={{ gap: '0.75rem', alignItems: 'center' }}>
                       <Avatar alt="settings toggler" variant="rounded">
                         <LayoutOutlined />
                       </Avatar>
@@ -125,7 +125,7 @@ export default function Customization() {
                 </Accordion>
                 <Accordion defaultExpanded>
                   <AccordionSummary aria-controls="panel4d-content" id="panel4d-header">
-                    <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center' }}>
+                    <Stack direction="row" sx={{ gap: '0.75rem', alignItems: 'center' }}>
                       <Avatar alt="settings toggler" variant="rounded">
                         <BorderInnerOutlined />
                       </Avatar>
@@ -143,7 +143,7 @@ export default function Customization() {
                 </Accordion>
                 <Accordion defaultExpanded>
                   <AccordionSummary aria-controls="panel3d-content" id="panel3d-header">
-                    <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center' }}>
+                    <Stack direction="row" sx={{ gap: '0.75rem', alignItems: 'center' }}>
                       <Avatar alt="settings toggler" variant="rounded">
                         <BgColorsOutlined />
                       </Avatar>
@@ -161,7 +161,7 @@ export default function Customization() {
                 </Accordion>
                 <Accordion defaultExpanded>
                   <AccordionSummary aria-controls="panel4d-content" id="panel4d-header">
-                    <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center' }}>
+                    <Stack direction="row" sx={{ gap: '0.75rem', alignItems: 'center' }}>
                       <Avatar alt="settings toggler" variant="rounded">
                         <BorderInnerOutlined />
                       </Avatar>
@@ -179,7 +179,7 @@ export default function Customization() {
                 </Accordion>
                 <Accordion defaultExpanded sx={{ borderBottom: 'none' }}>
                   <AccordionSummary aria-controls="panel4d-content" id="panel4d-header">
-                    <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center' }}>
+                    <Stack direction="row" sx={{ gap: '0.75rem', alignItems: 'center' }}>
                       <Avatar alt="settings toggler" variant="rounded">
                         <FontColorsOutlined />
                       </Avatar>
@@ -203,3 +203,5 @@ export default function Customization() {
     </>
   );
 }
+
+

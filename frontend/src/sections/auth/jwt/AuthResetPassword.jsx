@@ -220,10 +220,10 @@ export default function AuthResetPassword() {
                   {errors.password}
                 </FormHelperText>
               )}
-              <FormControl fullWidth sx={{ mt: 2 }}>
+              <FormControl fullWidth sx={{ mt: '1.0rem' }}>
                 <Grid container spacing={2} sx={{ alignItems: 'center' }}>
                   <Grid>
-                    <Box sx={{ bgcolor: level?.color, width: 85, height: 8, borderRadius: '7px' }} />
+                    <Box sx={{ bgcolor: level?.color, width: '5.3125rem', height: '0.375rem', borderRadius: '0.4375rem' }} />
                   </Grid>
                   <Grid>
                     <Typography variant="subtitle1" fontSize="0.75rem">
@@ -273,3 +273,5 @@ export default function AuthResetPassword() {
     </Formik>
   );
 }
+
+

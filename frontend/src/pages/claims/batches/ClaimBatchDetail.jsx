@@ -283,17 +283,17 @@ export default function ClaimBatchDetail() {
         const worksheet = workbook.addWorksheet('المطالبات');
 
         worksheet.columns = [
-            { header: '#', key: 'index', width: 10 },
-            { header: 'المرجع', key: 'ref', width: 25 },
-            { header: 'مقدم الخدمة', key: 'provider', width: 50 },
-            { header: 'المريض', key: 'patient', width: 30 },
-            { header: 'تاريخ الخدمة', key: 'serviceDate', width: 18 },
-            { header: 'الحالة', key: 'status', width: 15 },
-            { header: 'المبلغ الإجمالي', key: 'amount', width: 20 },
-            { header: 'المعتمد', key: 'covered', width: 20 },
-            { header: 'المرفوض', key: 'refused', width: 20 },
-            { header: 'نصيب المؤمن عليه', key: 'copay', width: 22 },
-            { header: 'المستحق للمزود', key: 'paid', width: 20 }
+            { header: '#', key: 'index', width: '0.625rem' },
+            { header: 'المرجع', key: 'ref', width: '1.5625rem' },
+            { header: 'مقدم الخدمة', key: 'provider', width: '3.125rem' },
+            { header: 'المريض', key: 'patient', width: '1.875rem' },
+            { header: 'تاريخ الخدمة', key: 'serviceDate', width: '1.125rem' },
+            { header: 'الحالة', key: 'status', width: '0.9375rem' },
+            { header: 'المبلغ الإجمالي', key: 'amount', width: '1.25rem' },
+            { header: 'المعتمد', key: 'covered', width: '1.25rem' },
+            { header: 'المرفوض', key: 'refused', width: '1.25rem' },
+            { header: 'نصيب المؤمن عليه', key: 'copay', width: '1.375rem' },
+            { header: 'المستحق للمزود', key: 'paid', width: '1.25rem' }
         ];
 
         worksheet.views = [{ rightToLeft: true }];
@@ -426,19 +426,19 @@ export default function ClaimBatchDetail() {
 
     // Table Columns
     const columns = [
-        { id: 'select', label: '', minWidth: 40, align: 'center', sortable: false },
-        { id: 'index', label: '#', minWidth: 30, align: 'center', sortable: false },
-        { id: 'ref', label: 'المرجع', minWidth: 50, sortable: false },
-        { id: 'provider', label: 'مقدم الخدمة', minWidth: 150, sortable: false },
-        { id: 'patient', label: 'الاسم (المريض)', minWidth: 250, sortable: true },
-        { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: 80, align: 'center', sortable: true },
-        { id: 'status', label: 'الحالة', minWidth: 80, align: 'center', sortable: true },
-        { id: 'amount', label: 'الإجمالي', minWidth: 110, align: 'right', sortable: true },
-        { id: 'covered', label: 'المعتمد', minWidth: 110, align: 'right', sortable: true },
-        { id: 'refused', label: 'المرفوض', minWidth: 100, align: 'right', sortable: true },
-        { id: 'copay', label: 'نصيب المؤمن', minWidth: 100, align: 'right', sortable: true },
-        { id: 'paid', label: 'المستحق', minWidth: 110, align: 'right', sortable: true },
-        { id: 'actions', label: 'إجراءات', minWidth: 110, align: 'center', sortable: false }
+        { id: 'select', label: '', minWidth: '2.5rem', align: 'center', sortable: false },
+        { id: 'index', label: '#', minWidth: '1.875rem', align: 'center', sortable: false },
+        { id: 'ref', label: 'المرجع', minWidth: '3.125rem', sortable: false },
+        { id: 'provider', label: 'مقدم الخدمة', minWidth: '9.375rem', sortable: false },
+        { id: 'patient', label: 'الاسم (المريض)', minWidth: '15.625rem', sortable: true },
+        { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '5.0rem', align: 'center', sortable: true },
+        { id: 'status', label: 'الحالة', minWidth: '5.0rem', align: 'center', sortable: true },
+        { id: 'amount', label: 'الإجمالي', minWidth: '6.875rem', align: 'right', sortable: true },
+        { id: 'covered', label: 'المعتمد', minWidth: '6.875rem', align: 'right', sortable: true },
+        { id: 'refused', label: 'المرفوض', minWidth: '6.25rem', align: 'right', sortable: true },
+        { id: 'copay', label: 'نصيب المؤمن', minWidth: '6.25rem', align: 'right', sortable: true },
+        { id: 'paid', label: 'المستحق', minWidth: '6.875rem', align: 'right', sortable: true },
+        { id: 'actions', label: 'إجراءات', minWidth: '6.875rem', align: 'center', sortable: false }
     ];
 
     // Totals for footer
@@ -477,7 +477,7 @@ export default function ClaimBatchDetail() {
                 label={s.label}
                 size="small"
                 sx={{
-                    fontWeight: 700,
+                    fontWeight: 400,
                     fontSize: '0.75rem',
                     bgcolor: s.bgcolor || 'action.selected',
                     color: `${s.color}.main`,
@@ -503,21 +503,21 @@ export default function ClaimBatchDetail() {
                 return <Typography variant="body2" sx={{ color: 'text.disabled' }}>{index + 1}</Typography>;
             case 'ref':
                 return (
-                    <Typography variant="body2" fontWeight={700} color="primary.main" dir="ltr">
+                    <Typography variant="body2" fontWeight={400} color="primary.main" dir="ltr">
                         {batchCode}/{String(index + 1).padStart(4, '0')}
                     </Typography>
                 );
             case 'provider':
                 return (
                     <Stack direction="row" spacing={1} alignItems="center">
-                        <BusinessIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                        <BusinessIcon sx={{ fontSize: '1.0rem', color: 'text.disabled' }} />
                         <Typography variant="body2">{provider?.name}</Typography>
                     </Stack>
                 );
             case 'patient':
                 return (
                     <Stack direction="row" spacing={1} alignItems="center">
-                        <Avatar sx={{ width: 24, height: 24, fontSize: '0.7rem', bgcolor: 'secondary.light' }}>
+                        <Avatar sx={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem', bgcolor: 'secondary.light' }}>
                             {claim.memberName?.charAt(0)}
                         </Avatar>
                         <Box>
@@ -535,16 +535,16 @@ export default function ClaimBatchDetail() {
             case 'status':
                 return getStatusChip(claim.status || 'APPROVED');
             case 'amount':
-                return <Typography variant="body2" fontWeight={700}>{claim.requestedAmount?.toFixed(2)}</Typography>;
+                return <Typography variant="body2" fontWeight={400}>{claim.requestedAmount?.toFixed(2)}</Typography>;
             case 'covered':
-                return <Typography variant="body2" color="success.main" fontWeight={700}>{(claim.approvedAmount || 0).toFixed(2)}</Typography>;
+                return <Typography variant="body2" color="success.main" fontWeight={400}>{(claim.approvedAmount || 0).toFixed(2)}</Typography>;
             case 'refused':
                 const displayRefused = (claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0))
                     ? claim.requestedAmount
                     : (claim.refusedAmount || 0);
                 return (
                     <Tooltip title={claim.rejectionReason || ''} arrow placement="top">
-                        <Typography variant="body2" color="error.main" fontWeight={700}>
+                        <Typography variant="body2" color="error.main" fontWeight={400}>
                             {displayRefused.toFixed(2)}
                         </Typography>
                     </Tooltip>
@@ -557,7 +557,7 @@ export default function ClaimBatchDetail() {
                 );
             case 'paid':
                 // For providers, paid is netProviderAmount (approved - patient share)
-                return <Typography variant="body2" color="secondary.main" fontWeight={900}>{(claim.netProviderAmount || 0).toFixed(2)}</Typography>;
+                return <Typography variant="body2" color="secondary.main" fontWeight={600}>{(claim.netProviderAmount || 0).toFixed(2)}</Typography>;
             case 'actions':
                 return (
                     <Stack direction="row" spacing={0.5} justifyContent="center">
@@ -661,7 +661,7 @@ export default function ClaimBatchDetail() {
                             color="secondary"
                             startIcon={<ArrowBackIcon />}
                             onClick={() => navigate('/claims/batches')}
-                            sx={{ borderRadius: 1.5, height: 40 }}
+                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
                         >
                             العودة
                         </Button>
@@ -679,7 +679,7 @@ export default function ClaimBatchDetail() {
                                 }
                                 navigate(`/reports/claims/statement-preview?ids=${selectedClaimIds.join(',')}`);
                             }}
-                            sx={{ borderRadius: 1.5, height: 40 }}
+                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
                         >
                             معاينة المحددة
                         </Button>
@@ -694,7 +694,7 @@ export default function ClaimBatchDetail() {
                                 }
                                 handlePrint();
                             }}
-                            sx={{ borderRadius: 1.5, height: 40 }}
+                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
                         >
                             {selectedClaimIds.length > 0
                                 ? `طباعة (${selectedClaimIds.length})`
@@ -706,7 +706,7 @@ export default function ClaimBatchDetail() {
                             color="error"
                             startIcon={<PdfIcon />}
                             onClick={handleRejectedReport}
-                            sx={{ borderRadius: 1.5, height: 40, borderColor: 'error.main', color: 'error.main' }}
+                            sx={{ borderRadius: '0.375rem', height: '2.5rem', borderColor: 'error.main', color: 'error.main' }}
                         >
                             تقرير المرفوضات
                         </Button>
@@ -716,8 +716,8 @@ export default function ClaimBatchDetail() {
                             sx={{
                                 color: '#1b5e20',
                                 borderColor: '#1b5e20',
-                                borderRadius: 1.5,
-                                height: 40,
+                                borderRadius: '0.375rem',
+                                height: '2.5rem',
                                 '&:hover': { backgroundColor: '#1b5e2010', borderColor: '#1b5e20' }
                             }}
                             startIcon={<ExcelIcon />}
@@ -733,9 +733,9 @@ export default function ClaimBatchDetail() {
                             startIcon={<AddIcon />}
                             onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`)}
                             sx={{
-                                borderRadius: 1.5,
-                                height: 40,
-                                px: 3,
+                                borderRadius: '0.375rem',
+                                height: '2.5rem',
+                                px: '1.5rem',
                                 boxShadow: '0 4px 12px rgba(var(--mui-palette-primary-mainChannel), 0.2)'
                             }}
                         >
@@ -754,7 +754,7 @@ export default function ClaimBatchDetail() {
                                 <IconButton
                                     onClick={() => window.location.reload()}
                                     color="primary"
-                                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}
+                                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
                                 >
                                     <RefreshIcon />
                                 </IconButton>
@@ -765,7 +765,7 @@ export default function ClaimBatchDetail() {
                                 label={`${claims.length} مطالبة`}
                                 variant="outlined"
                                 color="primary"
-                                sx={{ height: 40, borderRadius: 1, fontWeight: 'bold', fontSize: '14px', px: 1.5 }}
+                                sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: '0.75rem' }}
                             />
 
                             <TextField
@@ -784,7 +784,7 @@ export default function ClaimBatchDetail() {
                                             <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
                                         </InputAdornment>
                                     ),
-                                    sx: { height: 40, borderRadius: 1, bgcolor: 'background.paper' }
+                                    sx: { height: '2.5rem', borderRadius: 1, bgcolor: 'background.paper' }
                                 }}
                             />
 
@@ -797,8 +797,8 @@ export default function ClaimBatchDetail() {
                                     setStatusFilter(e.target.value);
                                     tableState.setPage(0);
                                 }}
-                                sx={{ minWidth: 130, bgcolor: 'background.paper' }}
-                                InputProps={{ sx: { height: 40, borderRadius: 1 } }}
+                                sx={{ minWidth: '8.125rem', bgcolor: 'background.paper' }}
+                                InputProps={{ sx: { height: '2.5rem', borderRadius: 1 } }}
                                 InputLabelProps={{ shrink: true }}
                             >
                                 <MenuItem value=""><em>الكل</em></MenuItem>
@@ -817,20 +817,20 @@ export default function ClaimBatchDetail() {
                                     setStatusFilter('');
                                     tableState.setPage(0);
                                 }}
-                                sx={{ minWidth: 120, height: 40, borderRadius: 1 }}
+                                sx={{ minWidth: '7.5rem', height: '2.5rem', borderRadius: 1 }}
                             >
                                 إعادة ضبط
                             </Button>
 
                             {/* Select-all control */}
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', height: 40, bgcolor: 'background.paper' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider', height: '2.5rem', bgcolor: 'background.paper' }}>
                                 <Checkbox
                                     size="small"
                                     checked={allSelected}
                                     indeterminate={someSelected}
                                     onChange={handleToggleAll}
                                 />
-                                <Typography variant="caption" fontWeight={700} sx={{ whiteSpace: 'nowrap', color: selectedClaimIds.length > 0 ? 'primary.main' : 'text.secondary' }}>
+                                <Typography variant="caption" fontWeight={400} sx={{ whiteSpace: 'nowrap', color: selectedClaimIds.length > 0 ? 'primary.main' : 'text.secondary' }}>
                                     {selectedClaimIds.length > 0 ? `${selectedClaimIds.length} محددة` : 'تحديد الكل'}
                                 </Typography>
                             </Box>
@@ -871,14 +871,14 @@ export default function ClaimBatchDetail() {
                     {claims.length > 0 && (
                         <MainCard sx={{ p: '10px 16px !important', flexShrink: 0, bgcolor: 'grey.50', borderTop: '2px solid', borderColor: 'divider' }}>
                             <Stack direction="row" spacing={2} justifyContent="flex-end" alignItems="center" flexWrap="wrap">
-                                <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ mr: 'auto' }}>
+                                <Typography variant="caption" color="text.secondary" fontWeight={400} sx={{ mr: 'auto' }}>
                                     الإجماليات ({claims.length} مطالبة)
                                 </Typography>
-                                <Chip label={`الإجمالي: ${totals.amount.toFixed(2)}`} size="small" sx={{ fontWeight: 700 }} />
-                                <Chip label={`المعتمد: ${totals.covered.toFixed(2)}`} color="success" size="small" sx={{ fontWeight: 700 }} />
-                                <Chip label={`المرفوض: ${totals.refused.toFixed(2)}`} color="error" size="small" sx={{ fontWeight: 700 }} />
-                                <Chip label={`نصيب المؤمن: ${totals.copay.toFixed(2)}`} color="info" size="small" sx={{ fontWeight: 700 }} />
-                                <Chip label={`المستحق: ${totals.paid.toFixed(2)}`} color="secondary" size="small" sx={{ fontWeight: 900, fontSize: '0.8rem' }} />
+                                <Chip label={`الإجمالي: ${totals.amount.toFixed(2)}`} size="small" sx={{ fontWeight: 400 }} />
+                                <Chip label={`المعتمد: ${totals.covered.toFixed(2)}`} color="success" size="small" sx={{ fontWeight: 400 }} />
+                                <Chip label={`المرفوض: ${totals.refused.toFixed(2)}`} color="error" size="small" sx={{ fontWeight: 400 }} />
+                                <Chip label={`نصيب المؤمن: ${totals.copay.toFixed(2)}`} color="info" size="small" sx={{ fontWeight: 400 }} />
+                                <Chip label={`المستحق: ${totals.paid.toFixed(2)}`} color="secondary" size="small" sx={{ fontWeight: 600, fontSize: '0.8rem' }} />
                             </Stack>
                         </MainCard>
                     )}
@@ -888,10 +888,10 @@ export default function ClaimBatchDetail() {
 
         {/* Suspend Dialog */}
         <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontWeight: 700, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <DialogTitle sx={{ fontWeight: 400, borderBottom: '1px solid', borderColor: 'divider' }}>
                 تعليق المطالبة للمراجعة
             </DialogTitle>
-            <DialogContent sx={{ pt: 2 }}>
+            <DialogContent sx={{ pt: '1.0rem' }}>
                 <Typography variant="body2" color="text.secondary" mb={2}>
                     سيتم تغيير حالة المطالبة إلى «يحتاج تصحيح». يجب إدخال سبب التعليق.
                 </Typography>
@@ -906,7 +906,7 @@ export default function ClaimBatchDetail() {
                     autoFocus
                 />
             </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
                 <Button variant="outlined" onClick={() => setSuspendDialogOpen(false)}>إلغاء</Button>
                 <Button
                     variant="contained"
@@ -921,3 +921,8 @@ export default function ClaimBatchDetail() {
         </>
     );
 }
+
+
+
+
+

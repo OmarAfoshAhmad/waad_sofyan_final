@@ -49,8 +49,8 @@ export const StatsCard = ({ title, value, change, icon: Icon, color = 'primary',
             {Icon && (
               <Box
                 sx={{
-                  p: 1.5,
-                  borderRadius: 2,
+                  p: '0.75rem',
+                  borderRadius: '0.125rem',
                   bgcolor: `${color}.lighter`,
                   color: `${color}.main`
                 }}
@@ -98,7 +98,7 @@ export const StatusDistributionChart = ({ data, loading }) => {
       <Card>
         <CardHeader title="توزيع الحالات" />
         <CardContent>
-          <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Box sx={{ height: '18.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loading ? <LinearProgress /> : <Typography color="text.secondary">لا توجد بيانات</Typography>}
           </Box>
         </CardContent>
@@ -139,7 +139,7 @@ export const StatusDistributionChart = ({ data, loading }) => {
     <Card>
       <CardHeader title="توزيع الحالات" />
       <CardContent>
-        <Box sx={{ height: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Box sx={{ height: '18.75rem', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <PieChart
             series={[
               {
@@ -181,18 +181,18 @@ export const HighPriorityQueue = ({ data, loading, onView, onEdit, onDelete }) =
       field: 'referenceNumber',
       headerName: 'الرقم المرجعي',
       flex: 1,
-      minWidth: 150
+      minWidth: '9.375rem'
     },
     {
       field: 'memberName',
       headerName: 'المريض',
       flex: 1,
-      minWidth: 150
+      minWidth: '9.375rem'
     },
     {
       field: 'priority',
       headerName: 'الأولوية',
-      width: 120,
+      width: '7.5rem',
       renderCell: (params) => {
         const color = params.value === 'EMERGENCY' ? 'error' : 'warning';
         const label = params.value === 'EMERGENCY' ? 'طارئ' : 'عاجل';
@@ -202,19 +202,19 @@ export const HighPriorityQueue = ({ data, loading, onView, onEdit, onDelete }) =
     {
       field: 'requestedAmount',
       headerName: 'المبلغ',
-      width: 120,
+      width: '7.5rem',
       renderCell: (params) => <Typography variant="body2">{params.value?.toLocaleString('en-US')} د.ل</Typography>
     },
     {
       field: 'submittedDate',
       headerName: 'تاريخ التقديم',
-      width: 140,
+      width: '8.75rem',
       renderCell: (params) => dayjs(params.value).format('YYYY/MM/DD')
     },
     {
       field: 'actions',
       headerName: 'إجراءات',
-      width: 150,
+      width: '9.375rem',
       sortable: false,
       renderCell: (params) => (
         <Stack direction="row" spacing={0.5}>
@@ -315,7 +315,7 @@ export const ExpiringSoonAlerts = ({ data, loading, withinDays = 7 }) => {
               <Box
                 key={item.id}
                 sx={{
-                  p: 2,
+                  p: '1.0rem',
                   borderRadius: 1,
                   bgcolor: isUrgent ? 'error.lighter' : 'warning.lighter',
                   border: 1,
@@ -368,7 +368,7 @@ export const TrendsChart = ({ data, loading, days = 30 }) => {
       <Card>
         <CardHeader title={`اتجاهات الطلبات (آخر ${days} يوم)`} />
         <CardContent>
-          <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Box sx={{ height: '18.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loading ? <LinearProgress /> : <Typography color="text.secondary">لا توجد بيانات</Typography>}
           </Box>
         </CardContent>
@@ -386,7 +386,7 @@ export const TrendsChart = ({ data, loading, days = 30 }) => {
     <Card>
       <CardHeader title={`اتجاهات الطلبات (آخر ${days} يوم)`} />
       <CardContent>
-        <Box sx={{ height: 300 }}>
+        <Box sx={{ height: '18.75rem' }}>
           <LineChart
             series={[
               { data: requestedData, label: 'المطلوبة', color: '#2196f3' },
@@ -394,7 +394,7 @@ export const TrendsChart = ({ data, loading, days = 30 }) => {
             ]}
             xAxis={[{ scaleType: 'point', data: xLabels }]}
             height={300}
-            margin={{ left: 50, right: 20, top: 20, bottom: 30 }}
+            margin={{ left: '3.125rem', right: '1.25rem', top: '10.0rem', bottom: '15.0rem' }}
             slotProps={{
               legend: {
                 direction: 'row',
@@ -428,7 +428,7 @@ export const TopProvidersChart = ({ data, loading, limit = 10 }) => {
       <Card>
         <CardHeader title={`أكثر ${limit} مقدمي خدمات`} subheader="حسب عدد الطلبات" />
         <CardContent>
-          <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Box sx={{ height: '18.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loading ? <LinearProgress /> : <Typography color="text.secondary">لا توجد بيانات</Typography>}
           </Box>
         </CardContent>
@@ -444,7 +444,7 @@ export const TopProvidersChart = ({ data, loading, limit = 10 }) => {
     <Card>
       <CardHeader title={`أكثر ${limit} مقدمي خدمات`} subheader="حسب عدد الطلبات ونسبة الموافقة" />
       <CardContent>
-        <Box sx={{ height: 350 }}>
+        <Box sx={{ height: '21.875rem' }}>
           <BarChart
             series={[
               { data: requestsData, label: 'عدد الطلبات', stack: 'A', color: '#2196f3' },
@@ -457,12 +457,12 @@ export const TopProvidersChart = ({ data, loading, limit = 10 }) => {
                 tickLabelStyle: {
                   angle: -45,
                   textAnchor: 'end',
-                  fontSize: 10
+                  fontSize: '0.75rem'
                 }
               }
             ]}
             height={350}
-            margin={{ left: 50, right: 20, top: 20, bottom: 100 }}
+            margin={{ left: '3.125rem', right: '1.25rem', top: '10.0rem', bottom: '50.0rem' }}
             slotProps={{
               legend: {
                 direction: 'row',
@@ -548,8 +548,8 @@ export const RecentActivityTimeline = ({ data, loading, limit = 10 }) => {
               key={activity.id || index}
               sx={{
                 display: 'flex',
-                gap: 2,
-                p: 1.5,
+                gap: '1.0rem',
+                p: '0.75rem',
                 borderRadius: 1,
                 bgcolor: 'background.default',
                 '&:hover': { bgcolor: 'action.hover' }
@@ -594,3 +594,6 @@ RecentActivityTimeline.propTypes = {
   loading: PropTypes.bool,
   limit: PropTypes.number
 };
+
+
+

@@ -59,7 +59,7 @@ const TbaSwitchField = ({
           </Typography>
         )}
       </Stack>
-      <Switch checked={checked} onChange={onChange} disabled={disabled || readOnly} color="primary" sx={{ ml: 2 }} />
+      <Switch checked={checked} onChange={onChange} disabled={disabled || readOnly} color="primary" sx={{ ml: '1.0rem' }} />
     </Box>
   );
 
@@ -71,8 +71,8 @@ const TbaSwitchField = ({
     <Paper
       variant="outlined"
       sx={{
-        p: 2,
-        borderRadius: 2,
+        p: '1.0rem',
+        borderRadius: '0.125rem',
         bgcolor: readOnly ? 'action.hover' : 'background.paper',
         borderColor: 'grey.200',
         transition: 'all 0.2s ease-in-out',

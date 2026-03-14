@@ -92,7 +92,7 @@ function stringToColor(string) {
 }
 
 // Get avatar props with fallback
-function getAvatarProps(user, size = { width: 80, height: 80 }) {
+function getAvatarProps(user, size = { width: '5.0rem', height: '5.0rem' }) {
   if (user?.profileImageUrl) {
     return { src: user.profileImageUrl, sx: size };
   }
@@ -111,8 +111,8 @@ function getAvatarProps(user, size = { width: 80, height: 80 }) {
 // ==============================|| INFO ROW COMPONENT ||============================== //
 
 const InfoRow = ({ label, value }) => (
-  <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 1.5 }}>
-    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140, fontWeight: 500 }}>
+  <Stack direction="row" spacing={2} alignItems="center" sx={{ py: '0.75rem' }}>
+    <Typography variant="body2" color="text.secondary" sx={{ minWidth: '8.75rem', fontWeight: 500 }}>
       {label}
     </Typography>
     <Typography variant="body1">{value ?? '—'}</Typography>
@@ -225,7 +225,7 @@ export default function ProfileOverview() {
           >
             <Stack spacing={0} divider={<Divider />}>
               {/* Avatar & Name */}
-              <Stack direction="row" spacing={3} alignItems="center" sx={{ py: 2 }}>
+              <Stack direction="row" spacing={3} alignItems="center" sx={{ py: '1.0rem' }}>
                 <Avatar {...avatarProps} />
                 <Stack spacing={0.5}>
                   <Typography variant="h4">{user?.fullName || user?.name || user?.username || 'مستخدم'}</Typography>
@@ -236,8 +236,8 @@ export default function ProfileOverview() {
               </Stack>
 
               {/* Role */}
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 1.5 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140, fontWeight: 500 }}>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ py: '0.75rem' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: '8.75rem', fontWeight: 500 }}>
                   الدور
                 </Typography>
                 <Chip label={roleLabel} color={roleColor} size="small" variant="outlined" />
@@ -320,7 +320,7 @@ export default function ProfileOverview() {
                       variant="determinate"
                       value={(strength / 5) * 100}
                       sx={{
-                        height: 6,
+                        height: '0.375rem',
                         borderRadius: 1,
                         bgcolor: 'grey.200',
                         '& .MuiLinearProgress-bar': {
@@ -368,3 +368,5 @@ export default function ProfileOverview() {
     </Box>
   );
 }
+
+

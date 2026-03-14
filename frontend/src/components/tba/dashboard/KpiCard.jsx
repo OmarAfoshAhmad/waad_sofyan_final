@@ -97,9 +97,9 @@ const KpiCard = memo(({ title, value, icon: Icon, color = 'primary', sparklineDa
           <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
             <Box
               sx={{
-                width: 44,
-                height: 44,
-                borderRadius: 2,
+                width: '2.75rem',
+                height: '2.75rem',
+                borderRadius: '0.125rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -107,7 +107,7 @@ const KpiCard = memo(({ title, value, icon: Icon, color = 'primary', sparklineDa
                 color: mainColor
               }}
             >
-              {Icon && <Icon style={{ fontSize: 24 }} />}
+              {Icon && <Icon style={{ fontSize: '1.5rem' }} />}
             </Box>
           </Stack>
 
@@ -122,7 +122,7 @@ const KpiCard = memo(({ title, value, icon: Icon, color = 'primary', sparklineDa
           </Typography>
 
           {/* Mini Sparkline Chart */}
-          <Box sx={{ height: 50, mt: 1 }}>
+          <Box sx={{ height: '3.125rem', mt: 1 }}>
             <Line data={sparklineConfig} options={sparklineOptions} />
           </Box>
         </Stack>

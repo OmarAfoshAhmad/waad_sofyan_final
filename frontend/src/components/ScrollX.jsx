@@ -7,10 +7,10 @@ const ScrollX = ({ children, ...other }) => {
       sx={{
         overflowX: 'auto',
         width: '100%',
-        '&::-webkit-scrollbar': { height: 8 },
+        '&::-webkit-scrollbar': { height: '0.375rem' },
         '&::-webkit-scrollbar-thumb': {
           backgroundColor: 'rgba(0,0,0,.2)',
-          borderRadius: 4
+          borderRadius: '0.375rem'
         }
       }}
       {...other}
@@ -25,3 +25,5 @@ ScrollX.propTypes = {
 };
 
 export default ScrollX;
+
+

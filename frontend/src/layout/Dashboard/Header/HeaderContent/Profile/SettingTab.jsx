@@ -38,14 +38,14 @@ export default function SettingTab() {
   }, [location.pathname]);
 
   return (
-    <List component="nav" sx={{ p: 0, '& .MuiListItemIcon-root': { minWidth: 32 } }}>
+    <List component="nav" sx={{ p: 0, '& .MuiListItemIcon-root': { minWidth: '2.0rem' } }}>
       <ListItemButton selected={selectedIndex === 0} onClick={(event) => handleListItemClick(event, 0, '/settings')}>
         <ListItemIcon>
           <SettingOutlined />
         </ListItemIcon>
         <ListItemText primary="إعدادات النظام" />
       </ListItemButton>
-      <Box sx={{ p: 2, pt: 1.5 }}>
+      <Box sx={{ p: '1.0rem', pt: '0.75rem' }}>
         <Typography variant="caption" color="text.secondary">
           نظام وعد - إدارة مطالبات التأمين الصحي
         </Typography>
@@ -53,3 +53,5 @@ export default function SettingTab() {
     </List>
   );
 }
+
+

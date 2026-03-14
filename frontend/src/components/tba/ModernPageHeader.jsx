@@ -29,8 +29,8 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 40,
-            height: 40,
+            width: '2.5rem',
+            height: '2.5rem',
             borderRadius: 1,
             bgcolor: 'primary.lighter',
             color: 'primary.main'
@@ -52,8 +52,8 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: 40,
-          height: 40,
+          width: '2.5rem',
+          height: '2.5rem',
           borderRadius: 1,
           bgcolor: 'primary.lighter',
           color: 'primary.main'
@@ -65,10 +65,10 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
   };
 
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box sx={{ mb: '1.5rem' }}>
       {/* Breadcrumbs - HIDDEN per user request */}
       {/* {breadcrumbs.length > 0 && (
-        <Breadcrumbs separator={<NavigateNext fontSize="small" />} sx={{ mb: 1.5 }}>
+        <Breadcrumbs separator={<NavigateNext fontSize="small" />} sx={{ mb: '0.75rem' }}>
           {breadcrumbs[0]?.label !== 'الرئيسية' && (
             <Link component={RouterLink} to="/" underline="hover" color="inherit" sx={{ display: 'flex', alignItems: 'center' }}>
               الرئيسية
@@ -90,7 +90,7 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
       )} */}
 
       {/* Title and Actions Row */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1, minHeight: 40 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1, minHeight: '2.5rem' }}>
         {/* Title Section */}
         <Stack direction="row" alignItems="center" spacing={1.5}>
           {renderIcon()}
@@ -99,7 +99,7 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
               <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
                 {title}
               </Typography>
-              {statusChip && <Chip label={statusChip.label} color={statusChip.color || 'primary'} size="small" sx={{ height: 24 }} />}
+              {statusChip && <Chip label={statusChip.label} color={statusChip.color || 'primary'} size="small" sx={{ height: '1.5rem' }} />}
             </Stack>
             {subtitle && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
@@ -139,3 +139,7 @@ ModernPageHeader.propTypes = {
 };
 
 export default ModernPageHeader;
+
+
+
+

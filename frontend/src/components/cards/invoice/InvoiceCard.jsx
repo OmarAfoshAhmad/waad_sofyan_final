@@ -13,7 +13,7 @@ export default function TableWidgetCard({ color, title, count, percentage, isLos
   return (
     <Grid container direction="row" spacing={2}>
       <Grid size={{ xs: 12, md: 5 }}>
-        <Stack sx={{ gap: 2 }}>
+        <Stack sx={{ gap: '1.0rem' }}>
           <Typography variant="subtitle1">{title}</Typography>
           <Stack sx={{ gap: 1 }}>
             <Typography variant="h4" color="inherit">
@@ -29,13 +29,13 @@ export default function TableWidgetCard({ color, title, count, percentage, isLos
       <Grid size={{ xs: 12, md: 7 }}>
         <Stack sx={{ alignItems: 'flex-end' }}>
           {percentage && (
-            <Stack direction="row" sx={{ gap: 1, alignItems: 'center', ml: 1.25, pl: 1 }}>
+            <Stack direction="row" sx={{ gap: 1, alignItems: 'center', ml: '0.625rem', pl: 1 }}>
               {!isLoss && <CaretUpOutlined style={{ fontSize: '0.75rem', color: `${color}` }} />}
               {isLoss && <CaretDownOutlined style={{ fontSize: '0.75rem', color: `${color}` }} />}
               <Typography color="secondary">{percentage}%</Typography>
             </Stack>
           )}
-          <Box sx={{ width: 1, height: 1 }}>{children}</Box>
+          <Box sx={{ width: '0.0625rem', height: '0.0625rem' }}>{children}</Box>
         </Stack>
       </Grid>
     </Grid>
@@ -51,3 +51,5 @@ TableWidgetCard.propTypes = {
   children: PropTypes.any,
   invoice: PropTypes.string
 };
+
+

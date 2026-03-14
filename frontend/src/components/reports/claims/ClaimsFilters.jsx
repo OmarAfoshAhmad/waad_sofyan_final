@@ -79,8 +79,8 @@ const ClaimsFilters = ({
   const hasActiveFilters = filters.statuses.length > 0 || filters.memberSearch.trim() !== '' || filters.dateFrom || filters.dateTo;
 
   return (
-    <Paper sx={{ p: 2, mb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+    <Paper sx={{ p: '1.0rem', mb: '1.0rem' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: '1.0rem' }}>
         <FilterListIcon sx={{ mr: 1, color: 'text.secondary' }} />
         <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
           فلاتر البحث
@@ -277,3 +277,4 @@ ClaimsFilters.propTypes = {
 };
 
 export default ClaimsFilters;
+

@@ -61,11 +61,11 @@ const getFileIcon = (mimeType) => {
   const type = getPreviewType(mimeType);
   switch (type) {
     case 'image':
-      return <ImageIcon sx={{ fontSize: 48, color: 'info.main' }} />;
+      return <ImageIcon sx={{ fontSize: '3.0rem', color: 'info.main' }} />;
     case 'pdf':
-      return <PdfIcon sx={{ fontSize: 48, color: 'error.main' }} />;
+      return <PdfIcon sx={{ fontSize: '3.0rem', color: 'error.main' }} />;
     default:
-      return <FileIcon sx={{ fontSize: 48, color: 'text.secondary' }} />;
+      return <FileIcon sx={{ fontSize: '3.0rem', color: 'text.secondary' }} />;
   }
 };
 
@@ -167,11 +167,11 @@ const DocumentPreviewDrawer = memo(
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              minHeight: 400
+              minHeight: '25.0rem'
             }}
           >
             <CircularProgress size={48} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: '1.0rem' }}>
               جارٍ تحميل المستند...
             </Typography>
           </Box>
@@ -188,15 +188,15 @@ const DocumentPreviewDrawer = memo(
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              minHeight: 400,
+              minHeight: '25.0rem',
               bgcolor: (theme) => alpha(theme.palette.error.main, 0.04)
             }}
           >
-            <BrokenImageIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+            <BrokenImageIcon sx={{ fontSize: '4.0rem', color: 'error.main', mb: '1.0rem' }} />
             <Typography variant="body1" color="error.main" fontWeight={600}>
               فشل تحميل المستند
             </Typography>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRetry} sx={{ mt: 2 }}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRetry} sx={{ mt: '1.0rem' }}>
               إعادة المحاولة
             </Button>
           </Box>
@@ -214,7 +214,7 @@ const DocumentPreviewDrawer = memo(
               alignItems: 'center',
               justifyContent: 'center',
               bgcolor: 'grey.100',
-              p: 2
+              p: '1.0rem'
             }}
           >
             <img
@@ -268,12 +268,12 @@ const DocumentPreviewDrawer = memo(
             alignItems: 'center',
             justifyContent: 'center',
             height: '100%',
-            minHeight: 400,
+            minHeight: '25.0rem',
             bgcolor: 'grey.50'
           }}
         >
           {getFileIcon(mimeType)}
-          <Typography variant="body1" sx={{ mt: 2, fontWeight: 600 }}>
+          <Typography variant="body1" sx={{ mt: '1.0rem', fontWeight: 600 }}>
             {fileName || 'مستند'}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -285,7 +285,7 @@ const DocumentPreviewDrawer = memo(
             </Typography>
           )}
           {showDownload && (
-            <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleDownload} sx={{ mt: 3 }}>
+            <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleDownload} sx={{ mt: '1.5rem' }}>
               تحميل الملف
             </Button>
           )}
@@ -309,7 +309,7 @@ const DocumentPreviewDrawer = memo(
         <Paper
           elevation={1}
           sx={{
-            p: 2,
+            p: '1.0rem',
             borderRadius: 0,
             bgcolor: 'primary.main',
             color: 'primary.contrastText'
@@ -319,7 +319,7 @@ const DocumentPreviewDrawer = memo(
             <Stack direction="row" alignItems="center" spacing={1}>
               {getFileIcon(mimeType)}
               <Box>
-                <Typography variant="subtitle1" fontWeight={600} noWrap sx={{ maxWidth: 300 }}>
+                <Typography variant="subtitle1" fontWeight={600} noWrap sx={{ maxWidth: '18.75rem' }}>
                   {documentTitle || fileName || 'معاينة المستند'}
                 </Typography>
                 {fileSize && (
@@ -347,7 +347,7 @@ const DocumentPreviewDrawer = memo(
                   </IconButton>
                 </span>
               </Tooltip>
-              <Typography variant="caption" sx={{ minWidth: 45, textAlign: 'center' }}>
+              <Typography variant="caption" sx={{ minWidth: '2.8125rem', textAlign: 'center' }}>
                 {Math.round(currentZoom * 100)}%
               </Typography>
               <Tooltip title="تكبير">

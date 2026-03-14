@@ -160,7 +160,7 @@ export const MEDICAL_TYPOGRAPHY = {
   weights: {
     light: 300,
     normal: 400,
-    medium: 500,
+    medium: '250.0rem',
     semibold: 600,
     bold: 700
   },
@@ -177,7 +177,7 @@ export const MEDICAL_TYPOGRAPHY = {
 // ═══════════════════════════════════════════════════════════════════════
 export const MEDICAL_SPACING = {
   xs: '4px',
-  sm: '8px',
+  sm: '0.375rem',
   md: '16px',
   lg: '24px',
   xl: '32px',
@@ -202,7 +202,7 @@ export const MEDICAL_SHADOWS = {
 // ═══════════════════════════════════════════════════════════════════════
 export const MEDICAL_RADIUS = {
   none: '0',
-  sm: '4px',
+  sm: '0.375rem',
   base: '8px',
   md: '12px',
   lg: '16px',
@@ -219,14 +219,14 @@ export const MEDICAL_Z_INDEX = {
   fixed: 1200,
   modal: 1300,
   popover: 1400,
-  tooltip: 1500
+  tooltip: '750.0rem'
 };
 
 // ═══════════════════════════════════════════════════════════════════════
 // Breakpoints (Desktop-First)
 // ═══════════════════════════════════════════════════════════════════════
 export const MEDICAL_BREAKPOINTS = {
-  desktop: '1280px', // Minimum width
+  desktop: '80.0rem', // Minimum width
   wide: '1440px',
   ultrawide: '1920px'
 };
@@ -240,13 +240,13 @@ export const MEDICAL_COMPONENTS = {
   splitScreen: {
     leftWidth: '60%',
     rightWidth: '40%',
-    minWidth: '1280px',
+    minWidth: '80.0rem',
     gap: '0' // No gap for seamless experience
   },
 
   // Header
   header: {
-    height: '64px',
+    height: '4.0rem',
     padding: '16px 24px',
     background: MEDICAL_COLORS.background.header,
     borderBottom: `1px solid ${MEDICAL_COLORS.border.light}`,
@@ -257,7 +257,7 @@ export const MEDICAL_COMPONENTS = {
 
   // Footer
   footer: {
-    height: '72px',
+    height: '4.5rem',
     padding: '16px 24px',
     background: MEDICAL_COLORS.background.footer,
     borderTop: `1px solid ${MEDICAL_COLORS.border.light}`,
@@ -269,7 +269,7 @@ export const MEDICAL_COMPONENTS = {
   // Document Viewer
   documentViewer: {
     background: MEDICAL_COLORS.neutral.darkest,
-    padding: '24px',
+    padding: '1.5rem',
     maxHeight: 'calc(100vh - 200px)',
     overflow: 'auto'
   },
@@ -278,7 +278,7 @@ export const MEDICAL_COMPONENTS = {
   card: {
     background: MEDICAL_COLORS.background.paper,
     borderRadius: MEDICAL_RADIUS.base,
-    padding: '16px',
+    padding: '1.0rem',
     boxShadow: MEDICAL_SHADOWS.sm,
     border: `1px solid ${MEDICAL_COLORS.border.light}`
   }
@@ -294,7 +294,7 @@ export const KEYBOARD_HINT_STYLE = {
   borderRadius: MEDICAL_RADIUS.sm,
   fontSize: MEDICAL_TYPOGRAPHY.sizes.xs,
   fontWeight: MEDICAL_TYPOGRAPHY.weights.medium,
-  marginLeft: '8px'
+  marginLeft: '0.375rem'
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -313,3 +313,5 @@ export const MEDICAL_THEME = {
 };
 
 export default MEDICAL_THEME;
+
+

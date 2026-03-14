@@ -120,7 +120,7 @@ export default function AuthLogin({ isDemo = false }) {
                     }
                     sx={{
                       '& .MuiOutlinedInput-notchedOutline': {
-                        borderRadius: 2
+                        borderRadius: '0.125rem'
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
@@ -174,7 +174,7 @@ export default function AuthLogin({ isDemo = false }) {
                     placeholder="أدخل كلمة المرور"
                     sx={{
                       '& .MuiOutlinedInput-notchedOutline': {
-                        borderRadius: 2
+                        borderRadius: '0.125rem'
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
@@ -203,8 +203,8 @@ export default function AuthLogin({ isDemo = false }) {
                       fontSize: '0.875rem',
                       textAlign: 'center',
                       bgcolor: alpha(theme.palette.error.main, 0.1),
-                      p: 1.5,
-                      borderRadius: 2
+                      p: '0.75rem',
+                      borderRadius: '0.125rem'
                     }}
                   >
                     {errors.submit}
@@ -225,8 +225,8 @@ export default function AuthLogin({ isDemo = false }) {
                     color="primary"
                     startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <LoginIcon />}
                     sx={{
-                      py: 1.5,
-                      borderRadius: 2,
+                      py: '0.75rem',
+                      borderRadius: '0.125rem',
                       fontWeight: 600,
                       fontSize: '1rem',
                       boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
@@ -250,4 +250,6 @@ export default function AuthLogin({ isDemo = false }) {
 }
 
 AuthLogin.propTypes = { isDemo: PropTypes.bool };
+
+
 

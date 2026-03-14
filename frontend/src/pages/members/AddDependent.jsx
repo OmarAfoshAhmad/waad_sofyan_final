@@ -205,7 +205,7 @@ const AddDependent = () => {
   if (fetchError) {
     return (
       <MainCard>
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: '1.0rem' }}>
           {fetchError}
         </Alert>
         <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/members')}>
@@ -241,7 +241,7 @@ const AddDependent = () => {
         </Alert>
 
         {/* Principal Info Summary (Optional, but good for context) */}
-        <MainCard content={false} sx={{ p: 2, bgcolor: 'primary.lighter', border: '1px dashed', borderColor: 'primary.main' }}>
+        <MainCard content={false} sx={{ p: '1.0rem', bgcolor: 'primary.lighter', border: '1px dashed', borderColor: 'primary.main' }}>
           <Stack direction="row" spacing={2} alignItems="center">
             <Typography variant="subtitle2" color="primary.main">
               <strong>إضافة تابع للمنتفع الرئيسي:</strong> {principal?.fullName}
@@ -251,8 +251,8 @@ const AddDependent = () => {
         </MainCard>
 
         {/* Dependent Form - Matches UnifiedMemberCreate Style */}
-        <Paper variant="outlined" sx={{ p: 3, bgcolor: 'background.paper' }}>
-          <Typography variant="subtitle2" sx={{ mb: 3, fontWeight: 'bold' }}>
+        <Paper variant="outlined" sx={{ p: '1.5rem', bgcolor: 'background.paper' }}>
+          <Typography variant="subtitle2" sx={{ mb: '1.5rem', fontWeight: 'bold' }}>
             إضافة تابع جديد
           </Typography>
 
@@ -268,13 +268,13 @@ const AddDependent = () => {
                 error={!!errors.fullName}
                 helperText={errors.fullName}
                 size="small"
-                sx={{ minWidth: 220 }}
+                sx={{ minWidth: '13.75rem' }}
               />
             </Grid>
 
             {/* Relationship */}
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth required error={!!errors.relationship} size="small" sx={{ minWidth: 150 }}>
+              <FormControl fullWidth required error={!!errors.relationship} size="small" sx={{ minWidth: '9.375rem' }}>
                 <InputLabel>القرابة</InputLabel>
                 <Select value={form.relationship} onChange={handleFieldChange('relationship')} label="القرابة">
                   {Object.entries(RELATIONSHIPS).map(([key, value]) => (
@@ -305,7 +305,7 @@ const AddDependent = () => {
 
             {/* Gender */}
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth required error={!!errors.gender} size="small" sx={{ minWidth: 130 }}>
+              <FormControl fullWidth required error={!!errors.gender} size="small" sx={{ minWidth: '8.125rem' }}>
                 <InputLabel>الجنس</InputLabel>
                 <Select value={form.gender} onChange={handleFieldChange('gender')} label="الجنس">
                   {Object.entries(GENDERS).map(([key, value]) => (
@@ -331,7 +331,7 @@ const AddDependent = () => {
                     size: 'small',
                     error: !!errors.birthDate,
                     helperText: errors.birthDate,
-                    sx: { minWidth: 150 }
+                    sx: { minWidth: '9.375rem' }
                   }
                 }}
               />
@@ -346,13 +346,13 @@ const AddDependent = () => {
                 onChange={handleFieldChange('nationalNumber')}
                 placeholder="اختياري"
                 size="small"
-                sx={{ minWidth: 150 }}
+                sx={{ minWidth: '9.375rem' }}
               />
             </Grid>
 
             {/* Photo Upload for Dependent */}
-            <Grid sx={{ mt: 2 }} size={12}>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50', borderStyle: 'dashed' }}>
+            <Grid sx={{ mt: '1.0rem' }} size={12}>
+              <Paper variant="outlined" sx={{ p: '1.0rem', bgcolor: 'grey.50', borderStyle: 'dashed' }}>
                 <Stack direction="row" spacing={3} alignItems="center">
                   <Box position="relative">
                     <MemberAvatar
@@ -361,7 +361,7 @@ const AddDependent = () => {
                         photoUrl: form.photoPreview
                       }}
                       size={100}
-                      sx={{ mb: 2, cursor: 'pointer', border: '2px solid', borderColor: 'divider' }}
+                      sx={{ mb: '1.0rem', cursor: 'pointer', border: '2px solid', borderColor: 'divider' }}
                       onClick={() => document.getElementById('dep-photo-upload').click()}
                     />
                     <input
@@ -404,7 +404,7 @@ const AddDependent = () => {
                   startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
                   onClick={handleSubmit}
                   disabled={saving}
-                  sx={{ height: 40, px: 4 }}
+                  sx={{ height: '2.5rem', px: '2.0rem' }}
                 >
                   إضافة التابع
                 </Button>

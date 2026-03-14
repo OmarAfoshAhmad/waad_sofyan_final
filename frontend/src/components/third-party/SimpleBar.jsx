@@ -39,11 +39,11 @@ const SimpleBarStyle = styled(SimpleBar)(({ theme }) => {
     },
     '& .simplebar-track': {
       '&.simplebar-vertical': {
-        width: 10
+        width: '0.625rem'
       }
     },
     '& .simplebar-track.simplebar-horizontal .simplebar-scrollbar': {
-      height: 6
+      height: '0.375rem'
     },
     '& .simplebar-mask': {
       zIndex: 'inherit'

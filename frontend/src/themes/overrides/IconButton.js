@@ -5,7 +5,7 @@ export default function IconButton(theme) {
     MuiIconButton: {
       styleOverrides: {
         root: {
-          borderRadius: 4,
+          borderRadius: 4.0,
           '&.MuiIconButton-loading': {
             pointerEvents: 'none !important',
             '& svg': {
@@ -33,3 +33,5 @@ export default function IconButton(theme) {
     }
   };
 }
+
+

@@ -87,7 +87,7 @@ const StatusPieChart = ({ data, loading }) => {
         </ResponsiveContainer>
 
         {/* Status chips */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2, justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: '1.0rem', justifyContent: 'center' }}>
           {chartData.map((item) => (
             <Chip
               key={item.name}

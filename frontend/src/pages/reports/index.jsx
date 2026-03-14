@@ -86,7 +86,7 @@ export default function ReportsPage() {
       />
 
       {/* التقارير المتاحة */}
-      <Box sx={{ mt: 4 }}>
+      <Box sx={{ mt: '2.0rem' }}>
         <Grid container spacing={3}>
           {availableReports.map((report) => {
             const IconComponent = report.icon;
@@ -96,7 +96,7 @@ export default function ReportsPage() {
                   elevation={3}
                   sx={{
                     height: '100%',
-                    borderRadius: 3,
+                    borderRadius: '0.1875rem',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     '&:hover': {
                       boxShadow: 10,
@@ -114,14 +114,14 @@ export default function ReportsPage() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            width: 64,
-                            height: 64,
-                            borderRadius: '16px',
+                            width: '4.0rem',
+                            height: '4.0rem',
+                            borderRadius: '1.0rem',
                             bgcolor: `${report.color}15`,
                             boxShadow: `0 8px 16px -4px ${report.color}33`
                           }}
                         >
-                          <IconComponent sx={{ color: report.color, fontSize: 36 }} />
+                          <IconComponent sx={{ color: report.color, fontSize: '2.25rem' }} />
                         </Box>
 
                         <Box>
@@ -142,7 +142,7 @@ export default function ReportsPage() {
                           <Typography variant="button" sx={{ color: report.color, fontWeight: 700, fontSize: '0.75rem' }}>
                             دخول التقرير
                           </Typography>
-                          <ArrowForward sx={{ color: report.color, fontSize: 18 }} />
+                          <ArrowForward sx={{ color: report.color, fontSize: '1.125rem' }} />
                         </Stack>
                       </Stack>
                     </CardContent>
@@ -155,7 +155,7 @@ export default function ReportsPage() {
       </Box>
 
       {/* ملاحظة تذكيرية */}
-      <Box sx={{ mt: 8, textAlign: 'center', opacity: 0.6 }}>
+      <Box sx={{ mt: '4.0rem', textAlign: 'center', opacity: 0.6 }}>
         <Typography variant="caption" color="text.secondary">
           جميع التقارير تعتمد نظام الـ Batches كنظام أساسي للتسوية والتدقيق المالي.
         </Typography>
@@ -163,3 +163,6 @@ export default function ReportsPage() {
     </>
   );
 }
+
+
+

@@ -91,51 +91,51 @@ const ProviderContractsList = () => {
       {
         id: 'contractCode',
         label: 'رمز العقد',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'provider',
         label: 'مقدم الخدمة',
-        minWidth: 200,
+        minWidth: '12.5rem',
         sortable: false
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'pricingModel',
         label: 'نموذج التسعير',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'discountPercent',
         label: 'نسبة الخصم',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'startDate',
         label: 'تاريخ البدء',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'endDate',
         label: 'تاريخ الانتهاء',
-        minWidth: 130,
+        minWidth: '8.125rem',
         sortable: false
       },
       {
         id: 'actions',
         label: 'الإجراءات',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'center',
         sortable: false
       }

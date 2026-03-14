@@ -16,7 +16,7 @@ export default function CSVExport({ data, filename, headers }) {
     <CSVLink data={data} filename={filename} headers={headers} tabIndex={-1}>
       <Tooltip title="CSV Export">
         <Stack sx={{ color: 'text.secondary', alignContent: 'center' }}>
-          <DownloadOutlined style={{ fontSize: '24px' }} />
+          <DownloadOutlined style={{ fontSize: '1.5rem' }} />
         </Stack>
       </Tooltip>
     </CSVLink>

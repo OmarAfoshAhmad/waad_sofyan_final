@@ -10,7 +10,7 @@ import {
 } from '@mui/icons-material';
 
 const inlineSx = {
-    '& .MuiInputBase-root': { fontSize: '0.85rem', fontWeight: 700 },
+    '& .MuiInputBase-root': { fontSize: '0.85rem', fontWeight: 400 },
     '& input': { textAlign: 'center', py: 0.5 }
 };
 
@@ -32,8 +32,8 @@ export const ClaimLineRow = ({
                 bgcolor: line.rejected ? alpha(theme.palette.error.main, 0.05) : 
                         (line.usageExceeded ? alpha(theme.palette.warning.main, 0.02) : 'transparent')
             }}>
-                <TableCell align="center" sx={{ fontWeight: 900, color: 'text.secondary', width: 40 }}>{idx + 1}</TableCell>
-                <TableCell align="right" sx={{ minWidth: 280 }}>
+                <TableCell align="center" sx={{ fontWeight: 600, color: 'text.secondary', width: '2.5rem' }}>{idx + 1}</TableCell>
+                <TableCell align="right" sx={{ minWidth: '17.5rem' }}>
                     <Stack spacing={0.5}>
                         <Autocomplete
                             size="small"
@@ -51,7 +51,7 @@ export const ClaimLineRow = ({
                             noOptionsText={loadingServices ? "جاري تحميل خدمات العقد..." : "لم يتم العثور على خدمات في العقد"}
                         />
                         {line.service && !line.service.medicalServiceId && line.service.pricingItemId && (
-                            <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: 16, fontSize: '0.65rem', fontWeight: 700 }} />
+                            <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: '1.0rem', fontSize: '0.75rem', fontWeight: 400 }} />
                         )}
                     </Stack>
                 </TableCell>
@@ -75,7 +75,7 @@ export const ClaimLineRow = ({
                     </Tooltip>
                 </TableCell>
                 <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 700, color: 'text.secondary' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>
                         {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
                     </Typography>
                 </TableCell>
@@ -83,12 +83,12 @@ export const ClaimLineRow = ({
                     {line.usageDetails && (
                         <Stack spacing={0.3} alignItems="center" justifyContent="center">
                             {line.usageDetails.timesLimit > 0 && (
-                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.timesExceeded || line.usageDetails.totalUsedCount > line.usageDetails.timesLimit ? 'error.main' : 'text.secondary', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.timesExceeded || line.usageDetails.totalUsedCount > line.usageDetails.timesLimit ? 'error.main' : 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                     مرات: {line.usageDetails.totalUsedCount}/{line.usageDetails.timesLimit}
                                 </Typography>
                             )}
                             {line.usageDetails.amountLimit > 0 && (
-                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.amountExceeded || line.usageDetails.totalUsedAmount > line.usageDetails.amountLimit ? 'error.main' : 'text.secondary', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.amountExceeded || line.usageDetails.totalUsedAmount > line.usageDetails.amountLimit ? 'error.main' : 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                     د.ل: {(line.usageDetails.totalUsedAmount ?? 0).toFixed(2)}/{line.usageDetails.amountLimit}
                                 </Typography>
                             )}
@@ -104,7 +104,7 @@ export const ClaimLineRow = ({
                                     <Typography variant="caption" sx={{
                                         fontSize: '0.75rem',
                                         color: remaining === 0 ? 'error.main' : 'primary.main',
-                                        fontWeight: 900, whiteSpace: 'nowrap'
+                                        fontWeight: 600, whiteSpace: 'nowrap'
                                     }}>
                                         مرات: {remaining}
                                     </Typography>
@@ -118,7 +118,7 @@ export const ClaimLineRow = ({
                                     <Typography variant="caption" sx={{
                                         fontSize: '0.75rem',
                                         color: remaining <= 0 ? 'error.main' : 'primary.main',
-                                        fontWeight: 900, whiteSpace: 'nowrap'
+                                        fontWeight: 600, whiteSpace: 'nowrap'
                                     }}>
                                         د.ل: {remaining.toFixed(2)}
                                     </Typography>
@@ -128,22 +128,22 @@ export const ClaimLineRow = ({
                     )}
                 </TableCell>
                 <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 800, color: 'error.main' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 500, color: 'error.main' }}>
                         {(line.rejected ? line.total : line.refusedAmount)?.toFixed(2)}
                     </Typography>
                 </TableCell>
                 <TableCell align="center">
                     <Stack spacing={0} alignItems="center">
-                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 900, color: 'success.main', lineHeight: 1.2 }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'success.main', lineHeight: 1.2 }}>
                             {line.byCompany?.toFixed(2)}
                         </Typography>
-                        <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 900, color: 'warning.dark', lineHeight: 1.2 }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'warning.dark', lineHeight: 1.2 }}>
                             {line.byEmployee?.toFixed(2)}
                         </Typography>
                     </Stack>
                 </TableCell>
                 <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 900, color: 'primary.main' }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'primary.main' }}>
                         {line.total?.toFixed(2)}
                     </Typography>
                 </TableCell>
@@ -151,10 +151,10 @@ export const ClaimLineRow = ({
                     <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
                         <IconButton size="small" color={line.rejected ? "error" : "default"}
                             onClick={() => line.rejected ? updateLine(idx, { rejected: false }) : openRejectDialog('line', idx)}>
-                            <RejectIcon sx={{ fontSize: 15 }} />
+                            <RejectIcon sx={{ fontSize: '0.9375rem' }} />
                         </IconButton>
                         <IconButton size="small" color="error" onClick={() => removeLine(idx)}>
-                            <DeleteIcon sx={{ fontSize: 15 }} />
+                            <DeleteIcon sx={{ fontSize: '0.9375rem' }} />
                         </IconButton>
                     </Stack>
                 </TableCell>
@@ -162,7 +162,7 @@ export const ClaimLineRow = ({
             {line.rejected && (
                 <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.02) }}>
                     <TableCell colSpan={11} sx={{ py: 0.5 }}>
-                        <Typography variant="caption" color="error" fontWeight={800} sx={{ fontSize: '0.75rem', px: 2 }}>
+                        <Typography variant="caption" color="error" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
                             سبب الرفض: {line.rejectionReason}
                         </Typography>
                     </TableCell>
@@ -171,8 +171,8 @@ export const ClaimLineRow = ({
             {line.usageExceeded && !line.rejected && (
                 <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
                     <TableCell colSpan={11} sx={{ py: 0.5 }}>
-                        <Typography variant="caption" color={line.usageExhausted ? "error.main" : "warning.dark"} fontWeight={900} sx={{ fontSize: '0.75rem', px: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {line.usageExhausted ? <RejectIcon sx={{ fontSize: 14 }} /> : <WarningIcon sx={{ fontSize: 14 }} />}
+                        <Typography variant="caption" color={line.usageExhausted ? "error.main" : "warning.dark"} fontWeight={600} sx={{ fontSize: '0.75rem', px: '1.0rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {line.usageExhausted ? <RejectIcon sx={{ fontSize: '0.875rem' }} /> : <WarningIcon sx={{ fontSize: '0.875rem' }} />}
                             {line.usageExhausted ? "⚠️ رصيد المنفعة استنفذ بالكامل: " : "⚠️ تجاوز سقف المنفعة المحدد: "}
                             {line.usageDetails?.timesLimit > 0 && `(تم استهلاك ${line.usageDetails.usedCount} من ${line.usageDetails.timesLimit} مرّة)`}
                             {line.usageDetails?.amountLimit > 0 && ` (تم استهلاك ${line.usageDetails.usedAmount} من ${line.usageDetails.amountLimit} ريال)`}
@@ -183,3 +183,8 @@ export const ClaimLineRow = ({
         </Fragment>
     );
 };
+
+
+
+
+

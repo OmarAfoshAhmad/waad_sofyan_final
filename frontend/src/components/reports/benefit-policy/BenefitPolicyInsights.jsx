@@ -29,7 +29,7 @@ const ProgressWithLabel = ({ value, max, label, color = 'primary' }) => {
   const percentage = max > 0 ? (value / max) * 100 : 0;
 
   return (
-    <Box sx={{ mb: 1.5 }}>
+    <Box sx={{ mb: '0.75rem' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
         <Typography variant="body2" noWrap sx={{ maxWidth: '60%' }}>
           {label}
@@ -38,7 +38,7 @@ const ProgressWithLabel = ({ value, max, label, color = 'primary' }) => {
           {value.toLocaleString('en-US')}
         </Typography>
       </Box>
-      <LinearProgress variant="determinate" value={Math.min(percentage, 100)} color={color} sx={{ height: 6, borderRadius: 3 }} />
+      <LinearProgress variant="determinate" value={Math.min(percentage, 100)} color={color} sx={{ height: '0.375rem', borderRadius: '0.1875rem' }} />
     </Box>
   );
 };
@@ -60,11 +60,11 @@ const InsightCard = ({ title, titleEn, icon: Icon, children, loading }) => (
       height: '100%',
       border: '1px solid',
       borderColor: 'divider',
-      borderRadius: 2
+      borderRadius: '0.125rem'
     }}
   >
     <CardContent>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.0rem' }}>
         <Icon fontSize="small" color="primary" />
         <Box>
           <Typography variant="subtitle2" fontWeight={600}>
@@ -196,7 +196,7 @@ const BenefitPolicyInsights = ({ insights = {}, loading = false }) => {
                           <Chip
                             label={STATUS_CONFIG[policy.status]?.label ?? policy.status}
                             size="small"
-                            sx={{ height: 16, fontSize: '0.6rem' }}
+                            sx={{ height: '1.0rem', fontSize: '0.75rem' }}
                           />
                         </Box>
                       }
@@ -255,3 +255,6 @@ BenefitPolicyInsights.propTypes = {
 };
 
 export default BenefitPolicyInsights;
+
+
+

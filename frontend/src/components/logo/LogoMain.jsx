@@ -32,7 +32,7 @@ export default function LogoMain({ reverse }) {
           src={logoSrc}
           alt={companyName || 'Waad TPA'}
           sx={{
-            height: 40,
+            height: '2.5rem',
             width: 'auto',
             objectFit: 'contain'
           }}
@@ -42,8 +42,8 @@ export default function LogoMain({ reverse }) {
         <Avatar
           sx={{
             bgcolor: primaryColor || '#1976d2',
-            width: 40,
-            height: 40,
+            width: '2.5rem',
+            height: '2.5rem',
             fontWeight: 700
           }}
         >

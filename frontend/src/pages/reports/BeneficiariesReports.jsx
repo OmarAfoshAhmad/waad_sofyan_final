@@ -366,14 +366,14 @@ const BeneficiariesReports = () => {
         id: 'index',
         header: '#',
         enableSorting: false,
-        width: 50,
+        width: '3.125rem',
         align: 'center',
         cell: ({ row }) => page * rowsPerPage + row.index + 1
       },
       {
         accessorKey: 'fullName',
         header: 'اسم المنتفع',
-        minWidth: 200,
+        minWidth: '12.5rem',
         cell: ({ row }) => (
           <Stack direction="row" alignItems="center" spacing={1}>
             <MemberAvatar member={row.original} size={32} />
@@ -391,17 +391,17 @@ const BeneficiariesReports = () => {
       {
         accessorKey: 'barcode',
         header: 'المعرف البصري (QR)',
-        minWidth: 160,
+        minWidth: '10.0rem',
         cell: ({ row }) => (
           <Stack spacing={0.5}>
             <Stack direction="row" spacing={0.5} alignItems="center">
-              <QrCode2Icon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+              <QrCode2Icon sx={{ fontSize: '1.0rem', color: theme.palette.primary.main }} />
               <Typography variant="body2" fontFamily="monospace" fontWeight="bold" color="primary">
                 <HighlightText text={row.original.barcode} searchTerm={liveSearch} />
               </Typography>
             </Stack>
             <Stack direction="row" spacing={0.5} alignItems="center">
-              <BusinessIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+              <BusinessIcon sx={{ fontSize: '0.875rem', color: 'text.secondary' }} />
               <Typography variant="caption" color="text.secondary" noWrap>
                 {row.original.employerName || row.original.partnerNane || '-'}
               </Typography>
@@ -412,10 +412,10 @@ const BeneficiariesReports = () => {
       {
         accessorKey: 'cardNumber',
         header: 'رقم البطاقة',
-        minWidth: 140,
+        minWidth: '8.75rem',
         cell: ({ row }) => (
           <Stack direction="row" spacing={0.5} alignItems="center">
-            <CreditCardIcon sx={{ fontSize: 14, color: theme.palette.warning.main }} />
+            <CreditCardIcon sx={{ fontSize: '0.875rem', color: theme.palette.warning.main }} />
             <Typography variant="body2" fontFamily="monospace" fontWeight="bold">
               <HighlightText text={row.original.cardNumber} searchTerm={liveSearch} />
             </Typography>
@@ -425,10 +425,10 @@ const BeneficiariesReports = () => {
       {
         accessorKey: 'nationalNumber',
         header: 'رقم الهوية',
-        minWidth: 130,
+        minWidth: '8.125rem',
         cell: ({ row }) => (
           <Stack direction="row" spacing={0.5} alignItems="center">
-            <BadgeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+            <BadgeIcon sx={{ fontSize: '0.875rem', color: 'text.secondary' }} />
             <Typography variant="body2" fontFamily="monospace">
               <HighlightText text={row.original.nationalNumber} searchTerm={liveSearch} />
             </Typography>
@@ -438,19 +438,19 @@ const BeneficiariesReports = () => {
       {
         accessorKey: 'memberType',
         header: 'نوع العضوية',
-        minWidth: 120,
+        minWidth: '7.5rem',
         cell: ({ row }) => <MemberTypeIndicator type={row.original.type} size="small" />
       },
       {
         accessorKey: 'joinDate',
         header: 'تاريخ الانضمام',
-        minWidth: 120,
+        minWidth: '7.5rem',
         cell: ({ getValue }) => getValue() || '-'
       },
       {
         accessorKey: 'cardStatus',
         header: 'الحالة',
-        minWidth: 100,
+        minWidth: '6.25rem',
         align: 'center',
         cell: ({ row }) => <CardStatusBadge status={row.original.cardStatus || 'ACTIVE'} size="small" language="ar" />
       },
@@ -506,7 +506,7 @@ const BeneficiariesReports = () => {
 
       {/* --- Filter Section (Only in Table Mode) --- */}
       {viewMode === 'TABLE' && (
-        <Card sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <Card sx={{ mb: '1.5rem', p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.125rem', border: '1px solid', borderColor: 'divider' }}>
           <Stack direction="row" alignItems="center" spacing={1} mb={2}>
             <FilterAltIcon color="primary" />
             <Typography variant="h6" fontWeight="bold">
@@ -630,14 +630,14 @@ const BeneficiariesReports = () => {
         <>
           <MainCard content={false}>
             {/* Live Search Bar with Stats */}
-            <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ p: '1.0rem', borderBottom: '1px solid', borderColor: 'divider' }}>
               <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
                 <TextField
                   size="small"
                   placeholder="بحث فوري بالاسم، رقم البطاقة، الهوية، الباركود..."
                   value={liveSearch}
                   onChange={handleLiveSearchChange}
-                  sx={{ minWidth: 320 }}
+                  sx={{ minWidth: '20.0rem' }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -686,21 +686,21 @@ const BeneficiariesReports = () => {
 
             {/* Error State */}
             {!isLoading && !isFetching && totalFetched === 0 && (
-              <Alert severity="info" sx={{ m: 2 }} icon={<ErrorOutlineIcon />}>
+              <Alert severity="info" sx={{ m: '1.0rem' }} icon={<ErrorOutlineIcon />}>
                 لا توجد بيانات مطابقة للفلاتر المحددة. جرّب تغيير معايير البحث.
               </Alert>
             )}
 
             {/* No Search Results */}
             {liveSearch && totalFiltered === 0 && totalFetched > 0 && (
-              <Alert severity="warning" sx={{ m: 2 }}>
+              <Alert severity="warning" sx={{ m: '1.0rem' }}>
                 لم يتم العثور على نتائج مطابقة لـ "{liveSearch}". جرّب كلمات بحث مختلفة.
               </Alert>
             )}
 
             {/* Loading Skeleton */}
             {(isLoading || isFetching) && (
-              <Box sx={{ p: 2 }}>
+              <Box sx={{ p: '1.0rem' }}>
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} variant="rectangular" height={60} sx={{ mb: 1, borderRadius: 1 }} />
                 ))}
@@ -789,9 +789,9 @@ const BeneficiariesReports = () => {
             </Stack>
           }
         >
-          <Box ref={printRef} sx={{ p: 2 }}>
+          <Box ref={printRef} sx={{ p: '1.0rem' }}>
             {/* Print Header */}
-            <Box sx={{ textAlign: 'center', mb: 3, pb: 2, borderBottom: '2px solid #1976d2' }}>
+            <Box sx={{ textAlign: 'center', mb: '1.5rem', pb: '1.0rem', borderBottom: '2px solid #1976d2' }}>
               <Typography variant="h5" fontWeight="bold" color="primary">
                 تقرير المنتفعين
               </Typography>
@@ -851,7 +851,7 @@ const BeneficiariesReports = () => {
             </TableContainer>
 
             {/* Print Footer */}
-            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #ddd', textAlign: 'center' }}>
+            <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid #ddd', textAlign: 'center' }}>
               <Typography variant="caption" color="text.secondary">
                 نظام إدارة التأمين الصحي - تقرير مُنشأ آلياً
               </Typography>
@@ -900,7 +900,7 @@ const InfoRow = ({ icon, label, value, isMono }) => (
 );
 
 const SummaryCard = ({ title, value, icon, color }) => (
-  <Paper sx={{ p: 2, borderLeft: `4px solid`, borderLeftColor: `${color}.main` }}>
+  <Paper sx={{ p: '1.0rem', borderLeft: `4px solid`, borderLeftColor: `${color}.main` }}>
     <Stack spacing={1}>
       <Box display="flex" justifyContent="space-between">
         <Typography variant="caption" color="text.secondary">
@@ -956,9 +956,9 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
   return (
     <Box>
       {/* Printable Area */}
-      <Box ref={componentRef} sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 2 }}>
+      <Box ref={componentRef} sx={{ p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.125rem' }}>
         {/* Report Header */}
-        <Box sx={{ borderBottom: '2px solid #eee', mb: 3, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ borderBottom: '2px solid #eee', mb: '1.5rem', pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>
             <Typography variant="h4" color="primary.main" fontWeight="bold">
               تقرير تفاصيل المنتفع
@@ -968,7 +968,7 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
             </Typography>
           </Box>
           {hasLogo() ? (
-            <img src={getLogoSrc()} alt={companyName} style={{ height: 50, opacity: 0.8 }} />
+            <img src={getLogoSrc()} alt={companyName} style={{ height: '3.125rem', opacity: 0.8 }} />
           ) : (
             <Typography variant="h6" color="primary.main" fontWeight="bold">
               {companyName}
@@ -1042,7 +1042,7 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
                     </Box>
                   </Stack>
                 </Box>
-                <Divider sx={{ mb: 2 }} />
+                <Divider sx={{ mb: '1.0rem' }} />
                 <InfoRow icon={<CreditCardIcon />} label="رقم البطاقة" value={member?.cardNumber} isMono />
                 <InfoRow icon={<BusinessIcon />} label="الشركة/الشريك" value={member?.employerName} />
                 <InfoRow icon={<DateRangeIcon />} label="تاريخ الانضمام" value={member?.joinDate} />
@@ -1102,7 +1102,7 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
 
               {/* Placeholder Table for recent claims */}
               <Box mt={3}>
-                <Divider sx={{ mb: 2 }} />
+                <Divider sx={{ mb: '1.0rem' }} />
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                   آخر 5 مطالبات
                 </Typography>

@@ -11,9 +11,9 @@ const SummaryCard = ({ title, value, subLabel, subValue, icon: Icon, color = 'pr
 
   const getTrendIcon = () => {
     if (trend === undefined || trend === null) return null;
-    if (trend > 0) return <TrendingUp sx={{ fontSize: 16, color: 'success.main' }} />;
-    if (trend < 0) return <TrendingDown sx={{ fontSize: 16, color: 'error.main' }} />;
-    return <Remove sx={{ fontSize: 16, color: 'text.secondary' }} />;
+    if (trend > 0) return <TrendingUp sx={{ fontSize: '1.0rem', color: 'success.main' }} />;
+    if (trend < 0) return <TrendingDown sx={{ fontSize: '1.0rem', color: 'error.main' }} />;
+    return <Remove sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />;
   };
 
   const getTrendColor = () => {
@@ -27,7 +27,7 @@ const SummaryCard = ({ title, value, subLabel, subValue, icon: Icon, color = 'pr
     <Card
       sx={{
         height: '100%',
-        borderRadius: 2,
+        borderRadius: '0.125rem',
         boxShadow: `0 1px 3px 0 ${alpha(theme.palette.common.black, 0.1)}`,
         transition: 'all 0.2s',
         '&:hover': {
@@ -44,12 +44,12 @@ const SummaryCard = ({ title, value, subLabel, subValue, icon: Icon, color = 'pr
           left: 0,
           top: 0,
           bottom: 0,
-          width: 4,
+          width: '0.375rem',
           bgcolor: `${color}.main`
         }}
       />
 
-      <CardContent sx={{ p: 3, pl: 4 }}>
+      <CardContent sx={{ p: '1.5rem', pl: '2.0rem' }}>
         <Stack spacing={2}>
           {/* Header */}
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -70,11 +70,11 @@ const SummaryCard = ({ title, value, subLabel, subValue, icon: Icon, color = 'pr
                 sx={{
                   bgcolor: alpha(theme.palette[color].main, 0.1),
                   color: `${color}.main`,
-                  width: 56,
-                  height: 56
+                  width: '3.5rem',
+                  height: '3.5rem'
                 }}
               >
-                <Icon sx={{ fontSize: 28 }} />
+                <Icon sx={{ fontSize: '1.75rem' }} />
               </Avatar>
             )}
           </Stack>
@@ -119,3 +119,4 @@ SummaryCard.propTypes = {
 };
 
 export default SummaryCard;
+

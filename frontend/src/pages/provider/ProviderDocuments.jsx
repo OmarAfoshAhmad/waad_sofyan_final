@@ -61,7 +61,7 @@ const STATUSES = [
 
 const StatusChip = ({ status }) => {
   const statusConfig = STATUSES.find((s) => s.value === status) || { label: status, color: 'default' };
-  return <Chip label={statusConfig.label} color={statusConfig.color} size="small" sx={{ minWidth: 70, fontWeight: 500 }} />;
+  return <Chip label={statusConfig.label} color={statusConfig.color} size="small" sx={{ minWidth: '4.375rem', fontWeight: 500 }} />;
 };
 
 // ==================== REFERENCE TYPE CHIP ====================
@@ -73,7 +73,7 @@ const ReferenceTypeChip = ({ type }) => {
     PRE_AUTH: 'secondary',
     CLAIM: 'warning'
   };
-  return <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: 80 }} />;
+  return <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: '5.0rem' }} />;
 };
 
 // ==================== MAIN COMPONENT ====================
@@ -164,45 +164,45 @@ const ProviderDocuments = () => {
       {
         id: 'referenceType',
         label: 'نوع المرجع',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'referenceNumber',
         label: 'رقم المرجع',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'documentType',
         label: 'نوع المستند',
-        minWidth: 180,
+        minWidth: '11.25rem',
         sortable: false
       },
       {
         id: 'status',
         label: 'الحالة',
-        minWidth: 110,
+        minWidth: '6.875rem',
         align: 'center',
         sortable: false
       },
       {
         id: 'uploadedAt',
         label: 'تاريخ الرفع',
-        minWidth: 150,
+        minWidth: '9.375rem',
         sortable: false
       },
       {
         id: 'rejectionReason',
         label: 'سبب الرفض',
-        minWidth: 180,
+        minWidth: '11.25rem',
         sortable: false
       },
       {
         id: 'actions',
         label: 'إجراءات',
-        minWidth: 150,
+        minWidth: '9.375rem',
         align: 'center',
         sortable: false
       }
@@ -215,7 +215,7 @@ const ProviderDocuments = () => {
   // ========================================
   const getStatusChip = (status) => {
     const statusConfig = STATUSES.find((s) => s.value === status) || { label: status, color: 'default' };
-    return <Chip label={statusConfig.label} color={statusConfig.color} size="small" sx={{ minWidth: 70, fontWeight: 500 }} />;
+    return <Chip label={statusConfig.label} color={statusConfig.color} size="small" sx={{ minWidth: '4.375rem', fontWeight: 500 }} />;
   };
 
   const getReferenceTypeChip = (type) => {
@@ -226,7 +226,7 @@ const ProviderDocuments = () => {
       CLAIM: 'warning'
     };
     return (
-      <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: 80 }} />
+      <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: '5.0rem' }} />
     );
   };
 
@@ -366,7 +366,7 @@ const ProviderDocuments = () => {
             <Box>
               <Typography variant="body2">{doc.documentTypeLabel || doc.documentType}</Typography>
               {doc.fileName && (
-                <Typography variant="caption" color="textSecondary" noWrap sx={{ maxWidth: 150, display: 'block' }}>
+                <Typography variant="caption" color="textSecondary" noWrap sx={{ maxWidth: '9.375rem', display: 'block' }}>
                   {doc.fileName}
                 </Typography>
               )}
@@ -396,7 +396,7 @@ const ProviderDocuments = () => {
               variant="body2"
               color="error"
               sx={{
-                maxWidth: 180,
+                maxWidth: '11.25rem',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap'
@@ -484,17 +484,17 @@ const ProviderDocuments = () => {
 
         {/* Error Alert */}
         {isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: '1.0rem' }}>
             {error?.message || 'حدث خطأ أثناء تحميل البيانات'}
           </Alert>
         )}
 
         {/* Statistics Cards */}
         {stats && (
-          <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card variant="outlined">
-                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <CardContent sx={{ textAlign: 'center', py: '1.0rem' }}>
                   <Typography variant="h4" color="primary">
                     {stats.totalDocuments || 0}
                   </Typography>
@@ -506,7 +506,7 @@ const ProviderDocuments = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card variant="outlined">
-                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <CardContent sx={{ textAlign: 'center', py: '1.0rem' }}>
                   <Typography variant="h4" color="info.main">
                     {stats.visitDocuments || 0}
                   </Typography>
@@ -518,7 +518,7 @@ const ProviderDocuments = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card variant="outlined">
-                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <CardContent sx={{ textAlign: 'center', py: '1.0rem' }}>
                   <Typography variant="h4" color="secondary.main">
                     {stats.preAuthDocuments || 0}
                   </Typography>
@@ -530,7 +530,7 @@ const ProviderDocuments = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <Card variant="outlined">
-                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <CardContent sx={{ textAlign: 'center', py: '1.0rem' }}>
                   <Typography variant="h4" color="warning.main">
                     {stats.claimDocuments || 0}
                   </Typography>
@@ -544,7 +544,7 @@ const ProviderDocuments = () => {
         )}
 
         {/* Filters */}
-        <MainCard sx={{ mb: 3 }}>
+        <MainCard sx={{ mb: '1.5rem' }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: showFilters ? 2 : 0 }}>
             <Stack direction="row" alignItems="center" spacing={1}>
               <FilterListIcon color="action" />
@@ -680,3 +680,4 @@ const ProviderDocuments = () => {
 };
 
 export default ProviderDocuments;
+

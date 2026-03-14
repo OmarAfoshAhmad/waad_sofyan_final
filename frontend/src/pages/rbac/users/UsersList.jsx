@@ -307,20 +307,20 @@ const UsersList = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: '5.0rem' }}>
                         <CircularProgress />
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: '1.0rem' }}>
                           جاري تحميل المستخدمين...
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : users.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: '5.0rem' }}>
                         <Typography variant="h6" color="text.secondary">
                           لا توجد نتائج
                         </Typography>
-                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => navigate('/admin/users/create')} sx={{ mt: 2 }}>
+                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => navigate('/admin/users/create')} sx={{ mt: '1.0rem' }}>
                           إضافة مستخدم
                         </Button>
                       </TableCell>
@@ -331,7 +331,7 @@ const UsersList = () => {
                         <TableCell>{page * rowsPerPage + index + 1}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1.5} alignItems="center">
-                            <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.875rem' }}>
+                            <Avatar sx={{ width: '2.0rem', height: '2.0rem', bgcolor: 'primary.main', fontSize: '0.875rem' }}>
                               {getInitials(user?.fullName || user?.username)}
                             </Avatar>
                             <Box>

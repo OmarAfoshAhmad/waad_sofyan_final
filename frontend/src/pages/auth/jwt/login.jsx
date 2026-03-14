@@ -40,13 +40,13 @@ export default function Login() {
         <Grid size={12}>
           <Stack sx={{ alignItems: 'center', mb: 1 }}>
             {/* Internal Branding - Simplified */}
-            <Box sx={{ mb: 2, textAlign: 'center' }}>
+            <Box sx={{ mb: '1.0rem', textAlign: 'center' }}>
               {hasLogo() ? (
                 <Box
                   component="img"
                   src={getLogoSrc()}
                   alt={companyName}
-                  sx={{ height: 60, width: 'auto', objectFit: 'contain', mb: 1 }}
+                  sx={{ height: '3.75rem', width: 'auto', objectFit: 'contain', mb: 1 }}
                 />
               ) : (
                 <Logo />
@@ -92,7 +92,7 @@ export default function Login() {
           <Typography
             variant="caption"
             color="text.secondary"
-            sx={{ display: 'block', textAlign: 'center', mt: 1.5, fontSize: '0.75rem' }}
+            sx={{ display: 'block', textAlign: 'center', mt: '0.75rem', fontSize: '0.75rem' }}
           >
             🔐 التسجيل متاح فقط من داخل النظام عبر مسؤول الحسابات
           </Typography>
@@ -101,3 +101,5 @@ export default function Login() {
     </AuthWrapper>
   );
 }
+
+

@@ -168,7 +168,7 @@ const PreApprovalsReport = () => {
             <IconButton onClick={refetch} disabled={loading} color="primary">
               <RefreshIcon
                 sx={{
-                  fontSize: 20,
+                  fontSize: '1.25rem',
                   animation: loading ? 'spin 1s linear infinite' : 'none'
                 }}
               />
@@ -179,14 +179,14 @@ const PreApprovalsReport = () => {
     >
       {/* Error Alert */}
       {error && (
-        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 2 }}>
+        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: '1.0rem' }}>
           {error}
         </Alert>
       )}
 
       {/* Large Dataset Warning */}
       {hasPartialData && (
-        <Alert severity="warning" icon={<ErrorOutlineIcon />} sx={{ mb: 2 }}>
+        <Alert severity="warning" icon={<ErrorOutlineIcon />} sx={{ mb: '1.0rem' }}>
           <AlertTitle>تحذير: بيانات جزئية</AlertTitle>
           <Typography variant="body2">
             تم تحميل {formatNumber(totalFetched)} سجل من أصل {formatNumber(pagination.totalElements)} سجل. الفلاتر تطبق على البيانات
@@ -210,7 +210,7 @@ const PreApprovalsReport = () => {
 
       {/* Data Summary */}
       {!loading && totalFetched > 0 && (
-        <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ mb: '1.0rem', display: 'flex', gap: '1.0rem', flexWrap: 'wrap' }}>
           <Typography variant="body2" color="text.secondary">
             إجمالي السجلات: <strong>{totalFetched}</strong>
           </Typography>

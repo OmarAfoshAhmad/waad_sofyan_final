@@ -98,20 +98,20 @@ const CONTEXT_OPTIONS = [
  * Section Header with Icon
  */
 const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary' }) => (
-  <Box sx={{ mb: 3 }}>
+  <Box sx={{ mb: '1.5rem' }}>
     <Stack direction="row" spacing={1.5} alignItems="center">
       <Box
         sx={{
-          width: 40,
-          height: 40,
-          borderRadius: 2,
+          width: '2.5rem',
+          height: '2.5rem',
+          borderRadius: '0.125rem',
           bgcolor: (theme) => alpha(theme.palette[color].main, 0.1),
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}
       >
-        <Icon sx={{ color: `${color}.main`, fontSize: 22 }} />
+        <Icon sx={{ color: `${color}.main`, fontSize: '1.375rem' }} />
       </Box>
       <Box>
         <Typography variant="h6" fontWeight={600}>
@@ -150,13 +150,13 @@ const CategoryTypeCard = ({ type, selected, onSelect, disabled }) => {
         }
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent sx={{ p: '1.25rem' }}>
         <Stack direction="row" spacing={2} alignItems="flex-start">
           <Box
             sx={{
-              width: 48,
-              height: 48,
-              borderRadius: 2,
+              width: '3.0rem',
+              height: '3.0rem',
+              borderRadius: '0.125rem',
               bgcolor: isMain ? 'primary.main' : 'secondary.main',
               display: 'flex',
               alignItems: 'center',
@@ -165,9 +165,9 @@ const CategoryTypeCard = ({ type, selected, onSelect, disabled }) => {
             }}
           >
             {isMain ? (
-              <FolderIcon sx={{ color: 'white', fontSize: 26 }} />
+              <FolderIcon sx={{ color: 'white', fontSize: '1.625rem' }} />
             ) : (
-              <SubdirectoryArrowLeftIcon sx={{ color: 'white', fontSize: 26 }} />
+              <SubdirectoryArrowLeftIcon sx={{ color: 'white', fontSize: '1.625rem' }} />
             )}
           </Box>
 
@@ -176,7 +176,7 @@ const CategoryTypeCard = ({ type, selected, onSelect, disabled }) => {
               <Typography variant="subtitle1" fontWeight={600}>
                 {isMain ? 'تصنيف رئيسي' : 'تصنيف فرعي'}
               </Typography>
-              {selected && <CheckCircleIcon sx={{ color: 'primary.main', fontSize: 18 }} />}
+              {selected && <CheckCircleIcon sx={{ color: 'primary.main', fontSize: '1.125rem' }} />}
             </Stack>
 
             <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
@@ -199,11 +199,11 @@ const ParentPreview = ({ parent }) => {
     <Paper
       variant="outlined"
       sx={{
-        p: 2,
-        mt: 2,
+        p: '1.0rem',
+        mt: '1.0rem',
         bgcolor: (theme) => alpha(theme.palette.info.main, 0.04),
         borderColor: 'info.light',
-        borderRadius: 2
+        borderRadius: '0.125rem'
       }}
     >
       <Stack direction="row" spacing={2} alignItems="center">
@@ -214,7 +214,7 @@ const ParentPreview = ({ parent }) => {
           </Typography>
           <Typography variant="subtitle2" fontWeight={600}>
             {parent.name}
-            <Chip label={parent.code} size="small" sx={{ ml: 1, fontSize: '0.7rem', height: 20 }} />
+            <Chip label={parent.code} size="small" sx={{ ml: 1, fontSize: '0.7rem', height: '1.25rem' }} />
           </Typography>
         </Box>
       </Stack>
@@ -377,13 +377,13 @@ const MedicalCategoryEdit = () => {
         />
         <MainCard>
           <Stack spacing={3}>
-            <Skeleton variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
+            <Skeleton variant="rectangular" height={80} sx={{ borderRadius: '0.125rem' }} />
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Skeleton variant="rectangular" height={100} sx={{ borderRadius: 2 }} />
+                <Skeleton variant="rectangular" height={100} sx={{ borderRadius: '0.125rem' }} />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Skeleton variant="rectangular" height={100} sx={{ borderRadius: 2 }} />
+                <Skeleton variant="rectangular" height={100} sx={{ borderRadius: '0.125rem' }} />
               </Grid>
             </Grid>
             <Skeleton variant="rectangular" height={56} sx={{ borderRadius: 1 }} />
@@ -445,7 +445,7 @@ const MedicalCategoryEdit = () => {
         <Box component="form" onSubmit={handleSubmit}>
           {/* API Error Alert */}
           {apiError && (
-            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setApiError(null)}>
+            <Alert severity="error" sx={{ mb: '1.5rem' }} onClose={() => setApiError(null)}>
               {apiError}
             </Alert>
           )}
@@ -458,7 +458,7 @@ const MedicalCategoryEdit = () => {
             color="primary"
           />
 
-          <Grid container spacing={2} sx={{ mb: 4 }}>
+          <Grid container spacing={2} sx={{ mb: '2.0rem' }}>
             <Grid size={{ xs: 12, md: 6 }}>
               <CategoryTypeCard
                 type={CATEGORY_TYPE.MAIN}
@@ -477,11 +477,11 @@ const MedicalCategoryEdit = () => {
             </Grid>
           </Grid>
 
-          <Divider sx={{ my: 4 }} />
+          <Divider sx={{ my: '2.0rem' }} />
 
           {/* ========== Section 2: Parent Category (if sub-category) ========== */}
           <Collapse in={categoryType === CATEGORY_TYPE.SUB}>
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: '2.0rem' }}>
               <SectionHeader
                 icon={FolderIcon}
                 title="التصنيف الأب"
@@ -498,7 +498,7 @@ const MedicalCategoryEdit = () => {
                   disabled={submitting || loadingParents}
                   sx={{
                     '& .MuiSelect-select': {
-                      py: 1.5
+                      py: '0.75rem'
                     }
                   }}
                 >
@@ -517,19 +517,19 @@ const MedicalCategoryEdit = () => {
                       }}
                     >
                       <Stack direction="row" spacing={1} alignItems="center">
-                        <FolderIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+                        <FolderIcon sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
                         <span>{mainCat.name}</span>
-                        <Chip label={mainCat.code} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />
+                        <Chip label={mainCat.code} size="small" sx={{ ml: 1, height: '1.25rem', fontSize: '0.7rem' }} />
                       </Stack>
                     </MenuItem>,
 
                     // Sub-categories indented
                     ...mainCat.children.map((subCat) => (
-                      <MenuItem key={subCat.id} value={subCat.id} sx={{ pr: 4 }}>
+                      <MenuItem key={subCat.id} value={subCat.id} sx={{ pr: '2.0rem' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <SubdirectoryArrowLeftIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                          <SubdirectoryArrowLeftIcon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />
                           <span>{subCat.name}</span>
-                          <Chip label={subCat.code} size="small" variant="outlined" sx={{ ml: 1, height: 18, fontSize: '0.65rem' }} />
+                          <Chip label={subCat.code} size="small" variant="outlined" sx={{ ml: 1, height: '1.125rem', fontSize: '0.75rem' }} />
                         </Stack>
                       </MenuItem>
                     ))
@@ -537,13 +537,13 @@ const MedicalCategoryEdit = () => {
                 </Select>
 
                 {errors.parentId && (
-                  <Typography variant="caption" color="error" sx={{ mt: 0.5, mr: 1.5 }}>
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5, mr: '0.75rem' }}>
                     {errors.parentId}
                   </Typography>
                 )}
 
                 {loadingParents && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, mr: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, mr: '0.75rem' }}>
                     جارِ تحميل التصنيفات...
                   </Typography>
                 )}
@@ -553,7 +553,7 @@ const MedicalCategoryEdit = () => {
               <ParentPreview parent={selectedParent} />
             </Box>
 
-            <Divider sx={{ my: 4 }} />
+            <Divider sx={{ my: '2.0rem' }} />
           </Collapse>
 
           {/* ========== Section 3: Category Details ========== */}
@@ -626,8 +626,8 @@ const MedicalCategoryEdit = () => {
               <Paper
                 variant="outlined"
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: '1.0rem',
+                  borderRadius: '0.125rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between'
@@ -636,8 +636,8 @@ const MedicalCategoryEdit = () => {
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Box
                     sx={{
-                      width: 40,
-                      height: 40,
+                      width: '2.5rem',
+                      height: '2.5rem',
                       borderRadius: '50%',
                       bgcolor: form.active ? 'success.light' : 'grey.200',
                       display: 'flex',
@@ -649,7 +649,7 @@ const MedicalCategoryEdit = () => {
                     <CheckCircleIcon
                       sx={{
                         color: form.active ? 'success.main' : 'grey.400',
-                        fontSize: 22
+                        fontSize: '1.375rem'
                       }}
                     />
                   </Box>
@@ -672,7 +672,7 @@ const MedicalCategoryEdit = () => {
             </Grid>
           </Grid>
 
-          <Divider sx={{ my: 4 }} />
+          <Divider sx={{ my: '2.0rem' }} />
 
           {/* ========== Actions ========== */}
           <Stack direction="row" spacing={2} justifyContent="flex-end">
@@ -680,7 +680,7 @@ const MedicalCategoryEdit = () => {
               إلغاء
             </Button>
 
-            <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={submitting} sx={{ minWidth: 160 }}>
+            <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={submitting} sx={{ minWidth: '10.0rem' }}>
               {submitting ? 'جارِ الحفظ...' : 'حفظ التغييرات'}
             </Button>
           </Stack>
@@ -690,12 +690,12 @@ const MedicalCategoryEdit = () => {
       {/* Info Card */}
       <Paper
         sx={{
-          mt: 3,
-          p: 2.5,
+          mt: '1.5rem',
+          p: '1.25rem',
           bgcolor: (theme) => alpha(theme.palette.warning.main, 0.04),
           border: 1,
           borderColor: 'warning.light',
-          borderRadius: 2
+          borderRadius: '0.125rem'
         }}
       >
         <Stack direction="row" spacing={2} alignItems="flex-start">
@@ -717,3 +717,6 @@ const MedicalCategoryEdit = () => {
 };
 
 export default MedicalCategoryEdit;
+
+
+

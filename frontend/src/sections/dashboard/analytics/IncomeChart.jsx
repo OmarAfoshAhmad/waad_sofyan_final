@@ -45,7 +45,7 @@ export default function IncomeChart({ slot, quantity }) {
       hideLegend
       grid={{ horizontal: true, vertical: true }}
       xAxis={[{ data: labels, scaleType: 'point', disableLine: true, tickSize: 7 }]}
-      yAxis={[{ disableLine: true, tickMaxStep: 20, tickSize: 7 }]}
+      yAxis={[{ disableLine: true, tickMaxStep: '10.0rem', tickSize: 7 }]}
       series={[
         {
           curve: 'linear',
@@ -59,7 +59,7 @@ export default function IncomeChart({ slot, quantity }) {
         }
       ]}
       height={355}
-      margin={{ top: 30, bottom: 25, left: 0, right: 22 }}
+      margin={{ top: '15.0rem', bottom: '12.5rem', left: 0, right: '1.375rem' }}
       sx={{
         '& .MuiLineElement-root': { strokeDasharray: 0, strokeWidth: 1 },
         '& .MuiAreaElement-series-IncomeChart': { fill: `url('#myGradient3')`, paintOrder: 'stroke' },

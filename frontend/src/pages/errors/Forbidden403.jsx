@@ -34,7 +34,7 @@ export default function Forbidden403() {
         </Grid>
 
         <Grid size={12}>
-          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: '1.0rem' }}>
             <Button variant="contained" color="primary" size="large" onClick={handleGoBack}>
               الرجوع للوحة التحكم
             </Button>

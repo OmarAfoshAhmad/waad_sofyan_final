@@ -28,9 +28,9 @@ export default function ProviderThemeToggle() {
       <IconButton
         onClick={handleToggle}
         sx={{
-          width: 40,
-          height: 40,
-          borderRadius: 2,
+          width: '2.5rem',
+          height: '2.5rem',
+          borderRadius: '0.125rem',
           bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
           border: '1px solid',
           borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
@@ -53,14 +53,14 @@ export default function ProviderThemeToggle() {
             {isDark ? (
               <LightModeIcon
                 sx={{
-                  fontSize: 22,
+                  fontSize: '1.375rem',
                   color: '#FFD54F'
                 }}
               />
             ) : (
               <DarkModeIcon
                 sx={{
-                  fontSize: 22,
+                  fontSize: '1.375rem',
                   color: '#5C6BC0'
                 }}
               />

@@ -112,8 +112,8 @@ const NetworkBadge = ({
     return (
       <Box
         sx={{
-          p: 1.5,
-          borderRadius: 2,
+          p: '0.75rem',
+          borderRadius: '0.125rem',
           bgcolor: `${tier.color}.lighter`,
           border: 1,
           borderColor: `${tier.color}.light`
@@ -122,8 +122,8 @@ const NetworkBadge = ({
         <Stack direction="row" spacing={1.5} alignItems="center">
           <Box
             sx={{
-              width: 40,
-              height: 40,
+              width: '2.5rem',
+              height: '2.5rem',
               borderRadius: '50%',
               bgcolor: `${tier.color}.main`,
               display: 'flex',
@@ -131,7 +131,7 @@ const NetworkBadge = ({
               justifyContent: 'center'
             }}
           >
-            <IconComponent sx={{ fontSize: 24, color: 'white' }} />
+            <IconComponent sx={{ fontSize: '1.5rem', color: 'white' }} />
           </Box>
           <Box>
             <Typography variant="subtitle2" fontWeight={600} color={`${tier.color}.dark`}>
@@ -180,3 +180,5 @@ export default NetworkBadge;
 
 // Export network tier constants for use in other components
 export { NETWORK_TIERS };
+
+

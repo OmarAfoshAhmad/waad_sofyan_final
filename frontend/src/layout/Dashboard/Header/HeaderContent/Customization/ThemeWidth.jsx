@@ -49,8 +49,8 @@ export default function ThemeWidth() {
                 boxShadow
                 sx={(theme) => ({ bgcolor: 'secondary.lighter', p: 1, ...(!state.container && { ...activeCardStyle(theme) }) })}
               >
-                <Stack sx={{ gap: 1.25, alignItems: 'center' }}>
-                  <CardMedia component="img" src={defaultLayout} alt="Vertical" sx={{ borderRadius: 1, width: 64, height: 64 }} />
+                <Stack sx={{ gap: '0.625rem', alignItems: 'center' }}>
+                  <CardMedia component="img" src={defaultLayout} alt="Vertical" sx={{ borderRadius: 1, width: '4.0rem', height: '4.0rem' }} />
                   <Typography variant="caption">مرن</Typography>
                 </Stack>
               </MainCard>
@@ -68,8 +68,8 @@ export default function ThemeWidth() {
                 boxShadow
                 sx={(theme) => ({ bgcolor: 'secondary.lighter', p: 1, ...(state.container && { ...activeCardStyle(theme) }) })}
               >
-                <Stack sx={{ gap: 1.25, alignItems: 'center' }}>
-                  <CardMedia component="img" src={containerLayout} alt="Vertical" sx={{ borderRadius: 1, width: 64, height: 64 }} />
+                <Stack sx={{ gap: '0.625rem', alignItems: 'center' }}>
+                  <CardMedia component="img" src={containerLayout} alt="Vertical" sx={{ borderRadius: 1, width: '4.0rem', height: '4.0rem' }} />
                   <Typography variant="caption">محدود</Typography>
                 </Stack>
               </MainCard>

@@ -138,8 +138,8 @@ const AuditItem = ({ audit, isLast }) => {
       <TimelineOppositeContent
         sx={{
           flex: 0.3,
-          pt: 2,
-          pr: 2
+          pt: '1.0rem',
+          pr: '1.0rem'
         }}
       >
         <Typography variant="caption" color="text.secondary">
@@ -160,34 +160,34 @@ const AuditItem = ({ audit, isLast }) => {
             bgcolor: config.bgColor,
             borderColor: `${config.color}.main`,
             borderWidth: 2,
-            width: 40,
-            height: 40,
+            width: '2.5rem',
+            height: '2.5rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}
         >
-          <ActionIcon sx={{ fontSize: 20, color: `${config.color}.dark` }} />
+          <ActionIcon sx={{ fontSize: '1.25rem', color: `${config.color}.dark` }} />
         </TimelineDot>
         {!isLast && (
           <TimelineConnector
             sx={{
               bgcolor: theme.palette.grey[300],
-              width: 2
+              width: '0.125rem'
             }}
           />
         )}
       </TimelineSeparator>
 
       {/* Content */}
-      <TimelineContent sx={{ pb: 4 }}>
+      <TimelineContent sx={{ pb: '2.0rem' }}>
         <Paper
           elevation={0}
           sx={{
-            p: 2,
+            p: '1.0rem',
             bgcolor: alpha(theme.palette[config.color].lighter, 0.3),
             border: `1px solid ${theme.palette[config.color].light}`,
-            borderRadius: 2
+            borderRadius: '0.125rem'
           }}
         >
           {/* Header */}
@@ -197,13 +197,13 @@ const AuditItem = ({ audit, isLast }) => {
             <Stack direction="row" alignItems="center" spacing={1}>
               <Avatar
                 sx={{
-                  width: 24,
-                  height: 24,
+                  width: '1.5rem',
+                  height: '1.5rem',
                   bgcolor: `${config.color}.main`,
-                  fontSize: 12
+                  fontSize: '0.75rem'
                 }}
               >
-                <PersonIcon sx={{ fontSize: 14 }} />
+                <PersonIcon sx={{ fontSize: '0.875rem' }} />
               </Avatar>
               <Typography variant="caption" fontWeight={500}>
                 {audit.changedBy}
@@ -222,8 +222,8 @@ const AuditItem = ({ audit, isLast }) => {
           {hasChanges && (
             <Box
               sx={{
-                mt: 1.5,
-                p: 1.5,
+                mt: '0.75rem',
+                p: '0.75rem',
                 bgcolor: theme.palette.background.paper,
                 borderRadius: 1,
                 border: `1px solid ${theme.palette.divider}`
@@ -261,7 +261,7 @@ const AuditItem = ({ audit, isLast }) => {
 
           {/* Notes */}
           {audit.notes && (
-            <Box sx={{ mt: 1.5 }}>
+            <Box sx={{ mt: '0.75rem' }}>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
                 الملاحظات:
               </Typography>
@@ -316,7 +316,7 @@ const AuditTimeline = ({ audits = [], loading = false, onLoadMore, hasMore = fal
     return (
       <Paper
         sx={{
-          p: 6,
+          p: '3.0rem',
           textAlign: 'center',
           bgcolor: theme.palette.grey[50]
         }}
@@ -341,7 +341,7 @@ const AuditTimeline = ({ audits = [], loading = false, onLoadMore, hasMore = fal
 
       {/* Load More Button */}
       {hasMore && (
-        <Box sx={{ textAlign: 'center', mt: 3 }}>
+        <Box sx={{ textAlign: 'center', mt: '1.5rem' }}>
           <Button variant="outlined" onClick={onLoadMore} disabled={loading} startIcon={loading ? <CircularProgress size={20} /> : null}>
             {loading ? 'جارِ التحميل...' : 'تحميل المزيد'}
           </Button>
@@ -373,3 +373,5 @@ AuditTimeline.propTypes = {
 };
 
 export default AuditTimeline;
+
+

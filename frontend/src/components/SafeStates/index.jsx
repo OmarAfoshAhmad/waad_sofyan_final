@@ -84,7 +84,7 @@ export const SafeEmptyState = ({ type = EmptyStateType.NO_DATA, title, subtitle,
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: (theme) => alpha(theme.palette.grey[500], 0.04),
-        borderRadius: 2,
+        borderRadius: '0.125rem',
         p: compact ? 2 : 3
       }}
     >
@@ -148,7 +148,7 @@ export const SafeDataWrapper = ({
       return loadingComponent;
     }
     return (
-      <Box sx={{ minHeight, p: 2 }}>
+      <Box sx={{ minHeight, p: '1.0rem' }}>
         <Skeleton variant="rectangular" height={minHeight - 32} sx={{ borderRadius: 1 }} />
       </Box>
     );
@@ -201,7 +201,7 @@ export const SafeChartWrapper = ({ loading, hasPermission = true, data, height =
       isEmpty={!data || (Array.isArray(data) && data.length === 0)}
       minHeight={height}
       loadingComponent={
-        <Box sx={{ height, p: 2 }}>
+        <Box sx={{ height, p: '1.0rem' }}>
           <Skeleton variant="rectangular" height={height - 32} sx={{ borderRadius: 1 }} />
         </Box>
       }
@@ -235,7 +235,7 @@ export const SafeTableWrapper = ({ loading, hasPermission = true, data, minRows 
       isEmpty={!data || (Array.isArray(data) && data.length === 0)}
       minHeight={minHeight}
       loadingComponent={
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: '1.0rem' }}>
           <Skeleton variant="rectangular" height={56} sx={{ mb: 1, borderRadius: 1 }} />
           {Array.from({ length: minRows }).map((_, i) => (
             <Skeleton key={i} variant="rectangular" height={rowHeight - 8} sx={{ mb: 1, borderRadius: 1 }} />

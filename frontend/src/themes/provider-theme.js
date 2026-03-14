@@ -287,14 +287,14 @@ export const getProviderCSSVariables = (mode = 'light') => {
 export const providerStyles = {
   // Page Container
   pageContainer: {
-    maxWidth: 1400,
+    maxWidth: '87.5rem',
     mx: 'auto',
     px: { xs: 2, sm: 3 }
   },
 
   // Card Styles
   card: {
-    borderRadius: 2,
+    borderRadius: '0.125rem',
     border: '1px solid',
     borderColor: 'divider',
     boxShadow: 'none',
@@ -305,7 +305,7 @@ export const providerStyles = {
 
   // Info Card (Read-only data)
   infoCard: (color = 'info') => ({
-    borderRadius: 2,
+    borderRadius: '0.125rem',
     border: '1px solid',
     borderColor: 'divider',
     bgcolor: (theme) => (theme.palette.mode === 'dark' ? `${color}.darker` : `${color}.lighter`),
@@ -340,15 +340,15 @@ export const providerStyles = {
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: 1.5,
-    mb: 2.5
+    gap: '0.75rem',
+    mb: '1.25rem'
   },
 
   // Section Icon Box
   sectionIcon: (color = 'primary') => ({
-    width: 40,
-    height: 40,
-    borderRadius: 2,
+    width: '2.5rem',
+    height: '2.5rem',
+    borderRadius: '0.125rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -358,8 +358,8 @@ export const providerStyles = {
 
   // Primary Button
   primaryButton: {
-    borderRadius: 2,
-    px: 3,
+    borderRadius: '0.125rem',
+    px: '1.5rem',
     py: 1,
     fontWeight: 600,
     textTransform: 'none',
@@ -371,8 +371,8 @@ export const providerStyles = {
 
   // Outlined Button
   outlinedButton: {
-    borderRadius: 2,
-    px: 3,
+    borderRadius: '0.125rem',
+    px: '1.5rem',
     py: 1,
     fontWeight: 500,
     textTransform: 'none'
@@ -380,11 +380,11 @@ export const providerStyles = {
 
   // Sticky Action Bar
   stickyActionBar: {
-    p: 2.5,
-    borderRadius: 2,
+    p: '1.25rem',
+    borderRadius: '0.125rem',
     bgcolor: 'background.paper',
     position: 'sticky',
-    bottom: 16,
+    bottom: '8.0rem',
     zIndex: 10,
     border: '1px solid',
     borderColor: 'divider',
@@ -414,3 +414,6 @@ export default {
   getProviderCSSVariables,
   providerStyles
 };
+
+
+

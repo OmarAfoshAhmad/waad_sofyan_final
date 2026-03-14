@@ -100,14 +100,14 @@ const IconButtonStyle = styled(MuiIconButton, { shouldForwardProp: (prop) => pro
       top: 0,
       width: '100%',
       height: '100%',
-      borderRadius: 4,
+      borderRadius: '0.375rem',
       opacity: 0,
       transition: 'all 0.5s'
     },
 
     ':active::after': {
       position: 'absolute',
-      borderRadius: 4,
+      borderRadius: '0.375rem',
       left: 0,
       top: 0,
       opacity: 1,
@@ -178,3 +178,4 @@ IconButton.propTypes = {
   ref: PropTypes.any,
   others: PropTypes.any
 };
+

@@ -24,15 +24,15 @@ const weeklyData2 = [11, 32, 45, 32, 34, 52, 41];
 
 function Legend({ items, onToggle }) {
   return (
-    <Stack direction="row" sx={{ gap: 2, alignItems: 'center', justifyContent: 'center', mt: 2.5, mb: 1.5 }}>
+    <Stack direction="row" sx={{ gap: '1.0rem', alignItems: 'center', justifyContent: 'center', mt: '1.25rem', mb: '0.75rem' }}>
       {items.map((item) => (
         <Stack
           key={item.label}
           direction="row"
-          sx={{ gap: 1.25, alignItems: 'center', cursor: 'pointer' }}
+          sx={{ gap: '0.625rem', alignItems: 'center', cursor: 'pointer' }}
           onClick={() => onToggle(item.label)}
         >
-          <Box sx={{ width: 12, height: 12, bgcolor: item.visible ? item.color : 'text.secondary', borderRadius: '50%' }} />
+          <Box sx={{ width: '0.75rem', height: '0.75rem', bgcolor: item.visible ? item.color : 'text.secondary', borderRadius: '50%' }} />
           <Typography variant="body2" color="text.primary">
             {item.label}
           </Typography>
@@ -100,7 +100,7 @@ export default function IncomeAreaChart({ view }) {
         xAxis={[{ scaleType: 'point', data: labels, tickSize: 7, disableLine: true }]}
         yAxis={[{ tickSize: 7, disableLine: true }]}
         height={450}
-        margin={{ top: 40, bottom: -5, right: 20, left: 5 }}
+        margin={{ top: '20.0rem', bottom: -5, right: '1.25rem', left: '0.3125rem' }}
         series={visibleSeries
           .filter((series) => series.visible)
           .map((series) => ({
@@ -141,3 +141,5 @@ export default function IncomeAreaChart({ view }) {
 Legend.propTypes = { items: PropTypes.array, onToggle: PropTypes.func };
 
 IncomeAreaChart.propTypes = { view: PropTypes.oneOf(['monthly', 'weekly']) };
+
+

@@ -63,7 +63,7 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
         height: '100%',
         background: gradient,
         color: '#fff',
-        borderRadius: 2,
+        borderRadius: '0.125rem',
         overflow: 'hidden',
         position: 'relative',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -71,14 +71,14 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
         '&:hover': { transform: 'translateY(-2px)' }
       }}
     >
-      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 }, position: 'relative', zIndex: 1 }}>
+      <CardContent sx={{ p: '0.75rem', '&:last-child': { pb: '0.75rem' }, position: 'relative', zIndex: 1 }}>
         <Stack spacing={1}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
             <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase' }}>
               {title}
             </Typography>
             <Box sx={{ p: 0.5, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.2)', display: 'flex' }}>
-              <Icon sx={{ fontSize: 18 }} />
+              <Icon sx={{ fontSize: '1.125rem' }} />
             </Box>
           </Stack>
 
@@ -91,7 +91,7 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
           )}
 
           {subtitle && (
-            <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.65rem', display: 'block', noWrap: true }}>
+            <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.75rem', display: 'block', noWrap: true }}>
               {subtitle}
             </Typography>
           )}
@@ -161,7 +161,7 @@ const DonutChart = ({ data, centerLabel, centerValue, size = 140 }) => {
             bgcolor: alpha(segment.color, 0.04)
           }}>
             <Stack direction="row" alignItems="center" spacing={1}>
-              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: segment.color }} />
+              <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: segment.color }} />
               <Typography sx={{ fontSize: '0.7rem' }} color="text.secondary">
                 {segment.label}
               </Typography>
@@ -186,7 +186,7 @@ const HorizontalBarChart = ({ data }) => {
   return (
     <Stack spacing={2}>
       {data.length === 0 ? (
-        <Box sx={{ py: 4, textAlign: 'center' }}>
+        <Box sx={{ py: '2.0rem', textAlign: 'center' }}>
           <Typography variant="caption" color="text.disabled">لا يوجد بيانات</Typography>
         </Box>
       ) : (
@@ -201,7 +201,7 @@ const HorizontalBarChart = ({ data }) => {
             <LinearProgress
               variant="determinate"
               value={(item.value / maxValue) * 100}
-              sx={{ height: 6, borderRadius: 3, bgcolor: alpha(barColors[i % 5], 0.1) }}
+              sx={{ height: '0.375rem', borderRadius: '0.1875rem', bgcolor: alpha(barColors[i % 5], 0.1) }}
             />
           </Box>
         ))
@@ -247,8 +247,8 @@ const ActivityTimeline = ({ claims, loading }) => {
 
   if (events.length === 0) {
     return (
-      <Box sx={{ py: 5, textAlign: 'center' }}>
-        <AccessTimeIcon sx={{ fontSize: 56, color: 'divider', mb: 1.5 }} />
+      <Box sx={{ py: '2.5rem', textAlign: 'center' }}>
+        <AccessTimeIcon sx={{ fontSize: '3.5rem', color: 'divider', mb: '0.75rem' }} />
         <Typography variant="body1" color="text.secondary" fontWeight={600}>
           النظام جاهز للعمل
         </Typography>
@@ -264,16 +264,16 @@ const ActivityTimeline = ({ claims, loading }) => {
       {events.map((event, i) => {
         const EventIcon = event.icon;
         return (
-          <Stack key={i} direction="row" spacing={1.5} alignItems="flex-start" sx={{ py: 1.25, position: 'relative' }}>
+          <Stack key={i} direction="row" spacing={1.5} alignItems="flex-start" sx={{ py: '0.625rem', position: 'relative' }}>
             {/* Timeline line */}
             {i < events.length - 1 && (
               <Box
                 sx={{
                   position: 'absolute',
-                  right: 15,
-                  top: 36,
+                  right: '0.9375rem',
+                  top: '18.0rem',
                   bottom: -8,
-                  width: 2,
+                  width: '0.125rem',
                   bgcolor: 'divider'
                 }}
               />
@@ -290,7 +290,7 @@ const ActivityTimeline = ({ claims, loading }) => {
                 flexShrink: 0
               }}
             >
-              <EventIcon sx={{ fontSize: 16 }} />
+              <EventIcon sx={{ fontSize: '1.0rem' }} />
             </Box>
             {/* Text */}
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -332,7 +332,7 @@ const NetworkStatRow = ({ label, value, maxValue, icon: Icon, color }) => {
               display: 'flex'
             }}
           >
-            <Icon sx={{ fontSize: 16 }} />
+            <Icon sx={{ fontSize: '1.0rem' }} />
           </Box>
           <Typography variant="body2" fontWeight={600}>
             {label}
@@ -346,11 +346,11 @@ const NetworkStatRow = ({ label, value, maxValue, icon: Icon, color }) => {
         variant="determinate"
         value={percent}
         sx={{
-          height: 6,
-          borderRadius: 3,
+          height: '0.375rem',
+          borderRadius: '0.1875rem',
           bgcolor: alpha(colorValue, 0.08),
           '& .MuiLinearProgress-bar': {
-            borderRadius: 3,
+            borderRadius: '0.1875rem',
             bgcolor: colorValue
           }
         }}
@@ -504,27 +504,27 @@ export default function Dashboard() {
       minHeight: 'calc(100vh - 110px)',
       display: 'flex',
       flexDirection: 'column',
-      p: { xs: 1.5, sm: 2 }
+      p: { xs: 1.5, sm: '1.0rem' }
     }}>
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2.5, mb: 3 }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', mb: '1.5rem' }}>
         {/* Welcome Bar - Softer Professional Green */}
         <Card sx={{
           background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
-          borderRadius: 3,
+          borderRadius: '0.1875rem',
           color: '#fff',
           border: 'none',
           boxShadow: '0 8px 24px rgba(13, 148, 136, 0.15)'
         }}>
-          <CardContent sx={{ py: 1.5, px: 2.5, '&:last-child': { pb: 1.5 } }}>
+          <CardContent sx={{ py: '0.75rem', px: '1.25rem', '&:last-child': { pb: '0.75rem' } }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Stack>
                 <Typography variant="h6" fontWeight={800} sx={{ letterSpacing: -0.5 }}>👋 مرحباً بك، {displayName}</Typography>
                 <Typography sx={{ fontSize: '0.8rem', opacity: 0.9 }}>نظام إدارة العمليات الصحية - لوحة التحكم الموحدة</Typography>
               </Stack>
               <Stack direction="row" spacing={2} alignItems="center">
-                <EmployerFilterSelector size="small" sx={{ minWidth: 300, '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', height: 40, borderRadius: 2 } }} />
+                <EmployerFilterSelector size="small" sx={{ minWidth: '18.75rem', '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', height: '2.5rem', borderRadius: '0.125rem' } }} />
                 <IconButton size="small" onClick={handleRefreshAll} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}>
-                  <RefreshIcon sx={{ fontSize: 22 }} />
+                  <RefreshIcon sx={{ fontSize: '1.375rem' }} />
                 </IconButton>
               </Stack>
             </Stack>
@@ -550,28 +550,28 @@ export default function Dashboard() {
         {/* Row 2: Analysis & Records */}
         <Grid container spacing={2.5}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ height: '360px', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <CardContent sx={{ p: 2.5 }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2 }}>توزيع الحالات</Typography>
-                <Divider sx={{ mb: 2.5 }} />
+            <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <CardContent sx={{ p: '1.25rem' }}>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>توزيع الحالات</Typography>
+                <Divider sx={{ mb: '1.25rem' }} />
                 <DonutChart data={donutData} centerValue={totalClaims} centerLabel="إجمالي" size={140} />
               </CardContent>
             </Card>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ height: '360px', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <CardContent sx={{ p: 2.5 }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2 }}>أعلى مقدمي الخدمات</Typography>
-                <Divider sx={{ mb: 2.5 }} />
+            <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <CardContent sx={{ p: '1.25rem' }}>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>أعلى مقدمي الخدمات</Typography>
+                <Divider sx={{ mb: '1.25rem' }} />
                 <HorizontalBarChart data={topProviders} />
               </CardContent>
             </Card>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ height: '360px', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <CardContent sx={{ p: 2.5 }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2 }}>إحصائيات الشبكة</Typography>
-                <Divider sx={{ mb: 2.5 }} />
+            <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <CardContent sx={{ p: '1.25rem' }}>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>إحصائيات الشبكة</Typography>
+                <Divider sx={{ mb: '1.25rem' }} />
                 <Stack spacing={2.5}>
                   <NetworkStatRow label="المقدمين" value={activeProviders} maxValue={maxNetworkValue} icon={LocalHospitalIcon} color="primary" />
                   <NetworkStatRow label="العقود" value={summary?.activeContracts || 0} maxValue={maxNetworkValue} icon={BusinessIcon} color="info" />
@@ -582,10 +582,10 @@ export default function Dashboard() {
             </Card>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card sx={{ height: '360px', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <CardContent sx={{ p: 2.5 }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 2 }}>آخر الأنشطة</Typography>
-                <Divider sx={{ mb: 2.5 }} />
+            <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <CardContent sx={{ p: '1.25rem' }}>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>آخر الأنشطة</Typography>
+                <Divider sx={{ mb: '1.25rem' }} />
                 <ActivityTimeline claims={claimsData?.content || []} loading={claimsLoading} />
               </CardContent>
             </Card>
@@ -595,8 +595,8 @@ export default function Dashboard() {
 
       {/* System status Footer - Pushed to bottom */}
       <Box sx={{
-        p: 1.25,
-        borderRadius: 2,
+        p: '0.625rem',
+        borderRadius: '0.125rem',
         bgcolor: alpha('#10b981', 0.05),
         border: '1px solid',
         borderColor: alpha('#10b981', 0.12),
@@ -607,7 +607,7 @@ export default function Dashboard() {
         mx: 0
       }}>
         <Stack direction="row" alignItems="center" spacing={2}>
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10b981', animation: 'pulse 2s infinite' }} />
+          <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: '#10b981', animation: 'pulse 2s infinite' }} />
           <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: '#065f46', opacity: 0.9 }}>
             اتصال النظام مستقر - تعمل جميع الخدمات بكفاءة عالية
           </Typography>
@@ -623,3 +623,7 @@ export default function Dashboard() {
     </Box>
   );
 }
+
+
+
+

@@ -23,7 +23,7 @@ export default function EmptyTable({ msg }) {
   const grey700 = greyVars[700] || '#616161';
 
   return (
-    <Stack sx={{ height: 400, gap: 1, alignItems: 'center', justifyContent: 'center' }}>
+    <Stack sx={{ height: '25.0rem', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
       <svg width="120" height="100" viewBox="0 0 184 152" aria-hidden focusable="false">
         <g fill="none" fillRule="evenodd">
           <g transform="translate(24 31.67)">

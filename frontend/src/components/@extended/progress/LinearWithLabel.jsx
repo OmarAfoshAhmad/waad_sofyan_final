@@ -10,10 +10,10 @@ import Box from '@mui/material/Box';
 export default function LinearWithLabel({ value, ...others }) {
   return (
     <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-      <Box sx={{ width: 1 }}>
+      <Box sx={{ width: '0.0625rem' }}>
         <LinearProgress variant="determinate" value={value} {...others} />
       </Box>
-      <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 35 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: '2.1875rem' }}>
         {`${Math.round(value)}%`}
       </Typography>
     </Stack>

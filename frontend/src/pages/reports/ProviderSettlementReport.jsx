@@ -243,7 +243,7 @@ const ProviderSettlementReport = () => {
         .print-title { font-size: 18px; font-weight: bold; }
         
         table { 
-          width: 100%;
+          width: '6.25rem'%;
           border-collapse: collapse; 
           font-size: 9px;
           border: 1px solid #000 !important;
@@ -476,7 +476,7 @@ const ProviderSettlementReport = () => {
       />
 
       {/* Filters */}
-      <Card sx={{ mb: 3 }} className="no-print">
+      <Card sx={{ mb: '1.5rem' }} className="no-print">
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             {/* Provider Selector - only for admin */}
@@ -573,7 +573,7 @@ const ProviderSettlementReport = () => {
 
       {/* Error Alert */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
@@ -582,21 +582,21 @@ const ProviderSettlementReport = () => {
       <Box ref={printRef} className="report-root">
         {loading ? (
           <Box className="no-print">
-            <Skeleton variant="rectangular" height={100} sx={{ mb: 2 }} />
+            <Skeleton variant="rectangular" height={100} sx={{ mb: '1.0rem' }} />
             <Skeleton variant="rectangular" height={400} />
           </Box>
         ) : reportData ? (
           <>
             {/* Screen-Only Summary (Dashboard Style) */}
-            <Grid container spacing={2} sx={{ mb: 3 }} className="no-print">
+            <Grid container spacing={2} sx={{ mb: '1.5rem' }} className="no-print">
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card sx={{ bgcolor: 'info.lighter', textAlign: 'center', p: 2 }}>
+                <Card sx={{ bgcolor: 'info.lighter', textAlign: 'center', p: '1.0rem' }}>
                   <Typography variant="caption" color="info.main" fontWeight="bold">إجمالي المطالب (له)</Typography>
                   <Typography variant="h5" fontWeight="bold">{formatLYD(reportData.totalRequestedAmount)}</Typography>
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card sx={{ bgcolor: 'error.lighter', textAlign: 'center', p: 2 }}>
+                <Card sx={{ bgcolor: 'error.lighter', textAlign: 'center', p: '1.0rem' }}>
                   <Typography variant="caption" color="error.main" fontWeight="bold">استقطاعات ورفض (عليه)</Typography>
                   <Typography variant="h5" fontWeight="bold">
                     {formatLYD((reportData.totalRejectedAmount || 0) + (reportData.totalPatientShare || 0))}
@@ -604,7 +604,7 @@ const ProviderSettlementReport = () => {
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card sx={{ bgcolor: 'warning.lighter', textAlign: 'center', p: 2 }}>
+                <Card sx={{ bgcolor: 'warning.lighter', textAlign: 'center', p: '1.0rem' }}>
                   <Typography variant="caption" color="warning.main" fontWeight="bold">نسبة الخصم</Typography>
                   <Typography variant="h5" fontWeight="bold">
                     {reportData.totalRequestedAmount > 0
@@ -614,7 +614,7 @@ const ProviderSettlementReport = () => {
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card sx={{ bgcolor: 'primary.main', textAlign: 'center', p: 2, color: 'white' }}>
+                <Card sx={{ bgcolor: 'primary.main', textAlign: 'center', p: '1.0rem', color: 'white' }}>
                   <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 'bold' }}>صافي المستحق للمرفق</Typography>
                   <Typography variant="h5" fontWeight="bold">{formatLYD(reportData.netProviderAmount)}</Typography>
                 </Card>
@@ -636,7 +636,7 @@ const ProviderSettlementReport = () => {
                         .pi-col { flex: 1; padding: 6px 12px; border-left: 1px solid #000; }
                         .pi-col:last-child { border-left: none; }
                         
-                        table.report-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 5px; }
+                        table.report-table { width: '6.25rem'%; border-collapse: collapse; font-size: 10px; margin-bottom: 5px; }
                         table.report-table th, table.report-table td { border: 1px solid #000; padding: 6px; text-align: center; color: #000; }
                         table.report-table th { background: #f2f2f2 !important; font-weight: bold; -webkit-print-color-adjust: exact; }
                         table.report-table .subtotal-row { font-weight: bold; background: #fafafa; }
@@ -649,10 +649,10 @@ const ProviderSettlementReport = () => {
 
               {/* Report Top Meta with Logo */}
               <Box className="report-header-box">
-                  <Stack direction="row" justifyContent="center" sx={{ mb: 2 }}>
+                  <Stack direction="row" justifyContent="center" sx={{ mb: '1.0rem' }}>
                        {/* Professional Logo Placeholder */}
-                       <Box sx={{ width: 80, height: 50, border: '3px solid #000', borderRadius: '40%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Typography variant="caption" fontWeight="bold" sx={{ color: '#000', fontSize: '10px' }}>WAAD TPA</Typography>
+                       <Box sx={{ width: '5.0rem', height: '3.125rem', border: '3px solid #000', borderRadius: '40%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Typography variant="caption" fontWeight="bold" sx={{ color: '#000', fontSize: '0.75rem' }}>WAAD TPA</Typography>
                        </Box>
                   </Stack>
                   <Typography className="report-title-main">شركة وعد لإدارة النفقات الطبية</Typography>
@@ -662,7 +662,7 @@ const ProviderSettlementReport = () => {
               </Box>
 
               {reportData.claims?.map((claim, idx) => (
-                <Box key={claim.claimId} sx={{ mb: 4, pageBreakInside: 'avoid' }}>
+                <Box key={claim.claimId} sx={{ mb: '2.0rem', pageBreakInside: 'avoid' }}>
                   <div className="patient-info-block">
                     <div className="pi-row">
                       <div className="pi-col" style={{ flex: 0.4 }}><strong>No.:</strong> {idx + 1}</div>
@@ -693,7 +693,7 @@ const ProviderSettlementReport = () => {
                           <td>{formatLYD(line.grossAmount)}</td>
                           <td>{formatLYD(line.approvedAmount)}</td>
                           <td>{formatLYD(line.rejectedAmount)}</td>
-                          <td style={{ textAlign: 'right', fontSize: '9px' }}>{line.rejectionReason || '-'}</td>
+                          <td style={{ textAlign: 'right', fontSize: '0.75rem' }}>{line.rejectionReason || '-'}</td>
                         </tr>
                       ))}
                       <tr className="subtotal-row">
@@ -715,7 +715,7 @@ const ProviderSettlementReport = () => {
                 <div className="footer-col" style={{ color: 'red' }}>REJECTED: {formatLYD(reportData.totalRejectedAmount)}</div>
               </div>
 
-              <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed #000', textAlign: 'center', fontSize: '11px' }}>
+              <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px dashed #000', textAlign: 'center', fontSize: '0.75rem' }}>
                 <Typography variant="body2">حرر هذا التقرير بتاريخ {formatDate(new Date())} بواسطة قسم المراجعة والتدقيق المالي</Typography>
                 <Typography variant="caption">شركة وعد لإدارة النفقات الطبية - جميع الحقوق محفوظة ©</Typography>
               </Box>
@@ -730,3 +730,5 @@ const ProviderSettlementReport = () => {
 };
 
 export default ProviderSettlementReport;
+
+

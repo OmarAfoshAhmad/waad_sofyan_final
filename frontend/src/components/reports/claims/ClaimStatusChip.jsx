@@ -59,7 +59,7 @@ const ClaimStatusChip = ({ status, size = 'small' }) => {
         color: colors.color,
         fontWeight: 500,
         fontSize: size === 'small' ? '0.75rem' : '0.875rem',
-        minWidth: 80
+        minWidth: '5.0rem'
       }}
     />
   );
@@ -76,3 +76,5 @@ ClaimStatusChip.defaultProps = {
 };
 
 export default ClaimStatusChip;
+
+

@@ -19,7 +19,7 @@ const areaChartOptions = {
     background: 'transparent'
   },
   dataLabels: { enabled: false },
-  stroke: { width: 1, curve: 'smooth' },
+  stroke: { width: '0.0625rem', curve: 'smooth' },
   grid: { show: false },
   yaxis: { show: false, stepSize: 50 },
   tooltip: {

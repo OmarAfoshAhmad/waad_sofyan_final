@@ -20,7 +20,7 @@ export default function MonthlyBarChart() {
       yAxis={[{ position: 'none' }]}
       slotProps={{ bar: { rx: 5, ry: 5 } }}
       axisHighlight={{ x: 'none' }}
-      margin={{ left: 20, right: 20 }}
+      margin={{ left: '1.25rem', right: '1.25rem' }}
       colors={[theme.vars.palette.info.light]}
       sx={{
         '& .MuiBarElement-root:hover': { opacity: 0.6 },

@@ -38,7 +38,7 @@ const ActionConfirmDialog = ({
                     {message}
                 </DialogContentText>
             </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
+            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem' }}>
                 <Button onClick={onClose} color="inherit" variant="outlined">
                     {cancelText}
                 </Button>

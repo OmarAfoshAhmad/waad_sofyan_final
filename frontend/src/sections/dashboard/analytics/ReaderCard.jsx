@@ -41,18 +41,18 @@ export default function ReaderCard() {
             color: 'common.white',
             bgcolor: 'primary.main',
             position: 'relative',
-            p: 2.75,
+            p: '1.375rem',
             borderRadius: { xs: 2, sm: '8px 0px 0px 8px' },
             overflow: 'hidden'
           }}
-          size={{ xs: 12, sm: 7 }}
+          size={{ xs: 12, sm: '3.5rem' }}
         >
           <Stack>
             <Typography variant="h5">What would you want to learn today</Typography>
             <Typography variant="caption" sx={{ maxWidth: '55%', pt: 1 }}>
               Your learning capacity is 80% as daily analytics
             </Typography>
-            <Typography variant="h4" sx={{ pt: 8, pb: 1, zIndex: 1 }}>
+            <Typography variant="h4" sx={{ pt: '4.0rem', pb: 1, zIndex: 1 }}>
               35% Completed
             </Typography>
             <Box sx={{ maxWidth: '60%' }}>
@@ -70,7 +70,7 @@ export default function ReaderCard() {
             </Box>
           </Stack>
         </Grid>
-        <Grid size={{ xs: 12, sm: 5 }}>
+        <Grid size={{ xs: 12, sm: '2.5rem' }}>
           <MainCard sx={{ borderRadius: { xs: 2, sm: '0px 8px 8px 0px' }, height: '100%', mt: { xs: 2.5, sm: 0 } }}>
             <Grid container spacing={3}>
               <Grid size={12}>
@@ -79,12 +79,12 @@ export default function ReaderCard() {
                   <Typography color="text.secondary" sx={{ pt: 1 }}>
                     Last Date 5th Nov 2020
                   </Typography>
-                  <Divider sx={{ pt: 3, width: '100%' }} />
+                  <Divider sx={{ pt: '1.5rem', width: '100%' }} />
                 </Stack>
               </Grid>
               <Grid size={12}>
-                <Stack direction="row" sx={{ gap: 3, alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ width: 186 }}>
+                <Stack direction="row" sx={{ gap: '1.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ width: '11.625rem' }}>
                     <Tooltip
                       open={show}
                       placement="top-end"
@@ -100,7 +100,7 @@ export default function ReaderCard() {
                         sx={{
                           '& .MuiAvatarGroup-avatar': { bgcolor: 'primary.main', cursor: 'pointer' },
                           justifyContent: 'start',
-                          '& .MuiAvatar-root': { width: 32, height: 32, fontSize: '0.875rem', bgcolor: 'secondary.400' }
+                          '& .MuiAvatar-root': { width: '2.0rem', height: '2.0rem', fontSize: '0.875rem', bgcolor: 'secondary.400' }
                         }}
                         max={4}
                         slotProps={{
@@ -122,7 +122,7 @@ export default function ReaderCard() {
                       </AvatarGroup>
                     </Tooltip>
                   </Box>
-                  <Button size="small" variant="contained" sx={{ minWidth: 'max-content', p: 1.5 }}>
+                  <Button size="small" variant="contained" sx={{ minWidth: 'max-content', p: '0.75rem' }}>
                     <PlusOutlined />
                   </Button>
                 </Stack>
@@ -139,3 +139,5 @@ export default function ReaderCard() {
     </Grid>
   );
 }
+
+

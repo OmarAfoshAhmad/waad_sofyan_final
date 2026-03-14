@@ -59,7 +59,7 @@ const TbaDetailField = ({
         children
       ) : (
         <Stack direction="row" alignItems="center" spacing={1}>
-          {Icon && <Icon sx={{ fontSize: 18 }} color={isEmpty ? 'disabled' : 'action'} />}
+          {Icon && <Icon sx={{ fontSize: '1.125rem' }} color={isEmpty ? 'disabled' : 'action'} />}
 
           {chip ? (
             <Chip label={displayValue} color={chipColor} size="small" variant="light" />
@@ -87,9 +87,9 @@ const TbaDetailField = ({
       <Paper
         elevation={0}
         sx={{
-          p: 1.75,
+          p: '0.875rem',
           bgcolor: 'grey.50',
-          borderRadius: 1.5,
+          borderRadius: '0.375rem',
           ...sx
         }}
       >
@@ -103,8 +103,8 @@ const TbaDetailField = ({
     <Paper
       variant="outlined"
       sx={{
-        p: 1.75,
-        borderRadius: 1.5,
+        p: '0.875rem',
+        borderRadius: '0.375rem',
         borderColor: 'grey.200',
         ...sx
       }}
@@ -138,3 +138,6 @@ TbaDetailField.propTypes = {
 };
 
 export default TbaDetailField;
+
+
+

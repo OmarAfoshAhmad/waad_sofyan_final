@@ -157,17 +157,17 @@ export const GlobalImportProgressProvider = ({ children }) => {
         <Box
           sx={{
             position: 'fixed',
-            bottom: 24,
-            right: 24,
+            bottom: '12.0rem',
+            right: '1.5rem',
             zIndex: 9999,
-            width: 320,
+            width: '20.0rem',
             transition: 'all 0.3s ease'
           }}
         >
           <Paper
             elevation={6}
             sx={{
-              p: 2,
+              p: '1.0rem',
               borderLeft: '6px solid',
               borderColor:
                 activeImport.status === 'COMPLETED' ? 'success.main' : activeImport.status === 'FAILED' ? 'error.main' : 'primary.main',
@@ -224,10 +224,10 @@ export const GlobalImportProgressProvider = ({ children }) => {
                           ? 'warning'
                           : 'primary'
                   }
-                  sx={{ height: 6, borderRadius: 1 }}
+                  sx={{ height: '0.375rem', borderRadius: 1 }}
                 />
 
-                <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', gap: 1, mt: '0.75rem', flexWrap: 'wrap' }}>
                   <ChipLabel label="جديد" count={activeImport.counts.created} color="success.main" />
                   <ChipLabel label="تحديث" count={activeImport.counts.updated} color="info.main" />
                   <ChipLabel label="أخطاء" count={activeImport.counts.error} color="error.main" />
@@ -288,8 +288,8 @@ export const GlobalImportProgressProvider = ({ children }) => {
               </TableBody>
             </Table>
           ) : (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <CheckCircle color="success" sx={{ fontSize: 48, mb: 1 }} />
+            <Box sx={{ p: '1.5rem', textAlign: 'center' }}>
+              <CheckCircle color="success" sx={{ fontSize: '3.0rem', mb: 1 }} />
               <Typography>لا توجد أخطاء مسجلة أو تم تصفير السجل</Typography>
             </Box>
           )}
@@ -316,7 +316,7 @@ const CircularLoader = ({ size }) => (
 
 const ChipLabel = ({ label, count, color }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'action.hover', px: 1, py: 0.5, borderRadius: 1 }}>
-    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color }} />
+    <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: color }} />
     <Typography variant="caption" color="textSecondary">
       {label}:
     </Typography>
@@ -327,3 +327,5 @@ const ChipLabel = ({ label, count, color }) => (
 );
 
 export default ImportProgressContext;
+
+

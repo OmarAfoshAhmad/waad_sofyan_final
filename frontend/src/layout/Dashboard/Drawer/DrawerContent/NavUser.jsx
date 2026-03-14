@@ -37,7 +37,7 @@ const ExpandMore = styled(IconButton, {
     },
     {
       props: ({ drawerOpen }) => !drawerOpen,
-      style: { opacity: 0, width: 50, height: 50 }
+      style: { opacity: 0, width: '3.125rem', height: '3.125rem' }
     }
   ]
 }));
@@ -75,7 +75,7 @@ export default function NavUser() {
   };
 
   return (
-    <Box sx={{ p: 1.25, px: !drawerOpen ? 1.25 : 3, borderTop: '2px solid', borderTopColor: 'divider' }}>
+    <Box sx={{ p: '0.625rem', px: !drawerOpen ? 1.25 : 3, borderTop: '2px solid', borderTopColor: 'divider' }}>
       <List disablePadding>
         <ListItem
           disablePadding
@@ -90,13 +90,13 @@ export default function NavUser() {
               onClick={handleClick}
               aria-label="show more"
             >
-              <RightOutlined style={{ fontSize: '0.625rem' }} />
+              <RightOutlined style={{ fontSize: '0.75rem' }} />
             </ExpandMore>
           }
           sx={{ '& .MuiListItemSecondaryAction-root': { right: !drawerOpen ? -20 : -16 } }}
         >
           <ListItemAvatar>
-            <Avatar alt="Avatar" src={avatar1} sx={{ ...(drawerOpen && { width: 46, height: 46 }) }} />
+            <Avatar alt="Avatar" src={avatar1} sx={{ ...(drawerOpen && { width: '2.875rem', height: '2.875rem' }) }} />
           </ListItemAvatar>
           <ListItemText primary={user?.name} secondary="UI/UX Designer" />
         </ListItem>
@@ -121,3 +121,4 @@ export default function NavUser() {
     </Box>
   );
 }
+

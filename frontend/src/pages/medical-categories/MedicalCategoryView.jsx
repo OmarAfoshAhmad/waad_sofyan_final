@@ -208,12 +208,12 @@ const MedicalCategoryView = () => {
             <Typography variant="h6" gutterBottom>
               المعلومات الأساسية
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           {/* Code */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 الرمز
               </Typography>
@@ -225,7 +225,7 @@ const MedicalCategoryView = () => {
 
           {/* Parent Category */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 التصنيف الأب
               </Typography>
@@ -242,7 +242,7 @@ const MedicalCategoryView = () => {
 
           {/* Name */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 الاسم
               </Typography>
@@ -254,7 +254,7 @@ const MedicalCategoryView = () => {
 
           {/* Status */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 الحالة
               </Typography>
@@ -265,7 +265,7 @@ const MedicalCategoryView = () => {
           {/* Description (Not in contract strictly but usually good to keep if backend sends it) */}
           {category?.description && (
             <Grid size={12}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
+              <Paper variant="outlined" sx={{ p: '1.0rem' }}>
                 <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                   الوصف
                 </Typography>
@@ -278,15 +278,15 @@ const MedicalCategoryView = () => {
 
           {/* ====== METADATA SECTION ====== */}
           <Grid size={12}>
-            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ mt: '1.0rem' }}>
               معلومات النظام
             </Typography>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: '1.0rem' }} />
           </Grid>
 
           {/* Created At */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 تاريخ الإنشاء
               </Typography>
@@ -296,7 +296,7 @@ const MedicalCategoryView = () => {
 
           {/* Updated At */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                 آخر تحديث
               </Typography>
@@ -307,7 +307,7 @@ const MedicalCategoryView = () => {
           {/* Created By */}
           {category?.createdBy && (
             <Grid size={{ xs: 12, md: 6 }}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
+              <Paper variant="outlined" sx={{ p: '1.0rem' }}>
                 <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                   أنشئ بواسطة
                 </Typography>
@@ -319,7 +319,7 @@ const MedicalCategoryView = () => {
           {/* Updated By */}
           {category?.updatedBy && (
             <Grid size={{ xs: 12, md: 6 }}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
+              <Paper variant="outlined" sx={{ p: '1.0rem' }}>
                 <Typography variant="caption" color="text.secondary" gutterBottom display="block">
                   آخر تحديث بواسطة
                 </Typography>

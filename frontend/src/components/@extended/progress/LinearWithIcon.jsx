@@ -13,7 +13,7 @@ export default function LinearWithIcon({ icon, value, ...others }) {
       <Box sx={{ width: '100%', mr: 1 }}>
         <LinearProgress variant="determinate" value={value} {...others} />
       </Box>
-      <Box sx={{ minWidth: 35 }}>{icon}</Box>
+      <Box sx={{ minWidth: '2.1875rem' }}>{icon}</Box>
     </Stack>
   );
 }

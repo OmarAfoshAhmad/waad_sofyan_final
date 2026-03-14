@@ -240,46 +240,46 @@ const VisitsList = () => {
     {
       id: 'visitDate',
       label: 'تاريخ الزيارة',
-      minWidth: 150,
+      minWidth: '9.375rem',
       sortable: true
     },
     {
       id: 'member',
       label: 'المؤمَّن عليه',
-      minWidth: 160,
+      minWidth: '10.0rem',
       icon: <PersonIcon fontSize="small" />,
       sortable: false
     },
     {
       id: 'provider',
       label: 'مقدم الخدمة',
-      minWidth: 180,
+      minWidth: '11.25rem',
       sortable: false
     },
     {
       id: 'services',
       label: 'الخدمات المقدمة',
-      minWidth: 200,
+      minWidth: '12.5rem',
       sortable: false
     },
     {
       id: 'claimPreAuth',
       label: 'حالة المطالبة / الموافقة',
-      minWidth: 200,
+      minWidth: '12.5rem',
       align: 'center',
       sortable: false
     },
     {
       id: 'status',
       label: 'الحالة',
-      minWidth: 110,
+      minWidth: '6.875rem',
       align: 'center',
       sortable: false
     },
     {
       id: 'actions',
       label: 'الإجراءات',
-      minWidth: 320,
+      minWidth: '20.0rem',
       align: 'center',
       sortable: false
     }
@@ -316,7 +316,7 @@ const VisitsList = () => {
       case 'member':
         return (
           <Stack direction="row" spacing={1} alignItems="center">
-            <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <PersonIcon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />
             <Typography variant="body2">{visit?.member?.fullName ?? '—'}</Typography>
           </Stack>
         );
@@ -336,7 +336,7 @@ const VisitsList = () => {
               {services.slice(0, 3).map((service, idx) => (
                 <Tooltip key={service?.id ?? idx} title={service?.name ?? ''}>
                   <Chip
-                    icon={<MedicalServicesIcon sx={{ fontSize: 14 }} />}
+                    icon={<MedicalServicesIcon sx={{ fontSize: '0.875rem' }} />}
                     label={service?.code ?? service?.name?.substring(0, 10) ?? `خدمة ${idx + 1}`}
                     size="small"
                     variant="outlined"
@@ -361,7 +361,7 @@ const VisitsList = () => {
             {visit?.latestClaimStatus ? (
               <Tooltip title={`مطالبة #${visit.latestClaimId} - ${visit.latestClaimStatusLabel || visit.latestClaimStatus}`}>
                 <Chip
-                  icon={<ReceiptIcon sx={{ fontSize: 14 }} />}
+                  icon={<ReceiptIcon sx={{ fontSize: '0.875rem' }} />}
                   label={visit.latestClaimStatusLabel || CLAIM_STATUS_CONFIG[visit.latestClaimStatus]?.label || visit.latestClaimStatus}
                   color={CLAIM_STATUS_CONFIG[visit.latestClaimStatus]?.color || 'default'}
                   size="small"
@@ -377,7 +377,7 @@ const VisitsList = () => {
             {visit?.latestPreAuthStatus ? (
               <Tooltip title={`موافقة مسبقة #${visit.latestPreAuthId} - ${visit.latestPreAuthStatusLabel || visit.latestPreAuthStatus}`}>
                 <Chip
-                  icon={<AssignmentIcon sx={{ fontSize: 14 }} />}
+                  icon={<AssignmentIcon sx={{ fontSize: '0.875rem' }} />}
                   label={
                     visit.latestPreAuthStatusLabel || PREAUTH_STATUS_CONFIG[visit.latestPreAuthStatus]?.label || visit.latestPreAuthStatus
                   }
@@ -394,7 +394,7 @@ const VisitsList = () => {
               </Typography>
             )}
             {(visit?.claimCount > 1 || visit?.preAuthCount > 1) && (
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                 {visit?.claimCount > 1 && `${visit.claimCount} مطالبات`}
                 {visit?.claimCount > 1 && visit?.preAuthCount > 1 && ' | '}
                 {visit?.preAuthCount > 1 && `${visit.preAuthCount} موافقات`}
@@ -419,7 +419,7 @@ const VisitsList = () => {
                 sx={{
                   bgcolor: '#2e7d32',
                   color: 'white',
-                  minWidth: '80px',
+                  minWidth: '5.0rem',
                   fontSize: '0.75rem',
                   fontWeight: 600,
                   '&:hover': {
@@ -438,7 +438,7 @@ const VisitsList = () => {
                 sx={{
                   bgcolor: '#2e7d32',
                   color: 'white',
-                  minWidth: '110px',
+                  minWidth: '6.875rem',
                   fontSize: '0.75rem',
                   fontWeight: 600,
                   '&:hover': {
@@ -482,7 +482,7 @@ const VisitsList = () => {
       />
 
       <MainCard>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: '1.5rem' }}>
           <TextField
             placeholder="بحث..."
             value={searchInput}
@@ -495,7 +495,7 @@ const VisitsList = () => {
                 </InputAdornment>
               )
             }}
-            sx={{ minWidth: { xs: '100%', sm: 300 } }}
+            sx={{ minWidth: { xs: '100%', sm: '150.0rem' } }}
           />
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" startIcon={<SearchIcon />} onClick={handleSearch}>
@@ -541,3 +541,6 @@ const VisitsList = () => {
 };
 
 export default VisitsList;
+
+
+

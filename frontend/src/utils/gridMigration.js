@@ -155,3 +155,4 @@ export default {
   convertToV2Size,
   MIGRATION_PATTERNS
 };
+

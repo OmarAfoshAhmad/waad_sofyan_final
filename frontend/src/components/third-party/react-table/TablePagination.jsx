@@ -46,7 +46,7 @@ export default function TablePagination({ getPageCount, setPageIndex, setPageSiz
   };
 
   return (
-    <Stack direction="row" sx={{ gap: 2, justifyContent: 'space-between', alignItems: 'center', width: 'auto', flexWrap: 'wrap' }}>
+    <Stack direction="row" sx={{ gap: '1.0rem', justifyContent: 'space-between', alignItems: 'center', width: 'auto', flexWrap: 'wrap' }}>
       <Stack direction="row" sx={{ gap: 1, alignItems: 'center' }}>
         <Typography variant="caption" color="secondary">
           Row per page
@@ -59,7 +59,7 @@ export default function TablePagination({ getPageCount, setPageIndex, setPageSiz
           value={getState().pagination.pageSize}
           onChange={handleChange}
           size="small"
-          slotProps={{ input: { sx: { py: 0.75, px: 1.25 } } }}
+          slotProps={{ input: { sx: { py: 0.75, px: '0.625rem' } } }}
         >
           {options.map((option) => (
             <MenuItem key={option} value={option}>
@@ -78,7 +78,7 @@ export default function TablePagination({ getPageCount, setPageIndex, setPageSiz
             const page = e.target.value ? Number(e.target.value) - 1 : 0;
             setPageIndex(page);
           }}
-          slotProps={{ htmlInput: { sx: { py: 0.75, px: 1.25, width: 36 } } }}
+          slotProps={{ htmlInput: { sx: { py: 0.75, px: '0.625rem', width: '2.25rem' } } }}
         />
       </Stack>
       <Pagination

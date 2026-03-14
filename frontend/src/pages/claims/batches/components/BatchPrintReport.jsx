@@ -153,7 +153,7 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                         color: #1b2540;
                     }
                     .a4-sheet {
-                        width: 100%;
+                        width: '6.25rem'%;
                         min-height: 0;
                     }
                     .page-break {
@@ -174,7 +174,7 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                         font-weight: 700;
                         color: #22335a;
                         margin-bottom: 4px;
-                        line-height: 1.35;
+                        line-height: '0.084375rem';
                     }
                     .print-batch-code {
                         font-size: 16px;
@@ -197,14 +197,14 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                         text-align: center;
                     }
                     .cover-body {
-                        line-height: 2;
+                        line-height: '0.125rem';
                         font-size: 13px;
                         margin-bottom: 14px;
                     }
                     .summary-section {
                         margin-top: 20px;
                         font-size: 13px;
-                        line-height: 2;
+                        line-height: '0.125rem';
                         margin-right: 10px;
                     }
                     .summary-line {
@@ -221,7 +221,7 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                         margin-top: 26px;
                         font-size: 13px;
                         text-align: center;
-                        line-height: 1.9;
+                        line-height: '0.11875rem';
                     }
 
                     .patient-block {
@@ -247,7 +247,7 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                     .ph-details-row:last-child { border-left: none; }
                     
                     table.print-table {
-                        width: 100%;
+                        width: '6.25rem'%;
                         border-collapse: collapse;
                         font-size: 10px;
                         text-align: center;
@@ -290,14 +290,14 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                     @media print {
                         body * { visibility: hidden; }
                         .print-content-wrapper, .print-content-wrapper * { visibility: visible; }
-                        .print-content-wrapper { position: absolute; left: 0; top: 0; width: 100%; bottom: auto; overflow: visible; }
+                        .print-content-wrapper { position: absolute; left: 0; top: 0; width: '6.25rem'%; bottom: auto; overflow: visible; }
                     }
                 `}
             </style>
 
             <div className="a4-sheet page-break">
                 <div className="print-header">
-                    <img src={logoSrc} alt="logo" style={{ height: 64, width: 'auto', objectFit: 'contain' }} />
+                    <img src={logoSrc} alt="logo" style={{ height: '4.0rem', width: 'auto', objectFit: 'contain' }} />
                     <div className="print-title">{fullTitle}</div>
                 </div>
 
@@ -337,14 +337,14 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
 
             {detailedClaims.map((item, pIdx) => (
                 <div key={pIdx} className={`a4-sheet ${pIdx < detailedClaims.length - 1 ? 'page-break' : ''}`}>
-                    <div className="print-header" style={{ marginBottom: '12px' }}>
-                        <img src={logoSrc} alt="logo" style={{ height: 50, width: 'auto', objectFit: 'contain', marginBottom: 5 }} />
-                        <div className="print-title" style={{ fontSize: '14px' }}>{fullTitle}</div>
+                    <div className="print-header" style={{ marginBottom: '0.75rem' }}>
+                        <img src={logoSrc} alt="logo" style={{ height: '3.125rem', width: 'auto', objectFit: 'contain', marginBottom: '0.3125rem' }} />
+                        <div className="print-title" style={{ fontSize: '0.875rem' }}>{fullTitle}</div>
                     </div>
 
-                    <div className="meta-info" style={{ marginBottom: '12px' }}>
+                    <div className="meta-info" style={{ marginBottom: '0.75rem' }}>
                         <div>{printDate} :التاريخ</div>
-                        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{provider?.name || '-'}</div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{provider?.name || '-'}</div>
                     </div>
 
                     <div className="patient-block" style={{ marginBottom: 0 }}>
@@ -380,11 +380,11 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
                                         <td>{fmtAmount(srv.gross)}</td>
                                         <td>{fmtAmount(srv.net)}</td>
                                         <td>{fmtAmount(srv.rejected)}</td>
-                                        <td className="reason-cell" style={{ fontSize: '9px' }}>{srv.rejectionReason || ''}</td>
+                                        <td className="reason-cell" style={{ fontSize: '0.75rem' }}>{srv.rejectionReason || ''}</td>
                                     </tr>
                                 ))}
                                 <tr className="subtotal-row">
-                                    <td colSpan={2} style={{ textAlign: 'left', paddingRight: '20px' }}>SUBTOTAL</td>
+                                    <td colSpan={2} style={{ textAlign: 'left', paddingRight: '1.25rem' }}>SUBTOTAL</td>
                                     <td className="sub-gross">{fmtAmount(item.subtotalGross)}</td>
                                     <td className="sub-net">{fmtAmount(item.subtotalNet)}</td>
                                     <td className="sub-rejected">{fmtAmount(item.subtotalRejected)}</td>
@@ -409,3 +409,6 @@ const BatchPrintReport = forwardRef(({ claims, employer, provider, month, year, 
 });
 
 export default BatchPrintReport;
+
+
+

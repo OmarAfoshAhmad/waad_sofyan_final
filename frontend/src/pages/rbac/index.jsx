@@ -49,7 +49,7 @@ const StatCard = ({ title, value, icon: Icon, color, loading }) => (
             </Typography>
           )}
         </Box>
-        <Avatar sx={{ bgcolor: `${color}.main`, width: 48, height: 48 }}>
+        <Avatar sx={{ bgcolor: `${color}.main`, width: '3.0rem', height: '3.0rem' }}>
           <Icon />
         </Avatar>
       </Stack>
@@ -78,8 +78,8 @@ const NavCard = ({ title, description, icon: Icon, color, onClick }) => (
     <CardActionArea onClick={onClick} sx={{ height: '100%' }}>
       <CardContent>
         <Stack spacing={2}>
-          <Avatar sx={{ bgcolor: `${color}.lighter`, color: `${color}.main`, width: 56, height: 56 }}>
-            <Icon sx={{ fontSize: 28 }} />
+          <Avatar sx={{ bgcolor: `${color}.lighter`, color: `${color}.main`, width: '3.5rem', height: '3.5rem' }}>
+            <Icon sx={{ fontSize: '1.75rem' }} />
           </Avatar>
           <Box>
             <Typography variant="h5" gutterBottom>
@@ -152,7 +152,7 @@ const RBACDashboard = () => {
       />
 
       {/* ====== STATS ROW ====== */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: '2.0rem' }}>
         <Grid size={{ xs: 12, sm: 4 }}>
           <StatCard title="المستخدمين" value={stats.users} icon={PeopleAltIcon} color="primary" loading={loading} />
         </Grid>
@@ -165,7 +165,7 @@ const RBACDashboard = () => {
       </Grid>
 
       {/* ====== NAVIGATION CARDS ====== */}
-      <Typography variant="h5" gutterBottom sx={{ mb: 2 }}>
+      <Typography variant="h5" gutterBottom sx={{ mb: '1.0rem' }}>
         الإدارة
       </Typography>
       <Grid container spacing={3}>
@@ -182,7 +182,7 @@ const RBACDashboard = () => {
       </Grid>
 
       {/* ====== INFO CARD ====== */}
-      <MainCard sx={{ mt: 4 }}>
+      <MainCard sx={{ mt: '2.0rem' }}>
         <Stack direction="row" spacing={2} alignItems="flex-start">
           <Avatar sx={{ bgcolor: 'info.lighter', color: 'info.main' }}>
             <SecurityIcon />
@@ -194,7 +194,7 @@ const RBACDashboard = () => {
             <Typography variant="body2" color="text.secondary" paragraph>
               يعتمد النظام على نموذج RBAC (Role-Based Access Control) حيث:
             </Typography>
-            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+            <Box component="ul" sx={{ m: 0, pl: '1.0rem' }}>
               <Typography component="li" variant="body2" color="text.secondary">
                 <strong>المستخدمين:</strong> يتم تعيين أدوار لهم
               </Typography>
@@ -216,3 +216,4 @@ const RBACDashboard = () => {
 };
 
 export default RBACDashboard;
+

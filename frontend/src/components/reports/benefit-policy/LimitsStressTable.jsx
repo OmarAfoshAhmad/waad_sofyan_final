@@ -64,7 +64,7 @@ const LimitsStressTable = ({ data = [], loading = false }) => {
   // Loading skeleton
   if (loading) {
     return (
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: '1.0rem' }}>
         <Skeleton variant="rectangular" height={40} sx={{ mb: 1 }} />
         {[1, 2, 3, 4, 5].map((i) => (
           <Skeleton key={i} variant="rectangular" height={52} sx={{ mb: 0.5 }} />
@@ -90,7 +90,7 @@ const LimitsStressTable = ({ data = [], loading = false }) => {
   return (
     <Box>
       {/* Summary Chips */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: '1.0rem', flexWrap: 'wrap' }}>
         <Chip
           icon={<CriticalIcon />}
           label={`حرج: ${criticalCount}`}
@@ -110,7 +110,7 @@ const LimitsStressTable = ({ data = [], loading = false }) => {
 
       {/* Critical Alert */}
       {criticalCount > 0 && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: '1.0rem' }}>
           <Typography variant="body2">⚠️ يوجد {criticalCount} وثيقة/وثائق تجاوزت 85% من الحد السنوي - تتطلب مراجعة فورية</Typography>
         </Alert>
       )}
@@ -131,7 +131,7 @@ const LimitsStressTable = ({ data = [], loading = false }) => {
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                 المتبقي
               </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 150 }}>
+              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: '9.375rem' }}>
                 نسبة الاستخدام
               </TableCell>
               <TableCell align="center" sx={{ fontWeight: 'bold' }}>
@@ -180,15 +180,15 @@ const LimitsStressTable = ({ data = [], loading = false }) => {
                   </TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box sx={{ flexGrow: 1, minWidth: 80 }}>
+                      <Box sx={{ flexGrow: 1, minWidth: '5.0rem' }}>
                         <LinearProgress
                           variant="determinate"
                           value={Math.min(row.utilizationPercent, 100)}
                           color={statusConfig.color}
-                          sx={{ height: 8, borderRadius: 4 }}
+                          sx={{ height: '0.375rem', borderRadius: '0.375rem' }}
                         />
                       </Box>
-                      <Typography variant="body2" fontWeight="bold" color={`${statusConfig.color}.main`} sx={{ minWidth: 45 }}>
+                      <Typography variant="body2" fontWeight="bold" color={`${statusConfig.color}.main`} sx={{ minWidth: '2.8125rem' }}>
                         {row.utilizationPercent.toFixed(1)}%
                       </Typography>
                     </Box>
@@ -206,11 +206,11 @@ const LimitsStressTable = ({ data = [], loading = false }) => {
       </TableContainer>
 
       {/* Legend */}
-      <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+      <Box sx={{ mt: '1.0rem', p: '0.75rem', bgcolor: 'action.hover', borderRadius: 1 }}>
         <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
           تصنيف حالة الضغط:
         </Typography>
-        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
           <Typography variant="caption">
             <Chip label="صحي" color="success" size="small" sx={{ mr: 0.5 }} />
             أقل من 60%
@@ -253,3 +253,5 @@ LimitsStressTable.propTypes = {
 };
 
 export default LimitsStressTable;
+
+

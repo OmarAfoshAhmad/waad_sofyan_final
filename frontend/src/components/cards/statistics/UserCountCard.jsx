@@ -18,8 +18,8 @@ function IconWrapper({ children }) {
         color: '#fff',
         transform: 'rotate(25deg)',
         '& svg': {
-          width: '100px',
-          height: '100px',
+          width: '6.25rem',
+          height: '6.25rem',
           opacity: '0.35'
         }
       }}
@@ -59,3 +59,4 @@ export default function UserCountCard({ primary, secondary, iconPrimary, color }
 IconWrapper.propTypes = { children: PropTypes.node };
 
 UserCountCard.propTypes = { primary: PropTypes.string, secondary: PropTypes.string, iconPrimary: PropTypes.any, color: PropTypes.string };
+

@@ -33,7 +33,7 @@ const ModernQuickActions = ({ actions = [] }) => {
               }
             }}
           >
-            <CardActionArea onClick={() => handleAction(action)} sx={{ height: '100%', p: 2 }}>
+            <CardActionArea onClick={() => handleAction(action)} sx={{ height: '100%', p: '1.0rem' }}>
               <Stack direction="row" spacing={2} alignItems="center">
                 {/* Icon */}
                 {action.icon && (
@@ -42,9 +42,9 @@ const ModernQuickActions = ({ actions = [] }) => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: 48,
-                      height: 48,
-                      borderRadius: 1.5,
+                      width: '3.0rem',
+                      height: '3.0rem',
+                      borderRadius: '0.375rem',
                       bgcolor: `${action.color || 'primary'}.lighter`,
                       color: `${action.color || 'primary'}.main`,
                       flexShrink: 0
@@ -88,3 +88,6 @@ ModernQuickActions.propTypes = {
 };
 
 export default ModernQuickActions;
+
+
+

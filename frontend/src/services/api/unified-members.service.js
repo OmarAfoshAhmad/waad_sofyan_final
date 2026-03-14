@@ -501,6 +501,22 @@ export const deletePhoto = async (id) => {
   }
 };
 
+/**
+ * Get financial summary for a member
+ *
+ * @param {number} memberId - Member ID
+ * @returns {Promise<Object>} Financial summary
+ */
+export const getFinancialSummary = async (memberId) => {
+  try {
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${memberId}/financial-summary`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching member financial summary:', error);
+    throw error;
+  }
+};
+
 export default {
   createPrincipalMember,
   addDependent,
@@ -522,6 +538,7 @@ export default {
   downloadTemplate,
   uploadPhoto,
   deletePhoto,
+  getFinancialSummary,
   RELATIONSHIPS,
   GENDERS,
   MEMBER_STATUSES,

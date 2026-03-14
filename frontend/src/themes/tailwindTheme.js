@@ -270,7 +270,7 @@ const tailwindTheme = createTheme({
 
   // Shape - Tailwind border radius
   shape: {
-    borderRadius: 6 // Tailwind rounded-md (0.375rem)
+    borderRadius: '0.375rem' // Tailwind rounded-md (0.375rem)
   },
 
   // Shadows - Tailwind-inspired
@@ -290,7 +290,7 @@ const tailwindTheme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8, // Tailwind rounded-lg
+          borderRadius: '0.375rem', // Tailwind rounded-lg
           textTransform: 'none',
           fontWeight: 600,
           padding: '8px 16px',
@@ -311,7 +311,7 @@ const tailwindTheme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12, // Tailwind rounded-xl
+          borderRadius: '0.75rem', // Tailwind rounded-xl
           boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
         }
       }
@@ -320,7 +320,7 @@ const tailwindTheme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 6, // Tailwind rounded-md
+          borderRadius: '0.375rem', // Tailwind rounded-md
           fontWeight: 500
         }
       }
@@ -330,7 +330,7 @@ const tailwindTheme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 8 // Tailwind rounded-lg
+            borderRadius: '0.375rem' // Tailwind rounded-lg
           }
         }
       }
@@ -342,7 +342,7 @@ const tailwindTheme = createTheme({
           backgroundImage: 'none'
         },
         rounded: {
-          borderRadius: 12
+          borderRadius: '0.75rem'
         }
       }
     },
@@ -390,3 +390,6 @@ export const tw = {
 };
 
 export default tailwindTheme;
+
+
+

@@ -92,9 +92,9 @@ const ExpandableRow = ({ row }) => {
               variant="determinate"
               value={Math.min(row.approvalRate, 100)}
               color={row.approvalRate >= 80 ? 'success' : row.approvalRate >= 50 ? 'warning' : 'error'}
-              sx={{ flexGrow: 1, height: 6, borderRadius: 3, minWidth: 50 }}
+              sx={{ flexGrow: 1, height: '0.375rem', borderRadius: '0.1875rem', minWidth: '3.125rem' }}
             />
-            <Typography variant="caption" sx={{ minWidth: 40 }}>
+            <Typography variant="caption" sx={{ minWidth: '2.5rem' }}>
               {row.approvalRate}%
             </Typography>
           </Box>
@@ -109,9 +109,9 @@ const ExpandableRow = ({ row }) => {
                 variant="determinate"
                 value={Math.min(row.utilizationPercent, 100)}
                 color={row.utilizationPercent > 85 ? 'error' : row.utilizationPercent > 60 ? 'warning' : 'success'}
-                sx={{ flexGrow: 1, height: 6, borderRadius: 3, minWidth: 50 }}
+                sx={{ flexGrow: 1, height: '0.375rem', borderRadius: '0.1875rem', minWidth: '3.125rem' }}
               />
-              <Typography variant="caption" sx={{ minWidth: 40 }}>
+              <Typography variant="caption" sx={{ minWidth: '2.5rem' }}>
                 {row.utilizationPercent}%
               </Typography>
             </Box>
@@ -141,11 +141,11 @@ const ExpandableRow = ({ row }) => {
       <TableRow>
         <TableCell colSpan={9} sx={{ py: 0 }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ py: 2, px: 3, bgcolor: 'action.hover' }}>
+            <Box sx={{ py: '1.0rem', px: '1.5rem', bgcolor: 'action.hover' }}>
               <Typography variant="subtitle2" gutterBottom>
                 تفاصيل إضافية
               </Typography>
-              <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', gap: '2.0rem', flexWrap: 'wrap' }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     الشريك
@@ -218,7 +218,7 @@ const PolicyEffectivenessTable = ({ data = [], loading = false }) => {
   // Loading skeleton
   if (loading) {
     return (
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: '1.0rem' }}>
         <Skeleton variant="rectangular" height={40} sx={{ mb: 1 }} />
         {[1, 2, 3, 4, 5].map((i) => (
           <Skeleton key={i} variant="rectangular" height={52} sx={{ mb: 0.5 }} />
@@ -247,7 +247,7 @@ const PolicyEffectivenessTable = ({ data = [], loading = false }) => {
   return (
     <Box>
       {/* Summary Chips */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: '1.0rem', flexWrap: 'wrap' }}>
         <Chip
           icon={<ExcellentIcon />}
           label={`أداء ممتاز: ${excellentCount}`}
@@ -282,7 +282,7 @@ const PolicyEffectivenessTable = ({ data = [], loading = false }) => {
 
       {/* Recommendations Alert */}
       {(redesignCount > 0 || unusedCount > 0) && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="warning" sx={{ mb: '1.0rem' }}>
           <Typography variant="body2">
             ⚠️ يوجد {redesignCount + unusedCount} وثيقة/وثائق تحتاج مراجعة عاجلة ({redesignCount > 0 ? `${redesignCount} للتصميم` : ''}
             {redesignCount > 0 && unusedCount > 0 ? '، ' : ''}
@@ -296,7 +296,7 @@ const PolicyEffectivenessTable = ({ data = [], loading = false }) => {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: 'action.hover' }}>
-              <TableCell sx={{ width: 50 }} />
+              <TableCell sx={{ width: '3.125rem' }} />
               <TableCell sx={{ fontWeight: 'bold' }}>الوثيقة</TableCell>
               <TableCell align="center" sx={{ fontWeight: 'bold' }}>
                 الأعضاء
@@ -304,13 +304,13 @@ const PolicyEffectivenessTable = ({ data = [], loading = false }) => {
               <TableCell align="center" sx={{ fontWeight: 'bold' }}>
                 المطالبات
               </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 120 }}>
+              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: '7.5rem' }}>
                 نسبة القبول
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                 متوسط المطالبة
               </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: 120 }}>
+              <TableCell align="center" sx={{ fontWeight: 'bold', minWidth: '7.5rem' }}>
                 الاستخدام
               </TableCell>
               <TableCell align="center" sx={{ fontWeight: 'bold' }}>
@@ -330,11 +330,11 @@ const PolicyEffectivenessTable = ({ data = [], loading = false }) => {
       </TableContainer>
 
       {/* Legend */}
-      <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+      <Box sx={{ mt: '1.0rem', p: '0.75rem', bgcolor: 'action.hover', borderRadius: 1 }}>
         <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
           معايير التوصية:
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: '1.0rem', flexWrap: 'wrap' }}>
           <Typography variant="caption">
             <Chip label="أداء ممتاز" color="success" size="small" sx={{ mr: 0.5 }} />
             قبول &gt;80%، استخدام 30-70%
@@ -383,3 +383,5 @@ PolicyEffectivenessTable.propTypes = {
 };
 
 export default PolicyEffectivenessTable;
+
+

@@ -257,8 +257,8 @@ const CategoryServicePicker = ({
   const renderCategoryOption = (props, option) => (
     <Box component="li" {...props}>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ width: '100%' }}>
-        <Avatar sx={{ bgcolor: 'primary.lighter', width: 36, height: 36 }}>
-          <CategoryIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+        <Avatar sx={{ bgcolor: 'primary.lighter', width: '2.25rem', height: '2.25rem' }}>
+          <CategoryIcon sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
         </Avatar>
         <Box sx={{ flex: 1 }}>
           <Typography variant="body2" fontWeight="medium">
@@ -275,8 +275,8 @@ const CategoryServicePicker = ({
   const renderServiceOption = (props, option) => (
     <Box component="li" {...props}>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ width: '100%' }}>
-        <Avatar sx={{ bgcolor: 'warning.lighter', width: 36, height: 36 }}>
-          <MedicalIcon sx={{ fontSize: 18, color: 'warning.main' }} />
+        <Avatar sx={{ bgcolor: 'warning.lighter', width: '2.25rem', height: '2.25rem' }}>
+          <MedicalIcon sx={{ fontSize: '1.125rem', color: 'warning.main' }} />
         </Avatar>
         <Box sx={{ flex: 1 }}>
           <Stack direction="row" alignItems="center" spacing={1}>
@@ -297,7 +297,7 @@ const CategoryServicePicker = ({
             label={`${Number(option.basePrice).toLocaleString()} د.ل`}
             size="small"
             color="success"
-            icon={<LockIcon sx={{ fontSize: 12 }} />}
+            icon={<LockIcon sx={{ fontSize: '0.75rem' }} />}
           />
         )}
       </Stack>
@@ -309,7 +309,7 @@ const CategoryServicePicker = ({
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem' }}>
       <Stack spacing={2}>
         {/* Info Alert */}
         <Alert severity="info" icon={<InfoIcon />} sx={{ py: 0.5 }}>
@@ -326,7 +326,7 @@ const CategoryServicePicker = ({
               label="1"
               size="small"
               color={selectedCategory ? 'success' : 'primary'}
-              sx={{ width: 24, height: 24, fontWeight: 'bold' }}
+              sx={{ width: '1.5rem', height: '1.5rem', fontWeight: 'bold' }}
             />
             <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
               {LABELS.selectCategory}
@@ -379,7 +379,7 @@ const CategoryServicePicker = ({
               label="2"
               size="small"
               color={selectedService ? 'success' : selectedCategory ? 'primary' : 'default'}
-              sx={{ width: 24, height: 24, fontWeight: 'bold' }}
+              sx={{ width: '1.5rem', height: '1.5rem', fontWeight: 'bold' }}
             />
             <Typography variant="subtitle2" fontWeight="bold" color={selectedCategory ? 'primary.main' : 'text.disabled'}>
               {LABELS.selectService}
@@ -442,7 +442,7 @@ const CategoryServicePicker = ({
         {showCoverageInfo && selectedService && (
           <>
             <Divider />
-            <Box sx={{ bgcolor: 'success.lighter', p: 1.5, borderRadius: 1 }}>
+            <Box sx={{ bgcolor: 'success.lighter', p: '0.75rem', borderRadius: 1 }}>
               <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
                 <Chip
                   icon={<CategoryIcon />}
@@ -487,3 +487,5 @@ CategoryServicePicker.propTypes = {
 };
 
 export default CategoryServicePicker;
+
+

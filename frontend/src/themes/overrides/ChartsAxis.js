@@ -20,7 +20,7 @@ export default function ChartsAxis(theme) {
             stroke: varsPalette.grey?.[300] ?? theme.palette.grey?.[300]
           },
           '& .MuiChartsAxis-tickLabel': {
-            fontSize: 12,
+            fontSize: '0.75rem',
             fill: varsPalette.text?.secondary ?? theme.palette.text?.secondary
           }
         }
@@ -28,3 +28,5 @@ export default function ChartsAxis(theme) {
     }
   };
 }
+
+

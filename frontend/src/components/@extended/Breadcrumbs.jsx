@@ -103,7 +103,7 @@ export default function Breadcrumbs({
 
   // item separator
   const SeparatorIcon = separator;
-  const separatorIcon = separator ? <SeparatorIcon style={{ fontSize: '0.75rem', marginTop: 2 }} /> : '/';
+  const separatorIcon = separator ? <SeparatorIcon style={{ fontSize: '0.75rem', marginTop: '1.0rem' }} /> : '/';
 
   let mainContent;
   let itemContent;
@@ -131,7 +131,7 @@ export default function Breadcrumbs({
       breadcrumbContent = (
         <MainCard
           border={card}
-          sx={card === false ? { mb: 3, bgcolor: 'inherit', backgroundImage: 'none', ...sx } : { mb: 3, ...sx }}
+          sx={card === false ? { mb: '1.5rem', bgcolor: 'inherit', backgroundImage: 'none', ...sx } : { mb: '1.5rem', ...sx }}
           {...others}
           content={card}
           shadow="none"
@@ -158,7 +158,7 @@ export default function Breadcrumbs({
               </Grid>
             )}
           </Grid>
-          {card === false && divider !== false && <Divider sx={{ mt: 2 }} />}
+          {card === false && divider !== false && <Divider sx={{ mt: '1.0rem' }} />}
         </MainCard>
       );
     }
@@ -216,7 +216,7 @@ export default function Breadcrumbs({
       breadcrumbContent = (
         <MainCard
           border={card}
-          sx={card === false ? { mb: 3, bgcolor: 'inherit', backgroundImage: 'none', ...sx } : { mb: 3, ...sx }}
+          sx={card === false ? { mb: '1.5rem', bgcolor: 'inherit', backgroundImage: 'none', ...sx } : { mb: '1.5rem', ...sx }}
           {...others}
           content={card}
           shadow="none"
@@ -239,7 +239,7 @@ export default function Breadcrumbs({
               </Grid>
             )}
           </Grid>
-          {card === false && divider !== false && <Divider sx={{ mt: 2 }} />}
+          {card === false && divider !== false && <Divider sx={{ mt: '1.0rem' }} />}
         </MainCard>
       );
     }
@@ -264,3 +264,5 @@ Breadcrumbs.propTypes = {
   sx: PropTypes.any,
   others: PropTypes.any
 };
+
+

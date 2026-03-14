@@ -68,11 +68,11 @@ const getFileIcon = (mimeType) => {
 
   switch (type) {
     case 'image':
-      return <ImageIcon sx={{ fontSize: 64, color: 'info.main' }} />;
+      return <ImageIcon sx={{ fontSize: '4.0rem', color: 'info.main' }} />;
     case 'pdf':
-      return <PdfIcon sx={{ fontSize: 64, color: 'error.main' }} />;
+      return <PdfIcon sx={{ fontSize: '4.0rem', color: 'error.main' }} />;
     default:
-      return <FileIcon sx={{ fontSize: 64, color: 'text.secondary' }} />;
+      return <FileIcon sx={{ fontSize: '4.0rem', color: 'text.secondary' }} />;
   }
 };
 
@@ -163,11 +163,11 @@ const DocumentPreview = memo(
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'grey.50',
-            borderRadius: 2
+            borderRadius: '0.125rem'
           }}
         >
           <CircularProgress size={40} />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: '1.0rem' }}>
             جارٍ تحميل المستند...
           </Typography>
         </Paper>
@@ -189,10 +189,10 @@ const DocumentPreview = memo(
             justifyContent: 'center',
             bgcolor: (theme) => alpha(theme.palette.error.main, 0.04),
             borderColor: 'error.light',
-            borderRadius: 2
+            borderRadius: '0.125rem'
           }}
         >
-          <BrokenImageIcon sx={{ fontSize: 48, color: 'error.main', mb: 2 }} />
+          <BrokenImageIcon sx={{ fontSize: '3.0rem', color: 'error.main', mb: '1.0rem' }} />
           <Typography variant="body1" color="error.main" fontWeight={600}>
             فشل تحميل المستند
           </Typography>
@@ -200,7 +200,7 @@ const DocumentPreview = memo(
             {error}
           </Typography>
           {onRetry && (
-            <Button variant="outlined" color="error" size="small" startIcon={<RefreshIcon />} onClick={onRetry} sx={{ mt: 2 }}>
+            <Button variant="outlined" color="error" size="small" startIcon={<RefreshIcon />} onClick={onRetry} sx={{ mt: '1.0rem' }}>
               إعادة المحاولة
             </Button>
           )}
@@ -222,10 +222,10 @@ const DocumentPreview = memo(
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'grey.50',
-            borderRadius: 2
+            borderRadius: '0.125rem'
           }}
         >
-          <FileIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+          <FileIcon sx={{ fontSize: '3.0rem', color: 'text.disabled', mb: '1.0rem' }} />
           <Typography variant="body1" color="text.secondary">
             اختر مستندًا للمعاينة
           </Typography>
@@ -247,18 +247,18 @@ const DocumentPreview = memo(
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'grey.50',
-            borderRadius: 2,
-            p: 3
+            borderRadius: '0.125rem',
+            p: '1.5rem'
           }}
         >
           {getFileIcon(mimeType)}
-          <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 2 }}>
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mt: '1.0rem' }}>
             {fileName || 'ملف غير معروف'}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
             {mimeType || 'نوع غير محدد'} • {formatFileSize(fileSize)}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem', textAlign: 'center' }}>
             لا يمكن معاينة هذا النوع من الملفات مباشرة
           </Typography>
           <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleDownload}>
@@ -280,7 +280,7 @@ const DocumentPreview = memo(
           height: containerHeight,
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: 2,
+          borderRadius: '0.125rem',
           overflow: 'hidden',
           position: isFullscreen ? 'fixed' : 'relative',
           top: isFullscreen ? 0 : 'auto',
@@ -295,7 +295,7 @@ const DocumentPreview = memo(
         {showToolbar && (
           <Box
             sx={{
-              px: 2,
+              px: '1.0rem',
               py: 1,
               borderBottom: 1,
               borderColor: 'divider',
@@ -308,7 +308,7 @@ const DocumentPreview = memo(
             <Stack direction="row" spacing={1} alignItems="center">
               {getFileIcon(mimeType)}
               <Box>
-                <Typography variant="subtitle2" fontWeight={600} noWrap sx={{ maxWidth: 200 }}>
+                <Typography variant="subtitle2" fontWeight={600} noWrap sx={{ maxWidth: '12.5rem' }}>
                   {fileName || 'مستند'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -334,7 +334,7 @@ const DocumentPreview = memo(
                       px: 1,
                       display: 'flex',
                       alignItems: 'center',
-                      minWidth: 50,
+                      minWidth: '3.125rem',
                       justifyContent: 'center'
                     }}
                   >
@@ -390,7 +390,7 @@ const DocumentPreview = memo(
                     alignItems: 'center'
                   }}
                 >
-                  <BrokenImageIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                  <BrokenImageIcon sx={{ fontSize: '3.0rem', color: 'text.disabled', mb: 1 }} />
                   <Typography variant="body2" color="text.secondary">
                     فشل تحميل الصورة
                   </Typography>

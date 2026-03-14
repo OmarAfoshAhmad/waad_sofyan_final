@@ -86,8 +86,8 @@ const UnifiedToolbar = ({
   return (
     <GridToolbarContainer
       sx={{
-        p: 2,
-        gap: 2,
+        p: '1.0rem',
+        gap: '1.0rem',
         backgroundColor: TABLE_THEME.toolbar.background,
         borderBottom: `1px solid ${TABLE_THEME.toolbar.border}`,
         flexWrap: 'wrap'
@@ -100,7 +100,7 @@ const UnifiedToolbar = ({
         value={searchTerm}
         onChange={(e) => onSearchChange(e.target.value)}
         sx={{
-          minWidth: 250,
+          minWidth: '15.625rem',
           backgroundColor: 'background.paper',
           '& .MuiOutlinedInput-root': {
             borderRadius: 1

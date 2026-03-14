@@ -74,23 +74,23 @@ const ErrorFallback = ({ errorId, onRetry, onGoHome, onReload }) => {
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: (theme) => alpha(theme.palette.error.light, 0.05),
-        p: 3
+        p: '1.5rem'
       }}
     >
       <Card
         sx={{
-          maxWidth: 500,
+          maxWidth: '31.25rem',
           width: '100%',
           textAlign: 'center',
           boxShadow: (theme) => `0 8px 32px ${alpha(theme.palette.error.main, 0.15)}`
         }}
       >
-        <CardContent sx={{ p: 4 }}>
+        <CardContent sx={{ p: '2.0rem' }}>
           <ErrorOutlineIcon
             sx={{
-              fontSize: 80,
+              fontSize: '5.0rem',
               color: 'error.main',
-              mb: 2
+              mb: '1.0rem'
             }}
           />
 
@@ -98,15 +98,15 @@ const ErrorFallback = ({ errorId, onRetry, onGoHome, onReload }) => {
             واجه النظام مشكلة غير متوقعة
           </Typography>
 
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: '1.5rem' }}>
             نأسف لهذا الخلل. فريقنا التقني يعمل على حل المشكلة بأسرع وقت.
             <br />
             يمكنك محاولة تحديث الصفحة أو العودة للصفحة الرئيسية.
           </Typography>
 
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: '1.0rem' }} />
 
-          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: '1.5rem' }}>
             {onRetry && (
               <Button variant="contained" color="primary" startIcon={<RefreshIcon />} onClick={onRetry} size="large">
                 إعادة المحاولة
@@ -122,10 +122,10 @@ const ErrorFallback = ({ errorId, onRetry, onGoHome, onReload }) => {
             </Button>
           </Stack>
 
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: '1.0rem' }} />
 
           <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-            <BugReportIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+            <BugReportIcon sx={{ fontSize: '1.0rem', color: 'text.disabled' }} />
             <Typography variant="caption" color="text.disabled">
               معرف الخطأ: {errorId}
             </Typography>

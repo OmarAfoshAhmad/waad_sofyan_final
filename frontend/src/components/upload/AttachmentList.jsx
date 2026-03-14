@@ -164,7 +164,7 @@ const AttachmentList = ({
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ m: 2 }}>
+      <Alert severity="error" sx={{ m: '1.0rem' }}>
         {error}
       </Alert>
     );
@@ -172,7 +172,7 @@ const AttachmentList = ({
 
   if (!attachments || attachments.length === 0) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
+      <Box sx={{ p: '1.5rem', textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
           {emptyMessage}
         </Typography>

@@ -224,9 +224,9 @@ export default function ProviderAccountsList() {
   const renderSummaryCard = (title, value, icon, borderColor = 'primary.main') => (
     <Box
       sx={{
-        minWidth: 170,
-        height: 48,
-        px: 1.25,
+        minWidth: '10.625rem',
+        height: '3.0rem',
+        px: '0.625rem',
         py: 0.5,
         border: 1,
         borderColor,
@@ -289,14 +289,14 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'claimNumber',
         header: 'رقم المطالبة',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{row.original.claimNumber || `CLM-${row.original.id}`}</Typography>
       },
       {
         accessorKey: 'serviceDate',
         header: 'تاريخ الخدمة',
-        minWidth: 125,
+        minWidth: '7.8125rem',
         align: 'center',
         cell: ({ row }) => {
           const value = row.original.visitDate || row.original.serviceDate;
@@ -306,21 +306,21 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'providerName',
         header: 'مقدم الخدمة',
-        minWidth: 180,
+        minWidth: '11.25rem',
         align: 'center',
         cell: ({ row }) => row.original.providerName || '-'
       },
       {
         accessorKey: 'requestedAmount',
         header: 'المبلغ الإجمالي (قبل)',
-        minWidth: 150,
+        minWidth: '9.375rem',
         align: 'center',
         cell: ({ row }) => formatCurrency(row.original.requestedAmount)
       },
       {
         accessorKey: 'refusedAmount',
         header: 'المبلغ المرفوض',
-        minWidth: 135,
+        minWidth: '8.4375rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography color="error.main" fontWeight="bold">
@@ -331,14 +331,14 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'payableAmount',
         header: 'القيمة المستحقة',
-        minWidth: 140,
+        minWidth: '8.75rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
       },
       {
         accessorKey: 'providerDiscountPercent',
         header: 'نسبة التخفيض',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         cell: ({ row }) => {
           const discount = getDiscountPercent(row.original);
@@ -348,7 +348,7 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'companyShare',
         header: 'حصة الشركة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography color="warning.main" fontWeight="bold">
@@ -359,7 +359,7 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'facilityShare',
         header: 'نصيب المرفق',
-        minWidth: 130,
+        minWidth: '8.125rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography color="success.main" fontWeight="bold">
@@ -370,7 +370,7 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'status',
         header: 'الحالة',
-        minWidth: 120,
+        minWidth: '7.5rem',
         align: 'center',
         cell: ({ row }) => {
           const status = row.original.status || 'DRAFT';
@@ -403,7 +403,7 @@ export default function ProviderAccountsList() {
                 alignItems: 'stretch',
                 overflowX: 'auto',
                 pb: 0.25,
-                '&::-webkit-scrollbar': { height: 6 }
+                '&::-webkit-scrollbar': { height: '0.375rem' }
               }}
             >
               {renderSummaryCard('إجمالي المطالبات', String(totals.count), <ReceiptIcon fontSize="small" color="primary" />, 'primary.main')}
@@ -427,8 +427,8 @@ export default function ProviderAccountsList() {
                     label="حالة المطالبة"
                     value={filters.status}
                     onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: 320 } } } }}
-                    sx={{ minWidth: 170, '& .MuiInputBase-root': { height: 40 } }}
+                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
+                    sx={{ minWidth: '10.625rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
                   >
                     {STATUS_OPTIONS.map((option) => (
                       <MenuItem key={option.value} value={option.value}>
@@ -446,8 +446,8 @@ export default function ProviderAccountsList() {
                     value={filters.providerId}
                     onChange={(e) => setFilters((prev) => ({ ...prev, providerId: e.target.value }))}
                     disabled={isProvidersLoading}
-                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: 320 } } } }}
-                    sx={{ minWidth: 180, '& .MuiInputBase-root': { height: 40 } }}
+                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
+                    sx={{ minWidth: '11.25rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
                   >
                     <MenuItem value="">الكل</MenuItem>
                     {providerOptions.map((p) => (
@@ -466,7 +466,7 @@ export default function ProviderAccountsList() {
                     value={filters.dateFrom}
                     onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
                     InputLabelProps={{ shrink: true }}
-                    sx={{ minWidth: 150, '& .MuiInputBase-root': { height: 40 } }}
+                    sx={{ minWidth: '9.375rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
                   />
                 </Grid>
 
@@ -478,17 +478,17 @@ export default function ProviderAccountsList() {
                     value={filters.dateTo}
                     onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
                     InputLabelProps={{ shrink: true }}
-                    sx={{ minWidth: 150, '& .MuiInputBase-root': { height: 40 } }}
+                    sx={{ minWidth: '9.375rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
                   />
                 </Grid>
 
                 <Grid item xs={12} md={2} lg={2}>
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: 40, minHeight: 40 }}>
+                    <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem' }}>
                       بحث
                     </Button>
                     <Tooltip title="مسح الفلاتر">
-                      <IconButton color="default" onClick={clearFilters} sx={{ height: 40, width: 40, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                      <IconButton color="default" onClick={clearFilters} sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                         <ClearIcon />
                       </IconButton>
                     </Tooltip>
@@ -502,7 +502,7 @@ export default function ProviderAccountsList() {
                         onClick={refetch}
                         color="primary"
                         disabled={isLoading}
-                        sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}
+                        sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
                       >
                         <RefreshIcon />
                       </IconButton>
@@ -513,7 +513,7 @@ export default function ProviderAccountsList() {
                       color="primary"
                       startIcon={<PrintIcon />}
                       onClick={handlePrint}
-                      sx={{ height: 40, minHeight: 40, whiteSpace: 'nowrap', px: 1.5, borderRadius: 1 }}
+                      sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
                     >
                       طباعة
                     </Button>
@@ -524,7 +524,7 @@ export default function ProviderAccountsList() {
                       startIcon={<FileDownloadIcon />}
                       onClick={handleExport}
                       disabled={!claims.length}
-                      sx={{ height: 40, minHeight: 40, whiteSpace: 'nowrap', px: 1.5, borderRadius: 1 }}
+                      sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
                     >
                       تصدير
                     </Button>
@@ -560,3 +560,5 @@ export default function ProviderAccountsList() {
     </PermissionGuard>
   );
 }
+
+

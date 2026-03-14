@@ -5,17 +5,20 @@ export default function TreeItem() {
     MuiTreeItem: {
       styleOverrides: {
         content: {
-          padding: 8
+          padding: '0.375rem'
         },
         iconContainer: {
           '& svg': {
-            fontSize: '0.625rem'
+            fontSize: '0.75rem'
           }
         },
         groupTransition: {
-          paddingLeft: 12
+          paddingLeft: '0.75rem'
         }
       }
     }
   };
 }
+
+
+

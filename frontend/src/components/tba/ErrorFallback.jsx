@@ -17,11 +17,11 @@ export default function ErrorFallback({ error, onRetry, fullHeight = false }) {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: fullHeight ? 400 : 200,
-        p: 3
+        p: '1.5rem'
       }}
     >
       <Stack spacing={2} alignItems="center" maxWidth={500}>
-        <WarningOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+        <WarningOutlined style={{ fontSize: '3.0rem', color: '#ff4d4f' }} />
 
         <Typography variant="h5" color="error" textAlign="center">
           Something went wrong
@@ -34,7 +34,7 @@ export default function ErrorFallback({ error, onRetry, fullHeight = false }) {
         )}
 
         {onRetry && (
-          <Button variant="contained" startIcon={<ReloadOutlined />} onClick={onRetry} sx={{ mt: 2 }}>
+          <Button variant="contained" startIcon={<ReloadOutlined />} onClick={onRetry} sx={{ mt: '1.0rem' }}>
             Try Again
           </Button>
         )}
@@ -60,16 +60,16 @@ export function EmptyState({ title = 'No data available', description, action, a
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 300,
-        p: 3
+        minHeight: '18.75rem',
+        p: '1.5rem'
       }}
     >
       <Stack spacing={2} alignItems="center" maxWidth={400}>
         {icon || (
           <Box
             sx={{
-              width: 80,
-              height: 80,
+              width: '5.0rem',
+              height: '5.0rem',
               borderRadius: '50%',
               bgcolor: 'grey.100',
               display: 'flex',
@@ -94,7 +94,7 @@ export function EmptyState({ title = 'No data available', description, action, a
         )}
 
         {action && (
-          <Button variant="contained" onClick={action} sx={{ mt: 2 }}>
+          <Button variant="contained" onClick={action} sx={{ mt: '1.0rem' }}>
             {actionLabel}
           </Button>
         )}

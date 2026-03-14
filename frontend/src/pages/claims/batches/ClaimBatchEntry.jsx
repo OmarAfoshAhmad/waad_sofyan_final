@@ -77,8 +77,8 @@ const inlineSx = {
 // رأس عمود الجدول
 const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => (
     <TableCell align={align} sx={{
-        bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 800,
-        fontSize: '0.75rem', py: 0.8, px: 1.2, whiteSpace: 'nowrap',
+        bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 500,
+        fontSize: '0.75rem', py: 0.8, px: '0.6rem', whiteSpace: 'nowrap',
         borderBottom: '2px solid #c8e6c9',
         ...(w && { width: w, minWidth: w }),
         ...sxOver
@@ -114,6 +114,7 @@ export default function ClaimBatchEntry() {
     const [isDirty, setIsDirty] = useState(false);
     const [policyId, setPolicyId] = useState(null);
     const [policyInfo, setPolicyInfo] = useState(null);
+    const [memberFinancialSummary, setMemberFinancialSummary] = useState(null);
 
     // Rejection State
     const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -229,7 +230,7 @@ export default function ClaimBatchEntry() {
             employerId,
             benefitPolicyId: policyId,
             status: 'ACTIVE',
-            size: 20
+            size: 100
         }),
         enabled: memberInput.length >= 2,
         staleTime: 5000
@@ -272,6 +273,7 @@ export default function ClaimBatchEntry() {
         queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
         queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
         queryClient.invalidateQueries({ queryKey: ['claim-batch-current'] });
+        queryClient.invalidateQueries({ queryKey: ['member-financial-summary'] });
         // Invalidate cached claim detail so re-opening a claim always triggers a fresh
         // coverage/usage fetch (ensures سقف المنفعة reflects the latest consumed amounts)
         queryClient.invalidateQueries({ queryKey: ['claim'] });
@@ -301,6 +303,20 @@ export default function ClaimBatchEntry() {
                 setPolicyInfo(null);
             });
     }, [employerId]);
+
+    // ── Member Financial Summary (PHASE 1 - Single Source of Truth) ──────
+    const { data: financialSummary, isFetching: loadingSummary, refetch: refetchFinancialSummary } = useQuery({
+        queryKey: ['member-financial-summary', member?.id],
+        queryFn: () => unifiedMembersService.getFinancialSummary(member.id),
+        enabled: !!member?.id,
+        staleTime: 30000 // 30 seconds
+    });
+
+    useEffect(() => {
+        if (financialSummary) {
+            setMemberFinancialSummary(financialSummary);
+        }
+    }, [financialSummary]);
 
     // ── Load Existing Claim for Edit ───────────────────────────────────────
     const { data: editingClaim, isLoading: loadingClaim } = useQuery({
@@ -717,26 +733,26 @@ export default function ClaimBatchEntry() {
                         <Stack direction="row" spacing={1} alignItems="center">
                              <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />}
                                 onClick={handleExport} disabled={!batchContent.length}
-                                sx={{ color: '#1b5e20', borderColor: '#1b5e20', fontWeight: 700, borderRadius: 1.5, '&:hover': { bgcolor: '#1b5e2012' } }}>
+                                 sx={{ color: '#1b5e20', borderColor: '#1b5e20', '&:hover': { bgcolor: '#1b5e2012' } }}>
                                 {/* FIX: Correct label — exports CSV not Excel */}
                                 تصدير CSV
                             </Button>
                             <Button variant="outlined" size="small" color="info" startIcon={<PrintIcon />}
                                 onClick={handlePrint}
-                                sx={{ fontWeight: 700, borderRadius: 1.5 }}>
+                                 sx={{}}>
                                 {t('claimEntry.printTable')}
                             </Button>
                             <Divider orientation="vertical" flexItem />
                             {/* FIX: Finish batch goes to claim-batches management page (different from detail) */}
                             <Button variant="contained" size="small" color="success" startIcon={<DoneIcon />}
                                 onClick={() => navigate(`/claims/batches`)} disabled={!batchContent.length}
-                                sx={{ fontWeight: 700, borderRadius: 1.5 }}>
+                                 sx={{}}>
                                 {t('claimEntry.finishBatch')}
                             </Button>
                             {/* FIX: Back goes to detail page (same month view) */}
                             <Button variant="outlined" size="small" color="secondary"
                                 startIcon={<BackIcon sx={{ ml: 1, mr: 0 }} />}
-                                onClick={() => navigate(detailUrl)} sx={{ borderRadius: 1.5 }}>
+                                onClick={() => navigate(detailUrl)} sx={{}}>
                                 {t('claimEntry.backToList')}
                             </Button>
                         </Stack>
@@ -746,14 +762,14 @@ export default function ClaimBatchEntry() {
 
             {/* FIX: Show batch error as visible alert (not silent) */}
             {batchError && (
-                <Alert severity="warning" variant="filled" sx={{ mx: 2, mb: 0.5, borderRadius: 1.5, fontWeight: 700 }}>
+                <Alert severity="warning" variant="filled" sx={{ mx: '1.0rem', mb: 0.5 }}>
                     ⚠️ تعذّر تحميل بيانات الدفعة: {batchError?.response?.data?.message || batchError?.message || 'خطأ غير معروف'}
                     {batchError?.response?.status === 403 && ' — لا تملك صلاحية الوصول.'}
                 </Alert>
             )}
 
             {/* ═══ المحتوى ═══ */}
-            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, gap: 2, px: 2, pb: 2 }}>
+            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, gap: '1.0rem', px: '1.0rem', pb: '1.0rem' }}>
                 
                 {/* ── الشريط الجانبي — يسار (سجل الدفعة) ── */}
                 <BatchHistorySidebar
@@ -779,29 +795,29 @@ export default function ClaimBatchEntry() {
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
                     <Paper variant="outlined" sx={{
                         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                        borderRadius: 2.5, boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
+                         boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
                     }}>
 
                         {/* ── لوحة معلومات التعديل ── */}
                         {editingClaimId && (
                             <Box sx={{
-                                px: 2.5, py: 1.2,
+                                px: '1.25rem', py: '0.6rem',
                                 bgcolor: alpha(theme.palette.info.main, 0.08),
                                 borderBottom: `1.5px solid ${alpha(theme.palette.info.main, 0.3)}`,
-                                display: 'flex', alignItems: 'center', gap: 1.5
+                                display: 'flex', alignItems: 'center', gap: '0.75rem'
                             }}>
-                                <InfoIcon sx={{ color: 'info.main', fontSize: 20 }} />
+                                <InfoIcon sx={{ color: 'info.main', fontSize: '1.25rem' }} />
                                 <Box sx={{ flex: 1 }}>
-                                    <Typography variant="subtitle2" fontWeight={900} color="info.dark">
+                                    <Typography variant="subtitle2" fontWeight={600} color="info.dark">
                                         أنت الآن في وضع التعديل (مطالبة #{editingClaimId})
                                     </Typography>
-                                    <Typography variant="caption" color="info.main" fontWeight={700}>
+                                    <Typography variant="caption" color="info.main" fontWeight={400}>
                                         جاري تعديل بيانات المطالبة المختارة من الشريط الجانبي.
                                     </Typography>
                                 </Box>
                                 <Button size="small" color="info" variant="outlined"
                                     onClick={() => { resetForm(); setEditingClaimId(null); }}
-                                    sx={{ fontWeight: 800, borderRadius: 1.5 }}>
+                                    sx={{}}>
                                     إلغاء وتعديل جديد
                                 </Button>
                             </Box>
@@ -809,7 +825,7 @@ export default function ClaimBatchEntry() {
 
                         {/* ── شريط الحالة ── */}
                         <Box sx={{
-                            flexShrink: 0, px: 2.5, py: 0.75,
+                            flexShrink: 0, px: '1.25rem', py: 0.75,
                             bgcolor: isDirty ? alpha(theme.palette.warning.main, 0.07) : alpha(theme.palette.primary.main, 0.04),
                             borderBottom: `1px solid ${theme.palette.divider}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between'
@@ -818,26 +834,26 @@ export default function ClaimBatchEntry() {
                                 <Chip size="small" variant="filled"
                                     label={isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')}
                                     color={isDirty ? 'warning' : 'primary'}
-                                    sx={{ fontWeight: 800, fontSize: '0.75rem' }}
+                                    sx={{ fontWeight: 500, fontSize: '0.75rem' }}
                                 />
                                 {policyInfo && (
-                                    <Chip icon={<PolicyIcon sx={{ fontSize: 12 }} />} size="small"
+                                    <Chip icon={<PolicyIcon sx={{ fontSize: '0.75rem' }} />} size="small"
                                         label={`${t('claimEntry.benefitPolicy')}: ${policyInfo.policyNumber || policyInfo.name || 'مفعّلة'}`}
                                         color="success" variant="outlined"
-                                        sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+                                        sx={{ fontWeight: 400, fontSize: '0.7rem' }}
                                     />
                                 )}
                                 {isClaimRejected && (
-                                    <Chip icon={<RejectIcon sx={{ fontSize: 12 }} />} size="small"
+                                    <Chip icon={<RejectIcon sx={{ fontSize: '0.75rem' }} />} size="small"
                                         label="مطالبة مرفوضة" color="error" variant="filled"
-                                        sx={{ fontWeight: 800, fontSize: '0.75rem' }}
+                                        sx={{ fontWeight: 500, fontSize: '0.75rem' }}
                                     />
                                 )}
                                 {(isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')) && !loadingBatchMeta && (
-                                    <Chip icon={<LockIcon sx={{ fontSize: 12 }} />} size="small"
+                                    <Chip icon={<LockIcon sx={{ fontSize: '0.75rem' }} />} size="small"
                                         label={isExpiredBatch ? "فترة منتهية (>3 أشهر)" : "الدفعة مغلقة — تعديل فقط"} 
                                         color="secondary" variant="filled"
-                                        sx={{ fontWeight: 800, fontSize: '0.75rem' }}
+                                        sx={{ fontWeight: 500, fontSize: '0.75rem' }}
                                     />
                                 )}
                             </Stack>
@@ -845,33 +861,33 @@ export default function ClaimBatchEntry() {
                                 <Tooltip title={t('claimEntry.discardChanges')}>
                                     <span>
                                         <IconButton size="small" onClick={resetForm} disabled={!isDirty} color="error">
-                                            <DiscardIcon sx={{ fontSize: 15 }} />
+                                            <DiscardIcon sx={{ fontSize: '0.9375rem' }} />
                                         </IconButton>
                                     </span>
                                 </Tooltip>
                                 
                                 {/* Save & Stay */}
                                 <Button variant="outlined" size="small" color="primary"
-                                    startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <SaveIcon sx={{ fontSize: 13 }} />}
+                                    startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <SaveIcon sx={{ fontSize: '0.8125rem' }} />}
                                     onClick={() => handleSave(false)} 
                                     disabled={saving || !isDirty || isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN' && !editingClaimId)}
-                                    sx={{ fontWeight: 800, borderRadius: 1.5, fontSize: '0.75rem', py: 0.4 }}>
+                                    sx={{ fontWeight: 500, fontSize: '0.75rem', py: 0.4 }}>
                                     {saving ? t('claimEntry.saving') : "حفظ"}
                                 </Button>
 
                                 {/* Save & New (The main button) */}
                                 <Button variant="contained" size="small" color="success"
-                                    startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <AddIcon sx={{ fontSize: 13 }} />}
+                                    startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <AddIcon sx={{ fontSize: '0.8125rem' }} />}
                                     onClick={() => handleSave(true)} 
                                     disabled={saving || !isDirty || isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')}
-                                    sx={{ fontWeight: 800, borderRadius: 1.5, fontSize: '0.75rem', py: 0.4 }}>
+                                    sx={{ fontWeight: 500, fontSize: '0.75rem', py: 0.4 }}>
                                     {saving ? t('claimEntry.saving') : t('claimEntry.saveAndAdd')}
                                 </Button>
                             </Stack>
                         </Box>
 
                         {/* ── حقول الرأس (مكون منفصل) ── */}
-                        <Box sx={{ flexShrink: 0, px: 2.5, py: 1.5, bgcolor: 'background.paper' }}>
+                        <Box sx={{ flexShrink: 0, px: '1.25rem', py: '0.75rem', bgcolor: 'background.paper' }}>
                             <ClaimHeaderFields
                                 member={member}
                                 setMember={setMember}
@@ -895,6 +911,8 @@ export default function ClaimBatchEntry() {
                                 complaint={complaint}
                                 setComplaint={setComplaint}
                                 setIsDirty={setIsDirty}
+                                financialSummary={memberFinancialSummary}
+                                loadingSummary={loadingSummary}
                                 t={t}
                             />
                         </Box>
@@ -902,18 +920,18 @@ export default function ClaimBatchEntry() {
                         <Divider />
 
                         <Box sx={{
-                            flexShrink: 0, px: 2.5, py: 0.75, bgcolor: alpha('#E8F5F1', 0.55),
+                            flexShrink: 0, px: '1.25rem', py: 0.75, bgcolor: alpha('#E8F5F1', 0.55),
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             borderBottom: `1px solid ${theme.palette.divider}`
                         }}>
-                            <Typography variant="subtitle2" fontWeight={900} color="#0D4731" sx={{ fontSize: '0.85rem' }}>
+                            <Typography variant="subtitle2" fontWeight={600} color="#0D4731" sx={{ fontSize: '0.85rem' }}>
                                 {t('claimEntry.serviceLines')}
                             </Typography>
-                            <Chip size="small" variant="outlined" label={`${lines.length} بند`} sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
+                            <Chip size="small" variant="outlined" label={`${lines.length} بند`} sx={{ fontWeight: 400, fontSize: '0.75rem' }} />
                         </Box>
 
                         <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
-                            <Table dir="rtl" size="small" stickyHeader sx={{ minWidth: 760 }}>
+                            <Table dir="rtl" size="small" stickyHeader sx={{ minWidth: '47.5rem' }}>
                                 <TableHead>
                                     <TableRow>
                                         <TH align="center" w={40}>#</TH>
@@ -947,7 +965,7 @@ export default function ClaimBatchEntry() {
                                     ))}
                                     <TableRow>
                                         <TableCell colSpan={11} sx={{ py: 1, textAlign: 'center' }}>
-                                            <Button size="small" startIcon={<AddIcon />} onClick={addLine} sx={{ fontWeight: 800 }}>
+                                            <Button size="small" startIcon={<AddIcon />} onClick={addLine} sx={{ fontWeight: 500 }}>
                                                 {t('claimEntry.addLine')}
                                             </Button>
                                         </TableCell>
@@ -973,14 +991,14 @@ export default function ClaimBatchEntry() {
             </Box>
 
             <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="xs" fullWidth
-                PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle sx={{ fontWeight: 900, color: 'error.main' }}>تحديد سبب الرفض</DialogTitle>
+                PaperProps={{ sx: { borderRadius: '0.1875rem' } }}>
+                <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>تحديد سبب الرفض</DialogTitle>
                 <DialogContent>
                     <TextField fullWidth autoFocus multiline rows={3} sx={{ mt: 1 }}
                         value={rejectionInput} onChange={e => setRejectionInput(e.target.value)}
                         placeholder="أدخل سبب الرفض..." />
                 </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
+                <DialogActions sx={{ p: '1.0rem' }}>
                     <Button onClick={() => setRejectDialogOpen(false)} color="inherit">إلغاء</Button>
                     <Button onClick={confirmRejection} variant="contained" color="error" disabled={!rejectionInput.trim()}>
                         تأكيد الرفض
@@ -989,11 +1007,11 @@ export default function ClaimBatchEntry() {
             </Dialog>
 
             <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)}>
-                <DialogTitle sx={{ fontWeight: 900 }}>تأكيد إلغاء المطالبة</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 600 }}>تأكيد إلغاء المطالبة</DialogTitle>
                 <DialogContent>
                     هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟ هذا الإجراء لا يمكن التراجع عنه.
                 </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
+                <DialogActions sx={{ p: '1.0rem' }}>
                     <Button onClick={() => setConfirmDeleteId(null)} color="inherit">تراجع</Button>
                     <Button onClick={confirmDeleteClaim} variant="contained" color="error">تأكيد الإلغاء</Button>
                 </DialogActions>
@@ -1001,3 +1019,7 @@ export default function ClaimBatchEntry() {
         </Box>
     );
 }
+
+
+
+

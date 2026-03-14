@@ -29,7 +29,7 @@ export default function EmptyUserCard({ title }) {
               <Box sx={{ position: 'relative' }}>
                 <UserCard />
               </Box>
-              <Box sx={{ position: 'relative', top: -120, left: 72 }}>
+              <Box sx={{ position: 'relative', top: -120, left: '4.5rem' }}>
                 <UserCard />
               </Box>
             </Box>
@@ -48,3 +48,4 @@ export default function EmptyUserCard({ title }) {
 }
 
 EmptyUserCard.propTypes = { title: PropTypes.string };
+

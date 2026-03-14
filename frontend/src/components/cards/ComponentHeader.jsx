@@ -13,7 +13,7 @@ import NodeExpandOutlined from '@ant-design/icons/NodeExpandOutlined';
 export default function ComponentHeader({ title, caption, directory, link }) {
   return (
     <Box sx={{ pl: { xs: 1.5, md: 2, lg: 3 }, pr: 1 }}>
-      <Stack sx={{ gap: 1.25 }}>
+      <Stack sx={{ gap: '0.625rem' }}>
         <Typography variant="h2">{title}</Typography>
         {caption && (
           <Typography variant="h6" color="text.secondary">
@@ -21,11 +21,11 @@ export default function ComponentHeader({ title, caption, directory, link }) {
           </Typography>
         )}
       </Stack>
-      <Grid container spacing={0.75} sx={{ mt: 2.5 }}>
+      <Grid container spacing={0.75} sx={{ mt: '1.25rem' }}>
         {directory && (
           <Grid size={12}>
             <Typography variant="caption" color="text.secondary">
-              <NodeExpandOutlined style={{ marginRight: 10 }} />
+              <NodeExpandOutlined style={{ marginRight: '0.625rem' }} />
               {directory}
             </Typography>
           </Grid>
@@ -33,7 +33,7 @@ export default function ComponentHeader({ title, caption, directory, link }) {
         {link && (
           <Grid size={12}>
             <Link variant="caption" color="primary" href={link} target="_blank">
-              <GlobalOutlined style={{ marginRight: 10 }} />
+              <GlobalOutlined style={{ marginRight: '0.625rem' }} />
               {link}
             </Link>
           </Grid>

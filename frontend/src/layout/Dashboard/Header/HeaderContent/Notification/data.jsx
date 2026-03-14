@@ -105,7 +105,7 @@ export const notificationData = [
           children: 'We have scheduled a meeting for next week.',
           icon: false,
           action: <Button variant="contained">Replay</Button>,
-          sx: { px: 1.75, py: 0.75, fontSize: '12px' }
+          sx: { px: '0.875rem', py: 0.75, fontSize: '0.75rem' }
         }
       }
     ]
@@ -144,3 +144,5 @@ export const notificationData = [
     read: true
   }
 ];
+
+

@@ -10,20 +10,20 @@ const EmptyState = ({ title = 'No data available', description = 'No records fou
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 400,
+        minHeight: '25.0rem',
         textAlign: 'center',
-        p: 3
+        p: '1.5rem'
       }}
     >
       <Stack spacing={2} alignItems="center">
-        <Icon sx={{ fontSize: 80, color: 'text.disabled' }} />
+        <Icon sx={{ fontSize: '5.0rem', color: 'text.disabled' }} />
         <Typography variant="h5" color="text.secondary">
           {title}
         </Typography>
-        <Typography variant="body2" color="text.disabled" sx={{ maxWidth: 400 }}>
+        <Typography variant="body2" color="text.disabled" sx={{ maxWidth: '25.0rem' }}>
           {description}
         </Typography>
-        {action && <Box sx={{ mt: 2 }}>{action}</Box>}
+        {action && <Box sx={{ mt: '1.0rem' }}>{action}</Box>}
       </Stack>
     </Box>
   );

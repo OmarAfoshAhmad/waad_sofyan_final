@@ -705,12 +705,12 @@ export const exportEmployers = async (params = {}) => {
     const worksheet = workbook.addWorksheet('جهات العمل');
 
     worksheet.columns = [
-      { header: 'الرمز', key: 'code', width: 15 },
-      { header: 'جهة العمل', key: 'name', width: 30 },
-      { header: 'البريد الإلكتروني', key: 'email', width: 30 },
-      { header: 'رقم الهاتف', key: 'phone', width: 20 },
-      { header: 'العنوان', key: 'address', width: 30 },
-      { header: 'الحالة', key: 'active', width: 15 }
+      { header: 'الرمز', key: 'code', width: '0.9375rem' },
+      { header: 'جهة العمل', key: 'name', width: '1.875rem' },
+      { header: 'البريد الإلكتروني', key: 'email', width: '1.875rem' },
+      { header: 'رقم الهاتف', key: 'phone', width: '1.25rem' },
+      { header: 'العنوان', key: 'address', width: '1.875rem' },
+      { header: 'الحالة', key: 'active', width: '0.9375rem' }
     ];
 
     // Right to left layout for Arabic

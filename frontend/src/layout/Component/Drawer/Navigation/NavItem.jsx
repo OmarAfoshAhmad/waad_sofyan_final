@@ -36,7 +36,7 @@ export default function NavItem({ item }) {
       onClick={() => itemHandler(item.id)}
       selected={isSelectedItem}
       sx={(theme) => ({
-        pl: 4,
+        pl: '2.0rem',
         py: 1,
         mb: 0.5,
         '&:hover': { bgcolor: 'primary.lighter', ...theme.applyStyles('dark', { bgcolor: 'divider' }) },

@@ -105,15 +105,15 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
     switch (status) {
       case 'IDLE':
         return (
-          <Box sx={{ py: 3, textAlign: 'center' }}>
-            <FileDownloadIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2, opacity: 0.8 }} />
+          <Box sx={{ py: '1.5rem', textAlign: 'center' }}>
+            <FileDownloadIcon sx={{ fontSize: '4.0rem', color: 'primary.main', mb: '1.0rem', opacity: 0.8 }} />
             <Typography variant="h6" gutterBottom>
               جاهز للتصدير
             </Typography>
             <Typography variant="body2" color="textSecondary">
               سيتم تصدير البيانات بناءً على الفلاتر النشطة حالياً في الجدول.
             </Typography>
-            <Paper variant="outlined" sx={{ mt: 3, p: 2, bgcolor: 'grey.50', textAlign: 'right' }}>
+            <Paper variant="outlined" sx={{ mt: '1.5rem', p: '1.0rem', bgcolor: 'grey.50', textAlign: 'right' }}>
               <Typography variant="caption" color="textSecondary" display="block">
                 الفلاتر المطبقة:
               </Typography>
@@ -149,15 +149,15 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
         );
       case 'PROCESSING':
         return (
-          <Box sx={{ py: 4, textAlign: 'center' }}>
-            <FileDownloadIcon sx={{ fontSize: 56, color: 'primary.main', mb: 2, opacity: 0.8 }} />
+          <Box sx={{ py: '2.0rem', textAlign: 'center' }}>
+            <FileDownloadIcon sx={{ fontSize: '3.5rem', color: 'primary.main', mb: '1.0rem', opacity: 0.8 }} />
             <Typography variant="h6" gutterBottom>
               جاري معالجة البيانات...
             </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+            <Typography variant="body2" color="textSecondary" sx={{ mb: '1.5rem' }}>
               يرجى الانتظار بينما نقوم بتجميع ملف الإكسل الخاص بك.
             </Typography>
-            <Box sx={{ px: 2 }}>
+            <Box sx={{ px: '1.0rem' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                 <Typography variant="caption" color="textSecondary">التقدم</Typography>
                 <Typography variant="caption" color="primary" fontWeight="bold">{progress}%</Typography>
@@ -165,15 +165,15 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
               <LinearProgress
                 variant="determinate"
                 value={progress}
-                sx={{ height: 10, borderRadius: 5 }}
+                sx={{ height: '0.625rem', borderRadius: '0.3125rem' }}
               />
             </Box>
           </Box>
         );
       case 'SUCCESS':
         return (
-          <Box sx={{ py: 6, textAlign: 'center' }}>
-            <CheckCircleIcon sx={{ fontSize: 80, color: 'success.main', mb: 2, animation: 'bounce 1s' }} />
+          <Box sx={{ py: '3.0rem', textAlign: 'center' }}>
+            <CheckCircleIcon sx={{ fontSize: '5.0rem', color: 'success.main', mb: '1.0rem', animation: 'bounce 1s' }} />
             <Typography variant="h6" color="success.main" gutterBottom>
               تم التصدير بنجاح!
             </Typography>
@@ -184,12 +184,12 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
         );
       case 'ERROR':
         return (
-          <Box sx={{ py: 4, textAlign: 'center' }}>
-            <ErrorIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+          <Box sx={{ py: '2.0rem', textAlign: 'center' }}>
+            <ErrorIcon sx={{ fontSize: '4.0rem', color: 'error.main', mb: '1.0rem' }} />
             <Typography variant="h6" color="error.main" gutterBottom>
               حدث خطأ أثناء التصدير
             </Typography>
-            <Alert severity="error" sx={{ mt: 2, textAlign: 'right' }}>
+            <Alert severity="error" sx={{ mt: '1.0rem', textAlign: 'right' }}>
               {error}
             </Alert>
           </Box>
@@ -207,7 +207,7 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
       fullWidth
       sx={{
         '& .MuiDialog-paper': {
-          borderRadius: 3,
+          borderRadius: '0.1875rem',
           boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
         }
       }}
@@ -220,7 +220,7 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
                 }
                 `}
       </style>
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2.5 }}>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: '1.25rem' }}>
         <Typography variant="h6">{title}</Typography>
         {status !== 'PROCESSING' && (
           <IconButton size="small" onClick={onClose}>
@@ -231,7 +231,7 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
       <Divider />
       <DialogContent>{renderContent()}</DialogContent>
       {status !== 'PROCESSING' && status !== 'SUCCESS' && (
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={{ px: '1.5rem', pb: '1.0rem' }}>
           <Button onClick={onClose} variant="text" color="inherit">
             إلغاء
           </Button>

@@ -58,7 +58,7 @@ export default function QuickActions() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
+      <Typography variant="h5" sx={{ mb: '1.5rem', fontWeight: 600 }}>
         إجراءات سريعة
       </Typography>
       <Grid container spacing={3}>
@@ -87,25 +87,25 @@ export default function QuickActions() {
                     top: 0,
                     left: 0,
                     right: 0,
-                    height: '4px',
+                    height: '0.375rem',
                     background: mainColor
                   }
                 }}
               >
-                <CardContent sx={{ p: 3 }}>
+                <CardContent sx={{ p: '1.5rem' }}>
                   <Box
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 2,
-                      mb: 2
+                      gap: '1.0rem',
+                      mb: '1.0rem'
                     }}
                   >
                     <Box
                       sx={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 2,
+                        width: '3.5rem',
+                        height: '3.5rem',
+                        borderRadius: '0.125rem',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -113,12 +113,12 @@ export default function QuickActions() {
                         color: mainColor
                       }}
                     >
-                      <Icon style={{ fontSize: 28 }} />
+                      <Icon style={{ fontSize: '1.75rem' }} />
                     </Box>
                     <Box
                       sx={{
-                        width: 40,
-                        height: 40,
+                        width: '2.5rem',
+                        height: '2.5rem',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
@@ -128,7 +128,7 @@ export default function QuickActions() {
                         ml: 'auto'
                       }}
                     >
-                      <PlusOutlined style={{ fontSize: 20 }} />
+                      <PlusOutlined style={{ fontSize: '1.25rem' }} />
                     </Box>
                   </Box>
                   <Typography
@@ -153,3 +153,4 @@ export default function QuickActions() {
     </Box>
   );
 }
+

@@ -110,7 +110,7 @@ const STATUS_CONFIG = {
  * Detail row component for displaying label-value pairs
  */
 const DetailRow = ({ label, value, icon: Icon }) => (
-  <Grid container spacing={2} sx={{ mb: 2 }}>
+  <Grid container spacing={2} sx={{ mb: '1.0rem' }}>
     <Grid size={{ xs: 12, sm: 4 }}>
       <Stack direction="row" spacing={1} alignItems="center">
         {Icon && <Icon fontSize="small" color="action" />}
@@ -340,7 +340,7 @@ const BenefitPolicyView = () => {
         />
         <MainCard>
           <Alert severity="error">{error.response?.data?.message || error.message || 'فشل تحميل بيانات الوثيقة'}</Alert>
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: '1.0rem' }}>
             <Button variant="outlined" onClick={() => navigate('/benefit-policies')}>
               العودة للقائمة
             </Button>
@@ -457,7 +457,7 @@ const BenefitPolicyView = () => {
       />
 
       {/* Tabs Navigation */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '1.5rem' }}>
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
           <Tab icon={<InfoIcon />} iconPosition="start" label="نظرة عامة" />
           <Tab icon={<RuleIcon />} iconPosition="start" label={`قواعد التغطية (${policy?.rulesCount || 0})`} />
@@ -474,7 +474,7 @@ const BenefitPolicyView = () => {
               <DetailRow label="اسم الوثيقة" value={policy?.name} icon={PolicyIcon} />
               <DetailRow label="رمز الوثيقة" value={policy?.policyCode} icon={CodeIcon} />
               <DetailRow label="الشريك" value={policy?.employerName} icon={BusinessIcon} />
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={{ my: '1.0rem' }} />
               <DetailRow
                 label="تاريخ البدء"
                 value={policy?.startDate ? new Date(policy.startDate).toLocaleDateString('en-US') : null}
@@ -505,7 +505,7 @@ const BenefitPolicyView = () => {
                 }
                 icon={PercentIcon}
               />
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={{ my: '1.0rem' }} />
               <DetailRow label="عدد القواعد" value={policy?.rulesCount || 0} />
               <DetailRow label="عدد الأعضاء المرتبطين" value={policy?.membersCount || 0} />
             </MainCard>
@@ -564,3 +564,4 @@ const BenefitPolicyView = () => {
 };
 
 export default BenefitPolicyView;
+

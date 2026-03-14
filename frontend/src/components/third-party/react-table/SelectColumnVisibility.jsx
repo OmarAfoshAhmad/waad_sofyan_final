@@ -11,7 +11,7 @@ import Typography from '@mui/material/Typography';
 
 const ITEM_HEIGHT = 48;
 const ITEM_PADDING_TOP = 8;
-const MenuProps = { PaperProps: { style: { maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP, width: 200 } } };
+const MenuProps = { PaperProps: { style: { maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP, width: '12.5rem' } } };
 
 // ==============================|| SELECT COLUMN VISIBILITY ||============================== //
 
@@ -22,7 +22,7 @@ export default function SelectColumnVisibility({
   getAllColumns
 }) {
   return (
-    <FormControl sx={{ width: 200 }}>
+    <FormControl sx={{ width: '12.5rem' }}>
       <Select
         id="column-hiding"
         multiple

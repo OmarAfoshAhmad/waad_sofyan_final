@@ -18,22 +18,22 @@ import useAuth from 'hooks/useAuth';
 const SettingsCard = ({ icon: Icon, title, description, onClick, color = '#1890ff' }) => {
   return (
     <Card sx={{ height: '100%', transition: 'all 0.3s', '&:hover': { transform: 'translateY(-4px)', boxShadow: 6 } }}>
-      <CardActionArea onClick={onClick} sx={{ height: '100%', p: 2 }}>
+      <CardActionArea onClick={onClick} sx={{ height: '100%', p: '1.0rem' }}>
         <CardContent>
           <Box display="flex" alignItems="center" mb={2}>
             <Box
               sx={{
-                width: 56,
-                height: 56,
-                borderRadius: 2,
+                width: '3.5rem',
+                height: '3.5rem',
+                borderRadius: '0.125rem',
                 bgcolor: `${color}15`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                mr: 2
+                mr: '1.0rem'
               }}
             >
-              <Icon style={{ fontSize: 28, color }} />
+              <Icon style={{ fontSize: '1.75rem', color }} />
             </Box>
             <Typography variant="h4" fontWeight={600}>
               {title}
@@ -97,7 +97,7 @@ const SettingsPage = () => {
       <ModernPageHeader title="إعدادات النظام" subtitle="التحكم في إعدادات النظام والصلاحيات" icon={SettingOutlined} />
 
       {/* Settings Grid */}
-      <Grid container spacing={3} sx={{ mt: 2 }}>
+      <Grid container spacing={3} sx={{ mt: '1.0rem' }}>
         {availableSections.map((section) => (
           <Grid key={section.id} size={{ xs: 12, sm: 6, md: 4 }}>
             <SettingsCard
@@ -113,8 +113,8 @@ const SettingsPage = () => {
 
       {/* No Settings Available */}
       {availableSections.length === 0 && (
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <SettingOutlined style={{ fontSize: 64, color: '#d9d9d9', marginBottom: 16 }} />
+        <Box sx={{ textAlign: 'center', py: '4.0rem' }}>
+          <SettingOutlined style={{ fontSize: '4.0rem', color: '#d9d9d9', marginBottom: '1.0rem' }} />
           <Typography variant="h5" color="text.secondary">
             لا توجد إعدادات متاحة
           </Typography>
@@ -128,3 +128,4 @@ const SettingsPage = () => {
 };
 
 export default SettingsPage;
+

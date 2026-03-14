@@ -13,7 +13,7 @@ export default function ProductPlaceholder() {
   return (
     <MainCard content={false} boxShadow>
       <Skeleton variant="rectangular" height={220} />
-      <CardContent sx={{ p: 2 }}>
+      <CardContent sx={{ p: '1.0rem' }}>
         <Grid container spacing={2}>
           <Grid size={12}>
             <Skeleton variant="rectangular" height={20} />

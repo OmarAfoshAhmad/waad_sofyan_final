@@ -145,7 +145,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                 overflow: 'hidden',
                 borderLeft: '6px solid',
                 borderLeftColor: '#76b880',
-                borderRadius: 3,
+                borderRadius: '0.1875rem',
                 transition: 'all 0.2s',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
                 '&:hover': {
@@ -162,17 +162,17 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
             }}
             onClick={() => onSelectBatch(provider, filterMonth, filterYear)}
         >
-            <CardContent sx={{ p: 2.5, flexGrow: 1, display: 'flex', flexDirection: 'column', '&:last-child': { pb: 2.5 } }}>
+            <CardContent sx={{ p: '1.25rem', flexGrow: 1, display: 'flex', flexDirection: 'column', '&:last-child': { pb: '1.25rem' } }}>
 
                 {/* 1. Header Row (Month | Code) */}
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: '1.0rem' }}>
                     <Typography variant="caption" sx={{ color: '#888', fontWeight: 600 }}>
                         {MONTHS_AR[filterMonth - 1]} {filterYear}
                     </Typography>
                     <Typography
                         variant="caption"
                         dir="ltr"
-                        sx={{ color: '#aaa', fontWeight: 700, letterSpacing: 0.5, fontFamily: 'monospace' }}
+                        sx={{ color: '#aaa', fontWeight: 400, letterSpacing: 0.5, fontFamily: 'monospace' }}
                     >
                         {batchCode}
                     </Typography>
@@ -185,13 +185,13 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         alignItems="center"
                         justifyContent="center"
                         spacing={2}
-                        sx={{ mb: 1.5 }}
+                        sx={{ mb: '0.75rem' }}
                     >
                         <BusinessIcon sx={{ color: '#d0d0d0', fontSize: '0.9rem' }} />
                         <Typography
                             variant="subtitle1"
                             sx={{
-                                fontWeight: 700,
+                                fontWeight: 400,
                                 color: '#444',
                                 textAlign: 'center',
                                 fontSize: '0.88rem',
@@ -201,27 +201,27 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                             {provider.name}
                         </Typography>
                     </Stack>
-                    <Divider sx={{ mb: 2, opacity: 0.6 }} />
+                    <Divider sx={{ mb: '1.0rem', opacity: 0.6 }} />
                 </Box>
 
                 {/* 3. Requests Green Banner */}
                 <Box sx={{
                     bgcolor: '#f5f9f5',
-                    borderRadius: 4,
+                    borderRadius: '0.375rem',
                     border: '1.5px solid #7cb983',
                     py: 1,
                     px: 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    mb: 3,
+                    mb: '1.5rem',
                     width: '100%',
                     mx: 'auto',
-                    minHeight: 50
+                    minHeight: '3.125rem'
                 }}>
                     <Stack direction="row" spacing={2} alignItems="center" sx={{ whiteSpace: 'nowrap' }}>
                         <ViewListIcon sx={{ color: '#7cb983', fontSize: '1.6rem' }} />
-                        <Typography variant="h6" sx={{ color: '#7cb983', fontWeight: 700, fontSize: '1.1rem' }}>
+                        <Typography variant="h6" sx={{ color: '#7cb983', fontWeight: 400, fontSize: '1.1rem' }}>
                             {stats.requestsCount} مطالبة
                         </Typography>
                     </Stack>
@@ -237,13 +237,13 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         alignItems: 'center',
                         bgcolor: '#92c68e',
                         color: 'white',
-                        borderRadius: 10,
-                        px: 2.5,
+                        borderRadius: '0.625rem',
+                        px: '1.25rem',
                         py: 0.6,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
                         <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.78rem' }}>المبلغ المطلوب</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.85rem' }}>{stats.amount.toFixed(2)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>{stats.amount.toFixed(2)}</Typography>
                     </Box>
 
                     {/* Covered Block */}
@@ -253,8 +253,8 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         alignItems: 'center',
                         bgcolor: '#67bc72',
                         color: 'white',
-                        borderRadius: 10,
-                        px: 2.5,
+                        borderRadius: '0.625rem',
+                        px: '1.25rem',
                         py: 0.6,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
@@ -262,7 +262,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                             <CheckCircleIcon sx={{ fontSize: '1.1rem' }} />
                             <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.78rem' }}>المعتمد</Typography>
                         </Stack>
-                        <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.85rem' }}>{stats.covered.toFixed(2)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>{stats.covered.toFixed(2)}</Typography>
                     </Box>
 
                     {/* Refused Block */}
@@ -272,8 +272,8 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         alignItems: 'center',
                         bgcolor: '#e66a6a',
                         color: 'white',
-                        borderRadius: 10,
-                        px: 2.5,
+                        borderRadius: '0.625rem',
+                        px: '1.25rem',
                         py: 0.6,
                         boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
                     }}>
@@ -281,7 +281,7 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                             <CancelIcon sx={{ fontSize: '1.1rem' }} />
                             <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.78rem' }}>المرفوض</Typography>
                         </Stack>
-                        <Typography variant="body2" sx={{ fontWeight: 800, fontSize: '0.85rem' }}>{stats.refused.toFixed(2)}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>{stats.refused.toFixed(2)}</Typography>
                     </Box>
 
                 </Stack>
@@ -299,24 +299,24 @@ const StatKpiCard = ({ title, value, subtitle, gradient, icon: Icon }) => (
         height: '100%',
         background: gradient,
         color: '#fff',
-        borderRadius: 2,
+        borderRadius: '0.125rem',
         overflow: 'hidden',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         transition: 'transform 0.2s ease',
         '&:hover': { transform: 'translateY(-2px)' }
     }}>
-        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <CardContent sx={{ p: '0.75rem', '&:last-child': { pb: '0.75rem' } }}>
             <Stack spacing={0.5}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                    <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 400, textTransform: 'uppercase', fontSize: '0.75rem' }}>
                         {title}
                     </Typography>
                     <Box sx={{ p: 0.5, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.2)', display: 'flex' }}>
-                        <Icon sx={{ fontSize: 16 }} />
+                        <Icon sx={{ fontSize: '1.0rem' }} />
                     </Box>
                 </Stack>
-                <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                {subtitle && <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.65rem' }}>{subtitle}</Typography>}
+                <Typography variant="h5" fontWeight={500}>{value}</Typography>
+                {subtitle && <Typography variant="caption" sx={{ opacity: 0.8, fontSize: '0.75rem' }}>{subtitle}</Typography>}
             </Stack>
         </CardContent>
     </Card>
@@ -459,7 +459,7 @@ export default function ClaimBatchManagement() {
                                 startIcon={<AssessmentIcon />}
                                 endIcon={showStats ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                                 onClick={() => setShowStats(v => !v)}
-                                sx={{ borderRadius: 2, fontWeight: 700 }}
+                                sx={{ borderRadius: '0.125rem', fontWeight: 400 }}
                             >
                                 {showStats ? 'إخفاء الإحصائيات' : 'عرض الإحصائيات'}
                             </Button>
@@ -467,7 +467,7 @@ export default function ClaimBatchManagement() {
                         {/* Employer Selector Directly in Header for context */}
                         <Autocomplete
                             size="small"
-                            sx={{ width: 300, bgcolor: 'background.paper', borderRadius: 1 }}
+                            sx={{ width: '18.75rem', bgcolor: 'background.paper', borderRadius: 1 }}
                             options={employers || []}
                             getOptionLabel={(option) => `${option.label || ''} (${option.code || option.id || ''})`}
                             value={selectedEmployer}
@@ -496,9 +496,9 @@ export default function ClaimBatchManagement() {
 
             {/* 🔹 STATISTICS PANEL (Collapsible) 🔹 */}
             <Collapse in={showStats && !!selectedEmployer} timeout="auto">
-                <Box sx={{ mb: 2, mt: -1 }}>
+                <Box sx={{ mb: '1.0rem', mt: -1 }}>
                     {isLoadingStats ? (
-                        <Box sx={{ py: 2 }}><LinearProgress /></Box>
+                        <Box sx={{ py: '1.0rem' }}><LinearProgress /></Box>
                     ) : (
                         <Grid container spacing={2}>
                             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -543,21 +543,21 @@ export default function ClaimBatchManagement() {
             </Collapse>
 
             {/* 🔹 MAIN CONTENT 🔹 */}
-            <Box sx={{ flex: 1, pt: 0, pb: 2, mt: -2 }}>
+            <Box sx={{ flex: 1, pt: 0, pb: '1.0rem', mt: -2 }}>
                 {!selectedEmployer ? (
                     <Box sx={{
-                        height: '400px',
+                        height: '25.0rem',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
                         bgcolor: 'rgba(var(--mui-palette-primary-mainChannel), 0.02)',
-                        borderRadius: 3,
+                        borderRadius: '0.1875rem',
                         border: '2px dashed',
                         borderColor: 'divider'
                     }}>
-                        <Avatar sx={{ width: 80, height: 80, bgcolor: 'primary.light', mb: 2 }}>
-                            <BusinessIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+                        <Avatar sx={{ width: '5.0rem', height: '5.0rem', bgcolor: 'primary.light', mb: '1.0rem' }}>
+                            <BusinessIcon sx={{ fontSize: '2.5rem', color: 'primary.main' }} />
                         </Avatar>
                         <Typography variant="h5" color="text.primary" gutterBottom>
                             يرجى اختيار جهة العمل
@@ -575,9 +575,9 @@ export default function ClaimBatchManagement() {
                                     مقدمو الخدمات لجهة عمل: <Typography component="span" color="primary.main" variant="inherit">{selectedEmployer.label || selectedEmployer.name}</Typography>
                                 </Typography>
 
-                                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                                <Box sx={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                                     {/* Month Filter */}
-                                    <FormControl size="small" sx={{ width: 130 }}>
+                                    <FormControl size="small" sx={{ width: '8.125rem' }}>
                                         <Select
                                             value={filterMonth}
                                             onChange={(e) => setFilterMonth(e.target.value)}
@@ -591,7 +591,7 @@ export default function ClaimBatchManagement() {
                                     </FormControl>
 
                                     {/* Year Filter */}
-                                    <FormControl size="small" sx={{ width: 100 }}>
+                                    <FormControl size="small" sx={{ width: '6.25rem' }}>
                                         <Select
                                             value={filterYear}
                                             onChange={(e) => setFilterYear(e.target.value)}
@@ -606,7 +606,7 @@ export default function ClaimBatchManagement() {
                                     </FormControl>
 
                                     {/* Search Box */}
-                                    <Box sx={{ width: 250, ml: 1 }}>
+                                    <Box sx={{ width: '15.625rem', ml: 1 }}>
                                         <TextField
                                             fullWidth
                                             size="small"
@@ -625,7 +625,7 @@ export default function ClaimBatchManagement() {
 
                         {/* Providers Grid */}
                         {isLoadingProviders ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'center', p: '5.0rem' }}>
                                 <CircularProgress />
                             </Box>
                         ) : filteredProviders.length > 0 ? (
@@ -643,7 +643,7 @@ export default function ClaimBatchManagement() {
                                 ))}
                             </Grid>
                         ) : (
-                            <Box sx={{ textAlign: 'center', py: 10, bgcolor: 'background.paper', borderRadius: 2 }}>
+                            <Box sx={{ textAlign: 'center', py: '5.0rem', bgcolor: 'background.paper' }}>
                                 <Typography color="text.secondary">لا يوجد مقدمو خدمات متعاقدون حالياً مع هذه الجهة أو يطابقون بحثك.</Typography>
                             </Box>
                         )}
@@ -653,3 +653,9 @@ export default function ClaimBatchManagement() {
         </Box>
     );
 }
+
+
+
+
+
+

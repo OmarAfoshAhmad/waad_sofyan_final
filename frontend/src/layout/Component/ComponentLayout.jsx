@@ -14,7 +14,7 @@ import { handlerComponentDrawer, useGetMenuMaster } from 'api/menu';
 // components content
 const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })(({ theme }) => ({
   minHeight: `calc(100vh - 188px)`,
-  width: `calc(100% - ${DRAWER_WIDTH}px)`,
+  width: `calc(100% - ${DRAWER_WIDTH})`,
   flexGrow: 1,
   transition: theme.transitions.create('margin', {
     easing: theme.transitions.easing.sharp,

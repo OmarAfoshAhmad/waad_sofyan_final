@@ -130,7 +130,7 @@ const ClaimsReport = () => {
             </Tooltip>
             <Tooltip title="تحديث البيانات">
               <IconButton onClick={refetch} disabled={loading} color="primary">
-                <RefreshIcon sx={{ fontSize: 20, animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+                <RefreshIcon sx={{ fontSize: '1.25rem', animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               </IconButton>
             </Tooltip>
           </Stack>
@@ -138,20 +138,20 @@ const ClaimsReport = () => {
       />
 
       {error && (
-        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: 2 }}>
+        <Alert severity="error" icon={<WarningIcon />} sx={{ mb: '1.0rem' }}>
           {error}
         </Alert>
       )}
 
       {hasPartialData && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="warning" sx={{ mb: '1.0rem' }}>
           <Typography variant="body2">
             تم تحميل {formatNumber(totalFetched)} سجل من أصل {formatNumber(pagination.totalElements)} سجل.
           </Typography>
         </Alert>
       )}
 
-      <Box sx={{ mt: 2 }}>
+      <Box sx={{ mt: '1.0rem' }}>
         <ClaimsFilters
           filters={filters}
           onFilterChange={handleFilterChange}
@@ -166,7 +166,7 @@ const ClaimsReport = () => {
       </Box>
 
       {!loading && totalFetched > 0 && (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: '1.0rem' }}>
           <Typography variant="body2" color="text.secondary">
             إجمالي السجلات: <strong>{totalFetched}</strong>
           </Typography>

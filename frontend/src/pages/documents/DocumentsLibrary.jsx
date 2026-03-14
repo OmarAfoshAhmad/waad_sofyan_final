@@ -418,7 +418,7 @@ const DocumentsLibrary = () => {
       field: 'fileName',
       headerName: 'اسم المستند',
       flex: 1,
-      minWidth: 200,
+      minWidth: '12.5rem',
       renderCell: (params) => (
         <Stack direction="row" spacing={1} alignItems="center">
           {getFileIcon(params.row.fileType)}
@@ -429,7 +429,7 @@ const DocumentsLibrary = () => {
     {
       field: 'entityType',
       headerName: 'مرتبط بـ',
-      width: 140,
+      width: '8.75rem',
       renderCell: (params) => (
         <Chip
           icon={params.value === 'CLAIM' ? <ClaimIcon /> : <PreApprovalIcon />}
@@ -442,17 +442,17 @@ const DocumentsLibrary = () => {
     {
       field: 'entityReference',
       headerName: 'رقم الطلب',
-      width: 130
+      width: '8.125rem'
     },
     {
       field: 'memberName',
       headerName: 'اسم المنتفع',
-      width: 160
+      width: '10.0rem'
     },
     {
       field: 'providerName',
       headerName: 'مقدم الخدمة',
-      width: 150,
+      width: '9.375rem',
       renderCell: (params) => (
         <Typography variant="body2" noWrap>
           {params.value || '-'}
@@ -462,7 +462,7 @@ const DocumentsLibrary = () => {
     {
       field: 'status',
       headerName: 'الحالة',
-      width: 130,
+      width: '8.125rem',
       renderCell: (params) => {
         if (!params.value) return null;
 
@@ -491,7 +491,7 @@ const DocumentsLibrary = () => {
             label={statusLabels[params.value] || params.value}
             size="small"
             color={statusColors[params.value] || 'default'}
-            sx={{ minWidth: 90 }}
+            sx={{ minWidth: '5.625rem' }}
           />
         );
       }
@@ -499,13 +499,13 @@ const DocumentsLibrary = () => {
     {
       field: 'fileSize',
       headerName: 'الحجم',
-      width: 100,
+      width: '6.25rem',
       renderCell: (params) => <Typography variant="body2">{formatFileSize(params.value)}</Typography>
     },
     {
       field: 'uploadedAt',
       headerName: 'تاريخ الرفع',
-      width: 150,
+      width: '9.375rem',
       valueFormatter: (params) => {
         if (!params.value) return '-';
         return new Date(params.value).toLocaleDateString('en-US', {
@@ -518,7 +518,7 @@ const DocumentsLibrary = () => {
     {
       field: 'actions',
       headerName: 'الإجراءات',
-      width: 160,
+      width: '10.0rem',
       sortable: false,
       renderCell: (params) => (
         <Stack direction="row" spacing={0.5}>
@@ -552,19 +552,19 @@ const DocumentsLibrary = () => {
         <MainCard>
           <Box sx={{ width: '100%' }}>
             {error && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+              <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setError(null)}>
                 {error}
               </Alert>
             )}
 
             {successMessage && (
-              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+              <Alert severity="success" sx={{ mb: '1.0rem' }} onClose={() => setSuccessMessage(null)}>
                 {successMessage}
               </Alert>
             )}
 
             {/* Statistics Cards */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <Card sx={{ bgcolor: 'primary.lighter' }}>
                   <CardContent>
@@ -652,7 +652,7 @@ const DocumentsLibrary = () => {
             </Grid>
 
             {/* Filters */}
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: '1.5rem' }} flexWrap="wrap">
               <TextField
                 placeholder="بحث بالاسم أو الرقم..."
                 value={searchTerm}
@@ -664,9 +664,9 @@ const DocumentsLibrary = () => {
                     </InputAdornment>
                   )
                 }}
-                sx={{ minWidth: 250, flex: 1 }}
+                sx={{ minWidth: '15.625rem', flex: 1 }}
               />
-              <FormControl sx={{ minWidth: 150 }}>
+              <FormControl sx={{ minWidth: '9.375rem' }}>
                 <InputLabel>نوع الطلب</InputLabel>
                 <Select value={entityTypeFilter} onChange={(e) => setEntityTypeFilter(e.target.value)} label="نوع الطلب">
                   <MenuItem value="ALL">الكل</MenuItem>
@@ -674,7 +674,7 @@ const DocumentsLibrary = () => {
                   <MenuItem value="PRE_APPROVAL">موافقات مسبقة</MenuItem>
                 </Select>
               </FormControl>
-              <FormControl sx={{ minWidth: 150 }}>
+              <FormControl sx={{ minWidth: '9.375rem' }}>
                 <InputLabel>الحالة</InputLabel>
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} label="الحالة">
                   <MenuItem value="ALL">الكل</MenuItem>
@@ -687,7 +687,7 @@ const DocumentsLibrary = () => {
                   <MenuItem value="SETTLED">مسددة</MenuItem>
                 </Select>
               </FormControl>
-              <FormControl sx={{ minWidth: 150 }}>
+              <FormControl sx={{ minWidth: '9.375rem' }}>
                 <InputLabel>نوع الملف</InputLabel>
                 <Select value={fileTypeFilter} onChange={(e) => setFileTypeFilter(e.target.value)} label="نوع الملف">
                   <MenuItem value="ALL">الكل</MenuItem>
@@ -699,14 +699,14 @@ const DocumentsLibrary = () => {
             </Stack>
 
             {/* DataGrid */}
-            <Box sx={{ height: 600, width: '100%' }}>
+            <Box sx={{ height: '37.5rem', width: '100%' }}>
               {loading ? (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                   <CircularProgress />
                 </Box>
               ) : filteredDocuments.length === 0 ? (
                 <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100%">
-                  <DocumentIcon sx={{ fontSize: 100, color: 'text.disabled', mb: 2 }} />
+                  <DocumentIcon sx={{ fontSize: '6.25rem', color: 'text.disabled', mb: '1.0rem' }} />
                   <Typography variant="h5" color="text.secondary" gutterBottom>
                     لا توجد مستندات
                   </Typography>
@@ -744,12 +744,12 @@ const DocumentsLibrary = () => {
           onClose={() => setDrawerOpen(false)}
           sx={{
             '& .MuiDrawer-paper': {
-              width: { xs: '100%', sm: 480 },
-              p: 3
+              width: { xs: '100%', sm: '240.0rem' },
+              p: '1.5rem'
             }
           }}
         >
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: '1.0rem' }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Typography variant="h5" fontWeight={600}>
                 📄 تفاصيل المستند
@@ -758,7 +758,7 @@ const DocumentsLibrary = () => {
                 <CloseIcon />
               </IconButton>
             </Stack>
-            <Divider sx={{ mt: 2 }} />
+            <Divider sx={{ mt: '1.0rem' }} />
           </Box>
 
           {selectedDocument && (
@@ -917,3 +917,4 @@ const DocumentsLibrary = () => {
 };
 
 export default DocumentsLibrary;
+

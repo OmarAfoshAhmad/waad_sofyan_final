@@ -315,13 +315,13 @@ export const exportToExcel = async ({ title, titleEn = '', filename, columns, da
  */
 export const exportMedicalServicesToExcel = async (data) => {
   const columns = [
-    { key: 'code', header: 'الرمز', width: 15, align: 'center' },
-    { key: 'name', header: 'الاسم (عربي)', width: 35, align: 'right' },
-    { key: 'name', header: 'الاسم (إنجليزي)', width: 35, align: 'left' },
-    { key: 'categoryName', header: 'التصنيف', width: 20, align: 'right' },
-    { key: 'basePrice', header: 'السعر (د.ل)', width: 15, type: 'currency' },
-    { key: 'requiresPA', header: 'موافقة مسبقة', width: 12, type: 'boolean' },
-    { key: 'active', header: 'الحالة', width: 10, type: 'boolean' }
+    { key: 'code', header: 'الرمز', width: '0.9375rem', align: 'center' },
+    { key: 'name', header: 'الاسم (عربي)', width: '2.1875rem', align: 'right' },
+    { key: 'name', header: 'الاسم (إنجليزي)', width: '2.1875rem', align: 'left' },
+    { key: 'categoryName', header: 'التصنيف', width: '1.25rem', align: 'right' },
+    { key: 'basePrice', header: 'السعر (د.ل)', width: '0.9375rem', type: 'currency' },
+    { key: 'requiresPA', header: 'موافقة مسبقة', width: '0.75rem', type: 'boolean' },
+    { key: 'active', header: 'الحالة', width: '0.625rem', type: 'boolean' }
   ];
 
   // Transform data - handle name display logic
@@ -354,11 +354,11 @@ export const exportMedicalServicesToExcel = async (data) => {
  */
 export const exportMedicalCategoriesToExcel = async (data) => {
   const columns = [
-    { key: 'code', header: 'الرمز', width: 15, align: 'center' },
-    { key: 'name', header: 'الاسم (عربي)', width: 35, align: 'right' },
-    { key: 'name', header: 'الاسم (إنجليزي)', width: 35, align: 'left' },
-    { key: 'parentName', header: 'التصنيف الأب', width: 25, align: 'right' },
-    { key: 'active', header: 'الحالة', width: 12, type: 'boolean' }
+    { key: 'code', header: 'الرمز', width: '0.9375rem', align: 'center' },
+    { key: 'name', header: 'الاسم (عربي)', width: '2.1875rem', align: 'right' },
+    { key: 'name', header: 'الاسم (إنجليزي)', width: '2.1875rem', align: 'left' },
+    { key: 'parentName', header: 'التصنيف الأب', width: '1.5625rem', align: 'right' },
+    { key: 'active', header: 'الحالة', width: '0.75rem', type: 'boolean' }
   ];
 
   // Transform data
@@ -381,3 +381,5 @@ export const exportMedicalCategoriesToExcel = async (data) => {
 };
 
 export default exportToExcel;
+
+

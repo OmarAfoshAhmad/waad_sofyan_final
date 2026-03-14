@@ -871,12 +871,25 @@ public class UnifiedMemberService {
                     String searchEn = "%" + nameEn.toLowerCase() + "%";
                     predicates.add(cb.or(
                             cb.like(cb.lower(root.get("fullName")), searchAr),
-                            cb.like(cb.lower(root.get("fullName")), searchEn)));
+                            cb.like(cb.lower(root.get("fullName")), searchEn),
+                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
+                            cb.like(cb.lower(root.get("cardNumber")), searchEn),
+                            cb.like(root.get("civilId"), searchAr),
+                            cb.like(root.get("barcode"), searchAr)));
                 } else {
-                    predicates.add(cb.like(cb.lower(root.get("fullName")), searchAr));
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(root.get("fullName")), searchAr),
+                            cb.like(cb.lower(root.get("cardNumber")), searchAr),
+                            cb.like(root.get("civilId"), searchAr),
+                            cb.like(root.get("barcode"), searchAr)));
                 }
             } else if (nameEn != null && !nameEn.trim().isEmpty()) {
-                predicates.add(cb.like(cb.lower(root.get("fullName")), "%" + nameEn.toLowerCase() + "%"));
+                String searchEn = "%" + nameEn.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("fullName")), searchEn),
+                        cb.like(cb.lower(root.get("cardNumber")), searchEn),
+                        cb.like(root.get("civilId"), searchEn),
+                        cb.like(root.get("barcode"), searchEn)));
             }
 
             if (civilId != null && !civilId.trim().isEmpty()) {

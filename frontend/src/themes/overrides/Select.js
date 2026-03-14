@@ -14,8 +14,8 @@ export default function Select() {
                 MenuProps: {
                     PaperProps: {
                         style: {
-                            minWidth: 220,
-                            marginTop: 4
+                            minWidth: 220.0,
+                            marginTop: '2.0rem'
                         }
                     }
                 }

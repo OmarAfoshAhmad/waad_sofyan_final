@@ -165,7 +165,7 @@ const ImagePreview = memo(({ url, fileName, zoom, onLoad, onError }) => {
         justifyContent: 'center',
         overflow: 'auto',
         bgcolor: 'grey.100',
-        p: 2
+        p: '1.0rem'
       }}
     >
       <Box
@@ -210,11 +210,11 @@ const UnsupportedPreview = memo(({ fileName, fileSize, onDownload }) => {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 2,
-        p: 4
+        gap: '1.0rem',
+        p: '2.0rem'
       }}
     >
-      <FileIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
+      <FileIcon sx={{ fontSize: '4.0rem', color: 'text.disabled' }} />
       <Typography variant="body2" color="text.secondary" align="center">
         {fileName || 'مستند'}
       </Typography>
@@ -227,7 +227,7 @@ const UnsupportedPreview = memo(({ fileName, fileSize, onDownload }) => {
         لا يمكن معاينة هذا النوع من الملفات
       </Typography>
       <Tooltip title="تحميل الملف">
-        <IconButton onClick={onDownload} color="primary" size="large" sx={{ mt: 2 }}>
+        <IconButton onClick={onDownload} color="primary" size="large" sx={{ mt: '1.0rem' }}>
           <DownloadIcon />
         </IconButton>
       </Tooltip>
@@ -351,13 +351,13 @@ const UnifiedAttachmentViewer = ({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 2,
-          p: 4,
+          gap: '1.0rem',
+          p: '2.0rem',
           bgcolor: 'background.default',
-          borderRadius: 2
+          borderRadius: '0.125rem'
         }}
       >
-        <EmptyIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
+        <EmptyIcon sx={{ fontSize: '4.0rem', color: 'text.disabled' }} />
         <Typography variant="body2" color="text.secondary" align="center">
           {emptyMessage}
         </Typography>
@@ -381,14 +381,14 @@ const UnifiedAttachmentViewer = ({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        borderRadius: 2
+        borderRadius: '0.125rem'
       }}
     >
       {/* Header */}
       <Box
         sx={{
-          px: 2,
-          py: 1.5,
+          px: '1.0rem',
+          py: '0.75rem',
           bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
           borderBottom: 1,
           borderColor: 'divider'
@@ -411,7 +411,7 @@ const UnifiedAttachmentViewer = ({
       {/* Thumbnail List */}
       <Box
         sx={{
-          maxHeight: 200,
+          maxHeight: '12.5rem',
           overflow: 'auto',
           borderBottom: 1,
           borderColor: 'divider',
@@ -419,7 +419,7 @@ const UnifiedAttachmentViewer = ({
         }}
       >
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: '1.5rem' }}>
             <CircularProgress size={24} />
           </Box>
         ) : (
@@ -438,7 +438,7 @@ const UnifiedAttachmentViewer = ({
                     }}
                     sx={{
                       py: 1,
-                      px: 2,
+                      px: '1.0rem',
                       '&.Mui-selected': {
                         bgcolor: alpha(theme.palette.primary.main, 0.12),
                         '&:hover': {
@@ -447,7 +447,7 @@ const UnifiedAttachmentViewer = ({
                       }
                     }}
                   >
-                    <ListItemIcon sx={{ minWidth: 36 }}>{getFileIcon(type)}</ListItemIcon>
+                    <ListItemIcon sx={{ minWidth: '2.25rem' }}>{getFileIcon(type)}</ListItemIcon>
                     <ListItemText
                       primary={attachment.fileName || attachment.name || `مستند ${index + 1}`}
                       secondary={formatFileSize(attachment.fileSize || attachment.size)}
@@ -471,7 +471,7 @@ const UnifiedAttachmentViewer = ({
       {fileType === FILE_TYPES.IMAGE && (
         <Box
           sx={{
-            px: 2,
+            px: '1.0rem',
             py: 1,
             bgcolor: 'background.default',
             borderBottom: 1,
@@ -487,7 +487,7 @@ const UnifiedAttachmentViewer = ({
                   </IconButton>
                 </span>
               </Tooltip>
-              <Typography variant="caption" sx={{ px: 1, py: 0.5, alignSelf: 'center', minWidth: 45, textAlign: 'center' }}>
+              <Typography variant="caption" sx={{ px: 1, py: 0.5, alignSelf: 'center', minWidth: '2.8125rem', textAlign: 'center' }}>
                 {zoom}%
               </Typography>
               <Tooltip title="تكبير">
@@ -537,11 +537,11 @@ const UnifiedAttachmentViewer = ({
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              gap: 2,
-              p: 3
+              gap: '1.0rem',
+              p: '1.5rem'
             }}
           >
-            <ErrorIcon sx={{ fontSize: 48, color: 'error.main' }} />
+            <ErrorIcon sx={{ fontSize: '3.0rem', color: 'error.main' }} />
             <Typography variant="body2" color="error">
               {previewError}
             </Typography>
@@ -630,3 +630,5 @@ UnifiedAttachmentViewer.propTypes = {
 };
 
 export default memo(UnifiedAttachmentViewer);
+
+

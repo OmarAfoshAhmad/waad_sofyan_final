@@ -178,7 +178,7 @@ const EmployerEdit = () => {
         />
         <MainCard>
           <Alert severity="error">{LABELS.notFound}</Alert>
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: '1.0rem' }}>
             <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/employers')} variant="outlined">
               {LABELS.backToList}
             </Button>
@@ -208,7 +208,7 @@ const EmployerEdit = () => {
       <MainCard>
         <Box component="form" onSubmit={handleSubmit} noValidate>
           {/* Section: Basic Info */}
-          <Typography variant="subtitle1" fontWeight={600} color="primary" sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={600} color="primary" sx={{ mb: '1.0rem' }}>
             المعلومات الأساسية
           </Typography>
           <Grid container spacing={2.5}>
@@ -250,10 +250,10 @@ const EmployerEdit = () => {
             </Grid>
           </Grid>
 
-          <Divider sx={{ my: 3 }} />
+          <Divider sx={{ my: '1.5rem' }} />
 
           {/* Section: Contact Info */}
-          <Typography variant="subtitle1" fontWeight={600} color="primary" sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={600} color="primary" sx={{ mb: '1.0rem' }}>
             معلومات التواصل
           </Typography>
           <Grid container spacing={2.5}>
@@ -311,7 +311,7 @@ const EmployerEdit = () => {
           </Grid>
 
           {/* Form Actions */}
-          <Divider sx={{ my: 3 }} />
+          <Divider sx={{ my: '1.5rem' }} />
           <Stack direction="row" spacing={2} justifyContent="flex-end">
             <Button variant="outlined" onClick={() => navigate('/employers')} disabled={saving}>
               {LABELS.cancel}
@@ -327,3 +327,4 @@ const EmployerEdit = () => {
 };
 
 export default EmployerEdit;
+

@@ -241,39 +241,39 @@ const PreApprovalsInbox = () => {
     {
       field: 'id',
       headerName: '#',
-      width: 100,
+      width: '6.25rem',
       valueGetter: (value, row) => row.referenceNumber || `-`
     },
     {
       field: 'memberName',
       headerName: 'اسم المؤمن عليه',
       flex: 1,
-      minWidth: 150,
+      minWidth: '9.375rem',
       valueGetter: (value, row) => row.memberName || '-'
     },
     {
       field: 'providerName',
       headerName: 'مقدم الخدمة',
       flex: 1,
-      minWidth: 150,
+      minWidth: '9.375rem',
       valueGetter: (value, row) => row.providerName || '-'
     },
     {
       field: 'serviceName',
       headerName: 'الخدمة',
-      width: 150,
+      width: '9.375rem',
       valueGetter: (value, row) => row.serviceName || '-'
     },
     {
       field: 'priority',
       headerName: 'الأولوية',
-      width: 100,
+      width: '6.25rem',
       renderCell: (params) => getUrgencyBadge(params.row.priority)
     },
     {
       field: 'requestDate',
       headerName: 'تاريخ الطلب',
-      width: 130,
+      width: '8.125rem',
       valueGetter: (value, row) => {
         return row.requestDate ? new Date(row.requestDate).toLocaleDateString('en-US') : '-';
       }
@@ -281,7 +281,7 @@ const PreApprovalsInbox = () => {
     {
       field: 'expiryDate',
       headerName: 'تاريخ الانتهاء',
-      width: 130,
+      width: '8.125rem',
       valueGetter: (value, row) => {
         const date = row?.expiryDate || row?.expiresAt;
         return date ? new Date(date).toLocaleDateString('en-US') : '-';
@@ -290,13 +290,13 @@ const PreApprovalsInbox = () => {
     {
       field: 'status',
       headerName: 'الحالة',
-      width: 120,
+      width: '7.5rem',
       renderCell: (params) => getStatusChip(params.value)
     },
     {
       field: 'actions',
       headerName: 'الإجراءات',
-      width: 200,
+      width: '12.5rem',
       sortable: false,
       renderCell: (params) => (
         <Stack direction="row" spacing={1}>
@@ -360,19 +360,19 @@ const PreApprovalsInbox = () => {
       />
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: '1.0rem' }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+        <Alert severity="success" sx={{ mb: '1.0rem' }} onClose={() => setSuccess(null)}>
           {success}
         </Alert>
       )}
 
       <MainCard>
-        <Box sx={{ minHeight: 400, width: '100%' }}>
+        <Box sx={{ minHeight: '25.0rem', width: '100%' }}>
           <DataGrid
             autoHeight
             rows={preApprovals}
@@ -413,7 +413,7 @@ const PreApprovalsInbox = () => {
           </Stack>
         </DialogTitle>
         <DialogContent>
-          <Card variant="outlined" sx={{ mb: 3, mt: 2 }}>
+          <Card variant="outlined" sx={{ mb: '1.5rem', mt: '1.0rem' }}>
             <CardContent>
               <Typography variant="subtitle2" color="primary" gutterBottom>
                 تفاصيل الطلب
@@ -437,7 +437,7 @@ const PreApprovalsInbox = () => {
             </CardContent>
           </Card>
 
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={{ my: '1.0rem' }} />
 
 
           <TextField
@@ -475,7 +475,7 @@ const PreApprovalsInbox = () => {
           </Stack>
         </DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2, mt: 1 }}>
+          <Alert severity="warning" sx={{ mb: '1.0rem', mt: 1 }}>
             يرجى إدخال سبب واضح للرفض. هذا السبب سيظهر للمستشفى/العيادة.
           </Alert>
 

@@ -33,12 +33,12 @@ const LoadingState = ({ message = 'جاري التحميل...' }) => (
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 200,
-      py: 4
+      minHeight: '12.5rem',
+      py: '2.0rem'
     }}
   >
     <CircularProgress size={40} thickness={4} />
-    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+    <Typography variant="body2" color="text.secondary" sx={{ mt: '1.0rem' }}>
       {message}
     </Typography>
   </Box>
@@ -57,16 +57,16 @@ const EmptyState = ({ title = 'لا توجد بيانات', message = 'لا تو
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 200,
-      py: 4,
+      minHeight: '12.5rem',
+      py: '2.0rem',
       textAlign: 'center'
     }}
   >
-    <Icon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+    <Icon sx={{ fontSize: '4.0rem', color: 'text.disabled', mb: '1.0rem' }} />
     <Typography variant="h6" color="text.secondary" gutterBottom>
       {title}
     </Typography>
-    <Typography variant="body2" color="text.disabled" sx={{ mb: 2 }}>
+    <Typography variant="body2" color="text.disabled" sx={{ mb: '1.0rem' }}>
       {message}
     </Typography>
     {onRetry && (

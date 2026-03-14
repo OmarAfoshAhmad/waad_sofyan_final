@@ -90,7 +90,7 @@ const ClaimStatementPreview = () => {
 
   const iframeStyle = {
     width: '100%',
-    height: '1000px',
+    height: '62.5rem',
     border: 'none',
     transform: `scale(${zoom / 100})`,
     transformOrigin: 'top center',
@@ -98,7 +98,7 @@ const ClaimStatementPreview = () => {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 3, mb: 3 }}>
+    <Container maxWidth="xl" sx={{ mt: '1.5rem', mb: '1.5rem' }}>
       <ModernPageHeader
         title="معاينة كشف المطالبات"
         subtitle="Claim Statement Preview"
@@ -154,9 +154,9 @@ const ClaimStatementPreview = () => {
         }
       />
 
-      <Card sx={{ mt: 3 }}>
+      <Card sx={{ mt: '1.5rem' }}>
         <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: '1.0rem' }}>
             <Typography variant="body2" color="text.secondary">
               تكبير / تصغير العرض:
             </Typography>
@@ -167,7 +167,7 @@ const ClaimStatementPreview = () => {
               </Button>
               <Button onClick={() => setZoom((z) => Math.min(z + 10, 200))}><ZoomInIcon /></Button>
             </ButtonGroup>
-            <Box sx={{ width: 150, ml: 2 }}>
+            <Box sx={{ width: '9.375rem', ml: '1.0rem' }}>
               <Slider
                 value={zoom}
                 min={50}
@@ -180,14 +180,14 @@ const ClaimStatementPreview = () => {
             </Box>
           </Stack>
           
-          <Divider sx={{ mb: 3 }} />
+          <Divider sx={{ mb: '1.5rem' }} />
 
           <Box sx={{ 
             position: 'relative', 
             bgcolor: '#ebeef2', 
             p: { xs: 1, md: 4 }, 
             borderRadius: 1, 
-            minHeight: '800px',
+            minHeight: '50.0rem',
             display: 'flex',
             justifyContent: 'center',
             overflow: 'auto',
@@ -196,14 +196,14 @@ const ClaimStatementPreview = () => {
             {loading && (
               <Box sx={{ 
                 position: 'absolute', 
-                top: 200, 
+                top: '100.0rem', 
                 left: '50%', 
                 transform: 'translateX(-50%)', 
                 zIndex: 10,
                 textAlign: 'center'
               }}>
                 <CircularProgress size={50} thickness={4} />
-                <Typography sx={{ mt: 2, fontWeight: 'bold' }}>جاري إعداد التقرير وتجهيز المعاينة...</Typography>
+                <Typography sx={{ mt: '1.0rem', fontWeight: 'bold' }}>جاري إعداد التقرير وتجهيز المعاينة...</Typography>
               </Box>
             )}
             
@@ -217,14 +217,14 @@ const ClaimStatementPreview = () => {
                 <Box sx={{
                   width: '210mm', // Fixed A4 width
                   height: '297mm', // Approximate A4 height for single page preview
-                  minHeight: '1200px',
+                  minHeight: '75.0rem',
                   bgcolor: 'white',
                   boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
                   transform: `scale(${zoom / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   overflow: 'hidden',
-                  borderRadius: '4px'
+                  borderRadius: '0.375rem'
                 }}>
                   <iframe
                     title="Claim Statement Preview"
@@ -249,3 +249,4 @@ const ClaimStatementPreview = () => {
 };
 
 export default ClaimStatementPreview;
+

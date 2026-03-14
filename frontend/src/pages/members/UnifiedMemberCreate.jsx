@@ -69,9 +69,9 @@ const UnifiedMemberCreate = () => {
   const menuProps = {
     PaperProps: {
       sx: {
-        '& .MuiMenuItem-root': { fontSize: '12px' },
-        maxHeight: 300,
-        minWidth: 200 // Added for better visibility of long options
+        '& .MuiMenuItem-root': { fontSize: '0.75rem' },
+        maxHeight: '18.75rem',
+        minWidth: '12.5rem' // Added for better visibility of long options
       }
     }
   };
@@ -466,14 +466,14 @@ const UnifiedMemberCreate = () => {
             variant="scrollable"
             scrollButtons="auto"
             sx={{
-              minHeight: 48,
+              minHeight: '3.0rem',
               '& .MuiTab-root': {
-                minHeight: 48,
-                fontSize: '13px',
+                minHeight: '3.0rem',
+                fontSize: '0.8125rem',
                 fontWeight: 500,
                 color: 'text.secondary',
                 transition: 'all 0.2s',
-                px: 3,
+                px: '1.5rem',
                 '&.Mui-selected': {
                   color: 'primary.main',
                   bgcolor: 'primary.lighter',
@@ -481,7 +481,7 @@ const UnifiedMemberCreate = () => {
                 }
               },
               '& .MuiTabs-indicator': {
-                height: 3,
+                height: '0.1875rem',
                 borderRadius: '3px 3px 0 0'
               }
             }}
@@ -492,7 +492,7 @@ const UnifiedMemberCreate = () => {
                 label={
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <span>البيانات الشخصية</span>
-                    {getTabErrorCount(0) > 0 && <span style={{ color: '#f44336', fontSize: '16px' }}>●</span>}
+                    {getTabErrorCount(0) > 0 && <span style={{ color: '#f44336', fontSize: '1.0rem' }}>●</span>}
                   </Stack>
                 }
                 icon={<PersonIcon />}
@@ -505,7 +505,7 @@ const UnifiedMemberCreate = () => {
                   label={
                     <Stack direction="row" spacing={0.5} alignItems="center">
                       <span>بيانات العمل</span>
-                      {getTabErrorCount(1) > 0 && <span style={{ color: '#f44336', fontSize: '16px' }}>●</span>}
+                      {getTabErrorCount(1) > 0 && <span style={{ color: '#f44336', fontSize: '1.0rem' }}>●</span>}
                     </Stack>
                   }
                   icon={<BadgeIcon />}
@@ -519,7 +519,7 @@ const UnifiedMemberCreate = () => {
                   label={
                     <Stack direction="row" spacing={0.5} alignItems="center">
                       <span>معلومات الاتصال</span>
-                      {getTabErrorCount(2) > 0 && <span style={{ color: '#f44336', fontSize: '16px' }}>●</span>}
+                      {getTabErrorCount(2) > 0 && <span style={{ color: '#f44336', fontSize: '1.0rem' }}>●</span>}
                     </Stack>
                   }
                   icon={<ContactPhoneIcon />}
@@ -532,14 +532,14 @@ const UnifiedMemberCreate = () => {
         </Box>
 
         {Object.keys(errors).length > 0 && (
-          <Box sx={{ px: 3, pt: 2 }}>
+          <Box sx={{ px: '1.5rem', pt: '1.0rem' }}>
             <Alert
               severity="error"
               variant="outlined"
               sx={{
                 bgcolor: 'error.lighter',
                 borderColor: 'error.light',
-                '& .MuiAlert-message': { fontWeight: 600, fontSize: '13px' }
+                '& .MuiAlert-message': { fontWeight: 600, fontSize: '0.8125rem' }
               }}
             >
               توجد أخطاء في المدخلات؛ يرجى مراجعة التبويبات المميزة باللون الأحمر (عدد الحقول المعيبة: {Object.keys(errors).length})
@@ -548,7 +548,7 @@ const UnifiedMemberCreate = () => {
         )}
 
         {/* Scrollable Content Area */}
-        <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: '1.5rem' }}>
           {/* Tab 0: Personal Info */}
           <div role="tabpanel" hidden={tabValue !== 0}>
             {tabValue === 0 && (
@@ -557,7 +557,7 @@ const UnifiedMemberCreate = () => {
                 <Grid size={{ xs: 12, md: 9 }}>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12 }}>
-                      <Alert severity="info" sx={{ mb: 2, '& .MuiAlert-message': { fontSize: '12px' } }}>
+                      <Alert severity="info" sx={{ mb: '1.0rem', '& .MuiAlert-message': { fontSize: '0.75rem' } }}>
                         يتم توليد رقم البطاقة والباركود تلقائياً عند الحفظ.
                       </Alert>
                     </Grid>
@@ -673,7 +673,7 @@ const UnifiedMemberCreate = () => {
 
                     {principalForm.isFastTrack && (
                       <Grid size={{ xs: 12 }}>
-                        <Paper sx={{ p: 2, mt: 1, bgcolor: 'warning.lighter', border: '1px dashed', borderColor: 'warning.main' }}>
+                        <Paper sx={{ p: '1.0rem', mt: 1, bgcolor: 'warning.lighter', border: '1px dashed', borderColor: 'warning.main' }}>
                           <Typography
                             variant="subtitle2"
                             color="warning.main"
@@ -703,7 +703,7 @@ const UnifiedMemberCreate = () => {
 
                 {/* Left Column: Photo Upload (Sticky behavior) */}
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', height: '100%', bgcolor: 'grey.50', borderStyle: 'dashed' }}>
+                  <Paper variant="outlined" sx={{ p: '1.5rem', textAlign: 'center', height: '100%', bgcolor: 'grey.50', borderStyle: 'dashed' }}>
                     <Box
                       position="relative"
                       sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}
@@ -711,17 +711,17 @@ const UnifiedMemberCreate = () => {
                       <Avatar
                         src={principalForm.photoPreview}
                         sx={{
-                          width: 140,
-                          height: 140,
+                          width: '8.75rem',
+                          height: '8.75rem',
                           fontSize: '4rem',
                           cursor: 'pointer',
                           border: '3px solid',
                           borderColor: 'primary.light',
-                          mb: 2
+                          mb: '1.0rem'
                         }}
                         onClick={() => document.getElementById('photo-upload').click()}
                       >
-                        {principalForm.fullName ? principalForm.fullName.charAt(0) : <PersonAddIcon sx={{ fontSize: 60 }} />}
+                        {principalForm.fullName ? principalForm.fullName.charAt(0) : <PersonAddIcon sx={{ fontSize: '3.75rem' }} />}
                       </Avatar>
                       <input
                         accept="image/*"
@@ -742,7 +742,7 @@ const UnifiedMemberCreate = () => {
                       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                         الصورة الشخصية
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: '1.0rem' }}>
                         اضغط على الدائرة للرفع
                       </Typography>
                       <Button variant="outlined" size="small" onClick={() => document.getElementById('photo-upload').click()}>
@@ -874,7 +874,7 @@ const UnifiedMemberCreate = () => {
 
                 {!principalForm.isFastTrack && (principalForm.isVip || principalForm.isUrgent) && (
                   <Grid size={{ xs: 12 }}>
-                    <Paper sx={{ p: 2, bgcolor: 'warning.lighter', border: '1px dashed', borderColor: 'warning.main' }}>
+                    <Paper sx={{ p: '1.0rem', bgcolor: 'warning.lighter', border: '1px dashed', borderColor: 'warning.main' }}>
                       <Typography
                         variant="subtitle2"
                         color="warning.main"
@@ -974,7 +974,7 @@ const UnifiedMemberCreate = () => {
         </Box>
 
         <Divider />
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end', gap: 2, bgcolor: 'background.default' }}>
+        <Box sx={{ p: '1.0rem', display: 'flex', justifyContent: 'flex-end', gap: '1.0rem', bgcolor: 'background.default' }}>
           <Button variant="outlined" onClick={() => navigate('/members')}>
             إلغاء
           </Button>
@@ -993,3 +993,5 @@ const UnifiedMemberCreate = () => {
 };
 
 export default UnifiedMemberCreate;
+
+

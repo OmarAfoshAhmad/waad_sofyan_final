@@ -143,16 +143,16 @@ const FileUploader = ({
 
       {/* Selected File Display */}
       {selectedFile && (
-        <Box sx={{ mt: 2 }}>
+        <Box sx={{ mt: '1.0rem' }}>
           <Box
             sx={{
-              p: 2,
+              p: '1.0rem',
               border: '1px solid',
               borderColor: 'divider',
               borderRadius: 1,
               display: 'flex',
               alignItems: 'center',
-              gap: 2
+              gap: '1.0rem'
             }}
           >
             {preview ? (
@@ -161,14 +161,14 @@ const FileUploader = ({
                 src={preview}
                 alt="Preview"
                 sx={{
-                  width: 60,
-                  height: 60,
+                  width: '3.75rem',
+                  height: '3.75rem',
                   objectFit: 'cover',
                   borderRadius: 1
                 }}
               />
             ) : (
-              <FileIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+              <FileIcon sx={{ fontSize: '2.5rem', color: 'text.secondary' }} />
             )}
 
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -189,7 +189,7 @@ const FileUploader = ({
 
           {/* Type Selector */}
           {showTypeSelector && attachmentTypes.length > 0 && (
-            <FormControl fullWidth sx={{ mt: 2 }}>
+            <FormControl fullWidth sx={{ mt: '1.0rem' }}>
               <InputLabel>نوع المرفق *</InputLabel>
               <Select value={attachmentType} label="نوع المرفق *" onChange={(e) => setAttachmentType(e.target.value)} disabled={uploading}>
                 {attachmentTypes.map((type) => (
@@ -211,13 +211,13 @@ const FileUploader = ({
               multiline
               rows={2}
               disabled={uploading}
-              sx={{ mt: 2 }}
+              sx={{ mt: '1.0rem' }}
             />
           )}
 
           {/* Progress Bar */}
           {uploading && (
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ mt: '1.0rem' }}>
               <LinearProgress variant="determinate" value={progress} />
               <Typography variant="caption" color="text.secondary" align="center" display="block">
                 {progress}%
@@ -227,7 +227,7 @@ const FileUploader = ({
 
           {/* Upload Button */}
           {!uploading && (
-            <Button fullWidth variant="contained" onClick={handleUpload} sx={{ mt: 2 }}>
+            <Button fullWidth variant="contained" onClick={handleUpload} sx={{ mt: '1.0rem' }}>
               رفع الملف
             </Button>
           )}
@@ -236,14 +236,14 @@ const FileUploader = ({
 
       {/* Validation Error */}
       {validationError && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mt: '1.0rem' }}>
           {validationError}
         </Alert>
       )}
 
       {/* Upload Error */}
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="error" sx={{ mt: '1.0rem' }}>
           {error}
         </Alert>
       )}

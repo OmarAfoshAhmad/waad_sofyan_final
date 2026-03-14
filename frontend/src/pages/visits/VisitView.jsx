@@ -115,8 +115,8 @@ const VisitView = () => {
       <>
         <ModernPageHeader title="خطأ" subtitle="فشل تحميل بيانات الزيارة" icon={LocalHospitalIcon} breadcrumbs={breadcrumbs} />
         <MainCard>
-          <Stack spacing={3} alignItems="center" sx={{ py: 4 }}>
-            <LocalHospitalIcon sx={{ fontSize: 48, color: '#ff4d4f' }} />
+          <Stack spacing={3} alignItems="center" sx={{ py: '2.0rem' }}>
+            <LocalHospitalIcon sx={{ fontSize: '3.0rem', color: '#ff4d4f' }} />
             <Typography variant="h5" color="error">
               الزيارة غير موجودة
             </Typography>
@@ -141,9 +141,9 @@ const VisitView = () => {
 
   // Enhanced InfoRow with icon support and defensive coding
   const InfoRow = ({ label, value, icon: Icon }) => (
-    <Box sx={{ mb: 2 }}>
+    <Box sx={{ mb: '1.0rem' }}>
       <Stack direction="row" spacing={1} alignItems="center">
-        {Icon && <Icon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+        {Icon && <Icon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />}
         <Typography variant="caption" color="text.secondary" display="block">
           {label ?? '—'}
         </Typography>
@@ -159,7 +159,7 @@ const VisitView = () => {
       <ModernPageHeader
         title={
           <Stack direction="row" spacing={2} alignItems="center">
-            <LocalHospitalIcon sx={{ fontSize: 28 }} />
+            <LocalHospitalIcon sx={{ fontSize: '1.75rem' }} />
             <Box>
               <Typography variant="h5">زيارة #{visit?.id ?? id}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
@@ -178,7 +178,7 @@ const VisitView = () => {
                 {(visit?.preApprovalId ?? visit?.preApproval?.id) && (
                   <Tooltip title="مرتبطة بموافقة مسبقة">
                     <Chip
-                      icon={<AssignmentIcon sx={{ fontSize: 14 }} />}
+                      icon={<AssignmentIcon sx={{ fontSize: '0.875rem' }} />}
                       label={`موافقة #${visit?.preApprovalId ?? visit?.preApproval?.id}`}
                       size="small"
                       color="info"
@@ -215,7 +215,7 @@ const VisitView = () => {
                 <span>معلومات الزيارة</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
           >
             <InfoRow
               label="تاريخ الزيارة"
@@ -236,7 +236,7 @@ const VisitView = () => {
                 <span>المؤمَّن عليه</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
           >
             <InfoRow label="المؤمَّن عليه" value={memberName} icon={PersonIcon} />
             <InfoRow label="معرف المؤمَّن عليه" value={visit?.memberId ?? visit?.member?.id ?? '—'} />
@@ -253,12 +253,12 @@ const VisitView = () => {
                 <span>مقدم الخدمة الصحية</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
           >
             <InfoRow label="الاسم" value={visit?.provider?.name ?? '—'} icon={BusinessIcon} />
             <InfoRow label="معرف المقدم" value={visit?.providerId ?? visit?.provider?.id ?? '—'} />
             {/* Network Status */}
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: '1.0rem' }}>
               <Typography variant="caption" color="text.secondary" display="block">
                 حالة الشبكة
               </Typography>
@@ -282,7 +282,7 @@ const VisitView = () => {
                 <span>الخدمات الطبية</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
             secondary={
               <Chip
                 label={`${services.length} خدمة`}
@@ -340,7 +340,7 @@ const VisitView = () => {
                 <span>الملاحظات والتشخيص</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
           >
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -385,7 +385,7 @@ const VisitView = () => {
                 <span>حالة الزيارة</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
           >
             <Stack direction="row" spacing={2} alignItems="center">
               <CardStatusBadge
@@ -415,7 +415,7 @@ const VisitView = () => {
                 <span>معلومات النظام</span>
               </Stack>
             }
-            contentSX={{ pt: 2 }}
+            contentSX={{ pt: '1.0rem' }}
           >
             <InfoRow label="المعرف" value={visit?.id ?? '—'} />
             <InfoRow

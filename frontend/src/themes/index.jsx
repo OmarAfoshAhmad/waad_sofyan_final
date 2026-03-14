@@ -30,7 +30,7 @@ export default function ThemeCustomization({ children }) {
       breakpoints: {
         values: {
           xs: 0,
-          sm: 768,
+          sm: 768, // Fixed 'sm' breakpoint to 768
           md: 1024,
           lg: 1266,
           xl: 1440
@@ -39,9 +39,9 @@ export default function ThemeCustomization({ children }) {
       direction: state.themeDirection,
       mixins: {
         toolbar: {
-          minHeight: 60,
-          paddingTop: 8,
-          paddingBottom: 8
+          minHeight: '3.75rem',
+          paddingTop: '0.375rem',
+          paddingBottom: '0.375rem'
         }
       },
       typography: themeTypography,
@@ -77,3 +77,5 @@ export default function ThemeCustomization({ children }) {
 }
 
 ThemeCustomization.propTypes = { children: PropTypes.node };
+
+

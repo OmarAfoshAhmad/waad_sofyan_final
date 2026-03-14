@@ -70,14 +70,14 @@ const UtilizationKPICard = ({ config, value, loading }) => {
         height: '100%',
         border: '1px solid',
         borderColor: showWarning ? 'warning.main' : 'divider',
-        borderRadius: 2,
+        borderRadius: '0.125rem',
         transition: 'box-shadow 0.2s',
         '&:hover': {
           boxShadow: 2
         }
       }}
     >
-      <CardContent sx={{ p: 2.5 }}>
+      <CardContent sx={{ p: '1.25rem' }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Box sx={{ flex: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
@@ -92,7 +92,7 @@ const UtilizationKPICard = ({ config, value, loading }) => {
                 {config.title}
               </Typography>
               <Tooltip title={config.description} arrow>
-                <InfoIcon sx={{ fontSize: 12, color: 'text.disabled', cursor: 'help' }} />
+                <InfoIcon sx={{ fontSize: '0.75rem', color: 'text.disabled', cursor: 'help' }} />
               </Tooltip>
             </Box>
 
@@ -112,16 +112,16 @@ const UtilizationKPICard = ({ config, value, loading }) => {
               </Typography>
             )}
 
-            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+            <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.75rem' }}>
               {config.titleEn}
             </Typography>
           </Box>
 
           <Box
             sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 2,
+              width: '2.75rem',
+              height: '2.75rem',
+              borderRadius: '0.125rem',
               backgroundColor: showWarning ? 'warning.lighter' : config.bgColor,
               display: 'flex',
               alignItems: 'center',
@@ -129,7 +129,7 @@ const UtilizationKPICard = ({ config, value, loading }) => {
               flexShrink: 0
             }}
           >
-            <Icon sx={{ color: showWarning ? 'warning.main' : config.color, fontSize: 22 }} />
+            <Icon sx={{ color: showWarning ? 'warning.main' : config.color, fontSize: '1.375rem' }} />
           </Box>
         </Box>
       </CardContent>
@@ -178,8 +178,8 @@ const UtilizationKPIs = ({ utilizationKpis = {}, loading = false }) => {
       {/* Approximation Notice */}
       <Box
         sx={{
-          mt: 1.5,
-          p: 1.5,
+          mt: '0.75rem',
+          p: '0.75rem',
           bgcolor: 'action.hover',
           borderRadius: 1,
           display: 'flex',
@@ -187,7 +187,7 @@ const UtilizationKPIs = ({ utilizationKpis = {}, loading = false }) => {
           gap: 1
         }}
       >
-        <InfoIcon sx={{ fontSize: 16, color: 'info.main' }} />
+        <InfoIcon sx={{ fontSize: '1.0rem', color: 'info.main' }} />
         <Typography variant="caption" color="text.secondary">
           ⚠️ نسبة الاستخدام تقريبية (Client-side) - تعتمد على maxClaimAmount كحد سنوي تقريبي
         </Typography>
@@ -209,3 +209,7 @@ UtilizationKPIs.propTypes = {
 };
 
 export default UtilizationKPIs;
+
+
+
+

@@ -186,11 +186,11 @@ const SmartServicePicker = ({
             <Avatar
               sx={{
                 bgcolor: option.hasContract ? 'success.lighter' : 'warning.lighter',
-                width: 36,
-                height: 36
+                width: '2.25rem',
+                height: '2.25rem'
               }}
             >
-              <MedicalIcon sx={{ fontSize: 18, color: option.hasContract ? 'success.main' : 'warning.main' }} />
+              <MedicalIcon sx={{ fontSize: '1.125rem', color: option.hasContract ? 'success.main' : 'warning.main' }} />
             </Avatar>
 
             {/* Service Info */}
@@ -213,18 +213,18 @@ const SmartServicePicker = ({
                     sx={{
                       bgcolor: 'grey.100',
                       color: 'text.secondary',
-                      fontSize: '0.65rem'
+                      fontSize: '0.75rem'
                     }}
                   />
                 )}
                 {/* Contract Status */}
                 {option.hasContract ? (
                   <Tooltip title="لها سعر تعاقدي">
-                    <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                    <CheckIcon sx={{ fontSize: '1.0rem', color: 'success.main' }} />
                   </Tooltip>
                 ) : (
                   <Tooltip title="بدون عقد">
-                    <WarningIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+                    <WarningIcon sx={{ fontSize: '1.0rem', color: 'warning.main' }} />
                   </Tooltip>
                 )}
               </Stack>
@@ -236,7 +236,7 @@ const SmartServicePicker = ({
             {/* Price Badge */}
             {showPrices && (
               <Chip
-                icon={<PriceIcon sx={{ fontSize: 14 }} />}
+                icon={<PriceIcon sx={{ fontSize: '0.875rem' }} />}
                 label={option.price ? `${Number(option.price).toLocaleString('en-US')} ${option.currency || 'د.ل'}` : '—'}
                 size="small"
                 color={option.price ? 'success' : 'default'}
@@ -273,7 +273,7 @@ const SmartServicePicker = ({
   // ════════════════════════════════════════════════════════════════════════════
   if (isError) {
     return (
-      <Alert severity="error" sx={{ mb: 2 }}>
+      <Alert severity="error" sx={{ mb: '1.0rem' }}>
         فشل في تحميل الخدمات: {fetchError?.message || 'خطأ غير معروف'}
       </Alert>
     );
@@ -283,7 +283,7 @@ const SmartServicePicker = ({
   // RENDER
   // ════════════════════════════════════════════════════════════════════════════
   return (
-    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2, mb: 2 }}>
+    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem', mb: '1.0rem' }}>
       <Stack spacing={2}>
         {/* Status Row */}
         <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -301,7 +301,7 @@ const SmartServicePicker = ({
         {showCategoryFilter && categories.length > 0 && (
           <Stack direction="row" spacing={2} alignItems="center">
             <FilterIcon color="action" fontSize="small" />
-            <FormControl size={size} sx={{ minWidth: 180 }}>
+            <FormControl size={size} sx={{ minWidth: '11.25rem' }}>
               <InputLabel>فلترة بالتصنيف</InputLabel>
               <Select value={categoryFilter} onChange={handleCategoryChange} label="فلترة بالتصنيف">
                 <MenuItem value="">
@@ -314,7 +314,7 @@ const SmartServicePicker = ({
                     <MenuItem key={cat} value={cat}>
                       <Stack direction="row" justifyContent="space-between" sx={{ width: '100%' }}>
                         <span>{cat}</span>
-                        <Chip label={count} size="small" sx={{ ml: 1, height: 20, fontSize: '0.7rem' }} />
+                        <Chip label={count} size="small" sx={{ ml: 1, height: '1.25rem', fontSize: '0.7rem' }} />
                       </Stack>
                     </MenuItem>
                   );
@@ -401,9 +401,9 @@ const SmartServicePicker = ({
             <Typography variant="caption" color="text.secondary">
               💡
             </Typography>
-            <Chip label="ابحث بالكود" size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 20 }} />
-            <Chip label="أو الاسم" size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 20 }} />
-            <Chip label="أو فلتر بالتصنيف" size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 20 }} />
+            <Chip label="ابحث بالكود" size="small" variant="outlined" sx={{ fontSize: '0.75rem', height: '1.25rem' }} />
+            <Chip label="أو الاسم" size="small" variant="outlined" sx={{ fontSize: '0.75rem', height: '1.25rem' }} />
+            <Chip label="أو فلتر بالتصنيف" size="small" variant="outlined" sx={{ fontSize: '0.75rem', height: '1.25rem' }} />
           </Stack>
         )}
       </Stack>
@@ -412,3 +412,6 @@ const SmartServicePicker = ({
 };
 
 export default SmartServicePicker;
+
+
+

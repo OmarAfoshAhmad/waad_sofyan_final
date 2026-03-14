@@ -54,7 +54,7 @@ export default function SalesCardChart() {
       yAxis={[{ position: 'none' }]}
       axisHighlight={{ x: 'none' }}
       slotProps={{ tooltip: { trigger: 'item', sx: { '& .MuiChartsTooltip-root': { border: '1px solid ', borderColor: 'grey.200' } } } }}
-      margin={{ top: -49, bottom: 0, left: 5, right: 5 }}
+      margin={{ top: -49, bottom: 0, left: '0.3125rem', right: '0.3125rem' }}
       sx={{ '& .MuiBarElement-root:hover': { opacity: 0.6 } }}
     />
   );

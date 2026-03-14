@@ -159,8 +159,8 @@ export default function TabCompanyInfo() {
 
             <Grid size={12}>
               <Stack direction="row" spacing={3} alignItems="center">
-                <Avatar variant="rounded" sx={{ width: 120, height: 120, bgcolor: 'primary.lighter' }} src={logoPreview}>
-                  <BankOutlined style={{ fontSize: 48 }} />
+                <Avatar variant="rounded" sx={{ width: '7.5rem', height: '7.5rem', bgcolor: 'primary.lighter' }} src={logoPreview}>
+                  <BankOutlined style={{ fontSize: '3.0rem' }} />
                 </Avatar>
                 <Box>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -191,7 +191,7 @@ export default function TabCompanyInfo() {
 
             {/* Company Names */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Company Names
               </Divider>
             </Grid>
@@ -219,7 +219,7 @@ export default function TabCompanyInfo() {
 
             {/* Legal Information */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Legal Information
               </Divider>
             </Grid>
@@ -246,7 +246,7 @@ export default function TabCompanyInfo() {
 
             {/* Contact Information */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Contact Information
               </Divider>
             </Grid>
@@ -301,7 +301,7 @@ export default function TabCompanyInfo() {
 
             {/* Branding */}
             <Grid size={12}>
-              <Divider textAlign="left" sx={{ mt: 2 }}>
+              <Divider textAlign="left" sx={{ mt: '1.0rem' }}>
                 Brand Colors
               </Divider>
             </Grid>
@@ -317,8 +317,8 @@ export default function TabCompanyInfo() {
                 />
                 <Box
                   sx={{
-                    width: 60,
-                    height: 40,
+                    width: '3.75rem',
+                    height: '2.5rem',
                     bgcolor: formData.brandPrimaryColor,
                     border: 1,
                     borderColor: 'divider',
@@ -339,8 +339,8 @@ export default function TabCompanyInfo() {
                 />
                 <Box
                   sx={{
-                    width: 60,
-                    height: 40,
+                    width: '3.75rem',
+                    height: '2.5rem',
                     bgcolor: formData.brandSecondaryColor,
                     border: 1,
                     borderColor: 'divider',
@@ -352,7 +352,7 @@ export default function TabCompanyInfo() {
 
             {/* Save Button */}
             <Grid size={12}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 2 }}>
+              <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: '1.0rem' }}>
                 <Button variant="outlined" startIcon={<ReloadOutlined />} onClick={handleReset} disabled={loading}>
                   Reset
                 </Button>

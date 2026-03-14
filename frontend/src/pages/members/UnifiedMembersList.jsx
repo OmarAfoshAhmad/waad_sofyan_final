@@ -312,32 +312,32 @@ const UnifiedMembersList = () => {
   // TABLE COLUMNS DEFINITION
   // ════════════════════════════════════════════════════════════════════════
   const columns = [
-    { id: 'index', label: '#', minWidth: 50, sortable: false, align: 'center' },
+    { id: 'index', label: '#', minWidth: '3.125rem', sortable: false, align: 'center' },
     {
       id: 'cardNumber',
       label: 'رقم البطاقة',
-      minWidth: 130,
+      minWidth: '8.125rem',
       align: 'center',
       sortable: true
     },
     {
       id: 'fullName',
       label: 'الاسم',
-      minWidth: 180,
+      minWidth: '11.25rem',
       align: 'center',
       sortable: true
     },
-    { id: 'type', label: 'النوع', minWidth: 100, sortable: true, align: 'center' },
-    { id: 'status', label: 'الحالة', minWidth: 100, sortable: true, align: 'center' },
+    { id: 'type', label: 'النوع', minWidth: '6.25rem', sortable: true, align: 'center' },
+    { id: 'status', label: 'الحالة', minWidth: '6.25rem', sortable: true, align: 'center' },
     {
       id: 'employerName',
       label: 'جهة العمل',
-      minWidth: 150,
+      minWidth: '9.375rem',
       align: 'center',
       sortable: true
     },
-    { id: 'dependentsCount', label: 'التبعية / التابعون', minWidth: 120, sortable: false, align: 'center' },
-    { id: 'actions', label: 'إجراءات', minWidth: 150, sortable: false, align: 'center' }
+    { id: 'dependentsCount', label: 'التبعية / التابعون', minWidth: '7.5rem', sortable: false, align: 'center' },
+    { id: 'actions', label: 'إجراءات', minWidth: '9.375rem', sortable: false, align: 'center' }
   ];
 
   // ════════════════════════════════════════════════════════════════════════
@@ -355,7 +355,7 @@ const UnifiedMembersList = () => {
             variant="outlined"
             size="small"
             color="secondary"
-            sx={{ fontWeight: 'medium', fontFamily: 'monospace', minWidth: 160, justifyContent: 'center' }}
+            sx={{ fontWeight: 'medium', fontFamily: 'monospace', minWidth: '10.0rem', justifyContent: 'center' }}
           />
         );
 
@@ -368,12 +368,12 @@ const UnifiedMembersList = () => {
               </Typography>
               {member.isVip && (
                 <Tooltip title="VIP member">
-                  <VIPIcon sx={{ color: '#ffc107', fontSize: 18 }} />
+                  <VIPIcon sx={{ color: '#ffc107', fontSize: '1.125rem' }} />
                 </Tooltip>
               )}
               {member.isUrgent && (
                 <Tooltip title="Urgent case">
-                  <FlashIcon sx={{ color: '#ff5722', fontSize: 18 }} />
+                  <FlashIcon sx={{ color: '#ff5722', fontSize: '1.125rem' }} />
                 </Tooltip>
               )}
             </Stack>
@@ -382,12 +382,12 @@ const UnifiedMembersList = () => {
 
       case 'type': {
         if (member.type === MEMBER_TYPES.PRINCIPAL) {
-          return <Chip label="رئيسي" color="primary" size="small" sx={{ width: 80, minWidth: 80, fontWeight: 600, justifyContent: 'center' }} />;
+          return <Chip label="رئيسي" color="primary" size="small" sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }} />;
         }
         const relConfig = RELATIONSHIP_CONFIG[member.relationship];
         const labelAr = relConfig ? relConfig.labelAr : 'تابع';
         const badgeColor = relConfig ? relConfig.color : 'default';
-        return <Chip label={labelAr} color={badgeColor} size="small" variant="outlined" sx={{ width: 80, minWidth: 80, fontWeight: 600, justifyContent: 'center' }} />;
+        return <Chip label={labelAr} color={badgeColor} size="small" variant="outlined" sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }} />;
       }
 
       case 'status':
@@ -430,9 +430,9 @@ const UnifiedMembersList = () => {
               size="small"
               variant="outlined"
               sx={{
-                minWidth: 28,
-                height: 20,
-                borderRadius: '6px',
+                minWidth: '1.75rem',
+                height: '1.25rem',
+                borderRadius: '0.375rem',
                 bgcolor: member.dependentsCount > 0 ? 'secondary.lighter' : 'transparent',
                 borderColor: member.dependentsCount > 0 ? 'secondary.light' : 'divider',
                 color: member.dependentsCount > 0 ? 'secondary.main' : 'text.disabled',
@@ -513,7 +513,7 @@ const UnifiedMembersList = () => {
               onClick={handleDownloadTemplate}
               startIcon={<DownloadIcon />}
               sx={{
-                minWidth: '155px',
+                minWidth: '9.6875rem',
                 color: '#1b5e20',
                 borderColor: '#1b5e20',
                 '&:hover': {
@@ -529,7 +529,7 @@ const UnifiedMembersList = () => {
               onClick={handleImportClick}
               startIcon={<UploadFileIcon />}
               sx={{
-                minWidth: '155px',
+                minWidth: '9.6875rem',
                 color: '#1b5e20',
                 borderColor: '#1b5e20',
                 '&:hover': {
@@ -545,7 +545,7 @@ const UnifiedMembersList = () => {
               onClick={() => setExportWizardOpen(true)}
               startIcon={<FileDownloadIcon />}
               sx={{
-                minWidth: '155px',
+                minWidth: '9.6875rem',
                 color: '#1b5e20',
                 borderColor: '#1b5e20',
                 '&:hover': {
@@ -575,7 +575,7 @@ const UnifiedMembersList = () => {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
             {/* Refresh */}
             <Tooltip title="تحديث">
-              <IconButton onClick={fetchMembers} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: 40, height: 40 }}>
+              <IconButton onClick={fetchMembers} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -586,7 +586,7 @@ const UnifiedMembersList = () => {
               label={`${totalCount} مستفيد`}
               variant="outlined"
               color="primary"
-              sx={{ height: 40, borderRadius: 1, fontWeight: 'bold', fontSize: '14px', px: 1 }}
+              sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
             />
 
             {/* Search Input */}
@@ -609,7 +609,7 @@ const UnifiedMembersList = () => {
                     </IconButton>
                   </InputAdornment>
                 ),
-                sx: { height: 40 }
+                sx: { height: '2.5rem' }
               }}
             />
 
@@ -620,8 +620,8 @@ const UnifiedMembersList = () => {
               label="جهة العمل"
               value={filters.organizationId}
               onChange={(e) => handleFilterChange('organizationId', e.target.value)}
-              sx={{ minWidth: 140, bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: 40 } }}
+              sx={{ minWidth: '8.75rem', bgcolor: 'background.paper' }}
+              InputProps={{ sx: { height: '2.5rem' } }}
               InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
@@ -641,8 +641,8 @@ const UnifiedMembersList = () => {
               label="النوع"
               value={filters.type}
               onChange={(e) => handleFilterChange('type', e.target.value)}
-              sx={{ minWidth: 110, bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: 40 } }}
+              sx={{ minWidth: '6.875rem', bgcolor: 'background.paper' }}
+              InputProps={{ sx: { height: '2.5rem' } }}
               InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
@@ -665,8 +665,8 @@ const UnifiedMembersList = () => {
               label="الحالة"
               value={filters.status}
               onChange={(e) => handleFilterChange('status', e.target.value)}
-              sx={{ minWidth: 110, bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: 40 } }}
+              sx={{ minWidth: '6.875rem', bgcolor: 'background.paper' }}
+              InputProps={{ sx: { height: '2.5rem' } }}
               InputLabelProps={{ shrink: true }}
             >
               <MenuItem value="">
@@ -678,7 +678,7 @@ const UnifiedMembersList = () => {
             </TextField>
 
             {/* Reset Button */}
-            <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: 120, height: 40 }}>
+            <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: '7.5rem', height: '2.5rem' }}>
               إعادة ضبط
             </Button>
           </Stack>

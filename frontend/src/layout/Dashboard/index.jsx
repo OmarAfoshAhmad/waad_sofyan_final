@@ -54,16 +54,16 @@ export default function DashboardLayout() {
 
       <Box component="main" sx={{ width: '100%', flexGrow: 1 }}>
         {/* ✅ Spacer matching reduced header height */}
-        <Toolbar sx={{ minHeight: { xs: 48, sm: 56 }, height: { xs: 48, sm: 56 } }} />
+        <Toolbar sx={{ minHeight: { xs: 48, sm: '28.0rem' }, height: { xs: 48, sm: '28.0rem' } }} />
         <Container
           maxWidth={isContainer ? 'xl' : false}
           sx={{
             // Professional UX: Optimized spacing for data density
             // Reduced top padding (16px desktop, 12px mobile) to minimize "white bar"
-            pt: { xs: 1.5, sm: 2 },
+            pt: { xs: 1.5, sm: '1.0rem' },
             pb: { xs: 2, sm: 3 },
-            px: { xs: 1.5, sm: 2 },
-            ...(isContainer && { px: { xs: 0, sm: 2 } }),
+            px: { xs: 1.5, sm: '1.0rem' },
+            ...(isContainer && { px: { xs: 0, sm: '1.0rem' } }),
             position: 'relative',
             minHeight: 'calc(100vh - 110px)',
             display: 'flex',
@@ -84,3 +84,4 @@ export default function DashboardLayout() {
     </Box>
   );
 }
+

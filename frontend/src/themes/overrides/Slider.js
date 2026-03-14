@@ -17,11 +17,11 @@ export default function Slider(theme) {
     MuiSlider: {
       styleOverrides: {
         track: {
-          height: '1px'
+          height: 1.0
         },
         thumb: {
-          width: 14,
-          height: 14,
+          width: 14.0,
+          height: 14.0,
           border: '2px solid',
           borderColor: varsPalette.primary?.main ?? theme.palette.primary?.main,
           backgroundColor: varsPalette.background?.paper ?? theme.palette.background?.paper,
@@ -33,8 +33,8 @@ export default function Slider(theme) {
           '&.MuiSlider-thumbColorError': getColorStyle({ color: 'error', theme })
         },
         mark: {
-          width: 4,
-          height: 4,
+          width: 4.0,
+          height: 4.0,
           borderRadius: '50%',
           border: '1px solid',
           borderColor: secondaryVars.light ?? secondaryVars.main,

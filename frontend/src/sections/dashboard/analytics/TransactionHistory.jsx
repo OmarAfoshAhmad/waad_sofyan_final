@@ -26,8 +26,8 @@ import avatar4 from 'assets/images/users/avatar-4.png';
 
 // avatar style
 const avatarSX = {
-  width: 36,
-  height: 36,
+  width: '2.25rem',
+  height: '2.25rem',
   fontSize: '1rem'
 };
 
@@ -52,15 +52,15 @@ export default function TransactionHistory() {
         </Grid>
         <Grid />
       </Grid>
-      <MainCard sx={{ mt: 2 }} content={false}>
+      <MainCard sx={{ mt: '1.0rem' }} content={false}>
         <List
           component="nav"
           sx={{
             px: 0,
             py: 0,
             '& .MuiListItemButton-root': {
-              py: 1.5,
-              px: 2,
+              py: '0.75rem',
+              px: '1.0rem',
               '& .MuiAvatar-root': avatarSX,
               '& .MuiListItemSecondaryAction-root': { ...actionSX, position: 'relative' }
             }
@@ -130,8 +130,8 @@ export default function TransactionHistory() {
           </ListItem>
         </List>
       </MainCard>
-      <MainCard sx={{ mt: 2 }}>
-        <Stack sx={{ gap: 3 }}>
+      <MainCard sx={{ mt: '1.0rem' }}>
+        <Stack sx={{ gap: '1.5rem' }}>
           <Grid container sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Grid>
               <Stack>
@@ -144,7 +144,7 @@ export default function TransactionHistory() {
               </Stack>
             </Grid>
             <Grid>
-              <AvatarGroup sx={{ '& .MuiAvatar-root': { width: 32, height: 32 } }}>
+              <AvatarGroup sx={{ '& .MuiAvatar-root': { width: '2.0rem', height: '2.0rem' } }}>
                 <Avatar alt="Remy Sharp" src={avatar1} />
                 <Avatar alt="Travis Howard" src={avatar2} />
                 <Avatar alt="Cindy Baker" src={avatar3} />
@@ -152,7 +152,7 @@ export default function TransactionHistory() {
               </AvatarGroup>
             </Grid>
           </Grid>
-          <Button size="small" variant="contained" sx={{ textTransform: 'capitalize', maxWidth: 'max-content', px: 2.25, py: 0.75 }}>
+          <Button size="small" variant="contained" sx={{ textTransform: 'capitalize', maxWidth: 'max-content', px: '1.125rem', py: 0.75 }}>
             Need Help?
           </Button>
         </Stack>
@@ -160,3 +160,5 @@ export default function TransactionHistory() {
     </>
   );
 }
+
+

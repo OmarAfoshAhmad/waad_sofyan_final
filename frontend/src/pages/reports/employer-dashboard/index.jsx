@@ -54,8 +54,8 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, loading, error }) 
           position: 'absolute',
           top: 0,
           right: 0,
-          width: 100,
-          height: 100,
+          width: '6.25rem',
+          height: '6.25rem',
           background: `radial-gradient(circle at top right, ${theme.palette[color]?.light || theme.palette.primary.light}40, transparent)`,
           borderRadius: '0 0 0 100%'
         }
@@ -90,14 +90,14 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, loading, error }) 
 
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
+              p: '0.75rem',
+              borderRadius: '0.125rem',
               bgcolor: `${theme.palette[color]?.main || theme.palette.primary.main}15`
             }}
           >
             <Icon
               sx={{
-                fontSize: 28,
+                fontSize: '1.75rem',
                 color: theme.palette[color]?.main || theme.palette.primary.main
               }}
             />
@@ -129,7 +129,7 @@ const ClaimsStatusGrid = ({ claimsByStatusArray, loading }) => {
   return (
     <Card sx={{ height: '100%' }}>
       <CardContent>
-        <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+        <Typography variant="h6" gutterBottom sx={{ mb: '1.0rem' }}>
           المطالبات حسب الحالة
         </Typography>
 
@@ -148,11 +148,11 @@ const ClaimsStatusGrid = ({ claimsByStatusArray, loading }) => {
                 <Paper
                   variant="outlined"
                   sx={{
-                    p: 1.5,
+                    p: '0.75rem',
                     textAlign: 'center',
                     borderColor: getStatusColor(color),
                     borderWidth: 1,
-                    borderRadius: 2,
+                    borderRadius: '0.125rem',
                     transition: 'all 0.2s',
                     '&:hover': {
                       bgcolor: `${getStatusColor(color)}10`,
@@ -188,7 +188,7 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
         <Typography variant="h6" gutterBottom>
           ملخص المبالغ
         </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: '1.0rem' }}>
           إجمالي المبالغ للفترة الكاملة
         </Typography>
 
@@ -202,13 +202,13 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
             {/* Approved Amount */}
             <Paper
               sx={{
-                p: 2,
+                p: '1.0rem',
                 bgcolor: `${theme.palette.success.main}10`,
-                borderRadius: 2
+                borderRadius: '0.125rem'
               }}
             >
               <Stack direction="row" alignItems="center" spacing={1}>
-                <CheckCircleIcon sx={{ fontSize: 20, color: theme.palette.success.main }} />
+                <CheckCircleIcon sx={{ fontSize: '1.25rem', color: theme.palette.success.main }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     المبالغ المعتمدة (موافق عليها + تمت التسوية)
@@ -223,13 +223,13 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
             {/* Rejected Amount */}
             <Paper
               sx={{
-                p: 2,
+                p: '1.0rem',
                 bgcolor: `${theme.palette.error.main}10`,
-                borderRadius: 2
+                borderRadius: '0.125rem'
               }}
             >
               <Stack direction="row" alignItems="center" spacing={1}>
-                <CancelIcon sx={{ fontSize: 20, color: theme.palette.error.main }} />
+                <CancelIcon sx={{ fontSize: '1.25rem', color: theme.palette.error.main }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary">
                     المبالغ المرفوضة
@@ -287,7 +287,7 @@ const EmployerDashboard = () => {
               <IconButton onClick={refresh} disabled={isLoading} color="primary">
                 <RefreshIcon
                   sx={{
-                    fontSize: 20,
+                    fontSize: '1.25rem',
                     animation: isLoading ? 'spin 1s linear infinite' : 'none'
                   }}
                 />
@@ -300,13 +300,13 @@ const EmployerDashboard = () => {
       <MainCard>
         {/* Global Error Alert */}
         {hasError && (
-          <Alert severity="warning" icon={<WarningIcon sx={{ fontSize: 20 }} />} sx={{ mb: 3 }}>
+          <Alert severity="warning" icon={<WarningIcon sx={{ fontSize: '1.25rem' }} />} sx={{ mb: '1.5rem' }}>
             حدث خطأ في تحميل بعض البيانات. البيانات المعروضة قد تكون غير كاملة.
           </Alert>
         )}
 
         {/* KPI Cards Row */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid container spacing={3} sx={{ mb: '1.5rem' }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <KPICard
               title="إجمالي الأعضاء"
@@ -379,3 +379,6 @@ const EmployerDashboard = () => {
 };
 
 export default EmployerDashboard;
+
+
+

@@ -174,7 +174,7 @@ const ProviderView = () => {
   if (loading) {
     return (
       <MainCard>
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: '1.5rem' }}>
           <CircularProgress />
         </Box>
       </MainCard>
@@ -184,8 +184,8 @@ const ProviderView = () => {
   if (!provider) {
     return (
       <MainCard>
-        <Stack spacing={3} alignItems="center" sx={{ py: 4 }}>
-          <Business sx={{ fontSize: 48, color: '#ff4d4f' }} />
+        <Stack spacing={3} alignItems="center" sx={{ py: '2.0rem' }}>
+          <Business sx={{ fontSize: '3.0rem', color: '#ff4d4f' }} />
           <Typography variant="h5" color="error">
             مقدم الخدمة غير موجود
           </Typography>
@@ -226,7 +226,7 @@ const ProviderView = () => {
       />
 
       <MainCard>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
           {/* Provider Type Chip */}
           <Chip
             label={PROVIDER_TYPE_LABELS[provider?.providerType] ?? provider?.providerType ?? '—'}
@@ -248,7 +248,7 @@ const ProviderView = () => {
         <Tabs
           value={activeTab}
           onChange={(_, v) => setActiveTab(v)}
-          sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+          sx={{ borderBottom: 1, borderColor: 'divider', mb: '1.5rem' }}
         >
           <Tab label="بيانات مقدم الخدمة" />
           <Tab
@@ -267,12 +267,12 @@ const ProviderView = () => {
         <Grid container spacing={3}>
           {/* Basic Information */}
           <Grid size={12}>
-            <Paper sx={{ p: 3 }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Paper sx={{ p: '1.5rem' }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
                 <Badge sx={{ color: '#1890ff' }} />
                 <Typography variant="h5">البيانات الأساسية</Typography>
               </Stack>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -337,54 +337,54 @@ const ProviderView = () => {
 
           {/* Location & Contact Information */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Paper sx={{ p: '1.5rem', height: '100%' }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
                 <Phone sx={{ color: '#52c41a' }} />
                 <Typography variant="h5">بيانات التواصل</Typography>
               </Stack>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Grid container spacing={2}>
                 <Grid size={12}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <LocationOn sx={{ fontSize: 18, color: '#8c8c8c' }} />
+                    <LocationOn sx={{ fontSize: '1.125rem', color: '#8c8c8c' }} />
                     <Typography variant="body2" color="text.secondary">
                       المدينة
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: 3 }}>
+                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: '1.5rem' }}>
                     {provider?.city ?? '—'}
                   </Typography>
                 </Grid>
                 <Grid size={12}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <LocationOn sx={{ fontSize: 18, color: '#8c8c8c' }} />
+                    <LocationOn sx={{ fontSize: '1.125rem', color: '#8c8c8c' }} />
                     <Typography variant="body2" color="text.secondary">
                       العنوان
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: 3 }}>
+                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: '1.5rem' }}>
                     {provider?.address ?? '—'}
                   </Typography>
                 </Grid>
                 <Grid size={12}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Phone sx={{ fontSize: 18, color: '#8c8c8c' }} />
+                    <Phone sx={{ fontSize: '1.125rem', color: '#8c8c8c' }} />
                     <Typography variant="body2" color="text.secondary">
                       رقم الهاتف
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: 3 }}>
+                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: '1.5rem' }}>
                     {provider?.phone ?? '—'}
                   </Typography>
                 </Grid>
                 <Grid size={12}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Email sx={{ fontSize: 18, color: '#8c8c8c' }} />
+                    <Email sx={{ fontSize: '1.125rem', color: '#8c8c8c' }} />
                     <Typography variant="body2" color="text.secondary">
                       البريد الإلكتروني
                     </Typography>
                   </Stack>
-                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: 3 }}>
+                  <Typography variant="body1" fontWeight={500} sx={{ mt: 0.5, mr: '1.5rem' }}>
                     {provider?.email ?? '—'}
                   </Typography>
                 </Grid>
@@ -394,12 +394,12 @@ const ProviderView = () => {
 
           {/* Contract Information */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Paper sx={{ p: '1.5rem', height: '100%' }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
                 <VerifiedUser sx={{ color: '#faad14' }} />
                 <Typography variant="h5">معلومات العقد والتشغيل</Typography>
               </Stack>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               <Grid container spacing={2}>
                 <Grid size={12}>
                   <Typography variant="body2" color="text.secondary">
@@ -447,18 +447,18 @@ const ProviderView = () => {
 
           {/* Provider Contracts */}
           <Grid size={12}>
-            <Paper sx={{ p: 3 }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Paper sx={{ p: '1.5rem' }}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
                 <VerifiedUser sx={{ color: '#1890ff' }} />
                 <Typography variant="h5">عقود مقدم الخدمة</Typography>
               </Stack>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: '1.0rem' }} />
               {loadingContracts ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: '1.5rem' }}>
                   <CircularProgress />
                 </Box>
               ) : !Array.isArray(contracts) || contracts.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: '1.5rem' }}>
                   لا توجد عقود لهذا المزود
                 </Typography>
               ) : (
@@ -510,7 +510,7 @@ const ProviderView = () => {
         {/* ── Tab 1: Services by category ── */}
         {activeTab === 1 && (
           <Box>
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: '1.0rem' }}>
               <TextField
                 size="small"
                 placeholder="بحث في الخدمات أو التصنيفات..."
@@ -523,24 +523,24 @@ const ProviderView = () => {
                     </InputAdornment>
                   )
                 }}
-                sx={{ width: { xs: '100%', sm: 320 } }}
+                sx={{ width: { xs: '100%', sm: '160.0rem' } }}
               />
             </Box>
 
             {loadingServices && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: '2.0rem' }}>
                 <CircularProgress />
               </Box>
             )}
 
             {servicesError && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: '1.0rem' }}>
                 حدث خطأ أثناء تحميل الخدمات
               </Alert>
             )}
 
             {!loadingServices && !servicesError && servicesByCategory.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: '2.0rem' }}>
                 {serviceSearch ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد خدمات مسجلة لهذا المزود'}
               </Typography>
             )}

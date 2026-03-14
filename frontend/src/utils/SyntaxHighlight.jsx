@@ -13,10 +13,10 @@ export default function SyntaxHighlight({ children }) {
   const style = {
     background: colorScheme === ThemeMode.DARK ? '#0b1226' : '#f8f8f8',
     color: colorScheme === ThemeMode.DARK ? '#dbeafe' : '#1f2937',
-    padding: 12,
-    borderRadius: 6,
+    padding: '0.75rem',
+    borderRadius: '0.375rem',
     fontFamily: 'monospace',
-    fontSize: 13,
+    fontSize: '0.8125rem',
     overflowX: 'auto'
   };
 
@@ -28,3 +28,5 @@ export default function SyntaxHighlight({ children }) {
 }
 
 SyntaxHighlight.propTypes = { children: PropTypes.string };
+
+

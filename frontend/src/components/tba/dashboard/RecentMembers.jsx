@@ -133,7 +133,7 @@ export default function RecentMembers() {
                 // No data message
                 <TableRow>
                   <TableCell colSpan={5} align="center">
-                    <Box sx={{ py: 4 }}>
+                    <Box sx={{ py: '2.0rem' }}>
                       <Typography variant="body2" color="text.secondary">
                         لا توجد بيانات للأعضاء المضافين مؤخراً
                       </Typography>
@@ -172,7 +172,7 @@ export default function RecentMembers() {
                         label={getStatusLabel(member.status)}
                         color={getStatusColor(member.status)}
                         size="small"
-                        sx={{ minWidth: 70 }}
+                        sx={{ minWidth: '4.375rem' }}
                       />
                     </TableCell>
                     <TableCell align="center">

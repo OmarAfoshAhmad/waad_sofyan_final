@@ -72,7 +72,7 @@ export default function NotificationMenu() {
         anchor="right"
         onClose={handleToggle}
         open={open}
-        slotProps={{ paper: { sx: { width: { xs: 340, sm: 440 } } } }}
+        slotProps={{ paper: { sx: { width: { xs: 340, sm: '220.0rem' } } } }}
       >
         {open && (
           <NotificationContent

@@ -5,7 +5,7 @@ export default function Typography() {
     MuiTypography: {
       styleOverrides: {
         gutterBottom: {
-          marginBottom: 12
+          marginBottom: '0.75rem'
         }
       },
       defaultProps: {
@@ -26,3 +26,5 @@ export default function Typography() {
     }
   };
 }
+
+

@@ -26,49 +26,49 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
     {
       id: 'referenceNumber',
       label: 'رقم المرجع',
-      minWidth: 150,
+      minWidth: '9.375rem',
       sortable: true,
       icon: <NumbersIcon fontSize="small" />
     },
     {
       id: 'memberName',
       label: 'المؤمن عليه',
-      minWidth: 180,
+      minWidth: '11.25rem',
       sortable: true,
       icon: <PersonIcon fontSize="small" />
     },
     {
       id: 'employerName',
       label: 'الشريك',
-      minWidth: 170,
+      minWidth: '10.625rem',
       sortable: true,
       icon: <BusinessIcon fontSize="small" />
     },
     {
       id: 'providerName',
       label: 'مقدم الخدمة',
-      minWidth: 170,
+      minWidth: '10.625rem',
       sortable: true,
       icon: <LocalHospitalIcon fontSize="small" />
     },
     {
       id: 'serviceName',
       label: 'الخدمة الطبية',
-      minWidth: 170,
+      minWidth: '10.625rem',
       sortable: true,
       icon: <MedicalServicesIcon fontSize="small" />
     },
     {
       id: 'status',
       label: 'الحالة',
-      minWidth: 140,
+      minWidth: '8.75rem',
       align: 'center',
       sortable: true
     },
     {
       id: 'requestedAmount',
       label: 'المبلغ المطلوب',
-      minWidth: 140,
+      minWidth: '8.75rem',
       align: 'right',
       sortable: true,
       icon: <AttachMoneyIcon fontSize="small" />
@@ -76,7 +76,7 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
     {
       id: 'approvedAmount',
       label: 'المبلغ المعتمد',
-      minWidth: 140,
+      minWidth: '8.75rem',
       align: 'right',
       sortable: true,
       icon: <AttachMoneyIcon fontSize="small" />
@@ -84,7 +84,7 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
     {
       id: 'requestDate',
       label: 'تاريخ الطلب',
-      minWidth: 130,
+      minWidth: '8.125rem',
       align: 'center',
       sortable: true,
       icon: <EventIcon fontSize="small" />
@@ -92,7 +92,7 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
     {
       id: 'validUntil',
       label: 'صالح حتى',
-      minWidth: 130,
+      minWidth: '8.125rem',
       align: 'center',
       sortable: true,
       icon: <EventIcon fontSize="small" />

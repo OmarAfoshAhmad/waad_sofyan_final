@@ -69,7 +69,7 @@ export const exportToPDF = (columns, rows, title = 'Export', filename = 'export'
           margin-bottom: 20px;
         }
         table {
-          width: 100%;
+          width: '6.25rem'%;
           border-collapse: collapse;
           margin-bottom: 20px;
         }

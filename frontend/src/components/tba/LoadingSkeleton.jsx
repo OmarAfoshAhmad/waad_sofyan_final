@@ -55,7 +55,7 @@ export function CardGridSkeleton({ count = 6, columns = 3 }) {
           sm: 'repeat(2, 1fr)',
           md: `repeat(${columns}, 1fr)`
         },
-        gap: 2
+        gap: '1.0rem'
       }}
     >
       {Array.from({ length: count }).map((_, index) => (
@@ -65,17 +65,17 @@ export function CardGridSkeleton({ count = 6, columns = 3 }) {
             border: 1,
             borderColor: 'divider',
             borderRadius: 1,
-            p: 2
+            p: '1.0rem'
           }}
         >
           <Skeleton variant="text" width="60%" height={32} />
           <Skeleton variant="text" width="40%" sx={{ mt: 1 }} />
-          <Stack spacing={1} sx={{ mt: 2 }}>
+          <Stack spacing={1} sx={{ mt: '1.0rem' }}>
             <Skeleton variant="text" />
             <Skeleton variant="text" />
             <Skeleton variant="text" width="80%" />
           </Stack>
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ mt: '1.0rem' }}>
             <Skeleton variant="rectangular" width={80} height={32} />
             <Skeleton variant="rectangular" width={80} height={32} />
           </Stack>
