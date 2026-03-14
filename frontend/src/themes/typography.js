@@ -1,8 +1,9 @@
 // ==============================|| DEFAULT THEME - TYPOGRAPHY ||============================== //
 
-export default function Typography(fontFamily) {
+export default function Typography(fontFamily, fontSize) {
   return {
-    htmlFontSize: 14,
+    fontSize,
+    htmlFontSize: 16,
     fontFamily,
     fontWeightLight: 300,
     fontWeightRegular: 400,

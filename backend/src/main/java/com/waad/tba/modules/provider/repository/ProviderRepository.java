@@ -63,6 +63,11 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
 
        java.util.Optional<Provider> findByLicenseNumber(String licenseNumber);
 
+       @Query("SELECT p FROM Provider p WHERE LOWER(p.email) = LOWER(:email)")
+       java.util.Optional<Provider> findByEmailIgnoreCase(@Param("email") String email);
+
+       java.util.Optional<Provider> findByEmail(String email);
+
        // ═══════════════════════════════════════════════════════════════════════════════
        // DASHBOARD STATISTICS QUERIES (Phase A)
        // Aggregations using JPQL - No Lazy Loading, No Entities returned

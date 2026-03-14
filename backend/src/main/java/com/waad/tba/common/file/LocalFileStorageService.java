@@ -75,23 +75,24 @@ public class LocalFileStorageService implements FileStorageService {
 
     @Override
     public FileUploadResult upload(MultipartFile file, String folder) {
-        // Validate file
-        validateFile(file);
+        try {
+            return upload(file.getInputStream(), file.getOriginalFilename(), file.getContentType(), file.getSize(), folder);
+        } catch (IOException e) {
+            throw new FileStorageException("Failed to read multipart file", e);
+        }
+    }
 
+    @Override
+    public FileUploadResult upload(java.io.InputStream inputStream, String originalFilename, String contentType, long size, String folder) {
         // Sanitize folder and filename to prevent path traversal
         String sanitizedFolder = StringUtils.cleanPath(folder).replace("..", "").replace("/", "");
-        String sanitizedFilename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()))
+        String sanitizedFilename = StringUtils.cleanPath(Objects.requireNonNull(originalFilename))
                 .replace("..", "").replace("/", "");
 
         String uniqueFilename = UUID.randomUUID().toString() + "_" + sanitizedFilename;
         String fileKey = sanitizedFolder + "/" + uniqueFilename;
 
         try {
-            // Security check: ensure fileKey doesn't contain traversal characters
-            if (fileKey.contains("..") || fileKey.startsWith("/")) {
-                throw new FileStorageException("Invalid file key: " + fileKey);
-            }
-
             // Create folder if not exists
             Path folderPath = uploadPath.resolve(sanitizedFolder).normalize();
             if (!folderPath.startsWith(uploadPath)) {
@@ -104,16 +105,15 @@ public class LocalFileStorageService implements FileStorageService {
             if (!targetPath.startsWith(uploadPath)) {
                 throw new FileStorageException("Invalid target path: " + fileKey);
             }
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
 
-            log.info("File uploaded successfully: {}", fileKey);
+            log.info("File saved successfully: {}", fileKey);
 
-            // Build result
             return FileUploadResult.builder()
                     .fileKey(fileKey)
                     .fileName(sanitizedFilename)
-                    .contentType(file.getContentType())
-                    .size(file.getSize())
+                    .contentType(contentType)
+                    .size(size)
                     .folder(folder)
                     .filePath(targetPath.toString())
                     .url("/api/files/" + fileKey + "/download")

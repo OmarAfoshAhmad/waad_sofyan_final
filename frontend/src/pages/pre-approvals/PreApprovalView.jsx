@@ -389,11 +389,6 @@ const PreApprovalView = () => {
                       <InfoRow label="مقدم الخدمة" value={preApproval?.providerName} />
                       <InfoRow label="الخدمة" value={preApproval?.serviceName ?? preApproval?.serviceCode ?? '-'} />
                       <InfoRow label="التشخيص" value={preApproval?.diagnosisDescription ?? preApproval?.diagnosisCode ?? '-'} />
-                      <InfoRow
-                        label="سعر العقد"
-                        value={preApproval?.contractPrice ? `${Number(preApproval.contractPrice).toFixed(2)} د.ل` : '-'}
-                        valueColor="primary.main"
-                      />
                     </CardContent>
                   </Card>
                 </Grid>
@@ -466,18 +461,9 @@ const PreApprovalView = () => {
                       </Typography>
                       <Divider sx={{ mb: 3 }} />
 
-                      {/* Insurance UX - AmountComparisonBar */}
-                      <AmountComparisonBar
-                        requestedAmount={typeof preApproval?.requestedAmount === 'number' ? preApproval.requestedAmount : 0}
-                        approvedAmount={typeof preApproval?.approvedAmount === 'number' ? preApproval.approvedAmount : 0}
-                        currency="د.ل"
-                        copayPercentage={typeof preApproval?.copayPercentage === 'number' ? preApproval.copayPercentage : 0}
-                        deductible={typeof preApproval?.deductible === 'number' ? preApproval.deductible : 0}
-                        showBreakdown={true}
-                        size="medium"
-                        language="ar"
-                        status={preApproval?.status}
-                      />
+                       <Alert severity="info">
+                        هذه الموافقة المسبقة إدارية وطبية فقط ولا تترتب عليها التزامات مالية في هذه المرحلة.
+                      </Alert>
 
                       {/* Reviewer Comment */}
                       {preApproval?.reviewerComment && (

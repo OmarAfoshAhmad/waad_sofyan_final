@@ -136,7 +136,8 @@ export function CompanySettingsProvider({ children }) {
     companyName: settings.companyName,
     companyNameEn: settings.companyNameEn,
     logoUrl: settings.logoUrl,
-    primaryColor: settings.primaryColor
+    primaryColor: settings.primaryColor,
+    businessType: settings.businessType
   };
 
   return <CompanySettingsContext.Provider value={value}>{children}</CompanySettingsContext.Provider>;

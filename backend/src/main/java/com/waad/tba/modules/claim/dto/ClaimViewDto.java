@@ -48,6 +48,7 @@ public class ClaimViewDto {
 
     // Pre-Approval information
     private Long preApprovalId;
+    private String preApprovalReferenceNumber;
     private String preApprovalStatus;
 
     // ═══════════════════════════════════════════════════════════════════════════

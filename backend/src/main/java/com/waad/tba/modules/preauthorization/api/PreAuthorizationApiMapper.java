@@ -56,6 +56,7 @@ public class PreAuthorizationApiMapper {
                 .notes(request.getNotes())
                 .serviceCategoryId(request.getServiceCategoryId())
                 .serviceCategoryName(request.getServiceCategoryName())
+                .emailRequestId(request.getEmailRequestId())
                 .build();
     }
     

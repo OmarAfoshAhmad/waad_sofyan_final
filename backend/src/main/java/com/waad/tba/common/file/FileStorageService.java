@@ -24,6 +24,11 @@ public interface FileStorageService {
     FileUploadResult upload(MultipartFile file, String folder);
     
     /**
+     * Upload a file from an input stream
+     */
+    FileUploadResult upload(java.io.InputStream inputStream, String originalFilename, String contentType, long size, String folder);
+    
+    /**
      * Download a file from storage
      * 
      * @param fileKey Unique file identifier

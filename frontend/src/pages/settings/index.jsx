@@ -8,7 +8,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { Box, Grid, Card, CardContent, Typography, CardActionArea } from '@mui/material';
-import { TeamOutlined, SettingOutlined } from '@ant-design/icons';
+import { TeamOutlined, SettingOutlined, MailOutlined } from '@ant-design/icons';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import useAuth from 'hooks/useAuth';
 

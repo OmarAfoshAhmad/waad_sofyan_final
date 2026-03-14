@@ -42,9 +42,8 @@ public class PreAuthReviewDto {
     
     /**
      * Approved amount (for APPROVED status)
-     * Must be > 0 and <= contractPrice
+     * Optional - pre-authorizations no longer have strict financial matters
      */
-    @DecimalMin(value = "0.01", message = "Approved amount must be greater than 0")
     private BigDecimal approvedAmount;
     
     /**

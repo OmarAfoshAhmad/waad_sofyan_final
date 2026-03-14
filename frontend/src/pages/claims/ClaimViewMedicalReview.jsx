@@ -319,7 +319,8 @@ const ClaimViewMedicalReview = () => {
       claimedAmount: claim.requestedAmount ?? claim.totalAmount ?? claim.claimedAmount ?? 0,
       approvedAmount: claim.approvedAmount ?? 0,
       copayAmount: claim.patientCoPay ?? claim.copayAmount ?? 0,
-      medicalNotes: claim.medicalNotes || claim.reviewerComment || ''
+      medicalNotes: claim.medicalNotes || claim.reviewerComment || '',
+      preApprovalReferenceNumber: claim.preApprovalReferenceNumber
     };
   }, [claim, id]);
 
@@ -868,6 +869,11 @@ const ClaimViewMedicalReview = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <InfoRow label="تاريخ المطالبة" value={formatDate(normalizedClaim.claimDate)} />
             </Grid>
+            {hasValue(normalizedClaim.preApprovalReferenceNumber) && (
+              <Grid size={{ xs: 12, md: 6 }}>
+                <InfoRow label="رقم الموافقة المسبقة" value={normalizedClaim.preApprovalReferenceNumber} />
+              </Grid>
+            )}
           </Grid>
         </SectionCard>
 

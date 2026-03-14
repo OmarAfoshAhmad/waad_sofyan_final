@@ -265,14 +265,6 @@ const PreApprovalsInbox = () => {
       valueGetter: (value, row) => row.serviceName || '-'
     },
     {
-      field: 'contractPrice',
-      headerName: 'المبلغ',
-      width: 120,
-      valueGetter: (value, row) => {
-        return row.contractPrice ? `${Number(row.contractPrice).toFixed(2)} ${row.currency || 'د.ل'}` : '-';
-      }
-    },
-    {
       field: 'priority',
       headerName: 'الأولوية',
       width: 100,
@@ -332,7 +324,7 @@ const PreApprovalsInbox = () => {
           {/* PENDING/UNDER_REVIEW → Approve/Reject
               CANONICAL: Both states allow approval/rejection actions */}
           {(params.row.status === 'PENDING' || params.row.status === 'UNDER_REVIEW') && (
-            
+            <>
               <Tooltip title="موافقة">
                 <span>
                   <IconButton size="small" color="success" onClick={() => handleOpenApprove(params.row)} disabled={actionLoading}>
@@ -347,7 +339,7 @@ const PreApprovalsInbox = () => {
                   </IconButton>
                 </span>
               </Tooltip>
-              
+            </>
           )}
         </Stack>
       )
@@ -440,14 +432,6 @@ const PreApprovalsInbox = () => {
                     <TableCell sx={{ fontWeight: 500 }}>نوع الخدمة</TableCell>
                     <TableCell>{selectedPreApproval?.serviceType || selectedPreApproval?.procedureName || '-'}</TableCell>
                   </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 500 }}>المبلغ المطلوب</TableCell>
-                    <TableCell>
-                      <Typography color="primary" fontWeight="bold">
-                        {selectedPreApproval?.requestedAmount?.toFixed(2)} د.ل
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
                 </TableBody>
               </Table>
             </CardContent>
@@ -455,18 +439,6 @@ const PreApprovalsInbox = () => {
 
           <Divider sx={{ my: 2 }} />
 
-          <TextField
-            fullWidth
-            type="number"
-            label="المبلغ الموافق عليه"
-            value={approvedAmount}
-            onChange={(e) => setApprovedAmount(e.target.value)}
-            InputProps={{
-              endAdornment: <Typography color="textSecondary">د.ل</Typography>
-            }}
-            sx={{ mb: 2 }}
-            disabled={actionLoading}
-          />
 
           <TextField
             fullWidth

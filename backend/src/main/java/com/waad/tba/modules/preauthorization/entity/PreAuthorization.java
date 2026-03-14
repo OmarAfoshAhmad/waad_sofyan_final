@@ -71,6 +71,9 @@ public class PreAuthorization {
     @Column(name = "provider_id", nullable = false)
     private Long providerId;
 
+    @Column(name = "email_request_id")
+    private Long emailRequestId;
+    
     // ==================== VISIT-CENTRIC ARCHITECTURE ====================
 
     /**
@@ -79,7 +82,7 @@ public class PreAuthorization {
      * This is NON-NEGOTIABLE - no standalone pre-authorization creation allowed
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "visit_id", nullable = false)
+    @JoinColumn(name = "visit_id", nullable = true)
     private Visit visit;
 
     // ==================== CONTRACT-DRIVEN MEDICAL SERVICE ====================
@@ -412,9 +415,9 @@ public class PreAuthorization {
      * THROWS IllegalStateException if any rule is violated
      */
     private void validateArchitecturalRules() {
-        // RULE: Visit is MANDATORY
-        if (visit == null) {
-            throw new IllegalStateException("ARCHITECTURAL VIOLATION: PreAuthorization MUST reference a Visit");
+        // RULE: Visit is MANDATORY (unless it's an email request)
+        if (visit == null && emailRequestId == null) {
+            throw new IllegalStateException("ARCHITECTURAL VIOLATION: PreAuthorization MUST reference a Visit or an Email Request");
         }
 
         // RULE: MedicalService is MANDATORY (no free-text services)

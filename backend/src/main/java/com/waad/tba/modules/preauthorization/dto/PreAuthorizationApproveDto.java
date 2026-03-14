@@ -14,9 +14,10 @@ import java.math.BigDecimal;
 @Builder
 public class PreAuthorizationApproveDto {
 
-    @NotNull(message = "Approved amount is required")
-    @DecimalMin(value = "0.0", inclusive = false, message = "Approved amount must be greater than 0")
-    @Digits(integer = 10, fraction = 2, message = "Approved amount must have at most 10 integer digits and 2 decimal places")
+    /**
+     * Approved amount (for APPROVED status)
+     * Optional - pre-authorizations no longer have strict financial matters
+     */
     private BigDecimal approvedAmount;
 
     @DecimalMin(value = "0.0", message = "Copay percentage must be 0 or greater")

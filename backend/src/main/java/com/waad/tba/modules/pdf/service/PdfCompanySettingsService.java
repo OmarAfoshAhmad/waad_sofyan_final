@@ -66,12 +66,19 @@ public class PdfCompanySettingsService {
     private static final long MAX_LOGO_SIZE = 5 * 1024 * 1024; // 5MB
     
     /**
-     * Get active PDF settings
+     * Get active PDF settings.
+     * If no settings exist, creates and saves default settings to ensure a valid ID exists.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public PdfCompanySettings getActiveSettings() {
         return repository.findActiveSettings()
-            .orElseGet(this::getDefaultSettings);
+            .orElseGet(() -> {
+                log.info("[PdfSettingsService] No active settings found. Creating default settings.");
+                PdfCompanySettings defaultSettings = getDefaultSettings();
+                defaultSettings.setCreatedBy("SYSTEM");
+                defaultSettings.setUpdatedBy("SYSTEM");
+                return repository.save(defaultSettings);
+            });
     }
     
     /**

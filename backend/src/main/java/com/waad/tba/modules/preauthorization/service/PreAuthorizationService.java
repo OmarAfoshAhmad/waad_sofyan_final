@@ -64,6 +64,8 @@ public class PreAuthorizationService {
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final ArchitecturalGuardService architecturalGuard;
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
+    private final PreAuthEmailNotificationService emailNotificationService;
+    private final EmailPreAuthService emailPreAuthService;
 
     // ==================== CREATE ====================
 
@@ -257,6 +259,7 @@ public class PreAuthorizationService {
                 .diagnosisCode(dto.getDiagnosisCode() != null ? dto.getDiagnosisCode() : "Z00.0")
                 .diagnosisDescription(dto.getDiagnosisDescription())
                 .notes(dto.getNotes())
+                .emailRequestId(dto.getEmailRequestId())
                 .active(true)
                 .createdBy(createdBy)
                 .build();
@@ -271,6 +274,77 @@ public class PreAuthorizationService {
         // Log audit trail
         auditService.logCreate(preAuth.getId(), preAuth.getReferenceNumber(), createdBy,
                 "Created with contract price: " + contractPrice + " LYD");
+
+        // Mark email request as processed if provided
+        if (dto.getEmailRequestId() != null) {
+            emailPreAuthService.markAsProcessed(dto.getEmailRequestId(), preAuth.getId());
+        }
+        return mapToResponseDto(preAuth, member, provider, service);
+    }
+    
+    @Transactional
+    public PreAuthorizationResponseDto createPreAuthorizationFromEmail(Long emailRequestId, Long memberId, Long medicalServiceId, String notes, String createdBy) {
+        log.info("[PRE-AUTH] Creating pre-authorization from email request: {}", emailRequestId);
+
+        // 1. Fetch Email Request
+        PreAuthEmailRequestDto emailRequest = emailPreAuthService.getById(emailRequestId);
+        
+        // 2. Resolve Provider and Member
+        Long providerId = emailRequest.getProviderId();
+        if (providerId == null) throw new IllegalArgumentException("Email request has no associated provider");
+        Provider provider = providerRepository.findById(providerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Provider not found: " + providerId));
+
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+
+        // 3. Resolve Medical Service
+        MedicalService service = medicalServiceRepository.findById(medicalServiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Medical Service not found: " + medicalServiceId));
+
+        // 4. Resolve Contract Price
+        EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(providerId, service.getCode(), LocalDate.now());
+        if (!priceResponse.isHasContract()) {
+            throw new IllegalArgumentException("Service not in provider's contract");
+        }
+        BigDecimal contractPrice = priceResponse.getContractPrice();
+
+        // 5. Build PreAuthorization
+        String referenceNumber = generateUniqueReferenceNumber();
+        PreAuthorization preAuth = PreAuthorization.builder()
+                .preAuthNumber(referenceNumber)
+                .referenceNumber(referenceNumber)
+                .memberId(member.getId())
+                .providerId(providerId)
+                .medicalService(service)
+                .serviceCode(service.getCode())
+                .serviceName(service.getName())
+                .serviceType(service.getCategoryId() != null ? "CATEGORY_" + service.getCategoryId() : "MEDICAL")
+                .serviceCategoryId(service.getCategoryId())
+                .requestDate(LocalDate.now())
+                .expectedServiceDate(LocalDate.now())
+                .expiryDate(LocalDate.now().plusDays(30))
+                .contractPrice(contractPrice)
+                .requiresPA(true)
+                .status(PreAuthStatus.APPROVED) // Auto-approve or set to PENDING? User said "if approved... send template"
+                .approvedAmount(contractPrice)
+                .copayAmount(BigDecimal.ZERO) // Default to zero or calculate copay?
+                .insuranceCoveredAmount(contractPrice)
+                .active(true)
+                .emailRequestId(emailRequestId)
+                .notes(notes)
+                .createdBy(createdBy)
+                .approvedBy(createdBy)
+                .approvedAt(LocalDateTime.now())
+                .build();
+
+        preAuth = preAuthorizationRepository.save(preAuth);
+        
+        // 6. Mark Email Request as Processed
+        emailPreAuthService.markAsProcessed(emailRequestId, preAuth.getId());
+
+        // 7. Notify Provider
+        emailNotificationService.sendDecisionEmail(preAuth);
 
         return mapToResponseDto(preAuth, member, provider, service);
     }
@@ -457,10 +531,10 @@ public class PreAuthorizationService {
             }
 
             if (dto.getStatus() == PreAuthStatus.APPROVED) {
-                if (dto.getApprovedAmount() == null || dto.getApprovedAmount().compareTo(BigDecimal.ZERO) <= 0) {
-                    throw new BusinessRuleException("APPROVED status requires approved amount > 0");
-                }
-                preAuth.setApprovedAmount(dto.getApprovedAmount());
+                // Pre-authorizations no longer have strict financial matters
+                // Default to contract price if not provided, or zero
+                BigDecimal approvedAmt = dto.getApprovedAmount() != null ? dto.getApprovedAmount() : preAuth.getContractPrice();
+                preAuth.setApprovedAmount(approvedAmt != null ? approvedAmt : BigDecimal.ZERO);
 
                 if (dto.getCopayPercentage() != null) {
                     preAuth.setCopayPercentage(dto.getCopayPercentage());
@@ -503,6 +577,9 @@ public class PreAuthorizationService {
         }
 
         log.info("✅ [PRE-AUTH] Reviewed: id={}, status={}", id, preAuth.getStatus());
+
+        // Notify if originated from email
+        emailNotificationService.sendDecisionEmail(preAuth);
 
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
@@ -765,6 +842,9 @@ public class PreAuthorizationService {
 
             log.info("✅ [SPLIT-PHASE] Phase 2 complete: PreAuth {} approved successfully", id);
 
+            // Notify if originated from email
+            emailNotificationService.sendDecisionEmail(preAuth);
+
         } catch (Exception e) {
             log.error("❌ [SPLIT-PHASE] Phase 2 failed for pre-auth {}: {}", id, e.getMessage(), e);
 
@@ -778,6 +858,9 @@ public class PreAuthorizationService {
                     failedPreAuth.setUpdatedBy(approvedBy);
                     preAuthorizationRepository.save(failedPreAuth);
                     log.info("🔄 PreAuth {} transitioned to REJECTED due to processing failure", id);
+                    
+                    // Notify if originated from email
+                    emailNotificationService.sendDecisionEmail(failedPreAuth);
                 }
             } catch (Exception rollbackError) {
                 log.error("❌ Failed to rollback pre-auth {} to REJECTED: {}", id, rollbackError.getMessage());
@@ -787,17 +870,15 @@ public class PreAuthorizationService {
 
     private BigDecimal resolveApprovedAmount(PreAuthorization preAuth, PreAuthorizationApproveDto dto) {
         if (dto != null && dto.getApprovedAmount() != null) {
-            if (dto.getApprovedAmount().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalStateException("Approved amount must be greater than zero");
-            }
+            // No longer enforcing > 0
             return dto.getApprovedAmount();
         }
 
-        if (preAuth.getContractPrice() != null && preAuth.getContractPrice().compareTo(BigDecimal.ZERO) > 0) {
+        if (preAuth.getContractPrice() != null) {
             return preAuth.getContractPrice();
         }
 
-        throw new IllegalStateException("Cannot resolve approved amount: missing contract price");
+        return BigDecimal.ZERO;
     }
 
     private BigDecimal resolveCopayPercentage(PreAuthorization preAuth, PreAuthorizationApproveDto dto) {
@@ -1294,12 +1375,12 @@ public class PreAuthorizationService {
                 .requestDate(preAuth.getRequestDate())
                 .expiryDate(preAuth.getExpiryDate())
                 .daysUntilExpiry(daysUntilExpiry)
-                // Pricing (Contract-Driven)
-                .contractPrice(preAuth.getContractPrice())
-                .approvedAmount(preAuth.getApprovedAmount())
-                .copayAmount(preAuth.getCopayAmount())
-                .copayPercentage(preAuth.getCopayPercentage())
-                .insuranceCoveredAmount(preAuth.getInsuranceCoveredAmount())
+                // Pricing (Contract-Driven) - Removed as per user requirement (Pre-Auth is non-financial)
+                .contractPrice(null)
+                .approvedAmount(null)
+                .copayAmount(null)
+                .copayPercentage(null)
+                .insuranceCoveredAmount(null)
                 .currency(preAuth.getCurrency())
                 // Status
                 .status(preAuth.getStatus().toString())

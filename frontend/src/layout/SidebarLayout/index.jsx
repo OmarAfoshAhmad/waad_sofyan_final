@@ -358,7 +358,7 @@ export const useSidebar = () => useContext(SidebarContext);
 export default function SidebarLayout() {
   const theme = useTheme();
   const { user, logout } = useAuth();
-  const { companyName, companyNameEn, getLogoSrc, settings } = useCompanySettings();
+  const { companyName, companyNameEn, getLogoSrc, settings, businessType } = useCompanySettings();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -435,8 +435,20 @@ export default function SidebarLayout() {
                 />
                 {!isMobile && (
                   <Box>
-                    <Typography variant="subtitle1" fontWeight={700} color="primary.main" lineHeight={1.2}>
+                    <Typography variant="subtitle1" fontWeight={700} color="primary.main" lineHeight={1.1}>
                       {displayName}
+                    </Typography>
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        display: 'block', 
+                        fontSize: '0.7rem', 
+                        color: 'text.secondary', 
+                        mt: -0.2,
+                        opacity: 0.85
+                      }}
+                    >
+                      {businessType}
                     </Typography>
                   </Box>
                 )}

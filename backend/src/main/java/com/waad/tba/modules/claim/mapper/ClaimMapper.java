@@ -636,6 +636,7 @@ public class ClaimMapper {
 
         if (claim.getPreAuthorization() != null) {
             dto.setPreApprovalId(claim.getPreAuthorization().getId());
+            dto.setPreApprovalReferenceNumber(claim.getPreAuthorization().getReferenceNumber());
             dto.setPreApprovalStatus(
                     claim.getPreAuthorization().getStatus() != null ? claim.getPreAuthorization().getStatus().name()
                             : null);

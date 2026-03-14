@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Card,
-  CardContent,
   CircularProgress,
   Divider,
   FormControlLabel,
@@ -20,6 +19,7 @@ import {
   Typography
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import axios from 'utils/axios';
 import {
   Business as BusinessIcon,
   CloudUpload as CloudUploadIcon,
@@ -30,7 +30,8 @@ import {
   Refresh as RefreshIcon,
   Save as SaveIcon,
   Settings as SettingsIcon,
-  Speed as SpeedIcon
+  Speed as SpeedIcon,
+  Mail as MailIcon
 } from '@mui/icons-material';
 
 import MainCard from 'components/MainCard';
@@ -42,6 +43,8 @@ import { companyService } from 'services/api/company.service';
 import reportSettingsService from 'services/api/reports-settings.service';
 import useSystemConfig from 'hooks/useSystemConfig';
 import useConfig from 'hooks/useConfig';
+import { useCompanySettings } from 'contexts/CompanySettingsContext';
+import EmailSettingsTab from './EmailSettingsTab';
 
 const KEYS = {
   systemNameAr: 'SYSTEM_NAME_AR',
@@ -89,10 +92,16 @@ const toInt = (value, fallback) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+const cleanStr = (value, fallback) => {
+  if (!value || value === 'undefined' || value === 'null') return fallback;
+  return value;
+};
+
 const SystemSettingsPage = () => {
   const theme = useTheme();
   const { setField } = useConfig();
   const { refresh: refreshSystemConfig } = useSystemConfig();
+  const { updateSettings: updateVisualSettings } = useCompanySettings();
 
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -129,6 +138,23 @@ const SystemSettingsPage = () => {
     eligibilityGracePeriodDays: 0
   });
 
+  const [emailSettings, setEmailSettings] = useState({
+    id: null,
+    emailAddress: '',
+    displayName: '',
+    smtpHost: '',
+    smtpPort: 587,
+    smtpUsername: '',
+    smtpPassword: '',
+    imapHost: '',
+    imapPort: 993,
+    imapUsername: '',
+    imapPassword: '',
+    encryptionType: 'TLS',
+    listenerEnabled: false,
+    syncIntervalMins: 5
+  });
+
   const settingsMap = useMemo(() => {
     const map = new Map();
     for (const item of rawSettings) {
@@ -144,15 +170,21 @@ const SystemSettingsPage = () => {
       setIsLoading(true);
       setError(null);
 
-      const [settings, flags, companyResponse, reportSettingsResponse] = await Promise.all([
+      const [settings, flags, companyResponse, reportSettingsResponse, emailSettingsBatch] = await Promise.all([
         systemSettingsService.getAll(),
         featureFlagsService.getAllFlags(),
         companyService.getSystemCompany(),
-        reportSettingsService.getActiveSettings()
+        reportSettingsService.getActiveSettings(),
+        axios.get('/admin/settings/email')
       ]);
 
       const normalized = settings || [];
       setRawSettings(normalized);
+
+      const emailResponse = emailSettingsBatch?.data;
+      if (emailResponse && emailResponse.id) {
+        setEmailSettings({ ...emailResponse, smtpPassword: '', imapPassword: '' });
+      }
 
       const company = companyResponse?.data || {};
 
@@ -168,9 +200,9 @@ const SystemSettingsPage = () => {
         address: company.address || '',
         website: company.website || '',
         taxNumber: company.taxNumber || '',
-        systemNameAr: byKey.get(KEYS.systemNameAr) || 'نظام واعد الطبي',
-        systemNameEn: byKey.get(KEYS.systemNameEn) || 'TBA WAAD System',
-        logoUrl: byKey.get(KEYS.logoUrl) || company.logoUrl || '',
+        systemNameAr: cleanStr(byKey.get(KEYS.systemNameAr), 'نظام واعد الطبي'),
+        systemNameEn: cleanStr(byKey.get(KEYS.systemNameEn), 'TBA WAAD System'),
+        logoUrl: cleanStr(byKey.get(KEYS.logoUrl), company.logoUrl || ''),
         fontFamily: byKey.get(KEYS.fontFamily) || 'Tajawal',
         fontSizeBase: toInt(byKey.get(KEYS.fontSizeBase), 14),
         claimSlaDays: toInt(byKey.get(KEYS.claimSlaDays), 10),
@@ -212,59 +244,76 @@ const SystemSettingsPage = () => {
 
   const saveSettingIfExists = async (key, value) => {
     if (!hasKey(key)) return;
-    await systemSettingsService.updateSetting(key, String(value));
+    await systemSettingsService.updateSetting(key, value ? String(value) : '');
   };
 
-  const handleSaveAll = async () => {
+  const handleSaveAll = async (manualData = null, manualEmail = null) => {
+    const dataToSave = manualData || formData;
+    const emailToSave = manualEmail || emailSettings;
+
     try {
       setIsSaving(true);
       setError(null);
 
       await Promise.all([
         companyService.updateDefaultCompany({
-          id: formData.companyId,
-          name: formData.companyName,
-          code: formData.companyCode,
-          active: formData.companyActive,
-          logoUrl: formData.logoUrl || null,
-          businessType: formData.businessType,
-          phone: formData.phone,
-          email: formData.email,
-          address: formData.address,
-          website: formData.website,
-          taxNumber: formData.taxNumber
+          id: dataToSave.companyId,
+          name: dataToSave.companyName,
+          code: dataToSave.companyCode,
+          active: true, // Force active
+          logoUrl: dataToSave.logoUrl || null,
+          businessType: dataToSave.businessType,
+          phone: dataToSave.phone,
+          email: dataToSave.email,
+          address: dataToSave.address,
+          website: dataToSave.website,
+          taxNumber: dataToSave.taxNumber
         }),
-        saveSettingIfExists(KEYS.systemNameAr, formData.systemNameAr),
-        saveSettingIfExists(KEYS.systemNameEn, formData.systemNameEn),
-        saveSettingIfExists(KEYS.logoUrl, formData.logoUrl),
-        saveSettingIfExists(KEYS.fontFamily, formData.fontFamily),
-        saveSettingIfExists(KEYS.fontSizeBase, formData.fontSizeBase),
-        saveSettingIfExists(KEYS.claimSlaDays, formData.claimSlaDays),
-        saveSettingIfExists(KEYS.preApprovalSlaDays, formData.preApprovalSlaDays),
-        saveSettingIfExists(KEYS.beneficiaryNumberFormat, formData.beneficiaryNumberFormat),
-        saveSettingIfExists(KEYS.beneficiaryNumberPrefix, formData.beneficiaryNumberPrefix),
-        saveSettingIfExists(KEYS.beneficiaryNumberDigits, formData.beneficiaryNumberDigits),
-        saveSettingIfExists(KEYS.eligibilityStrictMode, formData.eligibilityStrictMode),
-        saveSettingIfExists(KEYS.waitingPeriodDaysDefault, formData.waitingPeriodDaysDefault),
-        saveSettingIfExists(KEYS.eligibilityGracePeriodDays, formData.eligibilityGracePeriodDays),
+        saveSettingIfExists(KEYS.systemNameAr, dataToSave.companyName), // Mirror companyName
+        saveSettingIfExists(KEYS.systemNameEn, dataToSave.companyName), // Mirror companyName
+        saveSettingIfExists(KEYS.logoUrl, dataToSave.logoUrl),
+        saveSettingIfExists(KEYS.fontFamily, dataToSave.fontFamily),
+        saveSettingIfExists(KEYS.fontSizeBase, dataToSave.fontSizeBase),
+        saveSettingIfExists(KEYS.claimSlaDays, dataToSave.claimSlaDays),
+        saveSettingIfExists(KEYS.preApprovalSlaDays, dataToSave.preApprovalSlaDays),
+        saveSettingIfExists(KEYS.beneficiaryNumberFormat, dataToSave.beneficiaryNumberFormat),
+        saveSettingIfExists(KEYS.beneficiaryNumberPrefix, dataToSave.beneficiaryNumberPrefix),
+        saveSettingIfExists(KEYS.beneficiaryNumberDigits, dataToSave.beneficiaryNumberDigits),
+        saveSettingIfExists(KEYS.eligibilityStrictMode, dataToSave.eligibilityStrictMode),
+        saveSettingIfExists(KEYS.waitingPeriodDaysDefault, dataToSave.waitingPeriodDaysDefault),
+        saveSettingIfExists(KEYS.eligibilityGracePeriodDays, dataToSave.eligibilityGracePeriodDays),
         // Save Report Settings
-        reportSettingsService.updateSettings(formData.pdfSettingsId, {
-          claimReportTitle: formData.claimReportTitle,
-          claimReportPrimaryColor: formData.claimReportPrimaryColor,
-          claimReportIntro: formData.claimReportIntro,
-          claimReportFooterNote: formData.claimReportFooterNote,
-          claimReportSigRightTop: formData.claimReportSigRightTop,
-          claimReportSigRightBottom: formData.claimReportSigRightBottom,
-          claimReportSigLeftTop: formData.claimReportSigLeftTop,
-          claimReportSigLeftBottom: formData.claimReportSigLeftBottom
-        })
+        ...(dataToSave.pdfSettingsId 
+          ? [reportSettingsService.updateSettings(dataToSave.pdfSettingsId, {
+              claimReportTitle: dataToSave.claimReportTitle,
+              claimReportPrimaryColor: dataToSave.claimReportPrimaryColor,
+              claimReportIntro: dataToSave.claimReportIntro,
+              claimReportFooterNote: dataToSave.claimReportFooterNote,
+              claimReportSigRightTop: dataToSave.claimReportSigRightTop,
+              claimReportSigRightBottom: dataToSave.claimReportSigRightBottom,
+              claimReportSigLeftTop: dataToSave.claimReportSigLeftTop,
+              claimReportSigLeftBottom: dataToSave.claimReportSigLeftBottom
+            })]
+          : []),
+        axios.post('/admin/settings/email', emailToSave)
       ]);
 
-      if (formData.fontFamily) setField('fontFamily', formData.fontFamily);
-      if (formData.fontSizeBase) setField('fontSize', formData.fontSizeBase);
+      if (dataToSave.fontFamily) setField('fontFamily', dataToSave.fontFamily);
+      if (dataToSave.fontSizeBase) setField('fontSize', dataToSave.fontSizeBase);
+
+      // Sync the global visual context (Navbar, Title, etc)
+      updateVisualSettings({
+        companyName: dataToSave.companyName,
+        companyNameEn: dataToSave.companyName,
+        businessType: dataToSave.businessType,
+        logoUrl: dataToSave.logoUrl
+      });
 
       refreshSystemConfig();
-      setSuccess('تم حفظ الإعدادات بنجاح');
+      setSuccess('تم حفظ الإعدادات بنجاح وتحديث النظام');
+      setTimeout(() => setSuccess(null), 3000);
+      
+      // Sync internal state
       await loadData();
     } catch (e) {
       setError(e?.response?.data?.message || 'فشل حفظ الإعدادات');
@@ -272,6 +321,7 @@ const SystemSettingsPage = () => {
       setIsSaving(false);
     }
   };
+
 
   const handleToggleProviderPortal = async (event) => {
     const next = event.target.checked;
@@ -302,18 +352,28 @@ const SystemSettingsPage = () => {
       <Box sx={{ px: 2, pt: 1, flexShrink: 0 }}>
         <ModernPageHeader
           title="إعدادات النظام"
-          subtitle="نسخة كاملة مع ميزة إظهار بوابة مقدم الخدمة"
+          subtitle="تحكم كامل في مظهر وأداء النظام"
           icon={<SettingsIcon sx={{ fontSize: '3.2rem', color: 'primary.main' }} />}
           noIconBox
           actions={
-            <Stack direction="row" spacing={1}>
-              <Button variant="outlined" onClick={loadData} startIcon={<RefreshIcon />} disabled={isSaving}>
-                تحديث
-              </Button>
-              <Button variant="contained" onClick={() => window.open('/provider/eligibility-check', '_blank')} startIcon={<PreviewIcon />}>
-                استعراض
-              </Button>
-            </Stack>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button variant="outlined" onClick={loadData} startIcon={<RefreshIcon />} disabled={isSaving}>
+              تحديث
+            </Button>
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={() => handleSaveAll()} 
+              startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+              disabled={isSaving}
+              sx={{ fontWeight: 700 }}
+            >
+              حفظ وتطبيق التغييرات
+            </Button>
+            <Button variant="outlined" onClick={() => window.open('/provider/eligibility-check', '_blank')} startIcon={<PreviewIcon />}>
+              استعراض
+            </Button>
+          </Stack>
           }
           sx={{ mb: 1 }}
         />
@@ -371,6 +431,7 @@ const SystemSettingsPage = () => {
           <Tab icon={<SpeedIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="المحرك التشغيلي" />
           <Tab icon={<ReportIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات التقارير" />
           <Tab icon={<ProviderPortalIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="بوابة مقدم الخدمة" />
+          <Tab icon={<MailIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات البريد" />
         </Tabs>
 
         <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.paper', borderRadius: '0 0 8px 8px' }}>
@@ -459,26 +520,15 @@ const SystemSettingsPage = () => {
                     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                       <FieldGroup title="المعلومات الأساسية" icon={BusinessIcon}>
                         <Grid container spacing={1.5}>
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="اسم الشركة" value={formData.companyName} onChange={updateField('companyName')} required />
+                          <Grid size={{ xs: 12, sm: 8 }}>
+                            <TextField fullWidth size="small" label="اسم الشركة (الاسم المؤثر في النظام)" value={formData.companyName} onChange={updateField('companyName')} required />
                           </Grid>
-                          <Grid size={{ xs: 12, sm: 3 }}>
+                          <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField fullWidth size="small" label="كود الشركة" value={formData.companyCode} onChange={updateField('companyCode')} required />
                           </Grid>
-                          <Grid size={{ xs: 12, sm: 3 }}>
-                            <FormControlLabel
-                              control={<Switch checked={formData.companyActive} onChange={(e) => setFormData((p) => ({ ...p, companyActive: e.target.checked }))} />}
-                              label={formData.companyActive ? 'الشركة نشطة' : 'الشركة غير نشطة'}
-                            />
-                          </Grid>
+                          
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField fullWidth size="small" label="نوع النشاط" value={formData.businessType} onChange={updateField('businessType')} />
-                          </Grid>
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="اسم النظام (عربي)" value={formData.systemNameAr} onChange={updateField('systemNameAr')} required />
-                          </Grid>
-                          <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" label="اسم النظام (إنجليزي)" value={formData.systemNameEn} onChange={updateField('systemNameEn')} />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField fullWidth size="small" label="الهاتف" value={formData.phone} onChange={updateField('phone')} />
@@ -500,12 +550,6 @@ const SystemSettingsPage = () => {
                     </Paper>
                   </Grid>
                 </Grid>
-              </Box>
-              <Divider />
-              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
-                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
-                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
-                </Button>
               </Box>
             </Box>
           </TabPanel>
@@ -542,12 +586,6 @@ const SystemSettingsPage = () => {
                   </FieldGroup>
                 </Paper>
               </Box>
-              <Divider />
-              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
-                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
-                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
-                </Button>
-              </Box>
             </Box>
           </TabPanel>
 
@@ -579,12 +617,6 @@ const SystemSettingsPage = () => {
                     </Paper>
                   </Grid>
                 </Grid>
-              </Box>
-              <Divider />
-              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
-                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
-                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
-                </Button>
               </Box>
             </Box>
           </TabPanel>
@@ -644,12 +676,6 @@ const SystemSettingsPage = () => {
                   </Grid>
                 </Grid>
               </Box>
-              <Divider sx={{ mt: 'auto' }} />
-              <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.paper' }}>
-                <Button variant="contained" size="small" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} disabled={isSaving} onClick={handleSaveAll}>
-                  {isSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
-                </Button>
-              </Box>
             </Box>
           </TabPanel>
 
@@ -678,8 +704,30 @@ const SystemSettingsPage = () => {
               </Box>
             </Box>
           </TabPanel>
+
+          <TabPanel value={tabValue} index={5}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                <EmailSettingsTab settings={emailSettings} setSettings={setEmailSettings} />
+              </Box>
+            </Box>
+          </TabPanel>
         </Box>
       </Card>
+      
+      {/* Footer Save Button - Prominent for Global Action */}
+      <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.default', borderTop: '1px solid', borderColor: 'divider' }}>
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={() => handleSaveAll()} 
+          startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+          disabled={isSaving}
+          sx={{ px: 4, fontWeight: 700 }}
+        >
+          {isSaving ? 'جاري الحفظ والتحميل...' : 'حفظ وتطبيق التغييرات على النظام'}
+        </Button>
+      </Box>
     </Box>
   );
 };

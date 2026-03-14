@@ -40,15 +40,15 @@ public class SlaMonitoringScheduler {
      * Daily SLA compliance check.
      * 
      * Runs Saturday-Thursday at 9:00 AM.
-     * Cron: "0 0 9 * * SAT-THU"
+     * Cron: "0 0 9 * * 0-4,6"
      * - Second: 0
      * - Minute: 0
      * - Hour: 9
      * - Day of month: * (any)
      * - Month: * (any)
-     * - Day of week: SAT-THU
+     * - Day of week: 0-4,6 (Sun-Thu, Sat)
      */
-    @Scheduled(cron = "0 0 9 * * SAT-THU", zone = "Africa/Tripoli")
+    @Scheduled(cron = "0 0 9 * * 0-4,6", zone = "Africa/Tripoli")
     public void checkSlaCompliance() {
         log.info("═══════════════════════════════════════════════════════════════");
         log.info("🔍 Running SLA compliance check at {}", LocalDate.now());

@@ -126,6 +126,15 @@ public class CreatePreAuthorizationRequest {
     private String serviceCategoryName;
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // EMAIL SOURCE TRACKING
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * ID of the email request this pre-authorization originated from (Optional)
+     */
+    @Positive(message = "Email Request ID must be positive")
+    private Long emailRequestId;
+
     // ⛔ FORBIDDEN FIELDS - DECISION SAFETY
     // ═══════════════════════════════════════════════════════════════════════════
     // The following fields are EXPLICITLY FORBIDDEN in API v1 contracts:

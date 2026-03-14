@@ -9,6 +9,7 @@ export { default as employersService } from './employers.service';
 export { default as membersService } from './members.service';
 export { default as visitsService } from './visits.service';
 export { default as preApprovalsService } from './pre-approvals.service';
+export { default as emailPreAuthService } from './email-preauth.service';
 export * as medicalServicesService from './medical-services.service';
 export * as medicalCategoriesService from './medical-categories.service';
 export * as medicalPackagesService from './medical-packages.service';

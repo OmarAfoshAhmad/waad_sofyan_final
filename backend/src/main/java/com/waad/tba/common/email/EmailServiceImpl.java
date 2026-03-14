@@ -62,6 +62,11 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendEmail(String to, String subject, String body) {
+        sendEmail(to, subject, body, false);
+    }
+
+    @Override
+    public void sendEmail(String to, String subject, String body, boolean isHtml) {
         boolean isDev = "dev".equalsIgnoreCase(activeProfile) || "test".equalsIgnoreCase(activeProfile);
 
         if (isDev || !emailEnabled) {
@@ -72,6 +77,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("From: {} <{}>", fromName, fromEmail);
             log.info("To: {}", to);
             log.info("Subject: {}", subject);
+            log.info("Format: {}", isHtml ? "HTML" : "Plain");
             log.info("-".repeat(60));
             log.info("Body:\n{}", body);
             log.info("=".repeat(60));
@@ -85,11 +91,44 @@ public class EmailServiceImpl implements EmailService {
             helper.setFrom(fromEmail, fromName);
             helper.setTo(to);
             helper.setSubject(subject);
-            helper.setText(body, false);
+            helper.setText(body, isHtml);
             mailSender.send(message);
             log.info("Email sent successfully to {}", to);
         } catch (MessagingException | java.io.UnsupportedEncodingException e) {
-            log.error("Failed to send email to {}: {}", to, e.getMessage(), e);
+            log.error("Failed to send email to {}: {}", to, e.getMessage());
+        }
+    }
+
+    @Override
+    public void sendEmailWithAttachment(String to, String subject, String body, byte[] attachment, String fileName) {
+        boolean isDev = "dev".equalsIgnoreCase(activeProfile) || "test".equalsIgnoreCase(activeProfile);
+
+        if (isDev || !emailEnabled) {
+            log.info("=".repeat(60));
+            log.info("EMAIL WITH ATTACHMENT [{}] {} - Log only", fileName, isDev ? "(Dev Mode)" : "(Disabled)");
+            log.info("To: {}, Subject: {}", to, subject);
+            log.info("Attachment size: {} bytes", attachment.length);
+            log.info("-".repeat(60));
+            log.info("Body:\n{}", body);
+            log.info("=".repeat(60));
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            // multipart = true
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(body, true); // HTML assume
+            
+            helper.addAttachment(fileName, new org.springframework.core.io.ByteArrayResource(attachment));
+            
+            mailSender.send(message);
+            log.info("Email with attachment [{}] sent to {}", fileName, to);
+        } catch (MessagingException | java.io.UnsupportedEncodingException e) {
+            log.error("Failed to send email with attachment to {}: {}", to, e.getMessage());
         }
     }
 

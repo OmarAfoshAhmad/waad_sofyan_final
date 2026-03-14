@@ -47,8 +47,8 @@ const animation = {
 // ==============================|| SNACKBAR ||============================== //
 
 export default function Snackbar() {
-  const { snackbar } = useGetSnackbar();
-  if (!snackbar) return null;
+  const snackbar = useGetSnackbar();
+  if (!snackbar.variant) return null;
 
   const handleClose = (event, reason) => {
     if (reason === 'clickaway') {

@@ -1837,7 +1837,7 @@ export default function ProviderClaimsSubmission() {
                         preAuthorizationId: newValue ? newValue.id : ''
                       }));
                     }}
-                    getOptionLabel={(option) => `${option.referenceNumber} - ${option.serviceName} (${option.approvedAmount} د.ل)`}
+                    getOptionLabel={(option) => `${option.referenceNumber} - ${option.serviceName}`}
                     renderOption={(props, option) => (
                       <Box component="li" {...props}>
                         <Stack sx={{ width: '100%' }}>
@@ -1845,7 +1845,7 @@ export default function ProviderClaimsSubmission() {
                             {option.referenceNumber}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {option.serviceName} - المبلغ الموافق عليه: {option.approvedAmount} د.ل
+                            {option.serviceName}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             الحالة: {option.status === 'APPROVED' ? 'موافق عليه' : 'تم الاطلاع'}

@@ -31,4 +31,14 @@ public interface EmailService {
      * Send generic email
      */
     void sendEmail(String to, String subject, String body);
+
+    /**
+     * Send generic email with HTML support
+     */
+    void sendEmail(String to, String subject, String body, boolean isHtml);
+
+    /**
+     * Send email with HTML body and a byte array attachment.
+     */
+    void sendEmailWithAttachment(String to, String subject, String body, byte[] attachment, String fileName);
 }

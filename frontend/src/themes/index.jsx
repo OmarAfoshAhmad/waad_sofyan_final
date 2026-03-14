@@ -18,7 +18,10 @@ import Typography from './typography';
 export default function ThemeCustomization({ children }) {
   const { state } = useConfig();
 
-  const themeTypography = useMemo(() => Typography(state.fontFamily), [state.fontFamily]);
+  const themeTypography = useMemo(
+    () => Typography(state.fontFamily, state.fontSize),
+    [state.fontFamily, state.fontSize]
+  );
 
   const palette = useMemo(() => buildPalette(state.presetColor), [state.presetColor]);
 
