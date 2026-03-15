@@ -783,10 +783,10 @@ export default function ClaimBatchEntry() {
     const monthLabel = MONTHS_AR[(month || 1) - 1];
 
     return (
-        <Box dir="rtl" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 130px)', overflow: 'hidden' }}>
+        <Box dir="rtl" sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 105px)', overflow: 'hidden' }}>
 
             {/* ═══ رأس الصفحة المضغوط ═══ */}
-            <Box sx={{ flexShrink: 0, mb: 1 }}>
+            <Box sx={{ flexShrink: 0, mb: 0.5 }}>
                 <ModernPageHeader
                     title={`${t('claimEntry.pageTitle')} — ${monthLabel} ${year || ''}`}
                     subtitle={`${t('providers.singular')}: ${provider?.name || '...'} | الوثيقة: ${policyInfo?.name || policyInfo?.policyNumber || '...'} | رقم العقد: ${activeContract?.contractNumber || '—'} | المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`}
@@ -831,7 +831,7 @@ export default function ClaimBatchEntry() {
             )}
 
             {/* ═══ المحتوى ═══ */}
-            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, gap: '1.0rem', px: '1.0rem', pb: '1.0rem' }}>
+            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, gap: '1.0rem', px: '1.0rem', pb: '0.4rem' }}>
                 
                 {/* ── الشريط الجانبي — يسار (سجل الدفعة) ── */}
                 <BatchHistorySidebar
