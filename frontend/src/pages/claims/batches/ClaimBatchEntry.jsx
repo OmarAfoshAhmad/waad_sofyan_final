@@ -24,7 +24,7 @@ import {
     FileDownload as FileDownloadIcon, WarningAmber as WarningIcon,
     VerifiedUser as PolicyIcon, Info as InfoIcon, Block as RejectIcon,
     Cancel as CancelIcon, AttachFile as AttachFileIcon,
-    Lock as LockIcon
+    Lock as LockIcon, AddCircleOutline as AddReasonIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -43,6 +43,7 @@ import benefitPoliciesService from 'services/api/benefit-policies.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
 import providerContractsService from 'services/api/provider-contracts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
+import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
 
 import { useCalculationLogic } from './hooks/useCalculationLogic';
 import { useCoverageLogic } from './hooks/useCoverageLogic';
@@ -527,11 +528,35 @@ export default function ClaimBatchEntry() {
         setTimeout(() => memberRef.current?.focus(), 120);
     }, [defaultDate]);
 
+    // ── أسباب الرفض من قاعدة البيانات ─────────────────────────────────────
+    const { data: rejectionReasons = [], refetch: refetchReasons } = useQuery({
+        queryKey: ['claim-rejection-reasons'],
+        queryFn: claimRejectionReasonsService.getAll,
+        staleTime: 60000
+    });
+    const [isSavingNewReason, setIsSavingNewReason] = useState(false);
+
     const openRejectDialog = (type, idx = null) => {
         setRejectType(type);
         setRejectIdx(idx);
-        setRejectionInput(type === 'line' ? lines[idx].rejectionReason : rejectionInput);
+        setRejectionInput(type === 'line' ? (lines[idx].rejectionReason || '') : (rejectionInput || ''));
         setRejectDialogOpen(true);
+    };
+
+    const saveNewReason = async () => {
+        if (!rejectionInput?.trim()) return;
+        const alreadyExists = rejectionReasons.some(r => r.reasonText === rejectionInput.trim());
+        if (alreadyExists) return;
+        setIsSavingNewReason(true);
+        try {
+            await claimRejectionReasonsService.create(rejectionInput.trim());
+            await refetchReasons();
+            enqueueSnackbar('✅ تم حفظ السبب الجديد في القائمة', { variant: 'success' });
+        } catch {
+            enqueueSnackbar('فشل حفظ السبب الجديد', { variant: 'error' });
+        } finally {
+            setIsSavingNewReason(false);
+        }
     };
 
     const confirmRejection = () => {
@@ -566,10 +591,12 @@ export default function ClaimBatchEntry() {
                 return;
             }
 
-            // اكتشاف تلقائي: إذا كانت جميع البنود مرفوضة → حالة المطالبة = REJECTED
+            // الحالة REJECTED إذا كان هناك أي رفض: رفض صريح للمطالبة، أو بنود مرفوضة، أو فائض سعر
             const activeLines = lines.filter(l => l.service || l.serviceName);
-            const allLinesRejected = activeLines.length > 0 && activeLines.every(l => l.rejected);
-            const effectivelyRejected = isClaimRejected || allLinesRejected;
+            const anyLineRejected = activeLines.some(l => l.rejected);
+            const anyRefusedAmount = activeLines.some(l => parseFloat(l.refusedAmount) > 0);
+
+            const effectivelyRejected = isClaimRejected || anyLineRejected || anyRefusedAmount;
 
             const claimData = {
                 memberId: member.id,
@@ -580,7 +607,7 @@ export default function ClaimBatchEntry() {
                 complaint,
                 notes,
                 status: effectivelyRejected ? 'REJECTED' : 'APPROVED',
-                rejectionReason: effectivelyRejected ? (rejectionInput || (allLinesRejected ? 'جميع البنود مرفوضة' : null)) : null,
+                rejectionReason: effectivelyRejected ? (rejectionInput || null) : null,
                 preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
                 manualCategoryEnabled,
                 // Always send context category so backend can set appliedCategoryId on unmapped services
@@ -1019,17 +1046,55 @@ export default function ClaimBatchEntry() {
                 </Box>
             </Box>
 
-            <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="xs" fullWidth
-                PaperProps={{ sx: { borderRadius: '0.1875rem' } }}>
-                <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>تحديد سبب الرفض</DialogTitle>
-                <DialogContent>
-                    <TextField fullWidth autoFocus multiline rows={3} sx={{ mt: 1 }}
-                        value={rejectionInput} onChange={e => setRejectionInput(e.target.value)}
-                        placeholder="أدخل سبب الرفض..." />
+            <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="sm" fullWidth
+                PaperProps={{ sx: { borderRadius: '0.375rem' } }}>
+                <DialogTitle sx={{ fontWeight: 700, color: 'error.main', pb: 1 }}>
+                    {rejectType === 'claim' ? 'رفض المطالبة — تحديد السبب' : 'رفض البند — تحديد السبب'}
+                </DialogTitle>
+                <DialogContent sx={{ pt: '0.75rem !important' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                        اختر سبباً من القائمة أو اكتب سبباً جديداً
+                    </Typography>
+                    <Autocomplete
+                        freeSolo
+                        options={rejectionReasons.map(r => r.reasonText)}
+                        value={rejectionInput}
+                        onChange={(_, val) => setRejectionInput(val || '')}
+                        onInputChange={(_, val) => setRejectionInput(val)}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                autoFocus
+                                fullWidth
+                                size="small"
+                                label="سبب الرفض"
+                                placeholder="اختر أو اكتب سبباً..."
+                                error={!rejectionInput?.trim()}
+                            />
+                        )}
+                        noOptionsText="لا توجد أسباب — اكتب سبباً جديداً"
+                    />
+                    {rejectionInput?.trim() && !rejectionReasons.some(r => r.reasonText === rejectionInput.trim()) && (
+                        <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="caption" color="text.secondary">
+                                سبب جديد — يمكنك حفظه في القائمة:
+                            </Typography>
+                            <Button
+                                size="small"
+                                startIcon={isSavingNewReason ? <CircularProgress size={12} /> : <AddReasonIcon sx={{ fontSize: '0.9rem' }} />}
+                                onClick={saveNewReason}
+                                disabled={isSavingNewReason}
+                                sx={{ fontSize: '0.75rem', textTransform: 'none' }}
+                            >
+                                حفظ في القائمة
+                            </Button>
+                        </Box>
+                    )}
                 </DialogContent>
-                <DialogActions sx={{ p: '1.0rem' }}>
+                <DialogActions sx={{ p: '1.0rem', gap: 1 }}>
                     <Button onClick={() => setRejectDialogOpen(false)} color="inherit">إلغاء</Button>
-                    <Button onClick={confirmRejection} variant="contained" color="error" disabled={!rejectionInput.trim()}>
+                    <Button onClick={confirmRejection} variant="contained" color="error"
+                        disabled={!rejectionInput?.trim()}>
                         تأكيد الرفض
                     </Button>
                 </DialogActions>

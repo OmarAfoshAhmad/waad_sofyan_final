@@ -168,6 +168,19 @@ public class ClaimMapper {
                 }
             }
 
+            // FALLBACK: إذا لم يُوجَد عقد بالتاريخ لكن pricingItemId محدد (مثلاً تاريخ
+            // الخدمة قبل بداية العقد)
+            // نأخذ سعر العقد مباشرة من الـ pricing_item لأن المستخدم اختار الخدمة بوعي
+            if (resolvedUnitPrice == null && lineDto.getPricingItemId() != null) {
+                resolvedUnitPrice = pricingItemRepository.findById(lineDto.getPricingItemId())
+                        .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getContractPrice)
+                        .orElse(null);
+                if (resolvedUnitPrice != null) {
+                    log.info("🔄 [MAPPER] Fallback to pricingItemId={} contractPrice={}",
+                            lineDto.getPricingItemId(), resolvedUnitPrice);
+                }
+            }
+
             if (resolvedUnitPrice == null) {
                 // لا يوجد عقد ولا خدمة طبية موجودة → نستخدم السعر المدخل
                 resolvedUnitPrice = enteredUnitPrice;
@@ -408,6 +421,17 @@ public class ClaimMapper {
                     // FALLBACK: If draft + no contract, try base price
                     resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
                             : BigDecimal.ZERO;
+                }
+            }
+
+            // FALLBACK: إذا لم يُوجَد عقد بالتاريخ لكن pricingItemId محدد
+            if (resolvedUnitPrice == null && lineDto.getPricingItemId() != null) {
+                resolvedUnitPrice = pricingItemRepository.findById(lineDto.getPricingItemId())
+                        .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getContractPrice)
+                        .orElse(null);
+                if (resolvedUnitPrice != null) {
+                    log.info("🔄 [REPLACE_DRAFT] Fallback to pricingItemId={} contractPrice={}",
+                            lineDto.getPricingItemId(), resolvedUnitPrice);
                 }
             }
 

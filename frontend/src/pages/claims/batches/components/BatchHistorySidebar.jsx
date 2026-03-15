@@ -117,21 +117,21 @@ export const BatchHistorySidebar = ({
                                         </Typography>
                                         <Typography variant="caption" sx={{
                                             fontSize: '0.75rem', fontWeight: 500, px: 0.6, py: 0.1, borderRadius: 1,
-                                            color: c.status === 'REJECTED' ? 'error.dark'
+                                            color: (c.status === 'REJECTED' || c.refusedAmount > 0) ? 'error.dark'
                                                 : c.status === 'NEEDS_CORRECTION' ? 'warning.dark'
                                                 : c.status === 'DRAFT' ? 'text.secondary'
                                                 : 'success.dark',
-                                            bgcolor: c.status === 'REJECTED' ? alpha('#d32f2f', 0.1)
+                                            bgcolor: (c.status === 'REJECTED' || c.refusedAmount > 0) ? alpha('#d32f2f', 0.1)
                                                 : c.status === 'NEEDS_CORRECTION' ? alpha('#ed6c02', 0.1)
                                                 : c.status === 'DRAFT' ? alpha('#9e9e9e', 0.1)
                                                 : alpha('#2e7d32', 0.1)
                                         }}>
-                                            {c.status === 'REJECTED' ? 'مرفوضة'
+                                            {(c.status === 'REJECTED' || c.refusedAmount > 0) ? 'مرفوضة'
                                             : c.status === 'NEEDS_CORRECTION' ? 'معلقة'
                                             : c.status === 'DRAFT' ? 'مسودة'
                                             : c.status === 'PENDING' ? 'انتظار'
                                             : c.status === 'UNDER_REVIEW' ? 'مراجعة'
-                                            : 'مقبولة'}
+                                            : 'معتمدة'}
                                         </Typography>
                                     </Stack>
                                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>

@@ -444,9 +444,11 @@ export default function ClaimBatchDetail() {
         };
     }, [claims]);
 
-    const getStatusChip = (status) => {
+    const getStatusChip = (status, refusedAmount = 0) => {
         const config = {
-            'APPROVED': { label: 'معتمدة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
+            'APPROVED': refusedAmount > 0
+                ? { label: 'مرفوضة', color: 'error', bgcolor: '#fff1f0', border: '#ffa39e' }
+                : { label: 'معتمدة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
             'SETTLED': { label: 'تمت التسوية', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
             'PAID': { label: 'مدفوعة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
             'BATCHED': { label: 'في دفعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
@@ -521,7 +523,7 @@ export default function ClaimBatchDetail() {
                     </Typography>
                 );
             case 'status':
-                return getStatusChip(claim.status || 'APPROVED');
+                return getStatusChip(claim.status || 'APPROVED', claim.refusedAmount || 0);
             case 'amount':
                 return <Typography variant="body2" fontWeight={400}>{claim.requestedAmount?.toFixed(2)}</Typography>;
             case 'covered':
