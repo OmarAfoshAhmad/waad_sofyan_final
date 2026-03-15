@@ -8,7 +8,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
-    Box, Grid, Stack, Typography, Button, TextField, Autocomplete,
+    Box, Stack, Typography, Button, TextField, Autocomplete,
     Divider, CircularProgress, IconButton, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, Chip, Paper,
     Checkbox, FormControlLabel, Tooltip, alpha, TableFooter,
@@ -105,6 +105,11 @@ export default function ClaimBatchEntry() {
     // ── حالة النموذج ─────────────────────────────────────────────────────────
     const [member, setMember] = useState(null);
     const [memberInput, setMemberInput] = useState('');
+    const [debouncedMemberInput, setDebouncedMemberInput] = useState('');
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedMemberInput(memberInput), 350);
+        return () => clearTimeout(t);
+    }, [memberInput]);
     const [diagnosis, setDiagnosis] = useState('');
     const [complaint, setComplaint] = useState('');
     const [applyBenefits, setApplyBenefits] = useState(true);
@@ -223,17 +228,25 @@ export default function ClaimBatchEntry() {
         queryFn: () => providerContractsService.getActiveContractByProvider(providerId),
         enabled: !!providerId
     });
+    const memberSearchParams = useMemo(() => {
+        const q = debouncedMemberInput.trim();
+        // Smart detection: Arabic → fullName, digits → cardNumber, barcode pattern → barcode
+        if (/^[\u0600-\u06FF]/.test(q)) return { fullName: q };
+        if (/^[A-Z]{2,4}-\d{4}-\d+/i.test(q)) return { barcode: q };
+        if (/^\d+$/.test(q)) return { cardNumber: q };
+        return { fullName: q };
+    }, [debouncedMemberInput]);
+
     const { data: memberResults, isFetching: searchingMember } = useQuery({
-        queryKey: ['member-search', memberInput, employerId, policyId],
+        queryKey: ['member-search', debouncedMemberInput, employerId],
         queryFn: () => unifiedMembersService.searchMembers({
-            fullName: memberInput,
+            ...memberSearchParams,
             employerId,
-            benefitPolicyId: policyId,
             status: 'ACTIVE',
-            size: 100
+            size: 20
         }),
-        enabled: memberInput.length >= 2,
-        staleTime: 5000
+        enabled: debouncedMemberInput.length >= 2,
+        staleTime: 10000
     });
     const { data: summaryData } = useQuery({
         queryKey: ['batch-stats', employerId, providerId, month, year],
@@ -335,22 +348,25 @@ export default function ClaimBatchEntry() {
             setRejectionInput(editingClaim.reviewerComment || '');
 
             setLines(editingClaim.lines.map(l => {
-                const items = Array.isArray(contractedRaw) ? contractedRaw : (contractedRaw?.items || []);
-                const svc = items.find(s => s.id === l.medicalServiceId || s.medicalService?.id === l.medicalServiceId);
-                const cp = svc?.contractPrice || svc?.price || l.unitPrice;
+                // المطابقة: 1) pricingItemId (الأدق لأن الكود قد يختلف بين SV-xxxx وWE-xxxx)
+                //             2) serviceCode كاحتياط للبنود الجديدة
+                const svc = serviceOptions.find(s =>
+                    (s.pricingItemId != null && l.pricingItemId != null && s.pricingItemId === l.pricingItemId) ||
+                    (s.serviceCode && l.serviceCode && s.serviceCode === l.serviceCode)
+                );
+                // سعر العقد الحي من بيانات العقد — 65 بدلاً من 70 المدخل
+                const cp = svc ? (svc.contractPrice || 0) : 0;
 
-                // Restore entered price: if not rejected, refusedAmount represents price excess
-                let enteredPrice = l.unitPrice;
-                if (!l.rejected && (l.refusedAmount || 0) > 0) {
-                    enteredPrice = (parseFloat(l.unitPrice) || 0) + ((parseFloat(l.refusedAmount) || 0) / (parseInt(l.quantity) || 1));
-                }
+                // السعر المُدخل = requestedUnitPrice إذا متوفر، وإلا unitPrice
+                const enteredPrice = l.requestedUnitPrice != null
+                    ? parseFloat(l.requestedUnitPrice) || 0
+                    : parseFloat(l.unitPrice) || 0;
 
-                const serviceObj = svc
-                    ? { ...svc, label: `${svc.serviceCode ? '[' + svc.serviceCode + '] ' : ''}${svc.serviceName || ''}` }
-                    : {
-                        id: l.medicalServiceId, serviceCode: l.medicalServiceCode, serviceName: l.medicalServiceName,
-                        label: `${l.medicalServiceCode ? '[' + l.medicalServiceCode + '] ' : ''}${l.medicalServiceName || ''}`
-                    };
+                const serviceObj = svc || {
+                    serviceCode: l.serviceCode,
+                    serviceName: l.serviceName,
+                    label: `${l.serviceCode ? '[' + l.serviceCode + '] ' : ''}${l.serviceName || ''}`
+                };
                 const line = {
                     id: l.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
                     service: serviceObj,
@@ -381,20 +397,28 @@ export default function ClaimBatchEntry() {
 
     const memberOptions = useMemo(() => {
         const c = memberResults?.data?.content ?? memberResults?.content;
-        return Array.isArray(c) ? c : [];
-    }, [memberResults]);
+        const list = Array.isArray(c) ? c : [];
+        // Always include the currently selected member (for edit mode where no search is active)
+        if (member?.id && !list.find(m => m.id === member.id)) {
+            return [member, ...list];
+        }
+        return list;
+    }, [memberResults, member]);
 
     const serviceOptions = useMemo(() => {
         const items = Array.isArray(contractedRaw) ? contractedRaw : (contractedRaw?.items || []);
-        return items.map(s => ({
-            ...s,
-            label: `${s.code ? '[' + s.code + '] ' : (s.serviceCode ? '[' + s.serviceCode + '] ' : '')}${s.name || s.serviceName || ''}`,
-            serviceName: s.serviceName || s.name || '',
-            serviceCode: s.serviceCode || s.code || '',
-            medicalServiceId: s.medicalServiceId,
-            pricingItemId: s.pricingItemId,
-            price: s.contractPrice || 0
-        }));
+        return items.map(s => {
+            const code = s.serviceCode || s.code || '';
+            const name = s.serviceName || s.name || '';
+            return {
+                ...s,
+                label: `${code ? '[' + code + '] ' : ''}${name}`,
+                serviceName: name,
+                serviceCode: code,
+                pricingItemId: s.pricingItemId,
+                contractPrice: s.contractPrice || 0
+            };
+        });
     }, [contractedRaw]);
 
     const batchContent = useMemo(() =>
@@ -443,11 +467,11 @@ export default function ClaimBatchEntry() {
             cov = await fetchCoverage(svc, primaryCategoryCode);
         }
 
-        const price = svc?.contractPrice ?? svc?.basePrice ?? svc?.price ?? 0;
+        const price = svc?.contractPrice ?? 0;
         updateLine(idx, {
             service: svc,
-            serviceName: svc.serviceName || svc.name || (typeof val === 'string' ? val : ''),
-            serviceCode: svc.serviceCode || svc.code || '',
+            serviceName: svc.serviceName || (typeof val === 'string' ? val : ''),
+            serviceCode: svc.serviceCode || '',
             unitPrice: price,
             contractPrice: price,
             ...cov
@@ -542,6 +566,11 @@ export default function ClaimBatchEntry() {
                 return;
             }
 
+            // اكتشاف تلقائي: إذا كانت جميع البنود مرفوضة → حالة المطالبة = REJECTED
+            const activeLines = lines.filter(l => l.service || l.serviceName);
+            const allLinesRejected = activeLines.length > 0 && activeLines.every(l => l.rejected);
+            const effectivelyRejected = isClaimRejected || allLinesRejected;
+
             const claimData = {
                 memberId: member.id,
                 providerId: parseInt(providerId),
@@ -550,17 +579,16 @@ export default function ClaimBatchEntry() {
                 diagnosisDescription: diagnosis,
                 complaint,
                 notes,
-                status: isClaimRejected ? 'REJECTED' : 'APPROVED',
-                rejectionReason: isClaimRejected ? rejectionInput : null,
+                status: effectivelyRejected ? 'REJECTED' : 'APPROVED',
+                rejectionReason: effectivelyRejected ? (rejectionInput || (allLinesRejected ? 'جميع البنود مرفوضة' : null)) : null,
                 preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
                 manualCategoryEnabled,
                 // Always send context category so backend can set appliedCategoryId on unmapped services
                 primaryCategoryCode: primaryCategoryCode,
                 lines: lines.map(l => ({
-                    medicalServiceId: l.service?.medicalServiceId || null,
                     pricingItemId: l.service?.pricingItemId || null,
-                    serviceName: l.serviceName || l.service?.serviceName || l.service?.name || '',
-                    serviceCode: l.serviceCode || l.service?.serviceCode || l.service?.code || '',
+                    serviceName: l.serviceName || l.service?.serviceName || '',
+                    serviceCode: l.serviceCode || l.service?.serviceCode || '',
                     quantity: parseInt(l.quantity) || 1,
                     unitPrice: parseFloat(l.unitPrice) || 0,
                     refusedAmount: parseFloat(l.refusedAmount) || 0,
@@ -984,6 +1012,7 @@ export default function ClaimBatchEntry() {
                             openRejectDialog={openRejectDialog}
                             totals={totals}
                             theme={theme}
+                            lines={lines}
                             t={t}
                         />
                     </Paper>

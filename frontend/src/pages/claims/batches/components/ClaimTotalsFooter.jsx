@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Button, Typography, alpha } from '@mui/material';
-import { Block as RejectIcon } from '@mui/icons-material';
+import { Box, Button, Typography, alpha, Tooltip } from '@mui/material';
+import { Block as RejectIcon, WarningAmber as WarnIcon } from '@mui/icons-material';
 
 export const ClaimTotalsFooter = ({
     isClaimRejected,
@@ -11,47 +11,72 @@ export const ClaimTotalsFooter = ({
     openRejectDialog,
     totals,
     theme,
+    lines,
     t
 }) => {
+    // اكتشاف أن جميع البنود مرفوضة
+    const activeLines = (lines || []).filter(l => l.service || l.serviceName);
+    const allLinesRejected = activeLines.length > 0 && activeLines.every(l => l.rejected);
+    const showRejected = isClaimRejected || allLinesRejected;
+    const netApproved = totals.total - totals.refused;
+
     return (
-        <Box sx={{ 
-            flexShrink: 0, px: '1.25rem', py: '0.75rem', 
-            borderTop: `1px solid ${theme.palette.divider}`, 
-            display: 'flex', gap: '1.0rem', alignItems: 'center', 
-            bgcolor: alpha(theme.palette.primary.main, 0.02) 
+        <Box sx={{
+            flexShrink: 0, px: '1.25rem', py: '0.75rem',
+            borderTop: `2px solid ${showRejected ? theme.palette.error.light : theme.palette.divider}`,
+            display: 'flex', gap: '1.0rem', alignItems: 'center',
+            bgcolor: showRejected ? alpha(theme.palette.error.main, 0.04) : alpha(theme.palette.primary.main, 0.02)
         }}>
-            <Button variant="contained" color={isClaimRejected ? "error" : "primary"}
+            <Button variant="contained" color={showRejected ? "error" : "primary"}
                 onClick={handleSave} disabled={saving || !isDirty} sx={{ px: '2.0rem', fontWeight: 600 }}>
-                {saving ? t('claimEntry.saving') : (isClaimRejected ? "حفظ (مرفوض)" : t('claimEntry.saveAndAdd'))}
+                {saving ? t('claimEntry.saving') : (showRejected ? "حفظ (مرفوضة)" : t('claimEntry.saveAndAdd'))}
             </Button>
 
-            {!isClaimRejected ? (
+            {!isClaimRejected && !allLinesRejected ? (
                 <Button variant="outlined" color="error" startIcon={<RejectIcon />}
                     onClick={() => openRejectDialog('claim')} sx={{ fontWeight: 500 }}>
                     رفض المطالبة
                 </Button>
-            ) : (
+            ) : isClaimRejected ? (
                 <Button variant="text" onClick={() => setIsClaimRejected(false)} sx={{ fontWeight: 500 }}>
                     تغيير للقبول
                 </Button>
+            ) : null}
+
+            {/* تحذير عند رفض جميع البنود تلقائياً */}
+            {allLinesRejected && !isClaimRejected && (
+                <Tooltip title="جميع البنود مرفوضة — ستُحفظ المطالبة تلقائياً كمرفوضة" arrow>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'error.main' }}>
+                        <WarnIcon sx={{ fontSize: '1rem' }} />
+                        <Typography variant="caption" color="error.main" fontWeight={600} sx={{ fontSize: '0.78rem' }}>
+                            جميع البنود مرفوضة
+                        </Typography>
+                    </Box>
+                </Tooltip>
             )}
 
-            <Box sx={{ mr: 'auto', display: 'flex', gap: '2.0rem' }}>
+            <Box sx={{ mr: 'auto', display: 'flex', gap: '1.5rem' }}>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>حصة الشركة</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>الإجمالي المطلوب</Typography>
+                    <Typography variant="subtitle2" fontWeight={600} color="text.primary" sx={{ fontSize: '0.9rem' }}>{totals.total.toFixed(2)}</Typography>
+                </Box>
+                {totals.refused > 0 && (
+                    <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="caption" display="block" color="error.main" sx={{ fontSize: '0.75rem' }}>المرفوض</Typography>
+                        <Typography variant="subtitle2" fontWeight={700} color="error.main" sx={{ fontSize: '0.9rem' }}>−{totals.refused.toFixed(2)}</Typography>
+                    </Box>
+                )}
+                <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>الصافي المعتمد</Typography>
+                    <Typography variant="subtitle2" fontWeight={600} color={netApproved > 0 ? 'primary.main' : 'text.disabled'} sx={{ fontSize: '0.9rem' }}>{netApproved.toFixed(2)}</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>حصة الشركة</Typography>
                     <Typography variant="subtitle2" fontWeight={600} color="success.main" sx={{ fontSize: '0.9rem' }}>{totals.company.toFixed(2)}</Typography>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>حصة المشترك</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>حصة المشترك</Typography>
                     <Typography variant="subtitle2" fontWeight={600} color="warning.dark" sx={{ fontSize: '0.9rem' }}>{totals.employee.toFixed(2)}</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>المرفوضات</Typography>
-                    <Typography variant="subtitle2" fontWeight={600} color="error.main" sx={{ fontSize: '0.9rem' }}>{totals.refused.toFixed(2)}</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem' }}>الإجمالي</Typography>
-                    <Typography variant="h6" fontWeight={600} color="primary.main" sx={{ fontSize: '1.1rem' }}>{totals.total.toFixed(2)}</Typography>
                 </Box>
             </Box>
         </Box>

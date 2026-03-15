@@ -30,7 +30,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Service layer for ProviderContract operations (Legacy module - integrated with Provider)
+ * Service layer for ProviderContract operations (Legacy module - integrated
+ * with Provider)
  * 
  * Responsibilities:
  * - Contract CRUD operations
@@ -71,74 +72,70 @@ public class ProviderContractService {
      * 5. No overlapping contracts (optional - for strict mode)
      * 
      * @param providerId Provider ID
-     * @param dto Contract data
+     * @param dto        Contract data
      * @return Created contract
      * @throws ResourceNotFoundException if provider or service not found
-     * @throws BusinessRuleException if validation fails
+     * @throws BusinessRuleException     if validation fails
      */
     public ProviderContractResponseDto createContract(Long providerId, ProviderContractCreateDto dto) {
-        log.info("[PROVIDER-CONTRACT] Creating contract for provider {} and service {}", 
-            providerId, dto.getServiceCode());
+        log.info("[PROVIDER-CONTRACT] Creating contract for provider {} and service {}",
+                providerId, dto.getServiceCode());
 
         // Step 1: Validate provider
         Provider provider = providerRepository.findById(providerId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Provider not found with ID: " + providerId
-            ));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Provider not found with ID: " + providerId));
 
         if (!provider.getActive()) {
             throw new BusinessRuleException(
-                "Cannot create contract for inactive provider: " + provider.getName()
-            );
+                    "Cannot create contract for inactive provider: " + provider.getName());
         }
 
         // Step 2: Validate service
         MedicalService service = medicalServiceRepository.findByCode(dto.getServiceCode())
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Medical service not found with code: " + dto.getServiceCode()
-            ));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Medical service not found with code: " + dto.getServiceCode()));
 
         if (!service.isActive()) {
             throw new BusinessRuleException(
-                "Cannot create contract for inactive service: " + service.getName()
-            );
+                    "Cannot create contract for inactive service: " + service.getName());
         }
 
         // Step 3: Validate date range
         if (dto.getEffectiveTo() != null && dto.getEffectiveTo().isBefore(dto.getEffectiveFrom())) {
             throw new BusinessRuleException(
-                "Effective to date must be after or equal to effective from date"
-            );
+                    "Effective to date must be after or equal to effective from date");
         }
 
         // Step 4: Check for overlapping contracts (warning only, not strict)
         boolean hasOverlap = providerContractRepository.hasOverlappingContract(
-            providerId,
-            dto.getServiceCode(),
-            dto.getEffectiveFrom(),
-            dto.getEffectiveTo(),
-            0L // No exclusion for new contract
+                providerId,
+                dto.getServiceCode(),
+                dto.getEffectiveFrom(),
+                dto.getEffectiveTo(),
+                0L // No exclusion for new contract
         );
 
         if (hasOverlap) {
-            log.warn("[PROVIDER-CONTRACT] Overlapping contract detected for provider {} and service {}", 
-                providerId, dto.getServiceCode());
+            log.warn("[PROVIDER-CONTRACT] Overlapping contract detected for provider {} and service {}",
+                    providerId, dto.getServiceCode());
             // Allow overlapping contracts for price history
-            // throw new BusinessRuleException("Overlapping contract exists for this period");
+            // throw new BusinessRuleException("Overlapping contract exists for this
+            // period");
         }
 
         // Step 5: Create contract
         ProviderContract contract = ProviderContract.builder()
-            .providerId(providerId)
-            .serviceCode(dto.getServiceCode())
-            .contractPrice(dto.getContractPrice())
-            .currency(dto.getCurrency() != null ? dto.getCurrency() : "LYD")
-            .effectiveFrom(dto.getEffectiveFrom())
-            .effectiveTo(dto.getEffectiveTo())
-            .notes(dto.getNotes())
-            .active(true)
-            .createdBy(getCurrentUsername())
-            .build();
+                .providerId(providerId)
+                .serviceCode(dto.getServiceCode())
+                .contractPrice(dto.getContractPrice())
+                .currency(dto.getCurrency() != null ? dto.getCurrency() : "LYD")
+                .effectiveFrom(dto.getEffectiveFrom())
+                .effectiveTo(dto.getEffectiveTo())
+                .notes(dto.getNotes())
+                .active(true)
+                .createdBy(getCurrentUsername())
+                .build();
 
         contract = providerContractRepository.save(contract);
 
@@ -157,23 +154,21 @@ public class ProviderContractService {
      * 
      * @param providerId Provider ID
      * @param contractId Contract ID
-     * @param dto Update data
+     * @param dto        Update data
      * @return Updated contract
      * @throws ResourceNotFoundException if contract not found
-     * @throws BusinessRuleException if validation fails
+     * @throws BusinessRuleException     if validation fails
      */
     public ProviderContractResponseDto updateContract(
-        Long providerId, 
-        Long contractId, 
-        ProviderContractUpdateDto dto
-    ) {
+            Long providerId,
+            Long contractId,
+            ProviderContractUpdateDto dto) {
         log.info("[PROVIDER-CONTRACT] Updating contract {} for provider {}", contractId, providerId);
 
         // Find contract
         ProviderContract contract = providerContractRepository.findByIdAndProviderId(contractId, providerId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Contract not found with ID: " + contractId + " for provider: " + providerId
-            ));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Contract not found with ID: " + contractId + " for provider: " + providerId));
 
         // Update fields (only if provided)
         if (dto.getContractPrice() != null) {
@@ -215,7 +210,7 @@ public class ProviderContractService {
 
         // Fetch service for response
         MedicalService service = medicalServiceRepository.findByCode(contract.getServiceCode())
-            .orElse(null);
+                .orElse(null);
 
         return mapToResponseDto(contract, service);
     }
@@ -233,9 +228,8 @@ public class ProviderContractService {
         log.info("[PROVIDER-CONTRACT] Deleting contract {} for provider {}", contractId, providerId);
 
         ProviderContract contract = providerContractRepository.findByIdAndProviderId(contractId, providerId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Contract not found with ID: " + contractId + " for provider: " + providerId
-            ));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Contract not found with ID: " + contractId + " for provider: " + providerId));
 
         contract.setActive(false);
         contract.setUpdatedBy(getCurrentUsername());
@@ -251,38 +245,34 @@ public class ProviderContractService {
      * 
      * @param providerId Provider ID
      * @param activeOnly Filter by active status
-     * @param pageable Pagination
+     * @param pageable   Pagination
      * @return Page of contracts
      */
     @Transactional(readOnly = true)
     public Page<ProviderContractResponseDto> getProviderContracts(
-        Long providerId, 
-        boolean activeOnly,
-        Pageable pageable
-    ) {
-        log.debug("[PROVIDER-CONTRACT] Getting contracts for provider {}, activeOnly={}", 
-            providerId, activeOnly);
+            Long providerId,
+            boolean activeOnly,
+            Pageable pageable) {
+        log.debug("[PROVIDER-CONTRACT] Getting contracts for provider {}, activeOnly={}",
+                providerId, activeOnly);
 
         Page<ProviderContract> contracts = providerContractRepository.findByProviderIdAndActive(
-            providerId, 
-            activeOnly, 
-            pageable
-        );
+                providerId,
+                activeOnly,
+                pageable);
 
         // Fetch all service codes
         List<String> serviceCodes = contracts.getContent().stream()
-            .map(ProviderContract::getServiceCode)
-            .distinct()
-            .collect(Collectors.toList());
+                .map(ProviderContract::getServiceCode)
+                .distinct()
+                .collect(Collectors.toList());
 
         // Fetch services in bulk
         Map<String, MedicalService> serviceMap = medicalServiceRepository.findByCodes(serviceCodes)
-            .stream()
-            .collect(Collectors.toMap(MedicalService::getCode, s -> s));
+                .stream()
+                .collect(Collectors.toMap(MedicalService::getCode, s -> s));
 
-        return contracts.map(contract -> 
-            mapToResponseDto(contract, serviceMap.get(contract.getServiceCode()))
-        );
+        return contracts.map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())));
     }
 
     /**
@@ -299,17 +289,17 @@ public class ProviderContractService {
 
         // Fetch services
         List<String> serviceCodes = contracts.stream()
-            .map(ProviderContract::getServiceCode)
-            .distinct()
-            .collect(Collectors.toList());
+                .map(ProviderContract::getServiceCode)
+                .distinct()
+                .collect(Collectors.toList());
 
         Map<String, MedicalService> serviceMap = medicalServiceRepository.findByCodes(serviceCodes)
-            .stream()
-            .collect(Collectors.toMap(MedicalService::getCode, s -> s));
+                .stream()
+                .collect(Collectors.toMap(MedicalService::getCode, s -> s));
 
         return contracts.stream()
-            .map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())))
-            .collect(Collectors.toList());
+                .map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -325,12 +315,11 @@ public class ProviderContractService {
         log.debug("[PROVIDER-CONTRACT] Getting contract {} for provider {}", contractId, providerId);
 
         ProviderContract contract = providerContractRepository.findByIdAndProviderId(contractId, providerId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Contract not found with ID: " + contractId + " for provider: " + providerId
-            ));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Contract not found with ID: " + contractId + " for provider: " + providerId));
 
         MedicalService service = medicalServiceRepository.findByCode(contract.getServiceCode())
-            .orElse(null);
+                .orElse(null);
 
         return mapToResponseDto(contract, service);
     }
@@ -343,27 +332,25 @@ public class ProviderContractService {
      * Uses the NORMALIZED provider_contract_pricing_items table ONLY.
      * Legacy table (legacy_provider_contracts) is DEPRECATED and should be removed.
      * 
-     * @param providerId Provider ID
+     * @param providerId  Provider ID
      * @param serviceCode Service code
-     * @param date Date to check (default: today)
+     * @param date        Date to check (default: today)
      * @return Effective price
      */
     @Transactional(readOnly = true)
     public EffectivePriceResponseDto getEffectivePrice(
-        Long providerId, 
-        String serviceCode, 
-        LocalDate date
-    ) {
-        log.debug("[PROVIDER-CONTRACT] Getting effective price for provider {}, service {}, date {}", 
-            providerId, serviceCode, date);
+            Long providerId,
+            String serviceCode,
+            LocalDate date) {
+        log.debug("[PROVIDER-CONTRACT] Getting effective price for provider {}, service {}, date {}",
+                providerId, serviceCode, date);
 
         LocalDate effectiveDate = date != null ? date : LocalDate.now();
 
         // Fetch provider
         Provider provider = providerRepository.findById(providerId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                "Provider not found with ID: " + providerId
-            ));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Provider not found with ID: " + providerId));
 
         // Attempt to find service (NOT strictly required anymore for price lookup)
         MedicalService service = medicalServiceRepository.findByCode(serviceCode).orElse(null);
@@ -372,49 +359,52 @@ public class ProviderContractService {
         // Use NORMALIZED table (provider_contract_pricing_items)
         // ═══════════════════════════════════════════════════════════════════════════
         Optional<ProviderContractPricingItem> pricingOpt = (service != null)
-            ? pricingItemRepository.findEffectivePricing(providerId, service.getId(), effectiveDate)
-            : pricingItemRepository.findEffectivePricingByCode(providerId, serviceCode, effectiveDate);
+                ? pricingItemRepository.findEffectivePricing(providerId, service.getId(), effectiveDate)
+                : pricingItemRepository.findEffectivePricingByCode(providerId, serviceCode, effectiveDate);
 
         if (pricingOpt.isPresent()) {
             ProviderContractPricingItem pricing = pricingOpt.get();
-            log.debug("✅ Found effective pricing: provider={}, service={}, price={}", 
-                providerId, serviceCode, pricing.getContractPrice());
-            
+            log.debug("✅ Found effective pricing: provider={}, service={}, price={}",
+                    providerId, serviceCode, pricing.getContractPrice());
+
             return EffectivePriceResponseDto.builder()
+                    .providerId(providerId)
+                    .providerName(provider.getName())
+                    .serviceCode(serviceCode)
+                    .serviceName(pricing.getServiceName() != null ? pricing.getServiceName()
+                            : (service != null ? service.getName() : "Unknown"))
+                    .contractPrice(pricing.getContractPrice())
+                    .currency(pricing.getCurrency())
+                    .effectiveDate(effectiveDate)
+                    .contractId(pricing.getContract().getId())
+                    .effectiveFrom(pricing.getEffectiveFrom() != null ? pricing.getEffectiveFrom()
+                            : pricing.getContract().getStartDate())
+                    .effectiveTo(pricing.getEffectiveTo() != null ? pricing.getEffectiveTo()
+                            : pricing.getContract().getEndDate())
+                    .pricingItemId(pricing.getId())
+                    .hasContract(true)
+                    .message("Contract found")
+                    .build();
+        }
+
+        // No contract found in either table
+        log.warn("❌ No contract found for provider={}, service={}, date={}",
+                providerId, serviceCode, effectiveDate);
+
+        return EffectivePriceResponseDto.builder()
                 .providerId(providerId)
                 .providerName(provider.getName())
                 .serviceCode(serviceCode)
-                .serviceName(pricing.getServiceName() != null ? pricing.getServiceName() : (service != null ? service.getName() : "Unknown"))
-                .contractPrice(pricing.getContractPrice())
-                .currency(pricing.getCurrency())
+                .serviceName(service != null ? service.getName() : serviceCode)
+                .contractPrice(null)
+                .currency("LYD")
                 .effectiveDate(effectiveDate)
-                .contractId(pricing.getContract().getId())
-                .effectiveFrom(pricing.getEffectiveFrom() != null ? pricing.getEffectiveFrom() : pricing.getContract().getStartDate())
-                .effectiveTo(pricing.getEffectiveTo() != null ? pricing.getEffectiveTo() : pricing.getContract().getEndDate())
-                .pricingItemId(pricing.getId())
-                .hasContract(true)
-                .message("Contract found")
+                .contractId(null)
+                .effectiveFrom(null)
+                .effectiveTo(null)
+                .hasContract(false)
+                .message("No contract found for this date")
                 .build();
-        }
-        
-        // No contract found in either table
-        log.warn("❌ No contract found for provider={}, service={}, date={}", 
-            providerId, serviceCode, effectiveDate);
-            
-        return EffectivePriceResponseDto.builder()
-            .providerId(providerId)
-            .providerName(provider.getName())
-            .serviceCode(serviceCode)
-            .serviceName(service.getName())
-            .contractPrice(null)
-            .currency("LYD")
-            .effectiveDate(effectiveDate)
-            .contractId(null)
-            .effectiveFrom(null)
-            .effectiveTo(null)
-            .hasContract(false)
-            .message("No contract found for this date")
-            .build();
     }
 
     // ==================== STATISTICS ====================
@@ -457,17 +447,17 @@ public class ProviderContractService {
 
         // Fetch services
         List<String> serviceCodes = contracts.stream()
-            .map(ProviderContract::getServiceCode)
-            .distinct()
-            .collect(Collectors.toList());
+                .map(ProviderContract::getServiceCode)
+                .distinct()
+                .collect(Collectors.toList());
 
         Map<String, MedicalService> serviceMap = medicalServiceRepository.findByCodes(serviceCodes)
-            .stream()
-            .collect(Collectors.toMap(MedicalService::getCode, s -> s));
+                .stream()
+                .collect(Collectors.toMap(MedicalService::getCode, s -> s));
 
         return contracts.stream()
-            .map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())))
-            .collect(Collectors.toList());
+                .map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -482,17 +472,17 @@ public class ProviderContractService {
 
         // Fetch services
         List<String> serviceCodes = contracts.stream()
-            .map(ProviderContract::getServiceCode)
-            .distinct()
-            .collect(Collectors.toList());
+                .map(ProviderContract::getServiceCode)
+                .distinct()
+                .collect(Collectors.toList());
 
         Map<String, MedicalService> serviceMap = medicalServiceRepository.findByCodes(serviceCodes)
-            .stream()
-            .collect(Collectors.toMap(MedicalService::getCode, s -> s));
+                .stream()
+                .collect(Collectors.toMap(MedicalService::getCode, s -> s));
 
         return contracts.stream()
-            .map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())))
-            .collect(Collectors.toList());
+                .map(contract -> mapToResponseDto(contract, serviceMap.get(contract.getServiceCode())))
+                .collect(Collectors.toList());
     }
 
     // ==================== HELPER METHODS ====================
@@ -502,24 +492,24 @@ public class ProviderContractService {
      */
     private ProviderContractResponseDto mapToResponseDto(ProviderContract contract, MedicalService service) {
         return ProviderContractResponseDto.builder()
-            .id(contract.getId())
-            .providerId(contract.getProviderId())
-            .serviceCode(contract.getServiceCode())
-            .serviceName(service != null ? service.getName() : null)
-            .contractPrice(contract.getContractPrice())
-            .currency(contract.getCurrency())
-            .effectiveFrom(contract.getEffectiveFrom())
-            .effectiveTo(contract.getEffectiveTo())
-            .active(contract.isActive())
-            .notes(contract.getNotes())
-            .isCurrentlyEffective(contract.isCurrentlyEffective())
-            .isExpired(contract.isExpired())
-            .isOpenEnded(contract.isOpenEnded())
-            .createdAt(contract.getCreatedAt())
-            .updatedAt(contract.getUpdatedAt())
-            .createdBy(contract.getCreatedBy())
-            .updatedBy(contract.getUpdatedBy())
-            .build();
+                .id(contract.getId())
+                .providerId(contract.getProviderId())
+                .serviceCode(contract.getServiceCode())
+                .serviceName(service != null ? service.getName() : null)
+                .contractPrice(contract.getContractPrice())
+                .currency(contract.getCurrency())
+                .effectiveFrom(contract.getEffectiveFrom())
+                .effectiveTo(contract.getEffectiveTo())
+                .active(contract.isActive())
+                .notes(contract.getNotes())
+                .isCurrentlyEffective(contract.isCurrentlyEffective())
+                .isExpired(contract.isExpired())
+                .isOpenEnded(contract.isOpenEnded())
+                .createdAt(contract.getCreatedAt())
+                .updatedAt(contract.getUpdatedAt())
+                .createdBy(contract.getCreatedBy())
+                .updatedBy(contract.getUpdatedBy())
+                .build();
     }
 
     /**
@@ -532,9 +522,10 @@ public class ProviderContractService {
         }
         return "system";
     }
-    
+
     /**
-     * Get services requiring pre-approval for a member from provider's active contract.
+     * Get services requiring pre-approval for a member from provider's active
+     * contract.
      * 
      * This method:
      * 1. Gets the provider's active contract and its pricing items
@@ -542,54 +533,56 @@ public class ProviderContractService {
      * 3. Returns only services where requiresPreApproval = true
      * 
      * @param providerId Provider ID
-     * @param memberId Member ID to check benefit policy rules
+     * @param memberId   Member ID to check benefit policy rules
      * @return List of services requiring pre-approval with contract prices
      */
     public java.util.List<ProviderServiceDto> getServicesRequiringPreAuth(Long providerId, Long memberId) {
-        log.info("[PROVIDER-CONTRACT] Getting services requiring pre-auth for provider {} and member {}", 
+        log.info("[PROVIDER-CONTRACT] Getting services requiring pre-auth for provider {} and member {}",
                 providerId, memberId);
-        
+
         // Get pricing items from the NEW modern tables
-        java.util.List<com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem> pricingItems = 
-            pricingItemRepository.findEffectivePricingByProvider(providerId, java.time.LocalDate.now());
-        
+        java.util.List<com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem> pricingItems = pricingItemRepository
+                .findEffectivePricingByProvider(providerId, java.time.LocalDate.now());
+
         if (pricingItems.isEmpty()) {
             log.warn("[PROVIDER-CONTRACT] No pricing items found for provider {}", providerId);
             return java.util.Collections.emptyList();
         }
-        
+
         // Get member's benefit policy
         com.waad.tba.modules.member.entity.Member member = memberRepository.findById(memberId).orElse(null);
         if (member == null || member.getBenefitPolicy() == null) {
             log.warn("[PROVIDER-CONTRACT] Member {} not found or has no benefit policy", memberId);
             return java.util.Collections.emptyList();
         }
-        
+
         Long policyId = member.getBenefitPolicy().getId();
-        
+
         // Filter services that require pre-approval
         return pricingItems.stream()
-            .filter(item -> {
-                MedicalService service = item.getMedicalService();
-                if (service == null) return false;
-                
-                // Check if this service requires pre-approval in the member's policy
-                return benefitPolicyRuleService.requiresPreApproval(policyId, service.getId(), null);
-            })
-            .map(item -> {
-                MedicalService service = item.getMedicalService();
-                return ProviderServiceDto.builder()
-                    .serviceId(service.getId())
-                    .serviceCode(service.getCode())
-                    .serviceName(service.getName())
-                    .serviceNameArabic(service.getName())
-                    .categoryCode(null)
-                    .categoryName(item.getMedicalCategory() != null ? item.getMedicalCategory().getName() : null)
-                    .contractPrice(item.getContractPrice())
-                    .currency(item.getCurrency())
-                    .requiresPA(true)
-                    .build();
-            })
-            .collect(java.util.stream.Collectors.toList());
+                .filter(item -> {
+                    MedicalService service = item.getMedicalService();
+                    if (service == null)
+                        return false;
+
+                    // Check if this service requires pre-approval in the member's policy
+                    return benefitPolicyRuleService.requiresPreApproval(policyId, service.getId(), null);
+                })
+                .map(item -> {
+                    MedicalService service = item.getMedicalService();
+                    return ProviderServiceDto.builder()
+                            .serviceId(service.getId())
+                            .serviceCode(service.getCode())
+                            .serviceName(service.getName())
+                            .serviceNameArabic(service.getName())
+                            .categoryCode(null)
+                            .categoryName(
+                                    item.getMedicalCategory() != null ? item.getMedicalCategory().getName() : null)
+                            .contractPrice(item.getContractPrice())
+                            .currency(item.getCurrency())
+                            .requiresPA(true)
+                            .build();
+                })
+                .collect(java.util.stream.Collectors.toList());
     }
 }

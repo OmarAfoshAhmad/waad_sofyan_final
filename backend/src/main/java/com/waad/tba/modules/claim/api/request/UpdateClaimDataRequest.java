@@ -2,7 +2,6 @@ package com.waad.tba.modules.claim.api.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -30,7 +29,6 @@ public class UpdateClaimDataRequest {
     @Size(max = 255, message = "Doctor name must not exceed 255 characters")
     private String doctorName;
 
-    @NotBlank(message = "Diagnosis code is required")
     @Size(max = 20, message = "Diagnosis code must not exceed 20 characters")
     private String diagnosisCode;
 

@@ -84,10 +84,13 @@ export const BatchHistorySidebar = ({
                                     </Typography>
                                     <Stack direction="row" alignItems="center" spacing={0.25}>
                                         <Typography variant="caption" fontWeight={600} sx={{
-                                            color: 'success.dark', bgcolor: alpha('#2e7d32', 0.09),
+                                            color: c.status === 'REJECTED' ? 'error.dark' : 'success.dark',
+                                            bgcolor: c.status === 'REJECTED' ? alpha('#d32f2f', 0.09) : alpha('#2e7d32', 0.09),
                                             px: 0.7, py: 0.3, borderRadius: 1, fontSize: '0.85rem'
                                         }}>
-                                            {(c.approvedAmount || 0).toFixed(2)}
+                                            {c.status === 'REJECTED'
+                                                ? (c.requestedAmount || 0).toFixed(2)
+                                                : (c.approvedAmount || c.requestedAmount || 0).toFixed(2)}
                                         </Typography>
                                         {(c.refusedAmount > 0) && (
                                             <Typography variant="caption" fontWeight={600} sx={{
@@ -114,10 +117,21 @@ export const BatchHistorySidebar = ({
                                         </Typography>
                                         <Typography variant="caption" sx={{
                                             fontSize: '0.75rem', fontWeight: 500, px: 0.6, py: 0.1, borderRadius: 1,
-                                            color: c.status === 'REJECTED' ? 'error.dark' : 'success.dark',
-                                            bgcolor: c.status === 'REJECTED' ? alpha('#d32f2f', 0.1) : alpha('#2e7d32', 0.1)
+                                            color: c.status === 'REJECTED' ? 'error.dark'
+                                                : c.status === 'NEEDS_CORRECTION' ? 'warning.dark'
+                                                : c.status === 'DRAFT' ? 'text.secondary'
+                                                : 'success.dark',
+                                            bgcolor: c.status === 'REJECTED' ? alpha('#d32f2f', 0.1)
+                                                : c.status === 'NEEDS_CORRECTION' ? alpha('#ed6c02', 0.1)
+                                                : c.status === 'DRAFT' ? alpha('#9e9e9e', 0.1)
+                                                : alpha('#2e7d32', 0.1)
                                         }}>
-                                            {c.status === 'REJECTED' ? 'مرفوضة' : 'مقبولة'}
+                                            {c.status === 'REJECTED' ? 'مرفوضة'
+                                            : c.status === 'NEEDS_CORRECTION' ? 'معلقة'
+                                            : c.status === 'DRAFT' ? 'مسودة'
+                                            : c.status === 'PENDING' ? 'انتظار'
+                                            : c.status === 'UNDER_REVIEW' ? 'مراجعة'
+                                            : 'مقبولة'}
                                         </Typography>
                                     </Stack>
                                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>

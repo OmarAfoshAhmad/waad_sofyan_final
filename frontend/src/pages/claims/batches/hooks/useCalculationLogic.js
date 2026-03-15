@@ -85,7 +85,8 @@ export function useCalculationLogic({ applyBenefits, policyInfo }) {
 
         if (applyBenefits) {
             byCompany = parseFloat((approvedTotalForCoverage * cov / 100).toFixed(2));
-            byEmployee = parseFloat((effectiveTotal - byCompany).toFixed(2));
+            // التوزيع من المبلغ الصافي المعتمد (بعد خصم المرفوض) لا من كامل مبلغ العقد
+            byEmployee = parseFloat((approvedTotalForCoverage - byCompany).toFixed(2));
         } else {
             byEmployee = Math.max(0, parseFloat(line.byEmployee) || 0);
             byCompany = parseFloat(Math.max(0, approvedTotalForCoverage - byEmployee).toFixed(2));

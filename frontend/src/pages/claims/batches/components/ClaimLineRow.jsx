@@ -1,8 +1,16 @@
 import React, { Fragment } from 'react';
 import {
     TableRow, TableCell, Stack, Autocomplete, TextField, Chip,
-    Tooltip, Typography, IconButton, alpha
+    Tooltip, Typography, IconButton, alpha, createFilterOptions
 } from '@mui/material';
+
+const serviceFilter = createFilterOptions({
+    stringify: (opt) => `${opt.serviceCode || opt.code || ''} ${opt.serviceName || opt.name || ''}`,
+    ignoreAccents: true,
+    ignoreCase: true,
+    trim: true,
+    matchFrom: 'any',
+});
 import {
     Block as RejectIcon,
     Delete as DeleteIcon,
@@ -40,8 +48,13 @@ export const ClaimLineRow = ({
                             options={serviceOptions}
                             loading={loadingServices}
                             value={line.service || null}
-                            onChange={(_, val) => handleServiceChange(idx, val)} // Use complex handler for price/coverage
+                            onChange={(_, val) => handleServiceChange(idx, val)}
+                            filterOptions={serviceFilter}
                             getOptionLabel={o => o.label || o.serviceName || ''}
+                            isOptionEqualToValue={(opt, val) =>
+                                (opt?.pricingItemId != null && opt.pricingItemId === val?.pricingItemId) ||
+                                (opt?.serviceCode != null && opt.serviceCode === val?.serviceCode)
+                            }
                             renderInput={(params) => (
                                 <TextField {...params} variant="standard" 
                                     placeholder={loadingServices ? "جاري التحميل..." : "ابحث عن خدمة..."}
@@ -50,9 +63,7 @@ export const ClaimLineRow = ({
                             )}
                             noOptionsText={loadingServices ? "جاري تحميل خدمات العقد..." : "لم يتم العثور على خدمات في العقد"}
                         />
-                        {line.service && !line.service.medicalServiceId && line.service.pricingItemId && (
-                            <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: '1.0rem', fontSize: '0.75rem', fontWeight: 400 }} />
-                        )}
+
                     </Stack>
                 </TableCell>
                 <TableCell align="center">
@@ -128,9 +139,26 @@ export const ClaimLineRow = ({
                     )}
                 </TableCell>
                 <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 500, color: 'error.main' }}>
-                        {(line.rejected ? line.total : line.refusedAmount)?.toFixed(2)}
-                    </Typography>
+                    {(() => {
+                        const refusedVal = line.rejected ? (line.total || 0) : (line.refusedAmount || 0);
+                        if (refusedVal <= 0) {
+                            return (
+                                <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.disabled' }}>
+                                    —
+                                </Typography>
+                            );
+                        }
+                        const tooltipTitle = line.rejected
+                            ? 'الخدمة مرفوضة بالكامل'
+                            : `تجاوز سعر العقد (${line.contractPrice > 0 ? line.contractPrice : '—'})`;
+                        return (
+                            <Tooltip title={tooltipTitle} arrow>
+                                <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 700, color: 'error.main' }}>
+                                    {refusedVal.toFixed(2)}
+                                </Typography>
+                            </Tooltip>
+                        );
+                    })()}
                 </TableCell>
                 <TableCell align="center">
                     <Stack spacing={0} alignItems="center">

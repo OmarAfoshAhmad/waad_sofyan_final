@@ -7,6 +7,7 @@ import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
 import com.waad.tba.modules.provider.service.ProviderContractService;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -36,9 +37,29 @@ public class ClaimMapper {
 
     private final ProviderContractService providerContractService;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
+    private final BenefitPolicyRepository benefitPolicyRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
     private final ProviderContractPricingItemRepository pricingItemRepository;
     private final com.waad.tba.modules.claim.repository.ClaimBatchRepository claimBatchRepository;
+
+    /**
+     * Resolve the effective BenefitPolicy for a member.
+     * Direct link first; falls back to employer's active effective policy.
+     */
+    private com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy resolvePolicy(
+            com.waad.tba.modules.member.entity.Member member) {
+        if (member == null)
+            return null;
+        var direct = member.getBenefitPolicy();
+        if (direct != null)
+            return direct;
+        if (member.getEmployer() != null) {
+            return benefitPolicyRepository
+                    .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), java.time.LocalDate.now())
+                    .orElse(null);
+        }
+        return null;
+    }
 
     /**
      * Maps CreateClaimDto (from Visit) to a new Claim entity.
@@ -112,44 +133,46 @@ public class ClaimMapper {
 
             Long resolvedPricingItemId = lineDto.getPricingItemId();
 
-            if (isBacklog && enteredUnitPrice.compareTo(BigDecimal.ZERO) > 0) {
+            // دائماً نبحث عن سعر العقد بغض النظر عن نوع الزيارة (BACKLOG أو غيره)
+            // لضمان حساب المبلغ المرفوض بشكل صحيح عند تجاوز سعر العقد
+            String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
+
+            // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
+            // DB
+            if (codeToLookup == null && lineDto.getPricingItemId() != null) {
+                codeToLookup = pricingItemRepository.findById(lineDto.getPricingItemId())
+                        .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getServiceCode)
+                        .orElse(null);
+            }
+
+            if (codeToLookup != null) {
+                EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
+                        provider.getId(), codeToLookup, dto.getServiceDate());
+
+                if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
+                    resolvedUnitPrice = priceResponse.getContractPrice();
+                    resolvedPricingItemId = priceResponse.getPricingItemId();
+
+                    // Capture canonical name/code for unmapped services if missing
+                    if (serviceCode == null || "N/A".equals(serviceCode))
+                        serviceCode = priceResponse.getServiceCode();
+                    if (serviceName == null || "Unknown Service".equals(serviceName))
+                        serviceName = priceResponse.getServiceName();
+
+                    log.info("✅ [MAPPER] Contract price resolved: {} → {} (entered: {})",
+                            codeToLookup, resolvedUnitPrice, enteredUnitPrice);
+                } else if (medicalService != null) {
+                    // FALLBACK: Use base price if no active contract
+                    resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
+                            : BigDecimal.ZERO;
+                }
+            }
+
+            if (resolvedUnitPrice == null) {
+                // لا يوجد عقد ولا خدمة طبية موجودة → نستخدم السعر المدخل
                 resolvedUnitPrice = enteredUnitPrice;
-                log.info("ℹ️ [BACKLOG] Using user-provided price as approved base: {}", resolvedUnitPrice);
-            } else {
-                // Resolve contract price - Use code if medicalService is null
-                String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
-
-                // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
-                // DB
-                if (codeToLookup == null && lineDto.getPricingItemId() != null) {
-                    codeToLookup = pricingItemRepository.findById(lineDto.getPricingItemId())
-                            .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getServiceCode)
-                            .orElse(null);
-                }
-
-                if (codeToLookup != null) {
-                    EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
-                            provider.getId(), codeToLookup, dto.getServiceDate());
-
-                    if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
-                        resolvedUnitPrice = priceResponse.getContractPrice();
-                        resolvedPricingItemId = priceResponse.getPricingItemId();
-
-                        // Capture canonical name/code for unmapped services if missing
-                        if (serviceCode == null || "N/A".equals(serviceCode))
-                            serviceCode = priceResponse.getServiceCode();
-                        if (serviceName == null || "Unknown Service".equals(serviceName))
-                            serviceName = priceResponse.getServiceName();
-                    } else if (medicalService != null) {
-                        // FALLBACK: Use base price
-                        resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
-                                : BigDecimal.ZERO;
-                    }
-                }
-
-                if (resolvedUnitPrice == null) {
-                    resolvedUnitPrice = enteredUnitPrice;
-                }
+                log.info("⚠️ [MAPPER] No contract price found for '{}', using entered price: {}",
+                        codeToLookup, enteredUnitPrice);
             }
 
             // Resolve coverage snapshot
@@ -161,7 +184,7 @@ public class ClaimMapper {
                     : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
 
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
-                    claim.getMember().getBenefitPolicy().getId(),
+                    resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
                     medicalService != null ? medicalService.getId() : null,
                     medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId(),
                     categoryOverrideId,
@@ -292,7 +315,12 @@ public class ClaimMapper {
             claim.setNetProviderAmount(totalNetProvider); // Insurance share
             // calculateFields() will be called automatically by @PrePersist/@PreUpdate
         } else {
-            claim.setRefusedAmount(BigDecimal.ZERO);
+            // احتساب المبلغ المرفوض حتى للمطالبات في حالة DRAFT حتى تظهر الأرقام الصحيحة في
+            // العرض
+            BigDecimal totalRefusedDraft = lines.stream()
+                    .map(l -> l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            claim.setRefusedAmount(totalRefusedDraft);
             // Keep non-settled claims nullable to allow lifecycle hooks to derive
             // snapshots consistently from line data.
             claim.setApprovedAmount(null);
@@ -352,42 +380,39 @@ public class ClaimMapper {
 
             Long resolvedPricingItemId = lineDto.getPricingItemId();
 
-            if (isBacklog && enteredUnitPrice.compareTo(BigDecimal.ZERO) > 0) {
+            // دائماً نبحث عن سعر العقد بغض النظر عن نوع الزيارة
+            String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
+
+            // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
+            // DB
+            if (codeToLookup == null && lineDto.getPricingItemId() != null) {
+                codeToLookup = pricingItemRepository.findById(lineDto.getPricingItemId())
+                        .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getServiceCode)
+                        .orElse(null);
+            }
+
+            if (codeToLookup != null) {
+                EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
+                        claim.getProviderId(), codeToLookup, serviceDate);
+
+                if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
+                    resolvedUnitPrice = priceResponse.getContractPrice();
+                    resolvedPricingItemId = priceResponse.getPricingItemId();
+
+                    // Capture canonical name/code for unmapped services if missing
+                    if (serviceCode == null || "N/A".equals(serviceCode))
+                        serviceCode = priceResponse.getServiceCode();
+                    if (serviceName == null || "Unknown Service".equals(serviceName))
+                        serviceName = priceResponse.getServiceName();
+                } else if (medicalService != null) {
+                    // FALLBACK: If draft + no contract, try base price
+                    resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
+                            : BigDecimal.ZERO;
+                }
+            }
+
+            if (resolvedUnitPrice == null) {
                 resolvedUnitPrice = enteredUnitPrice;
-            } else {
-                String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
-
-                // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
-                // DB
-                if (codeToLookup == null && lineDto.getPricingItemId() != null) {
-                    codeToLookup = pricingItemRepository.findById(lineDto.getPricingItemId())
-                            .map(com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem::getServiceCode)
-                            .orElse(null);
-                }
-
-                if (codeToLookup != null) {
-                    EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
-                            claim.getProviderId(), codeToLookup, serviceDate);
-
-                    if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
-                        resolvedUnitPrice = priceResponse.getContractPrice();
-                        resolvedPricingItemId = priceResponse.getPricingItemId();
-
-                        // Capture canonical name/code for unmapped services if missing
-                        if (serviceCode == null || "N/A".equals(serviceCode))
-                            serviceCode = priceResponse.getServiceCode();
-                        if (serviceName == null || "Unknown Service".equals(serviceName))
-                            serviceName = priceResponse.getServiceName();
-                    } else if (medicalService != null) {
-                        // FALLBACK: If draft + no contract, try base price
-                        resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
-                                : BigDecimal.ZERO;
-                    }
-                }
-
-                if (resolvedUnitPrice == null) {
-                    resolvedUnitPrice = enteredUnitPrice;
-                }
             }
 
             BigDecimal lineApprovedBase = resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice;
@@ -410,7 +435,7 @@ public class ClaimMapper {
                     : (medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId());
 
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
-                    claim.getMember().getBenefitPolicy().getId(),
+                    resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
                     medicalService != null ? medicalService.getId() : null,
                     medicalService != null ? medicalService.getCategoryId() : lineDto.getAppliedCategoryId(),
                     categoryOverrideId,
@@ -657,6 +682,7 @@ public class ClaimMapper {
         return ClaimLineDto.builder()
                 .id(line.getId())
                 .medicalServiceId(line.getMedicalService() != null ? line.getMedicalService().getId() : null)
+                .pricingItemId(line.getPricingItemId())
                 .serviceCode(line.getServiceCode())
                 .serviceName(line.getServiceName())
                 .serviceCategoryId(line.getServiceCategoryId())
@@ -664,6 +690,7 @@ public class ClaimMapper {
                 .requiresPA(line.getRequiresPA())
                 .quantity(line.getQuantity())
                 .unitPrice(line.getUnitPrice())
+                .requestedUnitPrice(line.getRequestedUnitPrice())
                 .totalPrice(line.getTotalPrice())
                 .rejected(line.getRejected())
                 .rejectionReason(line.getRejectionReason())

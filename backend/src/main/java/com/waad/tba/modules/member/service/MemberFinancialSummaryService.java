@@ -3,6 +3,7 @@ package com.waad.tba.modules.member.service;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
@@ -50,6 +51,7 @@ public class MemberFinancialSummaryService {
 
     private final MemberRepository memberRepository;
     private final BenefitPolicyCoverageService coverageService;
+    private final BenefitPolicyRepository benefitPolicyRepository;
     private final ClaimRepository claimRepository;
     private final MedicalServiceRepository medicalServiceRepository;
 
@@ -65,10 +67,19 @@ public class MemberFinancialSummaryService {
 
         // 1. Load member
         Member member = memberRepository.findById(memberId)
-            .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
+                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
 
-        // 2. Load benefit policy (may be null)
+        // 2. Load benefit policy — direct link first, fallback to employer's effective
+        // policy
         BenefitPolicy policy = member.getBenefitPolicy();
+        if (policy == null && member.getEmployer() != null) {
+            policy = benefitPolicyRepository
+                    .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), LocalDate.now())
+                    .orElse(null);
+            if (policy != null) {
+                log.info("⚡ Using employer-level policy {} for member {}", policy.getId(), memberId);
+            }
+        }
 
         // 3. Load all claims for this member
         List<Claim> allClaims = claimRepository.findByMemberId(memberId);
@@ -78,19 +89,19 @@ public class MemberFinancialSummaryService {
 
         // ========== MEMBER INFO ==========
         builder.memberId(member.getId())
-               .fullName(member.getFullName())
-               .cardNumber(member.getCardNumber())
-               .barcode(member.getBarcode())
-               .isDependent(member.getParent() != null);
+                .fullName(member.getFullName())
+                .cardNumber(member.getCardNumber())
+                .barcode(member.getBarcode())
+                .isDependent(member.getParent() != null);
 
         // ========== POLICY INFO ==========
         if (policy != null) {
             builder.policyId(policy.getId())
-                   .policyName(policy.getName())
-                   .annualLimit(policy.getAnnualLimit())
-                   .policyStartDate(policy.getStartDate())
-                   .policyEndDate(policy.getEndDate())
-                   .policyActive(policy.isActive() && policy.isEffectiveOn(LocalDate.now()));
+                    .policyName(policy.getName())
+                    .annualLimit(policy.getAnnualLimit())
+                    .policyStartDate(policy.getStartDate())
+                    .policyEndDate(policy.getEndDate())
+                    .policyActive(policy.isActive() && policy.isEffectiveOn(LocalDate.now()));
         } else {
             builder.policyActive(false);
         }
@@ -103,15 +114,15 @@ public class MemberFinancialSummaryService {
         BigDecimal totalDeductible = calculateTotalDeductible(allClaims);
 
         builder.totalClaimed(totalClaimed)
-               .totalApproved(totalApproved)
-               .totalPaid(totalPaid)
-               .totalPatientCoPay(totalPatientCoPay)
-               .totalDeductibleApplied(totalDeductible);
+                .totalApproved(totalApproved)
+                .totalPaid(totalPaid)
+                .totalPatientCoPay(totalPatientCoPay)
+                .totalDeductibleApplied(totalDeductible);
 
         // REUSE: Remaining coverage from existing service
         BigDecimal remainingCoverage = null;
         BigDecimal utilizationPercent = BigDecimal.ZERO;
-        
+
         if (policy != null) {
             remainingCoverage = coverageService.getRemainingCoverage(member, LocalDate.now());
             builder.remainingCoverage(remainingCoverage);
@@ -119,8 +130,8 @@ public class MemberFinancialSummaryService {
             // Calculate utilization %
             if (policy.getAnnualLimit() != null && policy.getAnnualLimit().compareTo(BigDecimal.ZERO) > 0) {
                 utilizationPercent = totalApproved
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(policy.getAnnualLimit(), 2, RoundingMode.HALF_UP);
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(policy.getAnnualLimit(), 2, RoundingMode.HALF_UP);
                 builder.utilizationPercent(utilizationPercent);
             }
         }
@@ -128,28 +139,28 @@ public class MemberFinancialSummaryService {
         // ========== CLAIM STATISTICS ==========
         int totalCount = allClaims.size();
         int pendingCount = (int) allClaims.stream()
-            .filter(c -> c.getStatus() == ClaimStatus.SUBMITTED || c.getStatus() == ClaimStatus.UNDER_REVIEW)
-            .count();
+                .filter(c -> c.getStatus() == ClaimStatus.SUBMITTED || c.getStatus() == ClaimStatus.UNDER_REVIEW)
+                .count();
         int approvedCount = (int) allClaims.stream()
-            .filter(c -> c.getStatus() == ClaimStatus.APPROVED || 
-                         c.getStatus() == ClaimStatus.SETTLED)
-            .count();
+                .filter(c -> c.getStatus() == ClaimStatus.APPROVED ||
+                        c.getStatus() == ClaimStatus.SETTLED)
+                .count();
         int rejectedCount = (int) allClaims.stream()
-            .filter(c -> c.getStatus() == ClaimStatus.REJECTED)
-            .count();
+                .filter(c -> c.getStatus() == ClaimStatus.REJECTED)
+                .count();
 
         LocalDate lastClaimDate = allClaims.stream()
-            .map(Claim::getCreatedAt)
-            .filter(createdAt -> createdAt != null)
-            .max(java.time.LocalDateTime::compareTo)
-            .map(dateTime -> dateTime.toLocalDate())
-            .orElse(null);
+                .map(Claim::getCreatedAt)
+                .filter(createdAt -> createdAt != null)
+                .max(java.time.LocalDateTime::compareTo)
+                .map(dateTime -> dateTime.toLocalDate())
+                .orElse(null);
 
         builder.claimsCount(totalCount)
-               .pendingClaimsCount(pendingCount)
-               .approvedClaimsCount(approvedCount)
-               .rejectedClaimsCount(rejectedCount)
-               .lastClaimDate(lastClaimDate);
+                .pendingClaimsCount(pendingCount)
+                .approvedClaimsCount(approvedCount)
+                .rejectedClaimsCount(rejectedCount)
+                .lastClaimDate(lastClaimDate);
 
         // ========== WARNINGS / ALERTS ==========
         String warning = null;
@@ -180,20 +191,21 @@ public class MemberFinancialSummaryService {
         }
 
         builder.warningMessage(warning)
-               .nearingLimit(nearingLimit)
-               .policyExpiringSoon(expiringSoon);
+                .nearingLimit(nearingLimit)
+                .policyExpiringSoon(expiringSoon);
 
         MemberFinancialSummaryDto summary = builder.build();
         log.info("✅ Financial summary generated: Claimed={}, Approved={}, Remaining={}, Utilization={}%",
-                 totalClaimed, totalApproved, remainingCoverage, utilizationPercent);
+                totalClaimed, totalApproved, remainingCoverage, utilizationPercent);
 
         return summary;
     }
 
     /**
-     * Get Coverage Limits (times and amounts) for a specific service based on member's active policy.
+     * Get Coverage Limits (times and amounts) for a specific service based on
+     * member's active policy.
      * 
-     * @param memberId Member ID
+     * @param memberId    Member ID
      * @param serviceCode Medical Service Code
      * @return CoverageLimitsDto
      */
@@ -233,10 +245,11 @@ public class MemberFinancialSummaryService {
         if (timesLimit != null) {
             List<Claim> claims = claimRepository.findByMemberId(memberId);
             int currentYear = LocalDate.now().getYear();
-            
+
             for (Claim c : claims) {
                 // Only consider claims from the current policy year and that are not rejected
-                if (c.getStatus() == ClaimStatus.REJECTED || c.getServiceDate() == null || c.getServiceDate().getYear() != currentYear) {
+                if (c.getStatus() == ClaimStatus.REJECTED || c.getServiceDate() == null
+                        || c.getServiceDate().getYear() != currentYear) {
                     continue;
                 }
                 if (c.getLines() != null) {
@@ -247,12 +260,13 @@ public class MemberFinancialSummaryService {
                     }
                 }
             }
-            
+
             remainingTimes = timesLimit - timesUsed;
             if (remainingTimes <= 0) {
                 remainingTimes = 0;
                 timesLimitExceeded = true;
-                warningMessage = "تم تجاوز الحد الأقصى لعدد المرات المسموح بها (" + timesLimit + " مرات). المرات المتبقية: صفر.";
+                warningMessage = "تم تجاوز الحد الأقصى لعدد المرات المسموح بها (" + timesLimit
+                        + " مرات). المرات المتبقية: صفر.";
             }
         }
 
@@ -275,23 +289,24 @@ public class MemberFinancialSummaryService {
      */
     private BigDecimal calculateTotalClaimed(List<Claim> claims) {
         return claims.stream()
-            .filter(c -> c.getRequestedAmount() != null)
-            .map(Claim::getRequestedAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(c -> c.getRequestedAmount() != null)
+                .map(Claim::getRequestedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
-     * Calculate total approved amount (sum of approvedAmount for approved/settled claims)
+     * Calculate total approved amount (sum of approvedAmount for approved/settled
+     * claims)
      */
     private BigDecimal calculateTotalApproved(List<Claim> claims) {
         List<ClaimStatus> approvedStatuses = Arrays.asList(
-            ClaimStatus.APPROVED, ClaimStatus.SETTLED);
+                ClaimStatus.APPROVED, ClaimStatus.SETTLED);
 
         return claims.stream()
-            .filter(c -> approvedStatuses.contains(c.getStatus()))
-            .filter(c -> c.getApprovedAmount() != null)
-            .map(Claim::getApprovedAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(c -> approvedStatuses.contains(c.getStatus()))
+                .filter(c -> c.getApprovedAmount() != null)
+                .map(Claim::getApprovedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
@@ -299,10 +314,10 @@ public class MemberFinancialSummaryService {
      */
     private BigDecimal calculateTotalPaid(List<Claim> claims) {
         return claims.stream()
-            .filter(c -> c.getStatus() == ClaimStatus.SETTLED)
-            .filter(c -> c.getApprovedAmount() != null)
-            .map(Claim::getApprovedAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(c -> c.getStatus() == ClaimStatus.SETTLED)
+                .filter(c -> c.getApprovedAmount() != null)
+                .map(Claim::getApprovedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
@@ -310,26 +325,27 @@ public class MemberFinancialSummaryService {
      */
     private BigDecimal calculateTotalPatientCoPay(List<Claim> claims) {
         List<ClaimStatus> approvedStatuses = Arrays.asList(
-            ClaimStatus.APPROVED, ClaimStatus.SETTLED);
+                ClaimStatus.APPROVED, ClaimStatus.SETTLED);
 
         return claims.stream()
-            .filter(c -> approvedStatuses.contains(c.getStatus()))
-            .filter(c -> c.getPatientCoPay() != null)
-            .map(Claim::getPatientCoPay)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(c -> approvedStatuses.contains(c.getStatus()))
+                .filter(c -> c.getPatientCoPay() != null)
+                .map(Claim::getPatientCoPay)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /**
-     * Calculate total deductible applied (sum of deductibleApplied for approved claims)
+     * Calculate total deductible applied (sum of deductibleApplied for approved
+     * claims)
      */
     private BigDecimal calculateTotalDeductible(List<Claim> claims) {
         List<ClaimStatus> approvedStatuses = Arrays.asList(
-            ClaimStatus.APPROVED, ClaimStatus.SETTLED);
+                ClaimStatus.APPROVED, ClaimStatus.SETTLED);
 
         return claims.stream()
-            .filter(c -> approvedStatuses.contains(c.getStatus()))
-            .filter(c -> c.getDeductibleApplied() != null)
-            .map(Claim::getDeductibleApplied)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .filter(c -> approvedStatuses.contains(c.getStatus()))
+                .filter(c -> c.getDeductibleApplied() != null)
+                .map(Claim::getDeductibleApplied)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

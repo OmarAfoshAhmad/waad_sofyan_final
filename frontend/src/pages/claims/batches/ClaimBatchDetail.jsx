@@ -739,8 +739,10 @@ export default function ClaimBatchDetail() {
                             >
                                 <MenuItem value=""><em>الكل</em></MenuItem>
                                 <MenuItem value="APPROVED">معتمدة</MenuItem>
+                                <MenuItem value="NEEDS_CORRECTION">معلقة للمراجعة</MenuItem>
                                 <MenuItem value="PENDING">قيد الانتظار</MenuItem>
                                 <MenuItem value="UNDER_REVIEW">تحت المراجعة</MenuItem>
+                                <MenuItem value="DRAFT">مسودة</MenuItem>
                                 <MenuItem value="REJECTED">مرفوضة</MenuItem>
                             </TextField>
 
