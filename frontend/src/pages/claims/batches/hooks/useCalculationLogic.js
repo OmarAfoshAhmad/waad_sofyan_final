@@ -51,17 +51,18 @@ export function useCalculationLogic({ applyBenefits, policyInfo }) {
                 });
             }
 
-            totalUsedCount = (usage?.usedCount || 0) + batchUsedTimes;
+            // timesLimit = عدد المطالبات/الزيارات المسموح بها، وليس عدد الوحدات.
+            // totalUsedCount = عدد المطالبات السابقة فقط (الزيارة الحالية لم تُحسب بعد).
+            totalUsedCount = (usage?.usedCount || 0);
             totalUsedAmount = (usage?.usedAmount || 0) + batchUsedAmount;
 
             if (usage.timesLimit > 0) {
-                const remainingQty = Math.max(0, usage.timesLimit - totalUsedCount);
-                if (qty > remainingQty) {
-                    const refusedQty = qty - remainingQty;
-                    // Refuse the price for the exceeded quantity
-                    limitRefused = parseFloat((refusedQty * effectivePrice).toFixed(2));
+                // إذا استنفد المستفيد عدد الزيارات المسموح بها → نرفض كامل الخدمة
+                if (totalUsedCount >= usage.timesLimit) {
+                    limitRefused = effectiveTotal;
                     usageExceeded = true;
                 }
+                // أما إذا لم يستنفد → نسمح بكامل الكمية بغض النظر عنها
             }
             
             if (usage.amountLimit > 0) {

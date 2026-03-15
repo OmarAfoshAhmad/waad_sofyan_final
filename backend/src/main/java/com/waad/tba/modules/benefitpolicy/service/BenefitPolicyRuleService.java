@@ -296,7 +296,9 @@ public class BenefitPolicyRuleService {
                 ? "FROM ClaimLine cl JOIN cl.claim c "
                 : "FROM ClaimLine cl LEFT JOIN cl.medicalService ms JOIN cl.claim c ";
 
-        String q = "SELECT SUM(cl.quantity), SUM(cl.totalPrice) " + joinClause +
+        // usedCount = number of distinct CLAIMS (visits), not sum of units.
+        // timesLimit means "N visits per year", not "N units total".
+        String q = "SELECT COUNT(DISTINCT c.id), SUM(cl.totalPrice) " + joinClause +
                 "WHERE c.member.id = :memberId " +
                 "AND " + usageFilter + " " +
                 "AND c.status NOT IN :excludeStatuses " +
