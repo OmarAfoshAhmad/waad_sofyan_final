@@ -299,7 +299,7 @@ const StatKpiCard = ({ title, value, subtitle, gradient, icon: Icon }) => (
         height: '100%',
         background: gradient,
         color: '#fff',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         overflow: 'hidden',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         transition: 'transform 0.2s ease',
@@ -459,7 +459,7 @@ export default function ClaimBatchManagement() {
                                 startIcon={<AssessmentIcon />}
                                 endIcon={showStats ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                                 onClick={() => setShowStats(v => !v)}
-                                sx={{ borderRadius: '0.125rem', fontWeight: 400 }}
+                                sx={{ borderRadius: '0.25rem', fontWeight: 400 }}
                             >
                                 {showStats ? 'إخفاء الإحصائيات' : 'عرض الإحصائيات'}
                             </Button>

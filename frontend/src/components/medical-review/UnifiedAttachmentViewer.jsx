@@ -354,7 +354,7 @@ const UnifiedAttachmentViewer = ({
           gap: '1.0rem',
           p: '2.0rem',
           bgcolor: 'background.default',
-          borderRadius: '0.125rem'
+          borderRadius: '0.25rem'
         }}
       >
         <EmptyIcon sx={{ fontSize: '4.0rem', color: 'text.disabled' }} />
@@ -381,7 +381,7 @@ const UnifiedAttachmentViewer = ({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        borderRadius: '0.125rem'
+        borderRadius: '0.25rem'
       }}
     >
       {/* Header */}

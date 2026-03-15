@@ -113,7 +113,7 @@ const NetworkBadge = ({
       <Box
         sx={{
           p: '0.75rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: `${tier.color}.lighter`,
           border: 1,
           borderColor: `${tier.color}.light`

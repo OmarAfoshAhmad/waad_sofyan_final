@@ -21,7 +21,7 @@ const UnderDevelopment = () => {
           p: '3.0rem',
           textAlign: 'center',
           border: `2px dashed ${theme.palette.divider}`,
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           background: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[50]
         }}
       >

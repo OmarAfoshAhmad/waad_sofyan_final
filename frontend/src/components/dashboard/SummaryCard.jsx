@@ -27,7 +27,7 @@ const SummaryCard = ({ title, value, subLabel, subValue, icon: Icon, color = 'pr
     <Card
       sx={{
         height: '100%',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         boxShadow: `0 1px 3px 0 ${alpha(theme.palette.common.black, 0.1)}`,
         transition: 'all 0.2s',
         '&:hover': {

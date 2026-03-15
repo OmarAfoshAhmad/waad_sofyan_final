@@ -74,7 +74,7 @@ const KPICard = ({ config, value, loading }) => {
         height: '100%',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         transition: 'box-shadow 0.2s',
         '&:hover': {
           boxShadow: 2
@@ -126,7 +126,7 @@ const KPICard = ({ config, value, loading }) => {
             sx={{
               width: '3.0rem',
               height: '3.0rem',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               backgroundColor: config.bgColor,
               display: 'flex',
               alignItems: 'center',

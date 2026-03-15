@@ -193,7 +193,7 @@ const ComingSoonReport = () => {
                 bgcolor: 'warning.lighter',
                 border: '1px solid',
                 borderColor: 'warning.light',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 maxWidth: '31.25rem',
                 mb: '2.0rem'
               }}

@@ -72,7 +72,7 @@ const TbaSwitchField = ({
       variant="outlined"
       sx={{
         p: '1.0rem',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         bgcolor: readOnly ? 'action.hover' : 'background.paper',
         borderColor: 'grey.200',
         transition: 'all 0.2s ease-in-out',

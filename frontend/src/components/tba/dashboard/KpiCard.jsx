@@ -99,7 +99,7 @@ const KpiCard = memo(({ title, value, icon: Icon, color = 'primary', sparklineDa
               sx={{
                 width: '2.75rem',
                 height: '2.75rem',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

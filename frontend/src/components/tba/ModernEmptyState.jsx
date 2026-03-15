@@ -17,7 +17,7 @@ const ModernEmptyState = ({ icon: Icon = InboxOutlined, title = 'لا توجد �
         bgcolor: 'background.paper',
         border: '1px dashed',
         borderColor: 'divider',
-        borderRadius: '0.125rem'
+        borderRadius: '0.25rem'
       }}
     >
       <Stack spacing={2} alignItems="center" sx={{ maxWidth: '25.0rem', px: '1.5rem', py: '2.0rem', textAlign: 'center' }}>

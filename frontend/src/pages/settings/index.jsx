@@ -25,7 +25,7 @@ const SettingsCard = ({ icon: Icon, title, description, onClick, color = '#1890f
               sx={{
                 width: '3.5rem',
                 height: '3.5rem',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 bgcolor: `${color}15`,
                 display: 'flex',
                 alignItems: 'center',

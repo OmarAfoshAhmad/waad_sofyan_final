@@ -109,7 +109,7 @@ const CardStatusBadge = ({
           gap: '0.75rem',
           px: '1.0rem',
           py: 1,
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: config.bgColor,
           border: 2,
           borderColor: config.borderColor,

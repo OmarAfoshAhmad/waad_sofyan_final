@@ -232,7 +232,7 @@ const MedicalDecisionPanel = ({
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           border: 1,
           borderColor: 'divider'
         }}

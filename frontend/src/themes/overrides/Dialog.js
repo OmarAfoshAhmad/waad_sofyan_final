@@ -17,7 +17,8 @@ export default function Dialog(theme) {
           }
         },
         paper: {
-          backgroundImage: 'none'
+          backgroundImage: 'none',
+          borderRadius: 6  // 6px - نوافذ مدورة الزوايا
         }
       }
     }

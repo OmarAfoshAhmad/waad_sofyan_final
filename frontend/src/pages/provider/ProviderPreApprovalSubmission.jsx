@@ -149,7 +149,7 @@ const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary', action 
           sx={{
             width: '2.5rem',
             height: '2.5rem',
-            borderRadius: '0.125rem',
+            borderRadius: '0.25rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -213,7 +213,7 @@ const InfoCard = ({ children, bgcolor = 'grey.50' }) => (
       height: '100%',
       bgcolor,
       borderColor: 'divider',
-      borderRadius: '0.125rem',
+      borderRadius: '0.25rem',
       transition: 'box-shadow 0.2s',
       '&:hover': {
         boxShadow: 1
@@ -231,7 +231,7 @@ const FormSection = ({ children, highlighted = false }) => (
   <Card
     variant="outlined"
     sx={{
-      borderRadius: '0.125rem',
+      borderRadius: '0.25rem',
       borderColor: highlighted ? 'primary.main' : 'divider',
       borderWidth: highlighted ? 2 : 1,
       bgcolor: highlighted ? (theme) => alpha(theme.palette.primary.main, 0.02) : 'background.paper'
@@ -707,7 +707,7 @@ const ProviderPreApprovalSubmission = () => {
             size="large"
             startIcon={<ArrowBackIcon />}
             onClick={() => navigate('/provider/visits')}
-            sx={{ borderRadius: '0.125rem', px: '2.0rem' }}
+            sx={{ borderRadius: '0.25rem', px: '2.0rem' }}
           >
             الذهاب إلى سجل الزيارات
           </Button>
@@ -734,14 +734,14 @@ const ProviderPreApprovalSubmission = () => {
 
       {/* ═══════════════════════ ERROR ALERT ═══════════════════════ */}
       {error && (
-        <Alert severity="error" sx={{ mb: '1.5rem', borderRadius: '0.125rem' }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: '1.5rem', borderRadius: '0.25rem' }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {/* ═══════════════════════ CONTRACT WARNING ═══════════════════════ */}
       {!contract && !loading && (
-        <Alert severity="warning" sx={{ mb: '1.5rem', borderRadius: '0.125rem' }}>
+        <Alert severity="warning" sx={{ mb: '1.5rem', borderRadius: '0.25rem' }}>
           <Typography fontWeight={600}>{LABELS.noContract}</Typography>
           <Typography variant="body2">تواصل مع إدارة النظام للتحقق من حالة عقد مقدم الخدمة.</Typography>
         </Alert>
@@ -841,7 +841,7 @@ const ProviderPreApprovalSubmission = () => {
                 startIcon={<AddIcon />}
                 onClick={handleAddServiceRow}
                 disabled={submitting}
-                sx={{ borderRadius: '0.125rem' }}
+                sx={{ borderRadius: '0.25rem' }}
               >
                 إضافة خدمة
               </Button>
@@ -856,7 +856,7 @@ const ProviderPreApprovalSubmission = () => {
               icon={<DiagnosisIcon />}
               sx={{
                 mb: '1.25rem',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 border: '1px solid',
                 borderColor: 'info.light',
                 bgcolor: (theme) => alpha(theme.palette.info.main, 0.02),
@@ -892,7 +892,7 @@ const ProviderPreApprovalSubmission = () => {
           )}
 
           {/* Service Selection Table */}
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '0.125rem' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '0.25rem' }}>
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: tableHeaderBg }}>
@@ -1197,7 +1197,7 @@ const ProviderPreApprovalSubmission = () => {
           <SectionHeader icon={AttachFileIcon} title="المستندات المرفقة" subtitle="يمكن رفع ملفات طبية داعمة للطلب" color="secondary" />
           <Divider sx={{ mb: '1.0rem' }} />
           <Stack spacing={2}>
-            <Alert severity="info" sx={{ borderRadius: '0.125rem' }}>
+            <Alert severity="info" sx={{ borderRadius: '0.25rem' }}>
               الامتدادات المسموحة: PDF, JPG, JPEG, PNG, GIF, DOC, DOCX — الحد الأقصى للحجم: {MAX_UPLOAD_SIZE_MB}MB لكل ملف.
             </Alert>
             <Button component="label" variant="outlined" startIcon={<UploadFileIcon />} disabled={submitting} sx={{ width: 'fit-content' }}>
@@ -1231,7 +1231,7 @@ const ProviderPreApprovalSubmission = () => {
           elevation={3}
           sx={{
             p: '1.25rem',
-            borderRadius: '0.125rem',
+            borderRadius: '0.25rem',
             bgcolor: 'background.paper',
             position: 'sticky',
             bottom: '8.0rem',
@@ -1263,7 +1263,7 @@ const ProviderPreApprovalSubmission = () => {
                 startIcon={<ArrowBackIcon />}
                 onClick={handleBack}
                 disabled={submitting}
-                sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
+                sx={{ borderRadius: '0.25rem', px: '1.5rem' }}
               >
                 {LABELS.cancel}
               </Button>
@@ -1274,7 +1274,7 @@ const ProviderPreApprovalSubmission = () => {
                 startIcon={submitting && submitMode === 'draft' ? <CircularProgress size={20} color="inherit" /> : <NotesIcon />}
                 onClick={() => handleCreatePreApproval(false)}
                 disabled={submitting || !isFormValid}
-                sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
+                sx={{ borderRadius: '0.25rem', px: '1.5rem' }}
               >
                 {submitting && submitMode === 'draft' ? LABELS.savingDraft : LABELS.saveDraft}
               </Button>
@@ -1286,7 +1286,7 @@ const ProviderPreApprovalSubmission = () => {
                 onClick={() => handleCreatePreApproval(true)}
                 disabled={submitting || !isFormValid}
                 sx={{
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   px: '2.0rem',
                   boxShadow: 2,
                   '&:hover': { boxShadow: 4 }

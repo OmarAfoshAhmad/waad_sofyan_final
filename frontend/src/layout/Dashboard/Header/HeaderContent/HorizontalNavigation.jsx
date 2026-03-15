@@ -319,7 +319,7 @@ export default function HorizontalNavigation() {
                     minWidth: '15.0rem',
                     maxWidth: '22.5rem',
                     boxShadow: (theme) => theme.shadows[8],
-                    borderRadius: '0.125rem',
+                    borderRadius: '0.25rem',
                     border: '1px solid',
                     borderColor: 'divider'
                   }

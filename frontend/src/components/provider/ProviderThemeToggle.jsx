@@ -30,7 +30,7 @@ export default function ProviderThemeToggle() {
         sx={{
           width: '2.5rem',
           height: '2.5rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
           border: '1px solid',
           borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',

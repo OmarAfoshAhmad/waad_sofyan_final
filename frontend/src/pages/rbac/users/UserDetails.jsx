@@ -99,7 +99,7 @@ const RolesDisplay = ({ user, allRoles, userRoleIds }) => {
                   p: '1.0rem',
                   border: '1px solid',
                   borderColor: isAssigned ? 'primary.main' : 'divider',
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   bgcolor: isAssigned ? 'primary.lighter' : 'background.paper',
                   opacity: isAssigned ? 1 : 0.5
                 }}

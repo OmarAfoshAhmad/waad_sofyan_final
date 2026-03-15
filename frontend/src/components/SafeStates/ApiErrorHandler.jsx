@@ -119,7 +119,7 @@ const ApiErrorDisplay = ({ config, onRetry, onGoHome, onLogin, compact = false }
           p: '1.5rem',
           textAlign: 'center',
           bgcolor: (theme) => alpha(theme.palette[config.color].light, 0.1),
-          borderRadius: '0.125rem'
+          borderRadius: '0.25rem'
         }}
       >
         <IconComponent sx={{ fontSize: '3.0rem', color: `${config.color}.main`, mb: 1 }} />

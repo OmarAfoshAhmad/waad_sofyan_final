@@ -347,7 +347,7 @@ export default function ProviderPaymentsList() {
             color="primary"
             startIcon={<AccountBalanceWalletIcon />}
             onClick={() => handleViewTransactions(row)}
-            sx={{ borderRadius: '0.125rem' }}
+            sx={{ borderRadius: '0.25rem' }}
           >
             الدفعات
           </Button>
@@ -519,7 +519,7 @@ export default function ProviderPaymentsList() {
         <Box sx={{ p: 0, height: '100%' }}>
           {isError && (
             <Box sx={{ p: '1.0rem' }}>
-              <Alert severity="error" sx={{ borderRadius: '0.125rem' }}>
+              <Alert severity="error" sx={{ borderRadius: '0.25rem' }}>
                 {error?.message || 'فشل جلب بيانات الدفعات'}
               </Alert>
             </Box>

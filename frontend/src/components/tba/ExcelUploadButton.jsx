@@ -245,7 +245,7 @@ const ExcelUploadButton = ({
         variant="outlined"
         sx={{
           p: '1.0rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           borderStyle: 'dashed',
           borderColor: validationErrors.length > 0 ? 'error.main' : 'primary.main',
           bgcolor: validationErrors.length > 0 ? 'error.lighter' : 'primary.lighter'
@@ -290,7 +290,7 @@ const ExcelUploadButton = ({
         position: 'relative',
         border: '2px dashed',
         borderColor: dragActive ? 'primary.main' : 'divider',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         p: '2.0rem',
         textAlign: 'center',
         bgcolor: dragActive ? 'primary.lighter' : 'background.paper',
@@ -350,7 +350,7 @@ const ExcelUploadButton = ({
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: '0.125rem',
+            borderRadius: '0.25rem',
             minHeight: '18.75rem'
           }
         }}

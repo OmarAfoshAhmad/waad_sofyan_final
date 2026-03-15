@@ -74,7 +74,7 @@ const PriorityBadge = ({
           gap: '0.75rem',
           px: '1.0rem',
           py: 1,
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: `${config.color}.lighter`,
           border: 1,
           borderColor: `${config.color}.light`

@@ -362,7 +362,7 @@ const DocumentSidePanel = memo(
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           overflow: 'hidden'
         }}
       >

@@ -63,7 +63,7 @@ const GradientKPICard = ({ title, value, subtitle, icon: Icon, gradient, loading
         height: '100%',
         background: gradient,
         color: '#fff',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         overflow: 'hidden',
         position: 'relative',
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -522,7 +522,7 @@ export default function Dashboard() {
                 <Typography sx={{ fontSize: '0.8rem', opacity: 0.9 }}>نظام إدارة العمليات الصحية - لوحة التحكم الموحدة</Typography>
               </Stack>
               <Stack direction="row" spacing={2} alignItems="center">
-                <EmployerFilterSelector size="small" sx={{ minWidth: '18.75rem', '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', height: '2.5rem', borderRadius: '0.125rem' } }} />
+                <EmployerFilterSelector size="small" sx={{ minWidth: '18.75rem', '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', height: '2.5rem', borderRadius: '0.25rem' } }} />
                 <IconButton size="small" onClick={handleRefreshAll} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}>
                   <RefreshIcon sx={{ fontSize: '1.375rem' }} />
                 </IconButton>
@@ -596,7 +596,7 @@ export default function Dashboard() {
       {/* System status Footer - Pushed to bottom */}
       <Box sx={{
         p: '0.625rem',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         bgcolor: alpha('#10b981', 0.05),
         border: '1px solid',
         borderColor: alpha('#10b981', 0.12),

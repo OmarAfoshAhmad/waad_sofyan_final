@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
-              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
-              name="claim_audit_report"
-              pageWidth="595" pageHeight="842" columnWidth="555"
-              leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20"
-              isTitleNewPage="true" >
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="claim_audit_report" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" isTitleNewPage="true">
 
     <property name="ireport.zoom" value="1.5"/>
     <property name="ireport.x" value="0"/>
@@ -16,6 +11,12 @@
     <style name="HeaderCell" style="BaseArabic" isBold="true" mode="Opaque" backcolor="#F2F2F2"/>
     <style name="GroupHeader" style="BaseArabic" isBold="true" mode="Opaque" backcolor="#E0E0E0"/>
     <style name="SummaryBox" style="BaseArabic" mode="Opaque" backcolor="#FAFAFA"/>
+    <!-- Color styles — forecolor must be set via named styles in JasperReports 6.x -->
+    <style name="GreenAmount" mode="Opaque" forecolor="#006600" backcolor="#ECF9EE"/>
+    <style name="RedAmount" mode="Opaque" forecolor="#AA0000" backcolor="#FFF0F0"/>
+    <style name="RedText" forecolor="#AA0000"/>
+    <style name="GreenText" forecolor="#006600"/>
+    <style name="GrayText" forecolor="#666666"/>
 
     <!-- Parameters -->
     <parameter name="COMPANY_NAME" class="java.lang.String"/>
@@ -23,7 +24,7 @@
     <parameter name="REPORT_DATE" class="java.lang.String"/>
     <parameter name="REPORT_NUMBER" class="java.lang.String"/>
     <parameter name="PROVIDER_NAME" class="java.lang.String"/>
-    
+
     <!-- Totals for Cover Page -->
     <parameter name="TOTAL_GROSS" class="java.math.BigDecimal"/>
     <parameter name="TOTAL_REJECTED" class="java.math.BigDecimal"/>
@@ -77,25 +78,35 @@
                     <box>
                         <pen lineWidth="0.75" lineColor="#999999"/>
                     </box>
-                    
+
                     <!-- Row 1: No / Origin No -->
                     <staticText>
                         <reportElement style="HeaderCell" x="0" y="0" width="110" height="25" />
-                        <box><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[No:]]></text>
                     </staticText>
                     <textField>
                         <reportElement x="110" y="0" width="170" height="25" />
-                        <box><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
+                        <box>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
                         <textElement textAlignment="Center" verticalAlignment="Middle"/>
                         <textFieldExpression><![CDATA[$F{claimNo}]]></textFieldExpression>
                     </textField>
-                    
+
                     <staticText>
                         <reportElement style="HeaderCell" x="280" y="0" width="110" height="25" />
-                        <box><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Origin No:]]></text>
                     </staticText>
                     <textField>
@@ -107,26 +118,41 @@
                     <!-- Row 2: Insurance / Patient -->
                     <staticText>
                         <reportElement style="HeaderCell" x="0" y="25" width="110" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Insurance Number:]]></text>
                     </staticText>
                     <textField>
                         <reportElement x="110" y="25" width="170" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
                         <textElement textAlignment="Center" verticalAlignment="Middle"/>
                         <textFieldExpression><![CDATA[$F{insuranceNumber}]]></textFieldExpression>
                     </textField>
-                    
+
                     <staticText>
                         <reportElement style="HeaderCell" x="280" y="25" width="110" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Patient Name:]]></text>
                     </staticText>
                     <textField>
                         <reportElement x="390" y="25" width="165" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
                         <textElement textAlignment="Right" verticalAlignment="Middle">
                             <font fontName="Amiri" pdfEncoding="Identity-H" isPdfEmbedded="true"/>
                             <paragraph rightIndent="5"/>
@@ -137,26 +163,44 @@
                     <!-- Row 3: Complaint / Diagnosis -->
                     <staticText>
                         <reportElement style="HeaderCell" x="0" y="50" width="110" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Complaint:]]></text>
                     </staticText>
                     <textField isBlankWhenNull="true">
                         <reportElement x="110" y="50" width="170" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri"/><paragraph rightIndent="5"/></textElement>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Right" verticalAlignment="Middle">
+                            <font fontName="Amiri"/>
+                            <paragraph rightIndent="5"/>
+                        </textElement>
                         <textFieldExpression><![CDATA[$F{complaint}]]></textFieldExpression>
                     </textField>
-                    
+
                     <staticText>
                         <reportElement style="HeaderCell" x="280" y="50" width="110" height="25" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/><rightPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                            <rightPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Diagnosis:]]></text>
                     </staticText>
                     <textField isStretchWithOverflow="true" isBlankWhenNull="true">
                         <reportElement x="390" y="50" width="165" height="50" />
-                        <box><topPen lineWidth="0.5" lineColor="#AAAAAA"/></box>
+                        <box>
+                            <topPen lineWidth="0.5" lineColor="#AAAAAA"/>
+                        </box>
                         <textElement textAlignment="Right" verticalAlignment="Top">
                             <font fontName="Amiri" size="9"/>
                             <paragraph rightIndent="5"/>
@@ -170,38 +214,62 @@
                     <reportElement x="0" y="110" width="555" height="30" />
                     <staticText>
                         <reportElement style="HeaderCell" x="0" y="0" width="220" height="30" />
-                        <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Medical Service]]></text>
                     </staticText>
                     <staticText>
                         <reportElement style="HeaderCell" x="220" y="0" width="60" height="30" />
-                        <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Date]]></text>
                     </staticText>
                     <staticText>
                         <reportElement style="HeaderCell" x="280" y="0" width="65" height="30" />
-                        <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Gross]]></text>
                     </staticText>
                     <staticText>
                         <reportElement style="HeaderCell" x="345" y="0" width="65" height="30" />
-                        <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Net]]></text>
                     </staticText>
                     <staticText>
                         <reportElement style="HeaderCell" x="410" y="0" width="65" height="30" />
-                        <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Rejected]]></text>
                     </staticText>
                     <staticText>
                         <reportElement style="HeaderCell" x="475" y="0" width="80" height="30" />
-                        <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true"/></textElement>
+                        <box>
+                            <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                        </box>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true"/>
+                        </textElement>
                         <text><![CDATA[Rejection Reason]]></text>
                     </staticText>
                 </frame>
@@ -212,44 +280,54 @@
                 <!-- Group Subtotal -->
                 <frame>
                     <reportElement x="0" y="0" width="555" height="25" />
-                    <box><topPen lineWidth="1.0" lineColor="#333333"/></box>
-                    
+                    <box>
+                        <topPen lineWidth="1.0" lineColor="#333333"/>
+                    </box>
+
                     <staticText>
                         <reportElement style="HeaderCell" x="0" y="0" width="280" height="25" backcolor="#F9F9F9"/>
-                        <textElement textAlignment="Center" verticalAlignment="Middle"><font isBold="true" size="11"/></textElement>
+                        <textElement textAlignment="Center" verticalAlignment="Middle">
+                            <font isBold="true" size="11"/>
+                        </textElement>
                         <text><![CDATA[SUBTOTAL]]></text>
                     </staticText>
-                    
+
                     <textField pattern="#,##0.000">
                         <reportElement x="280" y="0" width="65" height="25" />
-                        <box><pen lineWidth="0.25" lineColor="#CCCCCC"/></box>
+                        <box>
+                            <pen lineWidth="0.25" lineColor="#CCCCCC"/>
+                        </box>
                         <textElement textAlignment="Right" verticalAlignment="Middle">
                             <font isBold="true" size="10"/>
                             <paragraph rightIndent="4"/>
                         </textElement>
                         <textFieldExpression><![CDATA[$V{GROUP_GROSS}]]></textFieldExpression>
                     </textField>
-                    
+
                     <textField pattern="#,##0.000">
-                        <reportElement x="345" y="0" width="65" height="25" forecolor="#006600" backcolor="#ECF9EE" mode="Opaque"/>
-                        <box><pen lineWidth="0.25" lineColor="#CCCCCC"/></box>
+                        <reportElement style="GreenAmount" x="345" y="0" width="65" height="25"/>
+                        <box>
+                            <pen lineWidth="0.25" lineColor="#CCCCCC"/>
+                        </box>
                         <textElement textAlignment="Right" verticalAlignment="Middle">
                             <font isBold="true" size="10"/>
                             <paragraph rightIndent="4"/>
                         </textElement>
                         <textFieldExpression><![CDATA[$V{GROUP_NET}]]></textFieldExpression>
                     </textField>
-                    
+
                     <textField pattern="#,##0.000">
-                        <reportElement x="410" y="0" width="65" height="25" forecolor="#AA0000" backcolor="#FFF0F0" mode="Opaque"/>
-                        <box><pen lineWidth="0.25" lineColor="#CCCCCC"/></box>
+                        <reportElement style="RedAmount" x="410" y="0" width="65" height="25"/>
+                        <box>
+                            <pen lineWidth="0.25" lineColor="#CCCCCC"/>
+                        </box>
                         <textElement textAlignment="Right" verticalAlignment="Middle">
                             <font isBold="true" size="10"/>
                             <paragraph rightIndent="4"/>
                         </textElement>
                         <textFieldExpression><![CDATA[$V{GROUP_REJECTED}]]></textFieldExpression>
                     </textField>
-                    
+
                     <textField>
                         <reportElement x="475" y="0" width="80" height="25" backcolor="#F9F9F9" mode="Opaque"/>
                         <textElement textAlignment="Center" verticalAlignment="Middle">
@@ -277,15 +355,19 @@
                 </textElement>
                 <textFieldExpression><![CDATA[$P{COMPANY_NAME}]]></textFieldExpression>
             </textField>
-            
+
             <textField>
                 <reportElement x="430" y="10" width="125" height="15" />
-                <textElement textAlignment="Right"><font fontName="Amiri" size="10"/></textElement>
+                <textElement textAlignment="Right">
+                    <font fontName="Amiri" size="10"/>
+                </textElement>
                 <textFieldExpression><![CDATA["التاريخ: " + $P{REPORT_DATE}]]></textFieldExpression>
             </textField>
             <textField>
                 <reportElement x="0" y="10" width="150" height="15" />
-                <textElement textAlignment="Left"><font fontName="Amiri" size="10"/></textElement>
+                <textElement textAlignment="Left">
+                    <font fontName="Amiri" size="10"/>
+                </textElement>
                 <textFieldExpression><![CDATA["رقم الدفعة: " + $P{REPORT_NUMBER}]]></textFieldExpression>
             </textField>
 
@@ -312,38 +394,52 @@
             <!-- Results Summary Box -->
             <frame>
                 <reportElement style="SummaryBox" x="100" y="220" width="355" height="110" />
-                <box><pen lineWidth="0.5" lineColor="#CCCCCC"/></box>
-                
+                <box>
+                    <pen lineWidth="0.5" lineColor="#CCCCCC"/>
+                </box>
+
                 <staticText>
                     <reportElement x="200" y="10" width="145" height="25" />
-                    <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="11"/></textElement>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font fontName="Amiri" size="11"/>
+                    </textElement>
                     <text><![CDATA[• إجمالي القيمة المقدمة:]]></text>
                 </staticText>
                 <textField pattern="#,##0.000">
                     <reportElement x="10" y="10" width="180" height="25" />
-                    <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="11" isBold="true"/></textElement>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font fontName="Amiri" size="11" isBold="true"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{TOTAL_GROSS} + " د.ل"]]></textFieldExpression>
                 </textField>
 
                 <staticText>
                     <reportElement x="200" y="40" width="145" height="25" />
-                    <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="11"/></textElement>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font fontName="Amiri" size="11"/>
+                    </textElement>
                     <text><![CDATA[• إجمالي القيمة المرفوضة:]]></text>
                 </staticText>
                 <textField pattern="#,##0.000">
-                    <reportElement x="10" y="40" width="180" height="25" forecolor="#AA0000" />
-                    <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="11" isBold="true"/></textElement>
+                    <reportElement style="RedText" x="10" y="40" width="180" height="25"/>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font fontName="Amiri" size="11" isBold="true"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{TOTAL_REJECTED} + " د.ل"]]></textFieldExpression>
                 </textField>
 
                 <staticText>
                     <reportElement x="200" y="70" width="145" height="25" />
-                    <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="11"/></textElement>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font fontName="Amiri" size="11"/>
+                    </textElement>
                     <text><![CDATA[• صافي القيمة المستحقة:]]></text>
                 </staticText>
                 <textField pattern="#,##0.000">
-                    <reportElement x="10" y="70" width="180" height="25" forecolor="#006600" />
-                    <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="11" isBold="true"/></textElement>
+                    <reportElement style="GreenText" x="10" y="70" width="180" height="25"/>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font fontName="Amiri" size="11" isBold="true"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{TOTAL_NET} + " د.ل"]]></textFieldExpression>
                 </textField>
             </frame>
@@ -361,41 +457,55 @@
             <!-- Signatures -->
             <frame>
                 <reportElement x="0" y="450" width="555" height="120" />
-                
+
                 <!-- Left Signature (Audit) -->
                 <textField isBlankWhenNull="true">
                     <reportElement x="30" y="0" width="180" height="20" />
-                    <textElement textAlignment="Center"><font fontName="Amiri" size="11" isBold="true"/></textElement>
+                    <textElement textAlignment="Center">
+                        <font fontName="Amiri" size="11" isBold="true"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{SIG_LEFT_TOP} != null ? $P{SIG_LEFT_TOP} : "قسم المراجعة والتدقيق"]]></textFieldExpression>
                 </textField>
                 <line>
                     <reportElement x="30" y="60" width="180" height="1" />
-                    <graphicElement><pen lineStyle="Dashed" lineColor="#999999"/></graphicElement>
+                    <graphicElement>
+                        <pen lineStyle="Dashed" lineColor="#999999"/>
+                    </graphicElement>
                 </line>
                 <textField isBlankWhenNull="true">
                     <reportElement x="30" y="70" width="180" height="20" />
-                    <textElement textAlignment="Center"><font fontName="Amiri" size="10"/></textElement>
+                    <textElement textAlignment="Center">
+                        <font fontName="Amiri" size="10"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{SIG_LEFT_BOTTOM} != null ? $P{SIG_LEFT_BOTTOM} : ""]]></textFieldExpression>
                 </textField>
 
                 <!-- Right Signature (Management) -->
                 <textField isBlankWhenNull="true">
                     <reportElement x="345" y="0" width="180" height="20" />
-                    <textElement textAlignment="Center"><font fontName="Amiri" size="11" isBold="true"/></textElement>
+                    <textElement textAlignment="Center">
+                        <font fontName="Amiri" size="11" isBold="true"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{SIG_RIGHT_TOP} != null ? $P{SIG_RIGHT_TOP} : "إدارة النفقات الطبية"]]></textFieldExpression>
                 </textField>
                 <line>
                     <reportElement x="345" y="60" width="180" height="1" />
-                    <graphicElement><pen lineStyle="Dashed" lineColor="#999999"/></graphicElement>
+                    <graphicElement>
+                        <pen lineStyle="Dashed" lineColor="#999999"/>
+                    </graphicElement>
                 </line>
                 <textField isBlankWhenNull="true">
                     <reportElement x="345" y="70" width="180" height="20" />
-                    <textElement textAlignment="Center"><font fontName="Amiri" size="10"/></textElement>
+                    <textElement textAlignment="Center">
+                        <font fontName="Amiri" size="10"/>
+                    </textElement>
                     <textFieldExpression><![CDATA[$P{SIG_RIGHT_BOTTOM} != null ? $P{SIG_RIGHT_BOTTOM} : "شركة وعد لإدارة النفقات"]]></textFieldExpression>
                 </textField>
             </frame>
 
-            <break><reportElement x="0" y="640" width="1" height="1" /></break>
+            <break>
+                <reportElement x="0" y="640" width="1" height="1" />
+            </break>
         </band>
     </title>
 
@@ -409,26 +519,37 @@
             </image>
             <textField>
                 <reportElement x="0" y="32" width="555" height="15" />
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font fontName="Amiri" size="11" isBold="true"/></textElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font fontName="Amiri" size="11" isBold="true"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$P{COMPANY_NAME}]]></textFieldExpression>
             </textField>
             <textField>
                 <reportElement x="430" y="5" width="125" height="12" />
-                <textElement textAlignment="Right"><font fontName="Amiri" size="8"/></textElement>
+                <textElement textAlignment="Right">
+                    <font fontName="Amiri" size="8"/>
+                </textElement>
                 <textFieldExpression><![CDATA["التاريخ: " + $P{REPORT_DATE}]]></textFieldExpression>
             </textField>
             <textField>
                 <reportElement x="430" y="17" width="125" height="12" />
-                <textElement textAlignment="Right"><font fontName="Amiri" size="8"/></textElement>
+                <textElement textAlignment="Right">
+                    <font fontName="Amiri" size="8"/>
+                </textElement>
                 <textFieldExpression><![CDATA["الصفحة: " + $V{PAGE_NUMBER}]]></textFieldExpression>
             </textField>
             <textField>
                 <reportElement x="0" y="5" width="150" height="12" />
-                <textElement textAlignment="Left"><font fontName="Amiri" size="8"/></textElement>
+                <textElement textAlignment="Left">
+                    <font fontName="Amiri" size="8"/>
+                </textElement>
                 <textFieldExpression><![CDATA["رقم الدفعة: " + $P{REPORT_NUMBER}]]></textFieldExpression>
             </textField>
             <line>
-                <reportElement x="0" y="55" width="555" height="1" forecolor="#CCCCCC"/>
+                <reportElement x="0" y="55" width="555" height="1"/>
+                <graphicElement>
+                    <pen lineColor="#CCCCCC"/>
+                </graphicElement>
             </line>
         </band>
     </pageHeader>
@@ -438,38 +559,62 @@
         <band height="20" splitType="Stretch">
             <textField isStretchWithOverflow="true">
                 <reportElement x="0" y="0" width="220" height="20" />
-                <box leftPadding="3" rightPadding="3"><pen lineWidth="0.25" lineColor="#DDDDDD"/></box>
-                <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="9"/></textElement>
+                <box leftPadding="3" rightPadding="3">
+                    <pen lineWidth="0.25" lineColor="#DDDDDD"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Amiri" size="9"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$F{medicalService}]]></textFieldExpression>
             </textField>
             <textField pattern="dd-MM-yyyy">
                 <reportElement x="220" y="0" width="60" height="20" />
-                <box><pen lineWidth="0.25" lineColor="#DDDDDD"/></box>
-                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="9"/></textElement>
+                <box>
+                    <pen lineWidth="0.25" lineColor="#DDDDDD"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$F{serviceDate}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0.000">
                 <reportElement x="280" y="0" width="65" height="20" />
-                <box rightPadding="3"><pen lineWidth="0.25" lineColor="#DDDDDD"/></box>
-                <textElement textAlignment="Right" verticalAlignment="Middle"><font size="9"/></textElement>
+                <box rightPadding="3">
+                    <pen lineWidth="0.25" lineColor="#DDDDDD"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$F{grossAmount}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0.000">
                 <reportElement x="345" y="0" width="65" height="20" />
-                <box rightPadding="3"><pen lineWidth="0.25" lineColor="#DDDDDD"/></box>
-                <textElement textAlignment="Right" verticalAlignment="Middle"><font size="9" isBold="true"/></textElement>
+                <box rightPadding="3">
+                    <pen lineWidth="0.25" lineColor="#DDDDDD"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="9" isBold="true"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$F{netAmount}]]></textFieldExpression>
             </textField>
             <textField pattern="#,##0.000">
                 <reportElement x="410" y="0" width="65" height="20" />
-                <box rightPadding="3"><pen lineWidth="0.25" lineColor="#DDDDDD"/></box>
-                <textElement textAlignment="Right" verticalAlignment="Middle"><font size="9"/></textElement>
+                <box rightPadding="3">
+                    <pen lineWidth="0.25" lineColor="#DDDDDD"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="9"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$F{rejectedAmount}]]></textFieldExpression>
             </textField>
             <textField isStretchWithOverflow="true" isBlankWhenNull="true">
                 <reportElement x="475" y="0" width="80" height="20" />
-                <box leftPadding="3" rightPadding="3"><pen lineWidth="0.25" lineColor="#DDDDDD"/></box>
-                <textElement textAlignment="Right" verticalAlignment="Middle"><font fontName="Amiri" size="8"/></textElement>
+                <box leftPadding="3" rightPadding="3">
+                    <pen lineWidth="0.25" lineColor="#DDDDDD"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font fontName="Amiri" size="8"/>
+                </textElement>
                 <textFieldExpression><![CDATA[$F{rejectionReason}]]></textFieldExpression>
             </textField>
         </band>
@@ -478,10 +623,13 @@
     <pageFooter>
         <band height="40">
             <line>
-                <reportElement x="0" y="10" width="555" height="1" forecolor="#EEEEEE"/>
+                <reportElement x="0" y="10" width="555" height="1"/>
+                <graphicElement>
+                    <pen lineColor="#EEEEEE"/>
+                </graphicElement>
             </line>
             <textField>
-                <reportElement x="0" y="15" width="555" height="15" forecolor="#666666" />
+                <reportElement style="GrayText" x="0" y="15" width="555" height="15"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font fontName="Amiri" size="9" isItalic="true" />
                 </textElement>

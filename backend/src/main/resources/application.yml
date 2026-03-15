@@ -57,8 +57,6 @@ spring:
           lock:
             timeout: 30000
 
-
-
   data:
     web:
       pageable:
@@ -99,7 +97,10 @@ server:
 
 jwt:
   expiration: 86400000
-  secret: ${JWT_SECRET:waad_tba_system_secure_secret_long_string_2026_9dda11e5_28fd_4086_a6c7}
+  # SECURITY: Secret MUST be provided via JWT_SECRET environment variable.
+  # No hardcoded fallback allowed. App will fail to start if not set.
+  # In local dev, use application-dev.yml override or set the env var.
+  secret: ${JWT_SECRET}
 
 security:
   password-reset-token-validity-hours: ${PASSWORD_RESET_TOKEN_VALIDITY_HOURS:1}
@@ -151,7 +152,6 @@ waad:
       - image/jpg
       - application/dicom
       - application/x-dicom
-
 
 management:
   endpoints:

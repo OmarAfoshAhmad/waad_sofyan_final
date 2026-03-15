@@ -1546,7 +1546,7 @@ const ProviderContractView = () => {
               sx={{
                 border: '2px dashed',
                 borderColor: selectedPricingFile ? 'success.main' : 'divider',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 p: '2.0rem',
                 textAlign: 'center',
                 backgroundColor: selectedPricingFile ? 'success.lighter' : 'background.paper',

@@ -60,7 +60,7 @@ const InsightCard = ({ title, titleEn, icon: Icon, children, loading }) => (
       height: '100%',
       border: '1px solid',
       borderColor: 'divider',
-      borderRadius: '0.125rem'
+      borderRadius: '0.25rem'
     }}
   >
     <CardContent>

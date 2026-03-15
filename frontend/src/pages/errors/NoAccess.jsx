@@ -84,7 +84,7 @@ const NoAccess = () => {
             sx={{
               px: '2.0rem',
               py: '0.75rem',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               textTransform: 'none',
               fontSize: '1rem'
             }}

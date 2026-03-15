@@ -100,7 +100,7 @@ const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary' }) => (
         sx={{
           width: '2.5rem',
           height: '2.5rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: (theme) => alpha(theme.palette[color].main, 0.1),
           display: 'flex',
           alignItems: 'center',
@@ -152,7 +152,7 @@ const CategoryTypeCard = ({ type, selected, onSelect, disabled }) => {
             sx={{
               width: '3.0rem',
               height: '3.0rem',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               bgcolor: isMain ? 'primary.main' : 'secondary.main',
               display: 'flex',
               alignItems: 'center',
@@ -199,7 +199,7 @@ const ParentPreview = ({ parent }) => {
         mt: '1.0rem',
         bgcolor: (theme) => alpha(theme.palette.info.main, 0.04),
         borderColor: 'info.light',
-        borderRadius: '0.125rem'
+        borderRadius: '0.25rem'
       }}
     >
       <Stack direction="row" spacing={2} alignItems="center">
@@ -548,7 +548,7 @@ const MedicalCategoryCreate = () => {
                 variant="outlined"
                 sx={{
                   p: '1.0rem',
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between'
@@ -618,7 +618,7 @@ const MedicalCategoryCreate = () => {
           bgcolor: (theme) => alpha(theme.palette.info.main, 0.04),
           border: 1,
           borderColor: 'info.light',
-          borderRadius: '0.125rem'
+          borderRadius: '0.25rem'
         }}
       >
         <Stack direction="row" spacing={2} alignItems="flex-start">

@@ -278,7 +278,7 @@ const ProviderPreAuthReport = () => {
             <Typography variant="caption" display="block" align="center">
               {used} / {approved}
             </Typography>
-            <LinearProgress variant="determinate" value={percentage} sx={{ height: '0.375rem', borderRadius: '0.125rem' }} />
+            <LinearProgress variant="determinate" value={percentage} sx={{ height: '0.375rem', borderRadius: '0.25rem' }} />
           </Box>
         );
 

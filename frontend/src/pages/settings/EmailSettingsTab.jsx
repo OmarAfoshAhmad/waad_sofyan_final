@@ -71,7 +71,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
       <Grid container spacing={2}>
         {/* Basic Settings */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <SettingOutlined /> الإعدادات الأساسية
             </Typography>
@@ -112,7 +112,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
 
         {/* Sync Settings */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CheckCircleOutlined /> المزامنة والنشاط
             </Typography>
@@ -168,7 +168,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
 
         {/* SMTP */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Typography variant="subtitle1" fontWeight={700}>خادم الإرسال (SMTP)</Typography>
               <Button size="small" variant="outlined" onClick={() => handleTestConnection('smtp')} disabled={testing}>
@@ -187,7 +187,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
 
         {/* IMAP */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+          <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Typography variant="subtitle1" fontWeight={700}>خادم الاستقبال (IMAP)</Typography>
               <Button size="small" variant="outlined" onClick={() => handleTestConnection('imap')} disabled={testing}>

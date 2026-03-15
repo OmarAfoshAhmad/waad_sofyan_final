@@ -70,7 +70,7 @@ const UtilizationKPICard = ({ config, value, loading }) => {
         height: '100%',
         border: '1px solid',
         borderColor: showWarning ? 'warning.main' : 'divider',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         transition: 'box-shadow 0.2s',
         '&:hover': {
           boxShadow: 2
@@ -121,7 +121,7 @@ const UtilizationKPICard = ({ config, value, loading }) => {
             sx={{
               width: '2.75rem',
               height: '2.75rem',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               backgroundColor: showWarning ? 'warning.lighter' : config.bgColor,
               display: 'flex',
               alignItems: 'center',

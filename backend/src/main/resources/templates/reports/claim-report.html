@@ -1,328 +1,688 @@
-<!DOCTYPE html>
+﻿<!doctype html>
 <html lang="ar" dir="rtl" xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>كشف مراجعة وتدقيق المطالبات</title>
+  <head>
+    <meta charset="UTF-8" />
+    <title th:text="${report.reportTitle} + ' - كشف مراجعة وتدقيق'">كشف مراجعة وتدقيق المطالبات</title>
     <style>
-        @page {
-            size: A4;
-            margin: 15mm;
-            @bottom-center {
-                content: "الصفحة " counter(page) " من " counter(pages);
-                font-family: 'Segoe UI', Tahoma, sans-serif;
-                font-size: 8pt;
-                color: #666;
-            }
+      /* ═══════════════════════════════════════════
+           WAAD REPORT ENGINE v3 - Flying Saucer / xhtmlrenderer
+           Exact match to signed paper format
+        ═══════════════════════════════════════════ */
+
+      @page {
+        size: A4;
+        margin: 38mm 15mm 18mm 15mm;
+        @top-center {
+          content: element(page-running-header);
+          width: 180mm;
         }
-        
-        * { box-sizing: border-box; }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #fff;
-            color: #333;
-            font-size: 11pt;
-            line-height: 1.6;
-            direction: rtl;
+        @bottom-center {
+          content: "الصفحة " counter(page) " من " counter(pages);
+          font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
+          font-size: 8pt;
+          color: #777;
         }
+      }
 
-        .report-page {
-            width: 100%;
-            padding: 0;
-            margin: 0;
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+        color: #1a1a1a;
+        font-size: 10pt;
+        line-height: 1.55;
+        direction: rtl;
+      }
+
+      /* ═══════════════════════════════════════════
+           RUNNING HEADER - يظهر في كل صفحة
+           (Flying Saucer: position: running)
+        ═══════════════════════════════════════════ */
+      #page-running-header {
+        position: running(page-running-header);
+        width: 180mm;
+        display: table;
+        table-layout: fixed;
+        border-bottom: 1.5px solid #1a1a1a;
+        padding-bottom: 3mm;
+        padding-top: 2mm;
+        background: white;
+      }
+
+      #page-running-header .h-right,
+      #page-running-header .h-center,
+      #page-running-header .h-left {
+        display: table-cell;
+        vertical-align: middle;
+      }
+
+      #page-running-header .h-right {
+        text-align: right;
+        width: 30%;
+        font-size: 8.5pt;
+        line-height: 1.7;
+      }
+      #page-running-header .h-center {
+        text-align: center;
+        width: 40%;
+      }
+      #page-running-header .h-left {
+        text-align: left;
+        width: 30%;
+        font-size: 9pt;
+        font-weight: bold;
+      }
+
+      #page-running-header .h-center img {
+        max-width: 60px;
+        max-height: 36px;
+        vertical-align: middle;
+      }
+
+      #page-running-header .h-center .co-name {
+        font-size: 13pt;
+        font-weight: bold;
+        color: #1a1a1a;
+      }
+
+      /* For browser/iframe: show static header at top */
+      #screen-header {
+        display: table;
+        table-layout: fixed;
+        width: 100%;
+        border-bottom: 1.5px solid #1a1a1a;
+        padding-bottom: 4mm;
+        padding-top: 2mm;
+        margin-bottom: 12mm;
+      }
+
+      #screen-header .h-right,
+      #screen-header .h-center,
+      #screen-header .h-left {
+        display: table-cell;
+        vertical-align: middle;
+      }
+
+      #screen-header .h-right {
+        text-align: right;
+        width: 30%;
+        font-size: 8.5pt;
+        line-height: 1.7;
+      }
+      #screen-header .h-center {
+        text-align: center;
+        width: 40%;
+      }
+      #screen-header .h-left {
+        text-align: left;
+        width: 30%;
+        font-size: 9pt;
+        font-weight: bold;
+      }
+
+      #screen-header .h-center img {
+        max-width: 60px;
+        max-height: 36px;
+        vertical-align: middle;
+      }
+
+      #screen-header .h-center .co-name {
+        font-size: 13pt;
+        font-weight: bold;
+        color: #1a1a1a;
+      }
+
+      /* Hide screen header when printing (PDF renderer does not use it) */
+      @media print {
+        #screen-header {
+          display: none !important;
         }
+      }
 
-        /* Cover Page Layout */
-        .cover-content {
-            page-break-after: always;
-            min-height: 260mm;
-            display: flex;
-            flex-direction: column;
+      /* ═══════════════════════════════════════════
+           COVER PAGE
+        ═══════════════════════════════════════════ */
+      .cover-page {
+        page-break-after: always;
+      }
+
+      .salutation {
+        font-size: 12.5pt;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 9mm;
+        margin-top: 8mm;
+      }
+
+      .body-text {
+        font-size: 10.5pt;
+        text-align: justify;
+        line-height: 1.8;
+        margin-bottom: 9mm;
+      }
+
+      /* ─ Bullet summary ─ */
+      .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 12mm;
+      }
+
+      .summary-table tr {
+        border-bottom: 1px solid #eaeaea;
+      }
+
+      .summary-table td {
+        padding: 4mm 0;
+        vertical-align: middle;
+        font-size: 10.5pt;
+      }
+
+      .summary-table .td-bullet {
+        width: 8px;
+        color: #1a1a1a;
+        font-size: 13pt;
+        font-weight: bold;
+        padding-left: 4px;
+        vertical-align: middle;
+      }
+
+      .summary-table .td-label {
+        text-align: right;
+      }
+
+      .summary-table .td-value {
+        text-align: left;
+        font-weight: bold;
+        font-family: "Courier New", Courier, monospace;
+        white-space: nowrap;
+        width: 130px;
+        direction: ltr;
+      }
+
+      .summary-table .td-value.red {
+        color: #c62828;
+      }
+
+      .summary-table tr.row-net .td-label,
+      .summary-table tr.row-net .td-value {
+        color: var(--primary, #005f6b);
+        font-weight: bold;
+        font-size: 11pt;
+      }
+
+      /* Circle around the count number */
+      .count-circle {
+        display: inline-block;
+        border: 1.5px solid #1a1a1a;
+        border-radius: 50%;
+        min-width: 1.9em;
+        height: 1.9em;
+        line-height: 1.85em;
+        text-align: center;
+        font-size: 10pt;
+        font-weight: bold;
+        font-family: "Courier New", monospace;
+        padding: 0 4px;
+      }
+
+      .footer-note {
+        font-size: 9.5pt;
+        color: #444;
+        text-align: justify;
+        line-height: 1.8;
+        margin-bottom: 14mm;
+      }
+
+      /* Single centered signature */
+      .signature-center {
+        text-align: center;
+        margin-top: 8mm;
+      }
+
+      .signature-center .sig-greeting {
+        font-size: 11.5pt;
+        font-weight: bold;
+      }
+
+      .signature-center .sig-dept {
+        font-size: 10pt;
+        color: #333;
+        margin-top: 3px;
+      }
+
+      /* ═══════════════════════════════════════════
+           DETAIL PAGES
+        ═══════════════════════════════════════════ */
+      .detail-section {
+        page-break-before: always;
+      }
+
+      .claim-card {
+        border: 1px solid #bbb;
+        border-bottom: none;
+        margin: 0;
+        padding: 0;
+        page-break-inside: avoid;
+      }
+      .claim-card:last-of-type {
+        border-bottom: 1px solid #bbb;
+      }
+
+      /* Meta header - matching photo exactly */
+      .meta-tbl {
+        width: 100%;
+        border-collapse: collapse;
+        background: #f6f9f9;
+        font-size: 8.5pt;
+        border-bottom: 1px solid #bbb;
+      }
+
+      .meta-tbl td {
+        padding: 5px 8px;
+        border: 1px solid #ddd;
+        vertical-align: top;
+      }
+
+      .meta-tbl .lbl {
+        display: block;
+        color: #888;
+        font-size: 7.5pt;
+        margin-bottom: 2px;
+      }
+
+      .meta-tbl .val {
+        font-weight: bold;
+        font-size: 9pt;
+        color: #111;
+      }
+
+      /* Services table */
+      .svc-tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 8.5pt;
+      }
+
+      .svc-tbl thead th {
+        background: #b0b8c1;
+        color: #1a1a1a;
+        padding: 6px 5px;
+        border: 1px solid #9aa3ad;
+        text-align: center;
+        font-size: 8.5pt;
+        font-weight: bold;
+      }
+
+      .svc-tbl tbody td {
+        padding: 5px 5px;
+        border: 1px solid #e4e4e4;
+        text-align: center;
+        vertical-align: middle;
+      }
+
+      .svc-tbl tbody tr:nth-child(even) {
+        background: #fafafa;
+      }
+
+      .svc-tbl .td-svc {
+        text-align: right;
+        padding-right: 7px;
+      }
+      .svc-tbl .td-date {
+        font-size: 8pt;
+        white-space: nowrap;
+      }
+      .svc-tbl .td-reason {
+        font-size: 7.5pt;
+        text-align: right;
+        padding-right: 5px;
+        color: #555;
+      }
+
+      /* Subtotal row - each value cell has its own color */
+      .svc-tbl tr.subtotal-row td {
+        background: #e8e8e8;
+        color: #1a1a1a;
+        font-weight: bold;
+        border-top: 2px solid #aaa;
+      }
+      .svc-tbl tr.subtotal-row td.sub-gross   { background-color: #1976d2; color: #fff; }
+      .svc-tbl tr.subtotal-row td.sub-net     { background-color: #00897b; color: #fff; }
+      .svc-tbl tr.subtotal-row td.sub-rejected { background-color: #e53935; color: #fff; }
+
+      .num {
+        font-family: "Courier New", Courier, monospace;
+        font-weight: bold;
+      }
+      .col-red {
+        color: #c62828;
+      }
+      .col-grn {
+        color: var(--primary, #005f6b);
+      }
+      .subtotal-row .num { font-family: "Courier New", Courier, monospace; font-weight: bold; }
+      .sub-gross .num, .sub-net .num, .sub-rejected .num { color: #fff; }
+
+      /* Grand Total row at the end of report */
+      .grand-total-wrap {
+        margin-top: 0;
+        border: 2px solid #ccc;
+        border-top: none;
+      }
+      .grand-total-wrap table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .grand-total-wrap .gt-label {
+        padding: 7px 10px;
+        font-weight: bold;
+        font-size: 10pt;
+        background: #f0f0f0;
+        border: 1px solid #ccc;
+        width: 32%;
+      }
+      .grand-total-wrap .gt-cell {
+        padding: 7px 6px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 10pt;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: #fff;
+        width: 17%;
+      }
+      .gt-gross {
+        background-color: #1976d2;
+      }
+      .gt-net {
+        background-color: #00897b;
+      }
+      .gt-rejected {
+        background-color: #e53935;
+      }
+      .grand-total-wrap .num {
+        font-family: "Courier New", Courier, monospace;
+        font-weight: bold;
+        color: #fff;
+      }
+
+      /* Hide the PDF running header in browser – it lives in @page margin only */
+      @media screen {
+        #page-running-header {
+          display: none !important;
         }
-
-        /* Centered Header as per report11.jpg */
-        .page-header-centered {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .logo-container {
-            margin-bottom: 10px;
-        }
-
-        .logo-container img {
-            max-width: 180px;
-            max-height: 90px;
-            object-fit: contain;
-        }
-
-        .main-title {
-            font-size: 24pt;
-            color: #005f6b; /* Fallback */
-            font-weight: bold;
-            margin: 0;
-        }
-
-        /* Info Bar: History on right, Batch on left */
-        .info-bar-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 30px;
-            font-size: 11pt;
-        }
-
-        .info-right { text-align: right; }
-        .info-left { text-align: left; }
-
-        .salutation {
-            font-size: 14pt;
-            font-weight: bold;
-            margin: 30px 0 20px;
-        }
-
-        .report-body-text {
-            font-size: 12pt;
-            margin-bottom: 35px;
-            text-align: justify;
-        }
-
-        /* Financial Summary List matching screenshot exactly */
-        .financial-summary-list {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0 50px;
-        }
-
-        .financial-summary-list tr {
-            border-bottom: 1px solid #eee;
-        }
-
-        .financial-summary-list td {
-            padding: 12px 0;
-            font-size: 13pt;
-        }
-
-        .sum-label {
-            text-align: right;
-            width: 60%;
-            color: #444;
-        }
-
-        .sum-value {
-            text-align: left;
-            font-weight: bold;
-            font-family: 'Courier New', Courier, monospace;
-            color: #000;
-        }
-
-        .sum-value.net-amount {
-            color: #00897b;
-            font-size: 15pt;
-        }
-
-        /* Signatures Section matching user request */
-        .signatures-footer {
-            margin-top: auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            padding-bottom: 50px;
-        }
-
-        .sig-block {
-            text-align: center;
-            min-width: 250px;
-        }
-
-        .sig-top-text {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        /* DETAIL PAGES */
-        .details-container {
-            padding: 10px 0;
-        }
-
-        .detail-page-header {
-            border-bottom: 2px solid #005f6b;
-            padding-bottom: 10px;
-            margin-bottom: 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .claim-statement-card {
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-bottom: 35px;
-            overflow: hidden;
-            page-break-inside: avoid;
-        }
-
-        .claim-card-meta {
-            background-color: #f5f8f8;
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-        }
-
-        .meta-field b { display: block; font-size: 9pt; color: #666; margin-bottom: 2px; }
-        .meta-field span { font-weight: bold; font-size: 10.5pt; }
-
-        .items-data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 9.5pt;
-        }
-
-        .items-data-table th {
-            background-color: #005f6b;
-            color: #fff;
-            padding: 10px;
-            border: 1px solid #004d56;
-        }
-
-        .items-data-table td {
-            padding: 8px 10px;
-            border: 1px solid #eee;
-            text-align: center;
-        }
-
-        .items-data-table .subtotal-bar {
-            background-color: #f1f1f1;
-            font-weight: bold;
-        }
-
-        .num-format { font-family: 'Courier New', monospace; font-weight: bold; }
-        .red-val { color: #d32f2f; }
-        .green-val { color: #00897b; }
-
+      }
     </style>
-</head>
-<body>
-
-    <div class="report-page">
-        
-        <!-- COVER PAGE -->
-        <div class="cover-content">
-            <div class="page-header-centered">
-                <div class="logo-container">
-                    <img th:if="${report.companyLogoBase64 != ''}" th:src="${report.companyLogoBase64}" src="" alt="LOGO" />
-                </div>
-                <div class="main-title" th:style="'color: ' + ${report.primaryColor}" th:text="${report.reportTitle}">نظام وعد الطبي</div>
-            </div>
-
-            <div class="info-bar-row">
-                <div class="info-right">
-                    <b>التاريخ:</b> <span th:text="${report.reportDate}"></span> <br/>
-                    <b>الصفحة:</b> 1
-                </div>
-                <div class="info-left">
-                    <b>رقم الدفعة:</b> <span th:text="${report.batchCode}"></span>
-                </div>
-            </div>
-
-            <div class="salutation">
-                السادة / <span th:text="${report.providerName}"></span> المحترمين
-            </div>
-
-            <div class="report-body-text" th:utext="${report.introText}">
-                نحيطكم علماً بأننا قد انتهينا من مراجعة المطالبات المالية المقدمة من طرفكم والمشار إليها في الدفعة رقم (<span th:text="${report.batchCode}"></span>)، وقد تمت المراجعة الفنية والمالية وفق المعايير المعتمدة، وكانت النتائج كالتالي:
-            </div>
-
-            <table class="financial-summary-list">
-                <tr>
-                    <td class="sum-label">إجمالي القيمة المقدمة من المرفق:</td>
-                    <td class="sum-value"><span th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')}"></span> د.ل</td>
-                </tr>
-                <tr>
-                    <td class="sum-label">إجمالي القيمة المرفوضة:</td>
-                    <td class="sum-value red-val"><span th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')}"></span> د.ل</td>
-                </tr>
-                <tr>
-                    <td class="sum-label">إجمالي مساهمة المؤمن لهم:</td>
-                    <td class="sum-value"><span th:text="${#numbers.formatDecimal(report.grandTotalPatientShare, 1, 'COMMA', 3, 'POINT')}"></span> د.ل</td>
-                </tr>
-                <tr th:style="'border-bottom: 2px solid ' + ${report.primaryColor}">
-                    <td class="sum-label" th:style="'font-weight: bold; color: ' + ${report.primaryColor}">صافي القيمة المستحقة للمرفق:</td>
-                    <td class="sum-value net-amount" th:style="'color: ' + ${report.primaryColor}" th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')} + ' د.ل'">130.000 د.ل</td>
-                </tr>
-                <tr>
-                    <td class="sum-label">عدد ملفات المطالبات:</td>
-                    <td class="sum-value"><span th:text="${report.claimCount}"></span> مطالبة</td>
-                </tr>
-            </table>
-
-            <div class="report-body-text" th:text="${report.footerNote}">
-                يرجى التكرم بمراجعة التفاصيل والملاحظات المرفقة، وفي حال وجود أي اعتراض يرجى مراسلتنا في غضون أسبوعين من تاريخه.
-            </div>
-
-            <div class="signatures-footer">
-                <div class="sig-block">
-                    <div class="sig-top-text" th:text="${report.sigRightTop}">والسلام عليكم</div>
-                    <div style="font-weight: bold; font-size: 13pt; margin-top: 10px;" th:text="${report.sigRightBottom}">قسم المراجعة والتدقيق</div>
-                </div>
-                <div class="sig-block">
-                    <div class="sig-top-text" th:text="${report.sigLeftTop}"></div>
-                    <div style="font-weight: bold; font-size: 13pt;" th:text="${report.sigLeftBottom}">إدارة الحسابات</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- DETAILS CONTENT -->
-        <div class="details-container">
-            <div class="detail-page-header" th:style="'border-bottom: 2px solid ' + ${report.primaryColor}">
-                <div th:style="'font-size: 18pt; font-weight: bold; color: ' + ${report.primaryColor}">كشف تفصيلي للمطالبات المراجعة</div>
-                <div style="font-size: 10pt; color: #666;">رقم الدفعة: <span th:text="${report.batchCode}"></span></div>
-            </div>
-
-            <div th:each="claim : ${report.groupedClaims}" class="claim-statement-card">
-                <div class="claim-card-meta">
-                    <div class="meta-field"><b>اسم المريض</b><span th:text="${claim.patientName}"></span></div>
-                    <div class="meta-field"><b>رقم المستفيد</b><span th:text="${claim.patientRef}"></span></div>
-                    <div class="meta-field"><b>رقم المطالبة</b><span th:text="${claim.claimId}"></span></div>
-                    <div class="meta-field"><b>رقم التأمين</b><span th:text="${claim.insuranceNumber}"></span></div>
-                    <div class="meta-field" style="grid-column: span 2;"><b>التشخيص</b><span th:text="${claim.diagnosis}"></span></div>
-                </div>
-
-                <table class="items-data-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 45%;" th:style="'background-color: ' + ${report.primaryColor} + '; color: #fff; padding: 10px; border: 1px solid ' + ${report.primaryColor}">الخدمــــــــة الطبيـــــة</th>
-                            <th style="width: 15%;" th:style="'background-color: ' + ${report.primaryColor} + '; color: #fff; padding: 10px; border: 1px solid ' + ${report.primaryColor}">القيمة المقدمة</th>
-                            <th style="width: 15%;" th:style="'background-color: ' + ${report.primaryColor} + '; color: #fff; padding: 10px; border: 1px solid ' + ${report.primaryColor}">المرفوض</th>
-                            <th style="width: 15%;" th:style="'background-color: ' + ${report.primaryColor} + '; color: #fff; padding: 10px; border: 1px solid ' + ${report.primaryColor}">الصافي</th>
-                            <th style="width: 10%;" th:style="'background-color: ' + ${report.primaryColor} + '; color: #fff; padding: 10px; border: 1px solid ' + ${report.primaryColor}">ملاحظة</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="item : ${claim.items}">
-                            <td style="text-align: right;" th:text="${item.medicalService}"></td>
-                            <td class="num-format" th:text="${#numbers.formatDecimal(item.grossAmount, 1, 'COMMA', 3, 'POINT')}"></td>
-                            <td class="num-format red-val" th:text="${#numbers.formatDecimal(item.rejectedAmount, 1, 'COMMA', 3, 'POINT')}"></td>
-                            <td class="num-format green-val" th:style="'color: ' + ${report.primaryColor}" th:text="${#numbers.formatDecimal(item.netAmount, 1, 'COMMA', 3, 'POINT')}"></td>
-                            <td style="font-size: 8pt; text-align: right;" th:text="${item.rejectionReasonArabic ?: '-'}"></td>
-                        </tr>
-                        <tr class="subtotal-bar">
-                            <td style="text-align: left;">إجمالي ملف المريض</td>
-                            <td class="num-format" th:text="${#numbers.formatDecimal(claim.subTotalGross, 1, 'COMMA', 3, 'POINT')}"></td>
-                            <td class="num-format red-val" th:text="${#numbers.formatDecimal(claim.subTotalRejected, 1, 'COMMA', 3, 'POINT')}"></td>
-                            <td class="num-format green-val" th:style="'color: ' + ${report.primaryColor}" th:text="${#numbers.formatDecimal(claim.subTotalNet, 1, 'COMMA', 3, 'POINT')}"></td>
-                            <td></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
+    <!-- Flying Saucer: CSS custom properties not supported – inject actual colors via Thymeleaf -->
+    <style th:inline="text">
+      /* thead stays silver – no override needed */
+      /* subtotal individual cells override via .sub-gross/.sub-net/.sub-rejected */
+      .col-grn {
+        color: [(${report.primaryColor ?: "#005f6b"})];
+      }
+      .summary-table tr.row-net .td-label,
+      .summary-table tr.row-net .td-value {
+        color: [(${report.primaryColor ?: "#005f6b"})];
+      }
+    </style>
+  </head>
+  <body th:style="'--primary: ' + ${report.primaryColor != null ? report.primaryColor : '#005f6b'}">
+    <!-- ═══════════════════════════════════════════
+     RUNNING HEADER FOR PDF (Flying Saucer)
+     Appears in @page margin on every page
+═══════════════════════════════════════════ -->
+    <div id="page-running-header">
+      <span class="h-left" th:text="${report.batchCode}">JFZ25-00225-07/2025</span>
+      <span class="h-center">
+        <img
+          th:if="${report.companyLogoBase64 != null and !#strings.isEmpty(report.companyLogoBase64)}"
+          th:src="${report.companyLogoBase64}"
+          alt=""
+        />
+        <span class="co-name" th:text="${report.reportTitle}">شركة وعد لإدارة النفقات الطبية</span>
+      </span>
+      <span class="h-right">
+        التاريخ &nbsp;<span th:text="${report.reportDate}">-</span><br />
+        الصفحة &nbsp;<span class="page-number"></span>
+      </span>
     </div>
 
-</body>
+    <!-- ═══════════════════════════════════════════
+     SCREEN HEADER (visible in browser/iframe only)
+═══════════════════════════════════════════ -->
+    <div id="screen-header">
+      <span class="h-left" th:text="${report.batchCode}">JFZ25-00225-07/2025</span>
+      <span class="h-center">
+        <img
+          th:if="${report.companyLogoBase64 != null and !#strings.isEmpty(report.companyLogoBase64)}"
+          th:src="${report.companyLogoBase64}"
+          alt=""
+        />
+        <span class="co-name" th:text="${report.reportTitle}">شركة وعد لإدارة النفقات الطبية</span>
+      </span>
+      <span class="h-right">
+        التاريخ &nbsp;<span th:text="${report.reportDate}">-</span><br />
+        الصفحة &nbsp;1
+      </span>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+     PAGE 1 – COVER LETTER
+═══════════════════════════════════════════ -->
+    <div class="cover-page">
+      <div class="salutation">السادة:&nbsp;<span th:text="${report.providerName}">-</span></div>
+
+      <div class="body-text" th:utext="${report.introText}">
+        نود إفادتكم بأن المطالبات المالية المستلمة من سيادتكم وتدقيقها وفق البرامج الصحية المعتمدة بالخصوص، حيث تبيّن ما
+        يلي:
+      </div>
+
+      <!-- Financial summary - bullet style -->
+      <table class="summary-table">
+        <tr>
+          <td class="td-bullet">•</td>
+          <td class="td-label">إجمالي القيمة المقدمة من المرفق:</td>
+          <td
+            class="td-value"
+            th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+          >
+            0.000 د.ل
+          </td>
+        </tr>
+        <tr>
+          <td class="td-bullet">•</td>
+          <td class="td-label">إجمالي القيمة الغير مستحقة:</td>
+          <td
+            class="td-value red"
+            th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+          >
+            0.000 د.ل
+          </td>
+        </tr>
+        <tr>
+          <td class="td-bullet">•</td>
+          <td class="td-label">إجمالي القيمة المدفوعة من المؤمّن:</td>
+          <td
+            class="td-value"
+            th:text="${#numbers.formatDecimal(report.grandTotalPatientShare, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+          >
+            0.000 د.ل
+          </td>
+        </tr>
+        <tr class="row-net">
+          <td class="td-bullet">•</td>
+          <td class="td-label">صافي القيمة المستحق للمرفق:</td>
+          <td
+            class="td-value"
+            th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+          >
+            0.000 د.ل
+          </td>
+        </tr>
+        <tr>
+          <td class="td-bullet">•</td>
+          <td class="td-label">عدد المطاليات المسلّمة:</td>
+          <td class="td-value">
+            <span class="count-circle" th:text="${report.claimCount}">0</span>
+          </td>
+        </tr>
+      </table>
+
+      <div class="footer-note" th:text="${report.footerNote}">
+        عليه يرجى من سيادتكم تسوية الملاحظات والتفاوض خلال مدة أقصاها أسبوعين من تاريخ الاستلام لتسوية القيمة المستحقة
+        نهائياً.
+      </div>
+
+      <div class="signature-center">
+        <div class="sig-greeting" th:text="${report.sigRightTop}">والسلام عليكم</div>
+        <div class="sig-dept" th:text="${report.sigRightBottom}">قسم المراجعة والتدقيق</div>
+      </div>
+    </div>
+    <!-- /cover-page -->
+
+    <!-- ═══════════════════════════════════════════
+     PAGES 2+ – CLAIM DETAIL CARDS
+═══════════════════════════════════════════ -->
+    <div class="detail-section">
+      <div th:each="claim : ${report.groupedClaims}" class="claim-card">
+        <!-- Meta header – 2 equal columns -->
+        <table class="meta-tbl">
+          <tr>
+            <td style="width: 50%">
+              <span class="lbl">No.</span>
+              <span class="val" th:text="${claim.claimId}">-</span>
+            </td>
+            <td style="width: 50%">
+              <span class="lbl">Origin No.</span>
+              <span class="val" th:text="${claim.originNo ?: ''}">-</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="lbl">Insurance Number</span>
+              <span class="val" th:text="${claim.insuranceNumber}">-</span>
+            </td>
+            <td>
+              <span class="lbl">Patient Name</span>
+              <span class="val" th:text="${claim.patientName}">-</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="lbl">Complaints</span>
+              <span class="val" th:text="${claim.complaint ?: ''}"></span>
+            </td>
+            <td>
+              <span class="lbl">Diagnosis</span>
+              <span class="val" th:text="${claim.diagnosis ?: ''}"></span>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Services table -->
+        <table class="svc-tbl">
+          <thead>
+            <tr>
+              <th style="width: 32%; text-align: right; padding-right: 8px">Medical Service</th>
+              <th style="width: 10%">Date</th>
+              <th style="width: 13%">Gross</th>
+              <th style="width: 13%">Net</th>
+              <th style="width: 13%">Rejected</th>
+              <th style="width: 19%; text-align: right; padding-right: 6px">Rejection Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="item : ${claim.items}">
+              <td class="td-svc" th:text="${item.medicalService}">-</td>
+              <td
+                class="td-date"
+                th:text="${item.serviceDate != null} ? ${#temporals.format(item.serviceDate, 'dd-MM-yyyy')} : '-'"
+              >
+                -
+              </td>
+              <td class="num" th:text="${#numbers.formatDecimal(item.grossAmount, 1, 'COMMA', 3, 'POINT')}">0.000</td>
+              <td class="num col-grn" th:text="${#numbers.formatDecimal(item.netAmount, 1, 'COMMA', 3, 'POINT')}">
+                0.000
+              </td>
+              <td
+                class="num col-red"
+                th:text="${item.rejectedAmount != null and item.rejectedAmount.compareTo(T(java.math.BigDecimal).ZERO) != 0}
+                                 ? ${#numbers.formatDecimal(item.rejectedAmount, 1, 'COMMA', 3, 'POINT')}
+                                 : '0.000'"
+              >
+                0.000
+              </td>
+              <td class="td-reason" th:text="${item.rejectionReasonArabic ?: (item.rejectionReason ?: '')}"></td>
+            </tr>
+
+            <!-- SUBTOTAL row - per-cell color -->
+            <tr class="subtotal-row">
+              <td class="td-svc">SUBTOTAL</td>
+              <td></td>
+              <td class="num sub-gross" th:text="${#numbers.formatDecimal(claim.subTotalGross, 1, 'COMMA', 3, 'POINT')}">
+                0.000
+              </td>
+              <td class="num sub-net" th:text="${#numbers.formatDecimal(claim.subTotalNet,   1, 'COMMA', 3, 'POINT')}">
+                0.000
+              </td>
+              <td
+                class="num sub-rejected"
+                th:text="${claim.subTotalRejected != null and claim.subTotalRejected.compareTo(T(java.math.BigDecimal).ZERO) != 0}
+                                 ? ${#numbers.formatDecimal(claim.subTotalRejected, 1, 'COMMA', 3, 'POINT')}
+                                 : '0.000'"
+              >
+                0.000
+              </td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- /claim-card -->
+
+      <!-- ═══ GRAND TOTAL ═══ -->
+      <div class="grand-total-wrap">
+        <table>
+          <tr>
+            <td class="gt-label">TOTAL</td>
+            <td class="gt-cell gt-gross">
+              <div style="font-size: 7.5pt; margin-bottom: 2px">Gross</div>
+              <div
+                class="num"
+                th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+              >
+                0.000 د.ل
+              </div>
+            </td>
+            <td class="gt-cell" style="background-color: #f0f0f0"></td>
+            <td class="gt-cell gt-net">
+              <div style="font-size: 7.5pt; margin-bottom: 2px">Net</div>
+              <div
+                class="num"
+                th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+              >
+                0.000 د.ل
+              </div>
+            </td>
+            <td class="gt-cell gt-rejected">
+              <div style="font-size: 7.5pt; margin-bottom: 2px">Rejected</div>
+              <div
+                class="num"
+                th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+              >
+                0.000 د.ل
+              </div>
+            </td>
+            <td class="gt-label" style="width: 19%"></td>
+          </tr>
+        </table>
+      </div>
+      <!-- /grand-total -->
+    </div>
+    <!-- /detail-section -->
+  </body>
 </html>

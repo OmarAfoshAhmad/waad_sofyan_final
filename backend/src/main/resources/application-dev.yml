@@ -16,9 +16,12 @@ spring:
   flyway:
     validate-on-migrate: false
     clean-disabled: false
+    out-of-order: false
 
 jwt:
-  secret: ${JWT_SECRET:waad_tba_system_secure_secret_long_string_2026_9dda11e5_28fd_4086_a6c7}
+  # DEV ONLY: fallback secret for local development. Override via JWT_SECRET env var.
+  # NEVER use this value in staging or production.
+  secret: ${JWT_SECRET:waad_dev_secret_not_for_production_only_local_dev_9dda11e5}
 
 app:
   cors:

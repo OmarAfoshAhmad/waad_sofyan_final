@@ -26,7 +26,7 @@ const DashboardStatCard = ({ title, value, change, icon: Icon, color = 'primary'
               <Box
                 sx={{
                   p: '0.75rem',
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   bgcolor: `${color}.lighter`,
                   color: `${color}.main`
                 }}

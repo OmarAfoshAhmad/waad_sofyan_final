@@ -154,7 +154,7 @@ const MemberTypeIndicator = ({
           gap: 1,
           px: '0.75rem',
           py: 0.75,
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: isPrincipal ? 'primary.lighter' : `${relationshipConfig.color}.lighter`,
           border: 1,
           borderColor: isPrincipal ? 'primary.light' : `${relationshipConfig.color}.light`

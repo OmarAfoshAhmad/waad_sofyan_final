@@ -96,16 +96,20 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Public access to reports for preview (iframe friendly)
                         .requestMatchers("/api/reports/**").permitAll()
-                        // Swagger / OpenAPI endpoints
+                        // Docker/load-balancer health check — must stay public
+                        .requestMatchers("/actuator/health").permitAll()
+                        // Error page — Spring internal, must stay public
+                        .requestMatchers("/error").permitAll()
+                        // Actuator management endpoints — SUPER_ADMIN only (exposes metrics/env)
+                        .requestMatchers("/actuator/**").hasRole("SUPER_ADMIN")
+                        // Swagger / OpenAPI — SUPER_ADMIN only (exposes full API surface)
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/swagger-resources/**",
-                                "/webjars/**",
-                                "/actuator/**",
-                                "/error")
-                        .permitAll()
+                                "/webjars/**")
+                        .hasRole("SUPER_ADMIN")
                         // All other endpoints require authentication
                         .anyRequest().authenticated())
 

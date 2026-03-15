@@ -64,11 +64,15 @@ const KEYS = {
 
 const PROVIDER_PORTAL_FLAG_KEY = 'PROVIDER_PORTAL_ENABLED';
 
-const TabPanel = ({ children, value, index }) => (
-  <Box role="tabpanel" hidden={value !== index} sx={{ height: '100%', display: value === index ? 'flex' : 'none', flexDirection: 'column' }}>
-    {children}
-  </Box>
-);
+// ✅ تحميل كسول: لا تُرَندَر محتويات التاب إلا عند اختياره
+const TabPanel = ({ children, value, index }) => {
+  if (value !== index) return null;
+  return (
+    <Box role="tabpanel" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {children}
+    </Box>
+  );
+};
 
 const FieldGroup = ({ title, children, icon: Icon, color = 'primary.main' }) => (
   <Box>
@@ -100,8 +104,15 @@ const cleanStr = (value, fallback) => {
 const SystemSettingsPage = () => {
   const theme = useTheme();
   const { setField } = useConfig();
-  const { refresh: refreshSystemConfig } = useSystemConfig();
+  const { refresh: refreshSystemConfig, applyFlags, applyUiConfig } = useSystemConfig();
   const { updateSettings: updateVisualSettings } = useCompanySettings();
+
+  // ✅ ألوان مُحسَّنة مُخزَّنة بـ useMemo بدلاً من الحساب inline
+  const alphaColors = useMemo(() => ({
+    logoBoxBg:    alpha('#000', 0.02),              // خلفية صندوق الشعار - رمادي خفيف محايد
+    primaryFaint: alpha(theme.palette.primary.main, 0.02),
+    infoFaint:    alpha(theme.palette.info.main, 0.05),
+  }), [theme.palette.primary.main, theme.palette.info.main]);
 
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -238,14 +249,16 @@ const SystemSettingsPage = () => {
     loadData();
   }, [loadData]);
 
-  const updateField = (field) => (event) => {
+  // ✅ مُحفوظة بـ useCallback لمنع إنشاء دوال جديدة عند كل render
+  const updateField = useCallback((field) => (event) => {
     setFormData((prev) => ({ ...prev, [field]: event.target.value }));
-  };
+  }, []);
 
-  const saveSettingIfExists = async (key, value) => {
+  // ✅ مُحفوظة بـ useCallback لتجنب إعادة الإنشاء عند كل render
+  const saveSettingIfExists = useCallback(async (key, value) => {
     if (!hasKey(key)) return;
     await systemSettingsService.updateSetting(key, value ? String(value) : '');
-  };
+  }, [hasKey]);
 
   const handleSaveAll = async (manualData = null, manualEmail = null) => {
     const dataToSave = manualData || formData;
@@ -301,6 +314,15 @@ const SystemSettingsPage = () => {
       if (dataToSave.fontFamily) setField('fontFamily', dataToSave.fontFamily);
       if (dataToSave.fontSizeBase) setField('fontSize', dataToSave.fontSizeBase);
 
+      // ✅ تحديث فوري بدون انتظار API — ينعكس فوراً على كل المكونات
+      applyUiConfig({
+        logoUrl:      dataToSave.logoUrl || '',
+        fontFamily:   dataToSave.fontFamily,
+        fontSizeBase: dataToSave.fontSizeBase,
+        systemNameAr: dataToSave.companyName,
+        systemNameEn: dataToSave.companyName
+      });
+
       // Sync the global visual context (Navbar, Title, etc)
       updateVisualSettings({
         companyName: dataToSave.companyName,
@@ -312,9 +334,7 @@ const SystemSettingsPage = () => {
       refreshSystemConfig();
       setSuccess('تم حفظ الإعدادات بنجاح وتحديث النظام');
       setTimeout(() => setSuccess(null), 3000);
-      
-      // Sync internal state
-      await loadData();
+      // ✅ تمت إزالة await loadData() الزائدة - البيانات محدَّثة محلياً، refreshSystemConfig() تكفي
     } catch (e) {
       setError(e?.response?.data?.message || 'فشل حفظ الإعدادات');
     } finally {
@@ -330,6 +350,8 @@ const SystemSettingsPage = () => {
       setError(null);
       await featureFlagsService.toggleFlag(PROVIDER_PORTAL_FLAG_KEY, next);
       setProviderPortalEnabled(next);
+      // ✅ تحديث فوري — تظهر/تختفي البوابة من القائمة فوراً بدون انتظار API
+      applyFlags({ PROVIDER_PORTAL_ENABLED: next });
       refreshSystemConfig();
       setSuccess(next ? 'تم إظهار بوابة مقدم الخدمة' : 'تم إخفاء بوابة مقدم الخدمة');
     } catch (e) {
@@ -441,7 +463,7 @@ const SystemSettingsPage = () => {
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 4 }}>
                     <Stack spacing={2}>
-                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem' }}>
+                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
                         <FieldGroup title="الهوية البصرية" icon={BusinessIcon}>
                           <Box sx={{ display: 'flex', gap: '1.0rem', alignItems: 'center' }}>
                             <Box
@@ -454,7 +476,7 @@ const SystemSettingsPage = () => {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                bgcolor: alpha('#000', 0.02),
+                                bgcolor: alphaColors.logoBoxBg,
                                 flexShrink: 0
                               }}
                             >
@@ -498,7 +520,7 @@ const SystemSettingsPage = () => {
                         </FieldGroup>
                       </Paper>
 
-                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem' }}>
+                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
                         <FieldGroup title="المظهر والخط" icon={SettingsIcon}>
                           <Stack spacing={1.5}>
                             <Stack spacing={0.5}>
@@ -529,7 +551,7 @@ const SystemSettingsPage = () => {
                   </Grid>
 
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
                       <FieldGroup title="المعلومات الأساسية" icon={BusinessIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 8 }}>
@@ -645,7 +667,7 @@ const SystemSettingsPage = () => {
           <TabPanel value={tabValue} index={1}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
-                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', maxWidth: '56.25rem' }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', maxWidth: '56.25rem' }}>
                   <FieldGroup title="قواعد التحقق من الاستحقاق" icon={SecurityIcon}>
                     <Stack spacing={1.5}>
                       <FormControlLabel
@@ -688,7 +710,7 @@ const SystemSettingsPage = () => {
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 7 }}>
-                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
                       <FieldGroup title="الإعدادات التشغيلية" icon={SpeedIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 6 }}>
@@ -720,7 +742,7 @@ const SystemSettingsPage = () => {
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem' }}>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
                       <FieldGroup title="تخصيص تقرير المطالبات" icon={ReportIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 8 }}>
@@ -739,7 +761,7 @@ const SystemSettingsPage = () => {
                             <TextField fullWidth size="small" multiline rows={2} label="ملاحظة التذييل" value={formData.claimReportFooterNote} onChange={updateField('claimReportFooterNote')} />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                            <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alphaColors.primaryFaint }}>
                               <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>التوقيع الأيمن</Typography>
                               <Stack spacing={1}>
                                 <TextField fullWidth size="small" label="السطر العلوي" value={formData.claimReportSigRightTop} onChange={updateField('claimReportSigRightTop')} />
@@ -748,7 +770,7 @@ const SystemSettingsPage = () => {
                             </Paper>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                            <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alphaColors.primaryFaint }}>
                               <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>التوقيع الأيسر</Typography>
                               <Stack spacing={1}>
                                 <TextField fullWidth size="small" label="السطر العلوي" value={formData.claimReportSigLeftTop} onChange={updateField('claimReportSigLeftTop')} />
@@ -761,7 +783,7 @@ const SystemSettingsPage = () => {
                     </Paper>
                   </Grid>
                   <Grid size={{ xs: 12, md: 4 }}>
-                     <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: alpha(theme.palette.info.main, 0.05), height: '100%' }}>
+                     <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: alphaColors.infoFaint, height: '100%' }}>
                         <Typography variant="subtitle2" fontWeight={700} gutterBottom>تلميحات التقرير</Typography>
                         <Typography variant="body2" sx={{ mb: 1 }}>• يمكنك استخدام الرمز <b>{'{batchCode}'}</b> في حقل المقدمة ليتم استبداله برقم الدفعة الحقيقي.</Typography>
                         <Typography variant="body2" sx={{ mb: 1 }}>• اللون الرئيسي يتحكم في لون العناوين والخطوط الفاصلة وصافي القيمة.</Typography>
@@ -776,7 +798,7 @@ const SystemSettingsPage = () => {
           <TabPanel value={tabValue} index={4}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
-                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', maxWidth: '47.5rem' }}>
+                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', maxWidth: '47.5rem' }}>
                   <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.

@@ -91,7 +91,7 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, loading, error }) 
           <Box
             sx={{
               p: '0.75rem',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               bgcolor: `${theme.palette[color]?.main || theme.palette.primary.main}15`
             }}
           >
@@ -152,7 +152,7 @@ const ClaimsStatusGrid = ({ claimsByStatusArray, loading }) => {
                     textAlign: 'center',
                     borderColor: getStatusColor(color),
                     borderWidth: 1,
-                    borderRadius: '0.125rem',
+                    borderRadius: '0.25rem',
                     transition: 'all 0.2s',
                     '&:hover': {
                       bgcolor: `${getStatusColor(color)}10`,
@@ -204,7 +204,7 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
               sx={{
                 p: '1.0rem',
                 bgcolor: `${theme.palette.success.main}10`,
-                borderRadius: '0.125rem'
+                borderRadius: '0.25rem'
               }}
             >
               <Stack direction="row" alignItems="center" spacing={1}>
@@ -225,7 +225,7 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
               sx={{
                 p: '1.0rem',
                 bgcolor: `${theme.palette.error.main}10`,
-                borderRadius: '0.125rem'
+                borderRadius: '0.25rem'
               }}
             >
               <Stack direction="row" alignItems="center" spacing={1}>

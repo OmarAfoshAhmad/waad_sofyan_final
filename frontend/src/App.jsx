@@ -26,6 +26,7 @@ import { EmployerFilterProvider } from 'contexts/EmployerFilterContext';
 import { CompanySettingsProvider } from 'contexts/CompanySettingsContext';
 import { ThemeModeProvider } from 'contexts/ThemeModeContext';
 import { GlobalImportProgressProvider } from 'contexts/GlobalImportProgressContext';
+import { SystemConfigProvider } from 'contexts/SystemConfigContext';
 
 // Production console cleanup
 import { suppressMUIDeprecationWarnings } from 'utils/gridMigration';
@@ -50,6 +51,7 @@ export default function App() {
               <ScrollTop>
                 <AuthProvider>
                   <CompanySettingsProvider>
+                    <SystemConfigProvider>
                     <EmployerFilterProvider>
                       <ThemeModeProvider>
                         <GlobalImportProgressProvider>
@@ -62,6 +64,7 @@ export default function App() {
                         </GlobalImportProgressProvider>
                       </ThemeModeProvider>
                     </EmployerFilterProvider>
+                    </SystemConfigProvider>
                   </CompanySettingsProvider>
                 </AuthProvider>
               </ScrollTop>

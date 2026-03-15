@@ -146,7 +146,7 @@ export default function HeaderContent() {
             variant="outlined"
             color={isProvider ? 'success' : 'primary'}
             sx={{
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               fontWeight: 500,
               '& .MuiChip-icon': { color: isProvider ? 'success.main' : 'primary.main' }
             }}

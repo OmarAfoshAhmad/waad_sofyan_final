@@ -145,7 +145,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
             sx={{
               border: '2px dashed',
               borderColor: file ? 'success.main' : 'divider',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               p: '1.5rem',
               textAlign: 'center',
               cursor: 'pointer',

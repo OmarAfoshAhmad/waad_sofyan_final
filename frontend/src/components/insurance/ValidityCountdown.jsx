@@ -165,7 +165,7 @@ const ValidityCountdown = ({
     <Box
       sx={{
         p: '1.0rem',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         bgcolor:
           isExpired || isRejected
             ? 'error.lighter'

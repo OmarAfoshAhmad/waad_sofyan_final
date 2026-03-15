@@ -414,7 +414,7 @@ const Step2Roles = ({
                   cursor: isProtected ? 'not-allowed' : 'pointer',
                   border: '2px solid',
                   borderColor: isSelected ? 'primary.main' : 'divider',
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   bgcolor: isSelected ? 'primary.lighter' : 'background.paper',
                   opacity: isProtected ? 0.6 : 1,
                   transition: 'all 0.2s ease',

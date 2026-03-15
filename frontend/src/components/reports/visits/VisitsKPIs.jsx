@@ -59,7 +59,7 @@ const KPICard = ({ title, value, subtitle, icon: Icon, color, loading }) => {
           <Box
             sx={{
               p: 1,
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               bgcolor: `${theme.palette[color]?.main || theme.palette.primary.main}15`
             }}
           >

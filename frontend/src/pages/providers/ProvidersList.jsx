@@ -220,7 +220,7 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
         }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '0.125rem' } }}
+        PaperProps={{ sx: { borderRadius: '0.25rem' } }}
       >
         <DialogTitle sx={{ m: 0, p: '1.0rem', pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>

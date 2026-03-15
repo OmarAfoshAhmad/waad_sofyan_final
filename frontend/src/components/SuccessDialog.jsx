@@ -136,7 +136,7 @@ const SuccessDialog = ({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: '0.1875rem',
+          borderRadius: '0.375rem',
           overflow: 'hidden'
         }
       }}
@@ -190,7 +190,7 @@ const SuccessDialog = ({
                 px: '1.5rem',
                 py: '0.75rem',
                 bgcolor: 'grey.100',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 mb: '1.5rem'
               }}
             >
@@ -217,7 +217,7 @@ const SuccessDialog = ({
               sx={{
                 p: '1.0rem',
                 bgcolor: 'grey.50',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 mb: '1.5rem',
                 maxWidth: '25.0rem',
                 mx: 'auto'

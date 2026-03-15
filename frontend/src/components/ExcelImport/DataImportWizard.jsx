@@ -209,7 +209,7 @@ const DataImportWizard = ({
               sx={{
                 border: '2px dashed',
                 borderColor: isDragActive ? 'primary.main' : 'grey.400',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 p: '2.0rem',
                 cursor: 'pointer',
                 bgcolor: isDragActive ? 'action.hover' : 'background.paper',

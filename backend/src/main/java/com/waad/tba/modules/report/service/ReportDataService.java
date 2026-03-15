@@ -30,7 +30,7 @@ public class ReportDataService {
     public ClaimReportDto getClaimReportData(List<Long> claimIds) {
         List<Claim> claims = claimRepository.findAllById(claimIds);
         PdfCompanySettings settings = settingsService.getActiveSettings();
-        
+
         List<ClaimStatementReportDto> groupedClaims = new ArrayList<>();
         BigDecimal grandTotalGross = BigDecimal.ZERO;
         BigDecimal grandTotalNet = BigDecimal.ZERO;
@@ -39,7 +39,7 @@ public class ReportDataService {
 
         String batchCode = "N/A";
         String providerName = "N/A";
-        
+
         // Find first valid provider name and batch code from all claims
         for (Claim c : claims) {
             if (providerName.equals("N/A") && c.getProviderName() != null) {
@@ -54,28 +54,34 @@ public class ReportDataService {
 
         for (Claim claim : claims) {
             String patientName = claim.getMember() != null ? claim.getMember().getFullName() : "غير معروف";
-            String insuranceNumber = claim.getMember() != null && claim.getMember().getPolicyNumber() != null ? claim.getMember().getPolicyNumber() : "غير معروف";
+            String insuranceNumber = claim.getMember() != null && claim.getMember().getPolicyNumber() != null
+                    ? claim.getMember().getPolicyNumber()
+                    : "غير معروف";
             String patientRef = claim.getMember() != null ? claim.getMember().getCardNumber() : "غير معروف";
-            
+
             String currentBatchCode = claim.getClaimBatch() != null ? claim.getClaimBatch().getBatchCode() : "N/A";
-            String diagnosis = claim.getDiagnosisDescription() != null ? claim.getDiagnosisDescription() : claim.getDiagnosisCode();
-            
+            String diagnosis = claim.getDiagnosisDescription() != null ? claim.getDiagnosisDescription()
+                    : claim.getDiagnosisCode();
+
             List<ClaimStatementItemDto> items = new ArrayList<>();
             BigDecimal subTotalGross = BigDecimal.ZERO;
             BigDecimal subTotalRejected = BigDecimal.ZERO;
-            BigDecimal subTotalPatientShare = claim.getPatientCoPay() != null ? claim.getPatientCoPay() : BigDecimal.ZERO;
-            
+            BigDecimal subTotalPatientShare = claim.getPatientCoPay() != null ? claim.getPatientCoPay()
+                    : BigDecimal.ZERO;
+
             for (ClaimLine line : claim.getLines()) {
-                BigDecimal gross = line.getRequestedUnitPrice() != null ? 
-                    line.getRequestedUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())) : line.getTotalPrice();
-                    
+                BigDecimal gross = line.getRequestedUnitPrice() != null
+                        ? line.getRequestedUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity()))
+                        : line.getTotalPrice();
+
                 BigDecimal rejected = line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO;
                 if (Boolean.TRUE.equals(line.getRejected())) {
                     rejected = gross;
                 }
-                
+
                 BigDecimal lineNet = gross.subtract(rejected);
-                if (lineNet.compareTo(BigDecimal.ZERO) < 0) lineNet = BigDecimal.ZERO;
+                if (lineNet.compareTo(BigDecimal.ZERO) < 0)
+                    lineNet = BigDecimal.ZERO;
 
                 items.add(ClaimStatementItemDto.builder()
                         .medicalService(line.getServiceName())
@@ -84,21 +90,25 @@ public class ReportDataService {
                         .netAmount(lineNet)
                         .rejectedAmount(rejected)
                         .rejectionReason(line.getRejectionReason())
-                        .rejectionReasonArabic(line.getRejectionReason()) 
+                        .rejectionReasonArabic(line.getRejectionReason())
                         .build());
-                        
+
                 subTotalGross = subTotalGross.add(gross);
                 subTotalRejected = subTotalRejected.add(rejected);
             }
-            
-            BigDecimal subTotalNet = claim.getNetPayableAmount(); 
-            
+
+            BigDecimal subTotalNet = claim.getNetPayableAmount();
+
             groupedClaims.add(ClaimStatementReportDto.builder()
                     .patientName(patientName)
                     .insuranceNumber(insuranceNumber)
                     .patientRef(patientRef)
                     .batchCode(currentBatchCode)
                     .claimId(claim.getId())
+                    .originNo(claim.getMember() != null && claim.getMember().getCardNumber() != null
+                            ? claim.getMember().getCardNumber()
+                            : null)
+                    .complaint(claim.getComplaint())
                     .diagnosis(diagnosis)
                     .currentContract(claim.getProviderName())
                     .items(items)
@@ -106,7 +116,7 @@ public class ReportDataService {
                     .subTotalNet(subTotalNet)
                     .subTotalRejected(subTotalRejected)
                     .build());
-                    
+
             grandTotalGross = grandTotalGross.add(subTotalGross);
             grandTotalNet = grandTotalNet.add(subTotalNet);
             grandTotalRejected = grandTotalRejected.add(subTotalRejected);
@@ -114,12 +124,14 @@ public class ReportDataService {
         }
 
         String logoBase64 = settings.getLogoBase64DataUrl();
-        if (logoBase64 == null) logoBase64 = "";
+        if (logoBase64 == null)
+            logoBase64 = "";
 
         // Default Intro Text with batch replacement if necessary
         String intro = settings.getClaimReportIntro();
         if (intro == null || intro.isEmpty()) {
-            intro = "نحيطكم علماً بأننا قد انتهينا من مراجعة المطالبات المالية المقدمة من طرفكم والمشار إليها في الدفعة رقم (" + batchCode + ")، وقد تمت المراجعة الفنية والمالية وفق المعايير المعتمدة، وكانت النتائج كالتالي:";
+            intro = "نحيطكم علماً بأننا قد انتهينا من مراجعة المطالبات المالية المقدمة من طرفكم والمشار إليها في الدفعة رقم ("
+                    + batchCode + ")، وقد تمت المراجعة الفنية والمالية وفق المعايير المعتمدة، وكانت النتائج كالتالي:";
         } else if (intro.contains("{batchCode}")) {
             intro = intro.replace("{batchCode}", batchCode);
         }
@@ -138,13 +150,19 @@ public class ReportDataService {
                 .grandTotalPatientShare(grandTotalPatientShare)
                 // New specialized settings
                 .reportTitle(settings.getClaimReportTitle() != null ? settings.getClaimReportTitle() : "نظام وعد الطبي")
-                .primaryColor(settings.getClaimReportPrimaryColor() != null ? settings.getClaimReportPrimaryColor() : "#005f6b")
+                .primaryColor(settings.getClaimReportPrimaryColor() != null ? settings.getClaimReportPrimaryColor()
+                        : "#005f6b")
                 .introText(intro)
-                .footerNote(settings.getClaimReportFooterNote() != null ? settings.getClaimReportFooterNote() : "يرجى التكرم بمراجعة التفاصيل والملاحظات المرفقة، وفي حال وجود أي اعتراض يرجى مراسلتنا في غضون أسبوعين من تاريخه.")
-                .sigRightTop(settings.getClaimReportSigRightTop() != null ? settings.getClaimReportSigRightTop() : "والسلام عليكم")
-                .sigRightBottom(settings.getClaimReportSigRightBottom() != null ? settings.getClaimReportSigRightBottom() : "قسم المراجعة والتدقيق")
+                .footerNote(settings.getClaimReportFooterNote() != null ? settings.getClaimReportFooterNote()
+                        : "يرجى التكرم بمراجعة التفاصيل والملاحظات المرفقة، وفي حال وجود أي اعتراض يرجى مراسلتنا في غضون أسبوعين من تاريخه.")
+                .sigRightTop(settings.getClaimReportSigRightTop() != null ? settings.getClaimReportSigRightTop()
+                        : "والسلام عليكم")
+                .sigRightBottom(
+                        settings.getClaimReportSigRightBottom() != null ? settings.getClaimReportSigRightBottom()
+                                : "قسم المراجعة والتدقيق")
                 .sigLeftTop(settings.getClaimReportSigLeftTop() != null ? settings.getClaimReportSigLeftTop() : "")
-                .sigLeftBottom(settings.getClaimReportSigLeftBottom() != null ? settings.getClaimReportSigLeftBottom() : "إدارة الحسابات")
+                .sigLeftBottom(settings.getClaimReportSigLeftBottom() != null ? settings.getClaimReportSigLeftBottom()
+                        : "إدارة الحسابات")
                 .build();
     }
 }

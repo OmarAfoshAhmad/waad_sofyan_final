@@ -400,7 +400,7 @@ const CompanySettingsPage = () => {
                 objectFit: 'contain',
                 border: '1px solid',
                 borderColor: 'divider',
-                borderRadius: '0.125rem',
+                borderRadius: '0.25rem',
                 p: '1.0rem',
                 bgcolor: '#fafafa'
               }}

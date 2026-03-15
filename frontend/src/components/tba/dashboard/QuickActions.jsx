@@ -105,7 +105,7 @@ export default function QuickActions() {
                       sx={{
                         width: '3.5rem',
                         height: '3.5rem',
-                        borderRadius: '0.125rem',
+                        borderRadius: '0.25rem',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',

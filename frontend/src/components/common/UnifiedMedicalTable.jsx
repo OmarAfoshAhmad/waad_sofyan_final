@@ -259,7 +259,7 @@ const UnifiedMedicalTable = ({
         component={Paper}
         variant="outlined"
         sx={{
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           overflow: 'auto',
           border: `1px solid ${theme.palette.divider}`,
           boxShadow: 'none', // NO shadows

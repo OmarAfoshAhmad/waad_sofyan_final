@@ -238,7 +238,6 @@ public class EmailPreAuthService {
         if (content == null || content.isEmpty()) content = request.getBodyHtml();
         if (content == null || content.isEmpty()) return;
 
-        // Pattern 1: SVC-XXX or CODE: XXX
         java.util.regex.Pattern codePattern = java.util.regex.Pattern.compile("(SVC-|CODE:|Service:)\\s*([A-Z0-9-]{3,10})", java.util.regex.Pattern.CASE_INSENSITIVE);
         java.util.regex.Matcher matcher = codePattern.matcher(content);
         if (matcher.find()) {

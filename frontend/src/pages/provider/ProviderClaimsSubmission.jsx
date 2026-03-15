@@ -154,7 +154,7 @@ const SectionHeader = ({ icon: Icon, title, subtitle, color = 'primary', action 
           sx={{
             width: '2.5rem',
             height: '2.5rem',
-            borderRadius: '0.125rem',
+            borderRadius: '0.25rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -218,7 +218,7 @@ const InfoCard = ({ children, bgcolor = 'grey.50' }) => (
       height: '100%',
       bgcolor,
       borderColor: 'divider',
-      borderRadius: '0.125rem',
+      borderRadius: '0.25rem',
       transition: 'box-shadow 0.2s',
       '&:hover': {
         boxShadow: 1
@@ -236,7 +236,7 @@ const FormSection = ({ children, highlighted = false }) => (
   <Card
     variant="outlined"
     sx={{
-      borderRadius: '0.125rem',
+      borderRadius: '0.25rem',
       borderColor: highlighted ? 'primary.main' : 'divider',
       borderWidth: highlighted ? 2 : 1,
       bgcolor: highlighted ? (theme) => alpha(theme.palette.primary.main, 0.02) : 'background.paper'
@@ -293,7 +293,7 @@ const BlockedAccessPage = ({ onBack }) => (
         <br />
         يرجى الانتقال إلى سجل الزيارات واختيار زيارة لإنشاء مطالبة منها.
       </Typography>
-      <Button variant="contained" size="large" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ borderRadius: '0.125rem', px: '2.0rem' }}>
+      <Button variant="contained" size="large" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ borderRadius: '0.25rem', px: '2.0rem' }}>
         الذهاب إلى سجل الزيارات
       </Button>
     </Card>
@@ -1354,7 +1354,7 @@ export default function ProviderClaimsSubmission() {
         breadcrumbs={[{ label: 'بوابة مقدم الخدمة' }, { label: 'سجل الزيارات', href: '/provider/visits' }, { label: LABELS.pageTitle }]}
       />
 
-      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'common.white', mb: '1.0rem' }}>
+      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'common.white', mb: '1.0rem' }}>
         <Stepper activeStep={workflowActiveStep} alternativeLabel>
           {workflowSteps.map((step, index) => {
             const completed = (index === 0 && hasVisitAndDiagnosis) || (index === 1 && hasServicesReady) || (index === 2 && hasAttachmentsReady);
@@ -1372,7 +1372,7 @@ export default function ProviderClaimsSubmission() {
 
       {/* ═══════════════════════ ERROR ALERT ═══════════════════════ */}
       {error && (
-        <Alert severity="error" sx={{ mb: '1.5rem', borderRadius: '0.125rem' }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: '1.5rem', borderRadius: '0.25rem' }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
@@ -1399,7 +1399,7 @@ export default function ProviderClaimsSubmission() {
         <Grid size={{ xs: 12, lg: 8.5 }}>
           <Stack spacing={3}>
             {/* ═══════════════════════ ROW 1: COMPACT READ-ONLY HEADER ═══════════════════════ */}
-            <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'common.white' }}>
+            <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'common.white' }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'flex-start', md: 'center' }} flexWrap="wrap">
                 <Chip label={`المؤمن عليه: ${linkedMemberName || '—'}`} color="primary" variant="outlined" />
                 <Chip label={`الرقم المدني: ${linkedMemberCivilId || '—'}`} variant="outlined" />
@@ -1425,7 +1425,7 @@ export default function ProviderClaimsSubmission() {
                     startIcon={<AddIcon />}
                     onClick={addClaimLine}
                     disabled={submitting || success}
-                    sx={{ borderRadius: '0.125rem' }}
+                    sx={{ borderRadius: '0.25rem' }}
                   >
                     {LABELS.addService}
                   </Button>
@@ -1439,7 +1439,7 @@ export default function ProviderClaimsSubmission() {
                   icon={<DiagnosisIcon />}
                   sx={{
                     mb: '1.25rem',
-                    borderRadius: '0.125rem',
+                    borderRadius: '0.25rem',
                     border: '1px solid',
                     borderColor: 'info.light',
                     bgcolor: (theme) => alpha(theme.palette.info.main, 0.02),
@@ -1481,7 +1481,7 @@ export default function ProviderClaimsSubmission() {
 
               {/* Category Violation Warning */}
               {hasCategoryViolation && claimLines.length > 0 && (
-                <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: '1.0rem', borderRadius: '0.125rem' }}>
+                <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: '1.0rem', borderRadius: '0.25rem' }}>
                   ⚠️ يجب اختيار التصنيف الطبي لكل خدمة قبل اختيار الخدمة نفسها
                 </Alert>
               )}
@@ -1489,7 +1489,7 @@ export default function ProviderClaimsSubmission() {
               {claimLines.length === 0 ? (
                 <Box sx={{ minHeight: '0.375rem' }} />
               ) : (
-                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '0.125rem' }}>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '0.25rem' }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ bgcolor: tableHeaderBg }}>
@@ -1822,7 +1822,7 @@ export default function ProviderClaimsSubmission() {
                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: '0.75rem' }}>
                     {LABELS.preAuth}
                   </Typography>
-                  <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.125rem' }}>
+                  <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.25rem' }}>
                     {LABELS.preAuthOptional}
                   </Alert>
 
@@ -1874,7 +1874,7 @@ export default function ProviderClaimsSubmission() {
                   />
 
                   {formData.preAuthorizationId && (
-                    <Alert severity="success" sx={{ mt: '1.0rem', borderRadius: '0.125rem' }}>
+                    <Alert severity="success" sx={{ mt: '1.0rem', borderRadius: '0.25rem' }}>
                       تم اختيار موافقة مسبقة - سيتم ربطها بالمطالبة وتحديث حالتها إلى "مستخدم" تلقائياً
                     </Alert>
                   )}
@@ -1887,7 +1887,7 @@ export default function ProviderClaimsSubmission() {
               <SectionHeader icon={AttachmentIcon} title={LABELS.attachments} subtitle="المستندات الداعمة للمطالبة" color="warning" />
               <Divider sx={{ mb: '1.5rem' }} />
 
-              <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.125rem' }}>
+              <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.25rem' }}>
                 {LABELS.attachmentHint}
                 <br />
                 <strong>الامتدادات المسموحة:</strong> PDF, JPG, JPEG, PNG, GIF, DOC, DOCX — <strong>الحد الأقصى:</strong> {MAX_UPLOAD_SIZE_MB}MB لكل ملف.
@@ -1904,7 +1904,7 @@ export default function ProviderClaimsSubmission() {
                   borderStyle: 'dashed',
                   borderWidth: 2,
                   borderColor: attemptedSubmit && !hasAttachmentsReady ? 'error.main' : undefined,
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   mb: '1.0rem'
                 }}
               >
@@ -1918,7 +1918,7 @@ export default function ProviderClaimsSubmission() {
                     المرفقات المحفوظة في المسودة ({existingAttachments.length})
                   </Typography>
                   {existingAttachments.map((item) => (
-                    <Paper key={item.id} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.04) }}>
+                    <Paper key={item.id} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.04) }}>
                       <Stack direction="row" alignItems="center" spacing={2}>
                         <AttachmentIcon color="success" />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1941,7 +1941,7 @@ export default function ProviderClaimsSubmission() {
               {pendingFiles.length > 0 && (
                 <Stack spacing={1} sx={{ mb: '1.0rem' }}>
                   {pendingFiles.map((item, index) => (
-                    <Paper key={index} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem' }}>
+                    <Paper key={index} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
                       <Stack direction="row" alignItems="center" spacing={2}>
                         <AttachmentIcon color="action" />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1995,7 +1995,7 @@ export default function ProviderClaimsSubmission() {
                 sx={{
                   border: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: '0.125rem',
+                  borderRadius: '0.25rem',
                   p: '0.75rem',
                   bgcolor: 'background.default',
                   maxHeight: '13.75rem',
@@ -2010,7 +2010,7 @@ export default function ProviderClaimsSubmission() {
                 ) : (
                   <Stack spacing={1}>
                     {providerChatMessages.map((message) => (
-                      <Paper key={message.id} variant="outlined" sx={{ p: '0.625rem', borderRadius: '0.125rem' }}>
+                      <Paper key={message.id} variant="outlined" sx={{ p: '0.625rem', borderRadius: '0.25rem' }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
                           <Typography variant="caption" fontWeight={600}>
                             {message.senderName}
@@ -2096,13 +2096,13 @@ export default function ProviderClaimsSubmission() {
                   />
                 </Stack>
               ) : (
-                <Alert severity="info" sx={{ borderRadius: '0.125rem' }}>
+                <Alert severity="info" sx={{ borderRadius: '0.25rem' }}>
                   لا تتوفر بيانات التغطية حالياً
                 </Alert>
               )}
             </InfoCard>
 
-            <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.125rem', bgcolor: 'common.white' }}>
+            <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', bgcolor: 'common.white' }}>
               <Typography variant="body2" fontWeight={700} sx={{ mb: 1 }}>
                 حالة الجاهزية
               </Typography>
@@ -2121,7 +2121,7 @@ export default function ProviderClaimsSubmission() {
         elevation={3}
         sx={{
           p: '1.25rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: 'background.paper',
           position: 'sticky',
           bottom: '6.0rem',
@@ -2188,7 +2188,7 @@ export default function ProviderClaimsSubmission() {
                   onClick={() => handleSubmit(true)}
                   disabled={submitting || claimLines.length === 0}
                   sx={{
-                    borderRadius: '0.125rem',
+                    borderRadius: '0.25rem',
                     px: '2.5rem',
                     minWidth: '13.125rem',
                     boxShadow: 4,
@@ -2205,7 +2205,7 @@ export default function ProviderClaimsSubmission() {
                   startIcon={submitting && submitMode === 'draft' ? <CircularProgress size={20} color="inherit" /> : <NotesIcon />}
                   onClick={() => handleSubmit(false)}
                   disabled={submitting || claimLines.length === 0}
-                  sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
+                  sx={{ borderRadius: '0.25rem', px: '1.5rem' }}
                 >
                   {submitting && submitMode === 'draft' ? LABELS.savingDraft : LABELS.saveDraft}
                 </Button>
@@ -2217,7 +2217,7 @@ export default function ProviderClaimsSubmission() {
               startIcon={<ArrowBackIcon />}
               onClick={handleBack}
               disabled={submitting}
-              sx={{ borderRadius: '0.125rem', px: '1.5rem' }}
+              sx={{ borderRadius: '0.25rem', px: '1.5rem' }}
             >
               {LABELS.cancel}
             </Button>

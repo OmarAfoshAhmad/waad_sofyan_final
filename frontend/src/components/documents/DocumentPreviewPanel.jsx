@@ -31,7 +31,7 @@ export default function DocumentPreviewPanel({ fileUrl, fileType, fileName, onCl
           justifyContent: 'center',
           height: '100%',
           bgcolor: 'background.paper',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           border: '1px dashed'
         }}
       >

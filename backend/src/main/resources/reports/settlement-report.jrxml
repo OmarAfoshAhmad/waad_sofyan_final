@@ -4,6 +4,12 @@
 
     <property name="net.sf.jasperreports.export.pdf.tagged" value="true"/>
 
+    <!-- Color styles — forecolor must be defined via named styles in JasperReports 6.x -->
+    <style name="BlueTitleText" forecolor="#0A4D8C"/>
+    <style name="DarkGrayText" forecolor="#374151"/>
+    <style name="WhiteText" forecolor="#FFFFFF"/>
+    <style name="GrayFooter" forecolor="#666666"/>
+
     <parameter name="BATCH_NUMBER" class="java.lang.String"/>
     <parameter name="PROVIDER_NAME" class="java.lang.String"/>
     <parameter name="SETTLEMENT_DATE" class="java.lang.String"/>
@@ -35,21 +41,21 @@
                 <reportElement x="0" y="0" width="802" height="90" backcolor="#F7F9FC"/>
             </rectangle>
             <textField>
-                <reportElement x="0" y="8" width="802" height="24" forecolor="#0A4D8C"/>
+                <reportElement style="BlueTitleText" x="0" y="8" width="802" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="16" isBold="true"/>
                 </textElement>
                 <textFieldExpression><![CDATA[$P{COMPANY_NAME} != null ? $P{COMPANY_NAME} : "شركة وعد لإدارة النفقات الطبية"]]></textFieldExpression>
             </textField>
             <staticText>
-                <reportElement x="0" y="34" width="802" height="20" forecolor="#0A4D8C"/>
+                <reportElement style="BlueTitleText" x="0" y="34" width="802" height="20"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="13" isBold="true"/>
                 </textElement>
                 <text><![CDATA[تقرير تسوية مالية - مقدم خدمة]]></text>
             </staticText>
             <textField>
-                <reportElement x="0" y="60" width="802" height="20" forecolor="#374151"/>
+                <reportElement style="DarkGrayText" x="0" y="60" width="802" height="20"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10"/>
                 </textElement>
@@ -65,63 +71,63 @@
             </rectangle>
 
             <staticText>
-                <reportElement x="730" y="0" width="72" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="730" y="0" width="72" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[رقم المطالبة]]></text>
             </staticText>
             <staticText>
-                <reportElement x="610" y="0" width="120" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="610" y="0" width="120" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[اسم المستفيد]]></text>
             </staticText>
             <staticText>
-                <reportElement x="500" y="0" width="110" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="500" y="0" width="110" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[الرقم الوطني]]></text>
             </staticText>
             <staticText>
-                <reportElement x="420" y="0" width="80" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="420" y="0" width="80" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[تاريخ الخدمة]]></text>
             </staticText>
             <staticText>
-                <reportElement x="290" y="0" width="130" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="290" y="0" width="130" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[التشخيص]]></text>
             </staticText>
             <staticText>
-                <reportElement x="220" y="0" width="70" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="220" y="0" width="70" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[الإجمالي]]></text>
             </staticText>
             <staticText>
-                <reportElement x="150" y="0" width="70" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="150" y="0" width="70" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[مساهمة]]></text>
             </staticText>
             <staticText>
-                <reportElement x="80" y="0" width="70" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="80" y="0" width="70" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
                 <text><![CDATA[مرفوض]]></text>
             </staticText>
             <staticText>
-                <reportElement x="0" y="0" width="80" height="24" forecolor="#FFFFFF"/>
+                <reportElement style="WhiteText" x="0" y="0" width="80" height="24"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="10" isBold="true"/>
                 </textElement>
@@ -201,7 +207,7 @@
     <pageFooter>
         <band height="18">
             <textField>
-                <reportElement x="0" y="0" width="802" height="18" forecolor="#666666"/>
+                <reportElement style="GrayFooter" x="0" y="0" width="802" height="18"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="9"/>
                 </textElement>

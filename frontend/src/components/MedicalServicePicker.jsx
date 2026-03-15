@@ -173,7 +173,7 @@ const MedicalServicePicker = ({
 
   // ========================= RENDER =========================
   return (
-    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem', mb: '1.0rem' }}>
+    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.25rem', mb: '1.0rem' }}>
       <Stack spacing={2}>
         {/* Category Filter Row */}
         {showCategoryFilter && categories.length > 0 && (

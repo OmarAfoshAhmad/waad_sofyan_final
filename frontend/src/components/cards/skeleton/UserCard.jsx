@@ -19,7 +19,7 @@ export default function UserCard() {
       border={false}
       content={false}
       boxShadow
-      sx={{ boxShadow: `rgba(50, 50, 93, 0.25) 0px 13px 27px -5px, rgba(0, 0, 0, 0.3) 0px 8px 16px -8px`, borderRadius: '0.125rem' }}
+      sx={{ boxShadow: `rgba(50, 50, 93, 0.25) 0px 13px 27px -5px, rgba(0, 0, 0, 0.3) 0px 8px 16px -8px`, borderRadius: '0.25rem' }}
     >
       <CardContent sx={{ p: '1.0rem' }}>
         <Grid container spacing={2}>

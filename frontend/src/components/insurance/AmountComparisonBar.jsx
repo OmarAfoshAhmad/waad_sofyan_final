@@ -142,7 +142,7 @@ const AmountComparisonBar = ({
 
       {/* Financial Breakdown */}
       {showBreakdown && (
-        <Box sx={{ mt: '1.5rem', p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem' }}>
+        <Box sx={{ mt: '1.5rem', p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.25rem' }}>
           <Typography variant="subtitle2" fontWeight={600} sx={{ mb: '1.0rem' }}>
             {t.financialSummary}
           </Typography>

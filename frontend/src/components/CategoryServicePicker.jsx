@@ -309,7 +309,7 @@ const CategoryServicePicker = ({
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.125rem' }}>
+    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50', borderRadius: '0.25rem' }}>
       <Stack spacing={2}>
         {/* Info Alert */}
         <Alert severity="info" icon={<InfoIcon />} sx={{ py: 0.5 }}>

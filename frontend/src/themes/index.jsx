@@ -37,6 +37,9 @@ export default function ThemeCustomization({ children }) {
         }
       },
       direction: state.themeDirection,
+      shape: {
+        borderRadius: 4  // قيمة التدوير الأساسية لكل sx={{ borderRadius: N }}
+      },
       mixins: {
         toolbar: {
           minHeight: '3.75rem',

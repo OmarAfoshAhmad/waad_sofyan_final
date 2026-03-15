@@ -187,7 +187,7 @@ const AuditItem = ({ audit, isLast }) => {
             p: '1.0rem',
             bgcolor: alpha(theme.palette[config.color].lighter, 0.3),
             border: `1px solid ${theme.palette[config.color].light}`,
-            borderRadius: '0.125rem'
+            borderRadius: '0.25rem'
           }}
         >
           {/* Header */}

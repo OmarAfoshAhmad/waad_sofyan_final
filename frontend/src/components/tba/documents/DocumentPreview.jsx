@@ -163,7 +163,7 @@ const DocumentPreview = memo(
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'grey.50',
-            borderRadius: '0.125rem'
+            borderRadius: '0.25rem'
           }}
         >
           <CircularProgress size={40} />
@@ -189,7 +189,7 @@ const DocumentPreview = memo(
             justifyContent: 'center',
             bgcolor: (theme) => alpha(theme.palette.error.main, 0.04),
             borderColor: 'error.light',
-            borderRadius: '0.125rem'
+            borderRadius: '0.25rem'
           }}
         >
           <BrokenImageIcon sx={{ fontSize: '3.0rem', color: 'error.main', mb: '1.0rem' }} />
@@ -222,7 +222,7 @@ const DocumentPreview = memo(
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'grey.50',
-            borderRadius: '0.125rem'
+            borderRadius: '0.25rem'
           }}
         >
           <FileIcon sx={{ fontSize: '3.0rem', color: 'text.disabled', mb: '1.0rem' }} />
@@ -247,7 +247,7 @@ const DocumentPreview = memo(
             alignItems: 'center',
             justifyContent: 'center',
             bgcolor: 'grey.50',
-            borderRadius: '0.125rem',
+            borderRadius: '0.25rem',
             p: '1.5rem'
           }}
         >
@@ -280,7 +280,7 @@ const DocumentPreview = memo(
           height: containerHeight,
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           overflow: 'hidden',
           position: isFullscreen ? 'fixed' : 'relative',
           top: isFullscreen ? 0 : 'auto',

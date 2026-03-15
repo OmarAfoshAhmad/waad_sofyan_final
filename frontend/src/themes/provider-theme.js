@@ -294,7 +294,7 @@ export const providerStyles = {
 
   // Card Styles
   card: {
-    borderRadius: '0.125rem',
+    borderRadius: '0.25rem',
     border: '1px solid',
     borderColor: 'divider',
     boxShadow: 'none',
@@ -305,7 +305,7 @@ export const providerStyles = {
 
   // Info Card (Read-only data)
   infoCard: (color = 'info') => ({
-    borderRadius: '0.125rem',
+    borderRadius: '0.25rem',
     border: '1px solid',
     borderColor: 'divider',
     bgcolor: (theme) => (theme.palette.mode === 'dark' ? `${color}.darker` : `${color}.lighter`),
@@ -348,7 +348,7 @@ export const providerStyles = {
   sectionIcon: (color = 'primary') => ({
     width: '2.5rem',
     height: '2.5rem',
-    borderRadius: '0.125rem',
+    borderRadius: '0.25rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -358,7 +358,7 @@ export const providerStyles = {
 
   // Primary Button
   primaryButton: {
-    borderRadius: '0.125rem',
+    borderRadius: '0.25rem',
     px: '1.5rem',
     py: 1,
     fontWeight: 600,
@@ -371,7 +371,7 @@ export const providerStyles = {
 
   // Outlined Button
   outlinedButton: {
-    borderRadius: '0.125rem',
+    borderRadius: '0.25rem',
     px: '1.5rem',
     py: 1,
     fontWeight: 500,
@@ -381,7 +381,7 @@ export const providerStyles = {
   // Sticky Action Bar
   stickyActionBar: {
     p: '1.25rem',
-    borderRadius: '0.125rem',
+    borderRadius: '0.25rem',
     bgcolor: 'background.paper',
     position: 'sticky',
     bottom: '8.0rem',

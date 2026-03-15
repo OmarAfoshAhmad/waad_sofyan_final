@@ -188,7 +188,7 @@ const DesktopNavGroupButton = ({ group }) => {
           onClose={handleClose}
           PaperProps={{
             elevation: 3,
-            sx: { mt: '0.75rem', minWidth: '13.75rem', borderRadius: '0.125rem', p: 1 }
+            sx: { mt: '0.75rem', minWidth: '13.75rem', borderRadius: '0.25rem', p: 1 }
           }}
         >
           {group.children?.map(child => {

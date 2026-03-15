@@ -62,7 +62,7 @@ export default function SingleFileUpload({ error, file, setFieldValue, sx }) {
         sx={{
           top: '4.0rem',
           left: '0.375rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           position: 'absolute',
           width: 'calc(100% - 16px)',
           height: 'calc(100% - 16px)',

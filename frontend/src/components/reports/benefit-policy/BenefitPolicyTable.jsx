@@ -165,7 +165,7 @@ const BenefitPolicyTable = ({ policies = [], loading = false }) => {
           textAlign: 'center',
           border: '1px solid',
           borderColor: 'divider',
-          borderRadius: '0.125rem'
+          borderRadius: '0.25rem'
         }}
       >
         <Typography variant="body1" color="text.secondary">
@@ -186,7 +186,7 @@ const BenefitPolicyTable = ({ policies = [], loading = false }) => {
         overflow: 'hidden',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: '0.125rem'
+        borderRadius: '0.25rem'
       }}
     >
       <TableContainer sx={{ maxHeight: '31.25rem' }}>

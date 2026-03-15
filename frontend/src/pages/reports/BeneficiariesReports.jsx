@@ -506,7 +506,7 @@ const BeneficiariesReports = () => {
 
       {/* --- Filter Section (Only in Table Mode) --- */}
       {viewMode === 'TABLE' && (
-        <Card sx={{ mb: '1.5rem', p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.125rem', border: '1px solid', borderColor: 'divider' }}>
+        <Card sx={{ mb: '1.5rem', p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.25rem', border: '1px solid', borderColor: 'divider' }}>
           <Stack direction="row" alignItems="center" spacing={1} mb={2}>
             <FilterAltIcon color="primary" />
             <Typography variant="h6" fontWeight="bold">
@@ -956,7 +956,7 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
   return (
     <Box>
       {/* Printable Area */}
-      <Box ref={componentRef} sx={{ p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.125rem' }}>
+      <Box ref={componentRef} sx={{ p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.25rem' }}>
         {/* Report Header */}
         <Box sx={{ borderBottom: '2px solid #eee', mb: '1.5rem', pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>

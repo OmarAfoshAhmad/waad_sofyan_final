@@ -758,7 +758,7 @@ const ClaimViewMedicalReview = () => {
       <Stack spacing={1.5}>
         <Card
           sx={{
-            borderRadius: '0.125rem',
+            borderRadius: '0.25rem',
             border: 1,
             borderColor: 'divider',
             bgcolor: (theme) => alpha(theme.palette.info.main, 0.08),

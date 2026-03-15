@@ -389,7 +389,7 @@ export default function ProviderEligibilityCheck() {
   // ========================================
 
   return (
-    <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 80px)', p: { xs: 1, md: 2 }, borderRadius: '0.125rem' }}>
+    <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 80px)', p: { xs: 1, md: 2 }, borderRadius: '0.25rem' }}>
       <ModernPageHeader title="فحص الأهلية" subtitle="التحقق من أهلية المؤمن عليه وتسجيل الزيارة" icon={LocalHospitalIcon} />
 
 
@@ -402,7 +402,7 @@ export default function ProviderEligibilityCheck() {
               width: '18.75rem',
               flexShrink: 0,
               bgcolor: 'background.paper',
-              borderRadius: '0.125rem',
+              borderRadius: '0.25rem',
               overflow: 'hidden',
               height: 'fit-content',
               position: 'sticky',
@@ -640,7 +640,7 @@ export default function ProviderEligibilityCheck() {
             {!result && (
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', height: '100%', bgcolor: 'common.white' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', height: '100%', bgcolor: 'common.white' }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <HistoryIcon color="primary" />
                       <Box>
@@ -651,7 +651,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', height: '100%', bgcolor: 'common.white' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', height: '100%', bgcolor: 'common.white' }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TaskAltIcon color="success" />
                       <Box>
@@ -662,7 +662,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', height: '100%', bgcolor: 'common.white' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', height: '100%', bgcolor: 'common.white' }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TipsAndUpdatesIcon color="warning" />
                       <Box>
@@ -673,7 +673,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'success.lighter', border: '1px solid', borderColor: 'success.light' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'success.lighter', border: '1px solid', borderColor: 'success.light' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Typography variant="subtitle2" color="success.dark" fontWeight={700}>حالات مقبولة اليوم</Typography>
                       <Typography variant="h4" color="success.dark" fontWeight={800}>{todayAcceptedCount}</Typography>
@@ -681,7 +681,7 @@ export default function ProviderEligibilityCheck() {
                   </Paper>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.125rem', bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}>
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Typography variant="subtitle2" color="error.dark" fontWeight={700}>حالات مرفوضة اليوم</Typography>
                       <Typography variant="h4" color="error.dark" fontWeight={800}>{todayRejectedCount}</Typography>
@@ -1026,7 +1026,7 @@ export default function ProviderEligibilityCheck() {
         sx={{
           mt: '1.0rem',
           p: '0.75rem',
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           bgcolor: 'common.white',
           display: 'flex',
           alignItems: 'center',

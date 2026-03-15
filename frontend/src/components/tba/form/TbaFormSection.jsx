@@ -78,7 +78,7 @@ const TbaFormSection = ({ title, subtitle, icon: Icon, children, noPaper = false
       variant="outlined"
       sx={{
         mb: '1.0rem',
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         overflow: 'hidden',
         borderColor: 'divider'
       }}

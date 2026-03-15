@@ -120,7 +120,7 @@ export default function AuthLogin({ isDemo = false }) {
                     }
                     sx={{
                       '& .MuiOutlinedInput-notchedOutline': {
-                        borderRadius: '0.125rem'
+                        borderRadius: '0.25rem'
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
@@ -174,7 +174,7 @@ export default function AuthLogin({ isDemo = false }) {
                     placeholder="أدخل كلمة المرور"
                     sx={{
                       '& .MuiOutlinedInput-notchedOutline': {
-                        borderRadius: '0.125rem'
+                        borderRadius: '0.25rem'
                       },
                       '&:hover .MuiOutlinedInput-notchedOutline': {
                         borderColor: theme.palette.primary.main
@@ -204,7 +204,7 @@ export default function AuthLogin({ isDemo = false }) {
                       textAlign: 'center',
                       bgcolor: alpha(theme.palette.error.main, 0.1),
                       p: '0.75rem',
-                      borderRadius: '0.125rem'
+                      borderRadius: '0.25rem'
                     }}
                   >
                     {errors.submit}
@@ -226,7 +226,7 @@ export default function AuthLogin({ isDemo = false }) {
                     startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <LoginIcon />}
                     sx={{
                       py: '0.75rem',
-                      borderRadius: '0.125rem',
+                      borderRadius: '0.25rem',
                       fontWeight: 600,
                       fontSize: '1rem',
                       boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,

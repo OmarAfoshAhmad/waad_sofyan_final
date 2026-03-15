@@ -297,7 +297,7 @@ const MedicalServiceSelector = ({
         elevation={8}
         sx={{
           mt: 1,
-          borderRadius: '0.125rem',
+          borderRadius: '0.25rem',
           border: '1px solid',
           borderColor: 'divider'
         }}

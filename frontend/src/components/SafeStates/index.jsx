@@ -84,7 +84,7 @@ export const SafeEmptyState = ({ type = EmptyStateType.NO_DATA, title, subtitle,
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: (theme) => alpha(theme.palette.grey[500], 0.04),
-        borderRadius: '0.125rem',
+        borderRadius: '0.25rem',
         p: compact ? 2 : 3
       }}
     >
