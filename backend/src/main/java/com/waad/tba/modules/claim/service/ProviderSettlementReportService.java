@@ -336,25 +336,15 @@ public class ProviderSettlementReportService {
         // Determine line status
         LineStatus lineStatus = ProviderSettlementReportDto.calculateLineStatus(gross, approved);
 
-        // Get service info
+        // Get service info directly from denormalized fields (MedicalService FK removed
+        // in V229)
         String serviceCode = line.getServiceCode();
         String serviceName = line.getServiceName();
         String serviceCategory = null;
 
-        if (line.getMedicalService() != null) {
-            if (serviceCode == null) {
-                serviceCode = line.getMedicalService().getCode();
-            }
-            if (serviceName == null) {
-                serviceName = line.getMedicalService().getName();
-            }
-            // Category is stored as categoryId, not as a relationship
-            // serviceCategory would require a separate lookup - skip for now
-        }
-
         return ServiceLineDetail.builder()
                 .lineId(line.getId())
-                .medicalServiceId(line.getMedicalService() != null ? line.getMedicalService().getId() : null)
+                .medicalServiceId(null)
                 .serviceCode(serviceCode)
                 .serviceName(serviceName)
                 .serviceCategory(serviceCategory)

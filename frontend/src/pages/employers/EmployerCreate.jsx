@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Box, Button, CircularProgress, FormControlLabel, Grid, InputAdornment, Stack, Switch, TextField, Divider, Typography } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Business as BusinessIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
@@ -68,11 +69,15 @@ const validateField = (field, value) => {
   if (field === 'email' && value?.trim()) {
     if (!EMAIL_REGEX.test(value.trim())) return LABELS.invalidEmail;
   }
+  if (field === 'phone' && value?.trim()) {
+    if (!/^\+?[\d\s\-().]{7,20}$/.test(value.trim())) return 'رقم الهاتف غير صحيح (مثال: +218911234567)';
+  }
   return null;
 };
 
 const EmployerCreate = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   const [employer, setEmployer] = useState(emptyEmployer);
   const [saving, setSaving] = useState(false);
@@ -110,6 +115,7 @@ const EmployerCreate = () => {
       code: validateField('code', employer.code),
       name: validateField('name', employer.name),
       email: validateField('email', employer.email),
+      phone: validateField('phone', employer.phone),
     };
     // Remove null entries
     Object.keys(newErrors).forEach((k) => { if (!newErrors[k]) delete newErrors[k]; });
@@ -126,6 +132,7 @@ const EmployerCreate = () => {
     try {
       setSaving(true);
       await createEmployer(employer);
+      queryClient.invalidateQueries({ queryKey: ['employers'] });
       enqueueSnackbar(LABELS.createdSuccess, { variant: 'success' });
       navigate('/employers');
     } catch (err) {

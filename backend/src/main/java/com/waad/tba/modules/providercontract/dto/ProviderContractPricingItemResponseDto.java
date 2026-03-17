@@ -29,16 +29,16 @@ public class ProviderContractPricingItemResponseDto {
 
     // Service info (from medicalService relation)
     private ServiceSummaryDto medicalService;
-    
+
     // Service name (for imported items without medical service link)
     private String serviceName;
-    
+
     // Service code (for imported items - reference/lookup)
     private String serviceCode;
-    
+
     // Category name (for imported items - display/grouping)
     private String categoryName;
-    
+
     // Quantity (for imported items)
     private Integer quantity;
 
@@ -76,14 +76,16 @@ public class ProviderContractPricingItemResponseDto {
     public static ProviderContractPricingItemResponseDto fromEntity(ProviderContractPricingItem entity) {
         return fromEntity(entity, null);
     }
-    
+
     /**
      * Convert entity to response DTO with category lookup
-     * @param entity The pricing item entity
-     * @param categoryMap Map of categoryId -> MedicalCategory (for resolving service categories)
+     * 
+     * @param entity      The pricing item entity
+     * @param categoryMap Map of categoryId -> MedicalCategory (for resolving
+     *                    service categories)
      */
     public static ProviderContractPricingItemResponseDto fromEntity(
-            ProviderContractPricingItem entity, 
+            ProviderContractPricingItem entity,
             Map<Long, MedicalCategory> categoryMap) {
         if (entity == null) {
             return null;
@@ -91,16 +93,8 @@ public class ProviderContractPricingItemResponseDto {
 
         ServiceSummaryDto serviceDto = null;
         Long serviceId = null;
-        if (entity.getMedicalService() != null) {
-            serviceId = entity.getMedicalService().getId();
-            serviceDto = ServiceSummaryDto.builder()
-                    .id(entity.getMedicalService().getId())
-                    .code(entity.getMedicalService().getCode())
-                    .name(entity.getMedicalService().getName())
-                    .nameAr(entity.getMedicalService().getNameAr())
-                    .nameEn(entity.getMedicalService().getNameEn())
-                    .build();
-        }
+        // MedicalService FK removed (V229): service info comes from
+        // serviceName/serviceCode fields
 
         CategorySummaryDto categoryDto = null;
         if (entity.getMedicalCategory() != null) {
@@ -118,31 +112,18 @@ public class ProviderContractPricingItemResponseDto {
         // 3. Item's categoryName field (for imported items)
         CategorySummaryDto effectiveCategoryDto = null;
         String effectiveCategoryName = entity.getCategoryName(); // Fallback for imported items
-        
+
         if (entity.getMedicalCategory() != null) {
             // Use item's override category
             effectiveCategoryDto = categoryDto;
-            effectiveCategoryName = entity.getMedicalCategory().getNameAr() != null ? 
-                    entity.getMedicalCategory().getNameAr() : entity.getMedicalCategory().getName();
-        } else if (serviceId != null && categoryMap != null && categoryMap.containsKey(serviceId)) {
-            // Lookup category from serviceId -> category map
-            MedicalCategory serviceCategory = categoryMap.get(serviceId);
-            effectiveCategoryDto = CategorySummaryDto.builder()
-                    .id(serviceCategory.getId())
-                    .code(serviceCategory.getCode())
-                    .name(serviceCategory.getName())
-                    .nameAr(serviceCategory.getNameAr())
-                    .build();
-            effectiveCategoryName = serviceCategory.getNameAr() != null ? serviceCategory.getNameAr() : serviceCategory.getName();
+            effectiveCategoryName = entity.getMedicalCategory().getNameAr() != null
+                    ? entity.getMedicalCategory().getNameAr()
+                    : entity.getMedicalCategory().getName();
         }
 
-        // Get display name: prefer medical service nameAr, then name, fallback to serviceName field
+        // Get display name from serviceName field (MedicalService FK removed in V229)
         String displayServiceName = entity.getServiceName();
-        if (entity.getMedicalService() != null) {
-            displayServiceName = entity.getMedicalService().getNameAr() != null ? 
-                    entity.getMedicalService().getNameAr() : entity.getMedicalService().getName();
-        }
-        
+
         return ProviderContractPricingItemResponseDto.builder()
                 .id(entity.getId())
                 .contractId(entity.getContract() != null ? entity.getContract().getId() : null)

@@ -115,6 +115,8 @@ email:
   enabled: ${EMAIL_ENABLED:false}
 
 app:
+  admin:
+    default-password: ${ADMIN_DEFAULT_PASSWORD:}
   frontend:
     url: ${APP_FRONTEND_URL:http://localhost:3000}
   cors:

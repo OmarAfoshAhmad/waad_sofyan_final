@@ -11,7 +11,6 @@ import {
 } from '@mui/material';
 import {
   Print as PrintIcon,
-  PictureAsPdf as PdfIcon,
   ArrowBack as ArrowBackIcon,
   ReceiptLong as ReceiptIcon
 } from '@mui/icons-material';
@@ -28,7 +27,6 @@ const ClaimStatementPreview = () => {
   const [loading, setLoading] = useState(true);
 
   const previewUrl = `/api/reports/claims/html?claimIds=${claimIds}`;
-  const pdfUrl     = `/api/reports/claims/pdf?claimIds=${claimIds}`;
   const claimCount = claimIds ? claimIds.split(',').length : 0;
 
   useEffect(() => {
@@ -40,10 +38,6 @@ const ClaimStatementPreview = () => {
 
   const handlePrint = () => {
     if (iframeRef.current) iframeRef.current.contentWindow.print();
-  };
-
-  const handleDownloadPdf = () => {
-    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -122,20 +116,6 @@ const ClaimStatementPreview = () => {
             }}
           >
             طباعة
-          </Button>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<PdfIcon />}
-            onClick={handleDownloadPdf}
-            disabled={loading}
-            sx={{
-              bgcolor: '#c62828',
-              '&:hover': { bgcolor: '#b71c1c' },
-              '&.Mui-disabled': { bgcolor: 'rgba(198,40,40,0.35)', color: 'rgba(255,255,255,0.4)' }
-            }}
-          >
-            تنزيل PDF
           </Button>
         </Stack>
       </Box>

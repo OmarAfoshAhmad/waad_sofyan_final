@@ -162,89 +162,7 @@ export const deleteAllMembersByEmployer = async (employerId) => {
   return unwrap(response);
 };
 
-/**
- * Export members list as PDF (Backend-generated)
- *
- * ✅ ENHANCED: 2-minute timeout for large exports
- * ✅ ENHANCED: Better error handling
- *
- * @param {Object} params - Filter parameters
- * @param {number} params.employerId - Optional employer ID filter
- * @param {string} params.search - Optional search query
- * @returns {Promise<Blob>} PDF file blob
- */
-export const exportMembersPdf = async (params = {}) => {
-  console.log('📄 [PDF Export] Starting PDF export with params:', params);
 
-  try {
-    const response = await axiosClient.get(`${BASE_URL}/export/pdf`, {
-      params,
-      responseType: 'blob', // Important for binary PDF file
-      timeout: 120000, // ✅ FIX: 2 minutes timeout (120 seconds)
-      headers: {
-        Accept: 'application/pdf'
-      }
-    });
-
-    console.log('✅ [PDF Export] PDF generated successfully, size:', response.data.size, 'bytes');
-    return response.data;
-  } catch (error) {
-    console.error('❌ [PDF Export] Failed to generate PDF:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      params
-    });
-    throw error;
-  }
-};
-
-/**
- * Download PDF file to user's computer
- *
- * @param {Blob} blob - PDF blob from backend
- * @param {string} filename - Filename for download (default: members-report.pdf)
- */
-export const downloadPdf = (blob, filename = 'members-report.pdf') => {
-  console.log('💾 [PDF Download] Downloading PDF:', filename, 'Size:', blob.size, 'bytes');
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-  console.log('✅ [PDF Download] Download initiated successfully');
-};
-
-/**
- * ✅ NEW: Preview PDF in new window (without downloading)
- *
- * @param {Blob} blob - PDF blob from backend
- * @param {string} title - Window title (default: 'معاينة PDF')
- */
-export const previewPdf = (blob, title = 'معاينة PDF') => {
-  console.log('👁️ [PDF Preview] Opening PDF preview, Size:', blob.size, 'bytes');
-  const url = window.URL.createObjectURL(blob);
-  const previewWindow = window.open(url, '_blank', 'width=1024,height=768');
-
-  if (previewWindow) {
-    previewWindow.document.title = title;
-    console.log('✅ [PDF Preview] Preview window opened successfully');
-
-    // Clean up URL after window is loaded
-    previewWindow.onload = () => {
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 1000);
-    };
-  } else {
-    console.error('❌ [PDF Preview] Failed to open preview window (popup blocked?)');
-    alert('فشل فتح نافذة المعاينة. يرجى السماح بالنوافذ المنبثقة.');
-    window.URL.revokeObjectURL(url);
-  }
-};
 
 /**
  * Get paginated members list
@@ -884,38 +802,7 @@ export const unifiedMemberSearch = async (query) => {
   return response.data; // Return full ApiResponse structure
 };
 
-/**
- * Export member card as PDF (Backend-generated)
- * Endpoint: GET /api/members/{id}/export/card-pdf
- *
- * Generates a professional member card PDF with:
- * - Company branding (logo, name, business type)
- * - Member complete information
- * - All personal, contact, employment details
- * - Card number, barcode, status
- * - Family members table
- * - Custom attributes
- *
- * @param {number} id - Member ID
- * @param {Object} params - Optional parameters
- * @returns {Promise<Blob>} PDF file blob
- */
-export const exportMemberCardPdf = async (id, params = {}) => {
-  console.log(`📄 [Export Member Card PDF] Member ID: ${id}`);
-  try {
-    const response = await axiosClient.get(`${BASE_URL}/${id}/export/card-pdf`, {
-      params,
-      responseType: 'blob',
-      timeout: 120000 // 2 minutes timeout for PDF generation
-    });
 
-    console.log(`✅ [Export Member Card PDF] PDF generated, size: ${response.data.size} bytes`);
-    return response.data;
-  } catch (error) {
-    console.error(`❌ [Export Member Card PDF] Failed:`, error);
-    throw error;
-  }
-};
 
 // Default export for convenient imports
 const membersService = {
@@ -966,9 +853,6 @@ const membersService = {
   searchMembersByName,
   // Phase 3: Unified Search (Card Number + Name + Barcode/QR)
   unifiedMemberSearch,
-  // PDF Export (Backend-generated)
-  exportMembersPdf,
-  downloadPdf,
   // Bulk Operations
   deleteAllMembersByEmployer
 };

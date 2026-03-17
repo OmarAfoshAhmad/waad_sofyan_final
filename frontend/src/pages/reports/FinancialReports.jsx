@@ -35,7 +35,6 @@ import {
   TrendingUp as TrendingIcon,
   Receipt as ReceiptIcon,
   Payment as PaymentIcon,
-  // PictureAsPdf as PdfIcon, // PDF export disabled - Excel is the official format
   TableChart as ExcelIcon,
   Refresh as RefreshIcon,
   Print as PrintIcon,
@@ -50,7 +49,6 @@ import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import { claimsService, providersService } from 'services/api';
-// PDF export disabled - Excel is the official reporting format
 import { exportToExcel } from 'utils/exportUtils';
 import { useAuth } from 'contexts/AuthContext';
 
@@ -399,13 +397,6 @@ const FinancialReports = () => {
     });
   };
 
-  // PDF export disabled - Excel is the official reporting format
-  // const handleExportPDF = () => {
-  //   const tabNames = ['الملخص المالي', 'تقرير الفواتير', 'تقرير المدفوعات', 'تقرير التسويات'];
-  //   const title = `${tabNames[activeTab]} - ${new Date().toLocaleDateString('en-US')}`;
-  //   exportToPDF(claims, title, { companyName, primaryColor });
-  // };
-
   // Tab change handler
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -730,7 +721,6 @@ const FinancialReports = () => {
               <Button variant="outlined" startIcon={<ExcelIcon />} onClick={handleExportExcel} disabled={loading || claims.length === 0}>
                 تصدير Excel
               </Button>
-              {/* PDF export disabled - Excel is the official reporting format */}
               <Tooltip title="معاينة الطباعة">
                 <span>
                   <IconButton color="primary" onClick={handleShowPrintPreview} disabled={loading || claims.length === 0}>

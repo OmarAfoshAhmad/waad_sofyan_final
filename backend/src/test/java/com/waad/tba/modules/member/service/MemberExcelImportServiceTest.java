@@ -59,6 +59,8 @@ class MemberExcelImportServiceTest {
     private AuthorizationService authorizationService;
     @Mock
     private BarcodeGeneratorService barcodeGeneratorService;
+    @Mock
+    private CardNumberGeneratorService cardNumberGeneratorService;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -70,7 +72,8 @@ class MemberExcelImportServiceTest {
         MemberImportParser parser = new MemberImportParser();
         MemberImportMapper mapper = new MemberImportMapper(parser);
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
-                parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService);
+                parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
+                cardNumberGeneratorService);
 
         service = new MemberExcelImportService(
                 memberRepository,
@@ -107,6 +110,8 @@ class MemberExcelImportServiceTest {
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());
         when(memberRepository.findByCivilId(anyString())).thenReturn(Optional.empty());
         when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
+        when(cardNumberGeneratorService.generateUniqueForPrincipal(any(Member.class))).thenReturn("CARD-0001",
+                "CARD-0002");
         when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> {
             Member member = invocation.getArgument(0);
             if (member.getId() == null) {

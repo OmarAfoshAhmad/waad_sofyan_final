@@ -74,9 +74,11 @@ class CostCalculationServiceTest {
     void calculateCosts_NoDeductibleMet() {
         // Arrange
         when(providerNetworkService.determineNetworkTypeByName(anyString())).thenReturn(NetworkType.IN_NETWORK);
-        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(BigDecimal.ZERO);
-        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(BigDecimal.ZERO);
-        
+        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(BigDecimal.ZERO);
+        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(BigDecimal.ZERO);
+
         // Act
         CostCalculationService.CostBreakdown result = costCalculationService.calculateCosts(testClaim);
 
@@ -99,8 +101,10 @@ class CostCalculationServiceTest {
     void calculateCosts_DeductibleAlreadyMet() {
         // Arrange
         when(providerNetworkService.determineNetworkTypeByName(anyString())).thenReturn(NetworkType.IN_NETWORK);
-        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(new BigDecimal("100.00"));
-        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(new BigDecimal("200.00"));
+        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(new BigDecimal("100.00"));
+        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(new BigDecimal("200.00"));
 
         // Act
         CostCalculationService.CostBreakdown result = costCalculationService.calculateCosts(testClaim);
@@ -122,8 +126,10 @@ class CostCalculationServiceTest {
         // Arrange
         testPolicy.setDefaultCoveragePercent(100); // 0% copay in-network
         when(providerNetworkService.determineNetworkTypeByName(anyString())).thenReturn(NetworkType.OUT_OF_NETWORK);
-        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(new BigDecimal("100.00"));
-        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(BigDecimal.ZERO);
+        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(new BigDecimal("100.00"));
+        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(BigDecimal.ZERO);
 
         // Act
         CostCalculationService.CostBreakdown result = costCalculationService.calculateCosts(testClaim);
@@ -142,9 +148,11 @@ class CostCalculationServiceTest {
         // Arrange
         testPolicy.setOutOfPocketMax(new BigDecimal("200.00"));
         when(providerNetworkService.determineNetworkTypeByName(anyString())).thenReturn(NetworkType.IN_NETWORK);
-        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(new BigDecimal("100.00"));
+        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(new BigDecimal("100.00"));
         // Already spent 150 OOP this year. Cap is 200. Remaining is 50.
-        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(new BigDecimal("150.00"));
+        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(new BigDecimal("150.00"));
 
         // Act
         CostCalculationService.CostBreakdown result = costCalculationService.calculateCosts(testClaim);
@@ -173,34 +181,33 @@ class CostCalculationServiceTest {
     @DisplayName("Should calculate weighted co-pay from lines")
     void calculateWeightedCopay_MultipleLines() {
         // Arrange
-        com.waad.tba.modules.medicaltaxonomy.entity.MedicalService service1 = com.waad.tba.modules.medicaltaxonomy.entity.MedicalService.builder().id(101L).build();
-        com.waad.tba.modules.medicaltaxonomy.entity.MedicalService service2 = com.waad.tba.modules.medicaltaxonomy.entity.MedicalService.builder().id(102L).build();
-        
         ClaimLine line1 = ClaimLine.builder()
-                .medicalService(service1)
+                .serviceCategoryId(101L)
                 .unitPrice(new BigDecimal("100.00"))
                 .quantity(1)
                 .requestedUnitPrice(new BigDecimal("100.00"))
                 .build();
-        
+
         ClaimLine line2 = ClaimLine.builder()
-                .medicalService(service2)
+                .serviceCategoryId(102L)
                 .unitPrice(new BigDecimal("200.00"))
                 .quantity(1)
                 .requestedUnitPrice(new BigDecimal("200.00"))
                 .build();
-        
+
         testClaim.setLines(List.of(line1, line2));
         testClaim.setRequestedAmount(new BigDecimal("300.00"));
 
         when(providerNetworkService.determineNetworkTypeByName(anyString())).thenReturn(NetworkType.IN_NETWORK);
-        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(new BigDecimal("100.00"));
-        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong())).thenReturn(BigDecimal.ZERO);
-        
+        when(claimRepository.sumDeductibleForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(new BigDecimal("100.00"));
+        when(claimRepository.sumPatientCopayForYear(anyLong(), anyInt(), anyList(), anyLong()))
+                .thenReturn(BigDecimal.ZERO);
+
         Map<Long, Integer> coverageMap = new HashMap<>();
         coverageMap.put(101L, 90); // 10% copay
         coverageMap.put(102L, 70); // 30% copay
-        when(benefitPolicyCoverageService.batchGetCoveragePercents(any(), anyList())).thenReturn(coverageMap);
+        when(benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(any(), anyList())).thenReturn(coverageMap);
 
         // Act
         CostCalculationService.CostBreakdown result = costCalculationService.calculateCosts(testClaim);

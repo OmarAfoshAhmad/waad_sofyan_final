@@ -12,6 +12,7 @@ import com.waad.tba.modules.rbac.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Static Data Initializer — Authorization Simplification (Phase 5)
@@ -29,6 +30,9 @@ public class RbacDataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
+
+    @Value("${app.admin.default-password:#{null}}")
+    private String configuredAdminPassword;
 
     @Override
     @Transactional
@@ -67,15 +71,21 @@ public class RbacDataInitializer implements CommandLineRunner {
             return;
         }
 
+        // Priority: env var → Spring property (app.admin.default-password)
         String envPassword = System.getenv("ADMIN_DEFAULT_PASSWORD");
-        if (envPassword == null || envPassword.isBlank()) {
+        String password;
+        if (envPassword != null && !envPassword.isBlank()) {
+            password = envPassword;
+        } else if (configuredAdminPassword != null && !configuredAdminPassword.isBlank()) {
+            password = configuredAdminPassword;
+            log.warn("Using configured admin password from application properties (dev mode).");
+        } else {
             log.error("╔═══════════════════════════════════════════════════════════════╗");
             log.error("║  SECURITY CRITICAL: ADMIN_DEFAULT_PASSWORD is NOT SET!        ║");
-            log.error("║  New super admin creation is BLOCKED for security.             ║");
+            log.error("║  Set ADMIN_DEFAULT_PASSWORD env var or app.admin.default-password. ║");
             log.error("╚═══════════════════════════════════════════════════════════════╝");
-            return; // BLOCKED: No hardcoded fallback
+            return;
         }
-        String password = envPassword;
 
         User superAdmin = User.builder()
                 .username(username)

@@ -25,7 +25,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Find all active pre-authorizations (paginated)
         */
-       @EntityGraph(attributePaths = { "visit", "medicalService" })
+       @EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByActiveTrue(Pageable pageable);
 
        // ==================== Find by Reference Number ====================
@@ -45,13 +45,13 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Find all pre-authorizations for a member
         */
-       @EntityGraph(attributePaths = { "visit", "medicalService" })
+       @EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByMemberIdAndActiveTrue(Long memberId, Pageable pageable);
 
        /**
         * Find pre-authorizations by member and status
         */
-       @EntityGraph(attributePaths = { "visit", "medicalService" })
+       @EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByMemberIdAndStatusAndActiveTrue(
                      Long memberId,
                      PreAuthStatus status,
@@ -72,7 +72,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Find all pre-authorizations for a provider (paginated)
         */
-       @EntityGraph(attributePaths = { "visit", "medicalService" })
+       @EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByProviderIdAndActiveTrue(Long providerId, Pageable pageable);
 
        /**
@@ -83,7 +83,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Find pre-authorizations by provider and status
         */
-       @EntityGraph(attributePaths = { "visit", "medicalService" })
+       @EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByProviderIdAndStatusAndActiveTrue(
                      Long providerId,
                      PreAuthStatus status,
@@ -94,7 +94,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Find pre-authorizations by service code
         */
-       @EntityGraph(attributePaths = { "visit", "medicalService" })
+       @EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByServiceCodeAndActiveTrue(String serviceCode, Pageable pageable);
 
        // ==================== Find by Status ====================
@@ -102,7 +102,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Find pre-authorizations by single status (active only)
         */
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "visit", "medicalService" })
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "visit" })
        Page<PreAuthorization> findByStatusAndActiveTrue(PreAuthStatus status, Pageable pageable);
 
        // ==================== INBOX QUERIES (CANONICAL 2026-01-26)
@@ -120,7 +120,6 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
         */
        @Query(value = "SELECT pa FROM PreAuthorization pa " +
                      "LEFT JOIN FETCH pa.visit v " +
-                     "LEFT JOIN FETCH pa.medicalService ms " +
                      "WHERE pa.active = true " +
                      "AND pa.status IN :statuses", countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa WHERE pa.active = true AND pa.status IN :statuses")
        Page<PreAuthorization> findByStatusIn(@Param("statuses") List<PreAuthStatus> statuses, Pageable pageable);
@@ -238,7 +237,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Search pre-authorizations
         */
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "visit", "medicalService" })
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "visit" })
        @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
                      "AND (LOWER(pa.referenceNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
                      "OR LOWER(pa.preAuthNumber) LIKE LOWER(CONCAT('%', :query, '%')) " +
@@ -277,7 +276,8 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
 
        /**
         * Check validity for a member + service (no provider filter).
-        * Replaces findAll().stream().filter() in PreAuthorizationService.checkValidity().
+        * Replaces findAll().stream().filter() in
+        * PreAuthorizationService.checkValidity().
         */
        @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
                      "AND pa.memberId = :memberId " +
@@ -303,7 +303,8 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
 
        /**
         * Find all active pre-authorizations from a start date (for trend calculation).
-        * Replaces findAll().stream().filter(date range) in PreAuthDashboardService.getTrends().
+        * Replaces findAll().stream().filter(date range) in
+        * PreAuthDashboardService.getTrends().
         */
        @Query("SELECT pa FROM PreAuthorization pa WHERE pa.active = true " +
                      "AND pa.requestDate >= :startDate " +
@@ -313,7 +314,8 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        /**
         * Provider-level aggregation for dashboard top-providers widget.
         * Returns: [providerId, totalCount, sumApprovedAmount(APPROVED only)]
-        * Replaces findAll().stream() + N×providerRepository.findById() in getTopProviders().
+        * Replaces findAll().stream() + N×providerRepository.findById() in
+        * getTopProviders().
         */
        @Query("SELECT pa.providerId, COUNT(pa), " +
                      "COALESCE(SUM(CASE WHEN pa.status = 'APPROVED' THEN pa.approvedAmount ELSE null END), 0) " +

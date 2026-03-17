@@ -1,6 +1,5 @@
 package com.waad.tba.modules.preauthorization.entity;
 
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.visit.entity.Visit;
 import jakarta.persistence.*;
 import lombok.*;
@@ -73,7 +72,7 @@ public class PreAuthorization {
 
     @Column(name = "email_request_id")
     private Long emailRequestId;
-    
+
     // ==================== VISIT-CENTRIC ARCHITECTURE ====================
 
     /**
@@ -88,17 +87,7 @@ public class PreAuthorization {
     // ==================== CONTRACT-DRIVEN MEDICAL SERVICE ====================
 
     /**
-     * Medical Service (FK to medical_services)
-     * ARCHITECTURAL LAW: Service MUST be selected from Provider Contract
-     * NO free-text service description allowed
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medical_service_id", nullable = false)
-    private MedicalService medicalService;
-
-    /**
      * Service code (denormalized snapshot for queries/reports)
-     * Auto-populated from medicalService.code on save
      */
     @Column(name = "service_code", nullable = false, length = 50)
     private String serviceCode;
@@ -382,14 +371,7 @@ public class PreAuthorization {
             referenceNumber = generateReferenceNumber();
         }
 
-        // Populate denormalized fields from MedicalService
-        if (medicalService != null) {
-            this.serviceCode = medicalService.getCode();
-            this.serviceCategoryId = medicalService.getCategoryId();
-            // NOTE: requiresPA is no longer taken from MedicalService
-            // PA requirement comes from BenefitPolicyRule.requiresPreApproval
-            this.requiresPA = true; // PreAuthorizations always require PA (that's why they exist)
-        }
+        this.requiresPA = true; // PreAuthorizations always require PA (that's why they exist)
 
         // Populate memberId from Visit
         if (visit != null && memberId == null) {
@@ -417,13 +399,19 @@ public class PreAuthorization {
     private void validateArchitecturalRules() {
         // RULE: Visit is MANDATORY (unless it's an email request)
         if (visit == null && emailRequestId == null) {
-            throw new IllegalStateException("ARCHITECTURAL VIOLATION: PreAuthorization MUST reference a Visit or an Email Request");
+            throw new IllegalStateException(
+                    "ARCHITECTURAL VIOLATION: PreAuthorization MUST reference a Visit or an Email Request");
         }
 
-        // RULE: MedicalService is MANDATORY (no free-text services)
-        if (medicalService == null) {
+        // RULE: Service must be identifiable (code + category mandatory)
+        if (serviceCode == null || serviceCode.isBlank()) {
             throw new IllegalStateException(
-                    "ARCHITECTURAL VIOLATION: PreAuthorization MUST reference a MedicalService from Provider Contract");
+                    "ARCHITECTURAL VIOLATION: PreAuthorization MUST have a service code");
+        }
+
+        if (serviceCategoryId == null) {
+            throw new IllegalStateException(
+                    "ARCHITECTURAL VIOLATION: PreAuthorization MUST have a service category ID");
         }
 
         // RULE: Contract price is MANDATORY (no manual pricing)

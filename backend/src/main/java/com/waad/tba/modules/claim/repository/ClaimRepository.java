@@ -66,10 +66,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @Query("SELECT c FROM Claim c " +
                         "LEFT JOIN FETCH c.member m " +
                         "LEFT JOIN FETCH m.benefitPolicy bp " +
-                        " " +
                         "LEFT JOIN FETCH c.preAuthorization pa " +
                         "LEFT JOIN FETCH c.lines cl " +
-                        "LEFT JOIN FETCH cl.medicalService ms " +
                         "WHERE c.id = :id")
         java.util.Optional<Claim> findByIdForFinancialUpdate(@Param("id") Long id);
 
@@ -289,10 +287,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @Query("SELECT DISTINCT c FROM Claim c " +
                         "LEFT JOIN FETCH c.member m " +
                         "LEFT JOIN FETCH m.benefitPolicy bp " +
-                        " " +
                         "LEFT JOIN FETCH c.preAuthorization pa " +
                         "LEFT JOIN FETCH c.lines cl " +
-                        "LEFT JOIN FETCH cl.medicalService ms " +
                         "WHERE c.active = true " +
                         "AND c.providerId = :providerId " +
                         "AND (:employerOrgId IS NULL OR c.member.employer.id = :employerOrgId) " +
@@ -774,13 +770,13 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          */
         @Query("SELECT COUNT(cl) FROM ClaimLine cl " +
                         "WHERE cl.claim.member.id = :memberId " +
-                        "AND cl.medicalService.id = :serviceId " +
+                        "AND cl.serviceCode = :serviceCode " +
                         "AND YEAR(cl.claim.serviceDate) = :year " +
                         "AND cl.claim.status IN :statuses " +
                         "AND cl.rejected = false")
         long countServiceUsageByMemberAndYear(
                         @Param("memberId") Long memberId,
-                        @Param("serviceId") Long serviceId,
+                        @Param("serviceCode") String serviceCode,
                         @Param("year") int year,
                         @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
 

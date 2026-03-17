@@ -39,6 +39,7 @@ public class MemberImportRowProcessor {
     private final EmployerRepository employerRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final BarcodeGeneratorService barcodeGeneratorService;
+    private final CardNumberGeneratorService cardNumberGeneratorService;
 
     public MemberImportRowDto parseRowForPreview(Row row, int rowNum,
             Map<String, Integer> fieldToColumnIndex,
@@ -120,8 +121,10 @@ public class MemberImportRowProcessor {
             }
         }
 
-        if (hasError) status = "ERROR";
-        else if (hasWarning) status = "WARNING";
+        if (hasError)
+            status = "ERROR";
+        else if (hasWarning)
+            status = "WARNING";
 
         return MemberImportRowDto.builder()
                 .rowNumber(rowNum).cardNumber(cardNumber).fullName(fullName)
@@ -162,35 +165,52 @@ public class MemberImportRowProcessor {
                 .barcode(barcodeGeneratorService.generateForPrincipal())
                 .build();
 
-        if (civilId != null && !civilId.isBlank()) member.setNationalNumber(civilId);
+        // Set card number: use value from Excel if present, otherwise generate a unique
+        // one
+        String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
+        if (cardNumber != null && !cardNumber.isBlank()) {
+            member.setCardNumber(cardNumber.trim());
+        } else {
+            member.setCardNumber(cardNumberGeneratorService.generateUniqueForPrincipal(member));
+        }
+
+        if (civilId != null && !civilId.isBlank())
+            member.setNationalNumber(civilId);
 
         // Optional fields
         String birthDateStr = parser.getFieldValue(row, fieldToColumnIndex, "birthDate");
         if (birthDateStr != null && !birthDateStr.isBlank()) {
             LocalDate birthDate = parser.parseDate(birthDateStr);
-            if (birthDate != null) member.setBirthDate(birthDate);
+            if (birthDate != null)
+                member.setBirthDate(birthDate);
         }
 
         String genderStr = parser.getFieldValue(row, fieldToColumnIndex, "gender");
         if (genderStr != null && !genderStr.isBlank()) {
             Gender gender = parser.parseGender(genderStr);
-            if (gender != null) member.setGender(gender);
+            if (gender != null)
+                member.setGender(gender);
         }
 
         String phone = parser.getFieldValue(row, fieldToColumnIndex, "phone");
-        if (phone != null && !phone.isBlank()) member.setPhone(phone);
+        if (phone != null && !phone.isBlank())
+            member.setPhone(phone);
 
         String email = parser.getFieldValue(row, fieldToColumnIndex, "email");
-        if (email != null && !email.isBlank()) member.setEmail(email);
+        if (email != null && !email.isBlank())
+            member.setEmail(email);
 
         String employeeNumber = parser.getFieldValue(row, fieldToColumnIndex, "employeeNumber");
-        if (employeeNumber != null && !employeeNumber.isBlank()) member.setEmployeeNumber(employeeNumber);
+        if (employeeNumber != null && !employeeNumber.isBlank())
+            member.setEmployeeNumber(employeeNumber);
 
-        if (policyNumber != null && !policyNumber.isBlank()) member.setPolicyNumber(policyNumber);
+        if (policyNumber != null && !policyNumber.isBlank())
+            member.setPolicyNumber(policyNumber);
 
         if (startDateStr != null && !startDateStr.isBlank()) {
             LocalDate parsedStartDate = parser.parseDate(startDateStr);
-            if (parsedStartDate != null) member.setStartDate(parsedStartDate);
+            if (parsedStartDate != null)
+                member.setStartDate(parsedStartDate);
         }
 
         // Attributes
@@ -211,10 +231,12 @@ public class MemberImportRowProcessor {
         return member;
     }
 
-    private Employer resolveEmployerForRow(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer) {
+    private Employer resolveEmployerForRow(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex,
+            Employer defaultEmployer) {
         String employerNameOrCode = parser.getFieldValue(row, fieldToColumnIndex, "employer");
         if (employerNameOrCode == null || employerNameOrCode.isBlank()) {
-            if (defaultEmployer != null) return defaultEmployer;
+            if (defaultEmployer != null)
+                return defaultEmployer;
             throw new BusinessRuleException("الصف " + rowNum + ": جهة العمل مطلوبة");
         }
 
@@ -223,7 +245,8 @@ public class MemberImportRowProcessor {
                 .or(() -> employerRepository.findByCode(normalized));
 
         if (resolvedOptional.isEmpty()) {
-            if (defaultEmployer != null) return defaultEmployer;
+            if (defaultEmployer != null)
+                return defaultEmployer;
             throw new BusinessRuleException("الصف " + rowNum + ": جهة العمل غير موجودة: " + normalized);
         }
 

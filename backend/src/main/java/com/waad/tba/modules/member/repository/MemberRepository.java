@@ -116,11 +116,55 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        // ═══════════════════════════════════════════════════════════════════════════
 
        /**
+        * Find all active PRINCIPAL member names by employer organization ID.
+        * Used for duplicate detection during bulk import (Pass 1 — principals only).
+        * Only returns principals (parent IS NULL) to avoid blocking dependents with
+        * the same name.
+        */
+       @Query("SELECT LOWER(m.fullName) FROM Member m WHERE m.employer.id = :employerOrgId AND m.active = true AND m.parent IS NULL")
+       List<String> findActivePrincipalNamesByEmployerId(@Param("employerOrgId") Long employerOrgId);
+
+       /**
+        * Find all active DEPENDENT member names by employer organization ID.
+        * Used for duplicate detection during bulk import (Pass 2 — dependents only).
+        * Only returns dependents (parent IS NOT NULL) to avoid false positives.
+        */
+       @Query("SELECT LOWER(m.fullName) FROM Member m WHERE m.employer.id = :employerOrgId AND m.active = true AND m.parent IS NOT NULL")
+       List<String> findActiveDependentNamesByEmployerId(@Param("employerOrgId") Long employerOrgId);
+
+       /**
+        * Find existing dependent parent IDs and lowercased names for a given employer.
+        * Returns Object[]{parentId (Long), lowerName (String)} per row.
+        * Used to build duplicate-detection keys without JPQL CONCAT (which is
+        * unreliable
+        * with non-String arguments in Hibernate 6 / JPQL spec).
+        */
+       @Query("SELECT m.parent.id, LOWER(m.fullName) FROM Member m WHERE m.employer.id = :employerOrgId AND m.active = true AND m.parent IS NOT NULL")
+       List<Object[]> findActiveDependentParentIdAndNamesByEmployerId(@Param("employerOrgId") Long employerOrgId);
+
+       /**
+        * Find an active principal member by exact (already-lowercased) full name and
+        * employer.
+        * Used in Pass 1 to reliably cache an already-existing principal so that
+        * Pass 2 dependents can link to it.
+        */
+       @Query("SELECT m FROM Member m WHERE LOWER(m.fullName) = :fullNameLower AND m.employer.id = :employerOrgId AND m.active = true AND m.parent IS NULL")
+       Optional<Member> findActivePrincipalByFullNameLowerAndEmployerId(
+                     @Param("fullNameLower") String fullNameLower,
+                     @Param("employerOrgId") Long employerOrgId);
+
+       /**
         * Find all active member names by employer organization ID.
         * Used for efficient duplicate detection during bulk import.
+        * 
+        * @deprecated Use findActivePrincipalNamesByEmployerId instead.
         */
+       @Deprecated
        @Query("SELECT LOWER(m.fullName) FROM Member m WHERE m.employer.id = :employerOrgId AND m.active = true")
        List<String> findActiveFullNamesByEmployerId(@Param("employerOrgId") Long employerOrgId);
+
+       @Query("SELECT m.cardNumber FROM Member m WHERE m.cardNumber IS NOT NULL")
+       List<String> findAllCardNumbers();
 
        /**
         * Find all members by employer organization ID

@@ -52,44 +52,27 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
        // ═══════════════════════════════════════════════════════════════════════════
 
        /**
-        * Find pricing items by medical service ID
+        * Find pricing items by service code (replaces old medicalServiceId lookup)
         */
-       List<ProviderContractPricingItem> findByMedicalServiceIdAndActiveTrue(Long medicalServiceId);
+       List<ProviderContractPricingItem> findByServiceCodeAndActiveTrue(String serviceCode);
 
        /**
-        * Find specific pricing for a contract and service
-        */
-       Optional<ProviderContractPricingItem> findByContractIdAndMedicalServiceIdAndActiveTrue(
-                     Long contractId, Long medicalServiceId);
-
-       /**
-        * Find by contract entity and service entity (for upsert operations)
-        */
-       @Query("SELECT p FROM ProviderContractPricingItem p WHERE p.contract = :contract AND p.medicalService = :service AND p.active = true")
-       Optional<ProviderContractPricingItem> findByContractAndMedicalService(
-                     @Param("contract") com.waad.tba.modules.providercontract.entity.ProviderContract contract,
-                     @Param("service") com.waad.tba.modules.medicaltaxonomy.entity.MedicalService service);
-
-       /**
-        * Find active unmapped pricing item by service name in a contract
-        * (case-insensitive).
+        * Find active pricing item by service name in a contract (case-insensitive).
         */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
-                     "AND p.medicalService IS NULL " +
                      "AND LOWER(p.serviceName) = LOWER(:serviceName)")
        Optional<ProviderContractPricingItem> findActiveUnmappedByContractAndServiceName(
                      @Param("contractId") Long contractId,
                      @Param("serviceName") String serviceName);
 
        /**
-        * Find active unmapped pricing item by service code in a contract.
+        * Find active pricing item by service code in a contract.
         */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
-                     "AND p.medicalService IS NULL " +
                      "AND p.serviceCode = :serviceCode")
        Optional<ProviderContractPricingItem> findActiveUnmappedByContractAndServiceCode(
                      @Param("contractId") Long contractId,
@@ -110,9 +93,10 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("serviceName") String serviceName);
 
        /**
-        * Check if pricing exists for service in contract
+        * Check if pricing exists for a service code in a contract (replaces
+        * medicalServiceId check)
         */
-       boolean existsByContractIdAndMedicalServiceIdAndActiveTrue(Long contractId, Long medicalServiceId);
+       boolean existsByContractIdAndServiceCodeAndActiveTrue(Long contractId, String serviceCode);
 
        // ═══════════════════════════════════════════════════════════════════════════
        // FIND BY CATEGORY
@@ -125,12 +109,12 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      Long contractId, Long categoryId);
 
        /**
-        * Find pricing items by service category within a contract
+        * Find pricing items by medical category within a contract
         */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
-                     "AND p.medicalService.categoryId = :categoryId")
+                     "AND p.medicalCategory.id = :categoryId")
        List<ProviderContractPricingItem> findByContractIdAndServiceCategoryId(
                      @Param("contractId") Long contractId,
                      @Param("categoryId") Long categoryId);
@@ -140,11 +124,13 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
        // ═══════════════════════════════════════════════════════════════════════════
 
        /**
-        * Find effective pricing for a service at a provider on a specific date
+        * Find effective pricing for a pricing item at a provider on a specific date
+        * (by pricingItemId).
+        * Use findEffectivePricingByCode for service-code based lookups.
         */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.provider.id = :providerId " +
-                     "AND p.medicalService.id = :serviceId " +
+                     "AND p.id = :pricingItemId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
                      "AND p.contract.status = 'ACTIVE' " +
@@ -154,19 +140,18 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
        Optional<ProviderContractPricingItem> findEffectivePricing(
                      @Param("providerId") Long providerId,
-                     @Param("serviceId") Long serviceId,
+                     @Param("pricingItemId") Long pricingItemId,
                      @Param("date") LocalDate date);
 
        /**
-        * Find effective pricing for a service code (mapped or unmapped)
+        * Find effective pricing for a service code at a provider on a specific date.
         */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.provider.id = :providerId " +
                      "AND p.active = true " +
                      "AND p.contract.active = true " +
                      "AND p.contract.status = 'ACTIVE' " +
-                     "AND (p.serviceCode = :serviceCode OR (p.medicalService IS NOT NULL AND p.medicalService.code = :serviceCode)) "
-                     +
+                     "AND p.serviceCode = :serviceCode " +
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
@@ -177,10 +162,10 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("date") LocalDate date);
 
        /**
-        * Find effective pricing for a service at a provider (today)
+        * Find effective pricing for a pricing item at a provider (today)
         */
-       default Optional<ProviderContractPricingItem> findEffectivePricingToday(Long providerId, Long serviceId) {
-              return findEffectivePricing(providerId, serviceId, LocalDate.now());
+       default Optional<ProviderContractPricingItem> findEffectivePricingToday(Long providerId, Long pricingItemId) {
+              return findEffectivePricing(providerId, pricingItemId, LocalDate.now());
        }
 
        // ═══════════════════════════════════════════════════════════════════════════
@@ -191,19 +176,14 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
         * Search pricing items by service code or name
         */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
-                     "LEFT JOIN p.medicalService ms " +
                      "LEFT JOIN p.medicalCategory mc " +
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
                      "AND (:q IS NULL OR :q = '' " +
-                     "     OR LOWER(ms.code) LIKE LOWER(CONCAT('%', :q, '%')) " +
-                     "     OR LOWER(ms.name) LIKE LOWER(CONCAT('%', :q, '%')) " +
-                     "     OR LOWER(ms.nameAr) LIKE LOWER(CONCAT('%', :q, '%')) " +
-                     "     OR LOWER(ms.nameEn) LIKE LOWER(CONCAT('%', :q, '%')) " +
                      "     OR LOWER(p.serviceCode) LIKE LOWER(CONCAT('%', :q, '%')) " +
                      "     OR LOWER(p.serviceName) LIKE LOWER(CONCAT('%', :q, '%')) " +
                      "     OR LOWER(p.categoryName) LIKE LOWER(CONCAT('%', :q, '%'))) " +
-                     "AND (:categoryId IS NULL OR mc.id = :categoryId OR ms.categoryId = :categoryId)")
+                     "AND (:categoryId IS NULL OR mc.id = :categoryId)")
        Page<ProviderContractPricingItem> searchByServiceCodeOrNameAndCategory(
                      @Param("contractId") Long contractId,
                      @Param("q") String q,
@@ -297,10 +277,10 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
        int softDeleteByContractId(@Param("contractId") Long contractId);
 
        /**
-        * Find all active pricing items for a contract that have no linked
-        * MedicalService
+        * Find all active pricing items in a contract that have no medical category
+        * assigned
         */
-       @Query("SELECT p FROM ProviderContractPricingItem p WHERE p.contract.id = :contractId AND p.active = true AND p.medicalService IS NULL")
+       @Query("SELECT p FROM ProviderContractPricingItem p WHERE p.contract.id = :contractId AND p.active = true AND p.medicalCategory IS NULL")
        List<ProviderContractPricingItem> findAllUnmappedInContract(@Param("contractId") Long contractId);
 
        /**

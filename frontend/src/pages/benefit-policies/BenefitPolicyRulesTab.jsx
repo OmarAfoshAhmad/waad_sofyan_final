@@ -39,7 +39,8 @@ import {
   MedicalServices as ServiceIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  AutoAwesome as MagicIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -52,7 +53,8 @@ import {
   createPolicyRule,
   updatePolicyRule,
   togglePolicyRuleActive,
-  deletePolicyRule
+  deletePolicyRule,
+  initializeStandardRules
 } from 'services/api/benefit-policy-rules.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
@@ -61,7 +63,7 @@ import { getAllMedicalCategories } from 'services/api/medical-categories.service
 // ═══════════════════════════════════════════════════════════════════════════
 
 const INITIAL_FORM_STATE = {
-  targetType: '', // 'CATEGORY' or 'SERVICE'
+  targetType: 'CATEGORY', // 'CATEGORY' or 'SERVICE'
   medicalCategoryId: '',
   medicalServiceId: '',
   medicalServiceObject: null, // full object for display
@@ -640,6 +642,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
+  const [initStandardDialog, setInitStandardDialog] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -713,6 +716,18 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     },
     onError: (err) => {
       enqueueSnackbar(err.response?.data?.message || 'فشل حذف القاعدة', { variant: 'error' });
+    }
+  });
+
+  const initializeMutation = useMutation({
+    mutationFn: () => initializeStandardRules(policyId),
+    onSuccess: (data) => {
+      enqueueSnackbar(`تم بذر ${data.length} قاعدة قياسية بنجاح`, { variant: 'success' });
+      queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
+      setInitStandardDialog(false);
+    },
+    onError: (err) => {
+      enqueueSnackbar(err.response?.data?.message || 'فشل بذر القواعد القياسية', { variant: 'error' });
     }
   });
 
@@ -1032,6 +1047,16 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             <Stack direction="row" spacing={1}>
               <Button
                 variant="outlined"
+                color="info"
+                startIcon={<MagicIcon />}
+                onClick={() => setInitStandardDialog(true)}
+                size="small"
+                disabled={rules.length > 0}
+              >
+                بذر القواعد القياسية
+              </Button>
+              <Button
+                variant="outlined"
                 color="secondary"
                 startIcon={<CategoryIcon />}
                 onClick={() => setCategoriesModalOpen(true)}
@@ -1259,7 +1284,43 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         onCancel={handleDeleteCancel}
         loading={deleteMutation.isPending}
       />
+
+      {/* Initialize Standard Rules Confirmation */}
+      <Dialog open={initStandardDialog} onClose={() => setInitStandardDialog(false)}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <MagicIcon color="info" />
+          بذر القواعد المهنية الـ 16 القياسية
+        </DialogTitle>
+        <DialogContent dividers>
+          <DialogContentText color="text.primary" sx={{ mb: 2 }}>
+            هل أنت متأكد من رغبتك في بذر القواعد القياسية الـ 16 لهذه الوثيقة؟
+          </DialogContentText>
+          <Typography variant="body2" component="div">
+            <Box component="ul" sx={{ pl: 2, m: 0 }}>
+              <li>سيتم إنشاء قواعد لجميع التصنيفات الرئيسية (داخل وخارج المشفى).</li>
+              <li>نسبة التغطية الافتراضية لهذه القواعد هي 75% (قابلة للتعديل لاحقاً).</li>
+              <li>لن يتم استبدال أو تكرار القواعد الموجودة مسبقاً لهذا التصنيف.</li>
+            </Box>
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInitStandardDialog(false)} disabled={initializeMutation.isPending}>
+            إلغاء
+          </Button>
+          <Button
+            onClick={() => initializeMutation.mutate()}
+            variant="contained"
+            color="info"
+            autoFocus
+            disabled={initializeMutation.isPending}
+            startIcon={initializeMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <MagicIcon />}
+          >
+            تأكيد البذر الذكي
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
+
   );
 };
 

@@ -15,7 +15,7 @@ import java.time.LocalDate;
  * - Price is AUTO-RESOLVED from Provider Contract (not in this DTO)
  * 
  * Data Flow:
- * Visit → MedicalService (from Contract) → ContractPrice (auto)
+ * Visit → ProviderContractPricingItem → ContractPrice (auto)
  */
 @Data
 @NoArgsConstructor
@@ -34,11 +34,18 @@ public class PreAuthorizationCreateDto {
     private Long visitId;
 
     /**
-     * REQUIRED: Medical Service ID (from Provider Contract)
+     * REQUIRED: Pricing Item ID (from Provider Contract)
      * ARCHITECTURAL LAW: Service MUST be selected from Provider Contract - NO
      * free-text allowed
      */
-    @NotNull(message = "Medical Service ID is required - Select from Provider Contract services")
+    @NotNull(message = "Pricing Item ID is required - Select from Provider Contract services")
+    @Positive(message = "Pricing Item ID must be positive")
+    private Long pricingItemId;
+
+    /**
+     * @deprecated Use pricingItemId instead. Kept for backward compatibility.
+     */
+    @Deprecated
     @Positive(message = "Medical Service ID must be positive")
     private Long medicalServiceId;
 

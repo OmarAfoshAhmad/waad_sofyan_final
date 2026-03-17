@@ -1,6 +1,5 @@
 package com.waad.tba.modules.claim.entity;
 
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,7 +21,7 @@ import java.math.BigDecimal;
  */
 @Entity
 @Table(name = "claim_lines", indexes = {
-        @Index(name = "idx_claim_line_service", columnList = "medical_service_id"),
+        @Index(name = "idx_claim_lines_category", columnList = "service_category_id"),
         @Index(name = "idx_claim_line_claim", columnList = "claim_id")
 })
 @Data
@@ -59,20 +58,13 @@ public class ClaimLine {
     @JoinColumn(name = "claim_id", nullable = false)
     private Claim claim;
 
-    // ==================== MEDICAL SERVICE (CONTRACT-DRIVEN) ====================
-
-    /**
-     * Medical Service (FK)
-     * ARCHITECTURAL LAW: Service MUST be selected from Provider Contract - NO
-     * free-text
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medical_service_id")
-    private MedicalService medicalService;
+    // ==================== MEDICAL SERVICE IDENTIFICATION ====================
 
     /**
      * Pricing Item ID (from provider_contract_pricing_items)
      * Links this line directly to a specific contract price entry.
+     * This is the primary reference to provider service (replaces MedicalService
+     * FK).
      */
     @Column(name = "pricing_item_id")
     private Long pricingItemId;
@@ -109,7 +101,8 @@ public class ClaimLine {
 
     /**
      * The category ID actually used for coverage calculation.
-     * This might be different from serviceCategoryId if Claim.manualCategoryEnabled is TRUE.
+     * This might be different from serviceCategoryId if Claim.manualCategoryEnabled
+     * is TRUE.
      */
     @Column(name = "applied_category_id")
     private Long appliedCategoryId;
@@ -271,23 +264,13 @@ public class ClaimLine {
      * Populate denormalized fields from MedicalService
      */
     public void populateDenormalizedFields() {
-        if (this.medicalService != null) {
-            this.serviceCode = this.medicalService.getCode();
-            this.serviceName = this.medicalService.getName();
-
-            // Only update category from DB if it exists there,
-            // otherwise keep the one sent from the UI
-            if (this.medicalService.getCategoryId() != null) {
-                this.serviceCategoryId = this.medicalService.getCategoryId();
-            }
-
-            this.requiresPA = this.medicalService.isRequiresPA();
-        } else {
-            // If no service link, ensure we don't crash. 
-            // name/code would have been set by Mapper from DTO.
-            if (this.serviceCode == null) this.serviceCode = "N/A";
-            if (this.serviceName == null) this.serviceName = "Unknown Service";
-        }
+        // serviceCode and serviceName are set directly by ClaimMapper from the pricing
+        // item.
+        // Ensure defaults if still null.
+        if (this.serviceCode == null)
+            this.serviceCode = "N/A";
+        if (this.serviceName == null)
+            this.serviceName = "Unknown Service";
     }
 
     private void calculateTotalPrice() {
@@ -305,24 +288,9 @@ public class ClaimLine {
             return;
         }
 
-        // RULE: Either MedicalService OR (ServiceCode + ServiceName) must be present
-        if (medicalService == null && (serviceCode == null || serviceName == null)) {
-            throw new IllegalStateException("ARCHITECTURAL VIOLATION: ClaimLine must have a MedicalService reference OR a ServiceCode/Name pair");
-        }
-
-        // RULE: Category is MANDATORY if medicalService is present
-        if (medicalService != null && serviceCategoryId == null) {
-            throw new IllegalStateException(
-                    "ARCHITECTURAL VIOLATION: ClaimLine with MedicalService MUST have a medical category.");
-        }
-
-        // RULE: Service must belong to the selected category (if both present)
-        if (medicalService != null && medicalService.getCategoryId() != null &&
-                serviceCategoryId != null && !medicalService.getCategoryId().equals(serviceCategoryId)) {
-            throw new IllegalStateException(
-                    "ARCHITECTURAL VIOLATION: Medical service does not belong to the selected category. " +
-                            "Service categoryId=" + medicalService.getCategoryId() +
-                            ", selected categoryId=" + serviceCategoryId);
+        // RULE: ServiceCode must be present
+        if (serviceCode == null || serviceCode.isBlank()) {
+            throw new IllegalStateException("ARCHITECTURAL VIOLATION: ClaimLine must have a serviceCode");
         }
 
         // RULE: Unit price must be set

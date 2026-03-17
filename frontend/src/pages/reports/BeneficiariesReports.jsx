@@ -37,7 +37,6 @@ import PrintIcon from '@mui/icons-material/Print';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
-// import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; // PDF export disabled - Excel is the official format
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
 import BadgeIcon from '@mui/icons-material/Badge';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
@@ -133,9 +132,6 @@ const BeneficiariesReports = () => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [financialStats, setFinancialStats] = useState(null);
   const [loadingStats, setLoadingStats] = useState(false);
-
-  // PDF Modal State - disabled, Excel is the official format
-  // const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
 
   // Pagination state (client-side)
   const [page, setPage] = useState(0);
@@ -869,16 +865,6 @@ const BeneficiariesReports = () => {
       )}
 
       {/* --- Hidden Components --- */}
-      {/* PDF export disabled - Excel is the official reporting format
-      <PdfPreviewModal
-        open={pdfPreviewOpen}
-        onClose={() => setPdfPreviewOpen(false)}
-        title="تقرير المنتفعين الاجمالي"
-        data={data?.items || []}
-        columns={columns.filter(c => c.id !== 'actions')}
-        partnerName={selectedEmployerId ? 'حسب الشريك المحدد' : 'كافة الشركاء'}
-      />
-      */}
     </Box>
   );
 };
@@ -931,18 +917,6 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
       @media print { body { -webkit-print-color-adjust: exact; } }
     `
   });
-
-  const handlePdfPreview = async () => {
-    try {
-      const response = await axiosClient.get(`/unified-members/${member?.id}/pdf`, {
-        responseType: 'blob'
-      });
-      const url = window.URL.createObjectURL(new Blob([response]));
-      window.open(url, '_blank');
-    } catch (error) {
-      console.error('PDF Preview failed', error);
-    }
-  };
 
   if (loadingStats) {
     return (
@@ -1120,11 +1094,6 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
         <Button variant="outlined" color="inherit" onClick={onBack} startIcon={<ArrowBackIcon />}>
           عودة
         </Button>
-        {/* PDF export disabled - Excel is the official reporting format
-                <Button variant="outlined" color="primary" onClick={handlePdfPreview} startIcon={<PictureAsPdfIcon />}>
-                   معاينة PDF
-                </Button>
-                */}
         <Button variant="contained" color="secondary" startIcon={<PrintIcon />} onClick={handlePrint}>
           طباعة التقرير الفردي
         </Button>

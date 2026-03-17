@@ -9,8 +9,6 @@ import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.visit.entity.Visit;
@@ -55,7 +53,7 @@ public class PreAuthorizationService {
     private final PreAuthorizationRepository preAuthorizationRepository;
     private final ProviderRepository providerRepository;
     private final MemberRepository memberRepository;
-    private final MedicalServiceRepository medicalServiceRepository;
+    private final com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository pricingItemRepository;
     private final VisitRepository visitRepository;
     private final ProviderContractService providerContractService;
     private final PreAuthorizationAuditService auditService;
@@ -83,8 +81,8 @@ public class PreAuthorizationService {
      */
     @Transactional
     public PreAuthorizationResponseDto createPreAuthorization(PreAuthorizationCreateDto dto, String createdBy) {
-        log.info("[PRE-AUTH] Creating pre-authorization: visitId={}, medicalServiceId={}",
-                dto.getVisitId(), dto.getMedicalServiceId());
+        log.info("[PRE-AUTH] Creating pre-authorization: visitId={}, pricingItemId={}",
+                dto.getVisitId(), dto.getPricingItemId());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // PROVIDER PORTAL: Validate and enforce provider ID from JWT
@@ -95,7 +93,7 @@ public class PreAuthorizationService {
         // ═══════════════════════════════════════════════════════════════════════════
         // ARCHITECTURAL GUARD: Validate system invariants before processing
         // ═══════════════════════════════════════════════════════════════════════════
-        architecturalGuard.guardPreAuthCreation(dto.getVisitId(), dto.getMedicalServiceId());
+        architecturalGuard.guardPreAuthCreation(dto.getVisitId(), dto.getPricingItemId());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // STEP 1: Validate Visit exists (ARCHITECTURAL LAW: Visit-Centric)
@@ -132,51 +130,30 @@ public class PreAuthorizationService {
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 3: Validate MedicalService (ARCHITECTURAL LAW: No free-text services)
+        // STEP 3: Resolve service info from ProviderContractPricingItem
         // ═══════════════════════════════════════════════════════════════════════════
-        MedicalService service = medicalServiceRepository.findById(dto.getMedicalServiceId())
+        com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem pricingItem = pricingItemRepository
+                .findById(dto.getPricingItemId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "ARCHITECTURAL VIOLATION: Medical Service not found with ID: " + dto.getMedicalServiceId() +
-                                ". Service MUST be selected from catalog."));
+                        "ARCHITECTURAL VIOLATION: Pricing Item not found with ID: " + dto.getPricingItemId() +
+                                ". Service MUST be selected from Provider Contract."));
 
-        if (!service.isActive()) {
-            throw new IllegalArgumentException("Medical service is not active");
-        }
+        String serviceCode = pricingItem.getServiceCode();
+        String serviceName = pricingItem.getServiceName();
+        Long categoryId = pricingItem.getMedicalCategory() != null ? pricingItem.getMedicalCategory().getId() : null;
 
-        // NOTE: requiresPA check removed from MedicalService.
-        // PA requirement is now determined by BenefitPolicyRule.requiresPreApproval.
-        // Providers can submit PreAuthorization for ANY service - the insurance company
-        // will decide whether to approve based on policy rules.
-
-        log.info("[PRE-AUTH] Medical Service validated: {} ({})", service.getCode(), service.getName());
+        log.info("[PRE-AUTH] Pricing item validated: {} ({})", serviceCode, serviceName);
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 4: Get Contract Price (ARCHITECTURAL LAW: No manual pricing)
+        // STEP 4: Get Contract Price directly from pricingItem
         // ═══════════════════════════════════════════════════════════════════════════
         LocalDate requestDate = dto.getRequestDate() != null ? dto.getRequestDate() : LocalDate.now();
-        BigDecimal contractPrice = null;
-
-        try {
-            EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
-                    dto.getProviderId(),
-                    service.getCode(),
-                    requestDate);
-
-            if (priceResponse.isHasContract()) {
-                contractPrice = priceResponse.getContractPrice();
-                log.info("[PRE-AUTH] Contract price resolved: {} LYD for service {}",
-                        contractPrice, service.getCode());
-            } else {
-                // ARCHITECTURAL LAW: Service MUST be in Provider Contract
-                throw new IllegalArgumentException(
-                        "ARCHITECTURAL VIOLATION: Service '" + service.getCode() +
-                                "' is not covered by Provider's contract. Select a covered service.");
-            }
-        } catch (ResourceNotFoundException e) {
+        BigDecimal contractPrice = pricingItem.getContractPrice();
+        if (contractPrice == null) {
             throw new IllegalArgumentException(
-                    "ARCHITECTURAL VIOLATION: No active contract found for provider " + dto.getProviderId() +
-                            ". Provider must have an active contract to create pre-authorizations.");
+                    "ARCHITECTURAL VIOLATION: Pricing item '" + serviceCode + "' has no contract price.");
         }
+        log.info("[PRE-AUTH] Contract price resolved: {} LYD for service {}", contractPrice, serviceCode);
 
         // ═══════════════════════════════════════════════════════════════════════════
         // STEP 5: Build PreAuthorization Entity
@@ -193,42 +170,21 @@ public class PreAuthorizationService {
             }
         }
 
-        // Determine service type from category or use default
+        // Determine service type from category
         String serviceType = "MEDICAL";
-        if (service.getCategoryId() != null) {
-            serviceType = "CATEGORY_" + service.getCategoryId();
+        if (categoryId != null) {
+            serviceType = "CATEGORY_" + categoryId;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // CANONICAL: Category resolution - prefer DTO, fallback to service.categoryId
-        // This enables correct coverage resolution when same service exists in multiple
-        // categories
-        // ═══════════════════════════════════════════════════════════════════════════
-        Long serviceCategoryId = dto.getServiceCategoryId() != null
-                ? dto.getServiceCategoryId()
-                : service.getCategoryId();
+        // CANONICAL: Category resolution - prefer DTO, fallback to pricingItem.category
+        Long serviceCategoryId = dto.getServiceCategoryId() != null ? dto.getServiceCategoryId() : categoryId;
         String serviceCategoryName = dto.getServiceCategoryName();
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // ARCHITECTURAL GUARD: Validate that service belongs to selected category
-        // This is a HARD FAILURE - protects against Postman attacks or frontend bugs
-        // ═══════════════════════════════════════════════════════════════════════════
-        if (dto.getServiceCategoryId() != null && service.getCategoryId() != null) {
-            if (!dto.getServiceCategoryId().equals(service.getCategoryId())) {
-                log.error(
-                        "🚫 ARCHITECTURAL VIOLATION: Service {} does not belong to category {}. Service's actual category: {}",
-                        service.getCode(), dto.getServiceCategoryId(), service.getCategoryId());
-                throw new IllegalArgumentException(
-                        "الخدمة الطبية '" + service.getName() + "' (" + service.getCode() +
-                                ") لا تنتمي للتصنيف الطبي المختار. يرجى التأكد من اختيار التصنيف الصحيح.");
-            }
-        }
 
         // ═══════════════════════════════════════════════════════════════════════════
         // FINANCIAL SNAPSHOT: Get coverage percentage at creation time (IMMUTABLE)
         // This ensures audit trail is preserved even if policy rules change later
         // ═══════════════════════════════════════════════════════════════════════════
-        var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForService(member, service.getId());
+        var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForCategory(member, serviceCategoryId);
         Integer coveragePercentSnapshot = coverageInfoOpt.map(c -> c.getCoveragePercent()).orElse(null);
         Integer patientCopayPercentSnapshot = coveragePercentSnapshot != null ? (100 - coveragePercentSnapshot) : null;
         log.info("[PRE-AUTH] Coverage snapshot: coverage={}%, copay={}%", coveragePercentSnapshot,
@@ -240,19 +196,18 @@ public class PreAuthorizationService {
                 .memberId(member.getId())
                 .providerId(dto.getProviderId())
                 .visit(visit) // FK to Visit
-                .medicalService(service) // FK to MedicalService (NO FREE-TEXT)
-                .serviceCode(service.getCode()) // Denormalized snapshot
-                .serviceName(service.getName()) // Denormalized snapshot
-                .serviceType(serviceType) // Legacy column (required by database)
-                .serviceCategoryId(serviceCategoryId) // CANONICAL: From DTO or service
-                .serviceCategoryName(serviceCategoryName) // CANONICAL: For display
+                .serviceCode(serviceCode) // Denormalized snapshot from pricingItem
+                .serviceName(serviceName) // Denormalized snapshot from pricingItem
+                .serviceType(serviceType) // Derived from category
+                .serviceCategoryId(serviceCategoryId) // From pricingItem or DTO
+                .serviceCategoryName(serviceCategoryName)
                 .requestDate(requestDate)
-                .expectedServiceDate(requestDate) // Default: same as request date
+                .expectedServiceDate(requestDate)
                 .expiryDate(expiryDate)
-                .contractPrice(contractPrice) // AUTO-RESOLVED from contract
-                .requiresPA(true) // PreAuthorization always requires PA (that's why it exists)
-                .coveragePercentSnapshot(coveragePercentSnapshot) // SNAPSHOT for financial audit
-                .patientCopayPercentSnapshot(patientCopayPercentSnapshot) // SNAPSHOT for financial audit
+                .contractPrice(contractPrice) // From pricingItem
+                .requiresPA(true)
+                .coveragePercentSnapshot(coveragePercentSnapshot)
+                .patientCopayPercentSnapshot(patientCopayPercentSnapshot)
                 .currency(dto.getCurrency() != null ? dto.getCurrency() : "LYD")
                 .status(PreAuthStatus.PENDING)
                 .priority(priority)
@@ -279,35 +234,49 @@ public class PreAuthorizationService {
         if (dto.getEmailRequestId() != null) {
             emailPreAuthService.markAsProcessed(dto.getEmailRequestId(), preAuth.getId());
         }
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
-    
+
     @Transactional
-    public PreAuthorizationResponseDto createPreAuthorizationFromEmail(Long emailRequestId, Long memberId, Long medicalServiceId, String notes, String createdBy) {
+    public PreAuthorizationResponseDto createPreAuthorizationFromEmail(Long emailRequestId, Long memberId,
+            Long medicalServiceId, String notes, String createdBy) {
         log.info("[PRE-AUTH] Creating pre-authorization from email request: {}", emailRequestId);
 
         // 1. Fetch Email Request
         PreAuthEmailRequestDto emailRequest = emailPreAuthService.getById(emailRequestId);
-        
+
         // 2. Resolve Provider and Member
         Long providerId = emailRequest.getProviderId();
-        if (providerId == null) throw new IllegalArgumentException("Email request has no associated provider");
+        if (providerId == null)
+            throw new IllegalArgumentException("Email request has no associated provider");
         Provider provider = providerRepository.findById(providerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Provider not found: " + providerId));
 
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
 
-        // 3. Resolve Medical Service
-        MedicalService service = medicalServiceRepository.findById(medicalServiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Medical Service not found: " + medicalServiceId));
+        // 3. Resolve Contract Price via pricingItem lookup (medicalServiceId used as
+        // pricingItemId for email path)
+        com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem emailPricingItem = pricingItemRepository
+                .findById(medicalServiceId).orElse(null);
+        String emailServiceCode = emailPricingItem != null ? emailPricingItem.getServiceCode() : null;
+        String emailServiceName = emailPricingItem != null ? emailPricingItem.getServiceName() : "Unknown Service";
+        Long emailCategoryId = emailPricingItem != null && emailPricingItem.getMedicalCategory() != null
+                ? emailPricingItem.getMedicalCategory().getId()
+                : null;
 
         // 4. Resolve Contract Price
-        EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(providerId, service.getCode(), LocalDate.now());
-        if (!priceResponse.isHasContract()) {
+        BigDecimal contractPrice = emailPricingItem != null ? emailPricingItem.getContractPrice() : null;
+        if (contractPrice == null && emailServiceCode != null) {
+            EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(providerId,
+                    emailServiceCode, LocalDate.now());
+            if (priceResponse.isHasContract()) {
+                contractPrice = priceResponse.getContractPrice();
+            }
+        }
+        if (contractPrice == null) {
             throw new IllegalArgumentException("Service not in provider's contract");
         }
-        BigDecimal contractPrice = priceResponse.getContractPrice();
 
         // 5. Build PreAuthorization
         String referenceNumber = generateUniqueReferenceNumber();
@@ -316,19 +285,18 @@ public class PreAuthorizationService {
                 .referenceNumber(referenceNumber)
                 .memberId(member.getId())
                 .providerId(providerId)
-                .medicalService(service)
-                .serviceCode(service.getCode())
-                .serviceName(service.getName())
-                .serviceType(service.getCategoryId() != null ? "CATEGORY_" + service.getCategoryId() : "MEDICAL")
-                .serviceCategoryId(service.getCategoryId())
+                .serviceCode(emailServiceCode)
+                .serviceName(emailServiceName)
+                .serviceType(emailCategoryId != null ? "CATEGORY_" + emailCategoryId : "MEDICAL")
+                .serviceCategoryId(emailCategoryId)
                 .requestDate(LocalDate.now())
                 .expectedServiceDate(LocalDate.now())
                 .expiryDate(LocalDate.now().plusDays(30))
                 .contractPrice(contractPrice)
                 .requiresPA(true)
-                .status(PreAuthStatus.APPROVED) // Auto-approve or set to PENDING? User said "if approved... send template"
+                .status(PreAuthStatus.APPROVED)
                 .approvedAmount(contractPrice)
-                .copayAmount(BigDecimal.ZERO) // Default to zero or calculate copay?
+                .copayAmount(BigDecimal.ZERO)
                 .insuranceCoveredAmount(contractPrice)
                 .active(true)
                 .emailRequestId(emailRequestId)
@@ -339,14 +307,14 @@ public class PreAuthorizationService {
                 .build();
 
         preAuth = preAuthorizationRepository.save(preAuth);
-        
+
         // 6. Mark Email Request as Processed
         emailPreAuthService.markAsProcessed(emailRequestId, preAuth.getId());
 
         // 7. Notify Provider
         emailNotificationService.sendDecisionEmail(preAuth);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== UPDATE ====================
@@ -414,9 +382,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -475,9 +442,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -533,7 +499,8 @@ public class PreAuthorizationService {
             if (dto.getStatus() == PreAuthStatus.APPROVED) {
                 // Pre-authorizations no longer have strict financial matters
                 // Default to contract price if not provided, or zero
-                BigDecimal approvedAmt = dto.getApprovedAmount() != null ? dto.getApprovedAmount() : preAuth.getContractPrice();
+                BigDecimal approvedAmt = dto.getApprovedAmount() != null ? dto.getApprovedAmount()
+                        : preAuth.getContractPrice();
                 preAuth.setApprovedAmount(approvedAmt != null ? approvedAmt : BigDecimal.ZERO);
 
                 if (dto.getCopayPercentage() != null) {
@@ -584,9 +551,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -633,9 +599,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== APPROVE ====================
@@ -695,9 +660,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -754,9 +718,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(savedPreAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(savedPreAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(savedPreAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(savedPreAuth, member, provider, service);
+        return mapToResponseDto(savedPreAuth, member, provider, null);
     }
 
     /**
@@ -858,7 +821,7 @@ public class PreAuthorizationService {
                     failedPreAuth.setUpdatedBy(approvedBy);
                     preAuthorizationRepository.save(failedPreAuth);
                     log.info("🔄 PreAuth {} transitioned to REJECTED due to processing failure", id);
-                    
+
                     // Notify if originated from email
                     emailNotificationService.sendDecisionEmail(failedPreAuth);
                 }
@@ -933,9 +896,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== CANCEL ====================
@@ -961,9 +923,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== ACKNOWLEDGE ====================
@@ -1001,9 +962,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== MARK AS USED ====================
@@ -1045,9 +1005,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== DELETE ====================
@@ -1084,9 +1043,8 @@ public class PreAuthorizationService {
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -1100,9 +1058,8 @@ public class PreAuthorizationService {
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -1193,9 +1150,8 @@ public class PreAuthorizationService {
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== START REVIEW ====================
@@ -1243,9 +1199,8 @@ public class PreAuthorizationService {
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== CHECK VALIDITY ====================
@@ -1281,9 +1236,8 @@ public class PreAuthorizationService {
 
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
 
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     // ==================== MAINTENANCE ====================
@@ -1333,7 +1287,7 @@ public class PreAuthorizationService {
      * Map to response DTO with full details (CANONICAL REBUILD 2026-01-16)
      */
     private PreAuthorizationResponseDto mapToResponseDto(PreAuthorization preAuth, Member member,
-            Provider provider, MedicalService service) {
+            Provider provider, @Deprecated Object ignoredService) {
         Integer daysUntilExpiry = null;
         if (preAuth.getExpiryDate() != null) {
             daysUntilExpiry = (int) ChronoUnit.DAYS.between(LocalDate.now(), preAuth.getExpiryDate());
@@ -1362,10 +1316,10 @@ public class PreAuthorizationService {
                 .providerId(preAuth.getProviderId())
                 .providerName(provider != null ? provider.getName() : null)
                 .providerLicense(provider != null ? provider.getLicenseNumber() : null)
-                // Medical Service info (from Contract)
-                .medicalServiceId(service != null ? service.getId() : null)
+                // Medical Service info (from pricingItem denormalized snapshot)
+                .medicalServiceId(null)
                 .serviceCode(preAuth.getServiceCode())
-                .serviceName(service != null ? service.getName() : null)
+                .serviceName(preAuth.getServiceName())
                 .serviceCategoryId(preAuth.getServiceCategoryId())
                 .requiresPA(preAuth.getRequiresPA())
                 // Diagnosis
@@ -1375,7 +1329,8 @@ public class PreAuthorizationService {
                 .requestDate(preAuth.getRequestDate())
                 .expiryDate(preAuth.getExpiryDate())
                 .daysUntilExpiry(daysUntilExpiry)
-                // Pricing (Contract-Driven) - Removed as per user requirement (Pre-Auth is non-financial)
+                // Pricing (Contract-Driven) - Removed as per user requirement (Pre-Auth is
+                // non-financial)
                 .contractPrice(null)
                 .approvedAmount(null)
                 .copayAmount(null)
@@ -1414,14 +1369,8 @@ public class PreAuthorizationService {
         // Fetch related entities for complete display
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
-        MedicalService service = preAuth.getMedicalService();
 
-        // Fallback: try to find service by code if not loaded
-        if (service == null && preAuth.getServiceCode() != null) {
-            service = medicalServiceRepository.findByCode(preAuth.getServiceCode()).orElse(null);
-        }
-
-        return mapToResponseDto(preAuth, member, provider, service);
+        return mapToResponseDto(preAuth, member, provider, null);
     }
 
     /**
@@ -1471,6 +1420,7 @@ public class PreAuthorizationService {
         }
         // Other roles: no restriction on providerId
     }
+
     /**
      * Search pre-authorizations
      */
@@ -1481,9 +1431,9 @@ public class PreAuthorizationService {
             return getAllPreAuthorizations(pageable);
         }
         return preAuthorizationRepository.search(query, pageable)
-                .map(pa -> mapToResponseDto(pa, 
-                    memberRepository.findById(pa.getMemberId()).orElse(null),
-                    providerRepository.findById(pa.getProviderId()).orElse(null),
-                    pa.getMedicalService()));
+                .map(pa -> mapToResponseDto(pa,
+                        memberRepository.findById(pa.getMemberId()).orElse(null),
+                        providerRepository.findById(pa.getProviderId()).orElse(null),
+                        null));
     }
 }

@@ -26,10 +26,22 @@ import java.time.LocalDate;
 public class ProviderContractPricingItemCreateDto {
 
     /**
-     * Medical service ID (required)
+     * Medical service ID (DEPRECATED - use serviceCode + medicalCategoryId instead)
      */
-    @NotNull(message = "Medical service ID is required")
+    @Deprecated
     private Long medicalServiceId;
+
+    /**
+     * Service name (required when medicalServiceId is not set)
+     */
+    @Size(max = 255)
+    private String serviceName;
+
+    /**
+     * Service code (optional - for reference and lookup)
+     */
+    @Size(max = 50)
+    private String serviceCode;
 
     /**
      * Optional category override

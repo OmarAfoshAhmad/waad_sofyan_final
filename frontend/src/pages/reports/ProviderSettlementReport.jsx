@@ -31,7 +31,6 @@ import {
   OutlinedInput
 } from '@mui/material';
 import {
-  // PictureAsPdf as PdfIcon, // PDF export disabled - Excel is the official format
   TableChart as ExcelIcon,
   Refresh as RefreshIcon,
   Print as PrintIcon,
@@ -51,7 +50,6 @@ import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import { reportsService } from 'services/api';
-// PDF export disabled - Excel is the official reporting format
 import { exportToExcel } from 'utils/exportUtils';
 import { useAuth } from 'contexts/AuthContext';
 
@@ -365,27 +363,6 @@ const ProviderSettlementReport = () => {
       ]
     });
   };
-
-  // PDF export disabled - Excel is the official reporting format
-  // const handleExportPDF = () => {
-  //   if (!reportData?.claims) return;
-  //
-  //   const flatData = [];
-  //   reportData.claims.forEach(claim => {
-  //     claim.lines.forEach(line => {
-  //       flatData.push({
-  //         'رقم المطالبة': claim.claimNumber,
-  //         'الخدمة': line.serviceNameArabic || line.serviceName,
-  //         'Gross': line.grossAmount,
-  //         'Net': line.approvedAmount,
-  //         'مرفوض': line.rejectedAmount
-  //       });
-  //     });
-  //   });
-  //
-  //   const title = `تقرير تسوية ${reportData.providerName}`;
-  //   exportToPDF(flatData, title, { companyName, primaryColor });
-  // };
 
   // Toggle claim expansion
   const toggleClaimExpansion = (claimId) => {

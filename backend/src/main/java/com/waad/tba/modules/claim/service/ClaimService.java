@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -43,8 +42,7 @@ import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.provider.service.ProviderNetworkService;
@@ -117,7 +115,6 @@ public class ClaimService {
     private final MemberRepository memberRepository;
     private final ProviderRepository providerRepository;
     private final VisitRepository visitRepository;
-    private final MedicalServiceRepository medicalServiceRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
 
     // Phase 8: BenefitPolicy-based coverage validation (Single Source of Truth)
@@ -270,10 +267,11 @@ public class ClaimService {
         // ═══════════════════════════════════════════════════════════════════════════
         // ARCHITECTURAL GUARD: Validate system invariants before processing
         // ═══════════════════════════════════════════════════════════════════════════
-        List<Long> serviceIds = dto.getLines() != null
-                ? dto.getLines().stream().map(ClaimLineDto::getMedicalServiceId).toList()
+        List<Long> pricingItemIds = dto.getLines() != null
+                ? dto.getLines().stream().map(ClaimLineDto::getPricingItemId)
+                        .filter(java.util.Objects::nonNull).toList()
                 : List.of();
-        architecturalGuard.guardClaimCreation(dto.getVisitId(), serviceIds);
+        architecturalGuard.guardClaimCreation(dto.getVisitId(), pricingItemIds);
 
         // ═══════════════════════════════════════════════════════════════════════════
         // STEP 2: Pre-fetch data for Pure Mapping (Phase 2 Performance Hardening)
@@ -311,10 +309,6 @@ public class ClaimService {
                             () -> new ResourceNotFoundException("PreAuthorization", "id", dto.getPreAuthorizationId()));
         }
 
-        // Fetch medical services in bulk for mapping
-        Map<Long, MedicalService> medicalServiceMap = medicalServiceRepository.findAllById(serviceIds).stream()
-                .collect(Collectors.toMap(MedicalService::getId, s -> s));
-
         // Resolve Claim Batch (Phase 11)
         com.waad.tba.modules.claim.entity.ClaimBatch claimBatch = null;
         if (dto.getClaimBatchId() != null) {
@@ -329,7 +323,7 @@ public class ClaimService {
             }
         }
 
-        Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch, medicalServiceMap);
+        Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch);
         // Status set to APPROVED by mapper — direct entry model (no review workflow)
         Claim savedClaim = claimRepository.save(claim);
 
@@ -604,16 +598,7 @@ public class ClaimService {
         // DRAFT line edits (services/categories/quantities) with backend contract
         // re-pricing
         if (dto.getLines() != null) {
-            List<Long> serviceIds = dto.getLines().stream()
-                    .map(ClaimLineDto::getMedicalServiceId)
-                    .filter(java.util.Objects::nonNull)
-                    .toList();
-
-            Map<Long, MedicalService> medicalServiceMap = serviceIds.isEmpty() ? java.util.Collections.emptyMap()
-                    : medicalServiceRepository.findAllById(serviceIds).stream()
-                            .collect(Collectors.toMap(MedicalService::getId, s -> s));
-
-            claimMapper.replaceClaimLinesForDraft(claim, dto.getLines(), medicalServiceMap);
+            claimMapper.replaceClaimLinesForDraft(claim, dto.getLines());
         }
 
         // Save and return

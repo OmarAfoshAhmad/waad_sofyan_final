@@ -34,18 +34,18 @@ import java.util.stream.Collectors;
  */
 @Component
 public class PreAuthorizationApiMapper {
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // REQUEST CONTRACTS → INTERNAL DTOs (Inbound)
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
-     * Convert CreatePreAuthorizationRequest (API v1) to PreAuthorizationCreateDto (internal)
+     * Convert CreatePreAuthorizationRequest (API v1) to PreAuthorizationCreateDto
+     * (internal)
      */
     public PreAuthorizationCreateDto toCreateDto(CreatePreAuthorizationRequest request) {
         return PreAuthorizationCreateDto.builder()
                 .visitId(request.getVisitId())
-                .medicalServiceId(request.getMedicalServiceId())
                 .memberId(request.getMemberId())
                 .providerId(request.getProviderId())
                 .diagnosisCode(request.getDiagnosisCode())
@@ -59,9 +59,10 @@ public class PreAuthorizationApiMapper {
                 .emailRequestId(request.getEmailRequestId())
                 .build();
     }
-    
+
     /**
-     * Convert UpdatePreAuthorizationRequest (API v1) to PreAuthorizationUpdateDto (internal)
+     * Convert UpdatePreAuthorizationRequest (API v1) to PreAuthorizationUpdateDto
+     * (internal)
      */
     public PreAuthorizationUpdateDto toUpdateDto(UpdatePreAuthorizationRequest request) {
         return PreAuthorizationUpdateDto.builder()
@@ -72,11 +73,13 @@ public class PreAuthorizationApiMapper {
                 .expiryDays(request.getExpiryDays())
                 .build();
     }
-    
+
     /**
-     * Convert ApprovePreAuthorizationRequest (API v1) to PreAuthorizationApproveDto (internal)
+     * Convert ApprovePreAuthorizationRequest (API v1) to PreAuthorizationApproveDto
+     * (internal)
      * 
-     * ⚠️ CRITICAL: This conversion MUST NOT include approvedAmount or copayPercentage.
+     * ⚠️ CRITICAL: This conversion MUST NOT include approvedAmount or
+     * copayPercentage.
      * The backend service layer calculates these values.
      */
     public PreAuthorizationApproveDto toApproveDto(ApprovePreAuthorizationRequest request) {
@@ -86,16 +89,17 @@ public class PreAuthorizationApiMapper {
                 // ✅ copayPercentage is NOT set - backend calculates it
                 .build();
     }
-    
+
     /**
-     * Convert RejectPreAuthorizationRequest (API v1) to PreAuthorizationRejectDto (internal)
+     * Convert RejectPreAuthorizationRequest (API v1) to PreAuthorizationRejectDto
+     * (internal)
      */
     public PreAuthorizationRejectDto toRejectDto(RejectPreAuthorizationRequest request) {
         return PreAuthorizationRejectDto.builder()
                 .rejectionReason(request.getRejectionReason())
                 .build();
     }
-    
+
     /**
      * Convert UpdatePreAuthDataRequest (API v1) to PreAuthDataUpdateDto (internal)
      * 
@@ -109,7 +113,7 @@ public class PreAuthorizationApiMapper {
                 .priority(request.getPriority())
                 .build();
     }
-    
+
     /**
      * Convert ReviewPreAuthRequest (API v1) to PreAuthReviewDto (internal)
      * 
@@ -123,20 +127,21 @@ public class PreAuthorizationApiMapper {
                 .copayPercentage(request.getCopayPercentage())
                 .build();
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // INTERNAL DTOs → RESPONSE CONTRACTS (Outbound)
     // ═══════════════════════════════════════════════════════════════════════════
-    
+
     /**
-     * Convert PreAuthorizationResponseDto (internal) to PreAuthorizationResponse (API v1)
+     * Convert PreAuthorizationResponseDto (internal) to PreAuthorizationResponse
+     * (API v1)
      */
     public PreAuthorizationResponse toResponse(PreAuthorizationResponseDto dto) {
         return PreAuthorizationResponse.builder()
                 // Identification
                 .id(dto.getId())
                 .referenceNumber(dto.getReferenceNumber())
-                
+
                 // Related entities
                 .visitId(dto.getVisitId())
                 .visitDate(dto.getVisitDate())
@@ -159,12 +164,12 @@ public class PreAuthorizationApiMapper {
                 .requiresPA(dto.getRequiresPA())
                 .diagnosisCode(dto.getDiagnosisCode())
                 .diagnosisDescription(dto.getDiagnosisDescription())
-                
+
                 // Dates (READ-ONLY)
                 .requestDate(dto.getRequestDate())
                 .expiryDate(dto.getExpiryDate())
                 .daysUntilExpiry(dto.getDaysUntilExpiry())
-                
+
                 // Decision data (READ-ONLY)
                 .contractPrice(dto.getContractPrice())
                 .approvedAmount(dto.getApprovedAmount())
@@ -172,15 +177,15 @@ public class PreAuthorizationApiMapper {
                 .copayPercentage(dto.getCopayPercentage())
                 .insuranceCoveredAmount(dto.getInsuranceCoveredAmount())
                 .currency(dto.getCurrency())
-                
+
                 // Status and workflow (READ-ONLY)
                 .status(dto.getStatus())
                 .priority(dto.getPriority())
-                
+
                 // Additional information (READ-ONLY)
                 .notes(dto.getNotes())
                 .rejectionReason(dto.getRejectionReason())
-                
+
                 // Business flags (READ-ONLY)
                 .hasContract(dto.getHasContract())
                 .isValid(dto.getIsValid())
@@ -188,7 +193,7 @@ public class PreAuthorizationApiMapper {
                 .canBeApproved(dto.getCanBeApproved())
                 .canBeRejected(dto.getCanBeRejected())
                 .canBeCancelled(dto.getCanBeCancelled())
-                
+
                 // Audit trail (READ-ONLY)
                 .createdAt(dto.getCreatedAt())
                 .updatedAt(dto.getUpdatedAt())
@@ -197,12 +202,13 @@ public class PreAuthorizationApiMapper {
                 .approvedAt(dto.getApprovedAt())
                 .approvedBy(dto.getApprovedBy())
                 .active(dto.getActive())
-                
+
                 .build();
     }
-    
+
     /**
-     * Convert paginated PreAuthorizationResponseDto to PreAuthorizationListResponse (API v1)
+     * Convert paginated PreAuthorizationResponseDto to PreAuthorizationListResponse
+     * (API v1)
      */
     public PreAuthorizationListResponse toListResponse(Page<PreAuthorizationResponseDto> page) {
         return PreAuthorizationListResponse.builder()

@@ -2,11 +2,7 @@ package com.waad.tba.modules.providercontract.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalServiceCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.providercontract.dto.*;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
@@ -42,9 +38,7 @@ public class ProviderContractPricingItemService {
 
     private final ProviderContractPricingItemRepository pricingRepository;
     private final ProviderContractRepository contractRepository;
-    private final MedicalServiceRepository medicalServiceRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
-    private final MedicalServiceCategoryRepository medicalServiceCategoryRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -89,59 +83,22 @@ public class ProviderContractPricingItemService {
     }
 
     /**
-     * Build a map of serviceId -> MedicalCategory for resolving effective service
-     * categories.
-     * Priority:
-     * 1) Primary active mapping from medical_service_categories
-     * 2) Legacy medical_services.category_id fallback
+     * Build a map of pricingItem.medicalCategory.id -> MedicalCategory.
+     * Since V229, all pricing items MUST have medical_category_id (NOT NULL).
+     * The old junction-table + MedicalService FK path is removed.
      */
     private Map<Long, MedicalCategory> buildCategoryMap(List<ProviderContractPricingItem> items) {
-        Set<Long> serviceIds = items.stream()
-                .map(ProviderContractPricingItem::getMedicalService)
-                .filter(Objects::nonNull)
-                .map(MedicalService::getId)
-                .collect(Collectors.toSet());
-
-        if (serviceIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        Map<Long, Long> serviceToCategoryId = new HashMap<>();
-
-        List<MedicalServiceCategory> mappings = medicalServiceCategoryRepository
-                .findPrimaryActiveByServiceIds(serviceIds);
-        for (MedicalServiceCategory mapping : mappings) {
-            serviceToCategoryId.put(mapping.getServiceId(), mapping.getCategoryId());
-        }
-
-        for (ProviderContractPricingItem item : items) {
-            MedicalService medicalService = item.getMedicalService();
-            if (medicalService == null || medicalService.getId() == null) {
-                continue;
-            }
-            serviceToCategoryId.putIfAbsent(medicalService.getId(), medicalService.getCategoryId());
-        }
-
-        Set<Long> categoryIds = serviceToCategoryId.values().stream()
-                .filter(Objects::nonNull)
+        Set<Long> categoryIds = items.stream()
+                .filter(i -> i.getMedicalCategory() != null)
+                .map(i -> i.getMedicalCategory().getId())
                 .collect(Collectors.toSet());
 
         if (categoryIds.isEmpty()) {
             return Collections.emptyMap();
         }
 
-        Map<Long, MedicalCategory> categoryById = medicalCategoryRepository.findAllById(categoryIds).stream()
+        return medicalCategoryRepository.findAllById(categoryIds).stream()
                 .collect(Collectors.toMap(MedicalCategory::getId, cat -> cat));
-
-        Map<Long, MedicalCategory> serviceCategoryMap = new HashMap<>();
-        for (Map.Entry<Long, Long> entry : serviceToCategoryId.entrySet()) {
-            MedicalCategory category = categoryById.get(entry.getValue());
-            if (category != null) {
-                serviceCategoryMap.put(entry.getKey(), category);
-            }
-        }
-
-        return serviceCategoryMap;
     }
 
     /**
@@ -234,42 +191,36 @@ public class ProviderContractPricingItemService {
             throw new BusinessRuleException("Cannot modify pricing for contract with status: " + contract.getStatus());
         }
 
-        // Get medical service
-        MedicalService service = medicalServiceRepository.findById(dto.getMedicalServiceId())
-                .orElseThrow(
-                        () -> new BusinessRuleException("Medical service not found: " + dto.getMedicalServiceId()));
-
-        MedicalCategory categoryOverride = null;
+        // Resolve medical category (required since V229)
+        MedicalCategory medicalCategory = null;
         if (dto.getMedicalCategoryId() != null) {
-            categoryOverride = medicalCategoryRepository.findById(dto.getMedicalCategoryId())
+            medicalCategory = medicalCategoryRepository.findById(dto.getMedicalCategoryId())
                     .orElseThrow(() -> new BusinessRuleException(
                             "Medical category not found: " + dto.getMedicalCategoryId()));
         }
 
-        // Check if pricing already exists for this service
-        if (pricingRepository.existsByContractIdAndMedicalServiceIdAndActiveTrue(contractId,
-                dto.getMedicalServiceId())) {
-            throw new BusinessRuleException("Pricing already exists for this service in contract. Update instead.");
+        // Prevent duplicate service code within the same contract
+        if (dto.getServiceCode() != null && !dto.getServiceCode().isBlank()
+                && pricingRepository.existsByContractIdAndServiceCodeAndActiveTrue(contractId, dto.getServiceCode())) {
+            throw new BusinessRuleException(
+                    "Pricing already exists for service code '" + dto.getServiceCode()
+                            + "' in this contract. Update instead.");
         }
 
         // Validate prices
-        BigDecimal basePrice = dto.getBasePrice();
-        if (basePrice == null) {
-            throw new BusinessRuleException("Base price is required");
-        }
-
+        BigDecimal basePrice = dto.getBasePrice() != null ? dto.getBasePrice() : BigDecimal.ZERO;
         BigDecimal contractPrice = dto.getContractPrice();
-        if (contractPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        if (contractPrice == null || contractPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessRuleException("Contract price must be greater than zero");
         }
 
-        // Build entity
+        // Build entity (MedicalService FK removed in V229)
         ProviderContractPricingItem item = ProviderContractPricingItem.builder()
                 .contract(contract)
-                .medicalService(service)
-                .medicalCategory(categoryOverride)
-                .categoryName(
-                        categoryOverride != null ? categoryOverride.getName() : resolveCategoryNameForService(service))
+                .medicalCategory(medicalCategory)
+                .categoryName(medicalCategory != null ? medicalCategory.getName() : null)
+                .serviceCode(dto.getServiceCode())
+                .serviceName(dto.getServiceName())
                 .basePrice(basePrice)
                 .contractPrice(contractPrice)
                 .effectiveFrom(dto.getEffectiveFrom() != null ? dto.getEffectiveFrom() : java.time.LocalDate.now())
@@ -318,24 +269,6 @@ public class ProviderContractPricingItemService {
         // Validate contract allows pricing modifications
         if (!contract.canModifyPricing()) {
             throw new BusinessRuleException("Cannot modify pricing for contract with status: " + contract.getStatus());
-        }
-
-        if (dto.getMedicalServiceId() != null) {
-            MedicalService service = medicalServiceRepository.findById(dto.getMedicalServiceId())
-                    .orElseThrow(
-                            () -> new BusinessRuleException("Medical service not found: " + dto.getMedicalServiceId()));
-
-            boolean duplicateInContract = pricingRepository.existsByContractIdAndMedicalServiceIdAndActiveTrue(
-                    contract.getId(), service.getId());
-            if (duplicateInContract && (item.getMedicalService() == null
-                    || !Objects.equals(item.getMedicalService().getId(), service.getId()))) {
-                throw new BusinessRuleException("Pricing already exists for this service in contract");
-            }
-
-            item.setMedicalService(service);
-            item.setServiceName(service.getName());
-            item.setServiceCode(service.getCode());
-            item.setCategoryName(resolveCategoryNameForService(service));
         }
 
         if (dto.getMedicalCategoryId() != null) {
@@ -431,67 +364,13 @@ public class ProviderContractPricingItemService {
     }
 
     /**
-     * Repair unmapped pricing items by trying to link them to MedicalService
-     * based on code or name.
+     * No-op since V229: MedicalService catalog was removed.
+     * All items are now directly linked to MedicalCategory.
      */
     @Transactional
     public int repairUnmappedItems(Long contractId) {
-        log.info("Repairing unmapped items for contract: {}", contractId);
-
-        List<ProviderContractPricingItem> unmappedItems = pricingRepository.findAllUnmappedInContract(contractId);
-        int fixedCount = 0;
-
-        for (ProviderContractPricingItem item : unmappedItems) {
-            MedicalService service = null;
-
-            // Try lookup by Code
-            if (item.getServiceCode() != null && !item.getServiceCode().isEmpty()) {
-                service = medicalServiceRepository.findByCode(item.getServiceCode()).orElse(null);
-            }
-
-            // Try lookup by Name
-            if (service == null && item.getServiceName() != null) {
-                // Try exact Arabic name match first
-                service = medicalServiceRepository.findFirstByName(item.getServiceName()).orElse(null);
-            }
-
-            if (service != null) {
-                item.setMedicalService(service);
-                
-                // Sync price if missing
-                if (item.getBasePrice() == null || item.getBasePrice().compareTo(BigDecimal.ZERO) == 0) {
-                    item.setBasePrice(service.getBasePrice());
-                }
-                
-                // Recalculate discount
-                if (item.getBasePrice() != null && item.getBasePrice().compareTo(BigDecimal.ZERO) > 0 
-                        && item.getContractPrice() != null) {
-                    BigDecimal diff = item.getBasePrice().subtract(item.getContractPrice());
-                    if (diff.compareTo(BigDecimal.ZERO) > 0) {
-                        item.setDiscountPercent(diff.multiply(BigDecimal.valueOf(100))
-                                .divide(item.getBasePrice(), 2, RoundingMode.HALF_UP));
-                    } else {
-                        item.setDiscountPercent(BigDecimal.ZERO);
-                    }
-                }
-                
-                // Sync category
-                if (item.getMedicalCategory() == null && service.getCategoryId() != null) {
-                    medicalCategoryRepository.findById(service.getCategoryId()).ifPresent(cat -> {
-                        item.setMedicalCategory(cat);
-                        item.setCategoryName(cat.getName());
-                    });
-                } else if (item.getCategoryName() == null) {
-                    item.setCategoryName(resolveCategoryNameForService(service));
-                }
-                
-                pricingRepository.save(item);
-                fixedCount++;
-            }
-        }
-
-        log.info("Repaired {} items for contract: {}", fixedCount, contractId);
-        return fixedCount;
+        log.info("repairUnmappedItems: no-op after V229 migration (MedicalService catalog removed)");
+        return 0;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -534,83 +413,69 @@ public class ProviderContractPricingItemService {
         log.debug("Finding contracted services for provider: {}, category: {}", providerId, categoryId);
 
         var pricingItems = pricingRepository.findAllServicesByProvider(providerId);
-        Map<Long, MedicalCategory> categoryMap = buildCategoryMap(pricingItems);
 
         return pricingItems.stream()
-                .filter(p -> p.getMedicalService() != null)
-                .filter(p -> {
-                    MedicalCategory resolvedCategory = categoryMap.get(p.getMedicalService().getId());
-                    return resolvedCategory != null && Objects.equals(resolvedCategory.getId(), categoryId);
-                })
+                .filter(p -> p.getMedicalCategory() != null
+                        && Objects.equals(p.getMedicalCategory().getId(), categoryId))
                 .map(p -> ContractServiceDto.builder()
-                        .id(p.getMedicalService().getId())
-                        .code(p.getMedicalService().getCode())
-                        .name(p.getMedicalService().getName())
+                        .id(p.getId())
+                        .pricingItemId(p.getId())
+                        .code(p.getServiceCode())
+                        .name(p.getServiceName())
                         .categoryId(categoryId)
-                        .categoryName(categoryMap.get(p.getMedicalService().getId()).getName())
+                        .categoryName(p.getMedicalCategory().getName())
                         .contractPrice(p.getContractPrice())
                         .basePrice(p.getBasePrice())
                         .discountPercent(p.getDiscountPercent())
-                        .requiresPreAuth(p.getMedicalService().isRequiresPA())
+                        .requiresPreAuth(false)
                         .build())
                 .collect(Collectors.toList());
     }
 
     /**
-     * Get all services (mapped AND unmapped) available in active contracts for a provider.
-     * For unmapped items without a MedicalCategory FK, we resolve categoryId from the categoryName text.
+     * Get all services (mapped AND unmapped) available in active contracts for a
+     * provider.
+     * For unmapped items without a MedicalCategory FK, we resolve categoryId from
+     * the categoryName text.
      */
     @Transactional(readOnly = true)
     public List<ContractServiceDto> findAllServicesByProvider(Long providerId) {
         log.debug("Finding all contracted services for provider: {}", providerId);
 
         var pricingItems = pricingRepository.findAllServicesByProvider(providerId);
-        Map<Long, MedicalCategory> categoryMap = buildCategoryMap(pricingItems);
 
-        // Pre-load a name→id cache for unmapped items that only have categoryName text
-        // This avoids N+1 queries per item
+        // Cache for resolving categoryName text → categoryId (avoids N+1 for items
+        // without a FK)
         Map<String, Long> categoryNameToIdCache = new HashMap<>();
 
         return pricingItems.stream()
                 .map(p -> {
-                    boolean hasMS = p.getMedicalService() != null;
-                    Long msId = hasMS ? p.getMedicalService().getId() : null;
+                    Long resolvedCategoryId = p.getMedicalCategory() != null ? p.getMedicalCategory().getId() : null;
+                    String resolvedCategoryName = p.getMedicalCategory() != null ? p.getMedicalCategory().getName()
+                            : null;
 
-                    // Resolve category ID for unmapped items using categoryName text
-                    Long resolvedCategoryId = null;
-                    String resolvedCategoryName = null;
-
-                    if (msId != null && categoryMap.containsKey(msId)) {
-                        // Mapped service: use the category from the category map
-                        resolvedCategoryId = categoryMap.get(msId).getId();
-                        resolvedCategoryName = categoryMap.get(msId).getName();
-                    } else if (p.getMedicalCategory() != null) {
-                        // Unmapped but has explicit MedicalCategory FK
-                        resolvedCategoryId = p.getMedicalCategory().getId();
-                        resolvedCategoryName = p.getMedicalCategory().getName();
-                    } else if (p.getCategoryName() != null && !p.getCategoryName().isBlank()) {
-                        // Unmapped with only a text categoryName — look up by name (fuzzy)
+                    // Fall back to categoryName text resolution if no FK
+                    if (resolvedCategoryId == null && p.getCategoryName() != null && !p.getCategoryName().isBlank()) {
                         String catName = p.getCategoryName().trim();
                         resolvedCategoryId = categoryNameToIdCache.computeIfAbsent(catName,
-                            this::resolveCategoryIdByName
-                        );
+                                this::resolveCategoryIdByName);
                         resolvedCategoryName = catName;
                     }
 
                     return ContractServiceDto.builder()
-                        .id(msId != null ? msId : p.getId())
-                        .medicalServiceId(msId)
-                        .pricingItemId(p.getId())
-                        .code(hasMS ? p.getMedicalService().getCode() : p.getServiceCode())
-                        .name(hasMS ? p.getMedicalService().getName() : p.getServiceName())
-                        .categoryId(resolvedCategoryId)
-                        .categoryName(resolvedCategoryName)
-                        .contractPrice(p.getContractPrice())
-                        .basePrice(p.getBasePrice())
-                        .discountPercent(p.getDiscountPercent())
-                        .requiresPreAuth(hasMS ? p.getMedicalService().isRequiresPA() : false)
-                        .mapped(hasMS)
-                        .build();
+                            .id(p.getId())
+                            .medicalServiceId(null) // deprecated — FK removed in V229
+                            .pricingItemId(p.getId())
+                            .code(p.getServiceCode())
+                            .name(p.getServiceName())
+                            .categoryId(resolvedCategoryId)
+                            .categoryName(resolvedCategoryName)
+                            .contractPrice(p.getContractPrice())
+                            .basePrice(p.getBasePrice())
+                            .discountPercent(p.getDiscountPercent())
+                            .requiresPreAuth(false)
+                            .mapped(p.getMedicalCategory() != null)
+                            .build();
                 })
                 .collect(Collectors.toList());
     }
@@ -636,54 +501,36 @@ public class ProviderContractPricingItemService {
      * 3. LIKE (contains) search on the stripped name
      */
     private Long resolveCategoryIdByName(String rawName) {
-        if (rawName == null || rawName.isBlank()) return null;
+        if (rawName == null || rawName.isBlank())
+            return null;
         String name = rawName.trim();
 
         // Step 1: exact match
         Optional<MedicalCategory> found = medicalCategoryRepository.findFirstByName(name);
-        if (found.isPresent()) return found.get().getId();
+        if (found.isPresent())
+            return found.get().getId();
 
         // Step 2: strip parenthetical suffix like " (IP)" or " (OP)" then exact
         String stripped = name.replaceAll("\\s*\\(.*?\\)\\s*$", "").trim();
         if (!stripped.equals(name)) {
             found = medicalCategoryRepository.findFirstByName(stripped);
-            if (found.isPresent()) return found.get().getId();
+            if (found.isPresent())
+                return found.get().getId();
         }
 
         // Step 3: LIKE search (contains) on the stripped name
         if (!stripped.isBlank()) {
             List<MedicalCategory> candidates = medicalCategoryRepository.searchByName(stripped);
-            if (!candidates.isEmpty()) return candidates.get(0).getId();
+            if (!candidates.isEmpty())
+                return candidates.get(0).getId();
         }
 
         // Step 4: LIKE search on full original name
         List<MedicalCategory> candidates = medicalCategoryRepository.searchByName(name);
-        if (!candidates.isEmpty()) return candidates.get(0).getId();
+        if (!candidates.isEmpty())
+            return candidates.get(0).getId();
 
         log.debug("Could not resolve category ID for name: '{}'", rawName);
-        return null;
-    }
-
-    private String resolveCategoryNameForService(MedicalService service) {
-        if (service == null || service.getId() == null) {
-            return null;
-        }
-
-        Optional<MedicalServiceCategory> mapped = medicalServiceCategoryRepository
-                .findFirstByServiceIdAndActiveTrueOrderByIsPrimaryDescIdAsc(service.getId());
-
-        if (mapped.isPresent()) {
-            return medicalCategoryRepository.findById(mapped.get().getCategoryId())
-                    .map(MedicalCategory::getName)
-                    .orElse(null);
-        }
-
-        if (service.getCategoryId() != null) {
-            return medicalCategoryRepository.findById(service.getCategoryId())
-                    .map(MedicalCategory::getName)
-                    .orElse(null);
-        }
-
         return null;
     }
 
@@ -740,6 +587,6 @@ public class ProviderContractPricingItemService {
         private BigDecimal basePrice;
         private BigDecimal discountPercent;
         private Boolean requiresPreAuth;
-        private Boolean mapped; 
+        private Boolean mapped;
     }
 }

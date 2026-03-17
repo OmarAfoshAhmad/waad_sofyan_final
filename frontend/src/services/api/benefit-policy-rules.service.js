@@ -196,6 +196,18 @@ export const createPolicyRulesBulk = async (policyId, rules) => {
   return unwrap(response);
 };
 
+/**
+ * Initialize standard professional rules
+ * Endpoint: POST /api/benefit-policies/{policyId}/rules/initialize-standard
+ * @param {number} policyId - Policy ID
+ * @returns {Promise<Array>} Created rules
+ */
+export const initializeStandardRules = async (policyId) => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/initialize-standard`);
+  return unwrap(response);
+};
+
+
 // ═══════════════════════════════════════════════════════════════════════════
 // UPDATE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -293,7 +305,9 @@ export default {
   // Create
   createPolicyRule,
   createPolicyRulesBulk,
+  initializeStandardRules,
   // Update
+
   updatePolicyRule,
   togglePolicyRuleActive,
   // Delete

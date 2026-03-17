@@ -69,6 +69,9 @@ const validateField = (field, value) => {
   if (field === 'email' && value?.trim()) {
     if (!EMAIL_REGEX.test(value.trim())) return LABELS.invalidEmail;
   }
+  if (field === 'phone' && value?.trim()) {
+    if (!/^\+?[\d\s\-().]{7,20}$/.test(value.trim())) return 'رقم الهاتف غير صحيح (مثال: +218911234567)';
+  }
   return null;
 };
 
@@ -126,6 +129,7 @@ const EmployerEdit = () => {
       code: validateField('code', employer.code),
       name: validateField('name', employer.name),
       email: validateField('email', employer.email),
+      phone: validateField('phone', employer.phone),
     };
     Object.keys(newErrors).forEach((k) => { if (!newErrors[k]) delete newErrors[k]; });
     setErrors(newErrors);

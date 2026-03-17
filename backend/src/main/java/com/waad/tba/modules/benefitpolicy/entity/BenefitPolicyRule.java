@@ -1,7 +1,6 @@
 package com.waad.tba.modules.benefitpolicy.entity;
 
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -25,26 +24,18 @@ import java.time.LocalDateTime;
  * Business Rules:
  * - A rule must target EITHER a category OR a service, NOT both
  * - No duplicate rules (same category or service) within one policy
- * - If coveragePercent is null, inherits from parent BenefitPolicy.defaultCoveragePercent
+ * - If coveragePercent is null, inherits from parent
+ * BenefitPolicy.defaultCoveragePercent
  * - If no rule exists for a service/category, the benefit is NOT covered
  */
 @Entity
 @Table(name = "benefit_policy_rules", indexes = {
-    @Index(name = "idx_bpr_policy", columnList = "benefit_policy_id"),
-    @Index(name = "idx_bpr_category", columnList = "medical_category_id"),
-    @Index(name = "idx_bpr_service", columnList = "medical_service_id"),
-    @Index(name = "idx_bpr_active", columnList = "active")
+        @Index(name = "idx_bpr_policy", columnList = "benefit_policy_id"),
+        @Index(name = "idx_bpr_category", columnList = "medical_category_id"),
+        @Index(name = "idx_bpr_active", columnList = "active")
 }, uniqueConstraints = {
-    // Prevent duplicate category rules within same policy
-    @UniqueConstraint(
-        name = "uk_bpr_policy_category",
-        columnNames = {"benefit_policy_id", "medical_category_id"}
-    ),
-    // Prevent duplicate service rules within same policy
-    @UniqueConstraint(
-        name = "uk_bpr_policy_service",
-        columnNames = {"benefit_policy_id", "medical_service_id"}
-    )
+        // Prevent duplicate category rules within same policy
+        @UniqueConstraint(name = "uk_bpr_policy_category", columnNames = { "benefit_policy_id", "medical_category_id" })
 })
 @Data
 @Builder
@@ -76,14 +67,6 @@ public class BenefitPolicyRule {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "medical_category_id")
     private MedicalCategory medicalCategory;
-
-    /**
-     * Optional: Target Medical Service (e.g., "X-Ray Chest")
-     * If set, this rule applies only to this specific service
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medical_service_id")
-    private MedicalService medicalService;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // COVERAGE SETTINGS
@@ -167,17 +150,19 @@ public class BenefitPolicyRule {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Check if this rule targets a category (not a specific service)
+     * Check if this rule targets a category.
+     * All rules are category rules since V228.
      */
     public boolean isCategoryRule() {
-        return medicalCategory != null && medicalService == null;
+        return medicalCategory != null;
     }
 
     /**
-     * Check if this rule targets a specific service
+     * @deprecated Since V228 all rules are category-level. Always returns false.
      */
+    @Deprecated
     public boolean isServiceRule() {
-        return medicalService != null;
+        return false;
     }
 
     /**
@@ -194,31 +179,6 @@ public class BenefitPolicyRule {
     }
 
     /**
-     * Check if this rule applies to a given service
-     * 
-     * @param service The medical service to check
-     * @return true if this rule covers the service
-     */
-    public boolean appliesTo(MedicalService service) {
-        if (!active) {
-            return false;
-        }
-        
-        // Direct service match
-        if (medicalService != null && medicalService.getId().equals(service.getId())) {
-            return true;
-        }
-        
-        // Category match (all services in category)
-        // MedicalService has categoryId, not category entity
-        if (medicalCategory != null && service.getCategoryId() != null) {
-            return medicalCategory.getId().equals(service.getCategoryId());
-        }
-        
-        return false;
-    }
-
-    /**
      * Check if this rule applies to a given category
      */
     public boolean appliesToCategory(MedicalCategory category) {
@@ -232,9 +192,6 @@ public class BenefitPolicyRule {
      * Get a descriptive label for this rule
      */
     public String getLabel() {
-        if (medicalService != null) {
-            return "Service: " + medicalService.getName();
-        }
         if (medicalCategory != null) {
             return "Category: " + medicalCategory.getName();
         }
@@ -242,20 +199,14 @@ public class BenefitPolicyRule {
     }
 
     /**
-     * Validate that the rule targets either a category OR a service, not both or neither
+     * Validate that the rule targets a category (mandatory since V228)
      */
     @PrePersist
     @PreUpdate
     public void validateTarget() {
-        boolean hasCategory = medicalCategory != null;
-        boolean hasService = medicalService != null;
-        
-        if (hasCategory && hasService) {
-            throw new IllegalStateException("Rule must target either a category OR a service, not both");
-        }
-        
-        if (!hasCategory && !hasService) {
-            throw new IllegalStateException("Rule must target at least a category or a service");
+        if (medicalCategory == null) {
+            throw new IllegalStateException(
+                    "Rule must target a medical category (service-level rules removed in V228)");
         }
     }
 }

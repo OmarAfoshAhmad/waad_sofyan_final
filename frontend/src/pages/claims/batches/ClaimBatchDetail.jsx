@@ -328,38 +328,6 @@ export default function ClaimBatchDetail() {
         navigate(`/reports/claims/statement-preview?ids=${claimId}`);
     };
 
-    const handleDownloadPdf = async () => {
-        // Validate batchId: extract only numeric/UUID-safe chars to prevent injection
-        const rawBatchId = realBatch?.id;
-        const batchId = rawBatchId != null ? String(rawBatchId).replace(/[^a-zA-Z0-9\-_]/g, '') : null;
-        if (!batchId) {
-            enqueueSnackbar('لم يتم العثور على معرف الدفعة', { variant: 'error' });
-            return;
-        }
-        try {
-            enqueueSnackbar('جاري تحضير ملف PDF...', { variant: 'info' });
-            const { blob, filename } = await settlementBatchesService.downloadOfficialPdf(batchId);
-            // Sanitize filename: allow only letters, digits, dash, underscore, dot
-            const safeFilename = String(filename || 'report.pdf').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-            // Build a safe blob URL — createObjectURL always returns 'blob:origin/...'
-            // We use setAttribute to avoid direct property XSS sink
-            const objectUrl = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]));
-            const link = document.createElement('a');
-            link.setAttribute('href', objectUrl);
-            link.setAttribute('download', safeFilename);
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            setTimeout(() => {
-                document.body.removeChild(link);
-                URL.revokeObjectURL(objectUrl);
-            }, 100);
-            enqueueSnackbar('تم تحميل التقرير بنجاح', { variant: 'success' });
-        } catch (err) {
-            enqueueSnackbar('فشل تحميل التقرير: ' + (err?.message || ''), { variant: 'error' });
-        }
-    };
-
     // فتح تقرير المرفوضات - يجلب التفاصيل ويفلتر المطالبات التي فيها بند واحد مرفوض على الأقل
     const handleRejectedReport = async () => {
         if (!claims || claims.length === 0) {

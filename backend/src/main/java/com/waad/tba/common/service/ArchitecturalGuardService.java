@@ -4,12 +4,8 @@ import com.waad.tba.common.exception.ArchitecturalViolationException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -46,37 +42,20 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ArchitecturalGuardService {
 
-    private final MedicalServiceRepository medicalServiceRepository;
-    private final MedicalServiceCategoryRepository medicalServiceCategoryRepository;
+    // No repository dependencies — this guard operates on IDs and entity state
+    // only.
+    // Category-based architecture: services are identified by code/name on
+    // pricingItem.
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // MEDICAL SERVICE GUARDS
+    // MEDICAL SERVICE GUARDS (legacy stubs — services are now pricingItem-based)
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Validate MedicalService has a category.
-     * RULE: Every MedicalService MUST belong to a MedicalCategory
-     */
-    public void guardServiceHasCategory(MedicalService service) {
-        if (service == null) {
-            throw new ArchitecturalViolationException("MedicalService", "Service cannot be null");
-        }
-        boolean hasCategory = service.getCategoryId() != null
-            || medicalServiceCategoryRepository
-                .findFirstByServiceIdAndActiveTrueOrderByIsPrimaryDescIdAsc(service.getId())
-                .isPresent();
-
-        if (!hasCategory) {
-            throw ArchitecturalViolationException.serviceWithoutCategory(service.getCode());
-        }
-        log.trace("✅ Guard passed: Service {} has category (legacy or junction)", service.getCode());
-    }
-
-    /**
-     * Validate service creation request has category
+     * Validate service creation request has category.
+     * RULE: Every ProviderContractPricingItem MUST belong to a MedicalCategory.
      */
     public void guardServiceCreateHasCategory(Long categoryId, String serviceCode) {
         if (categoryId == null) {
@@ -85,25 +64,12 @@ public class ArchitecturalGuardService {
     }
 
     /**
-     * Validate a service by ID has category assigned.
-     * Used for pre-validation before entity access.
+     * @deprecated Services are no longer tracked via MedicalService catalog.
+     *             Category is now embedded directly in ProviderContractPricingItem.
      */
+    @Deprecated
     public void guardServiceHasCategory(Long serviceId) {
-        if (serviceId == null) {
-            return; // Skip null service IDs - allowed for unmapped services
-        }
-        medicalServiceRepository.findById(serviceId).ifPresent(service -> {
-            boolean hasCategory = service.getCategoryId() != null
-                || medicalServiceCategoryRepository
-                    .findFirstByServiceIdAndActiveTrueOrderByIsPrimaryDescIdAsc(serviceId)
-                    .isPresent();
-
-            if (!hasCategory) {
-                // For now, we allow services without categories to support simplified import,
-                // but we log it.
-                log.warn("⚠️ Service {} has no category assigned.", service.getCode());
-            }
-        });
+        // No-op: MedicalService catalog is being removed.
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -135,8 +101,8 @@ public class ArchitecturalGuardService {
     }
 
     /**
-     * Validate Claim has at least one service.
-     * RULE: Free-text services are not allowed
+     * Validate Claim lines have service identification.
+     * RULE: Each line must have at least a serviceCode or serviceName.
      */
     public void guardClaimHasServices(Claim claim, List<ClaimLine> lines) {
         if (claim == null) {
@@ -145,35 +111,30 @@ public class ArchitecturalGuardService {
         if (lines == null || lines.isEmpty()) {
             throw ArchitecturalViolationException.claimWithoutService(claim.getId());
         }
-        
-        // Validate each line has a service or service identification
+
+        // Validate each line has service identification via code or name
         for (ClaimLine line : lines) {
-            if (line.getMedicalService() == null && 
-                (line.getServiceCode() == null || line.getServiceCode().isBlank()) &&
-                (line.getServiceName() == null || line.getServiceName().isBlank())) {
-                
+            if ((line.getServiceCode() == null || line.getServiceCode().isBlank()) &&
+                    (line.getServiceName() == null || line.getServiceName().isBlank())) {
                 throw new ArchitecturalViolationException(
-                    "INVALID_CLAIM_LINE",
-                    "ClaimLine",
-                    String.format("Claim %d line %d must have a service reference (ID, Code, or Name).",
-                        claim.getId(), line.getId())
-                );
+                        "INVALID_CLAIM_LINE",
+                        "ClaimLine",
+                        String.format("Claim %d line %d must have a service reference (Code or Name).",
+                                claim.getId(), line.getId()));
             }
         }
         log.trace("✅ Guard passed: Claim {} has {} valid service lines", claim.getId(), lines.size());
     }
 
     /**
-     * Validate service IDs provided for claim creation (ID-based).
+     * Validate claim lines (DTO) have pricing item or service code.
      * Called before entity is created.
      */
-    public void guardClaimHasServices(List<Long> serviceIds) {
-        if (serviceIds == null || serviceIds.isEmpty()) {
-            throw ArchitecturalViolationException.claimWithoutService(null);
-        }
-        // Also validate each service has a category
-        for (Long serviceId : serviceIds) {
-            guardServiceHasCategory(serviceId);
+    public void guardClaimHasServices(List<Long> pricingItemIds) {
+        // pricingItemIds may be empty for claims using serviceCode directly \u2014 just
+        // warn.
+        if (pricingItemIds == null || pricingItemIds.isEmpty()) {
+            log.debug("\u26a0\ufe0f guardClaimHasServices: no pricingItemIds provided (serviceCode path).");
         }
     }
 
@@ -206,38 +167,35 @@ public class ArchitecturalGuardService {
     }
 
     /**
-     * Validate PreAuthorization has a MedicalService.
-     * RULE: PA must reference a system-defined service
+     * Validate PreAuthorization has service identification.
+     * RULE: PA must reference a service via code or pricingItem.
      */
     public void guardPreAuthHasService(PreAuthorization preAuth) {
         if (preAuth == null) {
             throw new ArchitecturalViolationException("PreAuthorization", "PreAuthorization cannot be null");
         }
-        if (preAuth.getMedicalService() == null && (preAuth.getServiceCode() == null || preAuth.getServiceCode().isBlank())) {
+        if (preAuth.getServiceCode() == null || preAuth.getServiceCode().isBlank()) {
             throw new ArchitecturalViolationException(
-                "SERVICE_REQUIRED",
-                "PreAuthorization",
-                String.format("PreAuthorization '%s' must reference a MedicalService. Free-text services are not allowed.",
-                    preAuth.getReferenceNumber())
-            );
+                    "SERVICE_REQUIRED",
+                    "PreAuthorization",
+                    String.format(
+                            "PreAuthorization '%s' must have a service code. Free-text services are not allowed.",
+                            preAuth.getReferenceNumber()));
         }
         log.trace("✅ Guard passed: PreAuth {} has service", preAuth.getReferenceNumber());
     }
 
     /**
-     * Validate medicalServiceId is provided for preauth creation (ID-based).
-     * Called before entity is created.
+     * Validate pricingItemId is provided for preauth creation (ID-based).
+     * pricingItemId replaced medicalServiceId as the primary service identifier.
      */
-    public void guardPreAuthHasService(Long medicalServiceId) {
-        if (medicalServiceId == null) {
+    public void guardPreAuthHasService(Long pricingItemId) {
+        if (pricingItemId == null) {
             throw new ArchitecturalViolationException(
-                "SERVICE_REQUIRED",
-                "PreAuthorization",
-                "PreAuthorization must reference a MedicalService. Free-text services are not allowed."
-            );
+                    "SERVICE_REQUIRED",
+                    "PreAuthorization",
+                    "PreAuthorization must reference a pricing item. Free-text services are not allowed.");
         }
-        // Also validate the service has a category
-        guardServiceHasCategory(medicalServiceId);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -252,13 +210,11 @@ public class ArchitecturalGuardService {
         if (item == null) {
             throw new ArchitecturalViolationException("ProviderContractPricingItem", "Pricing item cannot be null");
         }
-        if (item.getMedicalService() == null && 
-            (item.getServiceName() == null || item.getServiceName().isBlank()) &&
-            (item.getServiceCode() == null || item.getServiceCode().isBlank())) {
-            
+        if ((item.getServiceName() == null || item.getServiceName().isBlank()) &&
+                (item.getServiceCode() == null || item.getServiceCode().isBlank())) {
+
             throw ArchitecturalViolationException.pricingWithoutService(
-                item.getContract() != null ? item.getContract().getId() : null
-            );
+                    item.getContract() != null ? item.getContract().getId() : null);
         }
         log.trace("✅ Guard passed: Pricing item has identification");
     }
@@ -268,33 +224,29 @@ public class ArchitecturalGuardService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Validate rule has a target (service or category).
-     * RULE: Rules without targets cannot be used for coverage calculation
+     * Validate rule has a target category.
+     * RULE: Rules without a category cannot be used for coverage calculation.
      */
     public void guardRuleHasTarget(BenefitPolicyRule rule) {
         if (rule == null) {
             throw new ArchitecturalViolationException("BenefitPolicyRule", "Rule cannot be null");
         }
-        if (rule.getMedicalService() == null && rule.getMedicalCategory() == null) {
+        if (rule.getMedicalCategory() == null) {
             throw ArchitecturalViolationException.ruleWithoutTarget(rule.getId());
         }
-        log.trace("✅ Guard passed: Rule {} has target", rule.getId());
+        log.trace("✅ Guard passed: Rule {} has category target", rule.getId());
     }
 
     /**
-     * Validate rule doesn't have both service and category (must be one or the other)
+     * Validate rule targets only a category (no service).
+     * In the new architecture rules are always category-based.
      */
     public void guardRuleHasSingleTarget(BenefitPolicyRule rule) {
         if (rule == null) {
             throw new ArchitecturalViolationException("BenefitPolicyRule", "Rule cannot be null");
         }
-        if (rule.getMedicalService() != null && rule.getMedicalCategory() != null) {
-            throw new ArchitecturalViolationException(
-                "MULTIPLE_TARGETS",
-                "BenefitPolicyRule",
-                String.format("Rule %d cannot target both a Service and a Category. Choose one.", rule.getId())
-            );
-        }
+        // No-op: service targets were removed; category is mandated by
+        // guardRuleHasTarget.
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -316,8 +268,7 @@ public class ArchitecturalGuardService {
     public void guardPriceFromContract(boolean hasContract, String context) {
         if (!hasContract) {
             throw ArchitecturalViolationException.invalidPriceSource(
-                String.format("No contract found. %s", context)
-            );
+                    String.format("No contract found. %s", context));
         }
     }
 
@@ -374,44 +325,48 @@ public class ArchitecturalGuardService {
 
     /**
      * Run all guards for Claim creation using IDs (pre-entity validation).
-     * @param visitId The visit ID from DTO
-     * @param serviceIds List of medical service IDs from DTO lines
+     *
+     * @param visitId        The visit ID from DTO
+     * @param pricingItemIds List of pricing item IDs from DTO lines (may be empty
+     *                       for serviceCode path)
      */
-    public void guardClaimCreation(Long visitId, List<Long> serviceIds) {
+    public void guardClaimCreation(Long visitId, List<Long> pricingItemIds) {
         log.debug("🔒 Running architectural guards for Claim creation (ID-based)");
         guardClaimHasVisit(visitId);
-        guardClaimHasServices(serviceIds);
+        guardClaimHasServices(pricingItemIds);
         log.debug("✅ All guards passed for Claim creation (ID-based)");
     }
 
     /**
-     * Run all guards for PreAuthorization creation using IDs (pre-entity validation).
-     * @param visitId The visit ID from DTO
-     * @param medicalServiceId The medical service ID from DTO
+     * Run all guards for PreAuthorization creation using IDs (pre-entity
+     * validation).
+     *
+     * @param visitId       The visit ID from DTO
+     * @param pricingItemId The pricing item ID from DTO (replaces medicalServiceId)
      */
-    public void guardPreAuthCreation(Long visitId, Long medicalServiceId) {
+    public void guardPreAuthCreation(Long visitId, Long pricingItemId) {
         log.debug("🔒 Running architectural guards for PreAuthorization creation (ID-based)");
         guardPreAuthHasVisit(visitId);
-        guardPreAuthHasService(medicalServiceId);
+        guardPreAuthHasService(pricingItemId);
         log.debug("✅ All guards passed for PreAuthorization creation (ID-based)");
     }
 
     /**
      * Run guards for BenefitPolicyRule creation using IDs (pre-entity validation).
-     * @param serviceId Optional service ID
-     * @param categoryId Optional category ID (at least one must be provided)
+     *
+     * @param serviceId  Must be null (service rules deprecated)
+     * @param categoryId Category ID \u2014 required
      */
     public void guardRuleCreation(Long serviceId, Long categoryId) {
         log.debug("🔒 Running architectural guards for Rule creation (ID-based)");
-        if (serviceId == null && categoryId == null) {
+        if (categoryId == null) {
             throw ArchitecturalViolationException.ruleWithoutTarget(null);
         }
-        if (serviceId != null && categoryId != null) {
+        if (serviceId != null) {
             throw new ArchitecturalViolationException(
-                "MULTIPLE_TARGETS",
-                "BenefitPolicyRule",
-                "Rule cannot target both a Service and a Category. Choose one."
-            );
+                    "SERVICE_RULE_DEPRECATED",
+                    "BenefitPolicyRule",
+                    "Service-level rules are no longer supported. Use category-based rules.");
         }
         log.debug("✅ All guards passed for Rule creation (ID-based)");
     }

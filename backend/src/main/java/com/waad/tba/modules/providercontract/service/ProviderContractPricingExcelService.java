@@ -4,9 +4,7 @@ import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto.ImportError;
 import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto.ImportSummary;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
@@ -53,7 +51,6 @@ public class ProviderContractPricingExcelService {
 
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
-    private final MedicalServiceRepository serviceRepository;
     private final MedicalCategoryRepository categoryRepository;
 
     /**
@@ -70,77 +67,77 @@ public class ProviderContractPricingExcelService {
 
     static {
         // ─── Sequence (optional) ────────────────────────────────────────────────
-        COLUMN_MAPPINGS.put("تسلسل",          "sequence");
-        COLUMN_MAPPINGS.put("sequence",        "sequence");
+        COLUMN_MAPPINGS.put("تسلسل", "sequence");
+        COLUMN_MAPPINGS.put("sequence", "sequence");
 
         // ─── Price List Name (optional) ─────────────────────────────────────────
-        COLUMN_MAPPINGS.put("قائمة الأسعار",   "priceListName");
-        COLUMN_MAPPINGS.put("price list",      "priceListName");
-        COLUMN_MAPPINGS.put("pricelist",       "priceListName");
+        COLUMN_MAPPINGS.put("قائمة الأسعار", "priceListName");
+        COLUMN_MAPPINGS.put("price list", "priceListName");
+        COLUMN_MAPPINGS.put("pricelist", "priceListName");
 
         // ─── Service Name (REQUIRED) ────────────────────────────────────────────
         // New official template format
         COLUMN_MAPPINGS.put("service_name / اسم الخدمة ★", "serviceName");
-        COLUMN_MAPPINGS.put("service_name",    "serviceName");
+        COLUMN_MAPPINGS.put("service_name", "serviceName");
         // Legacy / Odoo format
-        COLUMN_MAPPINGS.put("قالب المنتج",      "serviceName");
-        COLUMN_MAPPINGS.put("service name",    "serviceName");
-        COLUMN_MAPPINGS.put("product template","serviceName");
-        COLUMN_MAPPINGS.put("اسم الخدمة",       "serviceName");
-        COLUMN_MAPPINGS.put("اسم الخدمة ★",     "serviceName");
+        COLUMN_MAPPINGS.put("قالب المنتج", "serviceName");
+        COLUMN_MAPPINGS.put("service name", "serviceName");
+        COLUMN_MAPPINGS.put("product template", "serviceName");
+        COLUMN_MAPPINGS.put("اسم الخدمة", "serviceName");
+        COLUMN_MAPPINGS.put("اسم الخدمة ★", "serviceName");
 
         // ─── Service Code (optional) ────────────────────────────────────────────
         // New official template format
         COLUMN_MAPPINGS.put("service_code / الكود", "serviceCode");
-        COLUMN_MAPPINGS.put("service_code",    "serviceCode");
+        COLUMN_MAPPINGS.put("service_code", "serviceCode");
         // Legacy / Odoo format
         COLUMN_MAPPINGS.put("كود منتج المورد", "serviceCode");
         COLUMN_MAPPINGS.put("supplier product code", "serviceCode");
-        COLUMN_MAPPINGS.put("service code",    "serviceCode");
-        COLUMN_MAPPINGS.put("code",             "serviceCode");
-        COLUMN_MAPPINGS.put("الكود",             "serviceCode");
+        COLUMN_MAPPINGS.put("service code", "serviceCode");
+        COLUMN_MAPPINGS.put("code", "serviceCode");
+        COLUMN_MAPPINGS.put("الكود", "serviceCode");
 
         // ─── Currency (optional) ────────────────────────────────────────────────
-        COLUMN_MAPPINGS.put("العملة",           "currency");
-        COLUMN_MAPPINGS.put("currency",         "currency");
+        COLUMN_MAPPINGS.put("العملة", "currency");
+        COLUMN_MAPPINGS.put("currency", "currency");
 
         // ─── Quantity (optional / ignored) ──────────────────────────────────────
-        COLUMN_MAPPINGS.put("الكمية",           "quantity");
-        COLUMN_MAPPINGS.put("quantity",         "quantity");
+        COLUMN_MAPPINGS.put("الكمية", "quantity");
+        COLUMN_MAPPINGS.put("quantity", "quantity");
 
         // ─── Contract Price (required) ──────────────────────────────────────────
         // New official template format
         COLUMN_MAPPINGS.put("unit_price / السعر", "contractPrice");
-        COLUMN_MAPPINGS.put("unit_price",        "contractPrice");
+        COLUMN_MAPPINGS.put("unit_price", "contractPrice");
         // Legacy / Odoo format
-        COLUMN_MAPPINGS.put("السعر",             "contractPrice");
-        COLUMN_MAPPINGS.put("price",             "contractPrice");
-        COLUMN_MAPPINGS.put("سعر",               "contractPrice");
+        COLUMN_MAPPINGS.put("السعر", "contractPrice");
+        COLUMN_MAPPINGS.put("price", "contractPrice");
+        COLUMN_MAPPINGS.put("سعر", "contractPrice");
 
         // ─── Extra fields (optional, stored as notes) ────────────────────────────
         COLUMN_MAPPINGS.put("category / التصنيف", "category");
-        COLUMN_MAPPINGS.put("category",           "category");
-        COLUMN_MAPPINGS.put("التصنيف",             "category");
+        COLUMN_MAPPINGS.put("category", "category");
+        COLUMN_MAPPINGS.put("التصنيف", "category");
         COLUMN_MAPPINGS.put("main_category / التصنيف الرئيسي", "mainCategory");
-        COLUMN_MAPPINGS.put("main_category",        "mainCategory");
-        COLUMN_MAPPINGS.put("التصنيف الرئيسي",       "mainCategory");
+        COLUMN_MAPPINGS.put("main_category", "mainCategory");
+        COLUMN_MAPPINGS.put("التصنيف الرئيسي", "mainCategory");
         COLUMN_MAPPINGS.put("sub_category / البند (التصنيف الفرعي)", "subCategory");
-        COLUMN_MAPPINGS.put("sub_category",         "subCategory");
-        COLUMN_MAPPINGS.put("البند",                "subCategory");
-        COLUMN_MAPPINGS.put("التصنيف الفرعي",         "subCategory");
+        COLUMN_MAPPINGS.put("sub_category", "subCategory");
+        COLUMN_MAPPINGS.put("البند", "subCategory");
+        COLUMN_MAPPINGS.put("التصنيف الفرعي", "subCategory");
         COLUMN_MAPPINGS.put("specialty / التخصص", "specialty");
-        COLUMN_MAPPINGS.put("specialty",           "specialty");
-        COLUMN_MAPPINGS.put("التخصص",              "specialty");
-        COLUMN_MAPPINGS.put("notes / ملاحظات",     "notes");
-        COLUMN_MAPPINGS.put("notes",               "notes");
-        COLUMN_MAPPINGS.put("ملاحظات",             "notes");
+        COLUMN_MAPPINGS.put("specialty", "specialty");
+        COLUMN_MAPPINGS.put("التخصص", "specialty");
+        COLUMN_MAPPINGS.put("notes / ملاحظات", "notes");
+        COLUMN_MAPPINGS.put("notes", "notes");
+        COLUMN_MAPPINGS.put("ملاحظات", "notes");
     }
 
     /**
      * Import pricing items from Excel file
      * 
      * @param contractId The provider contract ID
-     * @param file Excel file (.xlsx or .xls)
+     * @param file       Excel file (.xlsx or .xls)
      * @return Import result with statistics
      */
     @Transactional
@@ -153,7 +150,7 @@ public class ProviderContractPricingExcelService {
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found: " + contractId));
 
         if (contract.getStatus() == ProviderContract.ContractStatus.EXPIRED ||
-            contract.getStatus() == ProviderContract.ContractStatus.TERMINATED) {
+                contract.getStatus() == ProviderContract.ContractStatus.TERMINATED) {
             throw new IllegalStateException("Cannot import pricing for EXPIRED or TERMINATED contract");
         }
 
@@ -164,7 +161,7 @@ public class ProviderContractPricingExcelService {
         int skipped = 0;
 
         try (InputStream is = file.getInputStream();
-             Workbook workbook = WorkbookFactory.create(is)) {
+                Workbook workbook = WorkbookFactory.create(is)) {
 
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
@@ -190,27 +187,22 @@ public class ProviderContractPricingExcelService {
 
             // Validate required column: service name
             if (!columnIndices.containsKey("serviceName") && !columnIndices.containsKey("serviceCode")) {
-                String detectedCols = actualHeaders.isEmpty() ? "(لا توجد أعمدة مكتشفة)" : String.join(" | ", actualHeaders);
+                String detectedCols = actualHeaders.isEmpty() ? "(لا توجد أعمدة مكتشفة)"
+                        : String.join(" | ", actualHeaders);
                 return ExcelImportResultDto.builder()
                         .success(false)
                         .message(String.format(
-                            "❌ الملف لا يطابق القالب المطلوب.%n" +
-                            "العمود الإلزامي المفقود: '%s'%n%n" +
-                            "الأعمدة المكتشفة في ملفك: %s%n%n" +
-                            "الأعمدة المطلوبة في القالب الرسمي:%n" +
-                            "  ★ إلزامي: %s%n" +
-                            "  ○ اختياري: %s%n%n" +
-                            "يرجى تحميل القالب الرسمي من صفحة العقد والمحاولة مرة أخرى.",
-                            TEMPLATE_REQUIRED_COLS, detectedCols,
-                            TEMPLATE_REQUIRED_COLS, TEMPLATE_OPTIONAL_COLS
-                        ))
+                                "❌ الملف لا يطابق القالب المطلوب.%n" +
+                                        "العمود الإلزامي المفقود: '%s'%n%n" +
+                                        "الأعمدة المكتشفة في ملفك: %s%n%n" +
+                                        "الأعمدة المطلوبة في القالب الرسمي:%n" +
+                                        "  ★ إلزامي: %s%n" +
+                                        "  ○ اختياري: %s%n%n" +
+                                        "يرجى تحميل القالب الرسمي من صفحة العقد والمحاولة مرة أخرى.",
+                                TEMPLATE_REQUIRED_COLS, detectedCols,
+                                TEMPLATE_REQUIRED_COLS, TEMPLATE_OPTIONAL_COLS))
                         .build();
             }
-
-            // Build service code to ID map (for fast lookups)
-            Map<String, MedicalService> serviceByCode = new HashMap<>();
-            Map<String, MedicalService> serviceByName = new HashMap<>();
-            buildServiceMaps(serviceByCode, serviceByName);
 
             // Get current username
             String currentUser = SecurityContextHolder.getContext()
@@ -235,7 +227,7 @@ public class ProviderContractPricingExcelService {
                     String mainCatCode = getCellValueAsString(row, columnIndices.get("mainCategory"));
                     String subCatCode = getCellValueAsString(row, columnIndices.get("subCategory"));
 
-                    log.debug("Row {}: serviceCode='{}', serviceName='{}', price={}", 
+                    log.debug("Row {}: serviceCode='{}', serviceName='{}', price={}",
                             rowNum + 1, serviceCodeValue, serviceNameValue, contractPriceValue);
 
                     // Validate required fields
@@ -259,74 +251,34 @@ public class ProviderContractPricingExcelService {
                         continue;
                     }
 
-                    // Find medical service
-                    MedicalService service = null;
-                    if (serviceCodeValue != null && !serviceCodeValue.isBlank()) {
-                        service = serviceByCode.get(serviceCodeValue.trim().toUpperCase());
-                        if (service != null) {
-                            log.debug("Row {}: Found service by code: {} -> {}", 
-                                    rowNum + 1, serviceCodeValue, service.getName());
-                        }
-                    }
-                    if (service == null && serviceNameValue != null && !serviceNameValue.isBlank()) {
-                        String trimmedName = serviceNameValue.trim();
-                        service = serviceByName.get(trimmedName);
-                        
-                        if (service != null) {
-                            log.debug("Row {}: ✓ Found service by name: '{}' -> {}", 
-                                    rowNum + 1, trimmedName, service.getCode());
-                        } else {
-                            // Try case-insensitive match as fallback
-                            service = serviceByName.entrySet().stream()
-                                    .filter(e -> e.getKey().equalsIgnoreCase(trimmedName))
-                                    .map(Map.Entry::getValue)
-                                    .findFirst()
-                                    .orElse(null);
-                            
-                            if (service != null) {
-                                log.debug("Row {}: ✓ Found service by case-insensitive name: '{}' -> {}", 
-                                        rowNum + 1, trimmedName, service.getCode());
-                            } else {
-                                log.warn("Row {}: ✗ Service NOT found for name: '{}'", rowNum + 1, trimmedName);
-                                if (log.isDebugEnabled()) {
-                                    log.debug("  Available names (first 10): {}", 
-                                            serviceByName.keySet().stream().limit(10).toList());
-                                }
-                            }
-                        }
-                    }
-
-                    // Identifier for logs
-                    String identifier = (serviceCodeValue != null && !serviceCodeValue.isBlank()) 
-                            ? serviceCodeValue : serviceNameValue;
-
-                    if (service == null) {
-                        log.info("Row {}: Service not found in medical taxonomy. Importing as unmapped item: '{}'", 
-                                rowNum + 1, identifier);
-                    } else if (!service.isActive()) {
+                    // No MedicalService catalog lookup — use serviceCode/serviceName directly.
+                    if (serviceCodeValue == null && serviceNameValue == null) {
                         errors.add(ImportError.builder()
                                 .row(rowNum + 1)
-                                .column(service.getCode())
-                                .error("الخدمة الطبية غير نشطة")
+                                .column("service_name / service_code")
+                                .error("يجب توفير اسم الخدمة أو الكود")
                                 .build());
                         skipped++;
                         continue;
                     }
 
-                    // Use service.basePrice as basePrice if available, else 0
-                    BigDecimal basePrice = (service != null && service.getBasePrice() != null) 
-                            ? service.getBasePrice() 
-                            : BigDecimal.ZERO;
+                    // Identifier for logs
+                    String identifier = (serviceCodeValue != null && !serviceCodeValue.isBlank())
+                            ? serviceCodeValue
+                            : serviceNameValue;
+
+                    // basePrice defaults to zero (no catalog to pull from)
+                    BigDecimal basePrice = BigDecimal.ZERO;
 
                     // Set currency (default: LYD)
-                    String currency = (currencyValue != null && !currencyValue.isBlank()) 
-                            ? currencyValue.trim().toUpperCase() 
+                    String currency = (currencyValue != null && !currencyValue.isBlank())
+                            ? currencyValue.trim().toUpperCase()
                             : "LYD";
 
                     // Resolve Medical Category from Excel if provided
                     MedicalCategory assignedCategory = null;
                     String targetCatCode = (subCatCode != null && !subCatCode.isBlank()) ? subCatCode : mainCatCode;
-                    
+
                     if (targetCatCode != null && !targetCatCode.isBlank()) {
                         assignedCategory = categoryRepository.findByCode(targetCatCode.trim())
                                 .orElse(null);
@@ -338,32 +290,23 @@ public class ProviderContractPricingExcelService {
                                     .orElse(null);
                         }
                     }
-                    
-                    // If still null and service is present, use service category
-                    if (assignedCategory == null && service != null && service.getCategoryId() != null) {
-                        assignedCategory = categoryRepository.findById(service.getCategoryId()).orElse(null);
-                    }
 
-                    // Check if pricing item already exists (upsert)
+                    // Check if pricing item already exists (upsert by service code or name)
                     Optional<ProviderContractPricingItem> existingOpt = Optional.empty();
-                    
-                    if (service != null) {
-                        existingOpt = pricingRepository.findByContractAndMedicalService(contract, service);
-                    } else if (serviceCodeValue != null && !serviceCodeValue.isBlank()) {
-                        // Match unmapped item by Code
-                        existingOpt = pricingRepository.findActiveUnmappedByContractAndServiceCode(
+
+                    if (serviceCodeValue != null && !serviceCodeValue.isBlank()) {
+                        existingOpt = pricingRepository.findByContractIdAndServiceCodeActiveTrue(
                                 contract.getId(), serviceCodeValue.trim());
                     } else if (serviceNameValue != null && !serviceNameValue.isBlank()) {
-                        // Match unmapped item by Name
-                        existingOpt = pricingRepository.findActiveUnmappedByContractAndServiceName(
+                        existingOpt = pricingRepository.findByContractIdAndServiceNameActiveTrue(
                                 contract.getId(), serviceNameValue.trim());
                     }
 
                     String fallbackCategoryName = null;
                     if (mainCatCode != null || subCatCode != null) {
-                        fallbackCategoryName = (mainCatCode != null ? mainCatCode : "") + 
-                                               (mainCatCode != null && subCatCode != null ? " > " : "") + 
-                                               (subCatCode != null ? subCatCode : "");
+                        fallbackCategoryName = (mainCatCode != null ? mainCatCode : "") +
+                                (mainCatCode != null && subCatCode != null ? " > " : "") +
+                                (subCatCode != null ? subCatCode : "");
                     }
 
                     if (existingOpt.isPresent()) {
@@ -378,17 +321,16 @@ public class ProviderContractPricingExcelService {
                         existing.setUpdatedBy(currentUser);
                         existing.setActive(true);
                         // discountPercent calculated automatically via @PreUpdate
-                        
+
                         pricingRepository.save(existing);
                         updated++;
-                        
-                        log.debug("Updated pricing: contract={}, service={}, price={}", 
+
+                        log.debug("Updated pricing: contract={}, service={}, price={}",
                                 contractId, identifier, contractPriceValue);
                     } else {
                         // INSERT
                         ProviderContractPricingItem newItem = ProviderContractPricingItem.builder()
                                 .contract(contract)
-                                .medicalService(service)
                                 .serviceName(serviceNameValue)
                                 .serviceCode(serviceCodeValue)
                                 .medicalCategory(assignedCategory)
@@ -401,11 +343,11 @@ public class ProviderContractPricingExcelService {
                                 .createdBy(currentUser)
                                 .updatedBy(currentUser)
                                 .build();
-                        
+
                         pricingRepository.save(newItem);
                         inserted++;
-                        
-                        log.debug("Inserted pricing: contract={}, service={}, price={}", 
+
+                        log.debug("Inserted pricing: contract={}, service={}, price={}",
                                 contractId, identifier, contractPriceValue);
                     }
 
@@ -441,8 +383,7 @@ public class ProviderContractPricingExcelService {
         boolean success = (inserted + updated) > 0;
         String message = String.format(
                 "تم استيراد %d عنصر تسعير بنجاح (إضافة: %d، تحديث: %d، تخطي: %d، فشل: %d)",
-                inserted + updated, inserted, updated, skipped, errors.size()
-        );
+                inserted + updated, inserted, updated, skipped, errors.size());
 
         return ExcelImportResultDto.builder()
                 .success(success)
@@ -464,7 +405,8 @@ public class ProviderContractPricingExcelService {
         log.info("Excel Header Row Analysis:");
         for (int i = 0; i < headerRow.getLastCellNum(); i++) {
             Cell cell = headerRow.getCell(i);
-            if (cell == null) continue;
+            if (cell == null)
+                continue;
 
             String columnName = cell.getStringCellValue().trim().toLowerCase();
             String mappedName = COLUMN_MAPPINGS.get(columnName);
@@ -478,27 +420,6 @@ public class ProviderContractPricingExcelService {
 
         log.info("Mapped columns: {}", indices.keySet());
         return indices;
-    }
-
-    /**
-     * Build service lookup maps for performance
-     */
-    private void buildServiceMaps(Map<String, MedicalService> byCode, Map<String, MedicalService> byName) {
-        List<MedicalService> allServices = serviceRepository.findAll();
-
-        for (MedicalService service : allServices) {
-            if (service.getCode() != null) {
-                byCode.put(service.getCode().toUpperCase(), service);
-            }
-            
-            // Index by name (unified name field)
-            if (service.getName() != null && !service.getName().isBlank()) {
-                byName.put(service.getName().trim(), service);
-            }
-        }
-
-        log.info("Built service maps: {} by code, {} by name entries (total services: {})", 
-                byCode.size(), byName.size(), allServices.size());
     }
 
     /**
@@ -518,10 +439,12 @@ public class ProviderContractPricingExcelService {
      * Get cell value as String
      */
     private String getCellValueAsString(Row row, Integer colIndex) {
-        if (colIndex == null) return null;
+        if (colIndex == null)
+            return null;
 
         Cell cell = row.getCell(colIndex);
-        if (cell == null) return null;
+        if (cell == null)
+            return null;
 
         switch (cell.getCellType()) {
             case STRING:
@@ -539,10 +462,12 @@ public class ProviderContractPricingExcelService {
      * Get cell value as BigDecimal
      */
     private BigDecimal getCellValueAsDecimal(Row row, Integer colIndex) {
-        if (colIndex == null) return null;
+        if (colIndex == null)
+            return null;
 
         Cell cell = row.getCell(colIndex);
-        if (cell == null) return null;
+        if (cell == null)
+            return null;
 
         try {
             switch (cell.getCellType()) {
@@ -551,7 +476,8 @@ public class ProviderContractPricingExcelService {
                             .setScale(2, RoundingMode.HALF_UP);
                 case STRING:
                     String value = cell.getStringCellValue().trim();
-                    if (value.isEmpty()) return null;
+                    if (value.isEmpty())
+                        return null;
                     return new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
                 default:
                     return null;

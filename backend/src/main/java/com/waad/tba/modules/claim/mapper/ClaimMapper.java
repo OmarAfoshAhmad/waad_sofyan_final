@@ -4,7 +4,6 @@ import com.waad.tba.modules.claim.dto.*;
 import com.waad.tba.modules.claim.entity.*;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.visit.entity.Visit;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
 import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
@@ -16,7 +15,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
@@ -66,7 +64,7 @@ public class ClaimMapper {
      * Enforces contract-first pricing and policy-first coverage.
      */
     public Claim toEntity(ClaimCreateDto dto, Visit visit, Provider provider, PreAuthorization preAuth,
-            ClaimBatch claimBatch, Map<Long, MedicalService> medicalServiceMap) {
+            ClaimBatch claimBatch) {
         Claim claim = Claim.builder()
                 .visit(visit)
                 .member(visit.getMember())
@@ -110,10 +108,6 @@ public class ClaimMapper {
         List<ClaimLine> lines = new ArrayList<>();
 
         for (ClaimLineDto lineDto : dto.getLines()) {
-            MedicalService medicalService = lineDto.getMedicalServiceId() != null
-                    ? medicalServiceMap.get(lineDto.getMedicalServiceId())
-                    : null;
-
             // ARCHITECTURAL LAW: Capture what was requested vs what is allowed by contract.
             BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice() : BigDecimal.ZERO;
             BigDecimal resolvedUnitPrice = null;
@@ -123,11 +117,6 @@ public class ClaimMapper {
             String serviceCode = lineDto.getServiceCode();
             String serviceName = lineDto.getServiceName();
 
-            if (medicalService != null) {
-                serviceCode = medicalService.getCode();
-                serviceName = medicalService.getName();
-            }
-
             log.info("🔍 [MAPPER] Processing line for service '{}'. VisitType: {}, isBacklog: {}, Entered Price: {}",
                     serviceCode, visit.getVisitType(), isBacklog, enteredUnitPrice);
 
@@ -135,7 +124,7 @@ public class ClaimMapper {
 
             // دائماً نبحث عن سعر العقد بغض النظر عن نوع الزيارة (BACKLOG أو غيره)
             // لضمان حساب المبلغ المرفوض بشكل صحيح عند تجاوز سعر العقد
-            String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
+            String codeToLookup = lineDto.getServiceCode();
 
             // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
             // DB
@@ -161,10 +150,6 @@ public class ClaimMapper {
 
                     log.info("✅ [MAPPER] Contract price resolved: {} → {} (entered: {})",
                             codeToLookup, resolvedUnitPrice, enteredUnitPrice);
-                } else if (medicalService != null) {
-                    // FALLBACK: Use base price if no active contract
-                    resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
-                            : BigDecimal.ZERO;
                 }
             }
 
@@ -192,12 +177,11 @@ public class ClaimMapper {
             Integer coveragePercentSnapshot = lineDto.getCoveragePercent();
             boolean requiresPA = lineDto.getRequiresPA() != null ? lineDto.getRequiresPA() : false;
 
-            // For unmapped services (medicalService=null), infer the category from the
-            // pricing
-            // item's medical_category_id (e.g. SUB-VISION). This ensures subcategory rules
+            // For all services, infer the category from the pricing item's
+            // medical_category_id. This ensures subcategory rules
             // (amount/times limits) are matched instead of falling back to POLICY_DEFAULT.
             Long pricingItemCategoryId = null;
-            if (medicalService == null && resolvedPricingItemId != null) {
+            if (resolvedPricingItemId != null) {
                 pricingItemCategoryId = pricingItemRepository.findById(resolvedPricingItemId)
                         .map(item -> item.getMedicalCategory() != null ? item.getMedicalCategory().getId() : null)
                         .orElse(null);
@@ -209,19 +193,17 @@ public class ClaimMapper {
 
             // Resolve the best category for coverage lookup:
             // 1. Manual override (manualCategoryEnabled=true)
-            // 2. Linked MedicalService's category
-            // 3. PricingItem's category (for unmapped but categorised items)
-            // 4. DTO's appliedCategoryId (from previous save)
-            Long serviceCatIdForCoverage = medicalService != null
-                    ? medicalService.getCategoryId()
-                    : (pricingItemCategoryId != null ? pricingItemCategoryId : lineDto.getAppliedCategoryId());
+            // 2. PricingItem's category
+            // 3. DTO's serviceCategoryId (from DTO or previous save)
+            Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
+                    : lineDto.getAppliedCategoryId();
 
             // Resolve coverage (support unmapped services via category rules)
             Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId : serviceCatIdForCoverage;
 
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
                     resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
-                    medicalService != null ? medicalService.getId() : null,
+                    null,
                     serviceCatIdForCoverage,
                     categoryOverrideId,
                     claim.getMember().getId(),
@@ -238,18 +220,9 @@ public class ClaimMapper {
                 lineDto.setRemainingAmount(coverageResult.getRemainingAmount());
             }
 
-            // Fetch applied category info: Rule match is MOST specific and should be
-            // prioritized
-            // for correct limit tracking (e.g. tracking a physio limit even if in
-            // 'Outpatient' context)
-            // For UNMAPPED services (medicalService=null), fall back to contextCategoryId
-            // from
-            // primaryCategoryCode so that usage queries can always find these lines.
-            Long rawCategoryId = (medicalService != null)
-                    ? medicalService.getCategoryId()
-                    : (pricingItemCategoryId != null ? pricingItemCategoryId
-                            : (lineDto.getAppliedCategoryId() != null ? lineDto.getAppliedCategoryId()
-                                    : contextCategoryId));
+            // Fetch applied category info.
+            Long rawCategoryId = pricingItemCategoryId != null ? pricingItemCategoryId
+                    : (lineDto.getAppliedCategoryId() != null ? lineDto.getAppliedCategoryId() : contextCategoryId);
 
             Long appliedCategoryId = (coverageResult != null && coverageResult.getMatchingCategoryId() != null)
                     ? coverageResult.getMatchingCategoryId()
@@ -293,7 +266,6 @@ public class ClaimMapper {
 
             ClaimLine line = ClaimLine.builder()
                     .claim(claim)
-                    .medicalService(medicalService)
                     .serviceCode(serviceCode != null ? serviceCode : "N/A")
                     .serviceName(serviceName != null ? serviceName : "Unknown Service")
                     .pricingItemId(resolvedPricingItemId)
@@ -380,8 +352,7 @@ public class ClaimMapper {
     /**
      * Re-applies pricing and coverage to claim lines during draft edit.
      */
-    public void replaceClaimLinesForDraft(Claim claim, List<ClaimLineDto> lineDtos,
-            Map<Long, MedicalService> medicalServiceMap) {
+    public void replaceClaimLinesForDraft(Claim claim, List<ClaimLineDto> lineDtos) {
         BigDecimal totalRequestedAmount = BigDecimal.ZERO;
         BigDecimal totalRefusedAmount = BigDecimal.ZERO;
         BigDecimal totalApprovedAmount = BigDecimal.ZERO;
@@ -407,10 +378,6 @@ public class ClaimMapper {
         }
 
         for (ClaimLineDto lineDto : lineDtos) {
-            MedicalService medicalService = lineDto.getMedicalServiceId() != null
-                    ? medicalServiceMap.get(lineDto.getMedicalServiceId())
-                    : null;
-
             // ARCHITECTURAL LAW: Capture what was requested vs what is allowed by contract.
             BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice() : BigDecimal.ZERO;
             BigDecimal resolvedUnitPrice = null;
@@ -421,15 +388,10 @@ public class ClaimMapper {
             String serviceCode = lineDto.getServiceCode();
             String serviceName = lineDto.getServiceName();
 
-            if (medicalService != null) {
-                serviceCode = medicalService.getCode();
-                serviceName = medicalService.getName();
-            }
-
             Long resolvedPricingItemId = lineDto.getPricingItemId();
 
             // دائماً نبحث عن سعر العقد بغض النظر عن نوع الزيارة
-            String codeToLookup = (medicalService != null) ? medicalService.getCode() : lineDto.getServiceCode();
+            String codeToLookup = lineDto.getServiceCode();
 
             // FALLBACK: If code is missing but pricingItemId is provided, fetch code from
             // DB
@@ -452,10 +414,6 @@ public class ClaimMapper {
                         serviceCode = priceResponse.getServiceCode();
                     if (serviceName == null || "Unknown Service".equals(serviceName))
                         serviceName = priceResponse.getServiceName();
-                } else if (medicalService != null) {
-                    // FALLBACK: If draft + no contract, try base price
-                    resolvedUnitPrice = medicalService.getBasePrice() != null ? medicalService.getBasePrice()
-                            : BigDecimal.ZERO;
                 }
             }
 
@@ -489,12 +447,9 @@ public class ClaimMapper {
             Integer coveragePercentSnapshot = lineDto.getCoveragePercent();
             boolean requiresPA = lineDto.getRequiresPA() != null ? lineDto.getRequiresPA() : false;
 
-            // For unmapped services (medicalService=null), infer the category from the
-            // pricing
-            // item's medical_category_id. This ensures subcategory rules are matched
-            // correctly.
+            // Infer the category from the pricing item's medical_category_id.
             Long pricingItemCategoryId = null;
-            if (medicalService == null && resolvedPricingItemId != null) {
+            if (resolvedPricingItemId != null) {
                 pricingItemCategoryId = pricingItemRepository.findById(resolvedPricingItemId)
                         .map(item -> item.getMedicalCategory() != null ? item.getMedicalCategory().getId() : null)
                         .orElse(null);
@@ -504,16 +459,15 @@ public class ClaimMapper {
                 }
             }
 
-            Long serviceCatIdForCoverage = medicalService != null
-                    ? medicalService.getCategoryId()
-                    : (pricingItemCategoryId != null ? pricingItemCategoryId : lineDto.getAppliedCategoryId());
+            Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
+                    : lineDto.getAppliedCategoryId();
 
             // Resolve coverage (support unmapped services via category rules)
             Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId : serviceCatIdForCoverage;
 
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
                     resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
-                    medicalService != null ? medicalService.getId() : null,
+                    null,
                     serviceCatIdForCoverage,
                     categoryOverrideId,
                     claim.getMember().getId(),
@@ -525,13 +479,9 @@ public class ClaimMapper {
                 coveragePercentSnapshot = coverageResult.getCoveragePercent();
             }
 
-            // Fetch applied category info (either manual or resolved).
-            // Same fallback chain as the create mapper.
-            Long rawCategoryId = (medicalService != null)
-                    ? medicalService.getCategoryId()
-                    : (pricingItemCategoryId != null ? pricingItemCategoryId
-                            : (lineDto.getAppliedCategoryId() != null ? lineDto.getAppliedCategoryId()
-                                    : contextCategoryId));
+            // Fetch applied category info.
+            Long rawCategoryId = pricingItemCategoryId != null ? pricingItemCategoryId
+                    : (lineDto.getAppliedCategoryId() != null ? lineDto.getAppliedCategoryId() : contextCategoryId);
 
             Long appliedCategoryId = (categoryOverrideId != null) ? categoryOverrideId : rawCategoryId;
 
@@ -584,7 +534,6 @@ public class ClaimMapper {
 
             ClaimLine line = ClaimLine.builder()
                     .claim(claim)
-                    .medicalService(medicalService)
                     .serviceCode(serviceCode != null ? serviceCode : "N/A")
                     .serviceName(serviceName != null ? serviceName : "Unknown Service")
                     .pricingItemId(resolvedPricingItemId)
@@ -765,7 +714,7 @@ public class ClaimMapper {
     private ClaimLineDto toLineDto(ClaimLine line) {
         return ClaimLineDto.builder()
                 .id(line.getId())
-                .medicalServiceId(line.getMedicalService() != null ? line.getMedicalService().getId() : null)
+                .medicalServiceId(null)
                 .pricingItemId(line.getPricingItemId())
                 .serviceCode(line.getServiceCode())
                 .serviceName(line.getServiceName())

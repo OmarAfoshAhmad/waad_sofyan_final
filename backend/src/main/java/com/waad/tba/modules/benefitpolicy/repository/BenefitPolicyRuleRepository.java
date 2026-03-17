@@ -18,230 +18,176 @@ import java.util.Optional;
 @Repository
 public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicyRule, Long> {
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // FIND BY POLICY
-    // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FIND BY POLICY
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Find all rules for a specific policy
-     */
-    List<BenefitPolicyRule> findByBenefitPolicyId(Long policyId);
+  /**
+   * Find all rules for a specific policy
+   */
+  List<BenefitPolicyRule> findByBenefitPolicyId(Long policyId);
 
-    /**
-     * Find all rules for a specific policy (paginated)
-     */
-    Page<BenefitPolicyRule> findByBenefitPolicyId(Long policyId, Pageable pageable);
+  /**
+   * Find all rules for a specific policy (paginated)
+   */
+  Page<BenefitPolicyRule> findByBenefitPolicyId(Long policyId, Pageable pageable);
 
-    /**
-     * Find all ACTIVE rules for a specific policy
-     */
-    List<BenefitPolicyRule> findByBenefitPolicyIdAndActiveTrue(Long policyId);
+  /**
+   * Find all ACTIVE rules for a specific policy
+   */
+  List<BenefitPolicyRule> findByBenefitPolicyIdAndActiveTrue(Long policyId);
 
-    /**
-     * Count rules for a policy
-     */
-    long countByBenefitPolicyId(Long policyId);
+  /**
+   * Count rules for a policy
+   */
+  long countByBenefitPolicyId(Long policyId);
 
-    /**
-     * Count active rules for a policy
-     */
-    long countByBenefitPolicyIdAndActiveTrue(Long policyId);
+  /**
+   * Count active rules for a policy
+   */
+  long countByBenefitPolicyIdAndActiveTrue(Long policyId);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // FIND BY SERVICE
-    // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FIND BY CATEGORY
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Find rule for a specific service within a policy
-     */
-    Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalServiceId(Long policyId, Long serviceId);
+  /**
+   * Find rule for a specific category within a policy
+   */
+  Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryId(Long policyId, Long categoryId);
 
-    /**
-     * Find active rule for a specific service within a policy
-     */
-    List<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalServiceIdAndActiveTrue(
-            Long policyId, Long serviceId);
+  /**
+   * Find active rule for a specific category within a policy
+   */
+  Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(
+      Long policyId, Long categoryId);
 
-    /**
-     * Find all rules targeting a specific service (across all policies)
-     */
-    List<BenefitPolicyRule> findByMedicalServiceId(Long serviceId);
+  /**
+   * Find all rules targeting a specific category (across all policies)
+   */
+  List<BenefitPolicyRule> findByMedicalCategoryId(Long categoryId);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // FIND BY CATEGORY
-    // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COVERAGE LOOKUP QUERIES (Used by Claims/Eligibility)
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Find rule for a specific category within a policy
-     */
-    Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryId(Long policyId, Long categoryId);
-
-    /**
-     * Find active rule for a specific category within a policy
-     */
-    Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(
-            Long policyId, Long categoryId);
-
-    /**
-     * Find all rules targeting a specific category (across all policies)
-     */
-    List<BenefitPolicyRule> findByMedicalCategoryId(Long categoryId);
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // COVERAGE LOOKUP QUERIES (Used by Claims/Eligibility)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Find the most specific rule for a service within a policy.
-     * Service-specific rules take priority over category rules.
-     * 
-     * Order of precedence:
-     * 1. Direct service match
-     * 2. Category match (for the service's category)
-     */
-    @Query("""
+  /**
+   * Find the most specific rule for a service within a policy.
+   * Service-specific rules take priority over category rules.
+   * 
+   * Order of precedence:
+   * 1. Direct service match
+   * 2. Category match (for the service's category)
+   */
+  @Query("""
       SELECT r FROM BenefitPolicyRule r
       WHERE r.benefitPolicy.id = :policyId
         AND r.active = true
-        AND (
-          r.medicalService.id = :serviceId
-          OR (r.medicalCategory.id = :categoryId AND r.medicalService IS NULL)
-        )
-      ORDER BY
-        CASE WHEN r.medicalService IS NOT NULL THEN 0 ELSE 1 END
+        AND r.medicalCategory.id = :categoryId
+      ORDER BY r.id
       """)
-    List<BenefitPolicyRule> findApplicableRulesForService(
-            @Param("policyId") Long policyId,
-            @Param("serviceId") Long serviceId,
-            @Param("categoryId") Long categoryId);
+  List<BenefitPolicyRule> findApplicableRulesForService(
+      @Param("policyId") Long policyId,
+      @Param("serviceId") Long serviceId,
+      @Param("categoryId") Long categoryId);
 
-    /**
-     * Find the best matching rule for a service within a policy.
-     * Returns the most specific rule (service rule > category rule).
-     * Works for both mapped (serviceId given) and unmapped (serviceId=null, categoryId given) lookups.
-     */
-    @Query("""
+  /**
+   * Find the best matching rule for a service within a policy.
+   * Returns the most specific rule (service rule > category rule).
+   * Works for both mapped (serviceId given) and unmapped (serviceId=null,
+   * categoryId given) lookups.
+   */
+  @Query("""
       SELECT r FROM BenefitPolicyRule r
       WHERE r.benefitPolicy.id = :policyId
         AND r.active = true
         AND (
-          (:serviceId IS NOT NULL AND r.medicalService.id = :serviceId)
-          OR (:serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId AND r.medicalService IS NULL)
-          OR (:overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId AND r.medicalService IS NULL)
-          OR (:parentCategoryId IS NOT NULL AND r.medicalCategory.id = :parentCategoryId AND r.medicalService IS NULL)
+          (:serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId)
+          OR (:overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId)
+          OR (:parentCategoryId IS NOT NULL AND r.medicalCategory.id = :parentCategoryId)
         )
       ORDER BY
         CASE
-          WHEN :serviceId IS NOT NULL AND r.medicalService.id = :serviceId THEN 0
-          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId THEN 1
-          WHEN :overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId THEN 2
-          ELSE 3
+          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId THEN 0
+          WHEN :overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId THEN 1
+          ELSE 2
         END
       LIMIT 1
       """)
-    Optional<BenefitPolicyRule> findBestRuleForService(
-            @Param("policyId") Long policyId,
-            @Param("serviceId") Long serviceId,
-            @Param("serviceCategoryId") Long serviceCategoryId,
-            @Param("overrideCategoryId") Long overrideCategoryId,
-            @Param("parentCategoryId") Long parentCategoryId);
+  Optional<BenefitPolicyRule> findBestRuleForService(
+      @Param("policyId") Long policyId,
+      @Param("serviceId") Long serviceId,
+      @Param("serviceCategoryId") Long serviceCategoryId,
+      @Param("overrideCategoryId") Long overrideCategoryId,
+      @Param("parentCategoryId") Long parentCategoryId);
 
-    /**
-     * Find active category rule for a policy
-     */
-    @Query("""
-        SELECT r FROM BenefitPolicyRule r
-        WHERE r.benefitPolicy.id = :policyId
-          AND r.medicalCategory.id = :categoryId
-          AND r.medicalService IS NULL
-          AND r.active = true
-        ORDER BY r.id DESC
-        """)
-    List<BenefitPolicyRule> findActiveCategoryRules(
-            @Param("policyId") Long policyId,
-            @Param("categoryId") Long categoryId);
+  /**
+   * Find active category rule for a policy
+   */
+  @Query("""
+      SELECT r FROM BenefitPolicyRule r
+      WHERE r.benefitPolicy.id = :policyId
+        AND r.medicalCategory.id = :categoryId
+        AND r.active = true
+      ORDER BY r.id DESC
+      """)
+  List<BenefitPolicyRule> findActiveCategoryRules(
+      @Param("policyId") Long policyId,
+      @Param("categoryId") Long categoryId);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DUPLICATE CHECK QUERIES
-    // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DUPLICATE CHECK QUERIES
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Check if a service rule already exists for this policy (excluding given rule id)
-     */
-    @Query("""
-        SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END
-        FROM BenefitPolicyRule r
-        WHERE r.benefitPolicy.id = :policyId
-          AND r.medicalService.id = :serviceId
-          AND (:excludeRuleId IS NULL OR r.id != :excludeRuleId)
-        """)
-    boolean existsServiceRule(
-            @Param("policyId") Long policyId,
-            @Param("serviceId") Long serviceId,
-            @Param("excludeRuleId") Long excludeRuleId);
+  /**
+   * Check if a category rule already exists for this policy (excluding given rule
+   * id)
+   */
+  @Query("""
+      SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END
+      FROM BenefitPolicyRule r
+      WHERE r.benefitPolicy.id = :policyId
+        AND r.medicalCategory.id = :categoryId
+        AND (:excludeRuleId IS NULL OR r.id != :excludeRuleId)
+      """)
+  boolean existsCategoryRule(
+      @Param("policyId") Long policyId,
+      @Param("categoryId") Long categoryId,
+      @Param("excludeRuleId") Long excludeRuleId);
 
-    /**
-     * Check if a category rule already exists for this policy (excluding given rule id)
-     */
-    @Query("""
-        SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END
-        FROM BenefitPolicyRule r
-        WHERE r.benefitPolicy.id = :policyId
-          AND r.medicalCategory.id = :categoryId
-          AND r.medicalService IS NULL
-          AND (:excludeRuleId IS NULL OR r.id != :excludeRuleId)
-        """)
-    boolean existsCategoryRule(
-            @Param("policyId") Long policyId,
-            @Param("categoryId") Long categoryId,
-            @Param("excludeRuleId") Long excludeRuleId);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RULE FILTERING
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // RULE FILTERING
-    // ═══════════════════════════════════════════════════════════════════════════
+  /**
+   * Find all category-level rules for a policy (no specific service)
+   */
+  @Query("""
+      SELECT r FROM BenefitPolicyRule r
+      WHERE r.benefitPolicy.id = :policyId
+        AND r.medicalCategory IS NOT NULL
+        AND r.active = true
+      ORDER BY r.medicalCategory.name
+      """)
+  List<BenefitPolicyRule> findCategoryRulesForPolicy(@Param("policyId") Long policyId);
 
-    /**
-     * Find all category-level rules for a policy (no specific service)
-     */
-    @Query("""
-        SELECT r FROM BenefitPolicyRule r
-        WHERE r.benefitPolicy.id = :policyId
-          AND r.medicalCategory IS NOT NULL
-          AND r.medicalService IS NULL
-          AND r.active = true
-        ORDER BY r.medicalCategory.name
-        """)
-    List<BenefitPolicyRule> findCategoryRulesForPolicy(@Param("policyId") Long policyId);
+  /**
+   * Find rules that require pre-approval
+   */
+  List<BenefitPolicyRule> findByBenefitPolicyIdAndRequiresPreApprovalTrue(Long policyId);
 
-    /**
-     * Find all service-level rules for a policy
-     */
-    @Query("""
-        SELECT r FROM BenefitPolicyRule r
-        WHERE r.benefitPolicy.id = :policyId
-          AND r.medicalService IS NOT NULL
-          AND r.active = true
-        ORDER BY r.medicalService.name
-        """)
-    List<BenefitPolicyRule> findServiceRulesForPolicy(@Param("policyId") Long policyId);
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BATCH OPERATIONS
+  // ═══════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Find rules that require pre-approval
-     */
-    List<BenefitPolicyRule> findByBenefitPolicyIdAndRequiresPreApprovalTrue(Long policyId);
+  /**
+   * Delete all rules for a policy
+   */
+  void deleteByBenefitPolicyId(Long policyId);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BATCH OPERATIONS
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Delete all rules for a policy
-     */
-    void deleteByBenefitPolicyId(Long policyId);
-
-    /**
-     * Deactivate all rules for a policy (soft delete)
-     */
-    @Query("UPDATE BenefitPolicyRule r SET r.active = false WHERE r.benefitPolicy.id = :policyId")
-    int deactivateAllForPolicy(@Param("policyId") Long policyId);
+  /**
+   * Deactivate all rules for a policy (soft delete)
+   */
+  @Query("UPDATE BenefitPolicyRule r SET r.active = false WHERE r.benefitPolicy.id = :policyId")
+  int deactivateAllForPolicy(@Param("policyId") Long policyId);
 }

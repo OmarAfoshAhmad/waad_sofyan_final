@@ -9,9 +9,6 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +35,6 @@ public class BenefitPolicyRuleService {
     private final BenefitPolicyRuleRepository ruleRepository;
     private final BenefitPolicyRepository policyRepository;
     private final MedicalCategoryRepository categoryRepository;
-    private final MedicalServiceRepository serviceRepository;
-    private final MedicalServiceCategoryRepository serviceCategoryRepository;
     private final jakarta.persistence.EntityManager em;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -106,15 +101,15 @@ public class BenefitPolicyRuleService {
     }
 
     /**
-     * Find service-level rules for a policy
+     * Find service-level rules for a policy.
+     * 
+     * @deprecated Since V228 all rules are category-level. Always returns empty
+     *             list.
      */
     @Transactional(readOnly = true)
+    @Deprecated
     public List<BenefitPolicyRuleResponseDto> findServiceRules(Long policyId) {
-        validatePolicyExists(policyId);
-        return ruleRepository.findServiceRulesForPolicy(policyId)
-                .stream()
-                .map(BenefitPolicyRuleResponseDto::fromEntity)
-                .toList();
+        return java.util.Collections.emptyList();
     }
 
     /**
@@ -153,35 +148,26 @@ public class BenefitPolicyRuleService {
     @Transactional(readOnly = true)
     public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId,
             Long categoryOverrideId) {
-        Long serviceCategoryId = null;
-        Long sid = (serviceId != null && serviceId > 0) ? serviceId : null;
+        // serviceId is kept for backward-compat but ignored — category is the
+        // resolution key
+        Long targetCategoryId = categoryOverrideId;
 
-        // 1. Resolve actual category from service if possible
-        if (sid != null) {
-            MedicalService service = serviceRepository.findById(sid)
-                    .orElseThrow(() -> new ResourceNotFoundException("MedicalService", "id", sid));
-            serviceCategoryId = resolveCategoryIdForCoverage(service);
-        }
-
-        // 2. Resolve parent of the override (or service cat if no override) for
-        // fallback
-        Long targetForParentRef = (categoryOverrideId != null) ? categoryOverrideId : serviceCategoryId;
+        // Resolve parent category for hierarchical fallback
         Long parentCategoryId = null;
-        if (targetForParentRef != null) {
-            parentCategoryId = categoryRepository.findById(targetForParentRef)
+        if (targetCategoryId != null) {
+            parentCategoryId = categoryRepository.findById(targetCategoryId)
                     .map(MedicalCategory::getParentId)
                     .orElse(null);
         }
 
-        // 3. Search for best rule with the new prioritized architecture
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                policyId, sid, serviceCategoryId, categoryOverrideId, parentCategoryId);
+                policyId, null, targetCategoryId, null, parentCategoryId);
 
         if (ruleOpt.isPresent()) {
             return ruleOpt.map(BenefitPolicyRuleResponseDto::fromEntity);
         }
 
-        // FALLBACK TO POLICY DEFAULT IF ALLOWED
+        // FALLBACK TO POLICY DEFAULT
         return policyRepository.findById(policyId)
                 .map(policy -> BenefitPolicyRuleResponseDto.builder()
                         .benefitPolicyId(policy.getId())
@@ -248,6 +234,8 @@ public class BenefitPolicyRuleService {
     public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId,
             Integer year, Long excludeClaimId) {
 
+        // categoryId is the resolution key since V228; serviceId is kept for
+        // backward-compat
         Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId, categoryId);
         if (ruleOpt.isEmpty()) {
             return java.util.Map.of("covered", false);
@@ -258,59 +246,22 @@ public class BenefitPolicyRuleService {
             return java.util.Map.of("covered", true, "hasLimit", false);
         }
 
-        // Query usage from DB
         int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
 
-        // Decide whether to query by Service or Category based on the rule level
-        boolean isCategoryRule = rule.getMedicalServiceId() == null;
-
-        // ─────────────────────────────────────────────────────────────────────
-        // FIX: Handle NULL fields in historical claim lines
-        //
-        // Old claims may have:
-        // - appliedCategoryId = null → fall back to serviceCategoryId
-        // - medicalService = null → fall back to serviceCode match
-        //
-        // Using LEFT JOIN + COALESCE ensures those claims ARE counted.
-        // ─────────────────────────────────────────────────────────────────────
-        String usageFilter;
-        String serviceCode = null;
-
-        if (isCategoryRule) {
-            // COALESCE: if appliedCategoryId is null, use serviceCategoryId as fallback
-            usageFilter = "COALESCE(cl.appliedCategoryId, cl.serviceCategoryId) = :catId";
-        } else {
-            // LEFT JOIN on medicalService so lines with medicalService=null are not
-            // silently dropped
-            // Also match by serviceCode for unmapped/free-text entries
-            serviceCode = serviceRepository.findById(rule.getMedicalServiceId())
-                    .map(MedicalService::getCode).orElse(null);
-            if (serviceCode != null) {
-                usageFilter = "(ms.id = :serviceId OR cl.serviceCode = :serviceCode)";
-            } else {
-                usageFilter = "ms.id = :serviceId";
-            }
-        }
-
-        String joinClause = isCategoryRule
-                ? "FROM ClaimLine cl JOIN cl.claim c "
-                : "FROM ClaimLine cl LEFT JOIN cl.medicalService ms JOIN cl.claim c ";
-
-        // usedCount = number of distinct CLAIMS (visits), not sum of units.
-        // timesLimit means "N visits per year", not "N units total".
-        String q = "SELECT COUNT(DISTINCT c.id), SUM(cl.totalPrice) " + joinClause +
+        // All rules are category-level since V228.
+        // Use COALESCE for backward-compat with old claim lines.
+        String q = "SELECT COUNT(DISTINCT c.id), SUM(cl.totalPrice) " +
+                "FROM ClaimLine cl JOIN cl.claim c " +
                 "WHERE c.member.id = :memberId " +
-                "AND " + usageFilter + " " +
+                "AND COALESCE(cl.appliedCategoryId, cl.serviceCategoryId) = :catId " +
                 "AND c.status NOT IN :excludeStatuses " +
                 "AND c.active = true " +
                 (excludeClaimId != null ? "AND c.id <> :excludeClaimId " : "") +
                 "AND YEAR(c.serviceDate) = :year";
 
-        log.debug("[checkUsageLimit] Query: {} | isCategoryRule={} | year={} | serviceCode={}",
-                q, isCategoryRule, targetYear, serviceCode);
-
         var query = em.createQuery(q)
                 .setParameter("memberId", memberId)
+                .setParameter("catId", rule.getMedicalCategoryId())
                 .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED))
                 .setParameter("year", targetYear);
 
@@ -318,17 +269,7 @@ public class BenefitPolicyRuleService {
             query.setParameter("excludeClaimId", excludeClaimId);
         }
 
-        if (isCategoryRule) {
-            query.setParameter("catId", rule.getMedicalCategoryId());
-        } else {
-            query.setParameter("serviceId", rule.getMedicalServiceId());
-            if (serviceCode != null) {
-                query.setParameter("serviceCode", serviceCode);
-            }
-        }
-
         Object[] result = (Object[]) query.getSingleResult();
-
         long usedCount = result[0] != null ? ((Number) result[0]).longValue() : 0;
         java.math.BigDecimal usedAmount = result[1] != null ? (java.math.BigDecimal) result[1]
                 : java.math.BigDecimal.ZERO;
@@ -340,7 +281,6 @@ public class BenefitPolicyRuleService {
         usageMap.put("covered", true);
         usageMap.put("hasLimit", true);
         usageMap.put("ruleId", rule.getId());
-        usageMap.put("medicalServiceId", rule.getMedicalServiceId());
         usageMap.put("medicalCategoryId", rule.getMedicalCategoryId());
         usageMap.put("timesLimit", rule.getTimesLimit());
         usageMap.put("amountLimit", rule.getAmountLimit());
@@ -360,8 +300,8 @@ public class BenefitPolicyRuleService {
      * Create a new rule for a policy
      */
     public BenefitPolicyRuleResponseDto create(Long policyId, BenefitPolicyRuleCreateDto dto) {
-        log.info("Creating rule for policy {} - category: {}, service: {}",
-                policyId, dto.getMedicalCategoryId(), dto.getMedicalServiceId());
+        log.info("Creating rule for policy {} - category: {}",
+                policyId, dto.getMedicalCategoryId());
 
         // Validate policy exists
         BenefitPolicy policy = policyRepository.findById(policyId)
@@ -382,7 +322,7 @@ public class BenefitPolicyRuleService {
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .build();
 
-        // Set category or service
+        // Set category (service-level rules removed in V228)
         if (dto.getMedicalCategoryId() != null) {
             MedicalCategory category = categoryRepository.findById(dto.getMedicalCategoryId())
                     .orElseThrow(
@@ -394,17 +334,6 @@ public class BenefitPolicyRuleService {
             }
 
             rule.setMedicalCategory(category);
-        } else {
-            MedicalService service = serviceRepository.findById(dto.getMedicalServiceId())
-                    .orElseThrow(
-                            () -> new ResourceNotFoundException("MedicalService", "id", dto.getMedicalServiceId()));
-
-            // Check for duplicate service rule
-            if (ruleRepository.existsServiceRule(policyId, dto.getMedicalServiceId(), null)) {
-                throw new BusinessRuleException("A rule for this service already exists in this policy");
-            }
-
-            rule.setMedicalService(service);
         }
 
         BenefitPolicyRule saved = ruleRepository.save(rule);
@@ -422,6 +351,59 @@ public class BenefitPolicyRuleService {
         return dtos.stream()
                 .map(dto -> create(policyId, dto))
                 .toList();
+    }
+
+    /**
+     * Initialize policy with the 16 standard professional rules.
+     * Searches for categories by their standard codes and creates rules for each.
+     */
+    public List<BenefitPolicyRuleResponseDto> initializeStandardRules(Long policyId) {
+        log.info("Initializing standard 16 rules for policy {}", policyId);
+
+        List<String> standardCodes = List.of(
+                "CAT-IP-GEN", "CAT-IP-NURSE", "CAT-IP-PHYSIO", "CAT-IP-WORK",
+                "CAT-IP-PSYCH", "CAT-IP-MATER", "CAT-IP-COMPL", "CAT-OP-GEN",
+                "CAT-OP-RAD", "CAT-OP-MRI", "CAT-OP-DRUG", "CAT-OP-EQUIP",
+                "CAT-OP-PHYSIO", "CAT-OP-DENT-R", "CAT-OP-DENT-C", "CAT-OP-GLASS");
+
+        List<BenefitPolicyRuleResponseDto> results = new java.util.ArrayList<>();
+
+        for (String code : standardCodes) {
+            Optional<MedicalCategory> categoryOpt = categoryRepository.findByCode(code);
+            if (categoryOpt.isPresent()) {
+                MedicalCategory category = categoryOpt.get();
+
+                // Skip if rule already exists
+                if (ruleRepository.existsCategoryRule(policyId, category.getId(), null)) {
+                    log.warn("Rule for category {} already exists, skipping initialization", code);
+                    continue;
+                }
+
+                BenefitPolicyRuleCreateDto dto = BenefitPolicyRuleCreateDto.builder()
+                        .medicalCategoryId(category.getId())
+                        .coveragePercent(
+                                category.getCoveragePercent() != null ? category.getCoveragePercent().intValue() : 100) // Use
+                                                                                                                        // the
+                                                                                                                        // default
+                                                                                                                        // from
+                                                                                                                        // category
+                        .active(true)
+                        .requiresPreApproval(false)
+                        .waitingPeriodDays(0)
+                        .notes("تم الإنشاء تلقائياً — القواعد القياسية")
+                        .build();
+
+                try {
+                    results.add(create(policyId, dto));
+                } catch (Exception e) {
+                    log.error("Failed to initialize rule for category {}: {}", code, e.getMessage());
+                }
+            } else {
+                log.warn("Standard category code {} not found in database", code);
+            }
+        }
+
+        return results;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -538,19 +520,15 @@ public class BenefitPolicyRuleService {
     }
 
     private void validateTargetXor(Long categoryId, Long serviceId) {
-        boolean hasCategory = categoryId != null;
-        boolean hasService = serviceId != null;
-
-        if (hasCategory && hasService) {
+        if (categoryId == null) {
             throw new BusinessRuleException(
-                    "Rule must target either a category OR a service, not both. " +
-                            "Remove one of: medicalCategoryId or medicalServiceId");
+                    "Rule must target a medical category (medicalCategoryId required). " +
+                            "Service-level rules have been removed as of V228.");
         }
-
-        if (!hasCategory && !hasService) {
+        if (serviceId != null) {
             throw new BusinessRuleException(
-                    "Rule must target at least a category or a service. " +
-                            "Provide either medicalCategoryId or medicalServiceId");
+                    "Service-level rules are no longer supported (removed in V228). " +
+                            "Use medicalCategoryId only.");
         }
     }
 
@@ -576,17 +554,16 @@ public class BenefitPolicyRuleService {
 
     /**
      * Resolve the effective category ID for a service.
-     * Prefers the primary category link from the junction table,
-     * falling back to the legacy categoryId column.
+     * Since V228, returns the service's direct categoryId (no junction table).
+     * 
+     * @deprecated Use categoryId directly. Will be removed when MedicalService is
+     *             fully dropped.
      */
-    private Long resolveCategoryIdForCoverage(MedicalService service) {
-        if (service == null || service.getId() == null) {
+    @Deprecated
+    private Long resolveCategoryIdForCoverage(com.waad.tba.modules.medicaltaxonomy.entity.MedicalService service) {
+        if (service == null) {
             return null;
         }
-
-        return serviceCategoryRepository
-                .findFirstByServiceIdAndActiveTrueOrderByIsPrimaryDescIdAsc(service.getId())
-                .map(link -> link.getCategoryId())
-                .orElse(service.getCategoryId());
+        return service.getCategoryId();
     }
 }

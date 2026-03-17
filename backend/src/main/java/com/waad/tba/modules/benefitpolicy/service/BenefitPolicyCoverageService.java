@@ -14,7 +14,6 @@ import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
@@ -57,11 +56,11 @@ import java.util.Optional;
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * resolveCoverage(policyId, serviceId, categoryId):
- * 1. If exists SERVICE_RULE for serviceId → return SERVICE_RULE
- * 2. Else if exists CATEGORY_RULE for categoryId → return CATEGORY_RULE
- * 3. Else → return POLICY_DEFAULT (or NOT_COVERED)
+ * 1. If exists CATEGORY_RULE for categoryId → return CATEGORY_RULE
+ * 2. Else → return POLICY_DEFAULT (or NOT_COVERED)
  * 
- * Priority: SERVICE_RULE > CATEGORY_RULE > POLICY_DEFAULT
+ * Priority: CATEGORY_RULE > POLICY_DEFAULT
+ * (Service-level rules removed in V228 — category-only architecture)
  */
 @Slf4j
 @Service
@@ -72,7 +71,6 @@ public class BenefitPolicyCoverageService {
     private final BenefitPolicyRepository policyRepository;
     private final BenefitPolicyRuleRepository ruleRepository;
     private final MedicalServiceRepository serviceRepository;
-    private final MedicalServiceCategoryRepository serviceCategoryRepository;
     private final ClaimRepository claimRepository;
     private final MemberRepository memberRepository;
     private final MedicalCategoryRepository categoryRepository;
@@ -201,6 +199,49 @@ public class BenefitPolicyCoverageService {
     // ═══════════════════════════════════════════════════════════════════════════
     // SERVICE COVERAGE LOOKUP
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Check if a specific category is covered under the member's policy.
+     * This is the PRIMARY method for the new category-direct architecture.
+     *
+     * @param member     The member
+     * @param categoryId The medical category ID
+     * @return Coverage info, or empty if not covered
+     */
+    public Optional<CoverageInfo> getCoverageForCategory(Member member, Long categoryId) {
+        BenefitPolicy policy = member.getBenefitPolicy();
+        if (policy == null || categoryId == null) {
+            return Optional.empty();
+        }
+
+        Long parentCategoryId = categoryRepository.findById(categoryId)
+                .map(MedicalCategory::getParentId)
+                .orElse(null);
+
+        Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
+                policy.getId(), null, categoryId, null, parentCategoryId);
+
+        if (ruleOpt.isEmpty()) {
+            return Optional.of(CoverageInfo.builder()
+                    .covered(true)
+                    .coveragePercent(policy.getDefaultCoveragePercent())
+                    .requiresPreApproval(false)
+                    .ruleType("POLICY_DEFAULT")
+                    .build());
+        }
+
+        BenefitPolicyRule rule = ruleOpt.get();
+        return Optional.of(CoverageInfo.builder()
+                .covered(true)
+                .coveragePercent(rule.getEffectiveCoveragePercent())
+                .amountLimit(rule.getAmountLimit())
+                .timesLimit(rule.getTimesLimit())
+                .requiresPreApproval(rule.isRequiresPreApproval())
+                .waitingPeriodDays(rule.getWaitingPeriodDays())
+                .ruleId(rule.getId())
+                .ruleType("CATEGORY")
+                .build());
+    }
 
     /**
      * Check if a specific service is covered under the member's policy.
@@ -595,7 +636,7 @@ public class BenefitPolicyCoverageService {
 
     /**
      * Validate waiting period for a specific claim line.
-     * Uses service code to lookup the medical service.
+     * Uses the line's serviceCategoryId directly (no MedicalService lookup needed).
      */
     private void validateWaitingPeriodForClaimLine(
             BenefitPolicy benefitPolicy,
@@ -604,23 +645,14 @@ public class BenefitPolicyCoverageService {
             LocalDate serviceDate,
             long daysSinceEnrollment) {
 
-        String serviceCode = line.getServiceCode();
-        if (serviceCode == null || serviceCode.isBlank()) {
-            return; // No service code to check
-        }
-
-        // Try to find the medical service by code
-        Optional<MedicalService> serviceOpt = serviceRepository.findByCode(serviceCode);
-        if (serviceOpt.isEmpty()) {
-            log.debug("Service code {} not found, skipping waiting period check for this line", serviceCode);
+        Long categoryId = line.getServiceCategoryId();
+        if (categoryId == null) {
+            log.debug("ClaimLine has no serviceCategoryId, skipping waiting period check for line {}", line.getId());
             return;
         }
 
-        MedicalService service = serviceOpt.get();
-        Long categoryId = resolveCategoryIdForCoverage(service);
-
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                benefitPolicy.getId(), service.getId(), categoryId, null, null);
+                benefitPolicy.getId(), null, categoryId, null, null);
 
         if (ruleOpt.isPresent()) {
             BenefitPolicyRule rule = ruleOpt.get();
@@ -628,7 +660,7 @@ public class BenefitPolicyCoverageService {
 
             if (ruleWaitingDays != null && ruleWaitingDays > 0 && daysSinceEnrollment < ruleWaitingDays) {
                 LocalDate eligibleDate = memberStartDate.plusDays(ruleWaitingDays);
-                String serviceName = service.getName() != null ? service.getName() : service.getName();
+                String serviceName = line.getServiceName() != null ? line.getServiceName() : line.getServiceCode();
                 throw new BusinessRuleException(
                         String.format("فترة الانتظار للخدمة '%s' لم تكتمل. العضو سيكون مؤهلاً من %s (مطلوب %d يوم)",
                                 serviceName, eligibleDate, ruleWaitingDays));
@@ -874,15 +906,14 @@ public class BenefitPolicyCoverageService {
 
         if (ruleOpt.isPresent()) {
             BenefitPolicyRule rule = ruleOpt.get();
-            log.debug("✅ Found matching rule: ruleId={}, level={}", rule.getId(),
-                    rule.isServiceRule() ? "SERVICE" : "CATEGORY");
+            log.debug("✅ Found matching rule: ruleId={}, level=CATEGORY", rule.getId());
 
             // Determine the category ID that actually matched (for usage tracking)
             Long matchingCategoryId = rule.getMedicalCategory() != null ? rule.getMedicalCategory().getId()
                     : serviceCategoryId;
 
             ResolvedCoverage res = ResolvedCoverage.fromRule(rule,
-                    rule.isServiceRule() ? CoverageSource.SERVICE_RULE : CoverageSource.CATEGORY_RULE,
+                    CoverageSource.CATEGORY_RULE,
                     matchingCategoryId);
 
             // Add consumption data if member and date provided
@@ -1005,55 +1036,101 @@ public class BenefitPolicyCoverageService {
             }
         }
 
-        // Step 2: Preload ALL service rules for this policy in a single query
-        java.util.List<BenefitPolicyRule> serviceRules = ruleRepository.findByBenefitPolicyIdAndActiveTrue(policyId);
-        java.util.Map<Long, BenefitPolicyRule> serviceRuleMap = new java.util.HashMap<>();
+        // Step 2: Preload ALL category rules for this policy in a single query
+        java.util.List<BenefitPolicyRule> allRules = ruleRepository.findByBenefitPolicyIdAndActiveTrue(policyId);
         java.util.Map<Long, BenefitPolicyRule> categoryRuleMap = new java.util.HashMap<>();
 
-        for (BenefitPolicyRule rule : serviceRules) {
-            if (rule.getMedicalService() != null) {
-                // SERVICE_RULE
-                serviceRuleMap.put(rule.getMedicalService().getId(), rule);
-            } else if (rule.getMedicalCategory() != null) {
-                // CATEGORY_RULE
+        for (BenefitPolicyRule rule : allRules) {
+            if (rule.getMedicalCategory() != null) {
                 categoryRuleMap.put(rule.getMedicalCategory().getId(), rule);
             }
         }
 
-        // Step 3: Resolve coverage for each service
+        // Step 3: Resolve coverage for each service (CATEGORY_RULE or POLICY_DEFAULT)
         for (Long serviceId : serviceIds) {
-            int coveragePercent = 0;
+            int coveragePercent = policyDefault;
 
-            // Priority 1: SERVICE_RULE
-            BenefitPolicyRule serviceRule = serviceRuleMap.get(serviceId);
-            if (serviceRule != null) {
-                coveragePercent = serviceRule.getEffectiveCoveragePercent();
-                log.debug("📋 Batch coverage for service {}: {}% (SERVICE_RULE)", serviceId, coveragePercent);
-            } else {
-                // Priority 2: CATEGORY_RULE
-                Long categoryId = serviceToCategory.get(serviceId);
-                if (categoryId != null) {
-                    BenefitPolicyRule categoryRule = categoryRuleMap.get(categoryId);
-                    if (categoryRule != null) {
-                        coveragePercent = categoryRule.getEffectiveCoveragePercent();
-                        log.debug("📋 Batch coverage for service {}: {}% (CATEGORY_RULE)", serviceId, coveragePercent);
-                    } else {
-                        // Priority 3: POLICY_DEFAULT
-                        coveragePercent = policyDefault;
-                        log.debug("📋 Batch coverage for service {}: {}% (POLICY_DEFAULT)", serviceId, coveragePercent);
-                    }
+            Long categoryId = serviceToCategory.get(serviceId);
+            if (categoryId != null) {
+                BenefitPolicyRule categoryRule = categoryRuleMap.get(categoryId);
+                if (categoryRule != null) {
+                    coveragePercent = categoryRule.getEffectiveCoveragePercent();
+                    log.debug("📋 Batch coverage for service {}: {}% (CATEGORY_RULE)", serviceId, coveragePercent);
                 } else {
-                    // No category, use policy default
-                    coveragePercent = policyDefault;
-                    log.debug("📋 Batch coverage for service {}: {}% (POLICY_DEFAULT, no category)", serviceId,
-                            coveragePercent);
+                    log.debug("📋 Batch coverage for service {}: {}% (POLICY_DEFAULT)", serviceId, coveragePercent);
                 }
+            } else {
+                log.debug("📋 Batch coverage for service {}: {}% (POLICY_DEFAULT, no category)", serviceId,
+                        coveragePercent);
             }
 
             result.put(serviceId, coveragePercent);
         }
 
         log.info("📊 Batch coverage resolved for {} services in policy {}", serviceIds.size(), policyId);
+        return result;
+    }
+
+    /**
+     * Get effective coverage percent for a member/category combination.
+     * Category-based resolution (replaces service-based lookup after V229).
+     */
+    public int getEffectiveCoveragePercentByCategory(Member member, Long categoryId) {
+        BenefitPolicy policy = member != null ? member.getBenefitPolicy() : null;
+        if (policy == null || categoryId == null) {
+            return 0;
+        }
+
+        int policyDefault = policy.getDefaultCoveragePercent() != null ? policy.getDefaultCoveragePercent()
+                : SYSTEM_DEFAULT_COVERAGE_PERCENT;
+
+        java.util.Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
+                policy.getId(), null, categoryId, null, null);
+
+        return ruleOpt.map(BenefitPolicyRule::getEffectiveCoveragePercent).orElse(policyDefault);
+    }
+
+    /**
+     * Batch preload coverage percentages for multiple categories.
+     * Category-based resolution (replaces service-based batchGetCoveragePercents
+     * after V229).
+     *
+     * @param member      The member
+     * @param categoryIds List of category IDs to resolve coverage for
+     * @return Map of categoryId → coverage percentage
+     */
+    public java.util.Map<Long, Integer> batchGetCoveragePercentsByCategory(Member member,
+            java.util.List<Long> categoryIds) {
+        java.util.Map<Long, Integer> result = new java.util.HashMap<>();
+
+        BenefitPolicy policy = member != null ? member.getBenefitPolicy() : null;
+        if (policy == null || categoryIds == null || categoryIds.isEmpty()) {
+            if (categoryIds != null)
+                categoryIds.forEach(id -> result.put(id, 0));
+            return result;
+        }
+
+        Long policyId = policy.getId();
+        int policyDefault = policy.getDefaultCoveragePercent() != null
+                ? policy.getDefaultCoveragePercent()
+                : SYSTEM_DEFAULT_COVERAGE_PERCENT;
+
+        // Preload all category rules for this policy in a single query
+        java.util.List<BenefitPolicyRule> allRules = ruleRepository.findByBenefitPolicyIdAndActiveTrue(policyId);
+        java.util.Map<Long, BenefitPolicyRule> categoryRuleMap = new java.util.HashMap<>();
+        for (BenefitPolicyRule rule : allRules) {
+            if (rule.getMedicalCategory() != null) {
+                categoryRuleMap.put(rule.getMedicalCategory().getId(), rule);
+            }
+        }
+
+        for (Long categoryId : categoryIds) {
+            BenefitPolicyRule rule = categoryRuleMap.get(categoryId);
+            int coveragePercent = rule != null ? rule.getEffectiveCoveragePercent() : policyDefault;
+            result.put(categoryId, coveragePercent);
+        }
+
+        log.info("📊 Batch category coverage resolved for {} categories in policy {}", categoryIds.size(), policyId);
         return result;
     }
 
@@ -1145,14 +1222,10 @@ public class BenefitPolicyCoverageService {
     }
 
     private Long resolveCategoryIdForCoverage(MedicalService service) {
-        if (service == null || service.getId() == null) {
+        if (service == null) {
             return null;
         }
-
-        return serviceCategoryRepository
-                .findFirstByServiceIdAndActiveTrueOrderByIsPrimaryDescIdAsc(service.getId())
-                .map(link -> link.getCategoryId())
-                .orElse(service.getCategoryId());
+        return service.getCategoryId();
     }
 
     /**

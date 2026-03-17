@@ -19,24 +19,24 @@ import java.time.LocalDateTime;
 public class BenefitPolicyRuleResponseDto {
 
     private Long id;
-    
+
     // Parent policy info
     private Long benefitPolicyId;
     private String benefitPolicyName;
-    
+
     // Target info
     private String ruleType; // "CATEGORY" or "SERVICE"
-    
+
     // Category info (if category rule)
     private Long medicalCategoryId;
     private String medicalCategoryCode;
     private String medicalCategoryName;
-    
+
     // Service info (if service rule)
     private Long medicalServiceId;
     private String medicalServiceCode;
     private String medicalServiceName;
-    
+
     // Coverage settings
     private Integer coveragePercent;
     private Integer effectiveCoveragePercent; // Resolved value (including fallback)
@@ -44,13 +44,13 @@ public class BenefitPolicyRuleResponseDto {
     private Integer timesLimit;
     private Integer waitingPeriodDays;
     private boolean requiresPreApproval;
-    
+
     // Display label
     private String label;
-    
+
     private String notes;
     private boolean active;
-    
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -75,29 +75,16 @@ public class BenefitPolicyRuleResponseDto {
         // Parent policy
         if (rule.getBenefitPolicy() != null) {
             builder.benefitPolicyId(rule.getBenefitPolicy().getId())
-                   .benefitPolicyName(rule.getBenefitPolicy().getName());
+                    .benefitPolicyName(rule.getBenefitPolicy().getName());
         }
 
-        // Determine rule type and set appropriate fields
+        // Since V228, all rules are category-based
         if (rule.isCategoryRule()) {
             builder.ruleType("CATEGORY");
             if (rule.getMedicalCategory() != null) {
                 builder.medicalCategoryId(rule.getMedicalCategory().getId())
-                       .medicalCategoryCode(rule.getMedicalCategory().getCode())
-                       .medicalCategoryName(rule.getMedicalCategory().getName());
-            }
-        } else if (rule.isServiceRule()) {
-            builder.ruleType("SERVICE");
-            if (rule.getMedicalService() != null) {
-                builder.medicalServiceId(rule.getMedicalService().getId())
-                       .medicalServiceCode(rule.getMedicalService().getCode())
-                       .medicalServiceName(rule.getMedicalService().getName());
-                
-                // Set category ID if service has it (category details need to be fetched separately)
-                if (rule.getMedicalService().getCategoryId() != null) {
-                    builder.medicalCategoryId(rule.getMedicalService().getCategoryId());
-                    // Category code/name would need separate repository fetch - omitting for now
-                }
+                        .medicalCategoryCode(rule.getMedicalCategory().getCode())
+                        .medicalCategoryName(rule.getMedicalCategory().getName());
             }
         }
 

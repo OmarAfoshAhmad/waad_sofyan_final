@@ -92,15 +92,6 @@ public class BenefitPolicyRuleController {
         return ResponseEntity.ok(ApiResponse.success("Category rules retrieved", result));
     }
 
-    @GetMapping("/rules/service")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "List service-level rules for a policy")
-    public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> findServiceRules(
-            @PathVariable("policyId") Long policyId) {
-        List<BenefitPolicyRuleResponseDto> result = ruleService.findServiceRules(policyId);
-        return ResponseEntity.ok(ApiResponse.success("Service rules retrieved", result));
-    }
-
     @GetMapping("/rules/pre-approval")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "List rules that require pre-approval")
@@ -122,7 +113,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "categoryId", required = false) Long categoryId) {
 
-        Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId, categoryId);
+        Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId,
+                categoryId);
 
         if (result.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success("Service not covered under this policy", null));
@@ -144,7 +136,8 @@ public class BenefitPolicyRuleController {
         boolean requiresPreApproval = ruleService.requiresPreApproval(policyId, serviceId, categoryId);
 
         // Also include limit info from the rule
-        Optional<BenefitPolicyRuleResponseDto> ruleOpt = ruleService.findCoverageForService(policyId, serviceId, categoryId);
+        Optional<BenefitPolicyRuleResponseDto> ruleOpt = ruleService.findCoverageForService(policyId, serviceId,
+                categoryId);
         Map<String, Object> result = new java.util.HashMap<>();
         result.put("covered", isCovered);
         result.put("coveragePercent", coveragePercent);
@@ -168,7 +161,8 @@ public class BenefitPolicyRuleController {
             @RequestParam(name = "year", required = false) Integer year,
             @RequestParam(name = "excludeClaimId", required = false) Long excludeClaimId) {
 
-        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId, memberId, year, excludeClaimId);
+        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId, memberId, year,
+                excludeClaimId);
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
     }
 
@@ -203,6 +197,18 @@ public class BenefitPolicyRuleController {
         List<BenefitPolicyRuleResponseDto> result = ruleService.createBulk(policyId, dtos);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Rules created successfully", result));
+    }
+
+    @PostMapping("/rules/initialize-standard")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Initialize policy with the 16 standard professional rules")
+    public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> initializeStandardRules(
+            @PathVariable("policyId") Long policyId) {
+
+        log.info("Initializing standard 16 rules for policy {}", policyId);
+        List<BenefitPolicyRuleResponseDto> result = ruleService.initializeStandardRules(policyId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Standard rules initialized successfully", result));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -305,4 +311,3 @@ public class BenefitPolicyRuleController {
         return ResponseEntity.ok(ApiResponse.success("Rule counts", counts));
     }
 }
-

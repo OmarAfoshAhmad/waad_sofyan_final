@@ -213,17 +213,20 @@ public class CostCalculationService {
             return getCoPayPercent(benefitPolicy, networkType);
         }
 
-        // PERFORMANCE OPTIMIZATION: Batch preload all coverage percentages in ONE query
-        List<Long> serviceIds = lines.stream()
-                .filter(line -> line.getMedicalService() != null)
-                .map(line -> line.getMedicalService().getId())
+        // PERFORMANCE OPTIMIZATION: Use category IDs from lines (MedicalService FK
+        // removed in V229)
+        List<Long> categoryIds = lines.stream()
+                .map(line -> line.getAppliedCategoryId() != null ? line.getAppliedCategoryId()
+                        : line.getServiceCategoryId())
+                .filter(id -> id != null)
                 .distinct()
                 .collect(java.util.stream.Collectors.toList());
 
-        java.util.Map<Long, Integer> coverageMap = benefitPolicyCoverageService.batchGetCoveragePercents(member,
-                serviceIds);
+        java.util.Map<Long, Integer> coverageMap = benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(
+                member,
+                categoryIds);
 
-        log.debug("📊 Preloaded coverage for {} services (N+1 elimination)", serviceIds.size());
+        log.debug("📊 Preloaded coverage for {} categories (N+1 elimination)", categoryIds.size());
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         BigDecimal weightedCopaySum = BigDecimal.ZERO;
@@ -240,10 +243,12 @@ public class CostCalculationService {
                 continue;
             }
 
-            // Get coverage percent from preloaded map (O(1) lookup)
+            // Get coverage percent from preloaded map (O(1) lookup) using categoryId
             int coveragePercent;
-            if (line.getMedicalService() != null) {
-                coveragePercent = coverageMap.getOrDefault(line.getMedicalService().getId(),
+            Long categoryId = line.getAppliedCategoryId() != null ? line.getAppliedCategoryId()
+                    : line.getServiceCategoryId();
+            if (categoryId != null) {
+                coveragePercent = coverageMap.getOrDefault(categoryId,
                         benefitPolicy.getDefaultCoveragePercent() != null ? benefitPolicy.getDefaultCoveragePercent()
                                 : 80);
             } else {
@@ -299,14 +304,15 @@ public class CostCalculationService {
     private int getCoveragePercentForLine(ClaimLine line, Member member) {
         int coverage;
 
-        // Try to get coverage from BenefitPolicyCoverageService
-        if (line.getMedicalService() != null) {
-            Long serviceId = line.getMedicalService().getId();
-            int rawCoverage = benefitPolicyCoverageService.getEffectiveCoveragePercent(member, serviceId);
+        // Resolve coverage by category (MedicalService FK removed in V229)
+        Long categoryId = line.getAppliedCategoryId() != null ? line.getAppliedCategoryId()
+                : line.getServiceCategoryId();
+        if (categoryId != null) {
+            int rawCoverage = benefitPolicyCoverageService.getEffectiveCoveragePercentByCategory(member, categoryId);
 
             if (rawCoverage > 0) {
-                log.debug("✅ Coverage for service {} resolved from BenefitPolicyRule: {}%",
-                        serviceId, rawCoverage);
+                log.debug("✅ Coverage for category {} resolved from BenefitPolicyRule: {}%",
+                        categoryId, rawCoverage);
                 coverage = rawCoverage;
             } else {
                 coverage = getFallbackCoverage(member);

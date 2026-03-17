@@ -8,15 +8,13 @@ import dayjs from 'dayjs';
 import {
   Grid,
   Button,
-  Stack,
   TextField,
   MenuItem,
   InputAdornment,
   Alert,
   Typography,
   Divider,
-  Box,
-  CircularProgress
+  Box
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -31,7 +29,6 @@ import BusinessIcon from '@mui/icons-material/Business';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import DescriptionIcon from '@mui/icons-material/Description';
-import RefreshIcon from '@mui/icons-material/Refresh';
 
 // Project Components
 import MainCard from 'components/MainCard';
@@ -83,7 +80,6 @@ const BenefitPolicyCreate = () => {
   const navigate = useNavigate();
   const [employers, setEmployers] = useState([]);
   const [loadingEmployers, setLoadingEmployers] = useState(true);
-  const [refreshingEmployers, setRefreshingEmployers] = useState(false);
   const [generalError, setGeneralError] = useState(null);
 
   // Initial Form Values
@@ -101,34 +97,22 @@ const BenefitPolicyCreate = () => {
   };
 
   // Fetch Employers Data Function
-  const fetchEmployers = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshingEmployers(true);
-    } else {
-      setLoadingEmployers(true);
-    }
+  const fetchEmployers = async () => {
+    setLoadingEmployers(true);
     try {
       const data = await getEmployerSelectors();
-      // Normalize data if needed, assuming API returns [{id, label}, ...]
       setEmployers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch employers:', err);
-      // Error is handled silently for selector, just empty list
     } finally {
       setLoadingEmployers(false);
-      setRefreshingEmployers(false);
     }
   };
 
   // Fetch Employers on Mount
   useEffect(() => {
-    fetchEmployers(false);
+    fetchEmployers();
   }, []);
-
-  // Handle Refresh Employers
-  const handleRefreshEmployers = () => {
-    fetchEmployers(true);
-  };
 
   // Handle Form Submission
   const handleSubmit = async (values, { setSubmitting }) => {
@@ -178,7 +162,6 @@ const BenefitPolicyCreate = () => {
         <MainCard
           content={false}
           sx={{
-            height: 'calc(100vh - 210px)',
             display: 'flex',
             flexDirection: 'column'
           }}
@@ -193,8 +176,8 @@ const BenefitPolicyCreate = () => {
 
           <Formik initialValues={initialValues} validationSchema={validationSchema} onSubmit={handleSubmit}>
             {({ values, errors, touched, handleChange, handleBlur, setFieldValue, isSubmitting }) => (
-              <Form autoComplete="off" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Box sx={{ flex: 1, overflowY: 'auto', p: '1.0rem' }}>
+              <Form autoComplete="off" style={{ display: 'flex', flexDirection: 'column' }}>
+                <Box sx={{ p: '1.0rem' }}>
                   <Grid container spacing={2}>
 
                     {/* ── Section 1: هوية الوثيقة ── */}
@@ -209,14 +192,13 @@ const BenefitPolicyCreate = () => {
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField
                         fullWidth
-                        label="رمز الوثيقة (اختياري)"
+                        label="رمز الوثيقة"
                         name="policyCode"
                         size="small"
-                        value={values.policyCode}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
-                        error={touched.policyCode && Boolean(errors.policyCode)}
-                        helperText={(touched.policyCode && errors.policyCode) || 'اتركه فارغاً للتوليد التلقائي'}
+                        value={values.policyCode || 'سيتم التوليد تلقائياً'}
+                        disabled
+                        helperText="يتم توليده تلقائياً عند الحفظ"
+                        sx={{ '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: 'text.secondary', fontStyle: 'italic' } }}
                       />
                     </Grid>
 
@@ -243,46 +225,41 @@ const BenefitPolicyCreate = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 8 }}>
-                      <Stack direction="row" spacing={1} alignItems="flex-start">
-                        <TextField
-                          fullWidth
-                          select
-                          size="small"
-                          label="الشريك (صاحب العمل)"
-                          name="employerOrgId"
-                          value={values.employerOrgId}
-                          onChange={handleChange}
-                          onBlur={handleBlur}
-                          error={touched.employerOrgId && Boolean(errors.employerOrgId)}
-                          helperText={(touched.employerOrgId && errors.employerOrgId) || 'اختر المؤسسة صاحبة الوثيقة'}
-                          disabled={loadingEmployers || refreshingEmployers}
-                        >
-                          {loadingEmployers || refreshingEmployers ? (
-                            <MenuItem value="" disabled>
-                              <CircularProgress size={16} sx={{ mr: 1 }} /> جارٍ التحميل...
+                      <TextField
+                        fullWidth
+                        select
+                        size="small"
+                        label="الشريك (صاحب العمل)"
+                        name="employerOrgId"
+                        value={values.employerOrgId}
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          setFieldValue('employerOrgId', selectedId);
+                          // Auto-populate name from employer
+                          if (!values.name) {
+                            const emp = employers.find((em) => em.id === selectedId);
+                            if (emp) setFieldValue('name', `وثيقة ${emp.label || emp.name}`);
+                          }
+                        }}
+                        onBlur={handleBlur}
+                        error={touched.employerOrgId && Boolean(errors.employerOrgId)}
+                        helperText={(touched.employerOrgId && errors.employerOrgId) || 'اختر المؤسسة صاحبة الوثيقة'}
+                        disabled={loadingEmployers}
+                      >
+                        {loadingEmployers ? (
+                          <MenuItem value="" disabled>
+                            <CircularProgress size={16} sx={{ mr: 1 }} /> جارٍ التحميل...
+                          </MenuItem>
+                        ) : employers.length > 0 ? (
+                          employers.map((emp) => (
+                            <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '0.8125rem' }}>
+                              {emp.label || emp.name}
                             </MenuItem>
-                          ) : employers.length > 0 ? (
-                            employers.map((emp) => (
-                              <MenuItem key={emp.id} value={emp.id} sx={{ fontSize: '0.8125rem' }}>
-                                {emp.label || emp.name}
-                              </MenuItem>
-                            ))
-                          ) : (
-                            <MenuItem value="" disabled>لا يوجد شركاء متاحين</MenuItem>
-                          )}
-                        </TextField>
-                        <Button
-                          variant="outlined"
-                          color="primary"
-                          size="small"
-                          onClick={handleRefreshEmployers}
-                          disabled={loadingEmployers || refreshingEmployers}
-                          sx={{ minWidth: '2.5rem', height: '2.5rem' }}
-                          title="تحديث قائمة الشركاء"
-                        >
-                          {refreshingEmployers ? <CircularProgress size={16} /> : <RefreshIcon size="small" />}
-                        </Button>
-                      </Stack>
+                          ))
+                        ) : (
+                          <MenuItem value="" disabled>لا يوجد شركاء متاحين</MenuItem>
+                        )}
+                      </TextField>
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
