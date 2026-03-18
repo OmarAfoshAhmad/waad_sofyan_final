@@ -158,14 +158,6 @@ public class BenefitPolicyRule {
     }
 
     /**
-     * @deprecated Since V228 all rules are category-level. Always returns false.
-     */
-    @Deprecated
-    public boolean isServiceRule() {
-        return false;
-    }
-
-    /**
      * Get the effective coverage percent (falls back to policy default)
      */
     public int getEffectiveCoveragePercent() {

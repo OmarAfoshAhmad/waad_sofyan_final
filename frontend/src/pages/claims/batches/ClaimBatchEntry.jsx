@@ -1,7 +1,6 @@
 /**
  * صفحة إدخال الدفعة — تخطيط RTL يملأ الشاشة
  * ✅ الجدول والفورم من اليمين لليسار
- * ✅ الشريط الجانبي (المطالبات) من اليسار
  * ✅ زر الحفظ مرئي دون scroll
  * ✅ كل النصوص من ar.js (لا hardcode)
  */
@@ -49,7 +48,7 @@ import systemSettingsService from 'services/api/systemSettings.service';
 import { useCalculationLogic } from './hooks/useCalculationLogic';
 import { useCoverageLogic } from './hooks/useCoverageLogic';
 
-import { BatchHistorySidebar } from './components/BatchHistorySidebar';
+
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
 import { ClaimLineRow } from './components/ClaimLineRow';
 import { ClaimTotalsFooter } from './components/ClaimTotalsFooter';
@@ -79,9 +78,11 @@ const inlineSx = {
 // رأس عمود الجدول
 const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => (
     <TableCell align={align} sx={{
-        bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 500,
-        fontSize: '0.75rem', py: 0.8, px: '0.6rem', whiteSpace: 'nowrap',
-        borderBottom: '2px solid #c8e6c9',
+        bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 600,
+        fontSize: '0.8rem', py: 1, px: '0.75rem', whiteSpace: 'nowrap',
+        borderBottom: '2px solid #93c9a8',
+        borderRight: '1px solid #c8e6c9',
+        '&:last-child': { borderRight: 'none' },
         ...(w && { width: w, minWidth: w }),
         ...sxOver
     }}>
@@ -860,29 +861,9 @@ export default function ClaimBatchEntry() {
             )}
 
             {/* ═══ المحتوى ═══ */}
-            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, gap: '1.0rem', px: '1.0rem', pb: '0.4rem' }}>
-                
-                {/* ── الشريط الجانبي — يسار (سجل الدفعة) ── */}
-                <BatchHistorySidebar
-                    loadingBatch={loadingBatch}
-                    batchContent={batchContent}
-                    editingClaimId={editingClaimId}
-                    onSwitchClaim={handleSwitchClaim}
-                    handleDeleteClaim={handleDeleteClaim}
-                    batchData={batchData}
-                    page={page}
-                    setPage={setPage}
-                    monthLabel={monthLabel}
-                    year={year}
-                    theme={theme}
-                    navigate={navigate}
-                    detailUrl={detailUrl}
-                    currentBatch={currentBatch}
-                    isBatchOpen={!isExpiredBatch && (!currentBatch || currentBatch.status === 'OPEN')}
-                    t={t}
-                />
+            <Box sx={{ flex: 1, display: 'flex', minHeight: 0, px: '1.0rem', pb: '0.4rem' }}>
 
-                {/* ── النموذج الرئيسي (يمين الشاشة) ── */}
+                {/* ── النموذج الرئيسي ── */}
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
                     <Paper variant="outlined" sx={{
                         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -956,15 +937,6 @@ export default function ClaimBatchEntry() {
                                         </IconButton>
                                     </span>
                                 </Tooltip>
-                                
-                                {/* Save & Stay */}
-                                <Button variant="outlined" size="small" color="primary"
-                                    startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <SaveIcon sx={{ fontSize: '0.8125rem' }} />}
-                                    onClick={() => handleSave(false)} 
-                                    disabled={saving || !isDirty || isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN' && !editingClaimId)}
-                                    sx={{ fontWeight: 500, fontSize: '0.75rem', py: 0.4 }}>
-                                    {saving ? t('claimEntry.saving') : "حفظ"}
-                                </Button>
 
                                 {/* Save & New (The main button) */}
                                 <Button variant="contained" size="small" color="success"
@@ -999,8 +971,8 @@ export default function ClaimBatchEntry() {
                                 preAuthId={preAuthId}
                                 setPreAuthId={setPreAuthId}
                                 setPreAuthSearch={setPreAuthSearch}
-                                complaint={complaint}
-                                setComplaint={setComplaint}
+                                serviceDate={serviceDate}
+                                setServiceDate={setServiceDate}
                                 setIsDirty={setIsDirty}
                                 financialSummary={memberFinancialSummary}
                                 loadingSummary={loadingSummary}
@@ -1022,7 +994,14 @@ export default function ClaimBatchEntry() {
                         </Box>
 
                         <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
-                            <Table dir="rtl" size="small" stickyHeader sx={{ minWidth: '47.5rem' }}>
+                            <Table dir="rtl" size="small" stickyHeader sx={{
+                                minWidth: '60rem',
+                                '& .MuiTableCell-body': {
+                                    borderRight: '1px solid #e0e0e0',
+                                    borderBottom: '1px solid #e0e0e0',
+                                    '&:last-child': { borderRight: 'none' }
+                                }
+                            }}>
                                 <TableHead>
                                     <TableRow>
                                         <TH align="center" w={40}>#</TH>
@@ -1033,7 +1012,8 @@ export default function ClaimBatchEntry() {
                                         <TH align="center" w={110}>سقف المنفعة</TH>
                                         <TH align="center" w={110}> المتبقي من السقف </TH>
                                         <TH align="center" w={75}>المرفوض</TH>
-                                        <TH align="center" w={100}>شركة / مشترك</TH>
+                                        <TH align="center" w={105}>حصة الشركة</TH>
+                                        <TH align="center" w={105}>حصة المشترك</TH>
                                         <TH align="center" w={80}>الإجمالي</TH>
                                         <TH align="left" w={40}></TH>
                                     </TableRow>
@@ -1055,7 +1035,7 @@ export default function ClaimBatchEntry() {
                                         />
                                     ))}
                                     <TableRow>
-                                        <TableCell colSpan={11} sx={{ py: 1, textAlign: 'center' }}>
+                                        <TableCell colSpan={12} sx={{ py: 1, textAlign: 'center' }}>
                                             <Button size="small" startIcon={<AddIcon />} onClick={addLine} sx={{ fontWeight: 500 }}>
                                                 {t('claimEntry.addLine')}
                                             </Button>

@@ -39,10 +39,6 @@ public class Provider {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * Provider name (الاسم)
-     * Unified single name field - Arabic-only system
-     */
     @Column(name = "name", nullable = false, length = 200)
     private String name;
 
@@ -80,39 +76,12 @@ public class Provider {
 
     private LocalDate contractEndDate;
 
-    /**
-     * [DEPRECATED] Default discount rate for provider
-     * 
-     * ⚠️ PHASE 3 AUDIT: This field violates Provider financial safety rules.
-     * Discount rates should be defined in ProviderContract entity, not in Provider.
-     * 
-     * Migration Path:
-     * - Use ProviderContract.discountPercent for contract-specific discounts
-     * - This field kept for backward compatibility with existing reports only
-     * 
-     * @deprecated Use {@link com.waad.tba.modules.providercontract.entity.ProviderContract#discountPercent}
-     * @see com.waad.tba.modules.providercontract.entity.ProviderContract#discountPercent
-     */
+    /** @deprecated Use ProviderContract.discountPercent instead */
     @Deprecated(since = "Phase 3 - 2026-02-12", forRemoval = false)
     @Column(precision = 5, scale = 2)
     private BigDecimal defaultDiscountRate;
 
-    /**
-     * ════════════════════════════════════════════════════════════════════════
-     * PROVIDER-PARTNER ISOLATION (Phase 5.5)
-     * ════════════════════════════════════════════════════════════════════════
-     * 
-     * TPA Model: Provider has master contract with TPA (Waad Insurance).
-     * 
-     * allowAllEmployers Flag:
-     * - true: Provider can access ALL employers (global network)
-     * - false: Provider restricted to allowedEmployers list only
-     * 
-     * SECURITY:
-     * - PROVIDER users NEVER see global employer selectors
-     * - All queries scoped by providerId + allowed employer IDs
-     * - Backend enforces at service/repository layer
-     */
+    // allowAllEmployers=true → global network | false → only allowedEmployers list
     @OneToMany(mappedBy = "provider", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ProviderAllowedEmployer> allowedEmployers = new ArrayList<>();
@@ -158,12 +127,6 @@ public class Provider {
         RADIOLOGY
     }
 
-    /**
-     * Network Tier for Insurance Providers
-     * - IN_NETWORK: Provider has contract with insurance (معتمد داخل الشبكة)
-     * - OUT_OF_NETWORK: Provider not contracted (خارج الشبكة)
-     * - PREFERRED: Preferred provider with better rates (مزود مفضل)
-     */
     public enum NetworkTier {
         IN_NETWORK,
         OUT_OF_NETWORK,

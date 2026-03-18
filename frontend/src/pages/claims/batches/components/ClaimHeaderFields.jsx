@@ -28,8 +28,8 @@ export const ClaimHeaderFields = ({
     preAuthId,
     setPreAuthId,
     setPreAuthSearch,
-    complaint,
-    setComplaint,
+    serviceDate,
+    setServiceDate,
     setIsDirty,
     financialSummary,
     loadingSummary,
@@ -99,7 +99,7 @@ export const ClaimHeaderFields = ({
                     </Box>
             </Stack>
 
-            {/* Column 2: Diagnosis & Complaint */}
+            {/* Column 2: Diagnosis & Service Date */}
             <Stack spacing={2}>
                     <Box>
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
@@ -113,12 +113,12 @@ export const ClaimHeaderFields = ({
                     </Box>
                     <Box>
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
-                            {t('claimEntry.complaint')}
+                            تاريخ الخدمة
                         </Typography>
-                        <TextField fullWidth size="small" variant="standard" value={complaint}
-                            placeholder="الشكوى أو الملاحظات..."
-                            onChange={e => { setComplaint(e.target.value); setIsDirty(true); }} 
-                            sx={inlineSx} 
+                        <TextField fullWidth size="small" variant="standard" type="date"
+                            value={serviceDate || ''}
+                            onChange={e => { setServiceDate(e.target.value); setIsDirty(true); }}
+                            sx={inlineSx}
                         />
                     </Box>
             </Stack>

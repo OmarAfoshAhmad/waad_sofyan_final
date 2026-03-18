@@ -40,7 +40,8 @@ import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Save as SaveIcon,
-  AutoAwesome as MagicIcon
+  AutoAwesome as MagicIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -816,7 +817,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [ruleSearch, setRuleSearch] = useState('');
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
-  const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
   const [initStandardModalOpen, setInitStandardModalOpen] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1201,10 +1201,34 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // ── shared header cell styles ──
+  const thSx = {
+    backgroundColor: '#E8F5F1',
+    color: '#0D4731',
+    fontWeight: 600,
+    borderBottom: '2px solid #1b5e20',
+    py: '0.75rem',
+  };
+
+  // ── shared row hover styles ──
+  const rowSx = (idx) => ({
+    backgroundColor: idx % 2 === 0 ? '#fff' : 'rgba(232, 245, 241, 0.45)',
+    '&:hover': { backgroundColor: 'rgba(27, 94, 32, 0.07) !important' },
+    '& td': { borderBottom: '1px solid #e8f5e1' },
+  });
+
+  // ── shared green TextField focus style ──
+  const greenFieldSx = {
+    '& .MuiOutlinedInput-root': {
+      '&:hover fieldset': { borderColor: '#1b5e20' },
+      '&.Mui-focused fieldset': { borderColor: '#1b5e20' },
+    },
+  };
+
   if (loadingRules) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
-        <CircularProgress />
+        <CircularProgress sx={{ color: '#1b5e20' }} />
       </Box>
     );
   }
@@ -1215,44 +1239,285 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   return (
     <>
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 1 — سقوف التصنيفات الطبية (16 تصنيف)
+      ═══════════════════════════════════════════════════════════════════ */}
       <MainCard
-        title="قواعد التغطية"
+        sx={{ mb: 2 }}
+        title={
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <CategoryIcon sx={{ color: '#1b5e20', fontSize: '1.25rem' }} />
+            <Typography variant="h5" fontWeight={600} sx={{ color: '#0D4731' }}>
+              سقوف التصنيفات الطبية
+            </Typography>
+            <Chip
+              label={`${categoriesCoverageRows.length} تصنيف`}
+              size="small"
+              sx={{ bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 600, border: '1px solid #1b5e20' }}
+            />
+          </Stack>
+        }
+        secondary={
+          canEdit && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Tooltip title="تحديث">
+                <IconButton
+                  size="small"
+                  onClick={() => refetchRules()}
+                  sx={{ color: '#1b5e20', border: '1px solid #c8e6c9', width: '2.25rem', height: '2.25rem' }}
+                >
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={bulkSavingCoverage ? <CircularProgress size={14} color="inherit" /> : <SaveIcon fontSize="small" />}
+                onClick={saveAllCategoryCoverage}
+                disabled={bulkSavingCoverage || isLoading || Object.keys(categoryCoverageInputs).length === 0}
+                sx={{ bgcolor: '#1b5e20', '&:hover': { bgcolor: '#0D4731' }, height: '2.25rem' }}
+              >
+                حفظ جماعي
+              </Button>
+            </Stack>
+          )
+        }
+      >
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
+          حدّد نسبة التغطية والسقوف لكل تصنيف. هذه القيم تُطبّق على جميع خدمات التصنيف ما لم توجد قاعدة خاصة بالخدمة.
+        </Typography>
+
+        <TableContainer>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={thSx}>التصنيف</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '8rem' }}>النسبة الحالية</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '10.5rem' }}>نسبة التغطية</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '10.5rem' }}>سقف المبلغ (د.ل)</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '9rem' }}>عدد المرات</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '7rem' }}>الإجراءات</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loadingCategories ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                    <CircularProgress size={24} sx={{ color: '#1b5e20' }} />
+                  </TableCell>
+                </TableRow>
+              ) : categoriesCoverageRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                    <Typography color="text.secondary">لا توجد تصنيفات طبية</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                categoriesCoverageRows.map((row, idx) => {
+                  const isRowSaving = createMutation.isPending || updateMutation.isPending;
+                  const isDirty = categoryCoverageInputs[row.category.id] !== undefined;
+                  return (
+                    <TableRow key={row.category.id} hover sx={rowSx(idx)}>
+                      {/* Category name */}
+                      <TableCell>
+                        <Stack spacing={0.25}>
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <Chip
+                              label={row.category.code || '-'}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontFamily: 'monospace', fontSize: '0.68rem', borderColor: '#1b5e20', color: '#1b5e20' }}
+                            />
+                            {row.serviceRulesCount > 0 && (
+                              <Tooltip title={`${row.serviceRulesCount} قاعدة خدمة مخصصة تُعدّل هذا التصنيف`}>
+                                <Chip label={`${row.serviceRulesCount} خدمة`} size="small" color="secondary" variant="filled" />
+                              </Tooltip>
+                            )}
+                          </Stack>
+                          <Typography variant="body2" fontWeight={500} sx={{ color: '#0D4731' }}>
+                            {row.category.nameAr || row.category.name || '-'}
+                          </Typography>
+                          {row.category.nameEn && (
+                            <Typography variant="caption" color="text.secondary">{row.category.nameEn}</Typography>
+                          )}
+                        </Stack>
+                      </TableCell>
+
+                      {/* Current effective coverage */}
+                      <TableCell align="center">
+                        {row.effectiveCoveragePercent !== null && row.effectiveCoveragePercent !== undefined ? (
+                          <Chip
+                            label={`${row.effectiveCoveragePercent}%`}
+                            size="small"
+                            sx={{ bgcolor: '#1b5e20', color: '#fff', fontWeight: 600 }}
+                          />
+                        ) : (
+                          <Chip label="افتراضي" size="small" variant="outlined" sx={{ borderColor: '#1b5e20', color: '#1b5e20' }} />
+                        )}
+                      </TableCell>
+
+                      {/* Coverage % input */}
+                      <TableCell align="center">
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={row.coverageInputValue}
+                          onChange={(e) => handleCoverageInputChange(row.category.id, 'coveragePercent', e.target.value)}
+                          inputProps={{ min: 0, max: 100 }}
+                          InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+                          placeholder="افتراضي"
+                          fullWidth
+                          disabled={!canEdit || bulkSavingCoverage}
+                          sx={greenFieldSx}
+                        />
+                      </TableCell>
+
+                      {/* Amount limit input */}
+                      <TableCell align="center">
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={row.amountLimitInputValue}
+                          onChange={(e) => handleCoverageInputChange(row.category.id, 'amountLimit', e.target.value)}
+                          inputProps={{ min: 0 }}
+                          InputProps={{ endAdornment: <InputAdornment position="end">د.ل</InputAdornment> }}
+                          placeholder="∞"
+                          fullWidth
+                          disabled={!canEdit || bulkSavingCoverage}
+                          sx={greenFieldSx}
+                        />
+                      </TableCell>
+
+                      {/* Times limit input */}
+                      <TableCell align="center">
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={row.timesLimitInputValue}
+                          onChange={(e) => handleCoverageInputChange(row.category.id, 'timesLimit', e.target.value)}
+                          inputProps={{ min: 0, step: 1 }}
+                          placeholder="∞"
+                          fullWidth
+                          disabled={!canEdit || bulkSavingCoverage}
+                          sx={greenFieldSx}
+                        />
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell align="center">
+                        <Stack direction="row" spacing={0.25} justifyContent="center">
+                          {isDirty && canEdit && (
+                            <Tooltip title="حفظ هذا التصنيف">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => saveCategoryCoverage(row)}
+                                  disabled={isLoading || isRowSaving || bulkSavingCoverage}
+                                  sx={{ color: '#1b5e20', border: '1px solid #1b5e20' }}
+                                >
+                                  {isRowSaving ? <CircularProgress size={14} color="inherit" /> : <SaveIcon fontSize="small" />}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                          {row.existingRule?.id && canEdit && (
+                            <Tooltip title="حذف قاعدة هذا التصنيف">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDeleteRule(row.existingRule)}
+                                  disabled={isLoading || isRowSaving || bulkSavingCoverage}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </MainCard>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 2 — قواعد التغطية التفصيلية
+      ═══════════════════════════════════════════════════════════════════ */}
+      <MainCard
+        title={
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <ServiceIcon sx={{ color: '#1b5e20', fontSize: '1.25rem' }} />
+            <Typography variant="h5" fontWeight={600} sx={{ color: '#0D4731' }}>
+              قواعد التغطية التفصيلية
+            </Typography>
+          </Stack>
+        }
         secondary={
           canEdit && (
             <Stack direction="row" spacing={1}>
               <Button
                 variant="outlined"
-                color="info"
+                size="small"
                 startIcon={<MagicIcon />}
                 onClick={() => setInitStandardModalOpen(true)}
-                size="small"
                 disabled={rules.length > 0}
+                sx={{ color: '#1b5e20', borderColor: '#1b5e20', height: '2.25rem', '&:hover': { borderColor: '#0D4731', color: '#0D4731' } }}
               >
                 بذر القواعد القياسية
               </Button>
               <Button
-                variant="outlined"
-                color="secondary"
-                startIcon={<CategoryIcon />}
-                onClick={() => setCategoriesModalOpen(true)}
+                variant="contained"
                 size="small"
+                startIcon={<AddIcon />}
+                onClick={handleAddRule}
+                sx={{ bgcolor: '#1b5e20', height: '2.25rem', '&:hover': { bgcolor: '#0D4731' } }}
               >
-                القواعد الأساسية
-              </Button>
-              <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleAddRule} size="small">
                 إضافة قاعدة
               </Button>
             </Stack>
           )
         }
       >
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: '1.0rem' }} alignItems={{ xs: 'stretch', md: 'center' }}>
+        {/* ── Filter bar ── */}
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: '1.0rem' }}>
+          <Tooltip title="تحديث">
+            <IconButton
+              size="small"
+              onClick={() => refetchRules()}
+              sx={{ color: '#1b5e20', border: '1px solid #c8e6c9', width: '2.5rem', height: '2.5rem' }}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Chip
+            size="small"
+            label={`${normalizedRules.length} قاعدة`}
+            sx={{ height: '2.5rem', px: 0.5, bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 600, border: '1px solid #1b5e20' }}
+          />
+          <Chip
+            size="small"
+            label={`${activeRulesCount} نشطة`}
+            sx={{ height: '2.5rem', px: 0.5, bgcolor: 'rgba(27, 94, 32, 0.1)', color: '#1b5e20', fontWeight: 600, border: '1px solid #1b5e20' }}
+          />
           <TextField
             placeholder="بحث بالكود أو الاسم أو النوع..."
             value={ruleSearch}
             onChange={(e) => setRuleSearch(e.target.value)}
             size="small"
-            sx={{ flexGrow: 1, maxWidth: { xs: '100%', md: 420 } }}
+            sx={{
+              flexGrow: 1,
+              maxWidth: 420,
+              '& .MuiOutlinedInput-root': {
+                height: '2.5rem',
+                '&:hover fieldset': { borderColor: '#1b5e20' },
+                '&.Mui-focused fieldset': { borderColor: '#1b5e20' },
+              },
+            }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -1265,27 +1530,26 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                     <ClearIcon fontSize="small" />
                   </IconButton>
                 </InputAdornment>
-              ) : null
+              ) : null,
             }}
           />
-          <Chip size="small" variant="outlined" color="primary" label={`${normalizedRules.length} قاعدة`} sx={{ width: 'fit-content' }} />
-          <Chip size="small" variant="outlined" color="success" label={`${activeRulesCount} نشطة`} sx={{ width: 'fit-content' }} />
         </Stack>
 
+        {/* ── Detailed rules table ── */}
         <TableContainer sx={{ maxHeight: '35.0rem' }}>
           <Table size="small" stickyHeader>
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                <TableCell>العنصر (القاموس الموحد)</TableCell>
-                <TableCell align="center">النوع</TableCell>
-                <TableCell align="center">نسبة التغطية</TableCell>
-                <TableCell align="center">حد المبلغ</TableCell>
-                <TableCell align="center">حد المرات</TableCell>
-                <TableCell align="center">فترة الانتظار</TableCell>
-                <TableCell align="center">موافقة مسبقة</TableCell>
-                <TableCell align="center">نشط</TableCell>
-                <TableCell align="center">آخر تحديث</TableCell>
-                <TableCell align="center">الإجراءات</TableCell>
+              <TableRow>
+                <TableCell sx={thSx}>العنصر (القاموس الموحد)</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '9rem' }}>النوع</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '8rem' }}>نسبة التغطية</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '8rem' }}>حد المبلغ</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '7rem' }}>حد المرات</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '7rem' }}>فترة الانتظار</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '7.5rem' }}>موافقة مسبقة</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '5rem' }}>نشط</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '8rem' }}>آخر تحديث</TableCell>
+                <TableCell align="center" sx={{ ...thSx, width: '7rem' }}>الإجراءات</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1293,7 +1557,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 <TableRow>
                   <TableCell colSpan={10} align="center" sx={{ py: '2.0rem' }}>
                     <Typography color="text.secondary">
-                      لا توجد قواعد تغطية. استخدم &quot;القواعد الأساسية&quot; لتعيين التغطية لكل تصنيف، أو &quot;إضافة قاعدة&quot; لإضافة قاعدة مخصصة.
+                      لا توجد قواعد تغطية. استخدم &quot;بذر القواعد القياسية&quot; لإضافة القواعد الـ 16، أو &quot;إضافة قاعدة&quot; لإضافة قاعدة مخصصة.
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -1304,14 +1568,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredRules.map((rule) => (
-                  <TableRow key={rule.id} hover sx={{ '&:nth-of-type(even)': { bgcolor: 'grey.25' } }}>
+                filteredRules.map((rule, idx) => (
+                  <TableRow key={rule.id} hover sx={rowSx(idx)}>
                     {/* Covered Item */}
                     <TableCell>
                       <Stack direction="row" spacing={1} alignItems="center">
                         {rule.ruleType === 'CATEGORY' ? (
                           <Tooltip title="تصنيف طبي">
-                            <CategoryIcon fontSize="small" color="primary" />
+                            <CategoryIcon fontSize="small" sx={{ color: '#1b5e20' }} />
                           </Tooltip>
                         ) : (
                           <Tooltip title="خدمة طبية">
@@ -1319,8 +1583,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                           </Tooltip>
                         )}
                         <Box>
-                          <Chip label={rule.code} size="small" variant="outlined" color="primary" sx={{ mb: 0.5, fontFamily: 'monospace' }} />
-                          <Typography variant="body2" fontWeight={500}>
+                          <Chip
+                            label={rule.code}
+                            size="small"
+                            variant="outlined"
+                            sx={{ mb: 0.5, fontFamily: 'monospace', borderColor: '#1b5e20', color: '#1b5e20' }}
+                          />
+                          <Typography variant="body2" fontWeight={500} sx={{ color: '#0D4731' }}>
                             {rule.nameAr}
                           </Typography>
                           {rule.nameEn !== '-' && <Typography variant="caption" color="text.secondary">{rule.nameEn}</Typography>}
@@ -1343,8 +1612,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                         <Chip
                           label={`${rule.coveragePercent}%`}
                           size="small"
-                          color="primary"
-                          variant="filled"
+                          sx={{ bgcolor: '#1b5e20', color: '#fff', fontWeight: 600 }}
                         />
                       ) : (
                         <Tooltip title={`افتراضي الوثيقة: ${rule.effectiveCoveragePercent}%`}>
@@ -1387,6 +1655,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                             onChange={() => handleToggleActive(rule)}
                             size="small"
                             disabled={!canEdit || toggleMutation.isPending}
+                            sx={{
+                              '& .MuiSwitch-switchBase.Mui-checked': { color: '#1b5e20' },
+                              '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#1b5e20' },
+                            }}
                           />
                         </span>
                       </Tooltip>
@@ -1423,22 +1695,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         </TableContainer>
       </MainCard>
 
-      {/* Categories Coverage Modal */}
-      <CategoryCoverageModal
-        open={categoriesModalOpen}
-        onClose={() => setCategoriesModalOpen(false)}
-        canEdit={canEdit}
-        bulkSavingCoverage={bulkSavingCoverage}
-        categoriesCoverageRows={categoriesCoverageRows}
-        handleCoverageInputChange={handleCoverageInputChange}
-        saveCategoryCoverage={saveCategoryCoverage}
-        saveAllCategoryCoverage={saveAllCategoryCoverage}
-        deleteRule={handleDeleteRule}
-        createMutation={createMutation}
-        updateMutation={updateMutation}
-        isLoading={isLoading}
-      />
-
       {/* Rule Form Modal */}
       <RuleFormModal
         open={formModal.open}
@@ -1469,7 +1725,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         categories={categories}
       />
     </>
-
   );
 };
 

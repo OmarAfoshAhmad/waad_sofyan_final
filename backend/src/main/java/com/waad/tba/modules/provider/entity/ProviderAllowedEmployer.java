@@ -29,7 +29,8 @@ import lombok.ToString;
  * This table defines WHICH specific employers/partners the provider can serve.
  * 
  * ARCHITECTURAL RULES:
- * 1. Provider with allowAllEmployers=true → Can access all partners (global network)
+ * 1. Provider with allowAllEmployers=true → Can access all partners (global
+ * network)
  * 2. Provider with allowAllEmployers=false → Only partners in this table
  * 3. PROVIDER users NEVER see global employer selectors
  * 4. All Provider queries are scoped by providerId + allowed employer IDs
@@ -43,23 +44,16 @@ import lombok.ToString;
  * @see Provider#allowAllEmployers
  */
 @Entity
-@Table(
-    name = "provider_allowed_employers",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_provider_employer",
-            columnNames = {"provider_id", "employer_id"}
-        )
-    },
-    indexes = {
+@Table(name = "provider_allowed_employers", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_provider_employer", columnNames = { "provider_id", "employer_id" })
+}, indexes = {
         @Index(name = "idx_pae_provider", columnList = "provider_id"),
         @Index(name = "idx_pae_employer", columnList = "employer_id"),
         @Index(name = "idx_pae_active", columnList = "active")
-    }
-)
+})
 @Getter
 @Setter
-@ToString(exclude = {"provider", "employer"})
+@ToString(exclude = { "provider", "employer" })
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -69,24 +63,14 @@ public class ProviderAllowedEmployer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * Provider (healthcare facility)
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "provider_id", nullable = false)
     private Provider provider;
 
-    /**
-     * Employer (partner company) that this provider can serve
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "employer_id", nullable = false)
     private Employer employer;
 
-    /**
-     * Is this partnership active?
-     * Can be temporarily disabled without deletion.
-     */
     @Column(name = "active", nullable = false)
     @Builder.Default
     private Boolean active = true;

@@ -55,145 +55,74 @@ public class Member {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * Optimistic Locking Version (PHASE 1: Concurrency Protection)
-     *
-     * Critical for ensuring financial limits are not exceeded by concurrent claims.
-     * Every time a claim is approved for this member, this version should be
-     * incremented.
-     */
     @Version
     private Long version;
 
-    // ==================== UNIFIED MEMBER ARCHITECTURE ====================
-    // Self-Referencing Relationship for Principal/Dependent Structure
-
-    /**
-     * Parent Member (Principal) - NULL for principal members, set for dependents.
-     * This creates a self-referencing tree structure where:
-     * - Principal: parent = null
-     * - Dependent: parent = Principal Member
-     */
+    // Self-referencing principal/dependent structure (parent=null → principal)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Member parent;
 
-    /**
-     * List of dependents (family members) for this member.
-     * Only populated for Principal members (where parent = null).
-     * Cascade ALL to ensure dependents are deleted when principal is deleted.
-     */
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<Member> dependents = new ArrayList<>();
 
-    /**
-     * Relationship type - ONLY for dependents (where parent != null).
-     * NULL for principal members.
-     * Examples: WIFE, HUSBAND, SON, DAUGHTER, FATHER, MOTHER, BROTHER, SISTER
-     */
+    /** Relationship type — only for dependents */
     @Enumerated(EnumType.STRING)
     @Column(length = 20, name = "relationship")
     private Relationship relationship;
 
-    /**
-     * Member Type - AUTO-CALCULATED based on parent_id.
-     * PRINCIPAL: parent = null
-     * DEPENDENT: parent != null
-     */
+    /** Auto-calculated: PRINCIPAL if parent==null, DEPENDENT if parent!=null */
     @Transient
     public MemberType getType() {
         return parent == null ? MemberType.PRINCIPAL : MemberType.DEPENDENT;
     }
 
-    /**
-     * Check if this member is a principal (has no parent).
-     */
     @Transient
     public boolean isPrincipal() {
         return parent == null;
     }
 
-    /**
-     * Check if this member is a dependent (has a parent).
-     */
     @Transient
     public boolean isDependent() {
         return parent != null;
     }
 
-    /**
-     * Get dependents count - for Principal members only.
-     */
     @Transient
     public int getDependentsCount() {
         return (dependents != null) ? dependents.size() : 0;
     }
 
-    // ==================== EMPLOYER RELATIONSHIP ====================
+    // ==================== EMPLOYER ====================
 
-    /**
-     * Employer - The company/organization this member belongs to.
-     * This is the ONLY business entity relationship.
-     */
     @NotNull(message = "Employer is required")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employer_id", nullable = false)
     private Employer employer;
 
-    /**
-     * BenefitPolicy for coverage rules (CANONICAL - Single Source of Truth).
-     * This is the source of truth for what benefits the member is entitled to.
-     * Auto-assigned on creation based on employer's active policy.
-     */
+    /** Auto-assigned from employer's active policy */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "benefit_policy_id")
     private BenefitPolicy benefitPolicy;
 
-    // Personal Information
     @NotBlank(message = "Full name is required")
     @Column(nullable = false, length = 200, name = "full_name")
     private String fullName;
 
-    // Phase 1 Enterprise Fix: Civil ID is Optional (DEPRECATED - use
-    // nationalNumber)
+    /** @deprecated Use nationalNumber instead */
     @Deprecated
     @Column(length = 50, name = "civil_id")
     private String civilId;
 
-    // National Number (الرقم الوطني) - OPTIONAL, replaces civilId
     @Column(length = 50, name = "national_number")
     private String nationalNumber;
 
-    // ==================== UNIFIED IDENTIFICATION SYSTEM ====================
-
-    /**
-     * Card Number (رقم بطاقة العضو) - UNIFIED for family.
-     * 
-     * PRINCIPAL: Base card number (e.g., "123456")
-     * DEPENDENT: Principal's card number + suffix (e.g., "123456-01", "123456-02")
-     * 
-     * Business Rules:
-     * - Principal: Auto-generated or manual input
-     * - Dependent: Inherited from principal with auto-incremented suffix
-     * - Format: {principal_card_number}-{sequence}
-     * - Unique when not null
-     */
+    // Card number: principal gets base, dependent gets base+suffix (e.g.
+    // "123456-01")
     @Column(length = 50, name = "card_number")
     private String cardNumber;
 
-    /**
-     * Barcode - MANDATORY for PRINCIPAL, NULL for DEPENDENT.
-     * 
-     * PRINCIPAL: Auto-generated unique barcode (WAD-YYYY-NNNNNNNN)
-     * DEPENDENT: NULL (uses parent's barcode for eligibility check)
-     * 
-     * Business Rules:
-     * - Only Principal members have barcodes
-     * - Barcode scanning returns the Principal + all Dependents
-     * - Used for QR code scanning and family eligibility verification
-     * - Format: WAD-{YEAR}-{SEQUENCE}
-     */
+    // Barcode: auto-generated for principals only (WAD-YYYY-NNNNNNNN)
     @Column(unique = true, length = 100, name = "barcode")
     private String barcode;
 
@@ -241,19 +170,11 @@ public class Member {
 
     }
 
-    /**
-     * Get the principal member (root of the family).
-     * - For Principal: returns self
-     * - For Dependent: returns parent
-     */
     @Transient
     public Member getPrincipalMember() {
         return isPrincipal() ? this : parent;
     }
 
-    /**
-     * Get the family barcode (always from principal).
-     */
     @Transient
     public String getFamilyBarcode() {
         return getPrincipalMember().getBarcode();
@@ -368,17 +289,11 @@ public class Member {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    /**
-     * Check if member has an active benefit policy
-     */
     @Transient
     public boolean hasActiveBenefitPolicy() {
         return benefitPolicy != null && benefitPolicy.isEffective();
     }
 
-    /**
-     * Check if member has an active benefit policy on a specific date
-     */
     @Transient
     public boolean hasActiveBenefitPolicyOn(LocalDate date) {
         return benefitPolicy != null && benefitPolicy.isEffectiveOn(date);
@@ -386,23 +301,12 @@ public class Member {
 
     // ==================== ENUMS ====================
 
-    /**
-     * Member Type - AUTO-CALCULATED based on parent_id.
-     * PRINCIPAL: parent = null (head of family, has barcode)
-     * DEPENDENT: parent != null (family member, uses parent's barcode)
-     */
     public enum MemberType {
         PRINCIPAL, // Parent = null, has barcode, can have dependents
         DEPENDENT // Parent != null, no barcode, has relationship
     }
 
-    /**
-     * Relationship Type - ONLY for DEPENDENT members.
-     * NULL for PRINCIPAL members.
-     *
-     * Each value carries its card-number suffix code.
-     * Example: DAUGHTER("D") → card suffix "D1", "D2", …
-     */
+    /** Card-number suffix code per relationship (e.g. DAUGHTER("D") → "D1","D2") */
     public enum Relationship {
         WIFE("W"), // زوجة
         HUSBAND("H"), // زوج
@@ -419,10 +323,6 @@ public class Member {
             this.cardCode = cardCode;
         }
 
-        /**
-         * Returns the card-number suffix prefix for this relationship (e.g. "D" for
-         * DAUGHTER).
-         */
         public String getCardCode() {
             return cardCode;
         }
