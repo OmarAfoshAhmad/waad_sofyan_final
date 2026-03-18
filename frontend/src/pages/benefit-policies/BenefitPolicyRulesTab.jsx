@@ -51,10 +51,10 @@ import MedicalServiceSelector from 'components/tba/MedicalServiceSelector';
 import {
   getPolicyRules,
   createPolicyRule,
+  createPolicyRulesBulk,
   updatePolicyRule,
   togglePolicyRuleActive,
-  deletePolicyRule,
-  initializeStandardRules
+  deletePolicyRule
 } from 'services/api/benefit-policy-rules.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
@@ -623,6 +623,181 @@ CategoryCoverageModal.propTypes = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// INIT STANDARD RULES MODAL (16 RULES — EDITABLE BEFORE SEED)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const STANDARD_16_RULES_DEF = [
+  { code: 'CAT-IP-GEN',    nameAr: 'داخل المستشفى — عام',                  defaultCoverage: '100', defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-IP-NURSE',  nameAr: 'داخل المستشفى — تمريض منزلي',          defaultCoverage: '100', defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-IP-PHYSIO', nameAr: 'داخل المستشفى — علاج طبيعي',           defaultCoverage: '100', defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-IP-WORK',   nameAr: 'داخل المستشفى — إصابات عمل',           defaultCoverage: '100', defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-IP-PSYCH',  nameAr: 'داخل المستشفى — طب نفسي',              defaultCoverage: '100', defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-IP-MATER',  nameAr: 'داخل المستشفى — ولادة',                defaultCoverage: '100', defaultLimit: '4000',  defaultTimes: '' },
+  { code: 'CAT-IP-COMPL',  nameAr: 'داخل المستشفى — مضاعفات حمل',          defaultCoverage: '100', defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-OP-GEN',    nameAr: 'خارج المستشفى — عام',                  defaultCoverage: '75',  defaultLimit: '3000',  defaultTimes: '' },
+  { code: 'CAT-OP-RAD',    nameAr: 'خارج المستشفى — أشعة',                 defaultCoverage: '75',  defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-OP-MRI',    nameAr: 'خارج المستشفى — رنين مغناطيسي',        defaultCoverage: '75',  defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-OP-DRUG',   nameAr: 'خارج المستشفى — أدوية',                defaultCoverage: '75',  defaultLimit: '15000', defaultTimes: '' },
+  { code: 'CAT-OP-EQUIP',  nameAr: 'خارج المستشفى — أجهزة ومعدات',         defaultCoverage: '75',  defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-OP-PHYSIO', nameAr: 'خارج المستشفى — علاج طبيعي',           defaultCoverage: '75',  defaultLimit: '2000',  defaultTimes: '20' },
+  { code: 'CAT-OP-DENT-R', nameAr: 'خارج المستشفى — أسنان روتيني',         defaultCoverage: '75',  defaultLimit: '2000',  defaultTimes: '' },
+  { code: 'CAT-OP-DENT-C', nameAr: 'خارج المستشفى — أسنان تجميلي',         defaultCoverage: '50',  defaultLimit: '',      defaultTimes: '' },
+  { code: 'CAT-OP-GLASS',  nameAr: 'خارج المستشفى — نظارة طبية',           defaultCoverage: '75',  defaultLimit: '500',   defaultTimes: '1' }
+];
+
+const InitStandardRulesModal = ({ open, onClose, onConfirm, loading, categories }) => {
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    if (open) {
+      setRows(STANDARD_16_RULES_DEF.map((def) => ({
+        code: def.code,
+        nameAr: def.nameAr,
+        coverage: def.defaultCoverage,
+        limit: def.defaultLimit,
+        times: def.defaultTimes
+      })));
+    }
+  }, [open]);
+
+  const handleChange = useCallback((code, field, value) => {
+    setRows((prev) => prev.map((r) => (r.code === code ? { ...r, [field]: value } : r)));
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    const categoryCodeMap = {};
+    categories.forEach((cat) => { categoryCodeMap[cat.code] = cat; });
+
+    const rules = rows
+      .map((row) => {
+        const cat = categoryCodeMap[row.code];
+        if (!cat) return null;
+        return {
+          medicalCategoryId: cat.id,
+          medicalServiceId: null,
+          coveragePercent: row.coverage !== '' ? Number(row.coverage) : null,
+          amountLimit: row.limit !== '' ? Number(row.limit) : null,
+          timesLimit: row.times !== '' ? Number(row.times) : null,
+          waitingPeriodDays: 0,
+          requiresPreApproval: false,
+          active: true,
+          notes: 'تم الإنشاء تلقائياً — القواعد القياسية'
+        };
+      })
+      .filter(Boolean);
+
+    onConfirm(rules);
+  }, [rows, categories, onConfirm]);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <MagicIcon color="info" />
+        بذر القواعد المهنية الـ 16 القياسية
+      </DialogTitle>
+      <DialogContent dividers sx={{ p: 0 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ px: '1.0rem', py: 1 }}>
+          حدّد نسبة التغطية والسقف لكل قاعدة قبل البذر. القواعد الموجودة مسبقاً لهذه التصنيفات لن تُستبدل.
+        </Typography>
+        <TableContainer sx={{ maxHeight: '32.5rem' }}>
+          <Table size="small" stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: '2rem' }}>#</TableCell>
+                <TableCell>القاعدة</TableCell>
+                <TableCell sx={{ width: '9rem' }}>الكود</TableCell>
+                <TableCell align="center" sx={{ width: '8rem' }}>نسبة التغطية</TableCell>
+                <TableCell align="center" sx={{ width: '9rem' }}>السقف (د.ل)</TableCell>
+                <TableCell align="center" sx={{ width: '7rem' }}>عدد المرات</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((row, idx) => (
+                <TableRow
+                  key={row.code}
+                  hover
+                  sx={{ backgroundColor: idx < 7 ? 'rgba(25, 118, 210, 0.04)' : 'rgba(0, 150, 136, 0.04)' }}
+                >
+                  <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                    {idx + 1}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={500}>{row.nameAr}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={row.code} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
+                  </TableCell>
+                  <TableCell align="center">
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={row.coverage}
+                      onChange={(e) => handleChange(row.code, 'coverage', e.target.value)}
+                      inputProps={{ min: 0, max: 100 }}
+                      InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+                      sx={{ width: '7.25rem' }}
+                      disabled={loading}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={row.limit}
+                      onChange={(e) => handleChange(row.code, 'limit', e.target.value)}
+                      inputProps={{ min: 0 }}
+                      InputProps={{ endAdornment: <InputAdornment position="end">د.ل</InputAdornment> }}
+                      placeholder="∞"
+                      sx={{ width: '8.25rem' }}
+                      disabled={loading}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={row.times}
+                      onChange={(e) => handleChange(row.code, 'times', e.target.value)}
+                      inputProps={{ min: 0, step: 1 }}
+                      placeholder="∞"
+                      sx={{ width: '5.75rem' }}
+                      disabled={loading}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={loading}>
+          إلغاء
+        </Button>
+        <Button
+          onClick={handleConfirm}
+          variant="contained"
+          color="info"
+          autoFocus
+          disabled={loading || rows.length === 0}
+          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <MagicIcon />}
+        >
+          تأكيد البذر الذكي
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+InitStandardRulesModal.propTypes = {
+  open: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onConfirm: PropTypes.func.isRequired,
+  loading: PropTypes.bool,
+  categories: PropTypes.array
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN RULES TAB COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -642,7 +817,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
-  const [initStandardDialog, setInitStandardDialog] = useState(false);
+  const [initStandardModalOpen, setInitStandardModalOpen] = useState(false);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -720,11 +895,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   });
 
   const initializeMutation = useMutation({
-    mutationFn: () => initializeStandardRules(policyId),
+    mutationFn: (rules) => createPolicyRulesBulk(policyId, rules),
     onSuccess: (data) => {
-      enqueueSnackbar(`تم بذر ${data.length} قاعدة قياسية بنجاح`, { variant: 'success' });
+      enqueueSnackbar(`تم بذر ${Array.isArray(data) ? data.length : 0} قاعدة قياسية بنجاح`, { variant: 'success' });
       queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
-      setInitStandardDialog(false);
+      setInitStandardModalOpen(false);
     },
     onError: (err) => {
       enqueueSnackbar(err.response?.data?.message || 'فشل بذر القواعد القياسية', { variant: 'error' });
@@ -1049,7 +1224,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 variant="outlined"
                 color="info"
                 startIcon={<MagicIcon />}
-                onClick={() => setInitStandardDialog(true)}
+                onClick={() => setInitStandardModalOpen(true)}
                 size="small"
                 disabled={rules.length > 0}
               >
@@ -1285,40 +1460,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         loading={deleteMutation.isPending}
       />
 
-      {/* Initialize Standard Rules Confirmation */}
-      <Dialog open={initStandardDialog} onClose={() => setInitStandardDialog(false)}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MagicIcon color="info" />
-          بذر القواعد المهنية الـ 16 القياسية
-        </DialogTitle>
-        <DialogContent dividers>
-          <DialogContentText color="text.primary" sx={{ mb: 2 }}>
-            هل أنت متأكد من رغبتك في بذر القواعد القياسية الـ 16 لهذه الوثيقة؟
-          </DialogContentText>
-          <Typography variant="body2" component="div">
-            <Box component="ul" sx={{ pl: 2, m: 0 }}>
-              <li>سيتم إنشاء قواعد لجميع التصنيفات الرئيسية (داخل وخارج المشفى).</li>
-              <li>نسبة التغطية الافتراضية لهذه القواعد هي 75% (قابلة للتعديل لاحقاً).</li>
-              <li>لن يتم استبدال أو تكرار القواعد الموجودة مسبقاً لهذا التصنيف.</li>
-            </Box>
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setInitStandardDialog(false)} disabled={initializeMutation.isPending}>
-            إلغاء
-          </Button>
-          <Button
-            onClick={() => initializeMutation.mutate()}
-            variant="contained"
-            color="info"
-            autoFocus
-            disabled={initializeMutation.isPending}
-            startIcon={initializeMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <MagicIcon />}
-          >
-            تأكيد البذر الذكي
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Initialize Standard Rules Modal */}
+      <InitStandardRulesModal
+        open={initStandardModalOpen}
+        onClose={() => setInitStandardModalOpen(false)}
+        onConfirm={(rules) => initializeMutation.mutate(rules)}
+        loading={initializeMutation.isPending}
+        categories={categories}
+      />
     </>
 
   );
