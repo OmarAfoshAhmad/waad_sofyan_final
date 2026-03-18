@@ -112,7 +112,6 @@ const BenefitPolicyEdit = Loadable(lazy(() => import('pages/benefit-policies/Ben
 const MedicalCategoriesPage = Loadable(lazy(() => import('pages/medical-categories')));
 const MedicalCategoryCreate = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryCreate')));
 const MedicalCategoryEdit = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryEdit')));
-const MedicalCategoryView = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryView')));
 
 // ==============================|| LAZY LOADING - DOCUMENTS ||============================== //
 
@@ -566,14 +565,6 @@ const MainRoutes = {
             </PermissionGuard>
           )
         },
-        {
-          path: ':id',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <MedicalCategoryView />
-            </PermissionGuard>
-          )
-        }
       ]
     },
 

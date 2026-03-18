@@ -75,6 +75,26 @@ export const toggleMedicalCategory = async (id) => {
 };
 
 /**
+ * Restore a soft-deleted category (sets active=true, deleted=false)
+ * @param {number} id - Category ID
+ * @returns {Promise<Object>} Restored category
+ */
+export const restoreMedicalCategory = async (id) => {
+  const response = await axiosClient.patch(`${BASE_URL}/${id}/restore`);
+  return unwrap(response);
+};
+
+/**
+ * Permanently delete a medical category (irreversible)
+ * @param {number} id - Category ID
+ * @returns {Promise<void>}
+ */
+export const hardDeleteMedicalCategory = async (id) => {
+  const response = await axiosClient.delete(`${BASE_URL}/${id}/hard`);
+  return unwrap(response);
+};
+
+/**
  * Get all categories (for dropdowns)
  * @returns {Promise<Array>} All categories
  */

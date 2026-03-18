@@ -54,4 +54,10 @@ public class MedicalCategoryUpdateDto {
      */
     @com.fasterxml.jackson.annotation.JsonAlias({ "multiParentIds", "rootIds" })
     private java.util.List<Long> multiParentIds;
+
+    /**
+     * When true, explicitly clears the parent (converts sub-category to root).
+     * Use this when parentId is intentionally being set to null.
+     */
+    private Boolean clearParent;
 }

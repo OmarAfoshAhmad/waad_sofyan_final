@@ -1,40 +1,45 @@
 /**
  * Medical Categories List Page
  *
- * Pattern: UnifiedPageHeader → External Filters → MainCard → GenericDataTable
- *
- * Features:
- * - External parent category filter
- * - No column filters (clean table)
- * - Professional Excel export with ALL data
- * - Multi-column sorting
- * - Sticky headers
- * - Pagination
+ * Pattern: ModernPageHeader → External Filters → UnifiedMedicalTable (no card)
  */
 
-import { useMemo, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Chip, IconButton, Stack, Tooltip, Typography, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import {
+  Box, Chip, IconButton, Stack, Tooltip, Typography, Button,
+  TextField, MenuItem, InputAdornment
+} from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import ReplayIcon from '@mui/icons-material/Replay';
 import CategoryIcon from '@mui/icons-material/Category';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 
 import MainCard from 'components/MainCard';
-import UnifiedPageHeader from 'components/UnifiedPageHeader';
-import GenericDataTable from 'components/GenericDataTable';
-import TableErrorBoundary from 'components/TableErrorBoundary';
+import { ModernPageHeader, ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
+import { UnifiedMedicalTable } from 'components/common';
 import PermissionGuard from 'components/PermissionGuard';
-import useTableState from 'hooks/useTableState';
 import { useTableRefresh } from 'contexts/TableRefreshContext';
-import { getMedicalCategories, deleteMedicalCategory, getAllMedicalCategories } from 'services/api/medical-categories.service';
+import { getMedicalCategories, deleteMedicalCategory, hardDeleteMedicalCategory, getAllMedicalCategories, restoreMedicalCategory } from 'services/api/medical-categories.service';
 import { exportMedicalCategoriesToExcel } from 'utils/excelExport';
 import { openSnackbar } from 'api/snackbar';
 
 const QUERY_KEY = 'medical-categories';
+
+// Colors palette for parent category badges (deterministic by parentId) — no green (reserved for active status)
+const PARENT_BADGE_COLORS = ['primary', 'secondary', 'info', 'warning', 'error'];
+const getParentColor = (parentId) => {
+  if (!parentId) return 'info';
+  return PARENT_BADGE_COLORS[Number(parentId) % PARENT_BADGE_COLORS.length];
+};
 
 const MedicalCategoriesList = () => {
   const navigate = useNavigate();
@@ -44,107 +49,166 @@ const MedicalCategoriesList = () => {
   // ========================================
   // LOCAL STATE
   // ========================================
-
-  // Parent category filter
+  const [searchTerm, setSearchTerm] = useState('');
   const [parentFilter, setParentFilter] = useState('');
-
-  // Excel export loading state
+  const [showDeleted, setShowDeleted] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Confirmation dialog
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false, title: '', message: '', onConfirm: null, confirmColor: 'error', confirmText: 'نعم، احذف'
+  });
 
   // ========================================
   // TABLE STATE
   // ========================================
-
-  const tableState = useTableState({
-    initialPageSize: 10,
-    defaultSort: { field: 'id', direction: 'desc' },
-    initialFilters: {}
-  });
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState('id');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   // ========================================
-  // FETCH PARENT CATEGORIES (for filter dropdown)
+  // FETCH PARENT CATEGORIES
   // ========================================
-
   const { data: allCategories = [] } = useQuery({
     queryKey: ['medical-categories-all'],
     queryFn: getAllMedicalCategories,
-    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000
   });
 
-  // Get only parent categories (those without parentId or root level)
-  const parentCategories = useMemo(() => {
-    return allCategories.filter((cat) => !cat.parentId);
-  }, [allCategories]);
+  const parentCategories = useMemo(() => allCategories.filter((cat) => !cat.parentId), [allCategories]);
 
   // ========================================
   // NAVIGATION HANDLERS
   // ========================================
-
   const handleNavigateAdd = useCallback(() => navigate('/medical-categories/add'), [navigate]);
-  const handleNavigateView = useCallback((id) => navigate(`/medical-categories/${id}`), [navigate]);
   const handleNavigateEdit = useCallback((id) => navigate(`/medical-categories/edit/${id}`), [navigate]);
 
-  const handleDelete = useCallback(
-    async (id, name) => {
-      if (!window.confirm(`هل أنت متأكد من حذف التصنيف "${name}"؟`)) return;
-      try {
-        await deleteMedicalCategory(id);
-        openSnackbar({ message: 'تم حذف التصنيف بنجاح', variant: 'success' });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        console.error('[MedicalCategories] Delete failed:', err);
-        const errorMsg = err?.response?.data?.message || 'فشل حذف التصنيف - قد يكون مرتبطاً بخدمات طبية';
-        openSnackbar({ message: errorMsg, variant: 'error' });
+  // ========================================
+  // DELETE with ActionConfirmDialog
+  // ========================================
+  const handleDeleteClick = useCallback((row) => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد حذف التصنيف',
+      message: `هل أنت متأكد من حذف التصنيف "${row.name || row.code}"؟\nسيتم إيقاف تشغيله ولن يظهر في القوائم.`,
+      confirmColor: 'error',
+      confirmText: 'نعم، احذف',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          await deleteMedicalCategory(row.id);
+          openSnackbar({ message: 'تم حذف التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+        } catch (err) {
+          console.error('[MedicalCategories] Delete failed:', err);
+          const errorMsg = err?.response?.data?.message || 'فشل حذف التصنيف - قد يكون مرتبطاً بخدمات طبية';
+          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+        }
       }
-    },
-    [queryClient]
-  );
+    });
+  }, [queryClient]);
 
+  const closeDialog = () => setConfirmDialog((prev) => ({ ...prev, open: false }));
+
+  // ========================================
+  // HARD DELETE (permanent — only in showDeleted view)
+  // ========================================
+  const handleHardDeleteClick = useCallback((row) => {
+    setConfirmDialog({
+      open: true,
+      title: '⚠️ حذف نهائي — لا يمكن التراجع',
+      message: `سيتم حذف التصنيف "${row.name || row.code}" نهائياً من قاعدة البيانات.\n\nهذا الإجراء لا يمكن التراجع عنه ولا يمكن استعادة السجل بعد الحذف.\n\nهل أنت متأكد تماماً؟`,
+      confirmColor: 'error',
+      confirmText: 'نعم، احذف نهائياً',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          await hardDeleteMedicalCategory(row.id);
+          openSnackbar({ message: 'تم الحذف النهائي للتصنيف', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+        } catch (err) {
+          console.error('[MedicalCategories] Hard delete failed:', err);
+          const errorMsg = err?.response?.data?.message || 'فشل الحذف النهائي - قد يكون التصنيف مرتبطاً ببيانات أخرى';
+          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+        }
+      }
+    });
+  }, [queryClient]);
+
+  // ========================================
+  // RESTORE (for soft-deleted items)
+  // ========================================
+  const handleRestoreClick = useCallback((row) => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد استعادة التصنيف',
+      message: `هل تريد استعادة التصنيف "${row.name || row.code}"؟\nسيتم تفعيله مجدداً وسيظهر في القوائم.`,
+      confirmColor: 'success',
+      confirmText: 'نعم، استعد',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          await restoreMedicalCategory(row.id);
+          openSnackbar({ message: 'تم استعادة التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+        } catch (err) {
+          console.error('[MedicalCategories] Restore failed:', err);
+          const errorMsg = err?.response?.data?.message || 'فشل استعادة التصنيف';
+          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+        }
+      }
+    });
+  }, [queryClient]);
+
+  // ========================================
+  // MAIN DATA QUERY
+  // ========================================
   const { data, isLoading, refetch } = useQuery({
-    queryKey: [QUERY_KEY, tableState.page, tableState.pageSize, tableState.sorting, parentFilter],
+    queryKey: [QUERY_KEY, page, rowsPerPage, sortBy, sortDirection, parentFilter, showDeleted, searchTerm],
     queryFn: async () => {
-      const params = { page: tableState.page, size: tableState.pageSize };
-
-      // Add sorting
-      if (tableState.sorting.length > 0) {
-        const sort = tableState.sorting[0];
-        params.sort = `${sort.id},${sort.desc ? 'desc' : 'asc'}`;
-      }
-
-      // Add parent filter
-      if (parentFilter) {
-        params.parentId = parentFilter;
-      }
-
+      const params = { page, size: rowsPerPage };
+      params.sortBy = sortBy;
+      params.sortDir = sortDirection.toUpperCase();
+      if (parentFilter) params.parentId = parentFilter;
+      params.active = showDeleted ? 'false' : 'true';
+      if (searchTerm.trim()) params.search = searchTerm.trim();
       return await getMedicalCategories(params);
     },
     keepPreviousData: true
   });
 
-  // Listen to global refresh signal
-  useEffect(() => {
-    refetch();
-  }, [refreshSignal, refetch]);
+  useEffect(() => { refetch(); }, [refreshSignal, refetch]);
 
   // ========================================
-  // EXCEL EXPORT - Export ALL data
+  // RESET FILTERS
   // ========================================
+  const handleResetFilters = useCallback(() => {
+    setSearchTerm('');
+    setParentFilter('');
+    setShowDeleted(false);
+    setPage(0);
+  }, []);
 
+  // ========================================
+  // EXCEL EXPORT
+  // ========================================
   const handleExcelExport = useCallback(async () => {
     try {
       setIsExporting(true);
-      // Fetch ALL categories for export (not just visible page)
       const allCats = await getAllMedicalCategories();
       await exportMedicalCategoriesToExcel(allCats || []);
       openSnackbar({
         message: `تم تصدير ${allCats?.length || 0} تصنيف بنجاح`,
-        variant: 'success'
+        variant: 'alert',
+        alert: { color: 'success', variant: 'filled' }
       });
     } catch (error) {
       console.error('[MedicalCategories] Excel export failed:', error);
       openSnackbar({
         message: 'فشل تصدير البيانات. يرجى المحاولة لاحقاً',
-        variant: 'error'
+        variant: 'alert',
+        alert: { color: 'error', variant: 'filled' }
       });
     } finally {
       setIsExporting(false);
@@ -152,194 +216,268 @@ const MedicalCategoriesList = () => {
   }, []);
 
   // ========================================
-  // COLUMN DEFINITIONS - No filters, just sorting
+  // COLUMN DEFINITIONS
   // ========================================
+  const columns = useMemo(() => [
+    { id: 'index',      label: '#',              minWidth: '3.125rem',  sortable: false, align: 'center' },
+    { id: 'code',       label: 'الرمز',          minWidth: '8rem',      sortable: true,  align: 'center' },
+    { id: 'name',       label: 'الاسم',          minWidth: '11.25rem',  sortable: true,  align: 'right'  },
+    { id: 'parentName', label: 'التصنيف الأب',   minWidth: '9.375rem',  sortable: true,  align: 'center' },
+    { id: 'active',     label: 'الحالة',         minWidth: '6.25rem',   sortable: true,  align: 'center' },
+    { id: 'actions',    label: 'الإجراءات',      minWidth: '8.125rem',  sortable: false, align: 'center' }
+  ], []);
 
-  const columns = useMemo(
-    () => [
-      {
-        accessorKey: 'code',
-        header: 'الرمز',
-        enableSorting: true,
-        enableColumnFilter: false,
-        minWidth: '6.25rem',
-        align: 'right',
-        cell: ({ getValue }) => (
-          <Typography variant="body2" fontWeight="medium">
-            {getValue() || '-'}
-          </Typography>
-        )
-      },
-      {
-        accessorKey: 'name',
-        header: 'الاسم',
-        enableSorting: true,
-        enableColumnFilter: false,
-        minWidth: '11.25rem',
-        align: 'right',
-        cell: ({ getValue }) => <Typography variant="body2">{getValue() || '-'}</Typography>
-      },
-      {
-        accessorKey: 'parentName',
-        header: 'التصنيف الأب',
-        enableSorting: true,
-        enableColumnFilter: false,
-        minWidth: '9.375rem',
-        align: 'right',
-        cell: ({ getValue }) => (
-          <Typography variant="body2" color="text.secondary">
-            {getValue() || '-'}
-          </Typography>
-        )
-      },
-      {
-        accessorKey: 'active',
-        header: 'الحالة',
-        enableSorting: true,
-        enableColumnFilter: false,
-        minWidth: '6.25rem',
-        align: 'center',
-        cell: ({ row }) => (
+  // ========================================
+  // CELL RENDERER
+  // ========================================
+  const renderCell = useCallback((row, column, rowIndex) => {
+    switch (column.id) {
+      case 'index':
+        return <Typography variant="body2" color="textSecondary" fontWeight="bold">{page * rowsPerPage + rowIndex + 1}</Typography>;
+
+      case 'code':
+        return (
           <Chip
-            label={row.original?.active ? 'نشط' : 'غير نشط'}
-            color={row.original?.active ? 'success' : 'default'}
+            label={row.code || '-'}
+            variant="outlined"
             size="small"
-            variant="light"
+            color="secondary"
+            sx={{ fontWeight: 'medium', fontFamily: 'monospace', minWidth: '7rem', justifyContent: 'center' }}
           />
-        )
-      },
-      {
-        id: 'actions',
-        header: 'الإجراءات',
-        enableSorting: false,
-        enableColumnFilter: false,
-        minWidth: '8.125rem',
-        align: 'center',
-        cell: ({ row }) => (
-          <Stack direction="row" spacing={0.5} justifyContent="center">
-            <Tooltip title="عرض">
-              <IconButton size="small" color="primary" onClick={() => handleNavigateView(row.original?.id)}>
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="تعديل">
-              <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.original?.id)}>
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="حذف">
-              <PermissionGuard requires="medical-categories.delete">
-                <IconButton
-                  size="small"
-                  color="error"
-                  onClick={() => handleDelete(row.original?.id, row.original?.name || row.original?.code)}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </PermissionGuard>
-            </Tooltip>
+        );
+
+      case 'name':
+        return <Typography variant="body2" fontWeight="500" sx={{ textAlign: 'right', width: '100%' }}>{row.name || '-'}</Typography>;
+
+      case 'parentName':
+        return row.parentName
+          ? (
+            <Chip
+              label={row.parentName}
+              size="small"
+              color={getParentColor(row.parentId)}
+              sx={{ fontWeight: 500, minWidth: '5.5rem', justifyContent: 'center' }}
+            />
+          )
+          : <Typography variant="body2" color="text.disabled">—</Typography>;
+
+      case 'active':
+        return (
+          <Chip
+            label={row.active ? 'نشط' : 'غير نشط'}
+            color={row.active ? 'success' : 'default'}
+            size="small"
+            sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }}
+          />
+        );
+
+      case 'actions':
+        return (
+          <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+            {showDeleted ? (
+              <>
+                {/* زر الاستعادة */}
+                <PermissionGuard requires="medical-categories.delete">
+                  <Tooltip title="استعادة" arrow>
+                    <IconButton size="small" color="success" onClick={() => handleRestoreClick(row)}>
+                      <ReplayIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </PermissionGuard>
+                {/* زر الحذف القاسي */}
+                <PermissionGuard requires="medical-categories.delete">
+                  <Tooltip title="حذف نهائي — لا يمكن الاسترجاع" arrow>
+                    <IconButton size="small" color="error" onClick={() => handleHardDeleteClick(row)}>
+                      <DeleteForeverIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </PermissionGuard>
+              </>
+            ) : (
+              <>
+                <Tooltip title="تعديل">
+                  <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="حذف (يمكن استعادته لاحقاً)">
+                  <PermissionGuard requires="medical-categories.delete">
+                    <IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </PermissionGuard>
+                </Tooltip>
+              </>
+            )}
           </Stack>
-        )
-      }
-    ],
-    [handleNavigateView, handleNavigateEdit, handleDelete]
-  );
+        );
+
+      default:
+        return row[column.id];
+    }
+  }, [page, rowsPerPage, handleNavigateEdit, handleDeleteClick, handleHardDeleteClick, handleRestoreClick, showDeleted]);
 
   // ========================================
   // RENDER
   // ========================================
-
   return (
-    <Box>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+
+      {/* ====== PAGE HEADER ====== */}
       <PermissionGuard requires="medical-categories.view">
-        <UnifiedPageHeader
+        <ModernPageHeader
           title="التصنيفات الطبية"
           subtitle="إدارة التصنيفات الطبية في النظام"
-          icon={CategoryIcon}
-          breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'التصنيفات الطبية' }]}
-          showAddButton={true}
-          addButtonLabel="إضافة تصنيف جديد"
-          onAddClick={handleNavigateAdd}
-          additionalActions={
-            <Stack direction="row" spacing={1} alignItems="center">
-              {/* Excel Export Button */}
-              <Tooltip title="تصدير جميع التصنيفات إلى Excel">
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  size="small"
-                  startIcon={isExporting ? null : <FileDownloadIcon />}
-                  onClick={handleExcelExport}
-                  disabled={isExporting}
-                >
-                  {isExporting ? 'جاري التصدير...' : 'تصدير Excel'}
-                </Button>
-              </Tooltip>
+          icon={<CategoryIcon />}
+          breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'التصنيفات الطبية' }]}
+          actions={
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+              {/* Soft Delete Toggle */}
+              <SoftDeleteToggle
+                showDeleted={showDeleted}
+                onToggle={() => { setShowDeleted((prev) => !prev); setPage(0); }}
+              />
 
-              {/* Refresh Button */}
-              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => refetch()} disabled={isLoading}>
-                تحديث
+              {/* Excel Export */}
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                onClick={handleExcelExport}
+                disabled={isExporting}
+                sx={{
+                  minWidth: '9.6875rem',
+                  height: '2.25rem',
+                  color: '#1b5e20',
+                  borderColor: '#1b5e20',
+                  '&:hover': { backgroundColor: '#1b5e2010', borderColor: '#1b5e20' }
+                }}
+              >
+                {isExporting ? 'جاري التصدير...' : 'تصدير Excel'}
+              </Button>
+
+              {/* Add Button */}
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleNavigateAdd}
+                sx={{ height: '2.25rem' }}
+              >
+                إضافة تصنيف جديد
               </Button>
             </Stack>
           }
+          sx={{ mb: 0.5 }}
         />
       </PermissionGuard>
 
       {/* ====== FILTER BAR ====== */}
-      <MainCard sx={{ mb: '1.0rem' }}>
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-          {/* Parent Category Filter */}
-          <FormControl size="small" sx={{ minWidth: '15.625rem' }}>
-            <InputLabel id="parent-filter-label">فلترة حسب التصنيف الأب</InputLabel>
-            <Select
-              labelId="parent-filter-label"
-              id="parent-filter"
-              value={parentFilter}
-              label="فلترة حسب التصنيف الأب"
-              onChange={(e) => {
-                setParentFilter(e.target.value);
-                tableState.setPage(0); // Reset to first page
-              }}
-            >
-              <MenuItem value="">
-                <em>الكل</em>
-              </MenuItem>
-              {parentCategories.map((cat) => (
-                <MenuItem key={cat.id} value={cat.id}>
-                  {cat.name || cat.code}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+      <MainCard sx={{ mb: 1, flexShrink: 0 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
 
-          {/* Stats Chips */}
-          <Stack direction="row" spacing={1}>
-            <Chip label={`الإجمالي: ${data?.total || 0}`} size="small" variant="outlined" />
-          </Stack>
+          {/* Refresh */}
+          <Tooltip title="تحديث">
+            <IconButton
+              onClick={() => refetch()}
+              color="primary"
+              sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+
+          {/* Total Count Badge */}
+          <Chip
+            icon={<CategoryIcon fontSize="small" />}
+            label={`${data?.total || 0} تصنيف`}
+            variant="outlined"
+            color="primary"
+            sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
+          />
+
+          {/* Search */}
+          <TextField
+            sx={{ flexGrow: 1, minWidth: { md: '200px' } }}
+            size="small"
+            placeholder="بحث بالاسم أو الرمز..."
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => { setSearchTerm(''); setPage(0); }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+              sx: { height: '2.5rem' }
+            }}
+          />
+
+          {/* Parent Category Filter */}
+          <TextField
+            select
+            size="small"
+            label="التصنيف الأب"
+            value={parentFilter}
+            onChange={(e) => { setParentFilter(e.target.value); setPage(0); }}
+            sx={{ minWidth: '10rem', bgcolor: 'background.paper' }}
+            InputProps={{ sx: { height: '2.5rem' } }}
+            InputLabelProps={{ shrink: true }}
+          >
+            <MenuItem value=""><em>الكل</em></MenuItem>
+            {parentCategories.map((cat) => (
+              <MenuItem key={cat.id} value={cat.id}>{cat.name || cat.code}</MenuItem>
+            ))}
+          </TextField>
+
+          {/* Reset */}
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={handleResetFilters}
+            startIcon={<FilterAltOffIcon />}
+            sx={{ minWidth: '7.5rem', height: '2.5rem' }}
+          >
+            إعادة ضبط
+          </Button>
         </Stack>
       </MainCard>
 
       {/* ====== MAIN TABLE ====== */}
-      <MainCard>
-        <TableErrorBoundary>
-          <GenericDataTable
-            columns={columns}
-            data={data?.items || []}
-            totalCount={data?.total || 0}
-            isLoading={isLoading}
-            tableState={tableState}
-            enableFiltering={false}
-            enableSorting={true}
-            enablePagination={true}
-            stickyHeader={true}
-            minHeight={400}
-            maxHeight="calc(100vh - 400px)"
-            onRowClick={(row) => handleNavigateView(row.id)}
-            emptyMessage="لا توجد تصنيفات طبية"
-            rowsPerPageOptions={[5, 10, 25, 50]}
-          />
-        </TableErrorBoundary>
-      </MainCard>
+      <UnifiedMedicalTable
+        columns={columns}
+        rows={data?.items || []}
+        loading={isLoading}
+        totalCount={data?.total || 0}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(newSize) => { setRowsPerPage(newSize); setPage(0); }}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSort={(columnId, direction) => { setSortBy(columnId); setSortDirection(direction); setPage(0); }}
+        renderCell={renderCell}
+        getRowKey={(row) => row.id}
+        emptyMessage="لا توجد تصنيفات طبية"
+        rowsPerPageOptions={[5, 10, 25, 50]}
+        sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
+        tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
+      />
+
+      {/* ====== CONFIRM DELETE DIALOG ====== */}
+      <ActionConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmColor={confirmDialog.confirmColor}
+        confirmText={confirmDialog.confirmText}
+        cancelText="إلغاء الأمر"
+        onConfirm={confirmDialog.onConfirm}
+        onClose={closeDialog}
+      />
     </Box>
   );
 };

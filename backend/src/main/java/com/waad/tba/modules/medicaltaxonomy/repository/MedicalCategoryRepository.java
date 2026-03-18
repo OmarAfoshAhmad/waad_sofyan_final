@@ -4,6 +4,7 @@ import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -21,7 +22,8 @@ import java.util.Optional;
  * - Active/inactive filtering
  */
 @Repository
-public interface MedicalCategoryRepository extends JpaRepository<MedicalCategory, Long> {
+public interface MedicalCategoryRepository
+        extends JpaRepository<MedicalCategory, Long>, JpaSpecificationExecutor<MedicalCategory> {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // BASIC QUERIES
@@ -122,20 +124,20 @@ public interface MedicalCategoryRepository extends JpaRepository<MedicalCategory
      * Search by name - case insensitive
      */
     @Query("""
-        SELECT mc FROM MedicalCategory mc
-        WHERE LOWER(mc.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
-          AND mc.active = true
-    """)
+                SELECT mc FROM MedicalCategory mc
+                WHERE LOWER(mc.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                  AND mc.active = true
+            """)
     List<MedicalCategory> searchByName(@Param("searchTerm") String searchTerm);
 
     /**
      * Search by name with pagination
      */
     @Query("""
-        SELECT mc FROM MedicalCategory mc
-        WHERE LOWER(mc.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
-          AND mc.active = true
-    """)
+                SELECT mc FROM MedicalCategory mc
+                WHERE LOWER(mc.name) LIKE LOWER(CONCAT('%', :searchTerm, '%'))
+                  AND mc.active = true
+            """)
     Page<MedicalCategory> searchByName(@Param("searchTerm") String searchTerm, Pageable pageable);
 
     // ═══════════════════════════════════════════════════════════════════════════

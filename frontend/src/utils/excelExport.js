@@ -354,18 +354,15 @@ export const exportMedicalServicesToExcel = async (data) => {
  */
 export const exportMedicalCategoriesToExcel = async (data) => {
   const columns = [
-    { key: 'code', header: 'الرمز', width: '0.9375rem', align: 'center' },
-    { key: 'name', header: 'الاسم (عربي)', width: '2.1875rem', align: 'right' },
-    { key: 'name', header: 'الاسم (إنجليزي)', width: '2.1875rem', align: 'left' },
-    { key: 'parentName', header: 'التصنيف الأب', width: '1.5625rem', align: 'right' },
-    { key: 'active', header: 'الحالة', width: '0.75rem', type: 'boolean' }
+    { key: 'code',       header: 'الرمز',         width: 18,  align: 'center' },
+    { key: 'name',       header: 'الاسم',          width: 35,  align: 'right' },
+    { key: 'parentName', header: 'التصنيف الأب',   width: 28,  align: 'right' },
+    { key: 'active',     header: 'الحالة',         width: 14,  align: 'center' }
   ];
 
-  // Transform data
   const transformedData = data.map((item) => ({
     ...item,
-    name: item.name || item.name || '-',
-    name: !item.name || item.name === (item.name || item.name) ? '-' : item.name,
+    name: item.name || '-',
     parentName: item.parentName || '-',
     active: item.active ? 'نشط' : 'غير نشط'
   }));

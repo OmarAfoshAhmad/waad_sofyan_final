@@ -62,6 +62,7 @@ import ModernEmptyState from 'components/tba/ModernEmptyState';
 import { useTableRefresh } from 'contexts/TableRefreshContext';
 import { useMedicalCategoryDetails } from 'hooks/useMedicalCategories';
 import { updateMedicalCategory, getAllMedicalCategories } from 'services/api/medical-categories.service';
+import { openSnackbar } from 'api/snackbar';
 
 // ============================================================================
 // CONSTANTS
@@ -340,14 +341,17 @@ const MedicalCategoryEdit = () => {
       setApiError(null);
 
       try {
+        const isMain = categoryType === CATEGORY_TYPE.MAIN;
         const payload = {
           name: form.name?.trim(),
-          parentId: categoryType === CATEGORY_TYPE.SUB ? form.parentId : null,
+          parentId: isMain ? null : form.parentId,
+          clearParent: isMain,
           context: form.context || 'ANY',
           active: form.active
         };
 
         await updateMedicalCategory(id, payload);
+        openSnackbar({ message: 'تم تحديث التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
         triggerRefresh();
         navigate('/medical-categories');
       } catch (err) {
@@ -450,268 +454,205 @@ const MedicalCategoryEdit = () => {
             </Alert>
           )}
 
-          {/* ========== Section 1: Category Type Selection ========== */}
-          <SectionHeader
-            icon={AccountTreeIcon}
-            title="نوع التصنيف"
-            subtitle="يمكنك تغيير نوع التصنيف من رئيسي إلى فرعي أو العكس"
-            color="primary"
-          />
-
-          <Grid container spacing={2} sx={{ mb: '2.0rem' }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <CategoryTypeCard
-                type={CATEGORY_TYPE.MAIN}
-                selected={categoryType === CATEGORY_TYPE.MAIN}
-                onSelect={handleCategoryTypeChange}
-                disabled={submitting}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <CategoryTypeCard
-                type={CATEGORY_TYPE.SUB}
-                selected={categoryType === CATEGORY_TYPE.SUB}
-                onSelect={handleCategoryTypeChange}
-                disabled={submitting}
-              />
-            </Grid>
-          </Grid>
-
-          <Divider sx={{ my: '2.0rem' }} />
-
-          {/* ========== Section 2: Parent Category (if sub-category) ========== */}
-          <Collapse in={categoryType === CATEGORY_TYPE.SUB}>
-            <Box sx={{ mb: '2.0rem' }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={3}
+            divider={<Divider orientation="vertical" flexItem />}
+            alignItems="flex-start"
+          >
+            {/* ===== العمود الأيمن: نوع التصنيف + الأب ===== */}
+            <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 38%' }, width: '100%', minWidth: 0 }}>
               <SectionHeader
-                icon={FolderIcon}
-                title="التصنيف الأب"
-                subtitle="اختر التصنيف الرئيسي الذي سيتبعه هذا التصنيف الفرعي"
-                color="secondary"
+                icon={AccountTreeIcon}
+                title="نوع التصنيف"
+                subtitle="يمكنك تغيير نوع التصنيف من رئيسي إلى فرعي أو العكس"
+                color="primary"
               />
 
-              <FormControl fullWidth error={!!errors.parentId}>
-                <InputLabel>اختر التصنيف الأب *</InputLabel>
-                <Select
-                  value={form.parentId}
-                  onChange={handleChange('parentId')}
-                  label="اختر التصنيف الأب *"
-                  disabled={submitting || loadingParents}
-                  sx={{
-                    '& .MuiSelect-select': {
-                      py: '0.75rem'
-                    }
-                  }}
-                >
-                  <MenuItem value="" disabled>
-                    <Typography color="text.secondary">— اختر التصنيف الأب —</Typography>
-                  </MenuItem>
+              <Stack spacing={1.5}>
+                <CategoryTypeCard
+                  type={CATEGORY_TYPE.MAIN}
+                  selected={categoryType === CATEGORY_TYPE.MAIN}
+                  onSelect={handleCategoryTypeChange}
+                  disabled={submitting}
+                />
+                <CategoryTypeCard
+                  type={CATEGORY_TYPE.SUB}
+                  selected={categoryType === CATEGORY_TYPE.SUB}
+                  onSelect={handleCategoryTypeChange}
+                  disabled={submitting}
+                />
+              </Stack>
 
-                  {organizedCategories.map((mainCat) => [
-                    // Main category as group header
-                    <MenuItem
-                      key={mainCat.id}
-                      value={mainCat.id}
-                      sx={{
-                        fontWeight: 600,
-                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04)
-                      }}
-                    >
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <FolderIcon sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
-                        <span>{mainCat.name}</span>
-                        <Chip label={mainCat.code} size="small" sx={{ ml: 1, height: '1.25rem', fontSize: '0.7rem' }} />
-                      </Stack>
-                    </MenuItem>,
+              <Collapse in={categoryType === CATEGORY_TYPE.SUB}>
+                <Divider sx={{ my: '1.25rem' }} />
+                <SectionHeader
+                  icon={FolderIcon}
+                  title="التصنيف الأب"
+                  subtitle="اختر التصنيف الرئيسي الذي سيتبعه هذا التصنيف الفرعي"
+                  color="secondary"
+                />
 
-                    // Sub-categories indented
-                    ...mainCat.children.map((subCat) => (
-                      <MenuItem key={subCat.id} value={subCat.id} sx={{ pr: '2.0rem' }}>
+                <FormControl fullWidth error={!!errors.parentId}>
+                  <InputLabel>اختر التصنيف الأب *</InputLabel>
+                  <Select
+                    value={form.parentId}
+                    onChange={handleChange('parentId')}
+                    label="اختر التصنيف الأب *"
+                    disabled={submitting || loadingParents}
+                    sx={{ '& .MuiSelect-select': { py: '0.75rem' } }}
+                  >
+                    <MenuItem value="" disabled>
+                      <Typography color="text.secondary">— اختر التصنيف الأب —</Typography>
+                    </MenuItem>
+
+                    {organizedCategories.map((mainCat) => [
+                      <MenuItem
+                        key={mainCat.id}
+                        value={mainCat.id}
+                        sx={{ fontWeight: 600, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04) }}
+                      >
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <SubdirectoryArrowLeftIcon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />
-                          <span>{subCat.name}</span>
-                          <Chip label={subCat.code} size="small" variant="outlined" sx={{ ml: 1, height: '1.125rem', fontSize: '0.75rem' }} />
+                          <FolderIcon sx={{ fontSize: '1.125rem', color: 'primary.main' }} />
+                          <span>{mainCat.name}</span>
+                          <Chip label={mainCat.code} size="small" sx={{ ml: 1, height: '1.25rem', fontSize: '0.7rem' }} />
                         </Stack>
-                      </MenuItem>
-                    ))
-                  ])}
-                </Select>
+                      </MenuItem>,
 
-                {errors.parentId && (
-                  <Typography variant="caption" color="error" sx={{ mt: 0.5, mr: '0.75rem' }}>
-                    {errors.parentId}
-                  </Typography>
-                )}
+                      ...mainCat.children.map((subCat) => (
+                        <MenuItem key={subCat.id} value={subCat.id} sx={{ pr: '2.0rem' }}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <SubdirectoryArrowLeftIcon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />
+                            <span>{subCat.name}</span>
+                            <Chip label={subCat.code} size="small" variant="outlined" sx={{ ml: 1, height: '1.125rem', fontSize: '0.75rem' }} />
+                          </Stack>
+                        </MenuItem>
+                      ))
+                    ])}
+                  </Select>
 
-                {loadingParents && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, mr: '0.75rem' }}>
-                    جارِ تحميل التصنيفات...
-                  </Typography>
-                )}
-              </FormControl>
+                  {errors.parentId && (
+                    <Typography variant="caption" color="error" sx={{ mt: 0.5, mr: '0.75rem' }}>
+                      {errors.parentId}
+                    </Typography>
+                  )}
 
-              {/* Parent Preview */}
-              <ParentPreview parent={selectedParent} />
+                  {loadingParents && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, mr: '0.75rem' }}>
+                      جارِ تحميل التصنيفات...
+                    </Typography>
+                  )}
+                </FormControl>
+
+                <ParentPreview parent={selectedParent} />
+              </Collapse>
             </Box>
 
-            <Divider sx={{ my: '2.0rem' }} />
-          </Collapse>
+            {/* ===== العمود الأيسر: البيانات + الإجراءات ===== */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <SectionHeader icon={LabelIcon} title="بيانات التصنيف" subtitle="قم بتحديث المعلومات الأساسية للتصنيف" color="info" />
 
-          {/* ========== Section 3: Category Details ========== */}
-          <SectionHeader icon={LabelIcon} title="بيانات التصنيف" subtitle="قم بتحديث المعلومات الأساسية للتصنيف" color="info" />
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    fullWidth
+                    label="رمز التصنيف"
+                    value={form.code}
+                    disabled
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockIcon sx={{ color: 'text.disabled' }} />
+                        </InputAdornment>
+                      ),
+                      sx: { fontFamily: 'monospace', letterSpacing: 1, bgcolor: 'action.hover' }
+                    }}
+                    helperText="الرمز غير قابل للتعديل بعد الإنشاء"
+                    inputProps={{ dir: 'ltr' }}
+                  />
+                </Grid>
 
-          <Grid container spacing={3}>
-            {/* Code Field (Read-Only) */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="رمز التصنيف"
-                value={form.code}
-                disabled
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockIcon sx={{ color: 'text.disabled' }} />
-                    </InputAdornment>
-                  ),
-                  sx: { fontFamily: 'monospace', letterSpacing: 1, bgcolor: 'action.hover' }
-                }}
-                helperText="الرمز غير قابل للتعديل بعد الإنشاء"
-                inputProps={{ dir: 'ltr' }}
-              />
-            </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    fullWidth
+                    required
+                    label="اسم التصنيف"
+                    placeholder="أدخل اسم التصنيف بالعربية"
+                    value={form.name}
+                    onChange={handleChange('name')}
+                    error={!!errors.name}
+                    helperText={errors.name || 'الاسم الذي سيظهر في القوائم والتقارير'}
+                    disabled={submitting}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LabelIcon sx={{ color: 'text.secondary' }} />
+                        </InputAdornment>
+                      )
+                    }}
+                  />
+                </Grid>
 
-            {/* Name Field */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                required
-                label="اسم التصنيف"
-                placeholder="أدخل اسم التصنيف بالعربية"
-                value={form.name}
-                onChange={handleChange('name')}
-                error={!!errors.name}
-                helperText={errors.name || 'الاسم الذي سيظهر في القوائم والتقارير'}
-                disabled={submitting}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LabelIcon sx={{ color: 'text.secondary' }} />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Grid>
-
-            {/* Context / Care-Setting Field */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth>
-                <InputLabel>السياق السريري (نوع الرعاية)</InputLabel>
-                <Select
-                  value={form.context}
-                  onChange={handleChange('context')}
-                  label="السياق السريري (نوع الرعاية)"
-                  disabled={submitting}
-                >
-                  {CONTEXT_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            {/* Active Status */}
-            <Grid size={12}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: '1.0rem',
-                  borderRadius: '0.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
+                <Grid size={12}>
+                  <Paper
+                    variant="outlined"
                     sx={{
-                      width: '2.5rem',
-                      height: '2.5rem',
-                      borderRadius: '50%',
-                      bgcolor: form.active ? 'success.light' : 'grey.200',
+                      p: '0.875rem',
+                      borderRadius: '0.25rem',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s'
+                      justifyContent: 'space-between'
                     }}
                   >
-                    <CheckCircleIcon
-                      sx={{
-                        color: form.active ? 'success.main' : 'grey.400',
-                        fontSize: '1.375rem'
-                      }}
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <Box
+                        sx={{
+                          width: '2.25rem',
+                          height: '2.25rem',
+                          borderRadius: '50%',
+                          bgcolor: form.active ? 'success.light' : 'grey.200',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <CheckCircleIcon sx={{ color: form.active ? 'success.main' : 'grey.400', fontSize: '1.25rem' }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          حالة التصنيف
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {form.active ? 'نشط - سيظهر في قوائم الاختيار' : 'غير نشط - لن يظهر في قوائم الاختيار'}
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    <FormControlLabel
+                      control={<Switch checked={form.active} onChange={handleChange('active')} color="success" disabled={submitting} />}
+                      label={form.active ? 'نشط' : 'غير نشط'}
+                      labelPlacement="start"
                     />
-                  </Box>
-                  <Box>
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      حالة التصنيف
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {form.active ? 'نشط - سيظهر في قوائم الاختيار' : 'غير نشط - لن يظهر في قوائم الاختيار'}
-                    </Typography>
-                  </Box>
-                </Stack>
+                  </Paper>
+                </Grid>
+              </Grid>
 
-                <FormControlLabel
-                  control={<Switch checked={form.active} onChange={handleChange('active')} color="success" disabled={submitting} />}
-                  label={form.active ? 'نشط' : 'غير نشط'}
-                  labelPlacement="start"
-                />
-              </Paper>
-            </Grid>
-          </Grid>
+              <Divider sx={{ my: '1.25rem' }} />
 
-          <Divider sx={{ my: '2.0rem' }} />
+              <Stack direction="row" spacing={2} justifyContent="flex-end">
+                <Button variant="outlined" onClick={handleBack} disabled={submitting} startIcon={<ArrowBackIcon />}>
+                  إلغاء
+                </Button>
 
-          {/* ========== Actions ========== */}
-          <Stack direction="row" spacing={2} justifyContent="flex-end">
-            <Button variant="outlined" onClick={handleBack} disabled={submitting} startIcon={<ArrowBackIcon />}>
-              إلغاء
-            </Button>
-
-            <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={submitting} sx={{ minWidth: '10.0rem' }}>
-              {submitting ? 'جارِ الحفظ...' : 'حفظ التغييرات'}
-            </Button>
+                <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={submitting} sx={{ minWidth: '10.0rem' }}>
+                  {submitting ? 'جارِ الحفظ...' : 'حفظ التغييرات'}
+                </Button>
+              </Stack>
+            </Box>
           </Stack>
         </Box>
       </MainCard>
-
-      {/* Info Card */}
-      <Paper
-        sx={{
-          mt: '1.5rem',
-          p: '1.25rem',
-          bgcolor: (theme) => alpha(theme.palette.warning.main, 0.04),
-          border: 1,
-          borderColor: 'warning.light',
-          borderRadius: '0.25rem'
-        }}
-      >
-        <Stack direction="row" spacing={2} alignItems="flex-start">
-          <InfoOutlinedIcon sx={{ color: 'warning.main', mt: 0.3 }} />
-          <Box>
-            <Typography variant="subtitle2" fontWeight={600} color="warning.main" gutterBottom>
-              ملاحظات مهمة
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-              • <strong>الرمز:</strong> لا يمكن تغييره بعد الإنشاء لضمان استقرار الربط مع الخدمات
-              <br />• <strong>تغيير النوع:</strong> يمكنك تحويل تصنيف رئيسي إلى فرعي إذا لم يكن له تصنيفات فرعية
-              <br />• <strong>التعطيل:</strong> تعطيل التصنيف سيخفيه من قوائم الاختيار لكنه لن يحذف البيانات المرتبطة
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
     </Box>
   );
 };

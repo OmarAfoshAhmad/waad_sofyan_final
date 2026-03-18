@@ -76,7 +76,7 @@ export const useMedicalCategoriesList = (initialParams = {}) => {
  */
 export const useMedicalCategoryDetails = (id) => {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!id); // start loading immediately if id provided
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {

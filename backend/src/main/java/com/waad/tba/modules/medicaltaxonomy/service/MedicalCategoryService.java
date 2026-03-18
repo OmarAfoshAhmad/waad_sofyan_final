@@ -1,7 +1,6 @@
 package com.waad.tba.modules.medicaltaxonomy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
-import com.waad.tba.common.guard.DeletionGuard;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryCreateDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryResponseDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryUpdateDto;
@@ -10,11 +9,12 @@ import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
-import com.waad.tba.modules.medicaltaxonomy.repository.MedicalSpecialtyRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +40,6 @@ public class MedicalCategoryService {
 
     private final MedicalCategoryRepository categoryRepository;
     private final MedicalServiceRepository serviceRepository;
-    private final MedicalSpecialtyRepository specialtyRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CREATE
@@ -79,8 +78,7 @@ public class MedicalCategoryService {
         // Handle multi-parents (Roots)
         if (dto.getMultiParentIds() != null && !dto.getMultiParentIds().isEmpty()) {
             java.util.Set<MedicalCategory> roots = new java.util.HashSet<>(
-                categoryRepository.findAllById(dto.getMultiParentIds())
-            );
+                    categoryRepository.findAllById(dto.getMultiParentIds()));
             category.setRoots(roots);
         }
 
@@ -126,6 +124,30 @@ public class MedicalCategoryService {
         }
         return categoryRepository.findAll(pageable)
                 .map(this::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MedicalCategoryResponseDto> findAll(Pageable pageable, Long parentId, Boolean active, String search) {
+        log.debug("Finding medical categories - page: {}, parentId: {}, active: {}, search: {}",
+                pageable.getPageNumber(), parentId, active, search);
+        String searchParam = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
+        Specification<MedicalCategory> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (searchParam != null) {
+                String pattern = "%" + searchParam + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("name")), pattern),
+                        cb.like(cb.lower(root.get("code")), pattern)));
+            }
+            if (parentId != null) {
+                predicates.add(cb.equal(root.get("parentId"), parentId));
+            }
+            if (active != null) {
+                predicates.add(cb.equal(root.get("active"), active));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        return categoryRepository.findAll(spec, pageable).map(this::toDto);
     }
 
     @Transactional(readOnly = true)
@@ -199,7 +221,12 @@ public class MedicalCategoryService {
         if (dto.getName() != null) {
             category.setName(dto.getName());
         }
-        if (dto.getParentId() != null) {
+
+        // Handle parent update
+        if (Boolean.TRUE.equals(dto.getClearParent())) {
+            // Explicitly converting to root category
+            category.setParentId(null);
+        } else if (dto.getParentId() != null) {
             // Validate parent category exists and is active
             categoryRepository.findActiveById(dto.getParentId())
                     .orElseThrow(() -> new BusinessRuleException(
@@ -224,8 +251,7 @@ public class MedicalCategoryService {
 
         if (dto.getMultiParentIds() != null) {
             java.util.Set<MedicalCategory> roots = new java.util.HashSet<>(
-                categoryRepository.findAllById(dto.getMultiParentIds())
-            );
+                    categoryRepository.findAllById(dto.getMultiParentIds()));
             category.setRoots(roots);
         }
 
@@ -246,17 +272,41 @@ public class MedicalCategoryService {
         MedicalCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Medical category not found: " + id));
 
-        DeletionGuard.of("تصنيف طبي")
-                .check("تخصصات نشطة", specialtyRepository.existsByCategoryIdAndDeletedFalse(id) ? 1L : 0L)
-                .check("خدمات طبية نشطة", serviceRepository.countActiveByCategoryId(id))
-                .throwIfBlocked("أوقف تفعيل التخصصات والخدمات المرتبطة أولاً.");
-
-        // Soft delete
+        // Soft delete — no service/specialty dependency check (tables not yet migrated)
         category.setActive(false);
         category.setDeleted(true);
         categoryRepository.save(category);
 
         log.info("✅ Deleted (soft) medical category: {}", id);
+    }
+
+    @Transactional
+    public void hardDelete(Long id) {
+        log.info("Hard-deleting (permanent) medical category: {}", id);
+
+        if (!categoryRepository.existsById(id)) {
+            throw new BusinessRuleException("Medical category not found: " + id);
+        }
+
+        categoryRepository.deleteById(id);
+
+        log.info("✅ Hard-deleted (permanent) medical category: {}", id);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RESTORE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Transactional
+    public MedicalCategoryResponseDto restore(Long id) {
+        log.info("Restoring medical category: {}", id);
+        MedicalCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("Medical category not found: " + id));
+        category.setDeleted(false);
+        category.setActive(true);
+        category = categoryRepository.save(category);
+        log.info("✅ Restored medical category: {}", category.getCode());
+        return toDto(category);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -269,12 +319,6 @@ public class MedicalCategoryService {
                 .orElseThrow(() -> new BusinessRuleException("Medical category not found: " + id));
 
         boolean nowActive = !category.isActive();
-
-        // Guard: cannot deactivate if specialties are under it
-        if (!nowActive && specialtyRepository.existsByCategoryIdAndDeletedFalse(id)) {
-            throw new BusinessRuleException(
-                    "Cannot deactivate category — active specialties still reference it.");
-        }
 
         category.setActive(nowActive);
         category = categoryRepository.save(category);
@@ -350,7 +394,8 @@ public class MedicalCategoryService {
                 .active(category.isActive())
                 .coveragePercent(category.getCoveragePercent())
                 .multiParentIds(category.getRoots().stream().map(MedicalCategory::getId).collect(Collectors.toList()))
-                .multiParentNames(category.getRoots().stream().map(MedicalCategory::getName).collect(Collectors.toList()))
+                .multiParentNames(
+                        category.getRoots().stream().map(MedicalCategory::getName).collect(Collectors.toList()))
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
                 .build();
