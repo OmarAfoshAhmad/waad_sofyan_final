@@ -207,9 +207,10 @@ const UnifiedMedicalTable = ({
     label: col.label || col.headerName
   }));
 
-  // Theme colors
-  const headerBg = isDark ? MEDICAL_TABLE_THEME.header.dark.background : MEDICAL_TABLE_THEME.header.light.background;
-  const headerText = isDark ? MEDICAL_TABLE_THEME.header.dark.text : MEDICAL_TABLE_THEME.header.light.text;
+  // Theme colors — use CSS variables injected by AppearanceInjector for light mode
+  const headerBg   = isDark ? MEDICAL_TABLE_THEME.header.dark.background : 'var(--tba-th-bg, #E0F2F1)';
+  const headerText = isDark ? MEDICAL_TABLE_THEME.header.dark.text        : 'var(--tba-th-text, #004D50)';
+  const headerBorder = isDark ? theme.palette.divider                     : 'var(--tba-th-text, #00838F)';
   const rowOdd = isDark ? MEDICAL_TABLE_THEME.row.dark.odd : MEDICAL_TABLE_THEME.row.light.odd;
   const rowHover = isDark ? MEDICAL_TABLE_THEME.row.dark.hover : MEDICAL_TABLE_THEME.row.light.hover;
 
@@ -277,7 +278,7 @@ const UnifiedMedicalTable = ({
                   padding="checkbox"
                   sx={{
                     bgcolor: headerBg,
-                    borderBottom: `2px solid ${theme.palette.divider}`
+                    borderBottom: `2px solid ${headerBorder}`
                   }}
                 />
               )}
@@ -297,7 +298,7 @@ const UnifiedMedicalTable = ({
                       minWidth: column.minWidth || 80,
                       width: column.width,
                       whiteSpace: 'nowrap',
-                      borderBottom: `2px solid ${theme.palette.divider}`
+                      borderBottom: `2px solid ${headerBorder}`
                     }}
                   >
                     {isSortable ? (

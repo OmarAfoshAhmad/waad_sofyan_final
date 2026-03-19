@@ -1,4 +1,4 @@
-// ==============================|| OVERRIDES - TABLE CELL ||============================== //
+// ==============================|| OVERRIDES - TABLE HEAD ||============================== //
 
 export default function TableHead(theme) {
   const varsPalette = (theme.vars && theme.vars.palette) || theme.palette || {};
@@ -6,11 +6,15 @@ export default function TableHead(theme) {
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: varsPalette.grey?.[50] ?? theme.palette.grey?.[50],
+          backgroundColor: 'var(--tba-th-bg, #E0F2F1)',
+          color: 'var(--tba-th-text, #004D50)',
           borderTop: '1px solid',
           borderTopColor: varsPalette.divider ?? theme.palette.divider,
           borderBottom: '2px solid',
-          borderBottomColor: varsPalette.divider ?? theme.palette.divider
+          borderBottomColor: 'var(--tba-th-text, #00838F)',
+          '& .MuiTableCell-root': {
+            color: 'var(--tba-th-text, #004D50)'
+          }
         }
       }
     }

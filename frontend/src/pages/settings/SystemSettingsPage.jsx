@@ -26,6 +26,7 @@ import {
   Description as ReportIcon,
   LocalHospital as ProviderPortalIcon,
   Lock as SecurityIcon,
+  Palette as PaletteIcon,
   Preview as PreviewIcon,
   Refresh as RefreshIcon,
   Save as SaveIcon,
@@ -106,7 +107,7 @@ const SystemSettingsPage = () => {
   const theme = useTheme();
   const { setField } = useConfig();
   const { refresh: refreshSystemConfig, applyFlags, applyUiConfig } = useSystemConfig();
-  const { updateSettings: updateVisualSettings } = useCompanySettings();
+  const { updateSettings: updateVisualSettings, settings: visualSettings } = useCompanySettings();
 
   // ✅ ألوان مُحسَّنة مُخزَّنة بـ useMemo بدلاً من الحساب inline
   const alphaColors = useMemo(() => ({
@@ -140,6 +141,12 @@ const SystemSettingsPage = () => {
     logoUrl: '',
     fontFamily: 'Tajawal',
     fontSizeBase: 14,
+    // إعدادات المظهر (من localStorage عبر CompanySettingsContext)
+    tableHeaderBg:   (visualSettings || {}).tableHeaderBg   || '#E0F2F1',
+    tableHeaderText: (visualSettings || {}).tableHeaderText || '#004D50',
+    tableRowEven:    (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
+    selectionColor:  (visualSettings || {}).selectionColor  || 'rgba(0,131,143,0.08)',
+    primaryColor:    (visualSettings || {}).primaryColor    || '#00838F',
     claimSlaDays: 10,
     preApprovalSlaDays: 3,
     claimBackdatedMonths: 3,
@@ -332,7 +339,14 @@ const SystemSettingsPage = () => {
         companyName: dataToSave.companyName,
         companyNameEn: dataToSave.companyName,
         businessType: dataToSave.businessType,
-        logoUrl: dataToSave.logoUrl
+        logoUrl: dataToSave.logoUrl?.startsWith('data:') ? null : (dataToSave.logoUrl || null),
+        logoBase64: dataToSave.logoUrl?.startsWith('data:') ? dataToSave.logoUrl : null,
+        // حفظ إعدادات المظهر في localStorage
+        tableHeaderBg:   dataToSave.tableHeaderBg,
+        tableHeaderText: dataToSave.tableHeaderText,
+        tableRowEven:    dataToSave.tableRowEven,
+        selectionColor:  dataToSave.selectionColor,
+        primaryColor:    dataToSave.primaryColor
       });
 
       refreshSystemConfig();
@@ -458,6 +472,7 @@ const SystemSettingsPage = () => {
           <Tab icon={<ReportIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات التقارير" />
           <Tab icon={<ProviderPortalIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="بوابة مقدم الخدمة" />
           <Tab icon={<MailIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات البريد" />
+          <Tab icon={<PaletteIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="المظهر" />
         </Tabs>
 
         <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.paper', borderRadius: '0 0 8px 8px' }}>
@@ -465,96 +480,7 @@ const SystemSettingsPage = () => {
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <Stack spacing={2}>
-                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
-                        <FieldGroup title="الهوية البصرية" icon={BusinessIcon}>
-                          <Box sx={{ display: 'flex', gap: '1.0rem', alignItems: 'center' }}>
-                            <Box
-                              sx={{
-                                width: '3.75rem',
-                                height: '3.75rem',
-                                borderRadius: '0.375rem',
-                                border: '1px dashed',
-                                borderColor: 'divider',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                bgcolor: alphaColors.logoBoxBg,
-                                flexShrink: 0
-                              }}
-                            >
-                              <img
-                                src={formData.logoUrl || waadLogoFallback}
-                                alt="Logo"
-                                style={{ maxWidth: '80%', maxHeight: '80%' }}
-                                onError={(e) => {
-                                  e.currentTarget.src = waadLogoFallback;
-                                }}
-                              />
-                            </Box>
-                            <Box sx={{ flex: 1 }}>
-                              <Button variant="outlined" component="label" size="small" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 1 }}>
-                                تغيير الشعار
-                                <input
-                                  type="file"
-                                  hidden
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    if (e.target.files?.[0]) {
-                                      const reader = new FileReader();
-                                      reader.onloadend = () => setFormData((p) => ({ ...p, logoUrl: reader.result || '' }));
-                                      reader.readAsDataURL(e.target.files[0]);
-                                    }
-                                  }}
-                                />
-                              </Button>
-                              <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">رابط الشعار</Typography>
-                                <TextField 
-                                  fullWidth 
-                                  size="small" 
-                                  placeholder="https://..."
-                                  value={formData.logoUrl} 
-                                  onChange={updateField('logoUrl')} 
-                                />
-                              </Stack>
-                            </Box>
-                          </Box>
-                        </FieldGroup>
-                      </Paper>
-
-                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
-                        <FieldGroup title="المظهر والخط" icon={SettingsIcon}>
-                          <Stack spacing={1.5}>
-                            <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">نوع الخط</Typography>
-                              <TextField select fullWidth size="small" value={formData.fontFamily} onChange={updateField('fontFamily')}>
-                                <MenuItem value="Tajawal">Tajawal</MenuItem>
-                                <MenuItem value="Cairo">Cairo</MenuItem>
-                              </TextField>
-                            </Stack>
-                            <Box>
-                              <Typography variant="caption" color="text.secondary" display="block">
-                                حجم الخط ({formData.fontSizeBase}px)
-                              </Typography>
-                              <Slider
-                                value={formData.fontSizeBase}
-                                onChange={(e, val) => setFormData((p) => ({ ...p, fontSizeBase: Number(val) }))}
-                                min={12}
-                                max={18}
-                                step={1}
-                                valueLabelDisplay="auto"
-                                size="small"
-                              />
-                            </Box>
-                          </Stack>
-                        </FieldGroup>
-                      </Paper>
-                    </Stack>
-                  </Grid>
-
-                  <Grid size={{ xs: 12, md: 8 }}>
+                  <Grid size={{ xs: 12 }}>
                     <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
                       <FieldGroup title="المعلومات الأساسية" icon={BusinessIcon}>
                         <Grid container spacing={2}>
@@ -844,6 +770,278 @@ const SystemSettingsPage = () => {
               </Box>
             </Box>
           </TabPanel>
+
+          {/* ===================== تبويب المظهر ===================== */}
+          <TabPanel value={tabValue} index={6}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
+                <Grid container spacing={2}>
+
+                  {/* عمود الشعار والخط */}
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Stack spacing={2}>
+
+                      {/* الشعار */}
+                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                        <FieldGroup title="شعار المؤسسة" icon={BusinessIcon} color="primary.main">
+                          <Box sx={{ display: 'flex', gap: '1.0rem', alignItems: 'center' }}>
+                            <Box
+                              sx={{
+                                width: '3.75rem',
+                                height: '3.75rem',
+                                borderRadius: '0.375rem',
+                                border: '1px dashed',
+                                borderColor: 'divider',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                bgcolor: alphaColors.logoBoxBg,
+                                flexShrink: 0
+                              }}
+                            >
+                              <img
+                                src={formData.logoUrl || waadLogoFallback}
+                                alt="Logo"
+                                style={{ maxWidth: '80%', maxHeight: '80%' }}
+                                onError={(e) => { e.currentTarget.src = waadLogoFallback; }}
+                              />
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                              <Button variant="outlined" component="label" size="small" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 1 }}>
+                                تغيير الشعار
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => setFormData((p) => ({ ...p, logoUrl: reader.result || '' }));
+                                      reader.readAsDataURL(e.target.files[0]);
+                                    }
+                                  }}
+                                />
+                              </Button>
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">رابط الشعار</Typography>
+                                <TextField fullWidth size="small" placeholder="https://..." value={formData.logoUrl} onChange={updateField('logoUrl')} />
+                              </Stack>
+                            </Box>
+                          </Box>
+                        </FieldGroup>
+                      </Paper>
+
+                      {/* نوع الخط وحجمه */}
+                      <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                        <FieldGroup title="الخط" icon={SettingsIcon} color="primary.main">
+                          <Stack spacing={1.5}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">نوع الخط</Typography>
+                              <TextField select fullWidth size="small" value={formData.fontFamily} onChange={updateField('fontFamily')}>
+                                <MenuItem value="Tajawal">Tajawal</MenuItem>
+                                <MenuItem value="Cairo">Cairo</MenuItem>
+                                <MenuItem value="Noto Naskh Arabic">Noto Naskh Arabic</MenuItem>
+                                <MenuItem value="Dubai">Dubai</MenuItem>
+                              </TextField>
+                            </Stack>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                حجم الخط ({formData.fontSizeBase}px)
+                              </Typography>
+                              <Slider
+                                value={formData.fontSizeBase}
+                                onChange={(e, val) => setFormData((p) => ({ ...p, fontSizeBase: Number(val) }))}
+                                min={12}
+                                max={18}
+                                step={1}
+                                valueLabelDisplay="auto"
+                                size="small"
+                              />
+                            </Box>
+                          </Stack>
+                        </FieldGroup>
+                      </Paper>
+
+                    </Stack>
+                  </Grid>
+
+                  {/* عمود ألوان الجداول والواجهة */}
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    <Stack spacing={2}>
+
+                      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
+                        <FieldGroup title="ألوان الجداول" icon={PaletteIcon} color="primary.main">
+                          <Grid container spacing={2}>
+
+                            {/* لون خلفية ترويسة الجداول */}
+                            <Grid size={{ xs: 12, sm: 6 }}>
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">خلفية ترويسة الجداول</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box
+                                    component="input"
+                                    type="color"
+                                    value={formData.tableHeaderBg}
+                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderBg: e.target.value }))}
+                                    sx={{ width: '2.5rem', height: '2.5rem', border: 'none', cursor: 'pointer', p: 0, borderRadius: 1 }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={formData.tableHeaderBg}
+                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderBg: e.target.value }))}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ maxLength: 25 }}
+                                  />
+                                </Box>
+                              </Stack>
+                            </Grid>
+
+                            {/* لون نص ترويسة الجداول */}
+                            <Grid size={{ xs: 12, sm: 6 }}>
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">نص ترويسة الجداول</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box
+                                    component="input"
+                                    type="color"
+                                    value={formData.tableHeaderText}
+                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderText: e.target.value }))}
+                                    sx={{ width: '2.5rem', height: '2.5rem', border: 'none', cursor: 'pointer', p: 0, borderRadius: 1 }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={formData.tableHeaderText}
+                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderText: e.target.value }))}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ maxLength: 25 }}
+                                  />
+                                </Box>
+                              </Stack>
+                            </Grid>
+
+                            {/* اللون الرئيسي (أزرار وأيقونات) */}
+                            <Grid size={{ xs: 12, sm: 6 }}>
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">اللون الرئيسي (أزرار وأيقونات)</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Box
+                                    component="input"
+                                    type="color"
+                                    value={formData.primaryColor}
+                                    onChange={(e) => setFormData((p) => ({ ...p, primaryColor: e.target.value }))}
+                                    sx={{ width: '2.5rem', height: '2.5rem', border: 'none', cursor: 'pointer', p: 0, borderRadius: 1 }}
+                                  />
+                                  <TextField
+                                    size="small"
+                                    value={formData.primaryColor}
+                                    onChange={(e) => setFormData((p) => ({ ...p, primaryColor: e.target.value }))}
+                                    sx={{ flex: 1 }}
+                                    inputProps={{ maxLength: 25 }}
+                                  />
+                                </Box>
+                              </Stack>
+                            </Grid>
+
+                            {/* لون التحديد */}
+                            <Grid size={{ xs: 12, sm: 6 }}>
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">لون التحديد (تحديد الصفوف)</Typography>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={formData.selectionColor}
+                                  onChange={(e) => setFormData((p) => ({ ...p, selectionColor: e.target.value }))}
+                                  placeholder="rgba(0,131,143,0.08)"
+                                  inputProps={{ maxLength: 40, dir: 'ltr' }}
+                                  helperText="يمكن استخدام rgba أو hex"
+                                />
+                              </Stack>
+                            </Grid>
+
+                            {/* لون الصفوف الزوجية */}
+                            <Grid size={{ xs: 12, sm: 6 }}>
+                              <Stack spacing={0.5}>
+                                <Typography variant="subtitle2" color="text.secondary">لون الصفوف البديلة (زوجية)</Typography>
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  value={formData.tableRowEven}
+                                  onChange={(e) => setFormData((p) => ({ ...p, tableRowEven: e.target.value }))}
+                                  placeholder="rgba(224,242,241,0.45)"
+                                  inputProps={{ maxLength: 40, dir: 'ltr' }}
+                                  helperText="يمكن استخدام rgba أو hex"
+                                />
+                              </Stack>
+                            </Grid>
+
+                          </Grid>
+                        </FieldGroup>
+                      </Paper>
+
+                      {/* معاينة مباشرة */}
+                      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
+                        <FieldGroup title="معاينة مباشرة" icon={PaletteIcon} color="primary.main">
+                          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                            {/* ترويسة الجدول */}
+                            <Box
+                              sx={{
+                                bgcolor: formData.tableHeaderBg,
+                                color: formData.tableHeaderText,
+                                borderBottom: `2px solid ${formData.tableHeaderText}`,
+                                px: 2, py: 1,
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 1fr 1fr',
+                                gap: 2
+                              }}
+                            >
+                              {['اسم المنتج', 'الرمز', 'الحالة'].map((h) => (
+                                <Typography key={h} variant="caption" fontWeight={700}>{h}</Typography>
+                              ))}
+                            </Box>
+                            {/* صفوف المعاينة */}
+                            {[
+                              ['خدمة طبية أولى', 'SRV-001', 'نشط'],
+                              ['تغطية استشفاء', 'SRV-002', 'نشط'],
+                              ['إجراء جراحي', 'SRV-003', 'موقوف']
+                            ].map((row, i) => (
+                              <Box
+                                key={i}
+                                sx={{
+                                  bgcolor: i % 2 === 1 ? formData.tableRowEven : 'transparent',
+                                  px: 2, py: '0.5rem',
+                                  display: 'grid',
+                                  gridTemplateColumns: '1fr 1fr 1fr',
+                                  gap: 2,
+                                  fontSize: '0.8rem'
+                                }}
+                              >
+                                {row.map((cell, j) => <span key={j}>{cell}</span>)}
+                              </Box>
+                            ))}
+                          </Box>
+                          <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Button variant="contained" size="small" sx={{ bgcolor: formData.primaryColor, '&:hover': { bgcolor: formData.primaryColor, opacity: 0.85 } }}>
+                              زر رئيسي
+                            </Button>
+                            <Button variant="outlined" size="small" sx={{ borderColor: formData.primaryColor, color: formData.primaryColor }}>
+                              زر ثانوي
+                            </Button>
+                            <Typography variant="caption" sx={{ color: formData.primaryColor, fontWeight: 700 }}>
+                              ● نموذج أيقونة/نص
+                            </Typography>
+                          </Box>
+                        </FieldGroup>
+                      </Paper>
+
+                    </Stack>
+                  </Grid>
+
+                </Grid>
+              </Box>
+            </Box>
+          </TabPanel>
+          {/* ===================== نهاية تبويب المظهر ===================== */}
+
         </Box>
       </Card>
       

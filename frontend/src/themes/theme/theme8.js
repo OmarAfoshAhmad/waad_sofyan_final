@@ -26,17 +26,17 @@ export default function Theme8(colors, mode) {
   };
   const contrastText = '#fff';
 
-  let primaryColors = ['#c1d6d066', '#81c9b9', '#5bbda9', '#38b09c', '#1aa391', '#009688', '#007069', '#004a47', '#002424', '#000000'];
+  let primaryColors = ['#E0F7FA', '#80DEEA', '#4DD0E1', '#26C6DA', '#00BCD4', '#00838F', '#006064', '#004D50', '#003038', '#001C20'];
   let errorColors = ['#FDE8E7', '#F25E52', '#F04134', '#EE3B2F', '#E92A21'];
   let warningColors = ['#FFF7E0', '#FFC926', '#FFBF00', '#FFB900', '#FFA900'];
-  let infoColors = ['#E0F4F5', '#26B0BA', '#00A2AE', '#009AA7', '#008694'];
+  let infoColors   = ['#E0F4F5', '#26B0BA', '#00A2AE', '#009AA7', '#008694'];
   let successColors = ['#E0F5EA', '#26B56E', '#00A854', '#00A04D', '#008D3A'];
 
   if (mode === ThemeMode.DARK) {
-    primaryColors = ['#1a2524', '#173331', '#15423e', '#11544e', '#0b6c63', '#058478', '#1a9686', '#37a996', '#59b8a5', '#7fc6b6'];
-    errorColors = ['#321d1d', '#7d2e28', '#d13c31', '#e66859', '#f8baaf'];
+    primaryColors = ['#001c20', '#002d33', '#003d45', '#005057', '#00686e', '#007f85', '#009fa6', '#19bfc7', '#66d8de', '#b2eff2'];
+    errorColors   = ['#321d1d', '#7d2e28', '#d13c31', '#e66859', '#f8baaf'];
     warningColors = ['#342c1a', '#836611', '#dda705', '#e9bf28', '#f8e577'];
-    infoColors = ['#1a2628', '#11595f', '#058e98', '#1ea6aa', '#64cfcb'];
+    infoColors    = ['#1a2628', '#11595f', '#058e98', '#1ea6aa', '#64cfcb'];
     successColors = ['#1a2721', '#115c36', '#05934c', '#1da65d', '#61ca8b'];
   }
 

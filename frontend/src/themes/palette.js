@@ -64,8 +64,8 @@ export function buildPalette(presetColor = 'default') {
       action: { disabled: extendedLight.grey[300] },
       divider: extendedLight.grey[200],
       background: {
-        paper: extendedLight.grey[0],
-        default: extendedLight.grey.A50
+        paper: '#ffffff',
+        default: '#f4fafa'  // أبيض مع مسحة تيل خفيفة — بدلاً من الفضي #fafafb
       }
     },
     dark: {

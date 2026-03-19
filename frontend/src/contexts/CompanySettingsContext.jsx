@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
   businessTypeEn: 'Medical Claims Management',
   logoUrl: null,
   logoBase64: null,
-  primaryColor: '#1976d2',
+  primaryColor: '#00838F',
   secondaryColor: '#42a5f5',
   headerStyle: 'gradient',
   phone: '',
@@ -30,7 +30,12 @@ const DEFAULT_SETTINGS = {
   address: '',
   website: '',
   footerText: 'جميع الحقوق محفوظة © 2026 - نظام Lymed (لايميد) لإدارة النفقات الطبية',
-  footerTextEn: 'All Rights Reserved © 2026'
+  footerTextEn: 'All Rights Reserved © 2026',
+  // Appearance customization
+  tableHeaderBg: '#E0F2F1',
+  tableHeaderText: '#004D50',
+  tableRowEven: 'rgba(224,242,241,0.45)',
+  selectionColor: 'rgba(0,131,143,0.08)'
 };
 
 /**

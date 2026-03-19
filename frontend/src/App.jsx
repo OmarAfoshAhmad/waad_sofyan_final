@@ -30,6 +30,7 @@ import { SystemConfigProvider } from 'contexts/SystemConfigContext';
 
 // Production console cleanup
 import { suppressMUIDeprecationWarnings } from 'utils/gridMigration';
+import { AppearanceInjector } from 'components/AppearanceInjector';
 
 // Initialize PDF Worker
 import 'utils/pdfWorker';
@@ -51,6 +52,7 @@ export default function App() {
               <ScrollTop>
                 <AuthProvider>
                   <CompanySettingsProvider>
+                    <AppearanceInjector />
                     <SystemConfigProvider>
                     <EmployerFilterProvider>
                       <ThemeModeProvider>
