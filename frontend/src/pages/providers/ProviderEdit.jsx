@@ -229,7 +229,7 @@ const ProviderEdit = () => {
 
   // Load Partners
   useEffect(() => {
-    if (!id || activeTab !== 3) return;
+    if (!id || activeTab !== 2) return;
 
     const loadPartnersData = async () => {
       setLoadingPayers(true);
@@ -260,16 +260,9 @@ const ProviderEdit = () => {
     loadPartnersData();
   }, [activeTab, id, enqueueSnackbar]);
 
-  // Load Linked User
-  useEffect(() => {
-    if (activeTab === 4 && id) {
-      fetchLinkedUser();
-    }
-  }, [activeTab, id]);
-
   // Load Documents
   useEffect(() => {
-    if (activeTab === 5 && id) {
+    if (activeTab === 3 && id) {
       fetchDocuments();
     }
   }, [activeTab, id]);
@@ -571,7 +564,7 @@ const ProviderEdit = () => {
           <Controller
             name="licenseNumber"
             control={providerControl}
-            render={({ field }) => <TextField {...field} fullWidth required label="رقم الترخيص" disabled />}
+            render={({ field }) => <TextField {...field} fullWidth required label="رقم الترخيص" />}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -1077,29 +1070,17 @@ const ProviderEdit = () => {
                 <LocationOn />
               </Badge>
             }
-            label="موقع"
-            iconPosition="start"
-          />
-          <Tab
-            icon={
-              <Badge badgeContent={getTabErrors(2)} color="error">
-                <VerifiedUser />
-              </Badge>
-            }
-            label="عقود"
+            label="الموقع و التواصل"
             iconPosition="start"
           />
           <Tab icon={<Handshake />} label="شركاء" iconPosition="start" />
-          <Tab icon={<People />} label="مدير الحساب" iconPosition="start" />
           <Tab icon={<Description />} label="مستندات" iconPosition="start" />
         </Tabs>
         <Box sx={{ minHeight: '25.0rem' }}>
           {activeTab === 0 && renderBasicInfo()}
           {activeTab === 1 && renderLocationContact()}
-          {activeTab === 2 && renderContractInfo()}
-          {activeTab === 3 && renderPartners()}
-          {activeTab === 4 && renderResponsibleUser()}
-          {activeTab === 5 && renderDocuments()}
+          {activeTab === 2 && renderPartners()}
+          {activeTab === 3 && renderDocuments()}
         </Box>
       </MainCard>
 

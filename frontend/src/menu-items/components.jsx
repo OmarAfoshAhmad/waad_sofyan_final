@@ -374,21 +374,8 @@ const menuItem = [
               size: 'small'
             }
           },
-          {
-            id: 'provider-users',
-            title: 'إدارة حسابات المقدمين',
-            titleEn: 'Provider Account Managers',
-            type: 'item',
-            url: '/admin/users?role=PROVIDER_STAFF',
-            icon: PeopleAltIcon,
-            resource: 'users',
-            action: 'view',
-            chip: {
-              label: 'جديد',
-              color: 'info',
-              size: 'small'
-            }
-          }
+          // hidden: إدارة حسابات المقدمين
+          // { id: 'provider-users', title: 'إدارة حسابات المقدمين', ... }
         ]
       }
     ]

@@ -280,7 +280,7 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
           onClick={handleSubmit}
           variant="contained"
           color="primary"
-          disabled={loading || !formData.targetType}
+          disabled={loading}
           startIcon={loading && <CircularProgress size={16} color="inherit" />}
         >
           {isEdit ? 'حفظ التعديلات' : 'إضافة القاعدة'}
@@ -537,6 +537,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // Pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Sort state
+  const [sortBy, setSortBy] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -672,11 +675,17 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // reset page when search changes
   useEffect(() => { setPage(0); }, [ruleSearch]);
 
+  const handleSort = useCallback((columnId, direction) => {
+    setSortBy(columnId);
+    setSortDirection(direction);
+    setPage(0);
+  }, []);
+
   // UnifiedMedicalTable column definitions
   const tableColumns = useMemo(() => [
-    { id: 'code',     label: 'الرمز',          minWidth: '7.5rem', align: 'center' },
-    { id: 'nameAr',   label: 'العنصر المغطى',  minWidth: '11rem' },
-    { id: 'typeLabel',label: 'النوع',           minWidth: '8rem',  align: 'center' },
+    { id: 'code',       label: 'الرمز',          minWidth: '7.5rem', align: 'center' },
+    { id: 'nameAr',     label: 'العنصر المغطى',  minWidth: '11rem' },
+    { id: 'parentNameAr', label: 'التصنيف الأب',  minWidth: '9rem' },
     { id: 'coveragePercent', label: 'نسبة التغطية', minWidth: '8rem', align: 'center' },
     { id: 'amountLimit', label: 'حد المبلغ',   minWidth: '7rem',  align: 'center' },
     { id: 'timesLimit',  label: 'حد المرات',   minWidth: '6rem',  align: 'center' },
@@ -695,38 +704,28 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             label={rule.code}
             size="small"
             variant="outlined"
-            sx={{ fontFamily: 'monospace', fontSize: '0.72rem', borderColor: 'primary.main', color: 'primary.main' }}
+            sx={{ fontFamily: 'monospace', fontSize: '0.72rem', borderColor: 'primary.main', color: 'primary.main', width: '9rem', justifyContent: 'center' }}
           />
         );
       case 'nameAr':
         return (
           <Stack spacing={0.25}>
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              {rule.ruleType === 'CATEGORY'
-                ? <Tooltip title="تصنيف طبي"><CategoryIcon fontSize="small" color="primary" /></Tooltip>
-                : <Tooltip title="خدمة طبية"><ServiceIcon fontSize="small" color="secondary" /></Tooltip>}
-              <Typography variant="body2" fontWeight={500}>{rule.nameAr}</Typography>
-            </Stack>
+            <Typography variant="body2" fontWeight={500}>{rule.nameAr}</Typography>
             {rule.nameEn !== '-' && (
               <Typography variant="caption" color="text.secondary">{rule.nameEn}</Typography>
             )}
           </Stack>
         );
-      case 'typeLabel':
+      case 'parentNameAr':
         return (
-          <Chip
-            label={rule.typeLabel}
-            size="small"
-            color={rule.ruleType === 'CATEGORY' ? 'primary' : 'secondary'}
-            variant="outlined"
-          />
+          <Typography variant="body2" color="text.secondary">{rule.parentNameAr || '-'}</Typography>
         );
       case 'coveragePercent':
         return rule.coveragePercent !== null && rule.coveragePercent !== undefined ? (
-          <Chip label={`${rule.coveragePercent}%`} size="small" color="primary" sx={{ fontWeight: 700 }} />
+          <Chip label={`${rule.coveragePercent}%`} size="small" color="primary" sx={{ fontWeight: 700, width: '5rem', justifyContent: 'center' }} />
         ) : (
           <Tooltip title={`افتراضي الوثيقة: ${rule.effectiveCoveragePercent}%`}>
-            <Chip label={`${rule.effectiveCoveragePercent}% (افتراضي)`} size="small" variant="outlined" />
+            <Chip label={`${rule.effectiveCoveragePercent}% (افتراضي)`} size="small" variant="outlined" sx={{ width: '5rem', justifyContent: 'center' }} />
           </Tooltip>
         );
       case 'amountLimit':
@@ -755,7 +754,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         );
       case 'changedAt':
         return (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="body2" color="text.secondary">
             {rule.changedAt ? new Date(rule.changedAt).toLocaleDateString('ar-LY') : '-'}
           </Typography>
         );
@@ -789,18 +788,30 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     return rules.map((rule) => {
       const isCategory = rule.ruleType === 'CATEGORY';
       const code = isCategory ? rule.medicalCategoryCode || '-' : rule.medicalServiceCode || '-';
-      const nameAr = rule.label || (isCategory ? rule.medicalCategoryName : rule.medicalServiceName) || '-';
+      const rawNameAr = rule.label || (isCategory ? rule.medicalCategoryName : rule.medicalServiceName) || '-';
+      const nameAr = rawNameAr.replace(/^Category:\s*/i, '');
       const nameEn = isCategory ? rule.medicalCategoryNameEn || '-' : rule.medicalServiceNameEn || '-';
 
       let typeLabel = 'خدمة طبية';
+      let parentNameAr = '-';
       if (isCategory) {
         const cat = categoryMap.get(rule.medicalCategoryId);
         const isRoot = cat ? !cat.parentId : true;
         typeLabel = isRoot ? 'تصنيف طبي رئيسي' : 'تصنيف طبي فرعي';
+        if (cat?.parentId) {
+          const parent = categoryMap.get(cat.parentId);
+          parentNameAr = parent?.nameAr || parent?.name || '-';
+        }
+      } else {
+        // خدمة طبية — التصنيف الأب هو التصنيف المرتبط بها
+        if (rule.medicalCategoryId) {
+          const cat = categoryMap.get(rule.medicalCategoryId);
+          parentNameAr = cat?.nameAr || cat?.name || '-';
+        }
       }
 
       const changedAt = rule.updatedAt || rule.lastModifiedAt || rule.modifiedAt || rule.createdAt || null;
-      const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel}`.toLowerCase();
+      const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr}`.toLowerCase();
 
       return {
         ...rule,
@@ -808,6 +819,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         nameAr,
         nameEn,
         typeLabel,
+        parentNameAr,
         changedAt,
         searchable
       };
@@ -816,9 +828,31 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
-    if (!query) return normalizedRules;
-    return normalizedRules.filter((rule) => rule.searchable.includes(query));
-  }, [normalizedRules, ruleSearch]);
+    const filtered = !query ? normalizedRules : normalizedRules.filter((rule) => rule.searchable.includes(query));
+
+    if (!sortBy) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+
+      // handle nulls
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // numeric fields
+      if (['coveragePercent', 'amountLimit', 'timesLimit', 'waitingPeriodDays'].includes(sortBy)) {
+        aVal = Number(aVal);
+        bVal = Number(bVal);
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      // string fields
+      const cmp = String(aVal).localeCompare(String(bVal), 'ar');
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [normalizedRules, ruleSearch, sortBy, sortDirection]);
 
   const pagedRules = useMemo(
     () => filteredRules.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -851,8 +885,16 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   }, [normalizedRules]);
 
   const categoriesCoverageRows = useMemo(
-    () =>
-      categories.map((category) => {
+    () => {
+      // فرعية فقط (parentId موجود) وبدون تكرار
+      const seen = new Set();
+      const subcategories = categories.filter((cat) => {
+        if (!cat.parentId) return false;
+        if (seen.has(cat.id)) return false;
+        seen.add(cat.id);
+        return true;
+      });
+      return subcategories.map((category) => {
         const existingRule = categoryRulesByCategoryId.get(category.id);
         const existingCoveragePercent = existingRule?.coveragePercent;
         const coverageInputValue =
@@ -885,7 +927,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           effectiveCoveragePercent: existingRule?.effectiveCoveragePercent ?? existingCoveragePercent ?? null,
           serviceRulesCount: serviceRulesCountByCategoryId.get(category.id) || 0
         };
-      }),
+      });
+    },
     [categories, categoryRulesByCategoryId, serviceRulesCountByCategoryId, categoryCoverageInputs, policyDefaultCoveragePercent]
   );
 
@@ -1042,6 +1085,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           قواعد التغطية التفصيلية
       ═══════════════════════════════════════════════════════════════════ */}
       <MainCard
+        sx={{ mt: -2 }}
         title={
           <Stack direction="row" alignItems="center" spacing={1}>
             <ServiceIcon sx={{ color: 'primary.main', fontSize: '1.25rem' }} />
@@ -1134,6 +1178,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           getRowKey={(row) => row.id}
           emptyMessage={ruleSearch ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد قواعد تغطية. استخدم "إضافة قالب" أو "إضافة قاعدة".'}
           hover
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={handleSort}
+          tableContainerSx={{ maxHeight: 'calc(100vh - 380px)', minHeight: '300px' }}
         />
       </MainCard>
 

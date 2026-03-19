@@ -185,7 +185,7 @@ public class BenefitPolicyRule {
      */
     public String getLabel() {
         if (medicalCategory != null) {
-            return "Category: " + medicalCategory.getName();
+            return  medicalCategory.getName();
         }
         return "Rule #" + id;
     }

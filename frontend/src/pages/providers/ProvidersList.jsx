@@ -57,7 +57,7 @@ import { UnifiedMedicalTable } from 'components/common';
 import useTableState from 'hooks/useTableState';
 
 // Insurance UX Components
-import { NetworkBadge, CardStatusBadge } from 'components/insurance';
+import { NetworkBadge } from 'components/insurance';
 
 // Services
 import { providersService } from 'services/api';
@@ -381,35 +381,37 @@ export default function ProvidersList() {
   const columns = useMemo(
     () => [
       {
+        id: 'index',
+        label: '#',
+        minWidth: '3.125rem',
+        align: 'center',
+        sortable: false
+      },
+      {
         id: 'name',
         label: 'اسم مقدم الخدمة',
         minWidth: '12.5rem',
-        sortable: false
+        sortable: true
       },
       {
         id: 'providerType',
         label: 'النوع',
         minWidth: '7.5rem',
         align: 'center',
-        sortable: false
-      },
-      {
-        id: 'code',
-        label: 'الرمز',
-        minWidth: '5.0rem',
-        align: 'center',
-        sortable: false
+        sortable: true
       },
       {
         id: 'city',
         label: 'المدينة',
         minWidth: '7.5rem',
-        sortable: false
+        align: 'center',
+        sortable: true
       },
       {
         id: 'phone',
         label: 'الهاتف',
         minWidth: '8.125rem',
+        align: 'center',
         sortable: false
       },
       {
@@ -456,10 +458,17 @@ export default function ProvidersList() {
   // ========================================
 
   const renderCell = useCallback(
-    (provider, column) => {
+    (provider, column, rowIndex) => {
       if (!provider) return null;
 
       switch (column.id) {
+        case 'index':
+          return (
+            <Typography variant="body2" color="textSecondary" fontWeight="bold">
+              {page * rowsPerPage + rowIndex + 1}
+            </Typography>
+          );
+
         case 'name':
           return (
             <Typography variant="body2" fontWeight={500}>
@@ -474,14 +483,8 @@ export default function ProvidersList() {
               color={PROVIDER_TYPE_COLORS[provider.providerType] || 'default'}
               size="small"
               variant="outlined"
+              sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }}
             />
-          );
-
-        case 'code':
-          return (
-            <Typography variant="body2" color="primary" fontWeight={500}>
-              {provider.id || '-'}
-            </Typography>
           );
 
         case 'city':
@@ -542,8 +545,16 @@ export default function ProvidersList() {
             </Stack>
           );
 
-        case 'status':
-          return <CardStatusBadge status={getProviderStatus(provider)} size="small" language="ar" />;
+        case 'status': {
+          const providerStatusConfig = {
+            ACTIVE:   { label: 'نشط',    color: 'success' },
+            INACTIVE: { label: 'غير نشط', color: 'error' },
+            SUSPENDED:{ label: 'معلق',   color: 'warning' },
+            PENDING:  { label: 'قيد المراجعة', color: 'warning' }
+          };
+          const sc = providerStatusConfig[getProviderStatus(provider)] || { label: getProviderStatus(provider), color: 'default' };
+          return <Chip label={sc.label} color={sc.color} size="small" sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }} />;
+        }
 
         case 'actions':
           return (
@@ -595,7 +606,7 @@ export default function ProvidersList() {
           return null;
       }
     },
-    [handleNavigateView, handleNavigateEdit, handleDelete]
+    [handleNavigateView, handleNavigateEdit, handleDelete, page, rowsPerPage]
   );
 
   // ========================================
@@ -671,6 +682,9 @@ export default function ProvidersList() {
           rowsPerPage={rowsPerPage}
           onPageChange={(newPage) => tableState.setPage(newPage)}
           onRowsPerPageChange={(newSize) => tableState.setPageSize(newSize)}
+          sortBy={sortColumn}
+          sortDirection={sortDirection}
+          onSort={(col, dir) => tableState.setSorting([{ id: col, desc: dir === 'desc' }])}
           emptyIcon={LocalHospitalIcon}
           emptyMessage="لا يوجد مقدمو خدمات صحية مسجلين حالياً"
         />
