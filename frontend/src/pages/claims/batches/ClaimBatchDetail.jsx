@@ -38,7 +38,6 @@ import {
     Business as BusinessIcon,
     ReceiptLong as ReceiptIcon,
     FileDownload as ExcelIcon,
-    Refresh as RefreshIcon,
     FilterAltOff as FilterAltOffIcon,
     PauseCircle as SuspendIcon
 } from '@mui/icons-material';
@@ -50,7 +49,7 @@ import ExcelJS from 'exceljs';
 // project components
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
-import GenericDataTable from 'components/GenericDataTable';
+import { UnifiedMedicalTable } from 'components/common';
 import useTableState from 'hooks/useTableState';
 import claimsService from 'services/api/claims.service';
 import employersService from 'services/api/employers.service';
@@ -167,7 +166,10 @@ export default function ClaimBatchDetail() {
                 dateTo,
                 size: 100
             });
-        }
+        },
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+        staleTime: 0
     });
 
     const claims = useMemo(() => {
@@ -383,18 +385,18 @@ export default function ClaimBatchDetail() {
 
     // Table Columns
     const columns = [
-        { id: 'select',      label: '',                minWidth: '2.5rem',  align: 'center', sortable: false },
+        { id: 'select',      label: <Checkbox size="small" checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} onClick={(e) => e.stopPropagation()} />, minWidth: '2.5rem',  align: 'center', sortable: false },
         { id: 'index',       label: '#',               minWidth: '2.5rem',  align: 'center', sortable: false },
-        { id: 'ref',         label: 'المرجع',          minWidth: '8rem',  align: 'center',       sortable: false },
-        { id: 'provider',    label: 'مقدم الخدمة',    minWidth: '7rem',   align: 'center' ,    sortable: false },
-        { id: 'patient',     label: 'الاسم (المستفيد)', minWidth: '10rem',   align: 'cenetr'  ,               sortable: true  },
-        { id: 'serviceDate', label: 'تاريخ الخدمة',  minWidth: '7rem',    align: 'center', sortable: true  },
-        { id: 'status',      label: 'الحالة',          minWidth: '6rem',    align: 'center', sortable: true  },
-        { id: 'amount',      label: 'الإجمالي',        minWidth: '5rem',  align: 'center',  sortable: true  },
-        { id: 'covered',     label: 'المعتمد',         minWidth: '5rem',  align: 'center',  sortable: true  },
-        { id: 'refused',     label: 'المرفوض',         minWidth: '5.5rem',  align: 'center',  sortable: true  },
-        { id: 'copay',       label: 'نصيب المستفيد',    minWidth: '5rem',    align: 'center',  sortable: true  },
-        { id: 'actions',     label: 'إجراءات',         minWidth: '5rem',  align: 'center', sortable: false }
+        { id: 'ref',         label: 'المرجع',          minWidth: '8rem',    align: 'center', sortable: false },
+        { id: 'provider',    label: 'مقدم الخدمة',    minWidth: '7rem',    align: 'center', sortable: false },
+        { id: 'patient',     label: 'الاسم (المستفيد)', minWidth: '10rem',  align: 'right',  sortable: true  },
+        { id: 'serviceDate', label: 'تاريخ الخدمة',   minWidth: '7rem',    align: 'center', sortable: true  },
+        { id: 'status',      label: 'الحالة',           minWidth: '6rem',    align: 'center', sortable: true  },
+        { id: 'amount',      label: 'الإجمالي',         minWidth: '5rem',    align: 'center', sortable: true  },
+        { id: 'covered',     label: 'المعتمد',          minWidth: '5rem',    align: 'center', sortable: true  },
+        { id: 'refused',     label: 'المرفوض',          minWidth: '5.5rem',  align: 'center', sortable: true  },
+        { id: 'copay',       label: 'نصيب المستفيد',    minWidth: '5rem',    align: 'center', sortable: true  },
+        { id: 'actions',     label: 'إجراءات',          minWidth: '5rem',    align: 'center', sortable: false }
     ];
 
     // Totals for footer
@@ -446,7 +448,8 @@ export default function ClaimBatchDetail() {
         );
     };
 
-    const renderCell = (claim, column, index) => {
+    const renderCell = (claim, column, rowIndex) => {
+        const index = tableState.page * tableState.pageSize + rowIndex;
         switch (column.id) {
             case 'select':
                 return (
@@ -557,8 +560,8 @@ export default function ClaimBatchDetail() {
         <Box sx={{ display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 }, pb: 2 }}>
 
             <ModernPageHeader
-                title={<span dir="ltr">{batchCode}</span>}
-                subtitle={`دفعة لشهر ${MONTHS_AR[month - 1]} ${year} - ${provider?.name || '...'}`}
+                title={provider?.name || '...'}
+                subtitle={`دفعة لشهر ${MONTHS_AR[month - 1]} ${year} - ${batchCode}`}
                 icon={ReceiptIcon}
                 breadcrumbs={[
                     { label: 'الرئيسية', path: '/' },
@@ -656,16 +659,6 @@ export default function ClaimBatchDetail() {
                     {/* Filter Bar - Matches Beneficiaries standard */}
                     <MainCard sx={{ p: '8px !important', flexShrink: 0 }}>
                         <Stack direction="row" spacing={1.5} alignItems="center">
-                            <Tooltip title="تحديث">
-                                <IconButton
-                                    onClick={() => window.location.reload()}
-                                    color="primary"
-                                    sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
-                                >
-                                    <RefreshIcon />
-                                </IconButton>
-                            </Tooltip>
-
                             <Chip
                                 icon={<ReceiptIcon fontSize="small" />}
                                 label={`${claims.length} مطالبة`}
@@ -744,43 +737,24 @@ export default function ClaimBatchDetail() {
                     </MainCard>
 
                     {/* Table View */}
-                    <GenericDataTable
-                        columns={columns.map((c) => ({
-                            accessorKey: c.id,
-                            header: c.id === 'select'
-                                ? () => (
-                                    <Checkbox
-                                        size="small"
-                                        checked={allSelected}
-                                        indeterminate={someSelected}
-                                        onChange={handleToggleAll}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                  )
-                                : c.label,
-                            minWidth: c.minWidth,
-                            align: c.align,
-                            enableSorting: c.sortable !== false,
-                            cell: ({ row }) => {
-                                const rowIndex = row.index + tableState.page * tableState.pageSize;
-                                return renderCell(row.original, c, rowIndex) ?? '-';
-                            }
-                        }))}
-                        data={tableRows}
-                        totalCount={claims.length}
-                        isLoading={isLoading}
-                        tableState={tableState}
-                        enableFiltering={false}
-                        enableSorting={true}
-                        enablePagination={true}
-                        compact={true}
-                        tableSize="small"
-                        stickyHeader={false}
-                        disableInternalScroll={true}
-                        minHeight="auto"
-                        maxHeight="none"
+                    <UnifiedMedicalTable
+                        columns={columns}
+                        rows={tableRows}
+                        loading={isLoading}
+                        totalCount={sortedClaims.length}
+                        page={tableState.page}
+                        rowsPerPage={tableState.pageSize}
+                        onPageChange={(newPage) => tableState.setPage(newPage)}
+                        onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
+                        sortBy={tableState.sorting?.[0]?.id}
+                        sortDirection={tableState.sorting?.[0]?.desc ? 'desc' : 'asc'}
+                        onSort={(col, dir) => { tableState.setSorting([{ id: col, desc: dir === 'desc' }]); tableState.setPage(0); }}
+                        renderCell={renderCell}
+                        getRowKey={(claim) => claim.id}
                         emptyMessage="لا توجد مطالبات في هذا الباتش حالياً."
                         rowsPerPageOptions={[10, 25, 50, 100]}
+                        size="small"
+                        stickyHeader={false}
                     />
 
                     {/* Totals Footer */}

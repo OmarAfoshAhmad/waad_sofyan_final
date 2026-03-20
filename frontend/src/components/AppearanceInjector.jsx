@@ -65,6 +65,96 @@ export function AppearanceInjector() {
       .MuiTableBody-root .MuiTableRow-root.Mui-selected:hover {
         background-color: var(--tba-selection) !important;
       }
+
+      /* ═══════════════════════════════════════════════════
+         اللون الرئيسي — Chip + Button + IconButton outlined
+         يتبع اللون المحدد في الإعدادات عبر --tba-primary
+         ═══════════════════════════════════════════════════ */
+
+      /* Chip outlined primary */
+      .MuiChip-outlined.MuiChip-colorPrimary,
+      .MuiChip-outlinedPrimary {
+        border-color: var(--tba-primary) !important;
+        color: var(--tba-primary) !important;
+      }
+      .MuiChip-outlined.MuiChip-colorPrimary .MuiChip-icon,
+      .MuiChip-outlinedPrimary .MuiChip-icon {
+        color: var(--tba-primary) !important;
+      }
+
+      /* Chip filled primary */
+      .MuiChip-filled.MuiChip-colorPrimary,
+      .MuiChip-filledPrimary {
+        background-color: var(--tba-primary) !important;
+      }
+
+      /* Button outlined primary */
+      .MuiButton-outlined.MuiButton-colorPrimary,
+      .MuiButton-outlinedPrimary {
+        border-color: var(--tba-primary) !important;
+        color: var(--tba-primary) !important;
+      }
+      .MuiButton-outlined.MuiButton-colorPrimary:hover,
+      .MuiButton-outlinedPrimary:hover {
+        background-color: color-mix(in srgb, var(--tba-primary) 8%, transparent) !important;
+        border-color: var(--tba-primary) !important;
+      }
+
+      /* Button contained primary */
+      .MuiButton-contained.MuiButton-colorPrimary,
+      .MuiButton-containedPrimary {
+        background-color: var(--tba-primary) !important;
+      }
+
+      /* IconButton primary */
+      .MuiIconButton-colorPrimary {
+        color: var(--tba-primary) !important;
+      }
+
+      /* Tab indicator & selected */
+      .MuiTabs-indicator {
+        background-color: var(--tba-primary) !important;
+      }
+      .MuiTab-root.Mui-selected {
+        color: var(--tba-primary) !important;
+      }
+
+      /* TextField outlined focused */
+      .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+        border-color: var(--tba-primary) !important;
+      }
+      .MuiInputLabel-root.Mui-focused {
+        color: var(--tba-primary) !important;
+      }
+
+      /* Checkbox & Radio & Switch primary */
+      .MuiCheckbox-colorPrimary.Mui-checked,
+      .MuiRadio-colorPrimary.Mui-checked {
+        color: var(--tba-primary) !important;
+      }
+      .MuiSwitch-colorPrimary.Mui-checked + .MuiSwitch-track {
+        background-color: var(--tba-primary) !important;
+      }
+      .MuiSwitch-colorPrimary.Mui-checked {
+        color: var(--tba-primary) !important;
+      }
+
+      /* Link primary */
+      .MuiLink-root.MuiLink-colorPrimary,
+      a.MuiTypography-colorPrimary {
+        color: var(--tba-primary) !important;
+      }
+
+      /* Pagination selected */
+      .MuiPaginationItem-root.Mui-selected {
+        background-color: var(--tba-primary) !important;
+      }
+
+      /* TableSortLabel active */
+      .MuiTableSortLabel-root.Mui-active,
+      .MuiTableSortLabel-root.Mui-active .MuiTableSortLabel-icon {
+        color: var(--tba-primary) !important;
+      }
     `;
   }, [settings]);
 

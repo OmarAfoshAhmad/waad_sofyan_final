@@ -150,196 +150,227 @@ const EmailSettingsPage = () => {
       />
 
       <Grid container spacing={3} sx={{ mt: '1.0rem' }}>
-        {/* Basic Settings */}
+
+        {/* ═══ العمود الأيمن: الإعدادات الأساسية + SMTP ═══ */}
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                <SettingOutlined style={{ marginRight: '0.375rem' }} /> الإعدادات الأساسية
-              </Typography>
-              <Divider sx={{ mb: '1.0rem' }} />
-              <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  label="عنوان البريد الإلكتروني"
-                  name="emailAddress"
-                  value={settings.emailAddress}
-                  onChange={handleChange}
-                  placeholder="preauth@alwahacare.com"
-                />
-                <TextField
-                  fullWidth
-                  label="الاسم الظاهر للمرسل"
-                  name="displayName"
-                  value={settings.displayName}
-                  onChange={handleChange}
-                  placeholder="شركة وعد - الموافقات المسبقة"
-                />
-                <FormControl fullWidth>
-                  <InputLabel>نوع التشفير</InputLabel>
-                  <Select
-                    name="encryptionType"
-                    value={settings.encryptionType}
-                    label="نوع التشفير"
+          <Stack spacing={3}>
+
+            {/* Basic Settings */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SettingOutlined style={{ marginRight: '0.375rem' }} /> الإعدادات الأساسية
+                </Typography>
+                <Divider sx={{ mb: '1.0rem' }} />
+                <Stack spacing={2}>
+                  <TextField
+                    fullWidth
+                    label="عنوان البريد الإلكتروني"
+                    name="emailAddress"
+                    value={settings.emailAddress}
                     onChange={handleChange}
-                  >
-                    <MenuItem value="TLS">STARTTLS (الأكثر شيوعاً)</MenuItem>
-                    <MenuItem value="SSL">SSL/TLS</MenuItem>
-                    <MenuItem value="NONE">بدون تشفير</MenuItem>
-                  </Select>
-                </FormControl>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Sync Settings */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                <CheckCircleOutlined style={{ marginRight: '0.375rem' }} /> حالة المزامنة والنشاط
-              </Typography>
-              <Divider sx={{ mb: '1.0rem' }} />
-              <Stack spacing={3}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.listenerEnabled}
+                    placeholder="preauth@alwahacare.com"
+                  />
+                  <TextField
+                    fullWidth
+                    label="الاسم الظاهر للمرسل"
+                    name="displayName"
+                    value={settings.displayName}
+                    onChange={handleChange}
+                    placeholder="شركة وعد - الموافقات المسبقة"
+                  />
+                  <FormControl fullWidth>
+                    <InputLabel>نوع التشفير</InputLabel>
+                    <Select
+                      name="encryptionType"
+                      value={settings.encryptionType}
+                      label="نوع التشفير"
                       onChange={handleChange}
-                      name="listenerEnabled"
-                      color="primary"
-                    />
-                  }
-                  label="تفعيل مستكشف البريد الآلي (Email Listener)"
-                />
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="فترة التحديث (بالدقائق)"
-                  name="syncIntervalMins"
-                  value={settings.syncIntervalMins}
-                  onChange={handleChange}
-                  helperText="الوقت المستغرق بين كل عملية فحص للبريد الجديد"
-                />
-                <Alert severity={settings.listenerEnabled ? "info" : "warning"}>
-                  {settings.listenerEnabled 
-                    ? "النظام سيقوم بفحص البريد آلياً وتحويله لطلبات موافقة."
-                    : "الاستقبال الآلي متوقف حالياً."}
-                </Alert>
-              </Stack>
-            </CardContent>
-          </Card>
+                    >
+                      <MenuItem value="TLS">STARTTLS (الأكثر شيوعاً)</MenuItem>
+                      <MenuItem value="SSL">SSL/TLS</MenuItem>
+                      <MenuItem value="NONE">بدون تشفير</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* SMTP Settings */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  خادم الإرسال (SMTP)
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleTestConnection('smtp')}
+                    disabled={testing}
+                    startIcon={testing ? <CircularProgress size={16} /> : <CheckCircleOutlined />}
+                  >
+                    فحص الإرسال
+                  </Button>
+                </Typography>
+                <Divider sx={{ mb: '1.0rem' }} />
+                <Stack spacing={2}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={8}>
+                      <TextField
+                        fullWidth
+                        label="خادم SMTP"
+                        name="smtpHost"
+                        value={settings.smtpHost}
+                        onChange={handleChange}
+                        placeholder="smtp.hostinger.com"
+                      />
+                    </Grid>
+                    <Grid item xs={4}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="المنفذ"
+                        name="smtpPort"
+                        value={settings.smtpPort}
+                        onChange={handleChange}
+                      />
+                    </Grid>
+                  </Grid>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        label="اسم المستخدم"
+                        name="smtpUsername"
+                        value={settings.smtpUsername}
+                        onChange={handleChange}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        type="password"
+                        label="كلمة المرور"
+                        name="smtpPassword"
+                        value={settings.smtpPassword}
+                        onChange={handleChange}
+                        placeholder="اتركه فارغاً للإبقاء على الحالي"
+                      />
+                    </Grid>
+                  </Grid>
+                </Stack>
+              </CardContent>
+            </Card>
+
+          </Stack>
         </Grid>
 
-        {/* SMTP Settings */}
+        {/* ═══ العمود الأيسر: المزامنة + IMAP ═══ */}
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h5" gutterBottom sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                إعدادات خادم الإرسال (SMTP)
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => handleTestConnection('smtp')} 
-                  disabled={testing}
-                  startIcon={testing ? <CircularProgress size={16} /> : <CheckCircleOutlined />}
-                >
-                  فحص الإرسال
-                </Button>
-              </Typography>
-              <Divider sx={{ mb: '1.0rem' }} />
-              <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  label="خادم SMTP"
-                  name="smtpHost"
-                  value={settings.smtpHost}
-                  onChange={handleChange}
-                  placeholder="smtp.hostinger.com"
-                />
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="منفذ SMTP"
-                  name="smtpPort"
-                  value={settings.smtpPort}
-                  onChange={handleChange}
-                />
-                <TextField
-                  fullWidth
-                  label="اسم مستخدم SMTP"
-                  name="smtpUsername"
-                  value={settings.smtpUsername}
-                  onChange={handleChange}
-                />
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="كلمة مرور SMTP"
-                  name="smtpPassword"
-                  value={settings.smtpPassword}
-                  onChange={handleChange}
-                  placeholder="أدخل كلمة المرور الجديدة فقط في حال الرغبة في تغييرها"
-                />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
+          <Stack spacing={3}>
 
-        {/* IMAP Settings */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h5" gutterBottom sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                إعدادات خادم الاستقبال (IMAP)
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => handleTestConnection('imap')} 
-                  disabled={testing}
-                  startIcon={testing ? <CircularProgress size={16} /> : <CheckCircleOutlined />}
-                >
-                  فحص الاستقبال
-                </Button>
-              </Typography>
-              <Divider sx={{ mb: '1.0rem' }} />
-              <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  label="خادم IMAP"
-                  name="imapHost"
-                  value={settings.imapHost}
-                  onChange={handleChange}
-                  placeholder="imap.hostinger.com"
-                />
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="منفذ IMAP"
-                  name="imapPort"
-                  value={settings.imapPort}
-                  onChange={handleChange}
-                />
-                <TextField
-                  fullWidth
-                  label="اسم مستخدم IMAP"
-                  name="imapUsername"
-                  value={settings.imapUsername}
-                  onChange={handleChange}
-                />
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="كلمة مرور IMAP"
-                  name="imapPassword"
-                  value={settings.imapPassword}
-                  onChange={handleChange}
-                  placeholder="أدخل كلمة المرور الجديدة فقط في حال الرغبة في تغييرها"
-                />
-              </Stack>
-            </CardContent>
-          </Card>
+            {/* Sync Settings */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                  <CheckCircleOutlined style={{ marginRight: '0.375rem' }} /> حالة المزامنة والنشاط
+                </Typography>
+                <Divider sx={{ mb: '1.0rem' }} />
+                <Stack spacing={3}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settings.listenerEnabled}
+                        onChange={handleChange}
+                        name="listenerEnabled"
+                        color="primary"
+                      />
+                    }
+                    label="تفعيل مستكشف البريد الآلي (Email Listener)"
+                  />
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="فترة التحديث (بالدقائق)"
+                    name="syncIntervalMins"
+                    value={settings.syncIntervalMins}
+                    onChange={handleChange}
+                    helperText="الوقت المستغرق بين كل عملية فحص للبريد الجديد"
+                  />
+                  <Alert severity={settings.listenerEnabled ? "info" : "warning"}>
+                    {settings.listenerEnabled
+                      ? "النظام سيقوم بفحص البريد آلياً وتحويله لطلبات موافقة."
+                      : "الاستقبال الآلي متوقف حالياً."}
+                  </Alert>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* IMAP Settings */}
+            <Card>
+              <CardContent>
+                <Typography variant="h5" gutterBottom sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  خادم الاستقبال (IMAP)
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleTestConnection('imap')}
+                    disabled={testing}
+                    startIcon={testing ? <CircularProgress size={16} /> : <CheckCircleOutlined />}
+                  >
+                    فحص الاستقبال
+                  </Button>
+                </Typography>
+                <Divider sx={{ mb: '1.0rem' }} />
+                <Stack spacing={2}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={8}>
+                      <TextField
+                        fullWidth
+                        label="خادم IMAP"
+                        name="imapHost"
+                        value={settings.imapHost}
+                        onChange={handleChange}
+                        placeholder="imap.hostinger.com"
+                      />
+                    </Grid>
+                    <Grid item xs={4}>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        label="المنفذ"
+                        name="imapPort"
+                        value={settings.imapPort}
+                        onChange={handleChange}
+                      />
+                    </Grid>
+                  </Grid>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        label="اسم المستخدم"
+                        name="imapUsername"
+                        value={settings.imapUsername}
+                        onChange={handleChange}
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        type="password"
+                        label="كلمة المرور"
+                        name="imapPassword"
+                        value={settings.imapPassword}
+                        onChange={handleChange}
+                        placeholder="اتركه فارغاً للإبقاء على الحالي"
+                      />
+                    </Grid>
+                  </Grid>
+                </Stack>
+              </CardContent>
+            </Card>
+
+          </Stack>
         </Grid>
 
         {/* Action Buttons */}
