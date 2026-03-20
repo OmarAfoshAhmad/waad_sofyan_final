@@ -211,8 +211,8 @@ const UnifiedMedicalTable = ({
   const headerBg   = isDark ? MEDICAL_TABLE_THEME.header.dark.background : 'var(--tba-th-bg, #E0F2F1)';
   const headerText = isDark ? MEDICAL_TABLE_THEME.header.dark.text        : 'var(--tba-th-text, #004D50)';
   const headerBorder = isDark ? theme.palette.divider                     : 'var(--tba-th-text, #00838F)';
-  const rowOdd = isDark ? MEDICAL_TABLE_THEME.row.dark.odd : MEDICAL_TABLE_THEME.row.light.odd;
-  const rowHover = isDark ? MEDICAL_TABLE_THEME.row.dark.hover : MEDICAL_TABLE_THEME.row.light.hover;
+  const rowEven = isDark ? MEDICAL_TABLE_THEME.row.dark.odd  : 'var(--tba-row-even, rgba(224,242,241,0.45))';
+  const rowHover = isDark ? MEDICAL_TABLE_THEME.row.dark.hover : 'var(--tba-selection, rgba(0,131,143,0.08))';
 
   // Pagination handlers
   const handlePageChange = (_, newPage) => {
@@ -375,7 +375,7 @@ const UnifiedMedicalTable = ({
                     <TableRow
                       hover={hover}
                       sx={{
-                        '&:nth-of-type(odd)': { bgcolor: rowOdd },
+                        '&:nth-of-type(even)': { bgcolor: rowEven },
                         '&:hover': {
                           bgcolor: `${rowHover} !important`
                         },

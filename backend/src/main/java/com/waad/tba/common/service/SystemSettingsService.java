@@ -259,20 +259,9 @@ public class SystemSettingsService {
     @Transactional
     @CacheEvict(value = "systemSettings", key = "#key")
     public void updateSetting(String key, String value, String updatedBy) {
-        SystemSetting setting = settingRepository.findBySettingKey(key)
-                .orElseThrow(() -> new IllegalArgumentException("Setting not found: " + key));
-
-        if (!setting.getIsEditable()) {
-            throw new IllegalStateException("Setting " + key + " is not editable");
-        }
-
-        String oldValue = setting.getSettingValue();
-        setting.setSettingValue(value);
-        setting.setUpdatedBy(updatedBy);
-
-        settingRepository.save(setting);
-
-        log.info("⚙️ Setting {} updated by {}: {} → {}", key, updatedBy, oldValue, value);
+        // استخدام UPSERT الأصلي لتجنب race condition وتعارض المفاتيح
+        settingRepository.upsertSetting(key, value != null ? value : "", updatedBy);
+        log.info("⚙️ Setting {} upserted by {} with value: {}", key, updatedBy, value);
     }
 
     /**

@@ -61,7 +61,13 @@ const KEYS = {
   beneficiaryNumberDigits: 'BENEFICIARY_NUMBER_DIGITS',
   eligibilityStrictMode: 'ELIGIBILITY_STRICT_MODE',
   waitingPeriodDaysDefault: 'WAITING_PERIOD_DAYS_DEFAULT',
-  eligibilityGracePeriodDays: 'ELIGIBILITY_GRACE_PERIOD_DAYS'
+  eligibilityGracePeriodDays: 'ELIGIBILITY_GRACE_PERIOD_DAYS',
+  // إعدادات المظهر
+  tableHeaderBg:   'TABLE_HEADER_BG',
+  tableHeaderText: 'TABLE_HEADER_TEXT',
+  tableRowEven:    'TABLE_ROW_EVEN',
+  selectionColor:  'SELECTION_COLOR',
+  primaryColor:    'PRIMARY_COLOR'
 };
 
 const PROVIDER_PORTAL_FLAG_KEY = 'PROVIDER_PORTAL_ENABLED';
@@ -91,6 +97,26 @@ const FieldGroup = ({ title, children, icon: Icon, color = 'primary.main' }) => 
 const toBool = (value, fallback = false) => {
   if (value === undefined || value === null) return fallback;
   return String(value).toLowerCase() === 'true';
+};
+
+/**
+ * يحوّل أي قيمة لون (hex أو rgba أو rgb) إلى hex مناسب لـ input[type=color]
+ * إذا فشل التحويل يُعيد #000000
+ */
+const toHexColor = (color) => {
+  if (!color) return '#000000';
+  const s = String(color).trim();
+  // إذا كان بالفعل hex
+  if (/^#[0-9a-fA-F]{3,6}$/.test(s)) return s.length === 4
+    ? '#' + s[1]+s[1]+s[2]+s[2]+s[3]+s[3]
+    : s;
+  // استخراج من rgba/rgb
+  const m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
+  if (m) {
+    const toH = (n) => Math.round(Number(n)).toString(16).padStart(2, '0');
+    return `#${toH(m[1])}${toH(m[2])}${toH(m[3])}`;
+  }
+  return '#000000';
 };
 
 const toInt = (value, fallback) => {
@@ -141,7 +167,7 @@ const SystemSettingsPage = () => {
     logoUrl: '',
     fontFamily: 'Tajawal',
     fontSizeBase: 14,
-    // إعدادات المظهر (من localStorage عبر CompanySettingsContext)
+    // إعدادات المظهر — القيم الافتراضية (تُستبدل من backend في loadData)
     tableHeaderBg:   (visualSettings || {}).tableHeaderBg   || '#E0F2F1',
     tableHeaderText: (visualSettings || {}).tableHeaderText || '#004D50',
     tableRowEven:    (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
@@ -234,6 +260,12 @@ const SystemSettingsPage = () => {
         eligibilityStrictMode: toBool(byKey.get(KEYS.eligibilityStrictMode), true),
         waitingPeriodDaysDefault: toInt(byKey.get(KEYS.waitingPeriodDaysDefault), 0),
         eligibilityGracePeriodDays: toInt(byKey.get(KEYS.eligibilityGracePeriodDays), 0),
+        // إعدادات المظهر — من backend أولاً، ثم localStorage كاحتياطي
+        tableHeaderBg:   byKey.get(KEYS.tableHeaderBg)   || (visualSettings || {}).tableHeaderBg   || '#E0F2F1',
+        tableHeaderText: byKey.get(KEYS.tableHeaderText) || (visualSettings || {}).tableHeaderText || '#004D50',
+        tableRowEven:    byKey.get(KEYS.tableRowEven)    || (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
+        selectionColor:  byKey.get(KEYS.selectionColor)  || (visualSettings || {}).selectionColor  || 'rgba(0,131,143,0.08)',
+        primaryColor:    byKey.get(KEYS.primaryColor)    || (visualSettings || {}).primaryColor    || '#00838F',
         // Report Settings Fields
         pdfSettingsId: reportSettingsResponse?.id,
         claimReportTitle: reportSettingsResponse?.claimReportTitle || 'نظام وعد الطبي',
@@ -265,8 +297,9 @@ const SystemSettingsPage = () => {
   }, []);
 
   // ✅ مُحفوظة بـ useCallback لتجنب إعادة الإنشاء عند كل render
+  // يدعم الإنشاء التلقائي إذا لم يكن المفتاح موجوداً في backend (upsert)
   const saveSettingIfExists = useCallback(async (key, value) => {
-    if (!hasKey(key)) return;
+    if (!hasKey(key) && !Object.values(KEYS).includes(key)) return;
     await systemSettingsService.updateSetting(key, value ? String(value) : '');
   }, [hasKey]);
 
@@ -306,6 +339,18 @@ const SystemSettingsPage = () => {
         saveSettingIfExists(KEYS.eligibilityStrictMode, dataToSave.eligibilityStrictMode),
         saveSettingIfExists(KEYS.waitingPeriodDaysDefault, dataToSave.waitingPeriodDaysDefault),
         saveSettingIfExists(KEYS.eligibilityGracePeriodDays, dataToSave.eligibilityGracePeriodDays),
+        // حفظ إعدادات المظهر في backend
+        saveSettingIfExists(KEYS.tableHeaderBg,   dataToSave.tableHeaderBg),
+        saveSettingIfExists(KEYS.tableHeaderText, dataToSave.tableHeaderText),
+        saveSettingIfExists(KEYS.tableRowEven,    dataToSave.tableRowEven),
+        saveSettingIfExists(KEYS.selectionColor,  dataToSave.selectionColor),
+        saveSettingIfExists(KEYS.primaryColor,    dataToSave.primaryColor),
+        // حفظ إعدادات المظهر في backend
+        saveSettingIfExists(KEYS.tableHeaderBg,   dataToSave.tableHeaderBg),
+        saveSettingIfExists(KEYS.tableHeaderText, dataToSave.tableHeaderText),
+        saveSettingIfExists(KEYS.tableRowEven,    dataToSave.tableRowEven),
+        saveSettingIfExists(KEYS.selectionColor,  dataToSave.selectionColor),
+        saveSettingIfExists(KEYS.primaryColor,    dataToSave.primaryColor),
         // Save Report Settings
         ...(dataToSave.pdfSettingsId 
           ? [reportSettingsService.updateSettings(dataToSave.pdfSettingsId, {
@@ -867,173 +912,117 @@ const SystemSettingsPage = () => {
 
                   {/* عمود ألوان الجداول والواجهة */}
                   <Grid size={{ xs: 12, md: 8 }}>
-                    <Stack spacing={2}>
+                    <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
 
-                      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
-                        <FieldGroup title="ألوان الجداول" icon={PaletteIcon} color="primary.main">
-                          <Grid container spacing={2}>
+                      {/* منتقيات الألوان - عمودياً */}
+                      <Grid size={{ xs: 12, md: 5 }}>
+                        <Paper variant="outlined" sx={{ p: '0.5rem 0.75rem', borderRadius: '0.25rem' }}>
+                          <FieldGroup title="ألوان الجداول" icon={PaletteIcon} color="primary.main">
+                            <Stack spacing={0.75}>
 
-                            {/* لون خلفية ترويسة الجداول */}
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">خلفية ترويسة الجداول</Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Box
-                                    component="input"
-                                    type="color"
-                                    value={formData.tableHeaderBg}
-                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderBg: e.target.value }))}
-                                    sx={{ width: '2.5rem', height: '2.5rem', border: 'none', cursor: 'pointer', p: 0, borderRadius: 1 }}
-                                  />
-                                  <TextField
-                                    size="small"
-                                    value={formData.tableHeaderBg}
-                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderBg: e.target.value }))}
-                                    sx={{ flex: 1 }}
-                                    inputProps={{ maxLength: 25 }}
-                                  />
-                                </Box>
-                              </Stack>
-                            </Grid>
+                              {[
+                                { label: 'خلفية الترويسة', key: 'tableHeaderBg' },
+                                { label: 'نص الترويسة',    key: 'tableHeaderText' },
+                                { label: 'اللون الرئيسي',  key: 'primaryColor' },
+                                { label: 'لون التحديد',    key: 'selectionColor' },
+                                { label: 'صفوف بديلة',     key: 'tableRowEven' },
+                              ].map(({ label, key }) => {
+                                const val = formData[key] || '';
+                                const hex = toHexColor(val);
+                                return (
+                                  <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                    {/* مربع ملوّن يعرض اللون الفعلي (بالشفافية) - يفتح المنتقي عند الضغط */}
+                                    <Box sx={{ position: 'relative', width: '1.75rem', height: '1.75rem', flexShrink: 0 }}>
+                                      <Box sx={{
+                                        width: '100%', height: '100%',
+                                        bgcolor: val || '#000',
+                                        borderRadius: '4px',
+                                        border: '1px solid rgba(0,0,0,0.2)',
+                                        cursor: 'pointer',
+                                      }} />
+                                      <Box
+                                        component="input"
+                                        type="color"
+                                        value={hex}
+                                        onChange={(e) => setFormData((p) => ({ ...p, [key]: e.target.value }))}
+                                        sx={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%', p: 0, border: 'none' }}
+                                      />
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary" sx={{ width: '85px', flexShrink: 0, lineHeight: 1.2 }}>{label}</Typography>
+                                    <TextField
+                                      size="small"
+                                      value={val}
+                                      onChange={(e) => setFormData((p) => ({ ...p, [key]: e.target.value }))}
+                                      sx={{ flex: 1, '& .MuiInputBase-input': { py: '4px', fontSize: '0.72rem' } }}
+                                      inputProps={{ maxLength: 40, dir: 'ltr' }}
+                                    />
+                                  </Box>
+                                );
+                              })}
 
-                            {/* لون نص ترويسة الجداول */}
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">نص ترويسة الجداول</Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Box
-                                    component="input"
-                                    type="color"
-                                    value={formData.tableHeaderText}
-                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderText: e.target.value }))}
-                                    sx={{ width: '2.5rem', height: '2.5rem', border: 'none', cursor: 'pointer', p: 0, borderRadius: 1 }}
-                                  />
-                                  <TextField
-                                    size="small"
-                                    value={formData.tableHeaderText}
-                                    onChange={(e) => setFormData((p) => ({ ...p, tableHeaderText: e.target.value }))}
-                                    sx={{ flex: 1 }}
-                                    inputProps={{ maxLength: 25 }}
-                                  />
-                                </Box>
-                              </Stack>
-                            </Grid>
+                            </Stack>
+                          </FieldGroup>
+                        </Paper>
+                      </Grid>
 
-                            {/* اللون الرئيسي (أزرار وأيقونات) */}
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">اللون الرئيسي (أزرار وأيقونات)</Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Box
-                                    component="input"
-                                    type="color"
-                                    value={formData.primaryColor}
-                                    onChange={(e) => setFormData((p) => ({ ...p, primaryColor: e.target.value }))}
-                                    sx={{ width: '2.5rem', height: '2.5rem', border: 'none', cursor: 'pointer', p: 0, borderRadius: 1 }}
-                                  />
-                                  <TextField
-                                    size="small"
-                                    value={formData.primaryColor}
-                                    onChange={(e) => setFormData((p) => ({ ...p, primaryColor: e.target.value }))}
-                                    sx={{ flex: 1 }}
-                                    inputProps={{ maxLength: 25 }}
-                                  />
-                                </Box>
-                              </Stack>
-                            </Grid>
-
-                            {/* لون التحديد */}
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">لون التحديد (تحديد الصفوف)</Typography>
-                                <TextField
-                                  size="small"
-                                  fullWidth
-                                  value={formData.selectionColor}
-                                  onChange={(e) => setFormData((p) => ({ ...p, selectionColor: e.target.value }))}
-                                  placeholder="rgba(0,131,143,0.08)"
-                                  inputProps={{ maxLength: 40, dir: 'ltr' }}
-                                  helperText="يمكن استخدام rgba أو hex"
-                                />
-                              </Stack>
-                            </Grid>
-
-                            {/* لون الصفوف الزوجية */}
-                            <Grid size={{ xs: 12, sm: 6 }}>
-                              <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">لون الصفوف البديلة (زوجية)</Typography>
-                                <TextField
-                                  size="small"
-                                  fullWidth
-                                  value={formData.tableRowEven}
-                                  onChange={(e) => setFormData((p) => ({ ...p, tableRowEven: e.target.value }))}
-                                  placeholder="rgba(224,242,241,0.45)"
-                                  inputProps={{ maxLength: 40, dir: 'ltr' }}
-                                  helperText="يمكن استخدام rgba أو hex"
-                                />
-                              </Stack>
-                            </Grid>
-
-                          </Grid>
-                        </FieldGroup>
-                      </Paper>
-
-                      {/* معاينة مباشرة */}
-                      <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
-                        <FieldGroup title="معاينة مباشرة" icon={PaletteIcon} color="primary.main">
-                          <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-                            {/* ترويسة الجدول */}
-                            <Box
-                              sx={{
-                                bgcolor: formData.tableHeaderBg,
-                                color: formData.tableHeaderText,
-                                borderBottom: `2px solid ${formData.tableHeaderText}`,
-                                px: 2, py: 1,
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 1fr 1fr',
-                                gap: 2
-                              }}
-                            >
-                              {['اسم المنتج', 'الرمز', 'الحالة'].map((h) => (
-                                <Typography key={h} variant="caption" fontWeight={700}>{h}</Typography>
-                              ))}
-                            </Box>
-                            {/* صفوف المعاينة */}
-                            {[
-                              ['خدمة طبية أولى', 'SRV-001', 'نشط'],
-                              ['تغطية استشفاء', 'SRV-002', 'نشط'],
-                              ['إجراء جراحي', 'SRV-003', 'موقوف']
-                            ].map((row, i) => (
+                      {/* المعاينة المباشرة - عمود بجانب الألوان */}
+                      <Grid size={{ xs: 12, md: 7 }}>
+                        <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
+                          <FieldGroup title="معاينة مباشرة" icon={PaletteIcon} color="primary.main">
+                            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                              {/* ترويسة الجدول */}
                               <Box
-                                key={i}
                                 sx={{
-                                  bgcolor: i % 2 === 1 ? formData.tableRowEven : 'transparent',
-                                  px: 2, py: '0.5rem',
+                                  bgcolor: formData.tableHeaderBg,
+                                  color: formData.tableHeaderText,
+                                  borderBottom: `2px solid ${formData.tableHeaderText}`,
+                                  px: 2, py: 1,
                                   display: 'grid',
                                   gridTemplateColumns: '1fr 1fr 1fr',
-                                  gap: 2,
-                                  fontSize: '0.8rem'
+                                  gap: 2
                                 }}
                               >
-                                {row.map((cell, j) => <span key={j}>{cell}</span>)}
+                                {['اسم المنتج', 'الرمز', 'الحالة'].map((h) => (
+                                  <Typography key={h} variant="caption" fontWeight={700}>{h}</Typography>
+                                ))}
                               </Box>
-                            ))}
-                          </Box>
-                          <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                            <Button variant="contained" size="small" sx={{ bgcolor: formData.primaryColor, '&:hover': { bgcolor: formData.primaryColor, opacity: 0.85 } }}>
-                              زر رئيسي
-                            </Button>
-                            <Button variant="outlined" size="small" sx={{ borderColor: formData.primaryColor, color: formData.primaryColor }}>
-                              زر ثانوي
-                            </Button>
-                            <Typography variant="caption" sx={{ color: formData.primaryColor, fontWeight: 700 }}>
-                              ● نموذج أيقونة/نص
-                            </Typography>
-                          </Box>
-                        </FieldGroup>
-                      </Paper>
+                              {/* صفوف المعاينة */}
+                              {[
+                                ['خدمة طبية أولى', 'SRV-001', 'نشط'],
+                                ['تغطية استشفاء', 'SRV-002', 'نشط'],
+                                ['إجراء جراحي', 'SRV-003', 'موقوف']
+                              ].map((row, i) => (
+                                <Box
+                                  key={i}
+                                  sx={{
+                                    bgcolor: i % 2 === 1 ? formData.tableRowEven : 'transparent',
+                                    px: 2, py: '0.5rem',
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr 1fr',
+                                    gap: 2,
+                                    fontSize: '0.8rem'
+                                  }}
+                                >
+                                  {row.map((cell, j) => <span key={j}>{cell}</span>)}
+                                </Box>
+                              ))}
+                            </Box>
+                            <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <Button variant="contained" size="small" sx={{ bgcolor: formData.primaryColor, '&:hover': { bgcolor: formData.primaryColor, opacity: 0.85 } }}>
+                                زر رئيسي
+                              </Button>
+                              <Button variant="outlined" size="small" sx={{ borderColor: formData.primaryColor, color: formData.primaryColor }}>
+                                زر ثانوي
+                              </Button>
+                              <Typography variant="caption" sx={{ color: formData.primaryColor, fontWeight: 700 }}>
+                                ● نموذج أيقونة/نص
+                              </Typography>
+                            </Box>
+                          </FieldGroup>
+                        </Paper>
+                      </Grid>
 
-                    </Stack>
+                    </Grid>
                   </Grid>
 
                 </Grid>
