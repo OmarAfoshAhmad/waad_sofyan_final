@@ -333,6 +333,14 @@ public class Claim {
     @Builder.Default
     private Boolean active = true;
 
+    /** تاريخ الحذف الناعم */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    /** من قام بالحذف */
+    @Column(name = "deleted_by", length = 255)
+    private String deletedBy;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

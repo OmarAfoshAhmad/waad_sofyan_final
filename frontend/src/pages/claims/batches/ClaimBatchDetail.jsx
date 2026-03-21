@@ -39,7 +39,11 @@ import {
     ReceiptLong as ReceiptIcon,
     FileDownload as ExcelIcon,
     FilterAltOff as FilterAltOffIcon,
-    PauseCircle as SuspendIcon
+    PauseCircle as SuspendIcon,
+    DeleteOutline as DeleteOutlineIcon,
+    RestoreFromTrash as RestoreIcon,
+    DeleteForever as DeleteForeverIcon,
+    History as HistoryIcon
 } from '@mui/icons-material';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,7 +52,7 @@ import ExcelJS from 'exceljs';
 
 // project components
 import MainCard from 'components/MainCard';
-import { ModernPageHeader } from 'components/tba';
+import { ModernPageHeader, SoftDeleteToggle } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import useTableState from 'hooks/useTableState';
 import claimsService from 'services/api/claims.service';
@@ -86,6 +90,15 @@ export default function ClaimBatchDetail() {
     const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
     const [suspendComment, setSuspendComment] = useState('');
     const [suspendingClaimId, setSuspendingClaimId] = useState(null);
+
+    // Soft Delete / Restore / Hard Delete
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletingClaim, setDeletingClaim] = useState(null);
+    const [showDeleted, setShowDeleted] = useState(false);
+    const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
+    const [hardDeletingClaim, setHardDeletingClaim] = useState(null);
+    const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+    const [restoringClaim, setRestoringClaim] = useState(null);
     const tableState = useTableState({
         initialPageSize: 10,
         defaultSort: { field: 'serviceDate', direction: 'desc' }
@@ -96,15 +109,55 @@ export default function ClaimBatchDetail() {
     // Detect superadmin / reviewer role from session storage
     const currentUserRole = (() => {
         try {
-            const u = localStorage.getItem('user_details');
-            if (u) {
-                const parsed = JSON.parse(u);
-                return parsed?.role || (Array.isArray(parsed?.roles) ? parsed.roles[0] : null) || '';
+            const rolesStr = localStorage.getItem('userRoles');
+            if (rolesStr) {
+                const roles = JSON.parse(rolesStr);
+                return Array.isArray(roles) ? roles[0] : '';
             }
         } catch { /* ignore */ }
         return '';
     })();
     const canSuspend = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'ACCOUNTANT';
+    const canDelete = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'DATA_ENTRY' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'PROVIDER_STAFF';
+    const canHardDelete = currentUserRole === 'SUPER_ADMIN';
+
+    const softDeleteMutation = useMutation({
+        mutationFn: (claimId) => claimsService.softDelete(claimId),
+        onSuccess: () => {
+            enqueueSnackbar('تم حذف المطالبة — تمت استعادة السقف تلقائياً', { variant: 'success' });
+            setDeleteDialogOpen(false);
+            setDeletingClaim(null);
+            queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
+        },
+        onError: (err) => {
+            enqueueSnackbar(err?.response?.data?.messageAr || err?.response?.data?.message || 'حدث خطأ أثناء الحذف', { variant: 'error' });
+        }
+    });
+
+    const restoreMutation = useMutation({
+        mutationFn: (claimId) => claimsService.restore(claimId),
+        onSuccess: () => {
+            enqueueSnackbar('تمت استعادة المطالبة بنجاح', { variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
+            queryClient.invalidateQueries({ queryKey: ['deleted-claims'] });
+        },
+        onError: (err) => {
+            enqueueSnackbar(err?.response?.data?.messageAr || err?.response?.data?.message || 'حدث خطأ أثناء الاستعادة', { variant: 'error' });
+        }
+    });
+
+    const hardDeleteMutation = useMutation({
+        mutationFn: (claimId) => claimsService.hardDelete(claimId),
+        onSuccess: () => {
+            enqueueSnackbar('تم الحذف النهائي للمطالبة', { variant: 'warning' });
+            setHardDeleteDialogOpen(false);
+            setHardDeletingClaim(null);
+            queryClient.invalidateQueries({ queryKey: ['deleted-claims'] });
+        },
+        onError: (err) => {
+            enqueueSnackbar(err?.response?.data?.messageAr || err?.response?.data?.message || 'حدث خطأ أثناء الحذف النهائي', { variant: 'error' });
+        }
+    });
 
     const suspendMutation = useMutation({
         mutationFn: ({ claimId, comment }) =>
@@ -140,6 +193,17 @@ export default function ClaimBatchDetail() {
         queryKey: ['claim-batch-detail', providerId, employerId, year, month],
         queryFn: () => claimBatchesService.getCurrentBatch(providerId, employerId, year, month),
         enabled: !!providerId && !!employerId
+    });
+
+    // Fetch deleted claims for this batch
+    const { data: deletedClaimsResponse, isLoading: deletedLoading } = useQuery({
+        queryKey: ['deleted-claims', employerId, providerId, year, month],
+        queryFn: async () => {
+            const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
+            const dateTo = `${year}-${String(month).padStart(2, '0')}-31`;
+            return await claimsService.listDeleted({ employerId, providerId, dateFrom, dateTo, size: 100 });
+        },
+        enabled: showDeleted && !!providerId && !!employerId
     });
     const { data: employer } = useQuery({
         queryKey: ['employer-detail', employerId],
@@ -548,6 +612,16 @@ export default function ClaimBatchDetail() {
                                 <PrintIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
                             </IconButton>
                         </Tooltip>
+                        {canDelete && !showDeleted && claim.status !== 'BATCHED' && claim.status !== 'SETTLED' && (
+                            <Tooltip title="حذف المطالبة">
+                                <IconButton
+                                    color="error"
+                                    onClick={() => { setDeletingClaim(claim); setDeleteDialogOpen(true); }}
+                                >
+                                    <DeleteOutlineIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
+                                </IconButton>
+                            </Tooltip>
+                        )}
                     </Stack>
                 );
             default:
@@ -650,6 +724,13 @@ export default function ClaimBatchDetail() {
                         >
                             إضافة مطالبة
                         </Button>
+
+                        {canDelete && (
+                            <SoftDeleteToggle
+                                showDeleted={showDeleted}
+                                onToggle={() => setShowDeleted(!showDeleted)}
+                            />
+                        )}
                     </Stack>
                 }
             />
@@ -737,25 +818,100 @@ export default function ClaimBatchDetail() {
                     </MainCard>
 
                     {/* Table View */}
-                    <UnifiedMedicalTable
-                        columns={columns}
-                        rows={tableRows}
-                        loading={isLoading}
-                        totalCount={sortedClaims.length}
-                        page={tableState.page}
-                        rowsPerPage={tableState.pageSize}
-                        onPageChange={(newPage) => tableState.setPage(newPage)}
-                        onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
-                        sortBy={tableState.sorting?.[0]?.id}
-                        sortDirection={tableState.sorting?.[0]?.desc ? 'desc' : 'asc'}
-                        onSort={(col, dir) => { tableState.setSorting([{ id: col, desc: dir === 'desc' }]); tableState.setPage(0); }}
-                        renderCell={renderCell}
-                        getRowKey={(claim) => claim.id}
-                        emptyMessage="لا توجد مطالبات في هذا الباتش حالياً."
-                        rowsPerPageOptions={[10, 25, 50, 100]}
-                        size="small"
-                        stickyHeader={false}
-                    />
+                    {showDeleted ? (
+                        /* ── DELETED RECORDS VIEW ── */
+                        <MainCard sx={{ p: 0 }}>
+                            <Box sx={{ p: '12px 16px', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <HistoryIcon color="error" fontSize="small" />
+                                <Typography variant="subtitle2" color="error.main" fontWeight={600}>
+                                    سجل المطالبات المحذوفة
+                                </Typography>
+                                {deletedLoading && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>جاري التحميل...</Typography>
+                                )}
+                            </Box>
+                            {(() => {
+                                const deletedItems = deletedClaimsResponse?.items || deletedClaimsResponse?.content || [];
+                                if (!deletedLoading && deletedItems.length === 0) {
+                                    return (
+                                        <Typography color="text.secondary" textAlign="center" py={5}>
+                                            لا توجد مطالبات محذوفة في هذه الدفعة
+                                        </Typography>
+                                    );
+                                }
+                                return (
+                                    <Box sx={{ overflowX: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', direction: 'rtl' }}>
+                                            <thead>
+                                                <tr style={{ background: '#fdecea', borderBottom: '2px solid #e0e0e0' }}>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>#</th>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>المستفيد</th>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>تاريخ الخدمة</th>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الإجمالي</th>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الحالة</th>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>حُذف بواسطة</th>
+                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>إجراءات</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {deletedItems.map((c, i) => (
+                                                    <tr key={c.id} style={{ borderBottom: '1px solid #e0e0e0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                                                        <td style={{ padding: '8px 14px', color: '#888' }}>{i + 1}</td>
+                                                        <td style={{ padding: '8px 14px', fontWeight: 600 }}>{c.memberName}</td>
+                                                        <td style={{ padding: '8px 14px', textAlign: 'center', direction: 'ltr' }}>{c.serviceDate}</td>
+                                                        <td style={{ padding: '8px 14px', textAlign: 'center' }}>{(c.requestedAmount || 0).toFixed(2)}</td>
+                                                        <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888' }}>{c.status}</td>
+                                                        <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888', fontSize: '0.75rem' }}>{c.deletedBy || '—'}</td>
+                                                        <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                                                            <Stack direction="row" spacing={0.5} justifyContent="center">
+                                                                <Tooltip title="استعادة المطالبة">
+                                                                    <IconButton color="success" size="small"
+                                                                        onClick={() => { setRestoringClaim(c); setRestoreDialogOpen(true); }}
+                                                                        disabled={restoreMutation.isPending}
+                                                                    >
+                                                                        <RestoreIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                                {canHardDelete && (
+                                                                    <Tooltip title="حذف نهائي">
+                                                                        <IconButton color="error" size="small"
+                                                                            onClick={() => { setHardDeletingClaim(c); setHardDeleteDialogOpen(true); }}
+                                                                        >
+                                                                            <DeleteForeverIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                )}
+                                                            </Stack>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </Box>
+                                );
+                            })()}
+                        </MainCard>
+                    ) : (
+                        <UnifiedMedicalTable
+                            columns={columns}
+                            rows={tableRows}
+                            loading={isLoading}
+                            totalCount={sortedClaims.length}
+                            page={tableState.page}
+                            rowsPerPage={tableState.pageSize}
+                            onPageChange={(newPage) => tableState.setPage(newPage)}
+                            onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
+                            sortBy={tableState.sorting?.[0]?.id}
+                            sortDirection={tableState.sorting?.[0]?.desc ? 'desc' : 'asc'}
+                            onSort={(col, dir) => { tableState.setSorting([{ id: col, desc: dir === 'desc' }]); tableState.setPage(0); }}
+                            renderCell={renderCell}
+                            getRowKey={(claim) => claim.id}
+                            emptyMessage="لا توجد مطالبات في هذا الباتش حالياً."
+                            rowsPerPageOptions={[10, 25, 50, 100]}
+                            size="small"
+                            stickyHeader={false}
+                        />
+                    )}
 
                     {/* Totals Footer */}
                     {claims.length > 0 && (
@@ -807,6 +963,91 @@ export default function ClaimBatchDetail() {
                 </Button>
             </DialogActions>
         </Dialog>
+
+        {/* Soft Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.main' }}>
+                تأكيد حذف المطالبة
+            </DialogTitle>
+            <DialogContent sx={{ pt: '1.25rem' }}>
+                <Typography variant="body2" mb={1}>
+                    هل أنت متأكد من حذف المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong>؟
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    • سيتم إخفاء المطالبة من القوائم<br />
+                    • ستعود الأموال المحجوزة إلى السقف السنوي تلقائياً<br />
+                    • يمكن استعادتها لاحقاً من زر «سجل المحذوفات»
+                </Typography>
+            </DialogContent>
+            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                <Button variant="outlined" onClick={() => setDeleteDialogOpen(false)}>إلغاء</Button>
+                <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<DeleteOutlineIcon />}
+                    onClick={() => softDeleteMutation.mutate(deletingClaim?.id)}
+                    disabled={softDeleteMutation.isPending}
+                >
+                    حذف المطالبة
+                </Button>
+            </DialogActions>
+        </Dialog>
+
+        {/* Restore Confirmation Dialog */}
+        <Dialog open={restoreDialogOpen} onClose={() => setRestoreDialogOpen(false)} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'success.dark' }}>
+                تأكيد استعادة المطالبة
+            </DialogTitle>
+            <DialogContent sx={{ pt: '1.25rem' }}>
+                <Typography variant="body2" color="text.secondary">
+                    هل أنت متأكد من استعادة مطالبة <strong>{restoringClaim?.memberName}</strong> بمبلغ <strong>{(restoringClaim?.requestedAmount || 0).toFixed(2)}</strong>؟
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mt={1}>
+                    سيتم إعادة المطالبة إلى قائمة المطالبات النشطة.
+                </Typography>
+            </DialogContent>
+            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                <Button variant="outlined" onClick={() => setRestoreDialogOpen(false)}>إلغاء</Button>
+                <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<RestoreIcon />}
+                    onClick={() => { restoreMutation.mutate(restoringClaim?.id); setRestoreDialogOpen(false); setRestoringClaim(null); }}
+                    disabled={restoreMutation.isPending}
+                >
+                    استعادة
+                </Button>
+            </DialogActions>
+        </Dialog>
+
+        {/* Hard Delete Confirmation Dialog */}
+        <Dialog open={hardDeleteDialogOpen} onClose={() => setHardDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.dark' }}>
+                ⚠️ حذف نهائي — لا يمكن التراجع
+            </DialogTitle>
+            <DialogContent sx={{ pt: '1.25rem' }}>
+                <Typography variant="body2" color="error.main" fontWeight={600} mb={1}>
+                    هذا الإجراء غير قابل للتراجع نهائياً!
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    سيتم حذف مطالبة <strong>{hardDeletingClaim?.memberName}</strong> من قاعدة البيانات بشكل دائم مع جميع بياناتها.
+                </Typography>
+            </DialogContent>
+            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                <Button variant="outlined" onClick={() => setHardDeleteDialogOpen(false)}>إلغاء</Button>
+                <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<DeleteForeverIcon />}
+                    onClick={() => hardDeleteMutation.mutate(hardDeletingClaim?.id)}
+                    disabled={hardDeleteMutation.isPending}
+                >
+                    حذف نهائي
+                </Button>
+            </DialogActions>
+        </Dialog>
+
+
         </>
     );
 }

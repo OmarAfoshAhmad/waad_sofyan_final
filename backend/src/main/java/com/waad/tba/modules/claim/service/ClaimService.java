@@ -1439,42 +1439,109 @@ public class ClaimService {
     }
 
     /**
-     * Delete a claim (Phase MVP).
-     * 
-     * Handles manual cleanup of RESTRICTED foreign keys (audit logs, batch items)
-     * before deleting the main entity.
+     * Soft-delete a claim (حذف ناعم).
+     * يُصفّر حصة الشركة بإخفاء المطالبة من الحسابات → السقف يعود تلقائياً.
      */
     @Transactional
     public void deleteClaim(Long id) {
-        log.info("🗑️ Deleting claim id: {}", id);
+        log.info("🗑️ Soft-deleting claim id: {}", id);
+
+        User currentUser = authorizationService.getCurrentUser();
 
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
-        // 1. Business Validation: Cannot delete BATCHED or SETTLED claims
-        // (settlement_batch_items and settlement_batches were dropped by V117)
-        if (claim.getStatus() == ClaimStatus.BATCHED || claim.getStatus() == ClaimStatus.SETTLED) {
-            throw new BusinessRuleException("لا يمكن حذف مطالبة في حالة مفعلة أو مسواة");
+        if (!Boolean.TRUE.equals(claim.getActive())) {
+            throw new BusinessRuleException("المطالبة محذوفة مسبقاً");
         }
 
-        // 2. Manual Cleanup for RESTRICTED tables (bypass DB constraint fails)
-        // Note: audit logs have ON DELETE RESTRICT, so purge them first.
+        if (claim.getStatus() == ClaimStatus.BATCHED || claim.getStatus() == ClaimStatus.SETTLED) {
+            throw new BusinessRuleException("لا يمكن حذف مطالبة في حالة مُفوتَرَة أو مُسوَّاة");
+        }
 
-        log.warn("🧹 Cleaning up constrained data for claim {}...", id);
+        claim.setActive(false);
+        claim.setDeletedAt(java.time.LocalDateTime.now());
+        claim.setDeletedBy(currentUser != null ? currentUser.getEmail() : "system");
 
-        // Delete Audit Logs
+        claimRepository.save(claim);
+        log.info("✅ Claim {} soft-deleted by {}. Annual limits automatically restored.", id,
+                currentUser != null ? currentUser.getEmail() : "system");
+    }
+
+    /**
+     * Restore a soft-deleted claim (استعادة).
+     */
+    @Transactional
+    public ClaimViewDto restoreClaim(Long id) {
+        log.info("♻️ Restoring claim id: {}", id);
+
+        Claim claim = claimRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
+
+        if (Boolean.TRUE.equals(claim.getActive())) {
+            throw new BusinessRuleException("المطالبة ليست محذوفة");
+        }
+
+        claim.setActive(true);
+        claim.setDeletedAt(null);
+        claim.setDeletedBy(null);
+
+        Claim saved = claimRepository.save(claim);
+        log.info("✅ Claim {} restored successfully.", id);
+        return claimMapper.toViewDto(saved);
+    }
+
+    /**
+     * Hard-delete a claim (حذف نهائي) — SUPER_ADMIN فقط.
+     */
+    @Transactional
+    public void hardDeleteClaim(Long id) {
+        log.warn("🔥 HARD-deleting claim id: {}", id);
+
+        Claim claim = claimRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
+
+        if (Boolean.TRUE.equals(claim.getActive())) {
+            throw new BusinessRuleException("يجب حذف المطالبة ناعماً أولاً قبل الحذف النهائي");
+        }
+
         em.createNativeQuery("DELETE FROM claim_audit_logs WHERE claim_id = :cid")
                 .setParameter("cid", id)
                 .executeUpdate();
 
-        // 3. Execute main entity deletion
-        // (lines, attachments, history will be deleted by DB-level CASCADE)
         claimRepository.delete(claim);
-
-        // 4. Force synchronization NOW to ensure failure happens inside this method if
-        // any FK remains
         claimRepository.flush();
 
-        log.info("✅ Claim {} and its associations successfully deleted. Limits recalculated.", id);
+        log.warn("🔥 Claim {} permanently deleted.", id);
+    }
+
+    /**
+     * List soft-deleted claims.
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ClaimViewDto> listDeletedClaims(
+            Long employerId, Long providerId,
+            java.time.LocalDate dateFrom, java.time.LocalDate dateTo,
+            int page, int size) {
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Authentication required");
+        }
+
+        // PROVIDER role: restrict to their own provider
+        if (authorizationService.isProvider(currentUser)) {
+            providerId = currentUser.getProviderId();
+        }
+        // EMPLOYER_ADMIN: restrict to their employer
+        if (authorizationService.isEmployerAdmin(currentUser)) {
+            employerId = currentUser.getEmployerId();
+        }
+
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size,
+                org.springframework.data.domain.Sort.by("deletedAt").descending());
+
+        return claimRepository.findDeleted(employerId, providerId, dateFrom, dateTo, pageable)
+                .map(claimMapper::toViewDto);
     }
 }

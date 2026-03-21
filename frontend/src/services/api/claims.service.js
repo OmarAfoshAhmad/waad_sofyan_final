@@ -607,6 +607,59 @@ export const claimsService = {
     } catch (error) {
       throw handleClaimErrors(error);
     }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // SOFT DELETE / RESTORE / HARD DELETE
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /** حذف ناعم — تعود الأموال للسقف تلقائياً */
+  softDelete: async (id) => {
+    try {
+      if (!id) throw new Error('معرف المطالبة مطلوب');
+      const response = await axiosClient.delete(`${BASE_URL}/${id}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /** استعادة مطالبة محذوفة */
+  restore: async (id) => {
+    try {
+      if (!id) throw new Error('معرف المطالبة مطلوب');
+      const response = await axiosClient.put(`${BASE_URL}/${id}/restore`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /** حذف نهائي — SUPER_ADMIN فقط */
+  hardDelete: async (id) => {
+    try {
+      if (!id) throw new Error('معرف المطالبة مطلوب');
+      const response = await axiosClient.delete(`${BASE_URL}/${id}/hard`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /** قائمة المطالبات المحذوفة */
+  listDeleted: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+          queryParams.append(key, params[key]);
+        }
+      });
+      const response = await axiosClient.get(`${BASE_URL}/deleted?${queryParams.toString()}`);
+      return normalizePaginatedResponse(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
   }
 };
 

@@ -233,6 +233,10 @@ public class ClaimViewDto {
     private String createdBy;
     private String updatedBy;
 
+    // Soft delete fields
+    private LocalDateTime deletedAt;
+    private String deletedBy;
+
     // ========== Helper Methods ==========
 
     /**

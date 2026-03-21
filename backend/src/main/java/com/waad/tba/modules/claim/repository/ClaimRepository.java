@@ -1261,4 +1261,32 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("providerIds") List<Long> providerIds,
                         @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
                         Pageable pageable);
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // SOFT DELETE QUERIES — Claims where active = false
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /**
+         * List soft-deleted claims with optional employer/provider filters.
+         */
+        @EntityGraph(attributePaths = { "member", "member.benefitPolicy", "member.employer", "preAuthorization",
+                        "visit" })
+        @Query(value = "SELECT c FROM Claim c " +
+                        "WHERE c.active = false " +
+                        "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
+                        "AND (:providerId IS NULL OR c.providerId = :providerId) " +
+                        "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
+                        "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo) " +
+                        "ORDER BY c.deletedAt DESC", countQuery = "SELECT COUNT(c) FROM Claim c " +
+                                        "WHERE c.active = false " +
+                                        "AND (:employerId IS NULL OR c.member.employer.id = :employerId) " +
+                                        "AND (:providerId IS NULL OR c.providerId = :providerId) " +
+                                        "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
+                                        "AND (CAST(:dateTo AS date) IS NULL OR c.serviceDate <= :dateTo)")
+        Page<Claim> findDeleted(
+                        @Param("employerId") Long employerId,
+                        @Param("providerId") Long providerId,
+                        @Param("dateFrom") java.time.LocalDate dateFrom,
+                        @Param("dateTo") java.time.LocalDate dateTo,
+                        Pageable pageable);
 }

@@ -717,6 +717,8 @@ public class ClaimMapper {
                         : null)
                 .claimBatchId(claim.getClaimBatch() != null ? claim.getClaimBatch().getId() : null)
                 .claimBatchCode(claim.getClaimBatch() != null ? claim.getClaimBatch().getBatchCode() : null)
+                .deletedAt(claim.getDeletedAt())
+                .deletedBy(claim.getDeletedBy())
                 .build();
 
         if (claim.getVisit() != null) {

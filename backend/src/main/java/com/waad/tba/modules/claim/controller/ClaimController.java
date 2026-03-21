@@ -263,7 +263,35 @@ public class ClaimController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Void>> deleteClaim(@PathVariable("id") Long id) {
         claimService.deleteClaim(id);
-        return ResponseEntity.ok(ApiResponse.success("Claim deleted successfully", null));
+        return ResponseEntity.ok(ApiResponse.success("تم حذف المطالبة (حذف ناعم) بنجاح", null));
+    }
+
+    @PutMapping("/{id:\\d+}/restore")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<ClaimViewDto>> restoreClaim(@PathVariable("id") Long id) {
+        ClaimViewDto restored = claimService.restoreClaim(id);
+        return ResponseEntity.ok(ApiResponse.success("تمت استعادة المطالبة بنجاح", restored));
+    }
+
+    @DeleteMapping("/{id:\\d+}/hard")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> hardDeleteClaim(@PathVariable("id") Long id) {
+        claimService.hardDeleteClaim(id);
+        return ResponseEntity.ok(ApiResponse.success("تم الحذف النهائي للمطالبة", null));
+    }
+
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    public ResponseEntity<ApiResponse<ClaimListResponse>> listDeletedClaims(
+            @RequestParam(name = "employerId", required = false) Long employerId,
+            @RequestParam(name = "providerId", required = false) Long providerId,
+            @RequestParam(name = "dateFrom", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateFrom,
+            @RequestParam(name = "dateTo", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateTo,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size) {
+        org.springframework.data.domain.Page<ClaimViewDto> result = claimService.listDeletedClaims(employerId,
+                providerId, dateFrom, dateTo, Math.max(0, page - 1), size);
+        return ResponseEntity.ok(ApiResponse.success(apiMapper.toListResponse(result)));
     }
 
     @GetMapping("/count")
