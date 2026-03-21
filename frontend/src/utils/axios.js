@@ -91,6 +91,16 @@ axiosServices.interceptors.response.use(
     }
 
     // ==========================================
+    // 400 - Validation / Bad Request
+    // ==========================================
+    if (status === 400) {
+      // Prefer Arabic message from backend, fall back to English
+      const backendMsg = errorData?.messageAr || errorData?.message || errorData?.error;
+      error.userMessage = backendMsg || 'البيانات المدخلة غير صحيحة. الرجاء التحقق والمحاولة مرة أخرى.';
+      error.errorType = classification.type;
+    }
+
+    // ==========================================
     // 403 - Forbidden
     // ==========================================
     if (status === 403) {

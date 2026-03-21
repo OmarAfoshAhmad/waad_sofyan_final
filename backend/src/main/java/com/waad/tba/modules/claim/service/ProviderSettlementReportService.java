@@ -258,11 +258,11 @@ public class ProviderSettlementReportService {
         BigDecimal claimGross = claim.getRequestedAmount() != null ? claim.getRequestedAmount() : linesGross;
         BigDecimal claimApproved = claim.getApprovedAmount() != null ? claim.getApprovedAmount() : linesApproved;
 
-        // Calculate rejected = gross - approved
-        BigDecimal claimRejected = claimGross.subtract(claimApproved);
-        if (claimRejected.compareTo(BigDecimal.ZERO) < 0) {
-            claimRejected = BigDecimal.ZERO;
-        }
+        // CANONICAL: Use stored refusedAmount directly — avoids incorrectly folding
+        // patient co-pay into the "rejected" bucket (gross - approved would mix both).
+        BigDecimal claimRejected = claim.getRefusedAmount() != null
+                ? claim.getRefusedAmount()
+                : claimGross.subtract(claimApproved).max(BigDecimal.ZERO);
 
         // Get patient share from claim level (co-pay)
         BigDecimal patientShare = claim.getPatientCoPay() != null ? claim.getPatientCoPay() : BigDecimal.ZERO;
@@ -305,33 +305,29 @@ public class ProviderSettlementReportService {
      * Build service line detail.
      */
     private ServiceLineDetail buildServiceLineDetail(ClaimLine line, LocalDate serviceDate) {
-        // Calculate gross amount (should be pre-calculated, but validate)
-        BigDecimal gross = line.getTotalPrice();
-        if (gross == null && line.getUnitPrice() != null && line.getQuantity() != null) {
-            gross = line.getUnitPrice().multiply(new BigDecimal(line.getQuantity()));
-        }
-        if (gross == null) {
+        // Gross = what was submitted (requested price × requested quantity)
+        Integer reqQty = line.getRequestedQuantity() != null ? line.getRequestedQuantity() : line.getQuantity();
+        BigDecimal reqUnitPrice = line.getRequestedUnitPrice() != null ? line.getRequestedUnitPrice()
+                : line.getUnitPrice();
+
+        BigDecimal gross;
+        if (reqUnitPrice != null && reqQty != null) {
+            gross = reqUnitPrice.multiply(new BigDecimal(reqQty));
+        } else if (line.getTotalPrice() != null) {
+            gross = line.getTotalPrice();
+        } else {
             gross = BigDecimal.ZERO;
         }
 
-        // Get approved amount (may be null if not yet adjudicated)
-        BigDecimal approved = BigDecimal.ZERO;
-        // For approved claims, approved amount equals the total unless partially
-        // rejected
-        // Check if claim is approved - if so, use total price as approved (unless we
-        // have rejection)
-        if (line.getClaim() != null &&
-                (line.getClaim().getStatus() == ClaimStatus.APPROVED ||
-                        line.getClaim().getStatus() == ClaimStatus.SETTLED)) {
-            // Default: full approval
-            approved = gross;
-        }
+        // Rejected = stored refusedAmount (price-excess + limit refusals — pure company
+        // refusal,
+        // does NOT include patient co-pay)
+        BigDecimal rejected = line.getRefusedAmount() != null
+                ? line.getRefusedAmount().max(BigDecimal.ZERO)
+                : BigDecimal.ZERO;
 
-        // Calculate rejected amount
-        BigDecimal rejected = gross.subtract(approved);
-        if (rejected.compareTo(BigDecimal.ZERO) < 0) {
-            rejected = BigDecimal.ZERO;
-        }
+        // Approved (net to provider) = gross − rejected
+        BigDecimal approved = gross.subtract(rejected).max(BigDecimal.ZERO);
 
         // Determine line status
         LineStatus lineStatus = ProviderSettlementReportDto.calculateLineStatus(gross, approved);

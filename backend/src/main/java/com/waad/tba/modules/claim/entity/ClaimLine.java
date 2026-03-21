@@ -215,6 +215,19 @@ public class ClaimLine {
     @Builder.Default
     private BigDecimal manualRefusedAmount = BigDecimal.ZERO;
 
+    /** Portion of refusal caused by submitted price exceeding contract price. */
+    @Column(name = "price_excess_refused", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal priceExcessRefused = BigDecimal.ZERO;
+
+    /**
+     * Portion of refusal caused by benefit limits (times/year or annual-amount
+     * caps).
+     */
+    @Column(name = "limit_refused", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal limitRefused = BigDecimal.ZERO;
+
     // ==================== FINANCIAL AUDIT: REQUESTED VS APPROVED
     // ====================
 

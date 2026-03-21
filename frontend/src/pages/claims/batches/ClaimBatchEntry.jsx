@@ -701,6 +701,15 @@ export default function ClaimBatchEntry() {
         try {
             const actualDate = serviceDate || defaultDate;
 
+            // التحقق: تاريخ الخدمة لا يجوز أن يكون في المستقبل
+            if (actualDate && new Date(actualDate) > new Date()) {
+                enqueueSnackbar(`⚠️ تاريخ الخدمة (${actualDate}) في المستقبل — يجب إدخال تاريخ صحيح`,
+                    { variant: 'error', autoHideDuration: 6000 });
+                setSaving(false);
+                isSavingRef.current = false;
+                return;
+            }
+
             // المرحلة 2.2: التحقق من انتهاء صلاحية الوثيقة
             if (policyInfo?.endDate && new Date(actualDate) > new Date(policyInfo.endDate)) {
                 enqueueSnackbar(`⚠️ تاريخ الخدمة (${actualDate}) يتجاوز نهاية الوثيقة المحددة (${policyInfo.endDate}) — لا يمكن الحفظ`,
@@ -843,7 +852,12 @@ export default function ClaimBatchEntry() {
                 setIsDirty(false);
             }
         } catch (err) {
-            enqueueSnackbar(err.message || t('claimEntry.saveFailed'), { variant: 'error' });
+            // Extract the Arabic backend message if available (400 validation, 409 conflict, etc.)
+            const apiMsg = err.response?.data?.messageAr
+                || err.response?.data?.message
+                || err.userMessage
+                || err.message;
+            enqueueSnackbar(apiMsg || t('claimEntry.saveFailed'), { variant: 'error', autoHideDuration: 7000 });
         } finally {
             setSaving(false);
             isSavingRef.current = false;

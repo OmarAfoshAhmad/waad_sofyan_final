@@ -35,15 +35,10 @@ export function useCoverageLogic({
             return { coveragePercent: 100, requiresPreApproval: false, notCovered: false, usageExceeded: false, usageDetails: null };
         }
 
-        // Policy date guard: service date must fall within the benefit policy validity period
-        if (serviceDate && policyInfo?.startDate && policyInfo?.endDate) {
-            const svcDate = new Date(serviceDate);
-            const policyStart = new Date(policyInfo.startDate);
-            const policyEnd = new Date(policyInfo.endDate);
-            if (svcDate < policyStart || svcDate > policyEnd) {
-                return { coveragePercent: 0, requiresPreApproval: false, notCovered: true, policyDateError: true, usageExceeded: false, usageDetails: null };
-            }
-        }
+        // NOTE: Policy date range validation is handled at SAVE time (ClaimBatchEntry line 705).
+        // Do NOT block coverage calculation here — that would cause 0% to display
+        // whenever serviceDate falls outside the formal policy endDate (e.g. after
+        // policy year rollover), which breaks normal operation for ongoing claims.
 
         const sid = service?.medicalServiceId || 0;
         const serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
@@ -114,10 +109,13 @@ export function useCoverageLogic({
                 }
             }
 
+            const isNotCovered = r?.covered === false;
             return {
-                coveragePercent: r?.coveragePercent ?? fallbackPercent,
+                // When the service is explicitly NOT covered by the policy, coverage must be 0,
+                // not the policy default — otherwise company incorrectly pays the fallback %.
+                coveragePercent: isNotCovered ? 0 : (r?.coveragePercent ?? fallbackPercent),
                 requiresPreApproval: r?.requiresPreApproval ?? false,
-                notCovered: r?.covered === false,
+                notCovered: isNotCovered,
                 usageExceeded: baseLimitDetails?.exceeded ?? false,
                 usageDetails: baseLimitDetails
             };
@@ -125,7 +123,7 @@ export function useCoverageLogic({
             console.error('[fetchCoverage] error:', err);
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         }
-    }, [policyId, policyInfo?.defaultCoveragePercent, policyInfo?.startDate, policyInfo?.endDate, serviceDate, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
+    }, [policyId, policyInfo?.defaultCoveragePercent, serviceDate, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
 
     const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
         if (!policyId || !member?.id) return;

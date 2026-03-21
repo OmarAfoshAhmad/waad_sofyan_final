@@ -46,6 +46,7 @@ export const ClaimLineRow = ({
         <Fragment>
             <TableRow sx={{ 
                 bgcolor: line.rejected ? alpha(theme.palette.error.main, 0.05) :
+                        line.notCovered ? alpha(theme.palette.error.main, 0.04) :
                         ((line.manualRefusedAmount > 0) ? alpha(theme.palette.warning.main, 0.04) :
                         (line.usageExceeded ? alpha(theme.palette.warning.main, 0.02) : 'transparent'))
             }}>
@@ -275,6 +276,16 @@ export const ClaimLineRow = ({
                     <TableCell colSpan={12} sx={{ py: 0.5 }}>
                         <Typography variant="caption" color="info.dark" fontWeight={600} sx={{ fontSize: '0.75rem', px: '1.0rem', display: 'flex', alignItems: 'center', gap: 1 }}>
                             🔒 هذه الخدمة تستلزم موافقة مسبقة (PA) — تأكد من إرفاق رقم الموافقة المسبقة
+                        </Typography>
+                    </TableCell>
+                </TableRow>
+            )}
+            {line.notCovered && !line.rejected && (
+                <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.07) }}>
+                    <TableCell colSpan={12} sx={{ py: 0.5 }}>
+                        <Typography variant="caption" color="error.main" fontWeight={600} sx={{ fontSize: '0.75rem', px: '1.0rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <RejectIcon sx={{ fontSize: '0.875rem' }} />
+                            هذه الخدمة غير مغطاة بالوثيقة (تغطية 0%) — يتحمّل المريض كامل المبلغ أو يجب رفض البند
                         </Typography>
                     </TableCell>
                 </TableRow>

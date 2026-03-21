@@ -201,6 +201,7 @@ public class ClaimMapper {
 
             // Resolve coverage:
             // When fullCoverage=true → 100% coverage, skip benefit rule lookup
+            BenefitPolicyCoverageService.ResolvedCoverage coverageResult = null;
             if (Boolean.TRUE.equals(claim.getFullCoverage())) {
                 coveragePercentSnapshot = 100;
                 log.info("✅ [MAPPER] Full coverage override → 100%");
@@ -211,7 +212,7 @@ public class ClaimMapper {
                 // priority 1 = child of override context (e.g. CAT-OP-PHYSIO when
                 // context=CAT-OP)
                 // priority 2 = exact override (e.g. CAT-OP root)
-                var coverageResult = benefitPolicyCoverageService.resolveCoverage(
+                coverageResult = benefitPolicyCoverageService.resolveCoverage(
                         resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
                         null,
                         serviceCatIdForCoverage,
@@ -292,6 +293,9 @@ public class ClaimMapper {
                     .coveragePercentSnapshot(coveragePercentSnapshot)
                     .patientCopayPercentSnapshot(patientCopayPercentSnapshot)
                     .manualRefusedAmount(manualRefused)
+                    .priceExcessRefused(isRejected ? BigDecimal.ZERO : priceExcessRefusal)
+                    .limitRefused(isRejected ? BigDecimal.ZERO
+                            : lineRefused.subtract(priceExcessRefusal).max(BigDecimal.ZERO))
                     .quantity(quantity)
                     .unitPrice(lineApprovedBase)
                     .totalPrice(lineApprovedBase.multiply(quantityBd))
@@ -479,13 +483,14 @@ public class ClaimMapper {
                     : lineDto.getAppliedCategoryId();
 
             // When fullCoverage=true → 100% coverage, skip benefit rule lookup
+            BenefitPolicyCoverageService.ResolvedCoverage coverageResult = null;
             if (Boolean.TRUE.equals(claim.getFullCoverage())) {
                 coveragePercentSnapshot = 100;
                 log.info("✅ [REPLACE_MAPPER] Full coverage override → 100%");
             } else {
                 // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
                 // finds the most specific rule (exact service cat beats child-of-override).
-                var coverageResult = benefitPolicyCoverageService.resolveCoverage(
+                coverageResult = benefitPolicyCoverageService.resolveCoverage(
                         resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
                         null,
                         serviceCatIdForCoverage,
@@ -576,6 +581,10 @@ public class ClaimMapper {
                     .rejectionReason(lineDto.getRejectionReason())
                     .refusedAmount(lineRefused)
                     .manualRefusedAmount(manualRefused)
+                    .priceExcessRefused(
+                            Boolean.TRUE.equals(lineDto.getRejected()) ? BigDecimal.ZERO : priceExcessRefusal)
+                    .limitRefused(Boolean.TRUE.equals(lineDto.getRejected()) ? BigDecimal.ZERO
+                            : lineRefused.subtract(priceExcessRefusal).max(BigDecimal.ZERO))
                     .quantity(quantity)
                     .unitPrice(lineApprovedBase)
                     .totalPrice(lineApprovedTotal)
