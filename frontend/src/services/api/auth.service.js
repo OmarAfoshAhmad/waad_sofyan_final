@@ -1,59 +1,42 @@
 /**
- * Hybrid Authentication Service
- * Supports both JWT and Session-based authentication
- *
- * JWT Mode: Stores token in localStorage, sends Authorization header
- * Session Mode: Uses HttpOnly cookies (JSESSIONID)
- *
- * CODESPACES FIX: Using JWT mode for proper port forwarding support
+ * Session Authentication Service (Web)
+ * Uses HttpOnly cookie session (JSESSIONID) only.
  */
 
 import axiosClient from 'utils/axios';
-import { setToken, clearToken } from 'utils/token-storage';
+import { clearToken } from 'utils/token-storage';
 
 /**
  * Login with username/password
- * Uses JWT endpoint for token-based auth (works better with port forwarding)
+ * Uses session endpoint. Backend sets HttpOnly cookie.
  */
 export const login = async (credentials) => {
-  const response = await axiosClient.post('/auth/login', credentials);
-  // Backend returns ApiResponse<LoginResponse> with token
+  // Clear any legacy token artifacts before creating session.
+  clearToken();
+
+  const response = await axiosClient.post('/auth/session/login', credentials);
   const data = response.data;
 
-  // Store JWT token for subsequent requests
-  if (data?.data?.token) {
-    setToken(data.data.token);
-    console.log('✅ JWT token stored');
-  }
-
-  // Return user info (adapt from LoginResponse format)
+  // Session login returns user info directly.
   return {
     status: data.status,
-    data: data.data?.user || data.data,
+    data: data.data,
     message: data.message
   };
 };
 
 /**
  * Get current authenticated user
- * Tries JWT /me first, falls back to session /me
+ * Session-only endpoint.
  */
 export const me = async () => {
   try {
-    // Try JWT endpoint first
-    const response = await axiosClient.get('/auth/me');
+    const response = await axiosClient.get('/auth/session/me');
     return response.data;
   } catch (error) {
-    // If 401, try session endpoint as fallback
     if (error.response?.status === 401) {
-      try {
-        const sessionResponse = await axiosClient.get('/auth/session/me');
-        return sessionResponse.data;
-      } catch (sessionError) {
-        return { status: 'unauthenticated', data: null };
-      }
+      return { status: 'unauthenticated', data: null };
     }
-    // Re-throw other errors (network, 500, etc.)
     throw error;
   }
 };

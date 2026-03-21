@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { logError, getUserFriendlyMessage, ErrorType } from 'services/errorLogger';
-import { getToken, clearToken } from 'utils/token-storage';
+import { clearToken } from 'utils/token-storage';
 
 // ==============================|| AXIOS CLIENT - CLEAN DOCKER VERSION ||============================== //
 
@@ -35,11 +35,7 @@ axiosServices.interceptors.request.use(
       }
     }
 
-    // JWT fallback (if token exists)
-    const token = getToken();
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Web auth is session-based (HttpOnly cookie via withCredentials).
 
     return config;
   },

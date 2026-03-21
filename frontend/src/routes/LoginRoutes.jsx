@@ -5,9 +5,7 @@ import AuthLayout from 'layout/Auth';
 import Loadable from 'components/Loadable';
 
 // jwt auth pages
-import JwtAuthLogin from 'pages/auth/jwt/login';
-// import JwtAuthLogin from 'pages/auth/jwt/TestLogin';
-// const JwtAuthLogin = Loadable(lazy(() => import('pages/auth/jwt/login'))); // Lazy load removed for debugging
+const JwtAuthLogin = Loadable(lazy(() => import('pages/auth/jwt/login')));
 const JwtAuthRegister = Loadable(lazy(() => import('pages/auth/jwt/register')));
 const JwtAuthForgotPassword = Loadable(lazy(() => import('pages/auth/jwt/forgot-password')));
 const JwtAuthResetPassword = Loadable(lazy(() => import('pages/auth/jwt/reset-password')));

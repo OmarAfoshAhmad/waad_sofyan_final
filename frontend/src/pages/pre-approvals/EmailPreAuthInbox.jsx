@@ -83,6 +83,12 @@ const EmailPreAuthInbox = () => {
     notes: ''
   });
 
+  // Avoid re-sanitizing unchanged HTML on every render.
+  const sanitizedBodyHtml = useMemo(() => {
+    if (!selectedRequest?.bodyHtml) return '';
+    return sanitizeHtml(selectedRequest.bodyHtml);
+  }, [selectedRequest?.bodyHtml]);
+
   // ========================================
   // DATA FETCHING
   // ========================================
@@ -557,7 +563,7 @@ const EmailPreAuthInbox = () => {
                   }}
                 >
                   {selectedRequest.bodyHtml ? (
-                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedRequest.bodyHtml) }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizedBodyHtml }} />
                   ) : (
                     <Typography style={{ whiteSpace: 'pre-line' }}>{selectedRequest.bodyText}</Typography>
                   )}

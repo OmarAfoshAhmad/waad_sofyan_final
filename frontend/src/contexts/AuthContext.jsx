@@ -21,7 +21,7 @@ import { createContext, useEffect, useState, useContext } from 'react';
 import authService from 'services/api/auth.service';
 import { useRBACStore } from 'api/rbac';
 import { openSnackbar } from 'api/snackbar';
-import { getToken, clearToken } from 'utils/token-storage';
+import { clearToken } from 'utils/token-storage';
 
 // ==============================|| AUTH STATUS ENUM ||============================== //
 
@@ -127,54 +127,6 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('auth:session-expired', handleUnauthorized);
   }, [authStatus]);
 
-  // 4. JWT Token Expiry Monitor (if JWT is used)
-  useEffect(() => {
-    if (authStatus !== AUTH_STATUS.AUTHENTICATED || !user) return;
-
-    // Try to get JWT expiry from user object or check for serviceToken
-    const token = getToken();
-    if (!token) return; // Session-based auth, skip JWT monitoring
-
-    try {
-      // Decode JWT to get expiry
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      const decoded = JSON.parse(jsonPayload);
-
-      if (decoded.exp) {
-        const expiryTime = decoded.exp * 1000; // Convert to milliseconds
-        const timeUntilExpiry = expiryTime - Date.now();
-
-        if (timeUntilExpiry <= 0) {
-          // Already expired
-          console.warn('⚠️ JWT already expired');
-          logout();
-          return;
-        }
-
-        // Set timer to auto-logout when token expires
-        const timerId = setTimeout(() => {
-          console.warn('⚠️ JWT expired - Auto logout');
-          openSnackbar({
-            message: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى',
-            alert: { color: 'warning' }
-          });
-          logout();
-        }, timeUntilExpiry);
-
-        return () => clearTimeout(timerId);
-      }
-    } catch (error) {
-      console.error('Error decoding JWT:', error);
-    }
-  }, [authStatus, user]);
-
   /**
    * Multi-tab logout synchronization
    */
@@ -204,13 +156,7 @@ export const AuthProvider = ({ children }) => {
     const init = async () => {
       // PRODUCTION STABILIZATION: Silent init - no console noise
       try {
-        // Stop 401 spam: only try to fetch user if we have a token or session hint
-        const token = getToken();
-        if (!token) {
-          setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
-          return;
-        }
-
+        // Session-first bootstrap. If no active cookie session, backend returns 401.
         const response = await authService.me();
 
         if (response.status === 'success' && response.data) {
