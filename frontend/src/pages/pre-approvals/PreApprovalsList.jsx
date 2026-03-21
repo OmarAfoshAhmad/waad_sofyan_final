@@ -45,6 +45,7 @@ import { useTableRefresh } from 'contexts/TableRefreshContext';
 
 // Services
 import { preApprovalsService, providersService } from 'services/api';
+import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 
 // ============================================================================
 // CONSTANTS
@@ -73,7 +74,7 @@ const PREAPPROVAL_STATUS_MAP = {
  */
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return '-';
-  return `${Number(value).toLocaleString('en-US')} د.ل`;
+  return formatCurrencyGlobal(value);
 };
 
 // ============================================================================

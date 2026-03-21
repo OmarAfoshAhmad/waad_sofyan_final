@@ -21,6 +21,7 @@ import { DataGrid } from '@mui/x-data-grid';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ar';
+import { formatCurrency } from 'utils/currency-formatter';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ar');
@@ -203,7 +204,7 @@ export const HighPriorityQueue = ({ data, loading, onView, onEdit, onDelete }) =
       field: 'requestedAmount',
       headerName: 'المبلغ',
       width: '7.5rem',
-      renderCell: (params) => <Typography variant="body2">{params.value?.toLocaleString('en-US')} د.ل</Typography>
+      renderCell: (params) => <Typography variant="body2">{formatCurrency(params.value || 0)}</Typography>
     },
     {
       field: 'submittedDate',

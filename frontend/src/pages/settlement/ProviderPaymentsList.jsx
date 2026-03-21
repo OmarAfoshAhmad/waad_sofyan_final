@@ -24,10 +24,11 @@ import { providerAccountsService } from 'services/api/settlement.service';
 
 // Utils
 import { exportAccountsListToExcel } from 'utils/settlementExcelExport';
+import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 
 const formatCurrency = (value) => {
-  if (value === null || value === undefined || isNaN(value)) return '0.00 د.ل';
-  return `${Number(value).toLocaleString('ar-LY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
+  if (value === null || value === undefined || isNaN(value)) return formatCurrencyGlobal(0);
+  return formatCurrencyGlobal(value);
 };
 
 const getBalanceColor = (balance) => {

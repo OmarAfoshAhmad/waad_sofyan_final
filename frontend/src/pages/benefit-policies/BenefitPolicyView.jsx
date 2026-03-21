@@ -38,6 +38,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
+import { formatCurrency } from 'utils/currency-formatter';
 import { useSnackbar } from 'notistack';
 
 import {
@@ -493,7 +494,7 @@ const BenefitPolicyView = () => {
             <MainCard title="معلومات التغطية">
               <DetailRow
                 label="الحد السنوي"
-                value={policy?.annualLimit ? `${Number(policy.annualLimit).toLocaleString('en-US')} د.ل` : 'غير محدد'}
+                value={policy?.annualLimit ? formatCurrency(policy.annualLimit) : 'غير محدد'}
                 icon={MoneyIcon}
               />
               <DetailRow

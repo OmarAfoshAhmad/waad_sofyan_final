@@ -32,6 +32,7 @@ import {
   Category as CategoryIcon,
   FilterList as FilterIcon
 } from '@mui/icons-material';
+import { formatCurrency } from 'utils/currency-formatter';
 
 /**
  * Props:
@@ -144,7 +145,7 @@ const MedicalServicePicker = ({
           {/* Price Badge */}
           {showPrices && (
             <Chip
-              label={option.price ? `${Number(option.price).toLocaleString()} د.ل` : 'سعر العقد'}
+              label={option.price ? formatCurrency(option.price) : 'سعر العقد'}
               size="small"
               color={option.price ? 'success' : 'default'}
               variant={option.price ? 'filled' : 'outlined'}

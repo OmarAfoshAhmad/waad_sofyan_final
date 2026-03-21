@@ -42,6 +42,7 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
+import { formatCurrency } from 'utils/currency-formatter';
 import axiosClient from 'utils/axios';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -294,7 +295,7 @@ const CategoryServicePicker = ({
         </Box>
         {showPrices && option.basePrice && (
           <Chip
-            label={`${Number(option.basePrice).toLocaleString()} د.ل`}
+            label={formatCurrency(option.basePrice)}
             size="small"
             color="success"
             icon={<LockIcon sx={{ fontSize: '0.75rem' }} />}

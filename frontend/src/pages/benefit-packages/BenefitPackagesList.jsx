@@ -37,6 +37,7 @@ import { useTableRefresh } from 'contexts/TableRefreshContext';
 
 // Services
 import { getBenefitPackages, deleteBenefitPackage } from 'services/api/benefit-packages.service';
+import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 
 // ============================================================================
 // CONSTANTS
@@ -53,7 +54,7 @@ const QUERY_KEY = 'benefit-packages';
  */
 const formatCurrency = (value) => {
   if (value === null || value === undefined) return '-';
-  return `${Number(value).toLocaleString('en-US')} د.ل`;
+  return formatCurrencyGlobal(value);
 };
 
 // ============================================================================

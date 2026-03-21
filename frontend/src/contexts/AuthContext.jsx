@@ -21,6 +21,7 @@ import { createContext, useEffect, useState, useContext } from 'react';
 import authService from 'services/api/auth.service';
 import { useRBACStore } from 'api/rbac';
 import { openSnackbar } from 'api/snackbar';
+import { getToken, clearToken } from 'utils/token-storage';
 
 // ==============================|| AUTH STATUS ENUM ||============================== //
 
@@ -131,7 +132,7 @@ export const AuthProvider = ({ children }) => {
     if (authStatus !== AUTH_STATUS.AUTHENTICATED || !user) return;
 
     // Try to get JWT expiry from user object or check for serviceToken
-    const token = localStorage.getItem('serviceToken');
+    const token = getToken();
     if (!token) return; // Session-based auth, skip JWT monitoring
 
     try {
@@ -204,7 +205,7 @@ export const AuthProvider = ({ children }) => {
       // PRODUCTION STABILIZATION: Silent init - no console noise
       try {
         // Stop 401 spam: only try to fetch user if we have a token or session hint
-        const token = localStorage.getItem('serviceToken');
+        const token = getToken();
         if (!token) {
           setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
           return;
@@ -262,7 +263,7 @@ export const AuthProvider = ({ children }) => {
     useRBACStore.getState().clear();
 
     // Clear JWT token if exists (for hybrid auth)
-    localStorage.removeItem('serviceToken');
+    clearToken();
     sessionStorage.clear();
 
     // Notify other tabs

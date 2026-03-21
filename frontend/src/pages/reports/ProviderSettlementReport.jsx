@@ -46,6 +46,7 @@ import {
   Receipt as ClaimIcon,
   MedicalServices as ServiceIcon
 } from '@mui/icons-material';
+import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
@@ -392,8 +393,7 @@ const ProviderSettlementReport = () => {
 
   // Format currency
   const formatCurrency = (amount) => {
-    if (amount == null) return '0.000 د.ل';
-    return `${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} د.ل`;
+    return formatCurrencyGlobal(amount || 0);
   };
 
   // Format date
@@ -406,7 +406,7 @@ const ProviderSettlementReport = () => {
     }
   };
 
-  const formatLYD = (val) => `${(val || 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} د.ل`;
+  const formatLYD = (val) => formatCurrency(val || 0);
 
   // Get status chip color
   const getStatusChipProps = (status) => {

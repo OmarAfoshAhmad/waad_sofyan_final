@@ -44,6 +44,7 @@ import {
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
+import { formatCurrency } from 'utils/currency-formatter';
 
 import MainCard from 'components/MainCard';
 import { UnifiedMedicalTable } from 'components/common';
@@ -729,7 +730,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           </Tooltip>
         );
       case 'amountLimit':
-        return rule.amountLimit ? `${Number(rule.amountLimit).toLocaleString('en-US')} د.ل` : '-';
+        return rule.amountLimit ? formatCurrency(rule.amountLimit) : '-';
       case 'timesLimit':
         return rule.timesLimit ?? '-';
       case 'waitingPeriodDays':

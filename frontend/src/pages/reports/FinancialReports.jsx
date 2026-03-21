@@ -45,6 +45,7 @@ import {
   ErrorOutline as ErrorOutlineIcon,
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
+import { formatCurrency } from 'utils/currency-formatter';
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
@@ -432,8 +433,7 @@ const FinancialReports = () => {
   // ============================================================================
 
   const formatAmount = (value) => {
-    if (value == null) return '0.00 د.ل';
-    return `${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
+    return formatCurrency(value || 0);
   };
 
   const formatDate = (value) => {

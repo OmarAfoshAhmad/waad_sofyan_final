@@ -33,6 +33,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import BusinessIcon from '@mui/icons-material/Business';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import VerifiedIcon from '@mui/icons-material/Verified';
+import { formatCurrency } from 'utils/currency-formatter';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 
 // project imports
@@ -449,8 +450,7 @@ export default function Dashboard() {
   const rejectedClaims = summary?.rejectedClaims || 0;
 
   const formatLYD = (amount) => {
-    if (!amount) return '0.00 د.ل';
-    return `${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} د.ل`;
+    return formatCurrency(amount || 0);
   };
 
   // ─── Chart Data ─────────────────────────────────────────────────────────────

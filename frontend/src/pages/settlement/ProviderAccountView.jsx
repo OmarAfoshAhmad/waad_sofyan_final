@@ -68,6 +68,7 @@ import { providerAccountsService, providerPaymentsService } from 'services/api/s
 
 // Utils
 import { exportProviderAccountTransactionsToExcel } from 'utils/settlementExcelExport';
+import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 
 // Snackbar
 import { openSnackbar } from 'api/snackbar';
@@ -102,8 +103,8 @@ const TRANSACTION_TYPE_COLORS = {
  * Format currency with LYD - ALWAYS returns string
  */
 const formatCurrency = (value) => {
-  if (value === null || value === undefined || isNaN(value)) return '0 د.ل';
-  return `${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
+  if (value === null || value === undefined || isNaN(value)) return formatCurrencyGlobal(0);
+  return formatCurrencyGlobal(value);
 };
 
 /**

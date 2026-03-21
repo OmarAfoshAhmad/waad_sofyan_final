@@ -5,6 +5,7 @@ import ReactApexChart from 'react-apexcharts';
 import { useColorScheme } from '@mui/material/styles';
 import { ThemeMode } from 'config';
 import useConfig from 'hooks/useConfig';
+import { formatCurrency, formatNumber } from 'utils/currency-formatter';
 
 /**
  * Bar Chart: التكاليف حسب مقدم الخدمة
@@ -35,7 +36,7 @@ const CostsBarChart = ({ data, loading }) => {
     },
     dataLabels: {
       enabled: true,
-      formatter: (val) => val.toLocaleString('en-US'),
+      formatter: (val) => formatNumber(val),
       style: {
         colors: [theme.palette.text.primary],
         fontFamily: fontFamily
@@ -52,7 +53,7 @@ const CostsBarChart = ({ data, loading }) => {
           colors: theme.palette.text.secondary,
           fontFamily: fontFamily
         },
-        formatter: (val) => val.toLocaleString('en-US')
+        formatter: (val) => formatNumber(val)
       }
     },
     yaxis: {
@@ -67,7 +68,7 @@ const CostsBarChart = ({ data, loading }) => {
     tooltip: {
       theme: colorScheme === ThemeMode.DARK ? 'dark' : 'light',
       y: {
-        formatter: (val) => val.toLocaleString('en-US') + ' د.ل'
+        formatter: (val) => formatCurrency(val)
       }
     }
   });

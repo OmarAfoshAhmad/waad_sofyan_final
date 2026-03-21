@@ -55,6 +55,7 @@ import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { claimsService, preApprovalsService } from 'services/api';
 import { useAuth } from 'contexts/AuthContext';
+import { formatCurrency } from 'utils/currency-formatter';
 
 /**
  * Documents Library - مكتبة الوثائق
@@ -832,7 +833,7 @@ const DocumentsLibrary = () => {
                         <TableCell>
                           <strong>المبلغ</strong>
                         </TableCell>
-                        <TableCell>{selectedDocument.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} د.ل</TableCell>
+                        <TableCell>{formatCurrency(selectedDocument.amount)}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>

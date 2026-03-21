@@ -16,6 +16,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { formatCurrency } from 'utils/currency-formatter';
 import {
   Box,
   Card,
@@ -471,7 +472,7 @@ const EligibilityCheckPage = () => {
                         الحد السنوي
                       </Typography>
                       <Typography variant="h6" color="primary">
-                        {result.coverageLimit.toLocaleString('en-US')} د.ل
+                        {formatCurrency(result.coverageLimit)}
                       </Typography>
                     </Box>
                   )}

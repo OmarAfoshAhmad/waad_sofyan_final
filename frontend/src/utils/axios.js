@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { logError, getUserFriendlyMessage, ErrorType } from 'services/errorLogger';
+import { getToken, clearToken } from 'utils/token-storage';
 
 // ==============================|| AXIOS CLIENT - CLEAN DOCKER VERSION ||============================== //
 
@@ -35,7 +36,7 @@ axiosServices.interceptors.request.use(
     }
 
     // JWT fallback (if token exists)
-    const token = localStorage.getItem('serviceToken');
+    const token = getToken();
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -81,7 +82,7 @@ axiosServices.interceptors.response.use(
         console.warn('401 Unauthorized - Session expired');
       }
 
-      localStorage.removeItem('serviceToken');
+      clearToken();
       sessionStorage.clear();
 
       window.dispatchEvent(new CustomEvent('auth:session-expired'));

@@ -47,6 +47,7 @@ import {
   alpha
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { formatCurrency } from 'utils/currency-formatter';
 import {
   Send as SendIcon,
   Delete as DeleteIcon,
@@ -256,7 +257,7 @@ const ContractPriceChip = ({ loading, price, hasContract, error }) => {
   return (
     <Chip
       icon={<LockIcon fontSize="small" />}
-      label={`${Number(price).toLocaleString()} د.ل`}
+      label={formatCurrency(price)}
       color="success"
       size="small"
       sx={{ fontWeight: 600 }}
@@ -1665,7 +1666,7 @@ export default function ProviderClaimsSubmission() {
                                       </Stack>
                                       {option.price && (
                                         <Typography variant="caption" color="success.main">
-                                          💰 سعر العقد: {Number(option.price).toLocaleString()} د.ل
+                                          💰 سعر العقد: {formatCurrency(option.price)}
                                         </Typography>
                                       )}
                                     </Stack>
@@ -1728,7 +1729,7 @@ export default function ProviderClaimsSubmission() {
                           {/* Line Total */}
                           <TableCell align="center">
                             <Typography fontWeight="bold" color="primary.main">
-                              {calculateLineTotal(line).toLocaleString()} د.ل
+                              {formatCurrency(calculateLineTotal(line))}
                             </Typography>
                           </TableCell>
 
@@ -1755,7 +1756,7 @@ export default function ProviderClaimsSubmission() {
                         </TableCell>
                         <TableCell align="center">
                           <Typography variant="h5" color="primary.main" fontWeight={700}>
-                            {totalClaimAmount.toLocaleString()} د.ل
+                            {formatCurrency(totalClaimAmount)}
                           </Typography>
                         </TableCell>
                         <TableCell />
@@ -2061,7 +2062,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.annualLimit}
                     </Typography>
                     <Typography variant="body2" fontWeight={700}>
-                      {Number(memberLimit.annualLimit || 0).toLocaleString()} د.ل
+                      {formatCurrency(memberLimit.annualLimit || 0)}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.error.main, 0.08) }}>
@@ -2069,7 +2070,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.usedAmount}
                     </Typography>
                     <Typography variant="body2" fontWeight={700} color="error.main">
-                      {Number(memberLimit.usedAmount || 0).toLocaleString()} د.ل
+                      {formatCurrency(memberLimit.usedAmount || 0)}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.1) }}>
@@ -2077,7 +2078,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.remainingLimit}
                     </Typography>
                     <Typography variant="body2" fontWeight={800} color="success.main">
-                      {Number(memberLimit.remainingLimit || 0).toLocaleString()} د.ل
+                      {formatCurrency(memberLimit.remainingLimit || 0)}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1, borderRadius: '0.375rem', bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1) }}>
@@ -2085,7 +2086,7 @@ export default function ProviderClaimsSubmission() {
                       {LABELS.totalClaimAmount}
                     </Typography>
                     <Typography variant="subtitle1" fontWeight={900} color="primary.main">
-                      {totalClaimAmount.toLocaleString()} د.ل
+                      {formatCurrency(totalClaimAmount)}
                     </Typography>
                   </Box>
                   <LinearProgress
@@ -2151,7 +2152,7 @@ export default function ProviderClaimsSubmission() {
             {isFormValid && pendingFiles.length + existingAttachments.length > 0 && (
               <Alert severity="success" sx={{ py: 0.5 }}>
                 <Typography variant="body2">
-                  ✅ جاهز للتقديم • {claimLines.length} خدمة • {totalClaimAmount.toLocaleString()} د.ل • {pendingFiles.length + existingAttachments.length}{' '}
+                  ✅ جاهز للتقديم • {claimLines.length} خدمة • {formatCurrency(totalClaimAmount)} • {pendingFiles.length + existingAttachments.length}{' '}
                   مرفق
                 </Typography>
               </Alert>

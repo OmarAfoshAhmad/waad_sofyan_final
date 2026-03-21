@@ -52,6 +52,7 @@ import PermissionGuard from 'components/PermissionGuard';
 // Services
 import { emailPreAuthService } from 'services/api';
 import useAuth from 'hooks/useAuth';
+import { sanitizeHtml } from 'utils/sanitize-html';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -556,7 +557,7 @@ const EmailPreAuthInbox = () => {
                   }}
                 >
                   {selectedRequest.bodyHtml ? (
-                    <div dangerouslySetInnerHTML={{ __html: selectedRequest.bodyHtml }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedRequest.bodyHtml) }} />
                   ) : (
                     <Typography style={{ whiteSpace: 'pre-line' }}>{selectedRequest.bodyText}</Typography>
                   )}

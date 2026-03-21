@@ -57,6 +57,7 @@ import providerContractsService from 'services/api/provider-contracts.service';
 import claimsService from 'services/api/claims.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import useAuth from 'hooks/useAuth';
+import { formatCurrency } from 'utils/currency-formatter';
 
 // ===========================================
 // CONSTANTS
@@ -68,8 +69,7 @@ const MONTHS_AR = [
 ];
 
 const formatLYD = (amount) => {
-    if (!amount && amount !== 0) return '0.00 د.ل';
-    return `${parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
+    return formatCurrency(amount || 0);
 };
 
 // ===========================================

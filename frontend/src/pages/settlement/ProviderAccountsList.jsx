@@ -31,6 +31,7 @@ import { getActiveContractByProvider } from 'services/api/provider-contracts.ser
 
 // Utils
 import { exportToExcel } from 'utils/exportUtils';
+import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter';
 
 const STATUS_OPTIONS = [
   { value: 'ALL', label: 'الكل' },
@@ -57,8 +58,8 @@ const STATUS_COLORS = {
 const COMPANY_SHARE_PERCENT = 10;
 
 const formatCurrency = (value) => {
-  if (value === null || value === undefined || isNaN(value)) return '0.00 د.ل';
-  return `${Number(value).toLocaleString('ar-LY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} د.ل`;
+  if (value === null || value === undefined || isNaN(value)) return formatCurrencyGlobal(0);
+  return formatCurrencyGlobal(value);
 };
 
 const formatDateParam = (value) => {

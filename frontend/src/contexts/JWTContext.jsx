@@ -28,6 +28,7 @@ import authReducer from 'contexts/auth-reducer/auth';
 import Loader from 'components/Loader';
 import axios from 'utils/axios';
 import { useRBACStore } from 'api/rbac';
+import { getToken, setToken, clearToken } from 'utils/token-storage';
 
 // ==============================|| INITIAL STATE ||============================== //
 
@@ -54,13 +55,13 @@ const verifyToken = (token) => {
 
 const setSession = (token) => {
   if (token) {
-    localStorage.setItem('serviceToken', token);
+    setToken(token);
     if (!axios.defaults.headers) axios.defaults.headers = {};
     if (!axios.defaults.headers.common) axios.defaults.headers.common = {};
     axios.defaults.headers.common.Authorization = `Bearer ${token}`;
     console.log('✅ Session token set');
   } else {
-    localStorage.removeItem('serviceToken');
+    clearToken();
     if (axios.defaults.headers?.common?.Authorization) {
       delete axios.defaults.headers.common.Authorization;
     }
@@ -82,7 +83,7 @@ export const JWTProvider = ({ children }) => {
       console.log('🔄 JWTContext: Starting initialization...');
 
       try {
-        const token = localStorage.getItem('serviceToken');
+        const token = getToken();
 
         if (token && verifyToken(token)) {
           console.log('✅ Valid token found, fetching user data...');
@@ -133,7 +134,7 @@ export const JWTProvider = ({ children }) => {
   useEffect(() => {
     if (!state.isLoggedIn) return;
 
-    const token = localStorage.getItem('serviceToken');
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -230,7 +231,7 @@ export const JWTProvider = ({ children }) => {
     console.log('✅ RBAC store cleared');
 
     // Clear all storage
-    localStorage.removeItem('serviceToken');
+    clearToken();
     sessionStorage.clear();
 
     dispatch({ type: LOGOUT });

@@ -9,6 +9,7 @@
  */
 
 import axiosClient from 'utils/axios';
+import { setToken, clearToken } from 'utils/token-storage';
 
 /**
  * Login with username/password
@@ -21,7 +22,7 @@ export const login = async (credentials) => {
 
   // Store JWT token for subsequent requests
   if (data?.data?.token) {
-    localStorage.setItem('serviceToken', data.data.token);
+    setToken(data.data.token);
     console.log('✅ JWT token stored');
   }
 
@@ -62,7 +63,7 @@ export const me = async () => {
  */
 export const logout = async () => {
   // Clear local token
-  localStorage.removeItem('serviceToken');
+  clearToken();
 
   // Clear backend session
   try {

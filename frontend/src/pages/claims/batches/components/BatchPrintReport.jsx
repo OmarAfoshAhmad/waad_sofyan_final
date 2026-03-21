@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
+import { formatCurrency } from 'utils/currency-formatter';
 
 const REPORT_TEXT = {
     recipientPrefix: 'السادة:',
@@ -11,8 +12,7 @@ const REPORT_TEXT = {
 };
 
 const fmtAmount = (value) => {
-    const num = Number(value || 0);
-    return `${num.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} د.ل`;
+    return formatCurrency(value || 0);
 };
 
 const buildCompanyTitle = (name, type) => {

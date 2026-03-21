@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
+import { formatCurrency } from 'utils/currency-formatter';
 
 const MONTHS_AR = [
     'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -90,7 +91,7 @@ const RejectedBatchPrintReport = forwardRef(({ claims, employer, provider, month
         }
     });
 
-    const formatLYD = (val) => `${(val || 0).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} د.ل`;
+    const formatLYD = (val) => formatCurrency(val || 0);
     const printDate = new Date().toISOString().split('T')[0];
 
     return (

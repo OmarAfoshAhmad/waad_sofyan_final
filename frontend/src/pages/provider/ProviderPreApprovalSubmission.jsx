@@ -44,6 +44,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { formatCurrency } from 'utils/currency-formatter';
 import {
   Send as SendIcon,
   Person as PersonIcon,
@@ -251,7 +252,7 @@ const ContractPriceChip = ({ loading, price, hasContract, error }) => {
   return (
     <Chip
       icon={<LockIcon fontSize="small" />}
-      label={`${Number(price).toLocaleString()} د.ل`}
+      label={formatCurrency(price)}
       color="success"
       size="small"
       sx={{ fontWeight: 600 }}
@@ -1060,7 +1061,7 @@ const ProviderPreApprovalSubmission = () => {
                                 </Stack>
                                 {(option.contractPrice || option.price) && (
                                   <Typography variant="caption" color="success.main">
-                                    💰 سعر العقد: {Number(option.contractPrice || option.price).toLocaleString()} د.ل
+                                    💰 سعر العقد: {formatCurrency(option.contractPrice || option.price)}
                                   </Typography>
                                 )}
                               </Stack>

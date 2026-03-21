@@ -14,6 +14,7 @@ import {
   TopProvidersChart,
   RecentActivityTimeline
 } from 'components/dashboard/PreAuthWidgets';
+import { formatCurrency } from 'utils/currency-formatter';
 
 /**
  * PreAuthorization Analytics Dashboard
@@ -161,7 +162,7 @@ const PreAuthDashboard = () => {
                     إجمالي المبالغ المطلوبة
                   </Typography>
                   <Typography variant="h6" fontWeight="bold">
-                    {(stats?.totalRequestedAmount || 0).toLocaleString('en-US')} د.ل
+                    {formatCurrency(stats?.totalRequestedAmount || 0)}
                   </Typography>
                 </Box>
                 <AttachMoney color="primary" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
@@ -178,7 +179,7 @@ const PreAuthDashboard = () => {
                     إجمالي المبالغ المعتمدة
                   </Typography>
                   <Typography variant="h6" fontWeight="bold" color="success.main">
-                    {(stats?.totalApprovedAmount || 0).toLocaleString('en-US')} د.ل
+                    {formatCurrency(stats?.totalApprovedAmount || 0)}
                   </Typography>
                 </Box>
                 <AttachMoney color="success" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
@@ -195,7 +196,7 @@ const PreAuthDashboard = () => {
                     متوسط المبلغ المطلوب
                   </Typography>
                   <Typography variant="h6" fontWeight="bold" color="info.main">
-                    {(stats?.averageRequestedAmount || 0).toLocaleString('en-US')} د.ل
+                    {formatCurrency(stats?.averageRequestedAmount || 0)}
                   </Typography>
                 </Box>
                 <AttachMoney color="info" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
