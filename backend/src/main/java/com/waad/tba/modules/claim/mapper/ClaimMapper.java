@@ -351,7 +351,10 @@ public class ClaimMapper {
             // approvedAmount is the insurer payable amount (company share) across all
             // code paths.
             claim.setApprovedAmount(totalNetProvider);
-            claim.setPatientCoPay(totalPatientShare);
+            // Patient CoPay = Total Requested - Company Approved
+            // This includes: price-excess refused + limit-refused + co-pay on net portion.
+            // For fully rejected claims this equals totalRequestedAmount.
+            claim.setPatientCoPay(totalRequestedAmount.subtract(totalNetProvider.max(BigDecimal.ZERO)));
             claim.setNetProviderAmount(totalNetProvider); // Insurance share
             // calculateFields() will be called automatically by @PrePersist/@PreUpdate
         } else {
@@ -529,18 +532,22 @@ public class ClaimMapper {
             BigDecimal linePatientShare = BigDecimal.ZERO;
             BigDecimal lineRefused;
 
+            // Declare outside if/else so builder can reference them in both branches
+            BigDecimal clientRefused = lineDto.getRefusedAmount() != null
+                    ? lineDto.getRefusedAmount()
+                    : BigDecimal.ZERO;
+            BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
+                    ? lineDto.getManualRefusedAmount()
+                    : BigDecimal.ZERO;
+
             if (Boolean.TRUE.equals(lineDto.getRejected())) {
                 lineRefused = lineRequestedTotal;
+                // Company pays nothing → patient bears the full amount
+                linePatientShare = lineRequestedTotal;
             } else {
                 // lineRefused = max(priceExcessRefusal, clientRefusedAmount)
                 // The client computes limit-based refusals (timesLimit / amountLimit) that
                 // cannot be recomputed independently here; take the larger value.
-                BigDecimal clientRefused = lineDto.getRefusedAmount() != null
-                        ? lineDto.getRefusedAmount()
-                        : BigDecimal.ZERO;
-                BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
-                        ? lineDto.getManualRefusedAmount()
-                        : BigDecimal.ZERO;
 
                 lineRefused = priceExcessRefusal.max(clientRefused);
 
@@ -554,11 +561,13 @@ public class ClaimMapper {
                     lineApproved = netAvailable.multiply(BigDecimal.valueOf(coveragePercentSnapshot))
                             .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
 
-                    // Patient Share (Co-pay) = Net Available - Company Share
-                    linePatientShare = netAvailable.subtract(lineApproved);
+                    // Patient Share = Everything the company did NOT approve
+                    // = refused portion (price excess + limit) + co-pay on net available
+                    linePatientShare = lineRequestedTotal.subtract(lineApproved);
                 } else {
                     lineApproved = netAvailable;
-                    linePatientShare = BigDecimal.ZERO;
+                    // No coverage info → company pays all net, patient bears only the refused
+                    linePatientShare = lineRefused;
                 }
             }
 
