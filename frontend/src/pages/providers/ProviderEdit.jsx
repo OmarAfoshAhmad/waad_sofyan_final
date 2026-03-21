@@ -102,6 +102,8 @@ const DOC_TYPE_LABELS = {
   OTHER: 'أخرى'
 };
 
+const getTodayIsoDate = () => new Date().toISOString().slice(0, 10);
+
 const ProviderEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -184,7 +186,7 @@ const ProviderEdit = () => {
   const [docDialog, setDocDialog] = useState({
     open: false,
     type: 'LICENSE',
-    expiryDate: '',
+    expiryDate: getTodayIsoDate(),
     notes: '',
     fileName: '',
     file: null
@@ -508,7 +510,7 @@ const ProviderEdit = () => {
       setDocDialog({
         open: false,
         type: 'LICENSE',
-        expiryDate: '',
+        expiryDate: getTodayIsoDate(),
         notes: '',
         fileName: '',
         file: null
@@ -961,7 +963,11 @@ const ProviderEdit = () => {
           <Description color="primary" sx={{ mr: 1 }} />
           <Typography variant="h5">المستندات</Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDocDialog({ ...docDialog, open: true })}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setDocDialog({ ...docDialog, open: true, expiryDate: docDialog.expiryDate || getTodayIsoDate() })}
+        >
           إضافة
         </Button>
       </Box>

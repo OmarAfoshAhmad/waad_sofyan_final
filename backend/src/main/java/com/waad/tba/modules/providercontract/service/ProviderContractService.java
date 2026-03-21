@@ -7,9 +7,11 @@ import com.waad.tba.modules.providercontract.dto.*;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,6 +43,7 @@ import java.util.stream.Collectors;
 public class ProviderContractService {
 
     private final ProviderContractRepository contractRepository;
+    private final ProviderContractPricingItemRepository pricingItemRepository;
     private final ProviderRepository providerRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -354,8 +357,8 @@ public class ProviderContractService {
                 .filter(c -> Boolean.TRUE.equals(c.getActive()))
                 .orElseThrow(() -> new BusinessRuleException("Provider contract not found: " + id));
 
-        // Validate can activate
-        if (!contractToActivate.canActivate()) {
+        // Validate can activate (supports reactivation from TERMINATED)
+        if (!contractToActivate.canActivate() && contractToActivate.getStatus() != ContractStatus.TERMINATED) {
             throw new BusinessRuleException("Cannot activate contract with status: " + contractToActivate.getStatus());
         }
 
@@ -487,6 +490,34 @@ public class ProviderContractService {
 
         log.info("Restored provider contract: {}", contract.getContractCode());
         return ProviderContractResponseDto.fromEntity(contract);
+    }
+
+    /**
+     * Permanently delete a soft-deleted contract and all of its pricing items.
+     */
+    @Transactional
+    public void hardDelete(Long id) {
+        log.info("Hard deleting provider contract: {}", id);
+
+        ProviderContract contract = contractRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("Provider contract not found: " + id));
+
+        if (Boolean.TRUE.equals(contract.getActive())) {
+            throw new BusinessRuleException("لا يمكن الحذف النهائي قبل النقل إلى سجل المحذوفات أولاً.");
+        }
+
+        try {
+            pricingItemRepository.hardDeleteByContractId(id);
+            contractRepository.delete(contract);
+            contractRepository.flush();
+            log.info("Hard deleted provider contract: {}", contract.getContractCode());
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessRuleException("تعذر الحذف النهائي للعقد لوجود بيانات مرتبطة به.");
+        } catch (RuntimeException ex) {
+            log.error("Unexpected hard delete failure for contract {}", id, ex);
+            throw new BusinessRuleException(
+                    "تعذر الحذف النهائي للعقد. يرجى المحاولة لاحقاً أو مراجعة الربط مع البيانات التابعة.");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

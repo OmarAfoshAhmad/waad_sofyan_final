@@ -173,7 +173,8 @@ public class ProviderContract {
     }
 
     public boolean canActivate() {
-        return status == ContractStatus.DRAFT || status == ContractStatus.SUSPENDED;
+        return status == ContractStatus.DRAFT || status == ContractStatus.SUSPENDED
+                || status == ContractStatus.TERMINATED;
     }
 
     public boolean canSuspend() {

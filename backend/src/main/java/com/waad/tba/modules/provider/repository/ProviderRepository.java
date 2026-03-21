@@ -104,8 +104,8 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
         * 2. Providers explicitly linked via provider_allowed_employers table
         */
        @Query("SELECT DISTINCT p FROM Provider p " +
-              "LEFT JOIN p.allowedEmployers pae " +
-              "WHERE p.active = true " +
-              "AND (p.allowAllEmployers = true OR (pae.employer.id = :employerId AND pae.active = true))")
+                     "LEFT JOIN p.allowedEmployers pae " +
+                     "WHERE p.active = true " +
+                     "AND (p.allowAllEmployers = true OR (pae.employer.id = :employerId AND pae.active = true))")
        List<Provider> findByAllowedEmployer(@Param("employerId") Long employerId);
 }

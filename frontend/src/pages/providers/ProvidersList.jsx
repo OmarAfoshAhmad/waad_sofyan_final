@@ -3,8 +3,8 @@
  * Healthcare Providers (Hospitals, Clinics, Labs, Pharmacies)
  */
 
-import { useMemo, useCallback, useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useMemo, useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // MUI Components
@@ -46,13 +46,14 @@ import HandshakeIcon from '@mui/icons-material/Handshake';
 import SearchIcon from '@mui/icons-material/Search'; // Added SearchIcon
 import BusinessIcon from '@mui/icons-material/Business'; // Added BusinessIcon
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 
 // Project Components
 import MainCard from 'components/MainCard';
 import UnifiedPageHeader from 'components/UnifiedPageHeader';
 import PermissionGuard from 'components/PermissionGuard';
 import { UnifiedMedicalTable } from 'components/common';
-import { SoftDeleteToggle } from 'components/tba';
+import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 
 // Hooks
 import useTableState from 'hooks/useTableState';
@@ -298,9 +299,17 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
 
 export default function ProvidersList() {
   const navigate = useNavigate();
-  const location = useLocation();
   const queryClient = useQueryClient();
   const [showDeleted, setShowDeleted] = useState(false);
+  const [confirmState, setConfirmState] = useState({
+    open: false,
+    title: '',
+    message: '',
+    confirmText: 'تأكيد',
+    cancelText: 'إلغاء',
+    confirmColor: 'warning',
+    onConfirm: null
+  });
 
   // ========================================
   // TABLE STATE
@@ -317,30 +326,12 @@ export default function ProvidersList() {
   const sortDirection = sorting?.[0]?.desc ? 'desc' : 'asc';
 
   // ========================================
-  // AUTO-REFRESH ON NAVIGATION BACK
-  // ========================================
-
-  useEffect(() => {
-    // Invalidate cache when navigating back to this page
-    // This ensures newly created providers appear immediately
-    console.log('[ProvidersList] Page mounted/navigated - refreshing data');
-    queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-  }, [location.key, queryClient]);
-
-  // ========================================
   // NAVIGATION HANDLERS
   // ========================================
 
   const handleNavigateAdd = useCallback(() => {
     navigate('/providers/add');
   }, [navigate]);
-
-  const handleNavigateView = useCallback(
-    (id) => {
-      navigate(`/providers/${id}`);
-    },
-    [navigate]
-  );
 
   const handleNavigateEdit = useCallback(
     (id) => {
@@ -349,42 +340,126 @@ export default function ProvidersList() {
     [navigate]
   );
 
+  const handleNavigateView = useCallback(
+    (id) => {
+      navigate(`/providers/${id}`);
+    },
+    [navigate]
+  );
+
   const handleDelete = useCallback(
     async (id, name) => {
-      const confirmMessage = `هل أنت متأكد من حذف مقدم الخدمة "${name}"؟`;
-      if (!window.confirm(confirmMessage)) return;
-
-      try {
-        await providersService.remove(id);
-        openSnackbar({
-          message: 'تم حذف مقدم الخدمة بنجاح',
-          variant: 'success'
-        });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        console.error('[Providers] Delete failed:', err);
-        openSnackbar({
-          message: 'فشل حذف مقدم الخدمة. يرجى المحاولة لاحقاً',
-          variant: 'error'
-        });
-      }
+      setConfirmState({
+        open: true,
+        title: 'تأكيد حذف مقدم الخدمة',
+        message: `هل أنت متأكد من حذف مقدم الخدمة "${name}"؟`,
+        confirmText: 'حذف',
+        cancelText: 'إلغاء',
+        confirmColor: 'warning',
+        onConfirm: async () => {
+          try {
+            await providersService.remove(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            openSnackbar({
+              message: 'تم حذف مقدم الخدمة بنجاح',
+              variant: 'success'
+            });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Providers] Delete failed:', err);
+            openSnackbar({
+              message: err?.response?.data?.message || 'فشل حذف مقدم الخدمة. يرجى المحاولة لاحقاً',
+              variant: 'error'
+            });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
     },
     [queryClient]
   );
 
   const handleRestore = useCallback(
     async (id, name) => {
-      const confirmMessage = `هل تريد استعادة مقدم الخدمة "${name}" من سجل المحذوفات؟`;
-      if (!window.confirm(confirmMessage)) return;
+      setConfirmState({
+        open: true,
+        title: 'تأكيد الاستعادة',
+        message: `هل تريد استعادة مقدم الخدمة "${name}" من سجل المحذوفات؟`,
+        confirmText: 'استعادة',
+        cancelText: 'إلغاء',
+        confirmColor: 'info',
+        onConfirm: async () => {
+          try {
+            await providersService.restore(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            openSnackbar({ message: 'تمت استعادة مقدم الخدمة بنجاح', variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Providers] Restore failed:', err);
+            openSnackbar({ message: err?.response?.data?.message || 'فشلت استعادة مقدم الخدمة', variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
+    },
+    [queryClient]
+  );
 
-      try {
-        await providersService.restore(id);
-        openSnackbar({ message: 'تمت استعادة مقدم الخدمة بنجاح', variant: 'success' });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        console.error('[Providers] Restore failed:', err);
-        openSnackbar({ message: 'فشلت استعادة مقدم الخدمة', variant: 'error' });
-      }
+  const handleHardDelete = useCallback(
+    async (id, name) => {
+      setConfirmState({
+        open: true,
+        title: 'تأكيد الحذف النهائي',
+        message: `سيتم حذف مقدم الخدمة "${name}" نهائياً ولا يمكن التراجع. هل تريد المتابعة؟`,
+        confirmText: 'حذف نهائي',
+        cancelText: 'إلغاء',
+        confirmColor: 'error',
+        onConfirm: async () => {
+          try {
+            await providersService.hardDelete(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            openSnackbar({ message: 'تم الحذف النهائي لمقدم الخدمة بنجاح', variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Providers] Hard delete failed:', err);
+            openSnackbar({ message: err?.response?.data?.message || 'فشل الحذف النهائي لمقدم الخدمة', variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
     },
     [queryClient]
   );
@@ -578,36 +653,50 @@ export default function ProvidersList() {
         case 'actions':
           return (
             <Stack direction="row" spacing={0.5} justifyContent="center" onClick={(e) => e.stopPropagation()}>
-              <Tooltip title="عرض">
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNavigateView(provider.id);
-                  }}
-                >
-                  <VisibilityIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-
               {provider.active === false || showDeleted ? (
                 <PermissionGuard resource="providers" action="delete">
-                  <Tooltip title="استعادة">
-                    <IconButton
-                      size="small"
-                      color="success"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRestore(provider.id, provider.name);
-                      }}
-                    >
-                      <RefreshIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  <>
+                    <Tooltip title="استعادة">
+                      <IconButton
+                        size="small"
+                        color="success"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRestore(provider.id, provider.name);
+                        }}
+                      >
+                        <RefreshIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="حذف نهائي">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleHardDelete(provider.id, provider.name);
+                        }}
+                      >
+                        <DeleteForeverIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </>
                 </PermissionGuard>
               ) : (
                 <>
+                  <Tooltip title="عرض">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNavigateView(provider.id);
+                      }}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+
                   <Tooltip title="تعديل">
                     <IconButton
                       size="small"
@@ -644,14 +733,14 @@ export default function ProvidersList() {
           return null;
       }
     },
-    [handleNavigateView, handleNavigateEdit, handleDelete, handleRestore, page, rowsPerPage, showDeleted]
+    [handleNavigateView, handleNavigateEdit, handleDelete, handleRestore, handleHardDelete, page, rowsPerPage, showDeleted]
   );
 
   // ========================================
   // DATA FETCHING WITH REACT QUERY
   // ========================================
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: [QUERY_KEY, showDeleted, page, rowsPerPage, sortColumn, sortDirection],
     queryFn: async () => {
       console.log('[ProvidersList] Fetching providers - page:', page + 1, 'size:', rowsPerPage);
@@ -666,8 +755,8 @@ export default function ProvidersList() {
       const result = await providersService.getAll(params);
       return result;
     },
-    staleTime: 30 * 1000, // 30 seconds
-    refetchOnMount: 'always' // Always refetch when component mounts
+    staleTime: 0,
+    refetchOnMount: 'always'
   });
 
   // Extract data
@@ -704,9 +793,6 @@ export default function ProvidersList() {
           additionalActions={
             <Stack direction="row" spacing={1} alignItems="center">
               <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
-              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => refetch()} size="small">
-                تحديث
-              </Button>
             </Stack>
           }
         />
@@ -731,6 +817,17 @@ export default function ProvidersList() {
           emptyMessage="لا يوجد مقدمو خدمات صحية مسجلين حالياً"
         />
       </MainCard>
+
+      <ActionConfirmDialog
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmText={confirmState.confirmText}
+        cancelText={confirmState.cancelText}
+        confirmColor={confirmState.confirmColor}
+        onClose={() => setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }))}
+        onConfirm={() => confirmState.onConfirm?.()}
+      />
     </Box>
   );
 }

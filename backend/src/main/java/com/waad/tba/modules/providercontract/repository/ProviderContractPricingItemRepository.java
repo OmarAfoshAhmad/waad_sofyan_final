@@ -298,6 +298,13 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
        int softDeleteByContractId(@Param("contractId") Long contractId);
 
        /**
+        * Hard delete all pricing items for a contract.
+        */
+       @org.springframework.data.jpa.repository.Modifying
+       @Query("DELETE FROM ProviderContractPricingItem p WHERE p.contract.id = :contractId")
+       int hardDeleteByContractId(@Param("contractId") Long contractId);
+
+       /**
         * Find all active pricing items in a contract that have no medical category
         * assigned
         */

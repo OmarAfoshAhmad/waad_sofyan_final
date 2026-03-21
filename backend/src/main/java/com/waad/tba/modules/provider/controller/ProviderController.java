@@ -150,6 +150,13 @@ public class ProviderController {
         return ResponseEntity.ok(ApiResponse.success("Provider restored successfully", provider));
     }
 
+    @DeleteMapping("/{id:\\d+}/hard")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> hardDeleteProvider(@PathVariable("id") Long id) {
+        providerService.hardDeleteProvider(id);
+        return ResponseEntity.ok(ApiResponse.success("Provider permanently deleted", null));
+    }
+
     @GetMapping("/active")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getAllActiveProviders() {

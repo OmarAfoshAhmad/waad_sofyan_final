@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -164,6 +165,38 @@ public class ProviderService {
         provider = providerRepository.save(provider);
         log.info("Provider {} restored from soft delete", id);
         return providerMapper.toViewDto(provider);
+    }
+
+    /**
+     * Permanently delete a provider (hard delete).
+     * Allowed only if provider is already soft-deleted (active=false).
+     */
+    @Transactional
+    public void hardDeleteProvider(Long id) {
+        Provider provider = providerRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+
+        if (Boolean.TRUE.equals(provider.getActive())) {
+            throw new BusinessRuleException("لا يمكن الحذف النهائي قبل النقل إلى سجل المحذوفات أولاً.");
+        }
+
+        // Prevent hard delete while legacy contracts still exist.
+        if (providerContractRepository.countByProviderIdAndActive(id, true) > 0
+                || providerContractRepository.countByProviderIdAndActive(id, false) > 0) {
+            throw new BusinessRuleException("لا يمكن الحذف النهائي لوجود عقود مرتبطة بمقدم الخدمة.");
+        }
+
+        // Remove partner mapping rows first to avoid FK violations.
+        providerAllowedEmployerRepository.deleteByProviderId(id);
+        providerAllowedEmployerRepository.flush();
+
+        try {
+            providerRepository.delete(provider);
+            providerRepository.flush();
+            log.info("Provider {} hard-deleted", id);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessRuleException("تعذر الحذف النهائي لوجود بيانات مرتبطة بمقدم الخدمة.");
+        }
     }
 
     @Transactional(readOnly = true)

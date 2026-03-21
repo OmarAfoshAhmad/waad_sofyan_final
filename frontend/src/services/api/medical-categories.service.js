@@ -104,6 +104,16 @@ export const getAllMedicalCategories = async () => {
 };
 
 /**
+ * Get active medical services for a specific category (canonical endpoint)
+ * @param {number} categoryId - Category ID
+ * @returns {Promise<Array>} Services in this category
+ */
+export const getMedicalServicesByCategory = async (categoryId) => {
+  const response = await axiosClient.get(`${BASE_URL}/${categoryId}/medical-services`);
+  return unwrap(response);
+};
+
+/**
  * Upload Excel file to import medical categories
  * @param {File} file - Excel file
  * @returns {Promise<Object>} Import result

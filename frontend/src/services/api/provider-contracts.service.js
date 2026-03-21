@@ -255,6 +255,15 @@ export const restoreProviderContract = async (id) => {
 };
 
 /**
+ * Permanently delete a soft-deleted provider contract
+ * Endpoint: DELETE /api/provider-contracts/{id}/hard
+ */
+export const hardDeleteProviderContract = async (id) => {
+  const response = await axiosClient.delete(`${BASE_URL}/${id}/hard`);
+  return unwrap(response);
+};
+
+/**
  * Delete provider contract (soft delete)
  * Endpoint: DELETE /api/provider-contracts/{id}
  * @param {number} id - Contract ID

@@ -14,16 +14,18 @@ import EditIcon from '@mui/icons-material/Edit';
 import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 
 import UnifiedPageHeader from 'components/UnifiedPageHeader';
 import { UnifiedMedicalTable } from 'components/common';
 import TableErrorBoundary from 'components/TableErrorBoundary';
-import { SoftDeleteToggle } from 'components/tba';
+import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 import useTableState from 'hooks/useTableState';
 import {
   getProviderContracts,
   getDeletedProviderContracts,
   restoreProviderContract,
+  hardDeleteProviderContract,
   deleteProviderContract,
   CONTRACT_STATUS_CONFIG,
   PRICING_MODEL_CONFIG
@@ -51,6 +53,15 @@ const ProviderContractsList = () => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   const [showDeleted, setShowDeleted] = useState(false);
+  const [confirmState, setConfirmState] = useState({
+    open: false,
+    title: '',
+    message: '',
+    confirmText: 'تأكيد',
+    cancelText: 'إلغاء',
+    confirmColor: 'warning',
+    onConfirm: null
+  });
 
   const tableState = useTableState({
     initialPageSize: 20,
@@ -83,28 +94,108 @@ const ProviderContractsList = () => {
 
   const handleDelete = useCallback(
     async (id, code) => {
-      if (!window.confirm(`هل تريد حذف العقد "${code || id}"؟`)) return;
-      try {
-        await deleteProviderContract(id);
-        enqueueSnackbar('تم حذف العقد بنجاح', { variant: 'success' });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        enqueueSnackbar(err?.response?.data?.message || 'فشل حذف العقد', { variant: 'error' });
-      }
+      setConfirmState({
+        open: true,
+        title: 'تأكيد حذف العقد',
+        message: `هل تريد حذف العقد "${code || id}"؟`,
+        confirmText: 'حذف',
+        cancelText: 'إلغاء',
+        confirmColor: 'warning',
+        onConfirm: async () => {
+          try {
+            await deleteProviderContract(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            enqueueSnackbar('تم حذف العقد بنجاح', { variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            enqueueSnackbar(err?.response?.data?.message || 'فشل حذف العقد', { variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
     },
     [enqueueSnackbar, queryClient]
   );
 
   const handleRestore = useCallback(
     async (id, code) => {
-      if (!window.confirm(`هل تريد استعادة العقد "${code || id}" من سجل المحذوفات؟`)) return;
-      try {
-        await restoreProviderContract(id);
-        enqueueSnackbar('تمت استعادة العقد بنجاح', { variant: 'success' });
-        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-      } catch (err) {
-        enqueueSnackbar(err?.response?.data?.message || 'فشلت استعادة العقد', { variant: 'error' });
-      }
+      setConfirmState({
+        open: true,
+        title: 'تأكيد الاستعادة',
+        message: `هل تريد استعادة العقد "${code || id}" من سجل المحذوفات؟`,
+        confirmText: 'استعادة',
+        cancelText: 'إلغاء',
+        confirmColor: 'info',
+        onConfirm: async () => {
+          try {
+            await restoreProviderContract(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            enqueueSnackbar('تمت استعادة العقد بنجاح', { variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            enqueueSnackbar(err?.response?.data?.message || 'فشلت استعادة العقد', { variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
+    },
+    [enqueueSnackbar, queryClient]
+  );
+
+  const handleHardDelete = useCallback(
+    async (id, code) => {
+      setConfirmState({
+        open: true,
+        title: 'تأكيد الحذف النهائي',
+        message: `سيتم حذف العقد "${code || id}" نهائياً ولا يمكن التراجع. هل تريد المتابعة؟`,
+        confirmText: 'حذف نهائي',
+        cancelText: 'إلغاء',
+        confirmColor: 'error',
+        onConfirm: async () => {
+          try {
+            await hardDeleteProviderContract(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            enqueueSnackbar('تم الحذف النهائي للعقد بنجاح', { variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            enqueueSnackbar(err?.response?.data?.message || 'فشل الحذف النهائي للعقد', { variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
     },
     [enqueueSnackbar, queryClient]
   );
@@ -250,11 +341,18 @@ const ProviderContractsList = () => {
               </Tooltip>
 
               {showDeleted ? (
-                <Tooltip title="استعادة">
-                  <IconButton size="small" color="success" onClick={() => handleRestore(contract.id, contract.contractCode)}>
-                    <UndoIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                <>
+                  <Tooltip title="استعادة">
+                    <IconButton size="small" color="success" onClick={() => handleRestore(contract.id, contract.contractCode)}>
+                      <UndoIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="حذف نهائي">
+                    <IconButton size="small" color="error" onClick={() => handleHardDelete(contract.id, contract.contractCode)}>
+                      <DeleteForeverIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </>
               ) : (
                 <>
                   <Tooltip title="تعديل">
@@ -286,7 +384,7 @@ const ProviderContractsList = () => {
           return null;
       }
     },
-    [handleNavigateView, handleNavigateEdit, handleDelete, handleRestore, showDeleted]
+    [handleNavigateView, handleNavigateEdit, handleDelete, handleRestore, handleHardDelete, showDeleted]
   );
 
   return (
@@ -324,6 +422,17 @@ const ProviderContractsList = () => {
             emptyMessage="لا توجد عقود مسجلة لمقدمي الخدمة"
           />
         </TableErrorBoundary>
+
+        <ActionConfirmDialog
+          open={confirmState.open}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          cancelText={confirmState.cancelText}
+          confirmColor={confirmState.confirmColor}
+          onClose={() => setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }))}
+          onConfirm={() => confirmState.onConfirm?.()}
+        />
       </Box>
     </>
   );

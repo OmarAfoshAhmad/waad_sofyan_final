@@ -95,9 +95,7 @@ import {
   CONTRACT_STATUS_CONFIG,
   PRICING_MODEL_CONFIG
 } from 'services/api/provider-contracts.service';
-import { getAllMedicalCategories } from 'services/api/medical-categories.service';
-import { lookupMedicalServices, createMedicalService } from 'services/api/medical-services.service';
-import MedicalServiceSelector from 'components/tba/MedicalServiceSelector';
+import { getAllMedicalCategories, getMedicalServicesByCategory } from 'services/api/medical-categories.service';
 
 // Snackbar
 import { useSnackbar } from 'notistack';
@@ -284,10 +282,7 @@ const ProviderContractView = () => {
     basePrice: '',
     contractPrice: '',
     discountPercent: '',
-    notes: '',
-    isAddingNewService: false,
-    newServiceName: '',
-    newServiceCode: ''
+    notes: ''
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -357,10 +352,11 @@ const ProviderContractView = () => {
       }
       try {
         setServicesLoading(true);
-        const services = await lookupMedicalServices({ categoryId });
+        const services = await getMedicalServicesByCategory(categoryId);
         setAvailableServices(services || []);
       } catch (err) {
         console.error('Failed to fetch services:', err);
+        setAvailableServices([]);
       } finally {
         setServicesLoading(false);
       }
@@ -390,7 +386,7 @@ const ProviderContractView = () => {
           }
 
           // Refresh pricing items
-          queryClient.invalidateQueries(['provider-contract-pricing', id]);
+          queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
           setExcelImportDialogOpen(false);
           setSelectedPricingFile(null);
         }
@@ -419,18 +415,51 @@ const ProviderContractView = () => {
     }
   }, [id, enqueueSnackbar]);
 
+  const syncContractStatusCaches = useCallback(
+    (updatedContract) => {
+      if (!updatedContract) return;
+
+      queryClient.setQueryData(['provider-contract', id], updatedContract);
+
+      queryClient.setQueriesData({ queryKey: ['provider-contracts'] }, (oldData) => {
+        if (!oldData) return oldData;
+
+        const applyUpdate = (list) => {
+          if (!Array.isArray(list)) return list;
+          return list.map((item) => (String(item?.id) === String(updatedContract.id) ? { ...item, ...updatedContract } : item));
+        };
+
+        if (Array.isArray(oldData)) {
+          return applyUpdate(oldData);
+        }
+
+        if (Array.isArray(oldData.content)) {
+          return { ...oldData, content: applyUpdate(oldData.content) };
+        }
+
+        if (Array.isArray(oldData.items)) {
+          return { ...oldData, items: applyUpdate(oldData.items) };
+        }
+
+        return oldData;
+      });
+    },
+    [queryClient, id]
+  );
+
   const activateMutation = useMutation({
     mutationFn: () => activateContract(id),
-    onSuccess: () => {
+    onSuccess: (updatedContract) => {
+      syncContractStatusCaches(updatedContract);
       enqueueSnackbar('تم تفعيل العقد بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract', id]);
-      queryClient.invalidateQueries(['provider-contracts']);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contracts'] });
     },
     onError: (err) => {
       const errorMsg = err.response?.data?.message || err.message || 'فشل تفعيل العقد';
       if (errorMsg.includes('ACTIVE')) {
         enqueueSnackbar('العقد مُفعّل بالفعل', { variant: 'warning' });
-        queryClient.invalidateQueries(['provider-contract', id]);
+        queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
       } else {
         enqueueSnackbar(errorMsg, { variant: 'error' });
       }
@@ -439,10 +468,11 @@ const ProviderContractView = () => {
 
   const suspendMutation = useMutation({
     mutationFn: (reason) => suspendContract(id, reason),
-    onSuccess: () => {
+    onSuccess: (updatedContract) => {
+      syncContractStatusCaches(updatedContract);
       enqueueSnackbar('تم إيقاف العقد بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract', id]);
-      queryClient.invalidateQueries(['provider-contracts']);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contracts'] });
       setSuspendDialogOpen(false);
       setSuspendReason('');
     },
@@ -453,10 +483,11 @@ const ProviderContractView = () => {
 
   const terminateMutation = useMutation({
     mutationFn: (reason) => terminateContract(id, reason),
-    onSuccess: () => {
+    onSuccess: (updatedContract) => {
+      syncContractStatusCaches(updatedContract);
       enqueueSnackbar('تم إلغاء العقد بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract', id]);
-      queryClient.invalidateQueries(['provider-contracts']);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contracts'] });
       setTerminateDialogOpen(false);
       setTerminateReason('');
     },
@@ -468,8 +499,8 @@ const ProviderContractView = () => {
     mutationFn: () => deleteAllPricingItems(id),
     onSuccess: (count) => {
       enqueueSnackbar(`تم حذف ${count} بند تسعير بنجاح. يمكنك الآن استيراد القائمة الجديدة.`, { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract-pricing', id]);
-      queryClient.invalidateQueries(['provider-contract', id]);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
       setClearAllDialogOpen(false);
       setPricingPage(0);
     },
@@ -483,12 +514,20 @@ const ProviderContractView = () => {
     mutationFn: (data) => addPricingItem(id, data),
     onSuccess: () => {
       enqueueSnackbar('تم إضافة الخدمة بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract-pricing', id]);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
       setAddPricingDialogOpen(false);
-      setPricingForm({ medicalServiceId: null, basePrice: '', contractPrice: '', notes: '' });
+      setPricingForm({
+        medicalServiceId: null,
+        mainCategoryId: null,
+        medicalCategoryId: null,
+        basePrice: '',
+        contractPrice: '',
+        discountPercent: '',
+        notes: ''
+      });
     },
     onError: (err) => {
-      enqueueSnackbar(err.message || 'فشل إضافة الخدمة', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || err.message || 'فشل إضافة الخدمة', { variant: 'error' });
     }
   });
 
@@ -496,7 +535,7 @@ const ProviderContractView = () => {
     mutationFn: (data) => updatePricingItem(selectedPricingItem.id, data),
     onSuccess: () => {
       enqueueSnackbar('تم تحديث الخدمة بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract-pricing', id]);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
       setEditPricingDialogOpen(false);
       setSelectedPricingItem(null);
     },
@@ -505,18 +544,11 @@ const ProviderContractView = () => {
     }
   });
 
-  const addMedicalServiceMutation = useMutation({
-    mutationFn: (data) => createMedicalService(data),
-    onError: (err) => {
-      enqueueSnackbar(err.message || 'فشل إضافة الخدمة للقاموس', { variant: 'error' });
-    }
-  });
-
   const deletePricingMutation = useMutation({
     mutationFn: () => deletePricingItem(selectedPricingItem.id),
     onSuccess: () => {
       enqueueSnackbar('تم حذف الخدمة بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['provider-contract-pricing', id]);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
       setDeletePricingDialogOpen(false);
       setSelectedPricingItem(null);
     },
@@ -617,45 +649,30 @@ const ProviderContractView = () => {
       basePrice: '',
       contractPrice: '',
       discountPercent: contract?.discountPercent ?? '',
-      notes: '',
-      isAddingNewService: false,
-      newServiceName: '',
-      newServiceCode: ''
+      notes: ''
     });
     setAddPricingDialogOpen(true);
   }, [contract?.discountPercent]);
 
   const handleAddPricingSubmit = useCallback(async () => {
     const effectiveCategoryId = pricingForm.medicalCategoryId?.id || pricingForm.mainCategoryId?.id;
-    if (!effectiveCategoryId || (!pricingForm.isAddingNewService && !pricingForm.medicalServiceId) || !pricingForm.contractPrice)
+    if (!effectiveCategoryId || !pricingForm.medicalServiceId || !pricingForm.contractPrice)
       return;
 
-    let finalServiceId = pricingForm.medicalServiceId?.id;
-
-    if (pricingForm.isAddingNewService) {
-      if (!pricingForm.newServiceName) return;
-      try {
-        const newService = await addMedicalServiceMutation.mutateAsync({
-          name: pricingForm.newServiceName,
-          code: pricingForm.newServiceCode || `SVC-NEW-${Date.now()}`,
-          categoryId: effectiveCategoryId,
-          basePrice: parseFloat(pricingForm.basePrice) || 0,
-          active: true
-        });
-        finalServiceId = newService.id;
-      } catch (err) {
-        return; // Mutation handles error display
-      }
-    }
+    const selectedService = pricingForm.medicalServiceId;
+    const parsedContractPrice = parseFloat(pricingForm.contractPrice);
+    const parsedBasePrice = parseFloat(pricingForm.basePrice);
 
     addPricingMutation.mutate({
-      medicalServiceId: finalServiceId,
+      medicalServiceId: selectedService?.id || null,
       medicalCategoryId: effectiveCategoryId || null,
-      basePrice: parseFloat(pricingForm.contractPrice), // BasePrice becomes ContractPrice
-      contractPrice: parseFloat(pricingForm.contractPrice),
+      serviceCode: selectedService?.code || null,
+      serviceName: selectedService?.nameAr || selectedService?.name || null,
+      basePrice: Number.isFinite(parsedBasePrice) && parsedBasePrice > 0 ? parsedBasePrice : parsedContractPrice,
+      contractPrice: parsedContractPrice,
       notes: pricingForm.notes
     });
-  }, [addPricingMutation, addMedicalServiceMutation, pricingForm]);
+  }, [addPricingMutation, pricingForm]);
 
   const handleOpenEditPricing = useCallback(
     (item) => {
@@ -671,10 +688,7 @@ const ProviderContractView = () => {
         basePrice: item.basePrice ?? '',
         contractPrice: item.contractPrice ?? '',
         discountPercent: item.discountPercent ?? '',
-        notes: item.notes || '',
-        isAddingNewService: false,
-        newServiceName: '',
-        newServiceCode: ''
+        notes: item.notes || ''
       });
       setEditPricingDialogOpen(true);
     },
@@ -794,7 +808,9 @@ const ProviderContractView = () => {
             </Button>
 
             {/* Lifecycle Actions */}
-            {(contract.status === CONTRACT_STATUS.DRAFT || contract.status === CONTRACT_STATUS.SUSPENDED) && (
+            {(contract.status === CONTRACT_STATUS.DRAFT ||
+              contract.status === CONTRACT_STATUS.SUSPENDED ||
+              contract.status === CONTRACT_STATUS.TERMINATED) && (
 
               <Button
                 variant="contained"
@@ -803,7 +819,7 @@ const ProviderContractView = () => {
                 onClick={handleActivate}
                 disabled={activateMutation.isLoading}
               >
-                تفعيل العقد
+                {contract.status === CONTRACT_STATUS.TERMINATED ? 'إعادة تفعيل' : 'تفعيل العقد'}
               </Button>
 
             )}
@@ -919,9 +935,9 @@ const ProviderContractView = () => {
               <Autocomplete
                 size="small"
                 sx={{ minWidth: '12.5rem' }}
-                options={medicalCategories?.data || []}
+                options={medicalCategories || []}
                 getOptionLabel={(option) => option.nameAr || option.name || option.code || ''}
-                value={medicalCategories?.data?.find(c => c.id === selectedCategoryId) || null}
+                value={medicalCategories?.find((c) => c.id === selectedCategoryId) || null}
                 onChange={(event, newValue) => {
                   setSelectedCategoryId(newValue?.id || null);
                   setPricingPage(0);
@@ -1282,72 +1298,36 @@ const ProviderContractView = () => {
             {(pricingForm.mainCategoryId) && (
               <Autocomplete
                 fullWidth
-                options={[...availableServices, { isNew: true }]}
+                options={availableServices}
                 getOptionLabel={(option) =>
-                  option.isNew
-                    ? '+ إضافة خدمة جديدة'
-                    : `[${option.code || ''}] ${option.nameAr || option.name || ''}`
+                  `[${option.code || ''}] ${option.nameAr || option.name || ''}`
                 }
                 ListboxProps={{ style: { maxHeight: '20.0rem', minHeight: '7.5rem' } }}
                 loading={servicesLoading}
-                value={pricingForm.isAddingNewService ? { isNew: true } : pricingForm.medicalServiceId}
+                value={pricingForm.medicalServiceId}
                 renderOption={(props, option) => (
-                  <li {...props} key={option.id || 'new'}>
-                    {option.isNew ? (
-                      <span style={{ color: '#1976d2', fontWeight: 600 }}>+ إضافة خدمة جديدة</span>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontWeight: 600 }}>{option.nameAr || option.name || ''}</span>
-                        <span style={{ fontSize: '0.75rem', color: '#888' }}>
-                          {option.code}{option.nameEn ? ` • ${option.nameEn}` : ''}
-                        </span>
-                      </div>
-                    )}
+                  <li {...props} key={option.id}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600 }}>{option.nameAr || option.name || ''}</span>
+                      <span style={{ fontSize: '0.75rem', color: '#888' }}>
+                        {option.code}{option.nameEn ? ` • ${option.nameEn}` : ''}
+                      </span>
+                    </div>
                   </li>
                 )}
                 onChange={(e, newValue) => {
-                  if (newValue?.isNew) {
-                    setPricingForm({
-                      ...pricingForm,
-                      isAddingNewService: true,
-                      medicalServiceId: null,
-                      newServiceName: '',
-                      newServiceCode: ''
-                    });
-                  } else {
-                    setPricingForm({
-                      ...pricingForm,
-                      isAddingNewService: false,
-                      medicalServiceId: newValue,
-                      basePrice: newValue?.basePrice ?? '',
-                      contractPrice:
-                        newValue?.basePrice && pricingForm.discountPercent
-                          ? (newValue.basePrice * (1 - parseFloat(pricingForm.discountPercent) / 100)).toFixed(2)
-                          : pricingForm.contractPrice
-                    });
-                  }
+                  setPricingForm({
+                    ...pricingForm,
+                    medicalServiceId: newValue,
+                    basePrice: newValue?.basePrice ?? '',
+                    contractPrice:
+                      newValue?.basePrice && pricingForm.discountPercent
+                        ? (newValue.basePrice * (1 - parseFloat(pricingForm.discountPercent) / 100)).toFixed(2)
+                        : pricingForm.contractPrice
+                  });
                 }}
                 renderInput={(params) => <TextField {...params} label="الخدمة الطبية *" required fullWidth />}
               />
-            )}
-
-            {pricingForm.isAddingNewService && (
-              <Stack direction="row" spacing={2}>
-                <TextField
-                  label="اسم الخدمة الجديدة"
-                  fullWidth
-                  required
-                  value={pricingForm.newServiceName}
-                  onChange={(e) => setPricingForm({ ...pricingForm, newServiceName: e.target.value })}
-                />
-                <TextField
-                  label="كود الخدمة (اختياري)"
-                  fullWidth
-                  value={pricingForm.newServiceCode}
-                  onChange={(e) => setPricingForm({ ...pricingForm, newServiceCode: e.target.value })}
-                  placeholder="SVC-..."
-                />
-              </Stack>
             )}
 
 
@@ -1378,8 +1358,7 @@ const ProviderContractView = () => {
             variant="contained"
             disabled={
               !pricingForm.mainCategoryId ||
-              (!pricingForm.isAddingNewService && !pricingForm.medicalServiceId) ||
-              (pricingForm.isAddingNewService && !pricingForm.newServiceName) ||
+              !pricingForm.medicalServiceId ||
               !pricingForm.contractPrice ||
               addPricingMutation.isLoading
             }

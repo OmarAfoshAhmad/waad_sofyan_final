@@ -341,6 +341,21 @@ public class ProviderContractController {
         return ResponseEntity.ok(ApiResponse.success("Contract restored successfully", result));
     }
 
+    /**
+     * DELETE /api/provider-contracts/{id}/hard
+     * Permanently delete a soft-deleted contract
+     */
+    @DeleteMapping("/{id:\\d+}/hard")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Hard delete contract", description = "Permanently delete a soft-deleted provider contract")
+    public ResponseEntity<ApiResponse<Void>> hardDelete(
+            @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
+
+        log.debug("REST request to hard delete contract: {}", id);
+        contractService.hardDelete(id);
+        return ResponseEntity.ok(ApiResponse.success("Contract permanently deleted", null));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONTRACT LIFECYCLE ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════════

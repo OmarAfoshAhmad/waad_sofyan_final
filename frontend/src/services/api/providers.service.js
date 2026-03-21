@@ -165,6 +165,21 @@ export const providersService = {
   },
 
   /**
+   * Hard delete provider permanently
+   * @param {number} id - Provider ID
+   * @returns {Promise<void>}
+   */
+  hardDelete: async (id) => {
+    try {
+      if (!id) throw new Error('معرف المزود مطلوب');
+      const response = await axiosClient.delete(`${BASE_URL}/${id}/hard`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
    * Search providers
    * @param {string} query - Search query
    * @returns {Promise<Array>} Matching providers
