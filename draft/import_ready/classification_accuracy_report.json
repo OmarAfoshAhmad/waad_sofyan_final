@@ -1,0 +1,23 @@
+{
+  "files": [
+    {
+      "input_file": "draft\\قائمة اسعار خدمات دار الشفاء مصنفة.xlsx",
+      "output_file": "draft\\import_ready\\قائمة اسعار خدمات دار الشفاء مصنفة_جاهز_للاستيراد.xlsx",
+      "accuracy": {
+        "total_services": 1377,
+        "recognized_main_ratio": 100.0,
+        "recognized_sub_ratio": 100.0,
+        "both_recognized_ratio": 100.0,
+        "overall_confidence_score": 100.0,
+        "unknown_main_categories": [],
+        "unknown_sub_categories": []
+      }
+    }
+  ],
+  "summary": {
+    "processed_files": 1,
+    "skipped_files": 0,
+    "total_services": 1377,
+    "average_confidence_score": 100.0
+  }
+}

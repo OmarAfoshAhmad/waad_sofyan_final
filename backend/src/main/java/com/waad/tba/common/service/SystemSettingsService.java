@@ -62,6 +62,13 @@ public class SystemSettingsService {
     public static final String PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY = "PASSWORD_RESET_OTP_EXPIRY_MINUTES";
     public static final String PASSWORD_RESET_OTP_LENGTH_KEY = "PASSWORD_RESET_OTP_LENGTH";
 
+    // ── AI Classifier ─────────────────────────────────────────────────────────
+    public static final String AI_CLASSIFIER_API_KEY = "AI_CLASSIFIER_API_KEY";
+    public static final String AI_CLASSIFIER_MODEL = "AI_CLASSIFIER_MODEL";
+    public static final String AI_CLASSIFIER_ENDPOINT = "AI_CLASSIFIER_ENDPOINT";
+    public static final String DEFAULT_AI_CLASSIFIER_MODEL = "qwen/qwen2.5-14b-instruct:free";
+    public static final String DEFAULT_AI_CLASSIFIER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+
     /**
      * Initialize default settings on application startup.
      */
@@ -186,6 +193,51 @@ public class SystemSettingsService {
                     .active(true)
                     .build());
             log.info("✅ Created default setting: {} = 6", PASSWORD_RESET_OTP_LENGTH_KEY);
+        }
+
+        // AI Classifier: API key (blank by default)
+        if (settingRepository.findBySettingKey(AI_CLASSIFIER_API_KEY).isEmpty()) {
+            settingRepository.save(SystemSetting.builder()
+                    .settingKey(AI_CLASSIFIER_API_KEY)
+                    .settingValue("")
+                    .valueType(SystemSetting.SettingValueType.STRING)
+                    .description("API key used by AI classifier for facility price-list categorization")
+                    .category("AI")
+                    .isEditable(true)
+                    .defaultValue("")
+                    .active(true)
+                    .build());
+            log.info("✅ Created default setting: {} = <empty>", AI_CLASSIFIER_API_KEY);
+        }
+
+        // AI Classifier: model id
+        if (settingRepository.findBySettingKey(AI_CLASSIFIER_MODEL).isEmpty()) {
+            settingRepository.save(SystemSetting.builder()
+                    .settingKey(AI_CLASSIFIER_MODEL)
+                    .settingValue(DEFAULT_AI_CLASSIFIER_MODEL)
+                    .valueType(SystemSetting.SettingValueType.STRING)
+                    .description("Model ID used for AI classifier requests")
+                    .category("AI")
+                    .isEditable(true)
+                    .defaultValue(DEFAULT_AI_CLASSIFIER_MODEL)
+                    .active(true)
+                    .build());
+            log.info("✅ Created default setting: {} = {}", AI_CLASSIFIER_MODEL, DEFAULT_AI_CLASSIFIER_MODEL);
+        }
+
+        // AI Classifier: endpoint
+        if (settingRepository.findBySettingKey(AI_CLASSIFIER_ENDPOINT).isEmpty()) {
+            settingRepository.save(SystemSetting.builder()
+                    .settingKey(AI_CLASSIFIER_ENDPOINT)
+                    .settingValue(DEFAULT_AI_CLASSIFIER_ENDPOINT)
+                    .valueType(SystemSetting.SettingValueType.STRING)
+                    .description("OpenAI-compatible endpoint for AI classifier")
+                    .category("AI")
+                    .isEditable(true)
+                    .defaultValue(DEFAULT_AI_CLASSIFIER_ENDPOINT)
+                    .active(true)
+                    .build());
+            log.info("✅ Created default setting: {} = {}", AI_CLASSIFIER_ENDPOINT, DEFAULT_AI_CLASSIFIER_ENDPOINT);
         }
     }
 

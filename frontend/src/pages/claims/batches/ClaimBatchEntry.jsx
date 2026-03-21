@@ -139,7 +139,7 @@ export default function ClaimBatchEntry() {
 
     // ✅ Claim Category Context (Manual Rule Selection)
     const [manualCategoryEnabled, setManualCategoryEnabled] = useState(true);
-    const [primaryCategoryCode, setPrimaryCategoryCode] = useState('CAT-OUTPAT');
+    const [primaryCategoryCode, setPrimaryCategoryCode] = useState('CAT-OP');
 
     const defaultDate = useMemo(
         () => (month && year) ? `${year}-${String(month).padStart(2, '0')}-01` : new Date().toISOString().split('T')[0],
@@ -381,6 +381,7 @@ export default function ClaimBatchEntry() {
                 const serviceObj = svc || {
                     serviceCode: lineCode,
                     serviceName: lineName,
+                    categoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
                     label: `${lineCode ? '[' + lineCode + '] ' : ''}${lineName || ''}`
                 };
                 const line = {
@@ -398,14 +399,14 @@ export default function ClaimBatchEntry() {
             setServiceDate(editingClaim.serviceDate || defaultDate);
             setPreAuthId(editingClaim.preAuthorizationId || '');
             setManualCategoryEnabled(editingClaim.manualCategoryEnabled ?? true);
-            setPrimaryCategoryCode(editingClaim.primaryCategoryCode || 'CAT-OUTPAT');
+            setPrimaryCategoryCode(editingClaim.primaryCategoryCode || 'CAT-OP');
             setIsDirty(false);
 
             // المرحلة 1.3: إعادة جلب التغطية والسقوف للمطالبة المحملة لضمان دقة العرض
             // يستخدم الـ ref لضمان استخدام النسخة الأحدث دائماً (تجنّب stale closure)
             if (policyId && editingClaim.memberId) {
                 setTimeout(() => {
-                    refetchCoverageOnEditRef.current(editingClaim.primaryCategoryCode || 'CAT-OUTPAT');
+                    refetchCoverageOnEditRef.current(editingClaim.primaryCategoryCode || 'CAT-OP');
                 }, 300);
             }
         }
@@ -426,11 +427,13 @@ export default function ClaimBatchEntry() {
         return items.map(s => {
             const code = s.serviceCode || s.code || '';
             const name = s.serviceName || s.name || '';
+            const normalizedCategoryId = s.categoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? null;
             return {
                 ...s,
                 label: `${code ? '[' + code + '] ' : ''}${name}`,
                 serviceName: name,
                 serviceCode: code,
+                categoryId: normalizedCategoryId,
                 pricingItemId: s.pricingItemId,
                 contractPrice: s.contractPrice || 0
             };
@@ -535,7 +538,7 @@ export default function ClaimBatchEntry() {
         setComplaint(''); setNotes(''); setLines([newLine()]);
         setApplyBenefits(true); setIsDirty(false);
         setServiceDate(defaultDate); setPreAuthId('');
-        setManualCategoryEnabled(true); setPrimaryCategoryCode('CAT-OUTPAT');
+        setManualCategoryEnabled(true); setPrimaryCategoryCode('CAT-OP');
         setIsClaimRejected(false); setRejectionInput('');
         setAttachments([]);
         // FIX: resetForm must also clear the editing state
@@ -964,7 +967,7 @@ export default function ClaimBatchEntry() {
                                 setPrimaryCategoryCode={setPrimaryCategoryCode}
                                 setManualCategoryEnabled={setManualCategoryEnabled}
                                 rootCategories={rootCategories}
-                                refetchAllLinesCoverage={refetchAllLinesCoverage}
+                                refetchAllLinesCoverage={refetchAllLinesCoverageCallback}
                                 linesRef={linesRef}
                                 preAuthResults={preAuthResults}
                                 searchingPreAuth={searchingPreAuth}

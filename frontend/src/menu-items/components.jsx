@@ -579,6 +579,21 @@ const menuItem = [
           color: 'success',
           size: 'small'
         }
+      },
+      {
+        id: 'facility-price-preparation',
+        title: 'تجهيز قوائم أسعار المرافق',
+        titleEn: 'Facility Price List Preparation',
+        type: 'item',
+        url: '/settings/facility-price-preparation',
+        icon: FormatListBulletedIcon,
+        resource: 'system_settings',
+        action: 'view',
+        chip: {
+          label: 'تجريبي',
+          color: 'warning',
+          size: 'small'
+        }
       }
     ]
   }

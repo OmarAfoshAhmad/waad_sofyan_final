@@ -965,9 +965,9 @@ const ProviderContractView = () => {
                 استيراد الأسعار
               </Button>
 
-              {/* Delete All Button - Only available in DRAFT */}
-              {contract.status === CONTRACT_STATUS.DRAFT && pricingItems.length > 0 && (
-                <Tooltip title="حذف جميع بنود التسعير لإعادة الاستيراد">
+              {/* Clear All Button */}
+              {pricingItems.length > 0 && contract.status !== CONTRACT_STATUS.TERMINATED && (
+                <Tooltip title="مسح جميع بنود التسعير الحالية">
                   <Button
                     variant="outlined"
                     color="error"
@@ -975,7 +975,7 @@ const ProviderContractView = () => {
                     startIcon={<DeleteIcon />}
                     size="medium"
                   >
-                    حذف الكل
+                    مسح الخدمات
                   </Button>
                 </Tooltip>
               )}
@@ -1495,13 +1495,13 @@ const ProviderContractView = () => {
       {/* Clear All Pricing Items Dialog */}
       <Dialog open={clearAllDialogOpen} onClose={() => setClearAllDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle color="error" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <DeleteIcon /> حذف جميع بنود التسعير
+          <DeleteIcon /> مسح الخدمات الحالية
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            سيؤدي هذا الإجراء إلى حذف <strong>جميع</strong> بنود التسعير الحالية (عدد {totalPricingItems}) من هذا العقد.
+            سيؤدي هذا الإجراء إلى <strong>مسح جميع</strong> بنود التسعير الحالية (<strong>{totalPricingItems} بند</strong>) من هذا العقد نهائياً.
             <br /><br />
-            هل أنت متأكد من رغبتك في الحذف لإعادة استيراد القائمة من جديد؟
+            ⚠️ هذا الإجراء لا يمكن التراجع عنه. هل أنت متأكد؟
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -1512,7 +1512,7 @@ const ProviderContractView = () => {
             variant="contained"
             disabled={deleteAllPricingMutation.isLoading}
           >
-            {deleteAllPricingMutation.isLoading ? <CircularProgress size={20} /> : 'نعم، حذف الكل'}
+            {deleteAllPricingMutation.isLoading ? <CircularProgress size={20} /> : 'نعم، مسح الكل'}
           </Button>
         </DialogActions>
       </Dialog>

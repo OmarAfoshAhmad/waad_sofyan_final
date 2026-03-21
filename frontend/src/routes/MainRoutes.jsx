@@ -135,6 +135,8 @@ const AdminUserEdit = Loadable(lazy(() => import('pages/rbac/users/UserEdit')));
 const Settings = Loadable(lazy(() => import('pages/settings')));
 
 const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSettingsPage')));
+const FacilityPricePreparationPage = Loadable(lazy(() => import('pages/settings/FacilityPricePreparationPage')));
+const AIKeySettingsPage = Loadable(lazy(() => import('pages/settings/AIKeySettingsPage')));
 
 // ==============================|| LAZY LOADING - PROFILE ||============================== //
 
@@ -821,6 +823,22 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <SystemSettingsPage />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'facility-price-preparation',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <FacilityPricePreparationPage />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'ai-key',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <AIKeySettingsPage />
             </PermissionGuard>
           )
         }

@@ -8,7 +8,7 @@
 
 import { useNavigate } from 'react-router-dom';
 import { Box, Grid, Card, CardContent, Typography, CardActionArea } from '@mui/material';
-import { TeamOutlined, SettingOutlined, MailOutlined } from '@ant-design/icons';
+import { TeamOutlined, SettingOutlined, MailOutlined, KeyOutlined } from '@ant-design/icons';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import useAuth from 'hooks/useAuth';
 
@@ -69,6 +69,24 @@ const SettingsPage = () => {
       description: 'تشمل معلومات المؤسسة وإعدادات النظام وبوابة مقدم الخدمة',
       color: '#fa8c16',
       route: '/settings/system',
+      roles: ['SUPER_ADMIN', 'ACCOUNTANT']
+    },
+    {
+      id: 'facility-price-prep',
+      icon: MailOutlined,
+      title: 'تجهيز قوائم أسعار المرافق',
+      description: 'تحضير ملفات الأسعار قبل الاستيراد مع قياس دقة التصنيف',
+      color: '#13c2c2',
+      route: '/settings/facility-price-preparation',
+      roles: ['SUPER_ADMIN', 'ACCOUNTANT']
+    },
+    {
+      id: 'ai-api-key',
+      icon: KeyOutlined,
+      title: 'إعداد مفتاح API للذكاء الاصطناعي',
+      description: 'حفظ مفتاح API لاستخدامه في أدوات التصنيف الذكي',
+      color: '#722ed1',
+      route: '/settings/ai-key',
       roles: ['SUPER_ADMIN', 'ACCOUNTANT']
     },
     // REMOVED: Theme customization disabled - Fixed professional UI/UX

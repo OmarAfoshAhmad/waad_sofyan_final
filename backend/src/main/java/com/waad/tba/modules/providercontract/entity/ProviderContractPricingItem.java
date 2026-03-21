@@ -50,6 +50,16 @@ public class ProviderContractPricingItem {
     @Column(name = "category_name", length = 255)
     private String categoryName;
 
+    /** Sub-category name imported from provider price lists. */
+    @Size(max = 255)
+    @Column(name = "sub_category_name", length = 255)
+    private String subCategoryName;
+
+    /** Provider specialty label imported from provider price lists. */
+    @Size(max = 255)
+    @Column(name = "specialty", length = 255)
+    private String specialty;
+
     @Column(name = "quantity")
     @Builder.Default
     private Integer quantity = 0;

@@ -29,7 +29,9 @@ export function useCoverageLogic({
     
     const fetchCoverage = useCallback(async (service, categoryCodeOverride) => {
         const sid = service?.medicalServiceId || 0;
-        let categoryId = service?.categoryId || null;
+        const serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
+        let categoryId = serviceOwnCategoryId;
+        // Keep the service's own intrinsic category for precise rule matching
         const fallbackPercent = policyInfo?.defaultCoveragePercent ?? 100;
 
         if (!policyId || !applyBenefits)
@@ -39,18 +41,24 @@ export function useCoverageLogic({
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
 
         try {
-            // Use the service's own specific subcategory (e.g. SUB-VISION) for coverage lookup.
-            // Only fall back to the claim's primary classification (e.g. CAT-OUTPAT) when the
-            // service has no intrinsic category — this ensures subcategory rules (amount/times
-            // limits) are matched correctly instead of the broader bucket rule.
-            if (!categoryId && categoryCodeOverride) {
+            // When a context (categoryCodeOverride) is explicitly set by the user, it always
+            // takes precedence so that context-level rules (e.g. "إيواء" vs "عيادات خارجية")
+            // are resolved correctly even when the service has its own intrinsic category.
+            // When no context is provided, fall back to the service's own category.
+            if (categoryCodeOverride) {
                 const cat = rootCategories?.find(c => c.code === categoryCodeOverride);
                 if (cat) categoryId = cat.id;
             }
 
+            // Send both: categoryId (context/override) and serviceOwnCategoryId (intrinsic)
+            // so the backend can find the most specific matching rule.
+            // e.g. context=CAT-OP (51), serviceOwn=CAT-IP-PHYSIO (201) → finds CAT-OP-PHYSIO
+            const contextCatId = categoryId;
+            const serviceCatId = serviceOwnCategoryId;
+
             const [r, fullRule] = await Promise.all([
-                checkServiceCoverage(policyId, sid, categoryId),
-                getCoverageForService(policyId, sid, categoryId).catch(() => null)
+                checkServiceCoverage(policyId, sid, contextCatId, serviceCatId),
+                getCoverageForService(policyId, sid, contextCatId, serviceCatId).catch(() => null)
             ]);
 
             const timesLimit = r?.timesLimit ?? fullRule?.timesLimit ?? null;
@@ -74,7 +82,16 @@ export function useCoverageLogic({
                 // Pass serviceYear so the query matches the batch's year (not current year)
                 // e.g. batch for Jan 2025 → serviceDate = 2025-01-01 → year must be 2025
                 const usageYear = serviceYear || null;
-                const usage = await checkServiceUsageLimit(policyId, sid, member.id, categoryId, usageYear, currentClaimId);
+                // Use the context category (categoryId) for usage limits so they match the active rule context
+                const usage = await checkServiceUsageLimit(
+                    policyId,
+                    sid,
+                    member.id,
+                    contextCatId,
+                    usageYear,
+                    currentClaimId,
+                    serviceCatId
+                );
                 if (usage && usage.hasLimit) {
                     baseLimitDetails = { ...baseLimitDetails, ...usage };
                 }

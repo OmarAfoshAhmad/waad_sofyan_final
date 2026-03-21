@@ -198,9 +198,13 @@ public class ClaimMapper {
             Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
                     : lineDto.getAppliedCategoryId();
 
-            // Resolve coverage (support unmapped services via category rules)
-            Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId : serviceCatIdForCoverage;
-
+            // Resolve coverage:
+            // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
+            // can find the most specific matching rule:
+            // priority 0 = exact service category (e.g. CAT-IP-PHYSIO)
+            // priority 1 = child of override context (e.g. CAT-OP-PHYSIO when
+            // context=CAT-OP)
+            // priority 2 = exact override (e.g. CAT-OP root)
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
                     resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
                     null,
@@ -462,9 +466,8 @@ public class ClaimMapper {
             Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
                     : lineDto.getAppliedCategoryId();
 
-            // Resolve coverage (support unmapped services via category rules)
-            Long targetCategoryId = (categoryOverrideId != null) ? categoryOverrideId : serviceCatIdForCoverage;
-
+            // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
+            // finds the most specific rule (exact service cat beats child-of-override).
             var coverageResult = benefitPolicyCoverageService.resolveCoverage(
                     resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
                     null,

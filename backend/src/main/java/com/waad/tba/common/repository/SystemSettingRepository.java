@@ -16,22 +16,22 @@ import java.util.Optional;
  */
 @Repository
 public interface SystemSettingRepository extends JpaRepository<SystemSetting, Long> {
-    
+
     /**
      * Find a setting by its unique key.
      */
     Optional<SystemSetting> findBySettingKey(String settingKey);
-    
+
     /**
      * Find all settings in a category.
      */
     List<SystemSetting> findByCategory(String category);
-    
+
     /**
      * Find all active settings.
      */
     List<SystemSetting> findByActiveTrue();
-    
+
     /**
      * Find all editable settings.
      */

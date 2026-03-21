@@ -119,9 +119,10 @@ export const getPolicyRulesCount = async (policyId) => {
  * @param {number} serviceId - Service ID
  * @returns {Promise<Object|null>} Coverage rule or null
  */
-export const getCoverageForService = async (policyId, serviceId, categoryId = null) => {
+export const getCoverageForService = async (policyId, serviceId, categoryId = null, serviceCategoryId = null) => {
   const params = {};
   if (categoryId) params.categoryId = categoryId;
+  if (serviceCategoryId) params.serviceCategoryId = serviceCategoryId;
   const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}`, { params });
   return unwrap(response);
 };
@@ -133,9 +134,10 @@ export const getCoverageForService = async (policyId, serviceId, categoryId = nu
  * @param {number} serviceId - Service ID
  * @returns {Promise<Object>} { covered, coveragePercent, requiresPreApproval }
  */
-export const checkServiceCoverage = async (policyId, serviceId, categoryId = null) => {
+export const checkServiceCoverage = async (policyId, serviceId, categoryId = null, serviceCategoryId = null) => {
   const params = {};
   if (categoryId) params.categoryId = categoryId;
+  if (serviceCategoryId) params.serviceCategoryId = serviceCategoryId;
   const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/check`, { params });
   return unwrap(response);
 };
@@ -151,9 +153,18 @@ export const checkServiceCoverage = async (policyId, serviceId, categoryId = nul
  * @param {number} excludeClaimId - Optional claim ID to exclude from usage calculation
  * @returns {Promise<Object>} Usage details
  */
-export const checkServiceUsageLimit = async (policyId, serviceId, memberId, categoryId = null, year = null, excludeClaimId = null) => {
+export const checkServiceUsageLimit = async (
+  policyId,
+  serviceId,
+  memberId,
+  categoryId = null,
+  year = null,
+  excludeClaimId = null,
+  serviceCategoryId = null
+) => {
   const params = { memberId };
   if (categoryId) params.categoryId = categoryId;
+  if (serviceCategoryId) params.serviceCategoryId = serviceCategoryId;
   if (year) params.year = year;
   if (excludeClaimId) params.excludeClaimId = excludeClaimId;
   const response = await axiosClient.get(`/benefit-policies/${policyId}/coverage/service/${serviceId}/usage`, { params });

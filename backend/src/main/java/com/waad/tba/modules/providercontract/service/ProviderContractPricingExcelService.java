@@ -209,6 +209,9 @@ public class ProviderContractPricingExcelService {
                     .getAuthentication()
                     .getName();
 
+            // Track codes used in THIS import session to avoid duplicates within the batch
+            Set<String> usedCodesInSession = new HashSet<>();
+
             // Process rows
             for (int rowNum = 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
                 Row row = sheet.getRow(rowNum);
@@ -260,6 +263,18 @@ public class ProviderContractPricingExcelService {
                                 .build());
                         skipped++;
                         continue;
+                    }
+
+                    // Auto-generate code when not provided in Excel
+                    if ((serviceCodeValue == null || serviceCodeValue.isBlank()) && serviceNameValue != null) {
+                        serviceCodeValue = generateUniqueServiceCode(
+                                contractId, serviceNameValue, usedCodesInSession);
+                        log.debug("Auto-generated code '{}' for service '{}'", serviceCodeValue, serviceNameValue);
+                    }
+
+                    // Register this code as used in the current session
+                    if (serviceCodeValue != null && !serviceCodeValue.isBlank()) {
+                        usedCodesInSession.add(serviceCodeValue.trim().toUpperCase());
                     }
 
                     // Identifier for logs
@@ -420,6 +435,59 @@ public class ProviderContractPricingExcelService {
 
         log.info("Mapped columns: {}", indices.keySet());
         return indices;
+    }
+
+    /**
+     * Generates a unique service code for services that have no code in the Excel
+     * file.
+     * Format: GEN-{INITIALS}-{disambiguator}
+     * Example: "فحص دم شامل" → "GEN-FDS" or "GEN-FDS-2" if GEN-FDS is taken.
+     */
+    private String generateUniqueServiceCode(Long contractId, String serviceName, Set<String> usedCodesInSession) {
+        // Build base code from initials of words (up to 4 words, first char each)
+        String base = buildBaseCode(serviceName);
+        String candidate = base;
+
+        int counter = 2;
+        while (isCodeTaken(contractId, candidate, usedCodesInSession)) {
+            candidate = base + "-" + counter;
+            counter++;
+            if (counter > 9999) {
+                // Ultimate fallback using timestamp suffix to guarantee uniqueness
+                candidate = base + "-" + (System.currentTimeMillis() % 100000);
+                break;
+            }
+        }
+        return candidate;
+    }
+
+    private String buildBaseCode(String name) {
+        if (name == null || name.isBlank())
+            return "GEN-SVC";
+        // Remove punctuation and split by whitespace
+        String[] words = name.trim().replaceAll("[^\\p{L}\\p{N}\\s]", " ").split("\\s+");
+        StringBuilder sb = new StringBuilder("GEN-");
+        int taken = 0;
+        for (String w : words) {
+            if (w.isBlank())
+                continue;
+            // Append first character (uppercase via codePoint for Arabic/Latin)
+            String ch = w.substring(0, 1).toUpperCase();
+            sb.append(ch);
+            taken++;
+            if (taken >= 4)
+                break;
+        }
+        if (taken == 0)
+            sb.append("SVC");
+        return sb.toString();
+    }
+
+    private boolean isCodeTaken(Long contractId, String code, Set<String> usedCodesInSession) {
+        String upperCode = code.toUpperCase();
+        if (usedCodesInSession.contains(upperCode))
+            return true;
+        return pricingRepository.findByContractIdAndServiceCodeActiveTrue(contractId, code).isPresent();
     }
 
     /**

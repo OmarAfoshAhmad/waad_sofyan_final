@@ -134,10 +134,10 @@ export const ClaimHeaderFields = ({
                                 control={
                                     <Checkbox
                                         size="small"
-                                        checked={primaryCategoryCode === 'CAT-OUTPAT'}
+                                        checked={primaryCategoryCode === 'CAT-OP'}
                                         onChange={(e) => {
                                             const checked = e.target.checked;
-                                            const newCode = checked ? 'CAT-OUTPAT' : '';
+                                            const newCode = checked ? 'CAT-OP' : '';
                                             setPrimaryCategoryCode(newCode);
                                             setManualCategoryEnabled(true);
                                             setIsDirty(true);
@@ -147,11 +147,11 @@ export const ClaimHeaderFields = ({
                                 }
                                 label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>عيادات خارجية</Typography>}
                             />
-                            {primaryCategoryCode !== 'CAT-OUTPAT' && (
+                            {primaryCategoryCode !== 'CAT-OP' && (
                                 <Autocomplete
                                     size="small"
                                     sx={{ flexGrow: 1 }}
-                                    options={rootCategories?.filter(c => c.code !== 'CAT-OUTPAT') || []}
+                                    options={rootCategories?.filter(c => c.code !== 'CAT-OP') || []}
                                     getOptionLabel={(o) => o.name || o.nameAr || ''}
                                     value={rootCategories?.find(c => c.code === primaryCategoryCode) || null}
                                     onChange={(_, v) => {

@@ -327,6 +327,10 @@ public class ClaimService {
         // Status set to APPROVED by mapper — direct entry model (no review workflow)
         Claim savedClaim = claimRepository.save(claim);
 
+        // Assign canonical claim number now that ID is available
+        savedClaim.setClaimNumber("CLM-" + savedClaim.getId());
+        savedClaim = claimRepository.save(savedClaim);
+
         // Record creation in audit trail
         if (currentUser != null) {
             claimAuditService.recordCreation(savedClaim, currentUser);

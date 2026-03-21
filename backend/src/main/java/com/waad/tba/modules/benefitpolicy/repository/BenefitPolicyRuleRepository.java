@@ -102,16 +102,21 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       WHERE r.benefitPolicy.id = :policyId
         AND r.active = true
         AND (
-          (:serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId)
-          OR (:overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId)
+          (:overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId)
+          OR (:overrideCategoryId IS NOT NULL AND r.medicalCategory.parentId = :overrideCategoryId)
+          OR (:serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId)
+          OR (:serviceCategoryId IS NOT NULL AND r.medicalCategory.parentId = :serviceCategoryId)
           OR (:parentCategoryId IS NOT NULL AND r.medicalCategory.id = :parentCategoryId)
         )
       ORDER BY
         CASE
-          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId THEN 0
+          WHEN :overrideCategoryId IS NOT NULL AND r.medicalCategory.parentId = :overrideCategoryId THEN 0
           WHEN :overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId THEN 1
-          ELSE 2
-        END
+          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId THEN 2
+          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.parentId = :serviceCategoryId THEN 3
+          ELSE 4
+        END,
+        r.id ASC
       LIMIT 1
       """)
   Optional<BenefitPolicyRule> findBestRuleForService(

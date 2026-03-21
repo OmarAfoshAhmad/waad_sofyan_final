@@ -81,6 +81,13 @@ public class Claim {
     @JoinColumn(name = "visit_id", nullable = false)
     private com.waad.tba.modules.visit.entity.Visit visit;
 
+    /**
+     * رقم المطالبة الفريد للعرض (CLM-{id}).
+     * يُولَّد في الخدمة بعد الحفظ الأول ثم يُحدَّث فوراً.
+     */
+    @Column(name = "claim_number", length = 100, unique = true)
+    private String claimNumber;
+
     // ==================== CLAIM DETAILS ====================
 
     @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)

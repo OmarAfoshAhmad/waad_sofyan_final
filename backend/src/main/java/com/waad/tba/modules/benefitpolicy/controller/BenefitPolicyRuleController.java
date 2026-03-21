@@ -111,10 +111,11 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> getCoverageForService(
             @PathVariable("policyId") Long policyId,
             @PathVariable("serviceId") Long serviceId,
-            @RequestParam(name = "categoryId", required = false) Long categoryId) {
+            @RequestParam(name = "categoryId", required = false) Long categoryId,
+            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId) {
 
         Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId,
-                categoryId);
+                categoryId, serviceCategoryId);
 
         if (result.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success("Service not covered under this policy", null));
@@ -129,15 +130,16 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkServiceCoverage(
             @PathVariable("policyId") Long policyId,
             @PathVariable("serviceId") Long serviceId,
-            @RequestParam(name = "categoryId", required = false) Long categoryId) {
+            @RequestParam(name = "categoryId", required = false) Long categoryId,
+            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId) {
 
-        boolean isCovered = ruleService.isServiceCovered(policyId, serviceId, categoryId);
-        int coveragePercent = ruleService.getCoveragePercent(policyId, serviceId, categoryId);
-        boolean requiresPreApproval = ruleService.requiresPreApproval(policyId, serviceId, categoryId);
-
-        // Also include limit info from the rule
         Optional<BenefitPolicyRuleResponseDto> ruleOpt = ruleService.findCoverageForService(policyId, serviceId,
-                categoryId);
+                categoryId, serviceCategoryId);
+        boolean isCovered = ruleOpt.isPresent();
+        int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
+                .orElse(ruleService.getDefaultCoveragePercent(policyId));
+        boolean requiresPreApproval = ruleOpt.map(BenefitPolicyRuleResponseDto::isRequiresPreApproval).orElse(false);
+
         Map<String, Object> result = new java.util.HashMap<>();
         result.put("covered", isCovered);
         result.put("coveragePercent", coveragePercent);
@@ -158,11 +160,12 @@ public class BenefitPolicyRuleController {
             @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "memberId") Long memberId,
             @RequestParam(name = "categoryId", required = false) Long categoryId,
+            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId,
             @RequestParam(name = "year", required = false) Integer year,
             @RequestParam(name = "excludeClaimId", required = false) Long excludeClaimId) {
 
-        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId, memberId, year,
-                excludeClaimId);
+        Map<String, Object> result = ruleService.checkUsageLimit(policyId, serviceId, categoryId,
+                serviceCategoryId, memberId, year, excludeClaimId);
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
     }
 

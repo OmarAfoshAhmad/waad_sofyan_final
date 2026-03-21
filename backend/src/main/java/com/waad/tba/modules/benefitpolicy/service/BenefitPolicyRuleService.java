@@ -148,26 +148,41 @@ public class BenefitPolicyRuleService {
     @Transactional(readOnly = true)
     public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId,
             Long categoryOverrideId) {
-        // serviceId is kept for backward-compat but ignored — category is the
-        // resolution key
-        Long targetCategoryId = categoryOverrideId;
+        return findCoverageForService(policyId, serviceId, categoryOverrideId, null);
+    }
 
-        // Resolve parent category for hierarchical fallback
-        Long parentCategoryId = null;
+    @Transactional(readOnly = true)
+    public Optional<BenefitPolicyRuleResponseDto> findCoverageForService(Long policyId, Long serviceId,
+            Long categoryOverrideId, Long serviceCategoryId) {
+        // ═══ Mirror Category Resolution ═══
+        // categoryOverrideId = السياق المختار (مثلاً CAT-OP للعيادات الخارجية)
+        // serviceCategoryId = التصنيف الجوهري للخدمة (مثلاً CAT-IP-PHYSIO)
+        //
+        // المنطق: نحدد التصنيف الهدف حسب السياق ثم نبحث عن القاعدة مباشرة.
+        // إذا كان السياق في فرع مختلف عن تصنيف الخدمة، نبحث عن التصنيف
+        // المرآة (mirror) تحت السياق بنفس الاسم.
+
+        Long targetCategoryId = resolveTargetCategory(categoryOverrideId, serviceCategoryId);
+
         if (targetCategoryId != null) {
-            parentCategoryId = categoryRepository.findById(targetCategoryId)
-                    .map(MedicalCategory::getParentId)
-                    .orElse(null);
+            // 1) ابحث عن قاعدة مطابقة تماماً للتصنيف الهدف
+            Optional<BenefitPolicyRule> rule = ruleRepository
+                    .findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(policyId, targetCategoryId);
+            if (rule.isPresent()) {
+                return rule.map(BenefitPolicyRuleResponseDto::fromEntity);
+            }
+
+            // 2) إذا لم توجد قاعدة للتصنيف الفرعي، جرّب قاعدة الجذر
+            if (categoryOverrideId != null && !categoryOverrideId.equals(targetCategoryId)) {
+                Optional<BenefitPolicyRule> rootRule = ruleRepository
+                        .findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(policyId, categoryOverrideId);
+                if (rootRule.isPresent()) {
+                    return rootRule.map(BenefitPolicyRuleResponseDto::fromEntity);
+                }
+            }
         }
 
-        Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                policyId, null, targetCategoryId, null, parentCategoryId);
-
-        if (ruleOpt.isPresent()) {
-            return ruleOpt.map(BenefitPolicyRuleResponseDto::fromEntity);
-        }
-
-        // FALLBACK TO POLICY DEFAULT
+        // 3) القاعدة الافتراضية للوثيقة
         return policyRepository.findById(policyId)
                 .map(policy -> BenefitPolicyRuleResponseDto.builder()
                         .benefitPolicyId(policy.getId())
@@ -178,6 +193,51 @@ public class BenefitPolicyRuleService {
                         .label("تغطية عامة (السياسة)")
                         .active(true)
                         .build());
+    }
+
+    /**
+     * Mirror Category Resolution — يحدد التصنيف الصحيح للبحث عن القاعدة.
+     *
+     * عندما يكون السياق (override) في فرع مختلف عن تصنيف الخدمة (service category):
+     * - نأخذ اسم التصنيف الفرعي للخدمة (مثلاً "علاج طبيعي")
+     * - نبحث تحت السياق عن تصنيف فرعي بنفس الاسم (mirror)
+     * - إذا وجدناه نستخدمه، وإلا نرجع للسياق الجذري
+     *
+     * أمثلة:
+     * | السياق | تصنيف الخدمة | النتيجة |
+     * |----------|--------------------|--------------------|
+     * | CAT-OP | CAT-IP-PHYSIO(201) | CAT-OP-PHYSIO(701) |
+     * | CAT-IP | CAT-IP-PHYSIO(201) | CAT-IP-PHYSIO(201) |
+     * | CAT-OP | null | CAT-OP(51) |
+     * | null | CAT-IP-PHYSIO(201) | 201 |
+     */
+    private Long resolveTargetCategory(Long categoryOverrideId, Long serviceCategoryId) {
+        if (categoryOverrideId == null && serviceCategoryId == null) {
+            return null;
+        }
+        if (categoryOverrideId == null) {
+            return serviceCategoryId;
+        }
+        if (serviceCategoryId == null) {
+            return categoryOverrideId;
+        }
+
+        // كلا القيمتين موجودتان — نحتاج تحديد الفرع
+        MedicalCategory serviceCat = categoryRepository.findById(serviceCategoryId).orElse(null);
+        if (serviceCat == null || serviceCat.getParentId() == null) {
+            // تصنيف الخدمة جذري أو غير موجود → استخدم السياق
+            return categoryOverrideId;
+        }
+
+        // إذا تصنيف الخدمة تحت نفس السياق → نفس الفرع، استخدمه مباشرة
+        if (serviceCat.getParentId().equals(categoryOverrideId)) {
+            return serviceCategoryId;
+        }
+
+        // فرع مختلف → ابحث عن المرآة (mirror) تحت السياق بنفس الاسم
+        Optional<MedicalCategory> mirror = categoryRepository
+                .findFirstByParentIdAndName(categoryOverrideId, serviceCat.getName());
+        return mirror.map(MedicalCategory::getId).orElse(categoryOverrideId);
     }
 
     /**
@@ -222,21 +282,38 @@ public class BenefitPolicyRuleService {
     }
 
     /**
+     * Get the policy-level default coverage percent.
+     */
+    @Transactional(readOnly = true)
+    public int getDefaultCoveragePercent(Long policyId) {
+        return policyRepository.findById(policyId)
+                .map(BenefitPolicy::getDefaultCoveragePercent)
+                .orElse(0);
+    }
+
+    /**
      * Check if a member has exceeded usage limits for a service
      */
     @Transactional(readOnly = true)
     public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId,
             Integer year) {
-        return checkUsageLimit(policyId, serviceId, categoryId, memberId, year, null);
+        return checkUsageLimit(policyId, serviceId, categoryId, null, memberId, year, null);
     }
 
     @Transactional(readOnly = true)
     public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId, Long memberId,
             Integer year, Long excludeClaimId) {
+        return checkUsageLimit(policyId, serviceId, categoryId, null, memberId, year, excludeClaimId);
+    }
 
-        // categoryId is the resolution key since V228; serviceId is kept for
-        // backward-compat
-        Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId, categoryId);
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> checkUsageLimit(Long policyId, Long serviceId, Long categoryId,
+            Long serviceCategoryId, Long memberId, Integer year, Long excludeClaimId) {
+
+        // Resolve usage rule using the same dual-key logic as coverage lookup:
+        // categoryId=context override, serviceCategoryId=service intrinsic category.
+        Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId,
+                categoryId, serviceCategoryId);
         if (ruleOpt.isEmpty()) {
             return java.util.Map.of("covered", false);
         }

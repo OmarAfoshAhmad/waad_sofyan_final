@@ -345,9 +345,9 @@ public class ProviderContractPricingItemService {
                 .filter(c -> Boolean.TRUE.equals(c.getActive()))
                 .orElseThrow(() -> new BusinessRuleException("Provider contract not found: " + contractId));
 
-        // Only allow for DRAFT contracts
-        if (contract.getStatus() != ContractStatus.DRAFT) {
-            throw new BusinessRuleException("Can only bulk delete pricing for DRAFT contracts");
+        // Disallow only for TERMINATED/EXPIRED contracts
+        if (contract.getStatus() == ContractStatus.TERMINATED || contract.getStatus() == ContractStatus.EXPIRED) {
+            throw new BusinessRuleException("لا يمكن مسح بنود التسعير لعقد منتهٍ أو ملغى");
         }
 
         List<ProviderContractPricingItem> items = pricingRepository.findByContractIdAndActiveTrue(contractId);

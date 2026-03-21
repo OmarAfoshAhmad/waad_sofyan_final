@@ -93,6 +93,27 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("serviceName") String serviceName);
 
        /**
+        * Find active pricing item by combined import identity:
+        * (serviceCode OR serviceName) AND (categoryName OR subCategoryName).
+        * Used during upsert to avoid duplicating items re-imported with different
+        * category assignments.
+        */
+       @Query("SELECT p FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.id = :contractId " +
+                     "AND p.active = true " +
+                     "AND (:serviceCode IS NULL OR p.serviceCode = :serviceCode) " +
+                     "AND LOWER(p.serviceName) = LOWER(:serviceName) " +
+                     "AND (:categoryName IS NULL AND p.categoryName IS NULL OR LOWER(p.categoryName) = LOWER(:categoryName)) "
+                     +
+                     "AND (:subCategoryName IS NULL AND p.subCategoryName IS NULL OR LOWER(p.subCategoryName) = LOWER(:subCategoryName))")
+       Optional<ProviderContractPricingItem> findByContractIdAndImportIdentityActiveTrue(
+                     @Param("contractId") Long contractId,
+                     @Param("serviceCode") String serviceCode,
+                     @Param("serviceName") String serviceName,
+                     @Param("categoryName") String categoryName,
+                     @Param("subCategoryName") String subCategoryName);
+
+       /**
         * Check if pricing exists for a service code in a contract (replaces
         * medicalServiceId check)
         */

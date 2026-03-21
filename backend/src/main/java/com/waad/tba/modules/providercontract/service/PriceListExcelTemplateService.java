@@ -5,6 +5,8 @@ import com.waad.tba.common.excel.dto.ExcelImportResult.ImportError;
 import com.waad.tba.common.excel.dto.ExcelImportResult.ImportError.ErrorType;
 import com.waad.tba.common.excel.dto.ExcelImportResult.ImportSummary;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
@@ -33,8 +35,8 @@ import java.util.regex.Pattern;
  * Generates and imports Excel price-list templates for provider contracts.
  *
  * Template columns:
- * service_name (required) | service_code | standard_price | contract_price
- * main_category | sub_category | specialty | notes
+ * service_name (required) | service_code | contract_price
+ * main_category | sub_category | notes
  */
 @Slf4j
 @Service
@@ -43,6 +45,7 @@ public class PriceListExcelTemplateService {
 
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
+    private final MedicalCategoryRepository medicalCategoryRepository;
     private final PlatformTransactionManager transactionManager;
 
     private static final String SHEET_NAME = "Pricing_Template";
@@ -50,12 +53,10 @@ public class PriceListExcelTemplateService {
     // Template column indices (0-based)
     private static final int COL_SERVICE_NAME = 0;
     private static final int COL_SERVICE_CODE = 1;
-    private static final int COL_BASE_PRICE = 2;
-    private static final int COL_CONTRACT_PRICE = 3;
-    private static final int COL_CATEGORY = 4;
-    private static final int COL_SUB_CATEGORY = 5;
-    private static final int COL_SPECIALTY = 6;
-    private static final int COL_NOTES = 7;
+    private static final int COL_CONTRACT_PRICE = 2;
+    private static final int COL_CATEGORY = 3;
+    private static final int COL_SUB_CATEGORY = 4;
+    private static final int COL_NOTES = 5;
 
     // Max field lengths (must match DB column constraints)
     private static final int MAX_SERVICE_NAME = 255;
@@ -111,11 +112,6 @@ public class PriceListExcelTemplateService {
             cell1.setCellValue("service_code / الكود");
             cell1.setCellStyle(headerStyle);
 
-            // standard_price (optional - reference price)
-            Cell cell2 = headerRow.createCell(COL_BASE_PRICE);
-            cell2.setCellValue("standard_price / السعر الأساسي");
-            cell2.setCellStyle(headerStyle);
-
             // contract_price (optional - what we pay)
             Cell cell3 = headerRow.createCell(COL_CONTRACT_PRICE);
             cell3.setCellValue("contract_price / سعر العقد");
@@ -130,11 +126,6 @@ public class PriceListExcelTemplateService {
             Cell cellSub = headerRow.createCell(COL_SUB_CATEGORY);
             cellSub.setCellValue("sub_category / البند (التصنيف الفرعي)");
             cellSub.setCellStyle(headerStyle);
-
-            // specialty (optional)
-            Cell cell5 = headerRow.createCell(COL_SPECIALTY);
-            cell5.setCellValue("specialty / التخصص");
-            cell5.setCellStyle(headerStyle);
 
             // notes (optional)
             Cell cell6 = headerRow.createCell(COL_NOTES);
@@ -152,10 +143,6 @@ public class PriceListExcelTemplateService {
             ex1.setCellValue("MC-001");
             ex1.setCellStyle(exampleStyle);
 
-            Cell ex2 = exampleRow.createCell(COL_BASE_PRICE);
-            ex2.setCellValue(120.00);
-            ex2.setCellStyle(exampleStyle);
-
             Cell ex3 = exampleRow.createCell(COL_CONTRACT_PRICE);
             ex3.setCellValue(100.00);
             ex3.setCellStyle(exampleStyle);
@@ -168,10 +155,6 @@ public class PriceListExcelTemplateService {
             exSub.setCellValue("كشوفات استشارية");
             exSub.setCellStyle(exampleStyle);
 
-            Cell ex5 = exampleRow.createCell(COL_SPECIALTY);
-            ex5.setCellValue("باطنة");
-            ex5.setCellStyle(exampleStyle);
-
             Cell ex6 = exampleRow.createCell(COL_NOTES);
             ex6.setCellValue("مثال - احذف هذا الصف");
             ex6.setCellStyle(exampleStyle);
@@ -179,11 +162,9 @@ public class PriceListExcelTemplateService {
             // Set column widths
             sheet.setColumnWidth(COL_SERVICE_NAME, 40 * 256);
             sheet.setColumnWidth(COL_SERVICE_CODE, 15 * 256);
-            sheet.setColumnWidth(COL_BASE_PRICE, 15 * 256);
             sheet.setColumnWidth(COL_CONTRACT_PRICE, 15 * 256);
             sheet.setColumnWidth(COL_CATEGORY, 25 * 256);
             sheet.setColumnWidth(COL_SUB_CATEGORY, 25 * 256);
-            sheet.setColumnWidth(COL_SPECIALTY, 25 * 256);
             sheet.setColumnWidth(COL_NOTES, 40 * 256);
 
             // Add instructions sheet
@@ -234,15 +215,15 @@ public class PriceListExcelTemplateService {
 
         sheet.createRow(rowNum++).createCell(0).setCellValue("1. العمود الإلزامي الوحيد: service_name (اسم الخدمة)");
         sheet.createRow(rowNum++).createCell(0).setCellValue(
-                "2. الأعمدة الاختيارية الجديدة: service_code (الكود)، category (التصنيف)، specialty (التخصص)");
+                "2. الأعمدة الاختيارية: service_code (الكود)، category (التصنيف)، sub_category (الفرعي)، notes (ملاحظات)");
         sheet.createRow(rowNum++).createCell(0).setCellValue(
                 "3. إذا كان الكود موجوداً في اسم الخدمة (مثل WE-001)، سيتعرف عليه النظام تلقائياً حتى بدون عمود الكود");
         sheet.createRow(rowNum++).createCell(0)
-                .setCellValue("4. unit_price اختياري - إذا كان فارغاً يتم حفظه 0 تلقائياً");
+                .setCellValue("4. contract_price اختياري - إذا كان فارغاً يتم حفظه 0 تلقائياً");
         sheet.createRow(rowNum++).createCell(0)
                 .setCellValue("5. يربط النظام الخدمة تلقائياً بالقاموس الموحد بالأولوية التالية: (الكود ثم الاسم)");
         sheet.createRow(rowNum++).createCell(0).setCellValue(
-                "6. إذا لم يتم الربط التلقائي، تظهر الخدمة في 'مركز الربط' متبوعة بالتصنيف والتخصص الذي أدخلته هنا");
+                "6. إذا لم يتم الربط التلقائي، تظهر الخدمة في 'مركز الربط' متبوعة بالتصنيف الذي أدخلته هنا");
 
         sheet.setColumnWidth(0, 80 * 256);
     }
@@ -546,24 +527,38 @@ public class PriceListExcelTemplateService {
         if (contractPrice == null)
             contractPrice = BigDecimal.ZERO;
 
-        String categoryName = null;
+        String rawCategoryName = null;
         Integer categoryIdx = columnIndices.get("main_category");
         if (categoryIdx == null)
             categoryIdx = columnIndices.get("provider_category");
         if (categoryIdx != null) {
-            categoryName = getCellStringValue(row.getCell(categoryIdx));
-            if (categoryName != null)
-                categoryName = truncate(categoryName.trim(), 255);
+            rawCategoryName = getCellStringValue(row.getCell(categoryIdx));
+            if (rawCategoryName != null)
+                rawCategoryName = truncate(rawCategoryName.trim(), 255);
         }
 
-        // If no main category, try sub-category
-        if (categoryName == null) {
-            Integer subCategoryIdx = columnIndices.get("sub_category");
-            if (subCategoryIdx != null) {
-                categoryName = getCellStringValue(row.getCell(subCategoryIdx));
-                if (categoryName != null)
-                    categoryName = truncate(categoryName.trim(), 255);
-            }
+        String rawSubCategoryName = null;
+        Integer subCategoryIdx = columnIndices.get("sub_category");
+        if (subCategoryIdx != null) {
+            rawSubCategoryName = getCellStringValue(row.getCell(subCategoryIdx));
+            if (rawSubCategoryName != null)
+                rawSubCategoryName = truncate(rawSubCategoryName.trim(), 255);
+        }
+
+        MedicalCategory resolvedCategory = resolveMedicalCategory(rawCategoryName, rawSubCategoryName);
+
+        String categoryName = rawCategoryName;
+        String subCategoryName = rawSubCategoryName;
+
+        if (resolvedCategory != null) {
+            subCategoryName = resolvedCategory.getParentId() != null ? displayCategoryName(resolvedCategory) : null;
+            categoryName = resolvedCategory.getParentId() != null
+                    ? medicalCategoryRepository.findById(resolvedCategory.getParentId())
+                            .map(this::displayCategoryName)
+                            .orElse(displayCategoryName(resolvedCategory))
+                    : displayCategoryName(resolvedCategory);
+        } else if (categoryName == null) {
+            categoryName = subCategoryName;
         }
 
         Integer notesIdx = columnIndices.get("notes");
@@ -575,7 +570,9 @@ public class PriceListExcelTemplateService {
                 .contract(contract)
                 .serviceName(serviceName)
                 .serviceCode(serviceCode)
+                .medicalCategory(resolvedCategory)
                 .categoryName(categoryName)
+                .subCategoryName(subCategoryName)
                 .basePrice(basePrice)
                 .contractPrice(contractPrice)
                 .notes(notes)
@@ -594,11 +591,20 @@ public class PriceListExcelTemplateService {
     private boolean upsertPricingItem(ProviderContract contract, ProviderContractPricingItem draft) {
         Optional<ProviderContractPricingItem> existing = Optional.empty();
 
-        if (draft.getServiceCode() != null) {
+        if (draft.getServiceName() != null) {
+            existing = pricingRepository.findByContractIdAndImportIdentityActiveTrue(
+                    contract.getId(),
+                    draft.getServiceCode(),
+                    draft.getServiceName(),
+                    draft.getCategoryName(),
+                    draft.getSubCategoryName());
+        }
+        if (existing.isEmpty() && draft.getServiceCode() != null && draft.getServiceName() == null) {
             existing = pricingRepository
                     .findByContractIdAndServiceCodeActiveTrue(contract.getId(), draft.getServiceCode());
         }
-        if (existing.isEmpty()) {
+        if (existing.isEmpty() && draft.getServiceCode() == null && draft.getServiceName() != null
+                && draft.getCategoryName() == null && draft.getSubCategoryName() == null) {
             existing = pricingRepository
                     .findByContractIdAndServiceNameActiveTrue(contract.getId(), draft.getServiceName());
         }
@@ -606,7 +612,10 @@ public class PriceListExcelTemplateService {
         if (existing.isPresent()) {
             ProviderContractPricingItem item = existing.get();
             item.setServiceCode(draft.getServiceCode());
+            item.setMedicalCategory(draft.getMedicalCategory());
             item.setCategoryName(draft.getCategoryName());
+            item.setSubCategoryName(draft.getSubCategoryName());
+            item.setSpecialty(draft.getSpecialty());
             item.setBasePrice(draft.getBasePrice());
             item.setContractPrice(draft.getContractPrice());
             item.setNotes(draft.getNotes());
@@ -686,6 +695,52 @@ public class PriceListExcelTemplateService {
                 .messageAr("فشل الاستيراد: " + message)
                 .messageEn("Import failed: " + message)
                 .build();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CATEGORY RESOLUTION
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Resolves a MedicalCategory from the sub-category name first, then main
+     * category name.
+     */
+    private MedicalCategory resolveMedicalCategory(String rawCategoryName, String rawSubCategoryName) {
+        if (rawSubCategoryName != null && !rawSubCategoryName.isBlank()) {
+            MedicalCategory subCategory = findCategoryByCodeOrName(rawSubCategoryName);
+            if (subCategory != null) {
+                return subCategory;
+            }
+        }
+        if (rawCategoryName != null && !rawCategoryName.isBlank()) {
+            return findCategoryByCodeOrName(rawCategoryName);
+        }
+        return null;
+    }
+
+    private MedicalCategory findCategoryByCodeOrName(String value) {
+        String trimmed = value == null ? null : value.trim();
+        if (trimmed == null || trimmed.isBlank()) {
+            return null;
+        }
+        return medicalCategoryRepository.findActiveByCode(trimmed)
+                .or(() -> medicalCategoryRepository.findFirstByName(trimmed).filter(MedicalCategory::isActive))
+                .or(() -> medicalCategoryRepository.findFirstByNameAr(trimmed).filter(MedicalCategory::isActive))
+                .or(() -> medicalCategoryRepository.findFirstByNameEn(trimmed).filter(MedicalCategory::isActive))
+                .orElse(null);
+    }
+
+    private String displayCategoryName(MedicalCategory category) {
+        if (category == null) {
+            return null;
+        }
+        if (category.getNameAr() != null && !category.getNameAr().isBlank()) {
+            return truncate(category.getNameAr().trim(), 255);
+        }
+        if (category.getName() != null && !category.getName().isBlank()) {
+            return truncate(category.getName().trim(), 255);
+        }
+        return truncate(category.getCode(), 255);
     }
 
     private String truncate(String text, int maxLen) {
