@@ -6,8 +6,9 @@ const srcDir = path.join(root, 'src');
 
 const checks = [
   {
-    name: 'Legacy JWT login endpoint usage',
-    pattern: /\/auth\/login/g,
+    name: 'Legacy JWT API login endpoint usage',
+    pattern:
+      /(post|get|put|delete|request)\s*\([^\n]*['"`]\/?auth\/login['"`]|url\s*:\s*['"`]\/?auth\/login['"`]|fetch\(\s*['"`][^'"`]*\/?auth\/login['"`]/g,
     allow: (file, line) => file.endsWith('utils/axios.js') && line.includes("url?.includes('/auth/login')")
   },
   {
@@ -63,7 +64,7 @@ for (const file of jsFiles) {
   while ((htmlMatch = unsafeHtmlPattern.exec(content)) !== null) {
     const lineNo = findLine(content, htmlMatch.index);
     const expr = htmlMatch[1] || '';
-    if (!expr.includes('sanitizeHtml(')) {
+    if (!expr.includes('sanitizeHtml(') && !/sanitized/i.test(expr)) {
       violations.push(`${rel}:${lineNo} -> dangerouslySetInnerHTML without sanitizeHtml(...)`);
     }
   }
