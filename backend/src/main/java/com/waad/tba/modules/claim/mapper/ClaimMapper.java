@@ -541,9 +541,16 @@ public class ClaimMapper {
                     : BigDecimal.ZERO;
 
             if (Boolean.TRUE.equals(lineDto.getRejected())) {
-                lineRefused = lineRequestedTotal;
-                // Company pays nothing → patient bears the full amount
-                linePatientShare = lineRequestedTotal;
+                // Patient pays only their co-pay; company refuses their share
+                if (patientCopayPercentSnapshot != null) {
+                    linePatientShare = lineRequestedTotal
+                            .multiply(BigDecimal.valueOf(patientCopayPercentSnapshot))
+                            .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                    lineRefused = lineRequestedTotal.subtract(linePatientShare); // Company's refused portion
+                } else {
+                    linePatientShare = BigDecimal.ZERO;
+                    lineRefused = lineRequestedTotal; // No coverage info → full line refused
+                }
             } else {
                 // lineRefused = max(priceExcessRefusal, clientRefusedAmount)
                 // The client computes limit-based refusals (timesLimit / amountLimit) that

@@ -432,12 +432,47 @@ public class Claim {
     }
 
     private void calculateFields() {
-        // Skip calculation for entirely REJECTED claims (handled separately below)
+        // REJECTED: company pays nothing; patient still owes only their co-pay share
         if (status == ClaimStatus.REJECTED) {
-            refusedAmount = requestedAmount != null ? requestedAmount : BigDecimal.ZERO;
             approvedAmount = BigDecimal.ZERO;
-            patientCoPay = BigDecimal.ZERO;
             netProviderAmount = BigDecimal.ZERO;
+
+            if (lines != null && !lines.isEmpty()) {
+                // Recalculate requestedAmount from lines
+                requestedAmount = lines.stream()
+                        .map(line -> {
+                            BigDecimal rPrice = line.getRequestedUnitPrice() != null
+                                    ? line.getRequestedUnitPrice()
+                                    : line.getUnitPrice();
+                            return rPrice != null ? rPrice.multiply(BigDecimal.valueOf(line.getQuantity()))
+                                    : BigDecimal.ZERO;
+                        })
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                // Patient pays their co-pay portion only (company refused their share)
+                patientCoPay = lines.stream()
+                        .map(l -> {
+                            if (l.getPatientCopayPercentSnapshot() == null)
+                                return BigDecimal.ZERO;
+                            BigDecimal lineRequested = (l.getRequestedUnitPrice() != null
+                                    ? l.getRequestedUnitPrice()
+                                    : l.getUnitPrice())
+                                    .multiply(BigDecimal.valueOf(l.getQuantity()));
+                            return lineRequested
+                                    .multiply(BigDecimal.valueOf(l.getPatientCopayPercentSnapshot()))
+                                    .divide(new BigDecimal(100), 2, java.math.RoundingMode.HALF_UP);
+                        })
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                // Refused = company's share that was refused (not including patient's co-pay)
+                refusedAmount = requestedAmount.subtract(patientCoPay);
+            } else {
+                if (requestedAmount == null)
+                    requestedAmount = BigDecimal.ZERO;
+                patientCoPay = BigDecimal.ZERO;
+                refusedAmount = requestedAmount;
+            }
+
             differenceAmount = requestedAmount;
             return;
         }
