@@ -60,6 +60,7 @@ const ProviderVisitsReport = Loadable(lazy(() => import('pages/provider/reports/
 const ProviderContractsList = Loadable(lazy(() => import('pages/provider-contracts')));
 const ProviderContractView = Loadable(lazy(() => import('pages/provider-contracts/ProviderContractView')));
 const ProviderContractCreate = Loadable(lazy(() => import('pages/provider-contracts/ProviderContractCreate')));
+const ProviderContractEdit = Loadable(lazy(() => import('pages/provider-contracts/ProviderContractEdit')));
 
 // ==============================|| LAZY LOADING - VISITS ||============================== //
 
@@ -427,6 +428,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <ProviderContractCreate />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'edit/:id',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <ProviderContractEdit />
             </PermissionGuard>
           )
         },

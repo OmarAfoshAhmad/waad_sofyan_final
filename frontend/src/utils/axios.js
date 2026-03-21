@@ -50,6 +50,11 @@ axiosServices.interceptors.response.use(
     const status = error.response?.status;
     const url = error.config?.url;
     const errorData = error.response?.data;
+    const suppress401Handling = status === 401 && error.config?.suppress401Handling === true;
+
+    if (suppress401Handling) {
+      return Promise.reject(error);
+    }
 
     const classification = logError(error, {
       isAuthenticated: false,

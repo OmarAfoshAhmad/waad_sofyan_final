@@ -14,6 +14,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import featureFlagsService from 'services/api/featureFlags.service';
+import { useAuth, AUTH_STATUS } from 'contexts/AuthContext';
 
 // ─── cache helpers ─────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ const DEFAULT_FLAGS = {
 const SystemConfigContext = createContext(null);
 
 export function SystemConfigProvider({ children }) {
+  const { authStatus } = useAuth();
   const [uiConfig, setUiConfig] = useState(DEFAULT_UI_CONFIG);
   const [flags, setFlags] = useState(DEFAULT_FLAGS);
   const [loading, setLoading] = useState(true);
@@ -83,6 +85,12 @@ export function SystemConfigProvider({ children }) {
     if (cached) {
       setUiConfig(cached.uiConfig);
       setFlags(cached.flags);
+      setLoading(false);
+      return;
+    }
+
+    // Avoid protected endpoint calls before authentication is established.
+    if (authStatus !== AUTH_STATUS.AUTHENTICATED) {
       setLoading(false);
       return;
     }
@@ -104,7 +112,7 @@ export function SystemConfigProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authStatus]);
 
   useEffect(() => {
     load();

@@ -77,13 +77,46 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
+              const is = (pkg) => id.includes(`/${pkg}/`) || id.includes(`\\${pkg}\\`);
+
               // ExcelJS is the only truly standalone chunk (large, no React dependency)
-              if (id.includes('exceljs')) {
+              if (is('exceljs')) {
                 return 'excel';
               }
+              // Large standalone libs that can be split safely from the core vendor chunk
+              if (is('xlsx')) {
+                return 'xlsx';
+              }
+              if (is('pdfjs-dist')) {
+                return 'pdfjs';
+              }
+              if (is('react-pdf')) {
+                return 'react-pdf';
+              }
+              if (is('recharts') || is('apexcharts') || is('react-apexcharts') || is('chart.js') || is('react-chartjs-2')) {
+                return 'charts';
+              }
+              if (is('framer-motion')) {
+                return 'motion';
+              }
+              if (is('lodash-es')) {
+                return 'lodash';
+              }
+              if (
+                id.includes('/@mui/x-data-grid/') ||
+                id.includes('\\@mui\\x-data-grid\\') ||
+                id.includes('/@mui/x-date-pickers/') ||
+                id.includes('\\@mui\\x-date-pickers\\') ||
+                id.includes('/@mui/x-charts/') ||
+                id.includes('\\@mui\\x-charts\\')
+              ) {
+                return 'mui-x';
+              }
+              if (is('material-react-table')) {
+                return 'mrt';
+              }
               // EVERYTHING ELSE from node_modules goes into vendor.
-              // Splitting React, MUI, charts, etc. into separate chunks causes
-              // circular chunk initialization errors in production builds.
+              // Keep React + MUI ecosystem in vendor to avoid brittle init ordering.
               return 'vendor';
             }
           }

@@ -119,6 +119,15 @@ export const getProviderContracts = async (params = {}) => {
 };
 
 /**
+ * Get soft-deleted provider contracts (paginated)
+ * Endpoint: GET /api/provider-contracts/deleted
+ */
+export const getDeletedProviderContracts = async (params = {}) => {
+  const response = await axiosClient.get(`${BASE_URL}/deleted`, { params });
+  return unwrap(response);
+};
+
+/**
  * Search provider contracts
  * Endpoint: GET /api/provider-contracts/search
  * @param {Object} params - Query parameters
@@ -233,6 +242,15 @@ export const createProviderContract = async (data) => {
  */
 export const updateProviderContract = async (id, data) => {
   const response = await axiosClient.put(`${BASE_URL}/${id}`, data);
+  return unwrap(response);
+};
+
+/**
+ * Restore a soft-deleted provider contract
+ * Endpoint: PUT /api/provider-contracts/{id}/restore
+ */
+export const restoreProviderContract = async (id) => {
+  const response = await axiosClient.put(`${BASE_URL}/${id}/restore`);
   return unwrap(response);
 };
 
@@ -542,6 +560,7 @@ export const getAllContractedServices = async (providerId) => {
 
 const providerContractsService = {
   getProviderContracts,
+  getDeletedProviderContracts,
   searchProviderContracts,
   getProviderContractStats,
   getExpiringContracts,
@@ -552,6 +571,7 @@ const providerContractsService = {
   getActiveContractByProvider,
   createProviderContract,
   updateProviderContract,
+  restoreProviderContract,
   deleteProviderContract,
   activateContract,
   suspendContract,

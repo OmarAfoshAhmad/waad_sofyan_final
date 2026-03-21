@@ -105,16 +105,26 @@ public class ProviderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ProviderViewDto> listProviders(int page, int size, String search) {
+    public Page<ProviderViewDto> listProviders(int page, int size, String search, Boolean active) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Provider> providers;
 
         if (search != null && !search.isEmpty()) {
-            // Search ALL providers (active AND inactive)
-            providers = providerRepository.searchPagedAll(search, pageable);
+            if (active == null) {
+                providers = providerRepository.searchPagedAll(search, pageable);
+            } else if (Boolean.TRUE.equals(active)) {
+                providers = providerRepository.searchPaged(search, pageable);
+            } else {
+                providers = providerRepository.searchPagedInactive(search, pageable);
+            }
         } else {
-            // Return ALL providers (active AND inactive)
-            providers = providerRepository.findAll(pageable);
+            if (active == null) {
+                providers = providerRepository.findAll(pageable);
+            } else if (Boolean.TRUE.equals(active)) {
+                providers = providerRepository.findByActiveTrue(pageable);
+            } else {
+                providers = providerRepository.findByActiveFalse(pageable);
+            }
         }
 
         return providers.map(providerMapper::toViewDto);
@@ -140,6 +150,20 @@ public class ProviderService {
         provider.setActive(false);
         providerRepository.save(provider);
         log.info("Provider {} deactivated (soft delete)", id);
+    }
+
+    /**
+     * Restore provider from soft-delete (active=false -> active=true)
+     */
+    @Transactional
+    public ProviderViewDto restoreProvider(Long id) {
+        Provider provider = providerRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+
+        provider.setActive(true);
+        provider = providerRepository.save(provider);
+        log.info("Provider {} restored from soft delete", id);
+        return providerMapper.toViewDto(provider);
     }
 
     @Transactional(readOnly = true)

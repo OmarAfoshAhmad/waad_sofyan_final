@@ -52,6 +52,7 @@ import MainCard from 'components/MainCard';
 import UnifiedPageHeader from 'components/UnifiedPageHeader';
 import PermissionGuard from 'components/PermissionGuard';
 import { UnifiedMedicalTable } from 'components/common';
+import { SoftDeleteToggle } from 'components/tba';
 
 // Hooks
 import useTableState from 'hooks/useTableState';
@@ -299,6 +300,7 @@ export default function ProvidersList() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const [showDeleted, setShowDeleted] = useState(false);
 
   // ========================================
   // TABLE STATE
@@ -365,6 +367,23 @@ export default function ProvidersList() {
           message: 'فشل حذف مقدم الخدمة. يرجى المحاولة لاحقاً',
           variant: 'error'
         });
+      }
+    },
+    [queryClient]
+  );
+
+  const handleRestore = useCallback(
+    async (id, name) => {
+      const confirmMessage = `هل تريد استعادة مقدم الخدمة "${name}" من سجل المحذوفات؟`;
+      if (!window.confirm(confirmMessage)) return;
+
+      try {
+        await providersService.restore(id);
+        openSnackbar({ message: 'تمت استعادة مقدم الخدمة بنجاح', variant: 'success' });
+        queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      } catch (err) {
+        console.error('[Providers] Restore failed:', err);
+        openSnackbar({ message: 'فشلت استعادة مقدم الخدمة', variant: 'error' });
       }
     },
     [queryClient]
@@ -572,33 +591,52 @@ export default function ProvidersList() {
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title="تعديل">
-                <IconButton
-                  size="small"
-                  color="info"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNavigateEdit(provider.id);
-                  }}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              {provider.active === false || showDeleted ? (
+                <PermissionGuard resource="providers" action="delete">
+                  <Tooltip title="استعادة">
+                    <IconButton
+                      size="small"
+                      color="success"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRestore(provider.id, provider.name);
+                      }}
+                    >
+                      <RefreshIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </PermissionGuard>
+              ) : (
+                <>
+                  <Tooltip title="تعديل">
+                    <IconButton
+                      size="small"
+                      color="info"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNavigateEdit(provider.id);
+                      }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
 
-              <PermissionGuard resource="providers" action="delete">
-                <Tooltip title="حذف">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(provider.id, provider.name);
-                    }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </PermissionGuard>
+                  <PermissionGuard resource="providers" action="delete">
+                    <Tooltip title="حذف">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(provider.id, provider.name);
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </PermissionGuard>
+                </>
+              )}
             </Stack>
           );
 
@@ -606,7 +644,7 @@ export default function ProvidersList() {
           return null;
       }
     },
-    [handleNavigateView, handleNavigateEdit, handleDelete, page, rowsPerPage]
+    [handleNavigateView, handleNavigateEdit, handleDelete, handleRestore, page, rowsPerPage, showDeleted]
   );
 
   // ========================================
@@ -614,14 +652,15 @@ export default function ProvidersList() {
   // ========================================
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: [QUERY_KEY, page, rowsPerPage, sortColumn, sortDirection],
+    queryKey: [QUERY_KEY, showDeleted, page, rowsPerPage, sortColumn, sortDirection],
     queryFn: async () => {
       console.log('[ProvidersList] Fetching providers - page:', page + 1, 'size:', rowsPerPage);
 
       const params = {
         page: page + 1, // Backend uses 1-based pages
         size: rowsPerPage,
-        sort: sortColumn ? `${sortColumn},${sortDirection}` : 'id,desc'
+        sort: sortColumn ? `${sortColumn},${sortDirection}` : 'id,desc',
+        active: showDeleted ? false : true
       };
 
       const result = await providersService.getAll(params);
@@ -663,9 +702,12 @@ export default function ProvidersList() {
           addButtonLabel="إضافة مقدم خدمة"
           onAddClick={handleNavigateAdd}
           additionalActions={
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => refetch()} size="small">
-              تحديث
-            </Button>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => refetch()} size="small">
+                تحديث
+              </Button>
+            </Stack>
           }
         />
       </PermissionGuard>

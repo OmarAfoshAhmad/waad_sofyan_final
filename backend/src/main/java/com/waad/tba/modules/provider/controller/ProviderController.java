@@ -50,12 +50,12 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<PaginationResponse<ProviderSelectorDto>>> getSelectorOptions(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "1000") int size) {
-        
+
         // Cap maximum size at 1000
         size = Math.min(size, 1000);
-        
+
         Page<ProviderSelectorDto> options = providerService.getSelectorOptions(Math.max(0, page - 1), size);
-        
+
         // Filter for Provider Users
         var currentUser = authorizationService.getCurrentUser();
         if (currentUser != null && authorizationService.isProvider(currentUser)) {
@@ -64,25 +64,25 @@ public class ProviderController {
                 List<ProviderSelectorDto> filtered = options.getContent().stream()
                         .filter(p -> p.getId().equals(providerId))
                         .collect(Collectors.toList());
-                
+
                 PaginationResponse<ProviderSelectorDto> response = PaginationResponse.<ProviderSelectorDto>builder()
                         .items(filtered)
                         .total((long) filtered.size())
                         .page(page)
                         .size(size)
                         .build();
-                
+
                 return ResponseEntity.ok(ApiResponse.success(response));
             }
         }
-        
+
         PaginationResponse<ProviderSelectorDto> response = PaginationResponse.<ProviderSelectorDto>builder()
                 .items(options.getContent())
                 .total(options.getTotalElements())
                 .page(page)
                 .size(size)
                 .build();
-        
+
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -115,8 +115,9 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<PaginationResponse<ProviderViewDto>>> listProviders(
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "10") int size,
-            @RequestParam(name = "search", required = false) String search) {
-        Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search);
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "active", required = false) Boolean active) {
+        Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search, active);
 
         PaginationResponse<ProviderViewDto> response = PaginationResponse.<ProviderViewDto>builder()
                 .items(providers.getContent())
@@ -140,6 +141,13 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Void>> deactivateProvider(@PathVariable("id") Long id) {
         providerService.deactivateProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider deactivated successfully", null));
+    }
+
+    @PutMapping("/{id:\\d+}/restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<ProviderViewDto>> restoreProvider(@PathVariable("id") Long id) {
+        ProviderViewDto provider = providerService.restoreProvider(id);
+        return ResponseEntity.ok(ApiResponse.success("Provider restored successfully", provider));
     }
 
     @GetMapping("/active")
@@ -175,12 +183,12 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<ProviderServiceResponseDto>> assignService(
             @PathVariable("id") Long id,
             @Valid @RequestBody ProviderServiceAssignDto dto) {
-        
-        log.info("[PROVIDER-SERVICES] POST /api/providers/{}/services - serviceCode={}", 
+
+        log.info("[PROVIDER-SERVICES] POST /api/providers/{}/services - serviceCode={}",
                 id, dto.getServiceCode());
-        
+
         ProviderServiceResponseDto result = providerServiceService.assignService(id, dto);
-        
+
         return ResponseEntity.ok(ApiResponse.success("Service assigned successfully", result));
     }
 
@@ -192,11 +200,11 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Void>> removeService(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode) {
-        
+
         log.info("[PROVIDER-SERVICES] DELETE /api/providers/{}/services/{}", id, serviceCode);
-        
+
         providerServiceService.removeService(id, serviceCode);
-        
+
         return ResponseEntity.ok(ApiResponse.success("Service removed successfully", null));
     }
 
@@ -207,11 +215,11 @@ public class ProviderController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderServiceResponseDto>>> getProviderServices(
             @PathVariable("id") Long id) {
-        
+
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/services", id);
-        
+
         List<ProviderServiceResponseDto> services = providerServiceService.getProviderServices(id);
-        
+
         return ResponseEntity.ok(ApiResponse.success(services));
     }
 
@@ -222,9 +230,9 @@ public class ProviderController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<String>>> getProviderServiceCodes(@PathVariable("id") Long id) {
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/service-codes", id);
-        
+
         List<String> serviceCodes = providerServiceService.getProviderServiceCodes(id);
-        
+
         return ResponseEntity.ok(ApiResponse.success(serviceCodes));
     }
 
@@ -236,11 +244,11 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Boolean>> checkProviderService(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode) {
-        
+
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/services/{}/check", id, serviceCode);
-        
+
         boolean offers = providerServiceService.providerOffersService(id, serviceCode);
-        
+
         return ResponseEntity.ok(ApiResponse.success(offers));
     }
 
@@ -254,11 +262,11 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> createContract(
             @PathVariable("id") Long id,
             @Valid @RequestBody ProviderContractCreateDto dto) {
-        
+
         log.info("[PROVIDER-CONTRACTS] POST /api/providers/{}/contracts", id);
-        
+
         ProviderContractResponseDto contract = providerContractService.createContract(id, dto);
-        
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Provider contract created successfully", contract));
     }
@@ -272,11 +280,11 @@ public class ProviderController {
             @PathVariable("id") Long id,
             @PathVariable("contractId") Long contractId,
             @Valid @RequestBody ProviderContractUpdateDto dto) {
-        
+
         log.info("[PROVIDER-CONTRACTS] PUT /api/providers/{}/contracts/{}", id, contractId);
-        
+
         ProviderContractResponseDto contract = providerContractService.updateContract(id, contractId, dto);
-        
+
         return ResponseEntity.ok(ApiResponse.success("Provider contract updated successfully", contract));
     }
 
@@ -288,11 +296,11 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Void>> deleteContract(
             @PathVariable("id") Long id,
             @PathVariable("contractId") Long contractId) {
-        
+
         log.info("[PROVIDER-CONTRACTS] DELETE /api/providers/{}/contracts/{}", id, contractId);
-        
+
         providerContractService.deleteContract(id, contractId);
-        
+
         return ResponseEntity.ok(ApiResponse.<Void>success("Provider contract deleted successfully", null));
     }
 
@@ -308,20 +316,19 @@ public class ProviderController {
             @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "sortBy", defaultValue = "effectiveFrom") String sortBy,
             @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
-        
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts?activeOnly={}&page={}&size={}", 
+
+        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts?activeOnly={}&page={}&size={}",
                 id, activeOnly, page, size);
-        
+
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                page, size, 
-                sortDir.equalsIgnoreCase("ASC") 
-                    ? org.springframework.data.domain.Sort.by(sortBy).ascending()
-                    : org.springframework.data.domain.Sort.by(sortBy).descending()
-        );
-        
+                page, size,
+                sortDir.equalsIgnoreCase("ASC")
+                        ? org.springframework.data.domain.Sort.by(sortBy).ascending()
+                        : org.springframework.data.domain.Sort.by(sortBy).descending());
+
         Page<ProviderContractResponseDto> contracts = providerContractService.getProviderContracts(
                 id, activeOnly, pageable);
-        
+
         return ResponseEntity.ok(PaginationResponse.of(contracts));
     }
 
@@ -332,11 +339,11 @@ public class ProviderController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getCurrentContracts(
             @PathVariable("id") Long id) {
-        
+
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/current", id);
-        
+
         List<ProviderContractResponseDto> contracts = providerContractService.getCurrentlyEffectiveContracts(id);
-        
+
         return ResponseEntity.ok(ApiResponse.success(contracts));
     }
 
@@ -348,11 +355,11 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getContractById(
             @PathVariable("id") Long id,
             @PathVariable("contractId") Long contractId) {
-        
+
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/{}", id, contractId);
-        
+
         ProviderContractResponseDto contract = providerContractService.getContractById(id, contractId);
-        
+
         return ResponseEntity.ok(ApiResponse.success(contract));
     }
 
@@ -364,14 +371,13 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<EffectivePriceResponseDto>> getEffectivePrice(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) 
-            java.time.LocalDate date) {
-        
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/services/{}/price?date={}", 
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+
+        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/services/{}/price?date={}",
                 id, serviceCode, date);
-        
+
         EffectivePriceResponseDto price = providerContractService.getEffectivePrice(id, serviceCode, date);
-        
+
         return ResponseEntity.ok(ApiResponse.success(price));
     }
 
@@ -382,14 +388,15 @@ public class ProviderController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Long>> getContractCount(@PathVariable("id") Long id) {
         log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/count", id);
-        
+
         long count = providerContractService.countActiveContracts(id);
-        
+
         return ResponseEntity.ok(ApiResponse.success(count));
     }
-    
+
     /**
-     * Get services requiring pre-approval for a member from provider's active contract.
+     * Get services requiring pre-approval for a member from provider's active
+     * contract.
      * 
      * This endpoint returns ONLY services that:
      * 1. Are in the provider's active contract (with contract pricing)
@@ -402,31 +409,30 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<java.util.List<ProviderServiceDto>>> getServicesRequiringPreAuth(
             @PathVariable("id") Long id,
             @RequestParam(name = "memberId") Long memberId) {
-        
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contract/services/requiring-preauth?memberId={}", 
+
+        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contract/services/requiring-preauth?memberId={}",
                 id, memberId);
-        
+
         java.util.List<ProviderServiceDto> services = providerContractService.getServicesRequiringPreAuth(id, memberId);
-        
+
         return ResponseEntity.ok(ApiResponse.success(
-            "Services requiring pre-approval retrieved", 
-            services
-        ));
+                "Services requiring pre-approval retrieved",
+                services));
     }
 
     /**
-         * Get allowed employer IDs for a provider
-         * Used in provider management to show partner permissions
-         * 
-         * GET /api/providers/{id}/allowed-employers-ids
-         */
-        @GetMapping("/{id}/allowed-employers-ids")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
-        public ResponseEntity<ApiResponse<List<Long>>> getAllowedEmployerIds(@PathVariable("id") Long id) {
-            log.info("[PROVIDER] GET /api/providers/{}/allowed-employers-ids", id);
-            List<Long> employerIds = providerService.getAllowedEmployerIds(id);
-            return ResponseEntity.ok(ApiResponse.success("Allowed employers retrieved", employerIds));
-        }
+     * Get allowed employer IDs for a provider
+     * Used in provider management to show partner permissions
+     * 
+     * GET /api/providers/{id}/allowed-employers-ids
+     */
+    @GetMapping("/{id}/allowed-employers-ids")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<List<Long>>> getAllowedEmployerIds(@PathVariable("id") Long id) {
+        log.info("[PROVIDER] GET /api/providers/{}/allowed-employers-ids", id);
+        List<Long> employerIds = providerService.getAllowedEmployerIds(id);
+        return ResponseEntity.ok(ApiResponse.success("Allowed employers retrieved", employerIds));
+    }
 
     /**
      * Get administrative documents for a provider
@@ -453,9 +459,9 @@ public class ProviderController {
             @PathVariable("id") Long id,
             @RequestPart("data") @Valid ProviderAdminDocumentCreateDto dto,
             @RequestPart(value = "file", required = false) MultipartFile file) {
-        
+
         log.info("[PROVIDER] POST /api/providers/{}/documents - type: {}", id, dto.getType());
-        
+
         ProviderAdminDocumentResponseDto document = providerAdminDocumentService.createDocument(id, dto, file);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Document added successfully", document));
@@ -471,9 +477,9 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Void>> deleteProviderDocument(
             @PathVariable("providerId") Long providerId,
             @PathVariable("docId") Long docId) {
-        
+
         log.info("[PROVIDER] DELETE /api/providers/{}/documents/{}", providerId, docId);
-        
+
         providerAdminDocumentService.deleteDocument(providerId, docId);
         return ResponseEntity.ok(ApiResponse.success("Document deleted successfully", null));
     }
@@ -494,10 +500,10 @@ public class ProviderController {
             Long userProviderId = authorizationService.getProviderFilterForUser(currentUser);
             if (userProviderId != null && !userProviderId.equals(id)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error("Access denied"));
+                        .body(ApiResponse.error("Access denied"));
             }
         }
-        
+
         List<AllowedEmployerDto> employers = providerService.getAllowedEmployers(id);
         return ResponseEntity.ok(ApiResponse.success(employers));
     }
@@ -510,7 +516,7 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Void>> updateAllowedEmployers(
             @PathVariable("id") Long id,
             @RequestBody List<Long> employerIds) {
-        
+
         providerService.updateAllowedEmployers(id, employerIds);
         return ResponseEntity.ok(ApiResponse.success("Allowed employers updated successfully", null));
     }

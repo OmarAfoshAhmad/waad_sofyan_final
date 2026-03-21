@@ -34,6 +34,20 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
                      "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :keyword, '%')))")
        Page<Provider> searchPagedAll(@Param("keyword") String keyword, Pageable pageable);
 
+       /**
+        * Search inactive providers with pagination
+        */
+       @Query("SELECT p FROM Provider p " +
+                     "WHERE p.active = false " +
+                     "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.licenseNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+       Page<Provider> searchPagedInactive(@Param("keyword") String keyword, Pageable pageable);
+
+       Page<Provider> findByActiveTrue(Pageable pageable);
+
+       Page<Provider> findByActiveFalse(Pageable pageable);
+
        @Query("SELECT p FROM Provider p WHERE p.active = true")
        List<Provider> findAllActive();
 

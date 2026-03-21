@@ -118,6 +118,11 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
        Page<ProviderContract> findByActiveTrue(Pageable pageable);
 
        /**
+        * Find all soft-deleted contracts (paginated)
+        */
+       Page<ProviderContract> findByActiveFalse(Pageable pageable);
+
+       /**
         * Check if contract exists and is active
         */
        boolean existsByIdAndActiveTrue(Long id);

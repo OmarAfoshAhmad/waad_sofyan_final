@@ -20,7 +20,9 @@ const featureFlagsService = {
    * @returns {Promise<Array>} List of public feature flag DTOs
    */
   getPublicFlags: async () => {
-    const response = await axiosClient.get(`${BASE_URL}/public`);
+    const response = await axiosClient.get(`${BASE_URL}/public`, {
+      suppress401Handling: true
+    });
     return response.data?.data ?? [];
   },
 
@@ -52,7 +54,9 @@ const featureFlagsService = {
    * @returns {Promise<Object>}
    */
   getUiConfig: async () => {
-    const response = await axiosClient.get('/admin/system-settings/ui-config');
+    const response = await axiosClient.get('/admin/system-settings/ui-config', {
+      suppress401Handling: true
+    });
     return response.data;
   }
 };

@@ -150,6 +150,21 @@ export const providersService = {
   },
 
   /**
+   * Restore provider from soft delete
+   * @param {number} id - Provider ID
+   * @returns {Promise<Object>} Restored provider
+   */
+  restore: async (id) => {
+    try {
+      if (!id) throw new Error('معرف المزود مطلوب');
+      const response = await axiosClient.put(`${BASE_URL}/${id}/restore`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
    * Search providers
    * @param {string} query - Search query
    * @returns {Promise<Array>} Matching providers

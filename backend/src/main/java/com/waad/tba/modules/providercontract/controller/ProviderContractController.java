@@ -81,6 +81,21 @@ public class ProviderContractController {
     }
 
     /**
+     * GET /api/provider-contracts/deleted
+     * List soft-deleted contracts (paginated)
+     */
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "List deleted contracts", description = "Get paginated list of soft-deleted provider contracts")
+    public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getDeleted(
+            @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+
+        log.debug("REST request to get soft-deleted provider contracts");
+        Page<ProviderContractResponseDto> result = contractService.findDeleted(pageable);
+        return ResponseEntity.ok(ApiResponse.success("Deleted contracts retrieved successfully", result));
+    }
+
+    /**
      * GET /api/provider-contracts/search
      * Search contracts
      */
@@ -309,6 +324,21 @@ public class ProviderContractController {
         log.debug("REST request to delete contract: {}", id);
         contractService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Contract deleted successfully", null));
+    }
+
+    /**
+     * PUT /api/provider-contracts/{id}/restore
+     * Restore a soft-deleted contract
+     */
+    @PutMapping("/{id:\\d+}/restore")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Restore contract", description = "Restore a soft-deleted provider contract")
+    public ResponseEntity<ApiResponse<ProviderContractResponseDto>> restore(
+            @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
+
+        log.debug("REST request to restore contract: {}", id);
+        ProviderContractResponseDto result = contractService.restore(id);
+        return ResponseEntity.ok(ApiResponse.success("Contract restored successfully", result));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

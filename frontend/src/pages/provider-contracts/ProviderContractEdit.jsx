@@ -1,22 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
-import { addYears, format } from 'date-fns';
+import { format } from 'date-fns';
 
 import {
   Alert,
-  Autocomplete,
+  Box,
   Button,
   CircularProgress,
   Grid,
   InputAdornment,
   MenuItem,
+  Paper,
   Stack,
   TextField,
   Typography
 } from '@mui/material';
-import { ArrowBack, Save, Add as AddIcon } from '@mui/icons-material';
+import { ArrowBack, Save, Edit as EditIcon } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -24,8 +25,11 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 
-import { createProviderContract, PRICING_MODEL_CONFIG } from 'services/api/provider-contracts.service';
-import { getProviderSelector } from 'services/api/providers.service';
+import {
+  getProviderContractById,
+  updateProviderContract,
+  PRICING_MODEL_CONFIG
+} from 'services/api/provider-contracts.service';
 
 const PRICING_MODELS = [
   { value: 'DISCOUNT', label: PRICING_MODEL_CONFIG.DISCOUNT.label },
@@ -34,66 +38,61 @@ const PRICING_MODELS = [
   { value: 'NEGOTIATED', label: PRICING_MODEL_CONFIG.NEGOTIATED.label }
 ];
 
-const ProviderContractCreate = () => {
+const ProviderContractEdit = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
 
   const [errors, setErrors] = useState({});
-  const [selectedProvider, setSelectedProvider] = useState(null);
-  const [autoContractCode, setAutoContractCode] = useState('AUTO-GENERATED');
 
-  const [formData, setFormData] = useState({
-    providerId: '',
-    startDate: new Date(),
-    endDate: addYears(new Date(), 1),
-    pricingModel: 'DISCOUNT',
-    discountPercent: 10,
-    notes: ''
+  const { data: contract, isLoading } = useQuery({
+    queryKey: ['provider-contract', id],
+    queryFn: () => getProviderContractById(id),
+    enabled: !!id,
+    staleTime: 30000
   });
 
-  const {
-    data: providersResponse,
-    isLoading: providersLoading,
-    error: providersError
-  } = useQuery({
-    queryKey: ['providers', 'selector'],
-    queryFn: getProviderSelector,
-    staleTime: 5 * 60 * 1000
-  });
-
-  const providers = useMemo(() => {
-    return Array.isArray(providersResponse) ? providersResponse : providersResponse?.data || [];
-  }, [providersResponse]);
-
-  useEffect(() => {
-    if (!selectedProvider || !formData.startDate) {
-      setAutoContractCode('AUTO-GENERATED');
-      return;
+  const initialFormData = useMemo(() => {
+    if (!contract) {
+      return {
+        contractCode: '',
+        startDate: null,
+        endDate: null,
+        pricingModel: 'DISCOUNT',
+        discountPercent: 0,
+        notes: ''
+      };
     }
 
-    const providerInitials = (selectedProvider.name || '')
-      .split(' ')
-      .slice(0, 2)
-      .map((word) => word?.[0] || '')
-      .join('')
-      .toUpperCase();
+    return {
+      contractCode: contract.contractCode || '',
+      startDate: contract.startDate ? new Date(contract.startDate) : null,
+      endDate: contract.endDate ? new Date(contract.endDate) : null,
+      pricingModel: contract.pricingModel || 'DISCOUNT',
+      discountPercent: contract.discountPercent ?? 0,
+      notes: contract.notes || ''
+    };
+  }, [contract]);
 
-    const year = format(formData.startDate, 'yyyy');
-    const month = format(formData.startDate, 'MM');
-    const suffix = Date.now().toString().slice(-3);
-    setAutoContractCode(`PC-${providerInitials || 'XX'}-${year}${month}-${suffix}`);
-  }, [selectedProvider, formData.startDate]);
+  const [formData, setFormData] = useState(null);
 
-  const createMutation = useMutation({
-    mutationFn: createProviderContract,
+  useEffect(() => {
+    if (contract && formData === null) {
+      setFormData(initialFormData);
+    }
+  }, [contract, formData, initialFormData]);
+
+  const updateMutation = useMutation({
+    mutationFn: (payload) => updateProviderContract(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['provider-contracts'] });
-      enqueueSnackbar('تم إنشاء العقد بنجاح', { variant: 'success' });
-      navigate('/provider-contracts');
+      queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
+      enqueueSnackbar('تم تحديث العقد بنجاح', { variant: 'success' });
+      navigate(`/provider-contracts/${id}`);
     },
     onError: (error) => {
-      enqueueSnackbar(error?.message || 'فشل إنشاء العقد', { variant: 'error' });
+      enqueueSnackbar(error?.message || 'فشل تحديث العقد', { variant: 'error' });
     }
   });
 
@@ -111,28 +110,21 @@ const ProviderContractCreate = () => {
     }
   };
 
-  const handleProviderChange = (_, value) => {
-    setSelectedProvider(value);
-    setFormData((prev) => ({ ...prev, providerId: value?.id || '' }));
-    if (errors.providerId) {
-      setErrors((prev) => ({ ...prev, providerId: '' }));
-    }
-  };
-
   const validate = () => {
     const nextErrors = {};
 
-    if (!formData.providerId) nextErrors.providerId = 'يرجى اختيار مقدم خدمة';
-    if (!formData.startDate) nextErrors.startDate = 'تاريخ البداية مطلوب';
-    if (!formData.endDate) nextErrors.endDate = 'تاريخ النهاية مطلوب';
+    if (!formData?.startDate) nextErrors.startDate = 'تاريخ البداية مطلوب';
+    if (!formData?.endDate) nextErrors.endDate = 'تاريخ النهاية مطلوب';
 
-    if (formData.startDate && formData.endDate && formData.endDate <= formData.startDate) {
+    if (formData?.startDate && formData?.endDate && formData.endDate <= formData.startDate) {
       nextErrors.endDate = 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية';
     }
 
-    if (!formData.pricingModel) nextErrors.pricingModel = 'نموذج التسعير مطلوب';
+    if (!formData?.pricingModel) {
+      nextErrors.pricingModel = 'نموذج التسعير مطلوب';
+    }
 
-    if (formData.pricingModel === 'DISCOUNT') {
+    if (formData?.pricingModel === 'DISCOUNT') {
       const value = Number(formData.discountPercent);
       if (Number.isNaN(value) || value < 0 || value > 100) {
         nextErrors.discountPercent = 'نسبة الخصم يجب أن تكون بين 0 و 100';
@@ -145,11 +137,12 @@ const ProviderContractCreate = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!formData || !contract) return;
     if (!validate()) return;
 
     const payload = {
-      providerId: formData.providerId,
-      contractCode: autoContractCode,
+      providerId: contract.providerId || contract.provider?.id,
+      contractCode: formData.contractCode,
       startDate: format(formData.startDate, 'yyyy-MM-dd'),
       endDate: format(formData.endDate, 'yyyy-MM-dd'),
       pricingModel: formData.pricingModel,
@@ -157,18 +150,26 @@ const ProviderContractCreate = () => {
       notes: formData.notes || null
     };
 
-    createMutation.mutate(payload);
+    updateMutation.mutate(payload);
   };
+
+  if (isLoading || !formData) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: '4rem' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <>
       <ModernPageHeader
-        title="إضافة عقد مقدم خدمة"
-        subtitle="إنشاء عقد جديد بنفس نمط شاشة تعديل العقد"
-        icon={AddIcon}
-        breadcrumbs={[{ label: 'العقود', path: '/provider-contracts' }, { label: 'إضافة عقد' }]}
+        title="تعديل بيانات العقد"
+        subtitle="تحديث معلومات عقد مقدم الخدمة"
+        icon={EditIcon}
+        breadcrumbs={[{ label: 'العقود', path: '/provider-contracts' }, { label: 'تعديل العقد' }]}
         actions={
-          <Button startIcon={<ArrowBack />} onClick={() => navigate('/provider-contracts')} disabled={createMutation.isPending}>
+          <Button startIcon={<ArrowBack />} onClick={() => navigate(`/provider-contracts/${id}`)} disabled={updateMutation.isPending}>
             عودة
           </Button>
         }
@@ -176,43 +177,25 @@ const ProviderContractCreate = () => {
 
       <MainCard>
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
+            <Grid size={12}>
+              <Alert severity="info">رقم العقد ومقدم الخدمة ثابتان، ويمكنك تعديل التواريخ، نموذج التسعير، والخصم والملاحظات.</Alert>
+            </Grid>
+
             <Grid size={{ xs: 12, md: 6 }}>
-              <Autocomplete
+              <TextField fullWidth label="رمز العقد" value={formData.contractCode} disabled />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
                 fullWidth
-                options={providers}
-                value={selectedProvider}
-                onChange={handleProviderChange}
-                isOptionEqualToValue={(option, value) => option.id === value?.id}
-                getOptionLabel={(option) => option?.name || ''}
-                loading={providersLoading}
-                disabled={providersLoading || createMutation.isPending}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="مقدم الخدمة *"
-                    error={!!errors.providerId}
-                    helperText={errors.providerId || 'ابحث واختر مقدم الخدمة'}
-                  />
-                )}
-                noOptionsText={providersLoading ? 'جاري التحميل...' : 'لا توجد بيانات'}
+                label="مقدم الخدمة"
+                value={contract?.providerName || contract?.provider?.name || '-'}
+                disabled
               />
-              {providersError && (
-                <Typography variant="caption" color="error.main" sx={{ display: 'block', mt: 0.5 }}>
-                  تعذر تحميل قائمة مقدمي الخدمة
-                </Typography>
-              )}
             </Grid>
 
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField fullWidth label="رمز العقد" value={autoContractCode} disabled />
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField fullWidth label="الحالة" value="DRAFT" disabled helperText="سيتم إنشاء العقد كمسودة" />
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
                   label="تاريخ البداية *"
@@ -229,7 +212,7 @@ const ProviderContractCreate = () => {
               </LocalizationProvider>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
                   label="تاريخ النهاية *"
@@ -247,7 +230,7 @@ const ProviderContractCreate = () => {
               </LocalizationProvider>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 select
                 fullWidth
@@ -265,7 +248,7 @@ const ProviderContractCreate = () => {
               </TextField>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
                 type="number"
@@ -280,35 +263,29 @@ const ProviderContractCreate = () => {
               />
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={12}>
               <TextField
                 fullWidth
                 multiline
-                rows={2}
+                rows={4}
                 label="ملاحظات"
                 value={formData.notes}
                 onChange={handleInputChange('notes')}
               />
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Alert severity="info" sx={{ py: 0.5 }}>
-                تم ضغط توزيع الحقول لتقليل الحاجة إلى السكرول.
-              </Alert>
-            </Grid>
-
             <Grid size={12}>
               <Stack direction="row" spacing={2} justifyContent="flex-end">
-                <Button variant="outlined" onClick={() => navigate('/provider-contracts')} disabled={createMutation.isPending}>
+                <Button variant="outlined" onClick={() => navigate(`/provider-contracts/${id}`)} disabled={updateMutation.isPending}>
                   إلغاء
                 </Button>
                 <Button
                   type="submit"
                   variant="contained"
-                  startIcon={createMutation.isPending ? <CircularProgress size={18} /> : <Save />}
-                  disabled={createMutation.isPending || providersLoading}
+                  startIcon={updateMutation.isPending ? <CircularProgress size={18} /> : <Save />}
+                  disabled={updateMutation.isPending}
                 >
-                  {createMutation.isPending ? 'جاري الحفظ...' : 'حفظ العقد'}
+                  {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التعديلات'}
                 </Button>
               </Stack>
             </Grid>
@@ -319,4 +296,4 @@ const ProviderContractCreate = () => {
   );
 };
 
-export default ProviderContractCreate;
+export default ProviderContractEdit;

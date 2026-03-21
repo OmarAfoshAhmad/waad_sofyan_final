@@ -58,6 +58,16 @@ public class ProviderContractService {
     }
 
     /**
+     * Get soft-deleted contracts (paginated)
+     */
+    @Transactional(readOnly = true)
+    public Page<ProviderContractResponseDto> findDeleted(Pageable pageable) {
+        log.debug("Finding soft-deleted provider contracts, page: {}", pageable.getPageNumber());
+        return contractRepository.findByActiveFalse(pageable)
+                .map(ProviderContractResponseDto::fromEntity);
+    }
+
+    /**
      * Get contract by ID
      */
     @Transactional(readOnly = true)
@@ -458,6 +468,25 @@ public class ProviderContractService {
         contractRepository.save(contract);
 
         log.info("Soft deleted provider contract: {}", contract.getContractCode());
+    }
+
+    /**
+     * Restore a soft-deleted contract
+     */
+    @Transactional
+    public ProviderContractResponseDto restore(Long id) {
+        log.info("Restoring provider contract: {}", id);
+
+        ProviderContract contract = contractRepository.findById(id)
+                .filter(c -> Boolean.FALSE.equals(c.getActive()))
+                .orElseThrow(() -> new BusinessRuleException("Deleted provider contract not found: " + id));
+
+        contract.setActive(true);
+        contract.setUpdatedBy(getCurrentUsername());
+        contract = contractRepository.save(contract);
+
+        log.info("Restored provider contract: {}", contract.getContractCode());
+        return ProviderContractResponseDto.fromEntity(contract);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

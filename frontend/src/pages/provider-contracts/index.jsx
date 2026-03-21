@@ -17,6 +17,7 @@
  *
  * Route Configuration (in MainRoutes.jsx):
  * - /provider-contracts → ProviderContractsList (this export)
+ * - /provider-contracts/edit/:id → ProviderContractView (temporary edit route)
  * - /provider-contracts/:id → ProviderContractView
  *
  * @version 1.0.0
