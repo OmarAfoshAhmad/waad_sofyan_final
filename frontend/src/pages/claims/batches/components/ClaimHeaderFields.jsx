@@ -8,6 +8,8 @@ const inlineSx = {
     '& .MuiInputBase-root': { fontSize: '0.8rem' }
 };
 
+const FULL_COVERAGE_OPTION = { id: -1, code: 'FULL_COVERAGE', name: '✦ تغطية كاملة' };
+
 export const ClaimHeaderFields = ({
     member,
     setMember,
@@ -151,9 +153,17 @@ export const ClaimHeaderFields = ({
                                 <Autocomplete
                                     size="small"
                                     sx={{ flexGrow: 1 }}
-                                    options={rootCategories?.filter(c => c.code !== 'CAT-OP') || []}
+                                    options={[
+                                        ...(rootCategories?.filter(c => c.code !== 'CAT-OP') || []),
+                                        FULL_COVERAGE_OPTION
+                                    ]}
                                     getOptionLabel={(o) => o.name || o.nameAr || ''}
-                                    value={rootCategories?.find(c => c.code === primaryCategoryCode) || null}
+                                    value={
+                                        primaryCategoryCode === 'FULL_COVERAGE'
+                                            ? FULL_COVERAGE_OPTION
+                                            : (rootCategories?.find(c => c.code === primaryCategoryCode) || null)
+                                    }
+                                    isOptionEqualToValue={(o, v) => o.code === v?.code}
                                     onChange={(_, v) => {
                                         const newCode = v?.code || '';
                                         setPrimaryCategoryCode(newCode);
@@ -161,9 +171,26 @@ export const ClaimHeaderFields = ({
                                         setIsDirty(true);
                                         refetchAllLinesCoverage(newCode, linesRef.current);
                                     }}
+                                    renderOption={(props, option) => (
+                                        <li {...props} key={option.code}>
+                                            <Typography sx={{
+                                                fontSize: '0.8rem',
+                                                fontWeight: option.code === 'FULL_COVERAGE' ? 700 : 400,
+                                                color: option.code === 'FULL_COVERAGE' ? '#00695c' : 'inherit'
+                                            }}>
+                                                {option.name || option.nameAr}
+                                            </Typography>
+                                        </li>
+                                    )}
                                     renderInput={(params) => (
                                         <TextField {...params} variant="standard" placeholder="اختر التصنيف..."
-                                            sx={inlineSx} />
+                                            sx={{
+                                                ...inlineSx,
+                                                ...(primaryCategoryCode === 'FULL_COVERAGE' && {
+                                                    '& .MuiInputBase-input': { color: '#00695c', fontWeight: 700 }
+                                                })
+                                            }}
+                                        />
                                     )}
                                 />
                             )}

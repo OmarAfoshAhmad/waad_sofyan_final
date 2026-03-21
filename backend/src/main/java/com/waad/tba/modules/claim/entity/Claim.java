@@ -190,6 +190,14 @@ public class Claim {
     @Column(name = "primary_category_code", length = 50)
     private String primaryCategoryCode;
 
+    /**
+     * Full coverage override: 100% coverage, no limits.
+     * When TRUE, bypasses all service-specific limits (amount/times).
+     */
+    @Column(name = "full_coverage")
+    @Builder.Default
+    private Boolean fullCoverage = false;
+
     // ========== Financial Snapshot Fields (Phase MVP) ==========
 
     /**

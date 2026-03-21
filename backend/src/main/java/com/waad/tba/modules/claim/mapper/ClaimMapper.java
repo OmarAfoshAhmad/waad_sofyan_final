@@ -81,6 +81,7 @@ public class ClaimMapper {
                 .claimBatch(claimBatch)
                 .manualCategoryEnabled(dto.getManualCategoryEnabled() != null ? dto.getManualCategoryEnabled() : false)
                 .primaryCategoryCode(dto.getPrimaryCategoryCode())
+                .fullCoverage(dto.getFullCoverage() != null ? dto.getFullCoverage() : false)
                 .isBacklog(visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG)
                 .build();
 
@@ -199,29 +200,35 @@ public class ClaimMapper {
                     : lineDto.getAppliedCategoryId();
 
             // Resolve coverage:
-            // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
-            // can find the most specific matching rule:
-            // priority 0 = exact service category (e.g. CAT-IP-PHYSIO)
-            // priority 1 = child of override context (e.g. CAT-OP-PHYSIO when
-            // context=CAT-OP)
-            // priority 2 = exact override (e.g. CAT-OP root)
-            var coverageResult = benefitPolicyCoverageService.resolveCoverage(
-                    resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
-                    null,
-                    serviceCatIdForCoverage,
-                    categoryOverrideId,
-                    claim.getMember().getId(),
-                    claim.getServiceDate(),
-                    claim.getId());
+            // When fullCoverage=true → 100% coverage, skip benefit rule lookup
+            if (Boolean.TRUE.equals(claim.getFullCoverage())) {
+                coveragePercentSnapshot = 100;
+                log.info("✅ [MAPPER] Full coverage override → 100%");
+            } else {
+                // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
+                // can find the most specific matching rule:
+                // priority 0 = exact service category (e.g. CAT-IP-PHYSIO)
+                // priority 1 = child of override context (e.g. CAT-OP-PHYSIO when
+                // context=CAT-OP)
+                // priority 2 = exact override (e.g. CAT-OP root)
+                var coverageResult = benefitPolicyCoverageService.resolveCoverage(
+                        resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
+                        null,
+                        serviceCatIdForCoverage,
+                        categoryOverrideId,
+                        claim.getMember().getId(),
+                        claim.getServiceDate(),
+                        claim.getId());
 
-            if (coverageResult != null) {
-                requiresPA = coverageResult.isRequiresPreApproval();
-                coveragePercentSnapshot = coverageResult.getCoveragePercent();
+                if (coverageResult != null) {
+                    requiresPA = coverageResult.isRequiresPreApproval();
+                    coveragePercentSnapshot = coverageResult.getCoveragePercent();
 
-                // POPULATE FINANCIAL SNAPSHOTS (Flyway V112)
-                lineDto.setBenefitLimit(coverageResult.getAmountLimit());
-                lineDto.setUsedAmount(coverageResult.getUsedAmount());
-                lineDto.setRemainingAmount(coverageResult.getRemainingAmount());
+                    // POPULATE FINANCIAL SNAPSHOTS (Flyway V112)
+                    lineDto.setBenefitLimit(coverageResult.getAmountLimit());
+                    lineDto.setUsedAmount(coverageResult.getUsedAmount());
+                    lineDto.setRemainingAmount(coverageResult.getRemainingAmount());
+                }
             }
 
             // Fetch applied category info.
@@ -466,20 +473,26 @@ public class ClaimMapper {
             Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
                     : lineDto.getAppliedCategoryId();
 
-            // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
-            // finds the most specific rule (exact service cat beats child-of-override).
-            var coverageResult = benefitPolicyCoverageService.resolveCoverage(
-                    resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
-                    null,
-                    serviceCatIdForCoverage,
-                    categoryOverrideId,
-                    claim.getMember().getId(),
-                    claim.getServiceDate(),
-                    claim.getId());
+            // When fullCoverage=true → 100% coverage, skip benefit rule lookup
+            if (Boolean.TRUE.equals(claim.getFullCoverage())) {
+                coveragePercentSnapshot = 100;
+                log.info("✅ [REPLACE_MAPPER] Full coverage override → 100%");
+            } else {
+                // Pass both serviceCatIdForCoverage AND categoryOverrideId so the repository
+                // finds the most specific rule (exact service cat beats child-of-override).
+                var coverageResult = benefitPolicyCoverageService.resolveCoverage(
+                        resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId() : null,
+                        null,
+                        serviceCatIdForCoverage,
+                        categoryOverrideId,
+                        claim.getMember().getId(),
+                        claim.getServiceDate(),
+                        claim.getId());
 
-            if (coverageResult != null) {
-                requiresPA = coverageResult.isRequiresPreApproval();
-                coveragePercentSnapshot = coverageResult.getCoveragePercent();
+                if (coverageResult != null) {
+                    requiresPA = coverageResult.isRequiresPreApproval();
+                    coveragePercentSnapshot = coverageResult.getCoveragePercent();
+                }
             }
 
             // Fetch applied category info.
@@ -662,6 +675,7 @@ public class ClaimMapper {
                 .slaStatus(calculateSlaStatus(claim))
                 .manualCategoryEnabled(claim.getManualCategoryEnabled())
                 .primaryCategoryCode(claim.getPrimaryCategoryCode())
+                .fullCoverage(claim.getFullCoverage())
                 .primaryCategoryName(claim.getPrimaryCategoryCode() != null
                         ? medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
                                 .map(com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory::getName).orElse(null)

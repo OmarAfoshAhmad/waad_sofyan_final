@@ -140,6 +140,7 @@ export default function ClaimBatchEntry() {
     // ✅ Claim Category Context (Manual Rule Selection)
     const [manualCategoryEnabled, setManualCategoryEnabled] = useState(true);
     const [primaryCategoryCode, setPrimaryCategoryCode] = useState('CAT-OP');
+    const fullCoverage = primaryCategoryCode === 'FULL_COVERAGE';
 
     const defaultDate = useMemo(
         () => (month && year) ? `${year}-${String(month).padStart(2, '0')}-01` : new Date().toISOString().split('T')[0],
@@ -171,7 +172,8 @@ export default function ClaimBatchEntry() {
         policyId, policyInfo, member, applyBenefits, rootCategories, primaryCategoryCode,
         setLines, recompute,
         serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : (year || new Date().getFullYear()),
-        currentClaimId: editingClaimId
+        currentClaimId: editingClaimId,
+        fullCoverage
     });
 
     const refetchAllLinesCoverageCallback = useCallback(async (newCategoryCode) => {
@@ -399,7 +401,9 @@ export default function ClaimBatchEntry() {
             setServiceDate(editingClaim.serviceDate || defaultDate);
             setPreAuthId(editingClaim.preAuthorizationId || '');
             setManualCategoryEnabled(editingClaim.manualCategoryEnabled ?? true);
-            setPrimaryCategoryCode(editingClaim.primaryCategoryCode || 'CAT-OP');
+            setPrimaryCategoryCode(
+                editingClaim.fullCoverage ? 'FULL_COVERAGE' : (editingClaim.primaryCategoryCode || 'CAT-OP')
+            );
             setIsDirty(false);
 
             // المرحلة 1.3: إعادة جلب التغطية والسقوف للمطالبة المحملة لضمان دقة العرض
@@ -651,7 +655,8 @@ export default function ClaimBatchEntry() {
                 preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
                 manualCategoryEnabled,
                 // Always send context category so backend can set appliedCategoryId on unmapped services
-                primaryCategoryCode: primaryCategoryCode,
+                primaryCategoryCode: fullCoverage ? '' : primaryCategoryCode,
+                fullCoverage: fullCoverage,
                 lines: lines.map(l => ({
                     pricingItemId: l.service?.pricingItemId || null,
                     serviceName: l.serviceName || l.service?.serviceName || '',

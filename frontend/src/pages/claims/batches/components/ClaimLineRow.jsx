@@ -68,12 +68,15 @@ export const ClaimLineRow = ({
                 </TableCell>
                 <TableCell align="center">
                     <TextField variant="standard" type="number" value={line.quantity}
-                        onChange={e => updateLine(idx, { quantity: e.target.value })} sx={inlineSx} />
+                        onChange={e => { const v = e.target.value; if (v === '' || Number(v) >= 0) updateLine(idx, { quantity: v }); }}
+                        inputProps={{ min: 0 }}
+                        sx={inlineSx} />
                 </TableCell>
                 <TableCell align="center">
                     <Tooltip title={line.contractPrice > 0 && line.unitPrice > line.contractPrice ? `السعر يتجاوز العقد (${line.contractPrice})` : ''} arrow>
                         <TextField variant="standard" type="number" value={line.unitPrice}
-                            onChange={e => updateLine(idx, { unitPrice: e.target.value })}
+                            onChange={e => { const v = e.target.value; if (v === '' || Number(v) >= 0) updateLine(idx, { unitPrice: v }); }}
+                            inputProps={{ min: 0 }}
                             sx={{
                                 ...inlineSx,
                                 '& input': {

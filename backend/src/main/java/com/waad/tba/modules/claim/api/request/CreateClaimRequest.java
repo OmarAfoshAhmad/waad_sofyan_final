@@ -147,6 +147,11 @@ public class CreateClaimRequest {
     @Size(max = 50, message = "Primary category code must not exceed 50 characters")
     private String primaryCategoryCode;
 
+    /**
+     * Full coverage override: 100% coverage, bypasses all limits.
+     */
+    private Boolean fullCoverage;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ⛔ FORBIDDEN FIELDS - FINANCIAL SAFETY
     // ═══════════════════════════════════════════════════════════════════════════

@@ -112,6 +112,7 @@ public class ClaimCreateDto {
     // ==================== COVERAGE CONTEXT ====================
     private Boolean manualCategoryEnabled;
     private String primaryCategoryCode;
+    private Boolean fullCoverage;
 
     /**
      * Optional: The monthly batch this claim belongs to.

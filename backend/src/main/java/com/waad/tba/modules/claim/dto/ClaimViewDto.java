@@ -267,6 +267,7 @@ public class ClaimViewDto {
     private Boolean manualCategoryEnabled;
     private String primaryCategoryCode;
     private String primaryCategoryName;
+    private Boolean fullCoverage;
 
     // Monthly Batch Information
     private Long claimBatchId;

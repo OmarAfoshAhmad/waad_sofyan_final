@@ -20,7 +20,8 @@ export function useCoverageLogic({
     setLines,
     recompute,
     currentClaimId,
-    serviceYear
+    serviceYear,
+    fullCoverage
 }) {
     const linesRef = useRef([]);
 
@@ -28,6 +29,11 @@ export function useCoverageLogic({
     // For now, assume we'll use functional updates or passed lines
     
     const fetchCoverage = useCallback(async (service, categoryCodeOverride) => {
+        // Full coverage: 100% with no limits, skip backend call
+        if (fullCoverage || categoryCodeOverride === 'FULL_COVERAGE') {
+            return { coveragePercent: 100, requiresPreApproval: false, notCovered: false, usageExceeded: false, usageDetails: null };
+        }
+
         const sid = service?.medicalServiceId || 0;
         const serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
         let categoryId = serviceOwnCategoryId;
@@ -108,7 +114,7 @@ export function useCoverageLogic({
             console.error('[fetchCoverage] error:', err);
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         }
-    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear]);
+    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
 
     const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
         if (!policyId || !member?.id) return;
