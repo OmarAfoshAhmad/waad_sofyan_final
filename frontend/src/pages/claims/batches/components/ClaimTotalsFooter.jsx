@@ -14,7 +14,8 @@ export const ClaimTotalsFooter = ({
     totals,
     theme,
     lines,
-    t
+    t,
+    visibleColumns
 }) => {
     // اكتشاف أن جميع البنود مرفوضة
     const activeLines = (lines || []).filter(l => l.service || l.serviceName);
@@ -72,14 +73,18 @@ export const ClaimTotalsFooter = ({
                     <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>الصافي المعتمد</Typography>
                     <Typography variant="subtitle2" fontWeight={600} color={netApproved > 0 ? 'primary.main' : 'text.disabled'} sx={{ fontSize: '0.9rem' }}>{netApproved.toFixed(2)}</Typography>
                 </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>حصة الشركة</Typography>
-                    <Typography variant="subtitle2" fontWeight={600} color="success.main" sx={{ fontSize: '0.9rem' }}>{totals.company.toFixed(2)}</Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>حصة المشترك</Typography>
-                    <Typography variant="subtitle2" fontWeight={600} color="warning.dark" sx={{ fontSize: '0.9rem' }}>{totals.employee.toFixed(2)}</Typography>
-                </Box>
+                {visibleColumns.companyShare && (
+                    <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="caption" display="block" color="success.main" sx={{ fontSize: '0.75rem', fontWeight: 700 }}>التزام الشركة</Typography>
+                        <Typography variant="subtitle2" fontWeight={700} color="success.main" sx={{ fontSize: '1.0rem' }}>{totals.company.toFixed(2)}</Typography>
+                    </Box>
+                )}
+                {visibleColumns.patientShare && (
+                    <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="caption" display="block" color="warning.dark" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>التزام المشترك</Typography>
+                        <Typography variant="subtitle2" fontWeight={600} color="warning.dark" sx={{ fontSize: '0.9rem' }}>{totals.employee.toFixed(2)}</Typography>
+                    </Box>
+                )}
             </Box>
         </Box>
     );

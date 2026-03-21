@@ -13,7 +13,7 @@ import {
     Checkbox, FormControlLabel, Radio, RadioGroup,
     Tooltip, alpha, TableFooter,
     InputAdornment, Alert, Dialog, DialogTitle, DialogContent,
-    DialogActions, Pagination
+    DialogActions, Pagination, Menu, MenuItem, ListItemIcon, ListItemText
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -24,7 +24,9 @@ import {
     FileDownload as FileDownloadIcon, WarningAmber as WarningIcon,
     VerifiedUser as PolicyIcon, Info as InfoIcon, Block as RejectIcon,
     Cancel as CancelIcon, AttachFile as AttachFileIcon,
-    Lock as LockIcon, AddCircleOutline as AddReasonIcon
+    Lock as LockIcon, AddCircleOutline as AddReasonIcon,
+    ViewColumn as ViewColumnIcon,
+    Edit as EditIcon, Check as CheckIcon, ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -78,19 +80,24 @@ const inlineSx = {
 };
 
 // رأس عمود الجدول
-const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => (
-    <TableCell align={align} sx={{
-        bgcolor: '#E8F5F1', color: '#0D4731', fontWeight: 600,
-        fontSize: '0.8rem', py: 1, px: '0.75rem', whiteSpace: 'nowrap',
-        borderBottom: '2px solid #93c9a8',
-        borderRight: '1px solid #c8e6c9',
-        '&:last-child': { borderRight: 'none' },
-        ...(w && { width: w, minWidth: w }),
-        ...sxOver
-    }}>
-        {children}
-    </TableCell>
-);
+const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => {
+    const theme = useTheme();
+    return (
+        <TableCell align={align} sx={{
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            color: theme.palette.primary.dark,
+            fontWeight: 700,
+            fontSize: '0.8rem', py: 1, px: '0.75rem', whiteSpace: 'nowrap',
+            borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+            borderRight: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            '&:last-child': { borderRight: 'none' },
+            ...(w && { width: w, minWidth: w }),
+            ...sxOver
+        }}>
+            {children}
+        </TableCell>
+    );
+};
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ClaimBatchEntry() {
@@ -134,12 +141,34 @@ export default function ClaimBatchEntry() {
     const [rejectionMode, setRejectionMode] = useState('full'); // 'full' | 'partial'
     const [manualRefusedAmountInput, setManualRefusedAmountInput] = useState('');
     const [isClaimRejected, setIsClaimRejected] = useState(false);
+    // Rejection reasons list management
+    const [editingReasonId, setEditingReasonId] = useState(null);
+    const [editingReasonText, setEditingReasonText] = useState('');
+    const [isDeletingReasonId, setIsDeletingReasonId] = useState(null);
+    const [showReasonsList, setShowReasonsList] = useState(false);
     const [page, setPage] = useState(0);
     const [attachments, setAttachments] = useState([]);
     const [editingClaimId, setEditingClaimId] = useState(initialClaimId);
     const [preAuthId, setPreAuthId] = useState('');
     const [preAuthSearch, setPreAuthSearch] = useState('');
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+    // Column Visibility State (Clutter Reduction)
+    const [visibleColumns, setVisibleColumns] = useState({
+        coverage: true,
+        benefitLimit: false, // Default hidden
+        remainingLimit: false, // Default hidden
+        refused: true,
+        companyShare: true,
+        patientShare: true
+    });
+    const [anchorElCols, setAnchorElCols] = useState(null);
+    const handleOpenCols = (event) => setAnchorElCols(event.currentTarget);
+    const handleCloseCols = () => setAnchorElCols(null);
+    const handleToggleColumn = (col) => {
+        setVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }));
+    };
+
 
     // ✅ Claim Category Context (Manual Rule Selection)
     const [manualCategoryEnabled, setManualCategoryEnabled] = useState(true);
@@ -176,6 +205,7 @@ export default function ClaimBatchEntry() {
         policyId, policyInfo, member, applyBenefits, rootCategories, primaryCategoryCode,
         setLines, recompute,
         serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : (year || new Date().getFullYear()),
+        serviceDate,
         currentClaimId: editingClaimId,
         fullCoverage
     });
@@ -570,6 +600,9 @@ export default function ClaimBatchEntry() {
         setRejectionMode('full');
         setManualRefusedAmountInput('');
         setRejectionInput(type === 'line' ? (lines[idx]?.rejectionReason || '') : (rejectionInput || ''));
+        setEditingReasonId(null);
+        setEditingReasonText('');
+        setShowReasonsList(false);
         setRejectDialogOpen(true);
     };
 
@@ -586,6 +619,37 @@ export default function ClaimBatchEntry() {
             enqueueSnackbar('فشل حفظ السبب الجديد', { variant: 'error' });
         } finally {
             setIsSavingNewReason(false);
+        }
+    };
+
+    const saveEditedReason = async () => {
+        if (!editingReasonText?.trim() || !editingReasonId) return;
+        try {
+            const updated = await claimRejectionReasonsService.update(editingReasonId, editingReasonText.trim());
+            await refetchReasons();
+            // if the current input matches the old text, update it
+            const oldReason = rejectionReasons.find(r => r.id === editingReasonId);
+            if (oldReason && rejectionInput === oldReason.reasonText) {
+                setRejectionInput(updated.reasonText);
+            }
+            setEditingReasonId(null);
+            setEditingReasonText('');
+            enqueueSnackbar('✅ تم تعديل السبب', { variant: 'success' });
+        } catch {
+            enqueueSnackbar('فشل تعديل السبب', { variant: 'error' });
+        }
+    };
+
+    const deleteReason = async (id) => {
+        setIsDeletingReasonId(id);
+        try {
+            await claimRejectionReasonsService.delete(id);
+            await refetchReasons();
+            enqueueSnackbar('✅ تم حذف السبب', { variant: 'success' });
+        } catch {
+            enqueueSnackbar('فشل حذف السبب', { variant: 'error' });
+        } finally {
+            setIsDeletingReasonId(null);
         }
     };
 
@@ -1017,14 +1081,65 @@ export default function ClaimBatchEntry() {
                         <Divider />
 
                         <Box sx={{
-                            flexShrink: 0, px: '1.25rem', py: 0.75, bgcolor: alpha('#E8F5F1', 0.55),
+                            flexShrink: 0, px: '1.25rem', py: 0.75, bgcolor: alpha(theme.palette.primary.main, 0.04),
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             borderBottom: `1px solid ${theme.palette.divider}`
                         }}>
-                            <Typography variant="subtitle2" fontWeight={600} color="#0D4731" sx={{ fontSize: '0.85rem' }}>
-                                {t('claimEntry.serviceLines')}
-                            </Typography>
-                            <Chip size="small" variant="outlined" label={`${lines.length} بند`} sx={{ fontWeight: 400, fontSize: '0.75rem' }} />
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ fontSize: '0.85rem' }}>
+                                    {t('claimEntry.serviceLines')}
+                                </Typography>
+                                <Chip size="small" variant="outlined" label={`${lines.length} بند`} sx={{ fontWeight: 400, fontSize: '0.75rem', borderColor: alpha(theme.palette.primary.main, 0.3) }} />
+                            </Stack>
+                            <Box>
+                                <Tooltip title="إظهار/إخفاء الأعمدة">
+                                    <IconButton size="small" onClick={handleOpenCols}>
+                                        <ViewColumnIcon fontSize="small" color="primary" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Menu
+                                    anchorEl={anchorElCols}
+                                    open={Boolean(anchorElCols)}
+                                    onClose={handleCloseCols}
+                                >
+                                    <MenuItem onClick={() => handleToggleColumn('coverage')}>
+                                        <ListItemIcon>
+                                            <Checkbox checked={visibleColumns.coverage} size="small" />
+                                        </ListItemIcon>
+                                        <ListItemText primary="التحمل %" />
+                                    </MenuItem>
+                                    <MenuItem onClick={() => handleToggleColumn('benefitLimit')}>
+                                        <ListItemIcon>
+                                            <Checkbox checked={visibleColumns.benefitLimit} size="small" />
+                                        </ListItemIcon>
+                                        <ListItemText primary="سقف المنفعة" />
+                                    </MenuItem>
+                                    <MenuItem onClick={() => handleToggleColumn('remainingLimit')}>
+                                        <ListItemIcon>
+                                            <Checkbox checked={visibleColumns.remainingLimit} size="small" />
+                                        </ListItemIcon>
+                                        <ListItemText primary="المتبقي" />
+                                    </MenuItem>
+                                    <MenuItem onClick={() => handleToggleColumn('refused')}>
+                                        <ListItemIcon>
+                                            <Checkbox checked={visibleColumns.refused} size="small" />
+                                        </ListItemIcon>
+                                        <ListItemText primary="المرفوض" />
+                                    </MenuItem>
+                                    <MenuItem onClick={() => handleToggleColumn('companyShare')}>
+                                        <ListItemIcon>
+                                            <Checkbox checked={visibleColumns.companyShare} size="small" />
+                                        </ListItemIcon>
+                                        <ListItemText primary="حصة الشركة" />
+                                    </MenuItem>
+                                    <MenuItem onClick={() => handleToggleColumn('patientShare')}>
+                                        <ListItemIcon>
+                                            <Checkbox checked={visibleColumns.patientShare} size="small" />
+                                        </ListItemIcon>
+                                        <ListItemText primary="حصة المشترك" />
+                                    </MenuItem>
+                                </Menu>
+                            </Box>
                         </Box>
 
                         <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
@@ -1042,12 +1157,12 @@ export default function ClaimBatchEntry() {
                                         <TH align="center" w={280}>الخدمة الطبية</TH>
                                         <TH align="center" w={45}>الكمية</TH>
                                         <TH align="center" w={70}>سعر الوحدة</TH>
-                                        <TH align="center" w={60}>التحمل %</TH>
-                                        <TH align="center" w={110}>سقف المنفعة</TH>
-                                        <TH align="center" w={110}> المتبقي من السقف </TH>
-                                        <TH align="center" w={75}>المرفوض</TH>
-                                        <TH align="center" w={105}>حصة الشركة</TH>
-                                        <TH align="center" w={105}>حصة المشترك</TH>
+                                        {visibleColumns.coverage && <TH align="center" w={60}>التحمل %</TH>}
+                                        {visibleColumns.benefitLimit && <TH align="center" w={110}>سقف المنفعة</TH>}
+                                        {visibleColumns.remainingLimit && <TH align="center" w={110}> المتبقي من السقف </TH>}
+                                        {visibleColumns.refused && <TH align="center" w={75}>المرفوض</TH>}
+                                        {visibleColumns.companyShare && <TH align="center" w={105}>حصة الشركة</TH>}
+                                        {visibleColumns.patientShare && <TH align="center" w={105}>حصة المشترك</TH>}
                                         <TH align="center" w={80}>الإجمالي</TH>
                                         <TH align="left" w={40}></TH>
                                     </TableRow>
@@ -1066,6 +1181,7 @@ export default function ClaimBatchEntry() {
                                             removeLine={removeLine}
                                             openRejectDialog={openRejectDialog}
                                             policyInfo={policyInfo}
+                                            visibleColumns={visibleColumns} 
                                         />
                                     ))}
                                     <TableRow>
@@ -1093,6 +1209,7 @@ export default function ClaimBatchEntry() {
                             theme={theme}
                             lines={lines}
                             t={t}
+                            visibleColumns={visibleColumns}
                         />
                     </Paper>
                 </Box>
@@ -1179,6 +1296,74 @@ export default function ClaimBatchEntry() {
                             </Button>
                         </Box>
                     )}
+
+                    {/* قائمة الأسباب المحفوظة مع تعديل وحذف */}
+                    <Box sx={{ mt: 2, borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
+                        <Button
+                            size="small"
+                            endIcon={<ExpandMoreIcon sx={{ fontSize: '0.9rem', transform: showReasonsList ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />}
+                            onClick={() => setShowReasonsList(v => !v)}
+                            sx={{ fontSize: '0.75rem', textTransform: 'none', color: 'text.secondary', p: 0 }}
+                        >
+                            إدارة قائمة الأسباب المحفوظة ({rejectionReasons.length})
+                        </Button>
+                        {showReasonsList && (
+                            <Box sx={{ mt: 1, maxHeight: '13rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                {rejectionReasons.map(r => (
+                                    <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5,
+                                        px: 1, py: 0.4, borderRadius: '0.25rem',
+                                        bgcolor: editingReasonId === r.id ? 'action.selected' : 'action.hover' }}>
+                                        {editingReasonId === r.id ? (
+                                            <>
+                                                <TextField
+                                                    size="small" variant="standard" fullWidth
+                                                    value={editingReasonText}
+                                                    onChange={e => setEditingReasonText(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter') saveEditedReason(); if (e.key === 'Escape') { setEditingReasonId(null); setEditingReasonText(''); } }}
+                                                    autoFocus
+                                                    inputProps={{ style: { fontSize: '0.8rem', textAlign: 'right' } }}
+                                                />
+                                                <Tooltip title="حفظ التعديل" arrow>
+                                                    <IconButton size="small" color="success" onClick={saveEditedReason}>
+                                                        <CheckIcon sx={{ fontSize: '0.9rem' }} />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="إلغاء" arrow>
+                                                    <IconButton size="small" onClick={() => { setEditingReasonId(null); setEditingReasonText(''); }}>
+                                                        <CancelIcon sx={{ fontSize: '0.9rem' }} />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Typography variant="caption" sx={{ flexGrow: 1, fontSize: '0.8rem', cursor: 'pointer' }}
+                                                    onClick={() => setRejectionInput(r.reasonText)}>
+                                                    {r.reasonText}
+                                                </Typography>
+                                                <Tooltip title="تعديل" arrow>
+                                                    <IconButton size="small" onClick={() => { setEditingReasonId(r.id); setEditingReasonText(r.reasonText); }}>
+                                                        <EditIcon sx={{ fontSize: '0.85rem', color: 'text.secondary' }} />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="حذف" arrow>
+                                                    <IconButton size="small" color="error"
+                                                        disabled={isDeletingReasonId === r.id}
+                                                        onClick={() => deleteReason(r.id)}>
+                                                        {isDeletingReasonId === r.id
+                                                            ? <CircularProgress size={12} />
+                                                            : <DeleteIcon sx={{ fontSize: '0.85rem' }} />}
+                                                    </IconButton>
+                                                </Tooltip>
+                                            </>
+                                        )}
+                                    </Box>
+                                ))}
+                                {rejectionReasons.length === 0 && (
+                                    <Typography variant="caption" color="text.disabled" sx={{ px: 1 }}>لا توجد أسباب محفوظة</Typography>
+                                )}
+                            </Box>
+                        )}
+                    </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: '1.0rem', gap: 1 }}>
                     <Button onClick={() => setRejectDialogOpen(false)} color="inherit">إلغاء</Button>

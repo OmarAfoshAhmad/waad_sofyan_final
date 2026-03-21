@@ -41,4 +41,24 @@ public class ClaimRejectionReasonController {
         return ResponseEntity.ok(ApiResponse.success(
                 Map.of("id", (Object) reason.getId(), "reasonText", reason.getReasonText())));
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> update(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String text = body.get("reasonText");
+        if (text == null || text.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("reasonText مطلوب"));
+        }
+        ClaimRejectionReason reason = service.update(id, text);
+        return ResponseEntity.ok(ApiResponse.success(
+                Map.of("id", (Object) reason.getId(), "reasonText", reason.getReasonText())));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        service.delete(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }

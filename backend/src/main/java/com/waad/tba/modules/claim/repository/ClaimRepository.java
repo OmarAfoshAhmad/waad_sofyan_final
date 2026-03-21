@@ -766,6 +766,18 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
 
         /**
+         * Calculate total approved amount for a member across all years (lifetime).
+         * Used for per-member lifetime limit validation.
+         * DB-aggregated: avoids loading all claim entities into memory.
+         */
+        @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
+                        "WHERE c.member.id = :memberId " +
+                        "AND c.status IN :statuses")
+        java.math.BigDecimal sumApprovedAmountByMember(
+                        @Param("memberId") Long memberId,
+                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+
+        /**
          * Count service usage for a member in a given year.
          */
         @Query("SELECT COUNT(cl) FROM ClaimLine cl " +

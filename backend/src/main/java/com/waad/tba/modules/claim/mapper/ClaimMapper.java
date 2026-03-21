@@ -271,6 +271,10 @@ public class ClaimMapper {
             BigDecimal clientRefused = lineDto.getRefusedAmount() != null
                     ? lineDto.getRefusedAmount()
                     : BigDecimal.ZERO;
+            BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
+                    ? lineDto.getManualRefusedAmount()
+                    : BigDecimal.ZERO;
+
             BigDecimal lineRefused = isRejected
                     ? lineRequestedTotal
                     : priceExcessRefusal.max(clientRefused);
@@ -287,6 +291,7 @@ public class ClaimMapper {
                     .requiresPA(requiresPA)
                     .coveragePercentSnapshot(coveragePercentSnapshot)
                     .patientCopayPercentSnapshot(patientCopayPercentSnapshot)
+                    .manualRefusedAmount(manualRefused)
                     .quantity(quantity)
                     .unitPrice(lineApprovedBase)
                     .totalPrice(lineApprovedBase.multiply(quantityBd))
@@ -528,6 +533,10 @@ public class ClaimMapper {
                 BigDecimal clientRefused = lineDto.getRefusedAmount() != null
                         ? lineDto.getRefusedAmount()
                         : BigDecimal.ZERO;
+                BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
+                        ? lineDto.getManualRefusedAmount()
+                        : BigDecimal.ZERO;
+
                 lineRefused = priceExcessRefusal.max(clientRefused);
 
                 // Net Available (Allowed base) = resolvedTotal - (any other refusal beyond
@@ -566,6 +575,7 @@ public class ClaimMapper {
                     .rejected(lineDto.getRejected() != null ? lineDto.getRejected() : false)
                     .rejectionReason(lineDto.getRejectionReason())
                     .refusedAmount(lineRefused)
+                    .manualRefusedAmount(manualRefused)
                     .quantity(quantity)
                     .unitPrice(lineApprovedBase)
                     .totalPrice(lineApprovedTotal)
@@ -745,6 +755,7 @@ public class ClaimMapper {
                 .rejected(line.getRejected())
                 .rejectionReason(line.getRejectionReason())
                 .refusedAmount(line.getRefusedAmount())
+                .manualRefusedAmount(line.getManualRefusedAmount())
                 .coveragePercent(line.getCoveragePercentSnapshot())
                 .patientSharePercent(line.getPatientCopayPercentSnapshot())
                 .companyShare(calculateCompanyShare(line))

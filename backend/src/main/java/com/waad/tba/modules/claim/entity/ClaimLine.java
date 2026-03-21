@@ -211,6 +211,10 @@ public class ClaimLine {
     @Builder.Default
     private BigDecimal refusedAmount = BigDecimal.ZERO;
 
+    @Column(name = "manual_refused_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal manualRefusedAmount = BigDecimal.ZERO;
+
     // ==================== FINANCIAL AUDIT: REQUESTED VS APPROVED
     // ====================
 

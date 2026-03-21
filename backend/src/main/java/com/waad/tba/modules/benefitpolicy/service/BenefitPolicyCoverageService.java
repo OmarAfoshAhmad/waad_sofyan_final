@@ -411,11 +411,15 @@ public class BenefitPolicyCoverageService {
         String serviceName = input.getServiceName() != null ? input.getServiceName() : "Unknown Service";
 
         if (serviceId == null) {
+            // Backlog/manual claims may not have a serviceId.
+            // Fall back to policy default coverage instead of failing.
+            int defaultPct = policy.getDefaultCoveragePercent() != null ? policy.getDefaultCoveragePercent() : 80;
             return ServiceCoverageResult.builder()
                     .serviceId(null)
                     .serviceName(serviceName)
-                    .covered(false)
-                    .reason("No service ID provided")
+                    .covered(true)
+                    .coveragePercent(defaultPct)
+                    .reason("No service ID — using policy default coverage (" + defaultPct + "%)")
                     .build();
         }
 
@@ -760,17 +764,16 @@ public class BenefitPolicyCoverageService {
     }
 
     /**
-     * Calculate total used for a member (all time).
+     * Calculate total approved amount for a member across all years (lifetime).
+     * Uses DB aggregation — avoids loading all claims into memory.
      */
     private BigDecimal calculateTotalUsedForMember(Long memberId) {
-        // We could optimize this too, but usually annual is the bottleneck
-        List<Claim> claims = claimRepository.findByMemberId(memberId);
-
-        return claims.stream()
-                .filter(c -> c.getApprovedAmount() != null)
-                .filter(c -> c.getStatus() != com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED)
-                .map(Claim::getApprovedAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
+                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
+                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
+                com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
+        BigDecimal total = claimRepository.sumApprovedAmountByMember(memberId, validStatuses);
+        return total != null ? total : BigDecimal.ZERO;
     }
 
     /**

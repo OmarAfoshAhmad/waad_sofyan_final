@@ -1,0 +1,1 @@
+ALTER TABLE claim_lines ADD COLUMN IF NOT EXISTS manual_refused_amount DECIMAL(15,2) DEFAULT 0.00;

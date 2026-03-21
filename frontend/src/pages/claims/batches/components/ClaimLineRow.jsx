@@ -32,7 +32,15 @@ export const ClaimLineRow = ({
     handleServiceChange,
     removeLine,
     openRejectDialog,
-    policyInfo
+    policyInfo,
+    visibleColumns = {
+        coverage: true,
+        benefitLimit: true,
+        remainingLimit: true,
+        refused: true,
+        companyShare: true,
+        patientShare: true
+    }
 }) => {
     return (
         <Fragment>
@@ -89,11 +97,14 @@ export const ClaimLineRow = ({
                         />
                     </Tooltip>
                 </TableCell>
+                {visibleColumns.coverage && (
                 <TableCell align="center">
                     <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>
                         {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
                     </Typography>
                 </TableCell>
+                )}
+                {visibleColumns.benefitLimit && (
                 <TableCell align="center">
                     {line.usageDetails && (
                         <Stack spacing={0.3} alignItems="center" justifyContent="center">
@@ -110,6 +121,8 @@ export const ClaimLineRow = ({
                         </Stack>
                     )}
                 </TableCell>
+                )}
+                {visibleColumns.remainingLimit && (
                 <TableCell align="center">
                     {line.usageDetails && (
                         <Stack spacing={0.3} alignItems="center" justifyContent="center">
@@ -142,6 +155,8 @@ export const ClaimLineRow = ({
                         </Stack>
                     )}
                 </TableCell>
+                )}
+                {visibleColumns.refused && (
                 <TableCell align="center">
                     {(() => {
                         // refusedAmount يتضمّن: تجاوز السعر + تجاوز السقف + الرفض اليدوي الجزئي + الرفض الكلي
@@ -172,16 +187,21 @@ export const ClaimLineRow = ({
                         );
                     })()}
                 </TableCell>
+                )}
+                {visibleColumns.companyShare && (
                 <TableCell align="center">
                     <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'success.main' }}>
                         {line.byCompany?.toFixed(2)}
                     </Typography>
                 </TableCell>
+                )}
+                {visibleColumns.patientShare && (
                 <TableCell align="center">
                     <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'warning.dark' }}>
                         {line.byEmployee?.toFixed(2)}
                     </Typography>
                 </TableCell>
+                )}
                 <TableCell align="center">
                     <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'primary.main' }}>
                         {line.total?.toFixed(2)}
@@ -246,6 +266,15 @@ export const ClaimLineRow = ({
                                 const total = parseFloat((prev + curr).toFixed(2));
                                 return ` (مستخدم مسبقاً: ${prev.toFixed(2)} + المطلوب حالياً: ${curr.toFixed(2)} = ${total} د.ل يتجاوز الحد ${limit.toFixed(2)} د.ل)`;
                             })()}
+                        </Typography>
+                    </TableCell>
+                </TableRow>
+            )}
+            {line.requiresPreApproval && !line.rejected && (
+                <TableRow sx={{ bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                    <TableCell colSpan={12} sx={{ py: 0.5 }}>
+                        <Typography variant="caption" color="info.dark" fontWeight={600} sx={{ fontSize: '0.75rem', px: '1.0rem', display: 'flex', alignItems: 'center', gap: 1 }}>
+                            🔒 هذه الخدمة تستلزم موافقة مسبقة (PA) — تأكد من إرفاق رقم الموافقة المسبقة
                         </Typography>
                     </TableCell>
                 </TableRow>

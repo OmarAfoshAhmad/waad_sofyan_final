@@ -29,4 +29,20 @@ public class ClaimRejectionReasonService {
                                 .active(true)
                                 .build()));
     }
+
+    @Transactional
+    public ClaimRejectionReason update(Long id, String reasonText) {
+        ClaimRejectionReason reason = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Rejection reason not found: " + id));
+        reason.setReasonText(reasonText.trim());
+        return repository.save(reason);
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        ClaimRejectionReason reason = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Rejection reason not found: " + id));
+        reason.setActive(false);
+        repository.save(reason);
+    }
 }

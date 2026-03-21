@@ -21,6 +21,7 @@ export function useCoverageLogic({
     recompute,
     currentClaimId,
     serviceYear,
+    serviceDate,
     fullCoverage
 }) {
     const linesRef = useRef([]);
@@ -32,6 +33,16 @@ export function useCoverageLogic({
         // Full coverage: 100% with no limits, skip backend call
         if (fullCoverage || categoryCodeOverride === 'FULL_COVERAGE') {
             return { coveragePercent: 100, requiresPreApproval: false, notCovered: false, usageExceeded: false, usageDetails: null };
+        }
+
+        // Policy date guard: service date must fall within the benefit policy validity period
+        if (serviceDate && policyInfo?.startDate && policyInfo?.endDate) {
+            const svcDate = new Date(serviceDate);
+            const policyStart = new Date(policyInfo.startDate);
+            const policyEnd = new Date(policyInfo.endDate);
+            if (svcDate < policyStart || svcDate > policyEnd) {
+                return { coveragePercent: 0, requiresPreApproval: false, notCovered: true, policyDateError: true, usageExceeded: false, usageDetails: null };
+            }
         }
 
         const sid = service?.medicalServiceId || 0;
@@ -114,7 +125,7 @@ export function useCoverageLogic({
             console.error('[fetchCoverage] error:', err);
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         }
-    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
+    }, [policyId, policyInfo?.defaultCoveragePercent, policyInfo?.startDate, policyInfo?.endDate, serviceDate, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
 
     const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
         if (!policyId || !member?.id) return;
