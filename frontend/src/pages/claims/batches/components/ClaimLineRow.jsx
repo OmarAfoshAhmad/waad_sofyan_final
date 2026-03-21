@@ -37,8 +37,9 @@ export const ClaimLineRow = ({
     return (
         <Fragment>
             <TableRow sx={{ 
-                bgcolor: line.rejected ? alpha(theme.palette.error.main, 0.05) : 
-                        (line.usageExceeded ? alpha(theme.palette.warning.main, 0.02) : 'transparent')
+                bgcolor: line.rejected ? alpha(theme.palette.error.main, 0.05) :
+                        ((line.manualRefusedAmount > 0) ? alpha(theme.palette.warning.main, 0.04) :
+                        (line.usageExceeded ? alpha(theme.palette.warning.main, 0.02) : 'transparent'))
             }}>
                 <TableCell align="center" sx={{ fontWeight: 600, color: 'text.secondary', width: '2.5rem' }}>{idx + 1}</TableCell>
                 <TableCell align="right" sx={{ minWidth: '17.5rem' }}>
@@ -143,7 +144,9 @@ export const ClaimLineRow = ({
                 </TableCell>
                 <TableCell align="center">
                     {(() => {
-                        const refusedVal = line.rejected ? (line.total || 0) : (line.refusedAmount || 0);
+                        // refusedAmount يتضمّن: تجاوز السعر + تجاوز السقف + الرفض اليدوي الجزئي + الرفض الكلي
+                        const refusedVal = parseFloat(line.refusedAmount) || 0;
+                        const isPartial = !line.rejected && (parseFloat(line.manualRefusedAmount) || 0) > 0;
                         if (refusedVal <= 0) {
                             return (
                                 <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.disabled' }}>
@@ -153,11 +156,17 @@ export const ClaimLineRow = ({
                         }
                         const tooltipTitle = line.rejected
                             ? (line.rejectionReason || 'الخدمة مرفوضة بالكامل')
-                            : (line.rejectionReason || `تجاوز سعر العقد (${line.contractPrice > 0 ? line.contractPrice : '—'})`);
+                            : isPartial
+                                ? `رفض جزئي: ${refusedVal.toFixed(2)} د.ل — ${line.rejectionReason || ''}`
+                                : (line.rejectionReason || `تجاوز سعر العقد (${line.contractPrice > 0 ? line.contractPrice : '—'})`);
                         return (
                             <Tooltip title={tooltipTitle} arrow>
-                                <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 700, color: 'error.main' }}>
+                                <Typography variant="body2" sx={{
+                                    fontSize: '0.85rem', fontWeight: 700,
+                                    color: isPartial ? 'warning.dark' : 'error.main'
+                                }}>
                                     {refusedVal.toFixed(2)}
+                                    {isPartial && <Typography component="span" sx={{ fontSize: '0.65rem', mr: 0.4 }}>جزئي</Typography>}
                                 </Typography>
                             </Tooltip>
                         );
@@ -180,10 +189,25 @@ export const ClaimLineRow = ({
                 </TableCell>
                 <TableCell align="left">
                     <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
-                        <IconButton size="small" color={line.rejected ? "error" : "default"}
-                            onClick={() => line.rejected ? updateLine(idx, { rejected: false }) : openRejectDialog('line', idx)}>
-                            <RejectIcon sx={{ fontSize: '0.9375rem' }} />
-                        </IconButton>
+                        <Tooltip title={
+                            line.rejected ? 'إلغاء الرفض الكلي' :
+                            (line.manualRefusedAmount > 0) ? 'إلغاء الرفض الجزئي' :
+                            'رفض البند'
+                        } arrow>
+                            <IconButton size="small"
+                                color={line.rejected ? 'error' : (line.manualRefusedAmount > 0 ? 'warning' : 'default')}
+                                onClick={() => {
+                                    if (line.rejected) {
+                                        updateLine(idx, { rejected: false, rejectionReason: '' });
+                                    } else if (line.manualRefusedAmount > 0) {
+                                        updateLine(idx, { manualRefusedAmount: 0, rejectionReason: '' });
+                                    } else {
+                                        openRejectDialog('line', idx);
+                                    }
+                                }}>
+                                <RejectIcon sx={{ fontSize: '0.9375rem' }} />
+                            </IconButton>
+                        </Tooltip>
                         <IconButton size="small" color="error" onClick={() => removeLine(idx)}>
                             <DeleteIcon sx={{ fontSize: '0.9375rem' }} />
                         </IconButton>
@@ -194,7 +218,16 @@ export const ClaimLineRow = ({
                 <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.02) }}>
                     <TableCell colSpan={12} sx={{ py: 0.5 }}>
                         <Typography variant="caption" color="error" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
-                            سبب الرفض: {line.rejectionReason}
+                            🚫 رفض كلي — {line.rejectionReason}
+                        </Typography>
+                    </TableCell>
+                </TableRow>
+            )}
+            {!line.rejected && (parseFloat(line.manualRefusedAmount) || 0) > 0 && (
+                <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.03) }}>
+                    <TableCell colSpan={12} sx={{ py: 0.5 }}>
+                        <Typography variant="caption" color="warning.dark" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
+                            ⚠️ رفض جزئي: {parseFloat(line.manualRefusedAmount).toFixed(2)} د.ل من حصة الشركة — {line.rejectionReason}
                         </Typography>
                     </TableCell>
                 </TableRow>

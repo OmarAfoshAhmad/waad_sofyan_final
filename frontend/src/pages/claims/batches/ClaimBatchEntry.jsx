@@ -10,7 +10,8 @@ import {
     Box, Stack, Typography, Button, TextField, Autocomplete,
     Divider, CircularProgress, IconButton, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, Chip, Paper,
-    Checkbox, FormControlLabel, Tooltip, alpha, TableFooter,
+    Checkbox, FormControlLabel, Radio, RadioGroup,
+    Tooltip, alpha, TableFooter,
     InputAdornment, Alert, Dialog, DialogTitle, DialogContent,
     DialogActions, Pagination
 } from '@mui/material';
@@ -65,7 +66,8 @@ const newLine = () => ({
     quantity: 1, unitPrice: 0, contractPrice: 0, byCompany: 0, byEmployee: 0,
     refusalTypes: '', total: 0, coveragePercent: null,
     requiresPreApproval: false, notCovered: false,
-    rejected: false, rejectionReason: ''
+    rejected: false, rejectionReason: '',
+    manualRefusedAmount: 0
 });
 
 // أنماط حقول الجدول القابلة للتعديل
@@ -129,6 +131,8 @@ export default function ClaimBatchEntry() {
     const [rejectType, setRejectType] = useState('claim'); // 'claim' or 'line'
     const [rejectIdx, setRejectIdx] = useState(null);
     const [rejectionInput, setRejectionInput] = useState('');
+    const [rejectionMode, setRejectionMode] = useState('full'); // 'full' | 'partial'
+    const [manualRefusedAmountInput, setManualRefusedAmountInput] = useState('');
     const [isClaimRejected, setIsClaimRejected] = useState(false);
     const [page, setPage] = useState(0);
     const [attachments, setAttachments] = useState([]);
@@ -394,7 +398,8 @@ export default function ClaimBatchEntry() {
                     contractPrice: cp,
                     coveragePercent: l.coveragePercent,
                     rejected: l.rejected,
-                    rejectionReason: l.rejectionReason
+                    rejectionReason: l.rejectionReason,
+                    manualRefusedAmount: parseFloat(l.manualRefusedAmount) || 0
                 };
                 return recompute(line);
             }));
@@ -533,7 +538,8 @@ export default function ClaimBatchEntry() {
             total: acc.total + (parseFloat(l.total) || 0),
             company: acc.company + (parseFloat(l.byCompany) || 0),
             employee: acc.employee + (parseFloat(l.byEmployee) || 0),
-            refused: acc.refused + (l.rejected ? (parseFloat(l.total) || 0) : (parseFloat(l.refusedAmount) || 0))
+            // refusedAmount دائماً يمثّل ما رُفض من حصة الشركة (سواء رفض كلي أو جزئي)
+            refused: acc.refused + (parseFloat(l.refusedAmount) || 0)
         }), { total: 0, company: 0, employee: 0, refused: 0 });
     }, [lines]);
 
@@ -561,7 +567,9 @@ export default function ClaimBatchEntry() {
     const openRejectDialog = (type, idx = null) => {
         setRejectType(type);
         setRejectIdx(idx);
-        setRejectionInput(type === 'line' ? (lines[idx].rejectionReason || '') : (rejectionInput || ''));
+        setRejectionMode('full');
+        setManualRefusedAmountInput('');
+        setRejectionInput(type === 'line' ? (lines[idx]?.rejectionReason || '') : (rejectionInput || ''));
         setRejectDialogOpen(true);
     };
 
@@ -594,7 +602,24 @@ export default function ClaimBatchEntry() {
                 enqueueSnackbar('يجب إدخال سبب رفض البند', { variant: 'warning' });
                 return;
             }
-            updateLine(rejectIdx, { rejected: true, rejectionReason: rejectionInput });
+            if (rejectionMode === 'partial') {
+                const amount = parseFloat(manualRefusedAmountInput) || 0;
+                const maxAmount = lines[rejectIdx]?.byCompany ?? 0;
+                if (amount <= 0 || amount > maxAmount + 0.001) {
+                    enqueueSnackbar(
+                        `مبلغ الرفض الجزئي يجب أن يكون بين 0.01 و ${maxAmount.toFixed(2)} د.ل`,
+                        { variant: 'warning' }
+                    );
+                    return;
+                }
+                updateLine(rejectIdx, {
+                    manualRefusedAmount: parseFloat(amount.toFixed(2)),
+                    rejectionReason: rejectionInput,
+                    rejected: false
+                });
+            } else {
+                updateLine(rejectIdx, { rejected: true, rejectionReason: rejectionInput, manualRefusedAmount: 0 });
+            }
         }
         setRejectDialogOpen(false);
     };
@@ -665,7 +690,8 @@ export default function ClaimBatchEntry() {
                     unitPrice: parseFloat(l.unitPrice) || 0,
                     refusedAmount: parseFloat(l.refusedAmount) || 0,
                     rejected: l.rejected || false,
-                    rejectionReason: l.rejectionReason || null
+                    rejectionReason: l.rejectionReason || null,
+                    manualRefusedAmount: parseFloat(l.manualRefusedAmount) || 0
                 }))
             };
 
@@ -1078,6 +1104,43 @@ export default function ClaimBatchEntry() {
                     {rejectType === 'claim' ? 'رفض المطالبة — تحديد السبب' : 'رفض البند — تحديد السبب'}
                 </DialogTitle>
                 <DialogContent sx={{ pt: '0.75rem !important' }}>
+
+                    {/* نوع الرفض — للبند فقط */}
+                    {rejectType === 'line' && (
+                        <Box sx={{ mb: 2 }}>
+                            <RadioGroup
+                                row
+                                value={rejectionMode}
+                                onChange={e => { setRejectionMode(e.target.value); setManualRefusedAmountInput(''); }}
+                            >
+                                <FormControlLabel
+                                    value="full"
+                                    control={<Radio size="small" color="error" />}
+                                    label={<Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>رفض كلي (حصة الشركة كاملاً)</Typography>}
+                                />
+                                <FormControlLabel
+                                    value="partial"
+                                    control={<Radio size="small" color="warning" />}
+                                    label={<Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>رفض جزئي (تحديد مبلغ)</Typography>}
+                                />
+                            </RadioGroup>
+
+                            {rejectionMode === 'partial' && (
+                                <TextField
+                                    fullWidth size="small" type="number"
+                                    label={`مبلغ الرفض من حصة الشركة (الحد الأقصى: ${(lines[rejectIdx]?.byCompany ?? 0).toFixed(2)} د.ل)`}
+                                    value={manualRefusedAmountInput}
+                                    onChange={e => setManualRefusedAmountInput(e.target.value)}
+                                    inputProps={{ min: 0.01, max: lines[rejectIdx]?.byCompany ?? 0, step: 0.01 }}
+                                    helperText="يُطبَّق على حصة الشركة فقط — حصة المستفيد لا تتأثر"
+                                    error={parseFloat(manualRefusedAmountInput) > (lines[rejectIdx]?.byCompany ?? 0)}
+                                    sx={{ mt: 1.5 }}
+                                    autoFocus
+                                />
+                            )}
+                        </Box>
+                    )}
+
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                         اختر سبباً من القائمة أو اكتب سبباً جديداً
                     </Typography>
@@ -1090,7 +1153,7 @@ export default function ClaimBatchEntry() {
                         renderInput={(params) => (
                             <TextField
                                 {...params}
-                                autoFocus
+                                autoFocus={rejectType === 'claim' || rejectionMode === 'full'}
                                 fullWidth
                                 size="small"
                                 label="سبب الرفض"
@@ -1119,9 +1182,17 @@ export default function ClaimBatchEntry() {
                 </DialogContent>
                 <DialogActions sx={{ p: '1.0rem', gap: 1 }}>
                     <Button onClick={() => setRejectDialogOpen(false)} color="inherit">إلغاء</Button>
-                    <Button onClick={confirmRejection} variant="contained" color="error"
-                        disabled={!rejectionInput?.trim()}>
-                        تأكيد الرفض
+                    <Button onClick={confirmRejection} variant="contained"
+                        color={rejectionMode === 'partial' ? 'warning' : 'error'}
+                        disabled={
+                            !rejectionInput?.trim() ||
+                            (rejectionMode === 'partial' && rejectType === 'line' && (
+                                !manualRefusedAmountInput ||
+                                parseFloat(manualRefusedAmountInput) <= 0 ||
+                                parseFloat(manualRefusedAmountInput) > (lines[rejectIdx]?.byCompany ?? 0) + 0.001
+                            ))
+                        }>
+                        {rejectionMode === 'partial' && rejectType === 'line' ? 'تأكيد الرفض الجزئي' : 'تأكيد الرفض'}
                     </Button>
                 </DialogActions>
             </Dialog>

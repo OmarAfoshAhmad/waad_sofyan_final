@@ -10,7 +10,22 @@ export function useCalculationLogic({ applyBenefits, policyInfo }) {
         const total = parseFloat((enteredPrice * qty).toFixed(2));
 
         if (line.rejected) {
-            return { ...line, byCompany: 0, byEmployee: 0, total, refusedAmount: total };
+            // حصة المستفيد تبقى محسوبة — المريض دفعها فعلاً
+            // ما يُرفض هو حصة الشركة فقط
+            const contractPrice = parseFloat(line.contractPrice || 0);
+            const effectivePrice = (contractPrice > 0 && enteredPrice > contractPrice) ? contractPrice : enteredPrice;
+            const effectiveTotal = parseFloat((effectivePrice * qty).toFixed(2));
+            const defaultCov = policyInfo?.defaultCoveragePercent ?? 100;
+            const cov = (line.coveragePercent !== null && line.coveragePercent !== undefined) ? line.coveragePercent : defaultCov;
+            let byEmployee, byCompanyRefused;
+            if (applyBenefits) {
+                byEmployee = parseFloat((effectiveTotal * (100 - cov) / 100).toFixed(2));
+                byCompanyRefused = parseFloat((effectiveTotal * cov / 100).toFixed(2));
+            } else {
+                byEmployee = Math.max(0, parseFloat(line.byEmployee) || 0);
+                byCompanyRefused = Math.max(0, effectiveTotal - byEmployee);
+            }
+            return { ...line, byCompany: 0, byEmployee, total, refusedAmount: byCompanyRefused };
         }
 
         const contractPrice = parseFloat(line.contractPrice || 0);
@@ -93,6 +108,15 @@ export function useCalculationLogic({ applyBenefits, policyInfo }) {
             byCompany = parseFloat(Math.max(0, approvedTotalForCoverage - byEmployee).toFixed(2));
         }
 
+        // الرفض الجزئي اليدوي: يُخصم من حصة الشركة فقط — حصة المستفيد لا تتأثر
+        const manualRefused = Math.min(
+            Math.max(0, parseFloat(line.manualRefusedAmount) || 0),
+            byCompany
+        );
+        if (manualRefused > 0) {
+            byCompany = parseFloat((byCompany - manualRefused).toFixed(2));
+        }
+
         // تعيين سبب الرفض تلقائياً بناءً على نوع المرفوض
         const AUTO_PRICE_REASON = 'تجاوز السعر المتفق عليه';
         const AUTO_LIMIT_REASON = 'المستفيد استهلك رصيده';
@@ -112,7 +136,7 @@ export function useCalculationLogic({ applyBenefits, policyInfo }) {
             total,
             byCompany,
             byEmployee,
-            refusedAmount: parseFloat((priceRefused + limitRefused).toFixed(2)),
+            refusedAmount: parseFloat((priceRefused + limitRefused + manualRefused).toFixed(2)),
             rejectionReason: autoRejectionReason,
             usageExceeded: usageExceeded || (usage && usage.exceeded),
             usageExhausted: limitRefused >= effectiveTotal && effectiveTotal > 0,
