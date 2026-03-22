@@ -567,11 +567,13 @@ export const claimsService = {
   getFinancialSummary: async (params = {}) => {
     try {
       const queryParams = new URLSearchParams();
-      // Match backend ClaimController @RequestParam names: employerId, dateFrom, dateTo
+      // Match backend ClaimController @RequestParam names: employerId, providerId, status, dateFrom, dateTo
       if (params.employerId) queryParams.append('employerId', params.employerId);
       else if (params.employerOrgId) queryParams.append('employerId', params.employerOrgId); // Fallback
 
       if (params.providerId) queryParams.append('providerId', params.providerId);
+
+      if (params.status) queryParams.append('status', params.status);
 
       if (params.dateFrom) queryParams.append('dateFrom', params.dateFrom);
       else if (params.fromDate) queryParams.append('dateFrom', params.fromDate); // Fallback

@@ -79,18 +79,18 @@ const inlineSx = {
     '& input': { fontSize: '0.8rem', fontWeight: 500, textAlign: 'center' }
 };
 
-// رأس عمود الجدول
 const TH = ({ children, align = 'center', w, sx: sxOver = {} }) => {
     const theme = useTheme();
     return (
         <TableCell align={align} sx={{
-            bgcolor: alpha(theme.palette.primary.main, 0.08),
+            bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : '#f8f9fa',
             color: theme.palette.primary.dark,
             fontWeight: 700,
             fontSize: '0.8rem', py: 1, px: '0.75rem', whiteSpace: 'nowrap',
             borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
             borderRight: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
             '&:last-child': { borderRight: 'none' },
+            position: 'sticky', top: 0, zIndex: 10,
             ...(w && { width: w, minWidth: w }),
             ...sxOver
         }}>

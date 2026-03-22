@@ -153,7 +153,7 @@ export const providerDefaultValues = {
   licenseNumber: '',
   taxNumber: '',
   providerType: '',
-  networkStatus: '',
+  networkStatus: 'IN_NETWORK',
   city: '',
   address: '',
   phone: '',

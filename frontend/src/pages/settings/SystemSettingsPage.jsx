@@ -29,7 +29,6 @@ import {
   Key as KeyIcon,
   Palette as PaletteIcon,
   Preview as PreviewIcon,
-  Refresh as RefreshIcon,
   Save as SaveIcon,
   Settings as SettingsIcon,
   Speed as SpeedIcon,
@@ -440,13 +439,10 @@ const SystemSettingsPage = () => {
         <ModernPageHeader
           title="إعدادات النظام"
           subtitle="تحكم كامل في مظهر وأداء النظام"
-          icon={<SettingsIcon sx={{ fontSize: '3.2rem', color: 'primary.main' }} />}
+          icon={<SettingsIcon sx={{ fontSize: '1.8rem', color: 'primary.main' }} />}
           noIconBox
           actions={
           <Stack direction="row" spacing={1} alignItems="center">
-            <Button variant="outlined" onClick={loadData} startIcon={<RefreshIcon />} disabled={isSaving}>
-              تحديث
-            </Button>
             <Button 
               variant="contained" 
               color="primary"
@@ -456,9 +452,6 @@ const SystemSettingsPage = () => {
               sx={{ fontWeight: 700 }}
             >
               حفظ وتطبيق التغييرات
-            </Button>
-            <Button variant="outlined" onClick={() => window.open('/provider/eligibility-check', '_blank')} startIcon={<PreviewIcon />}>
-              استعراض
             </Button>
           </Stack>
           }
@@ -1045,19 +1038,7 @@ const SystemSettingsPage = () => {
         </Box>
       </Card>
       
-      {/* Footer Save Button - Prominent for Global Action */}
-      <Box sx={{ p: '0.75rem', display: 'flex', justifyContent: 'flex-end', bgcolor: 'background.default', borderTop: '1px solid', borderColor: 'divider' }}>
-        <Button 
-          variant="contained" 
-          color="primary"
-          onClick={() => handleSaveAll()} 
-          startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-          disabled={isSaving}
-          sx={{ px: '2.0rem', fontWeight: 700 }}
-        >
-          {isSaving ? 'جاري الحفظ والتحميل...' : 'حفظ وتطبيق التغييرات على النظام'}
-        </Button>
-      </Box>
+
     </Box>
   );
 };

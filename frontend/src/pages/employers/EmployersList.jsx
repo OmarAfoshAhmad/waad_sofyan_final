@@ -163,6 +163,8 @@ const EmployersList = () => {
       }
       return result;
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
     keepPreviousData: true
   });
 

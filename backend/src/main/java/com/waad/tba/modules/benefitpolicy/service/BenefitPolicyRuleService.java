@@ -369,6 +369,65 @@ public class BenefitPolicyRuleService {
         return usageMap;
     }
 
+    /**
+     * Bulk check coverage for a list of items to avoid N+1 API calls from frontend.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<java.util.Map<String, Object>> checkBulkCoverage(Long policyId, BulkCoverageCheckDto request) {
+        java.util.List<java.util.Map<String, Object>> responses = new java.util.ArrayList<>();
+        
+        if (request == null || request.getLines() == null || request.getLines().isEmpty()) {
+            return responses;
+        }
+
+        for (BulkCoverageCheckDto.BulkCoverageLineDto line : request.getLines()) {
+            java.util.Map<String, Object> result = new java.util.HashMap<>();
+            result.put("id", line.getId());
+            
+            // Check coverage for this specific line
+            Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(
+                    policyId, line.getServiceId(), line.getCategoryId(), line.getServiceCategoryId());
+
+            boolean isCovered = ruleOpt.isPresent();
+            int fallbackPercent = getDefaultCoveragePercent(policyId);
+            
+            // If the service has a specific rule and is not covered (active=false or not found but rule exists? Actually ruleOpt.isEmpty() means not covered or fallback to default)
+            // The frontend logic applies fallback manually. Here we integrate it cleanly.
+            boolean explicitlyNotCovered = ruleOpt.map(r -> !r.isActive()).orElse(false);
+            
+            int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
+                    .orElse(fallbackPercent);
+                    
+            if (explicitlyNotCovered) {
+                coveragePercent = 0;
+            }
+
+            boolean requiresPreApproval = ruleOpt.map(BenefitPolicyRuleResponseDto::isRequiresPreApproval).orElse(false);
+
+            result.put("covered", isCovered);
+            result.put("notCovered", explicitlyNotCovered || (ruleOpt.isEmpty() && fallbackPercent == 0)); 
+            result.put("coveragePercent", explicitlyNotCovered ? 0 : coveragePercent);
+            result.put("requiresPreApproval", requiresPreApproval);
+
+            java.util.Map<String, Object> usageDetails = null;
+
+            if (request.getMemberId() != null) {
+                // Check usage using the same line args
+                java.util.Map<String, Object> usage = checkUsageLimit(policyId, line.getServiceId(), line.getCategoryId(),
+                        line.getServiceCategoryId(), request.getMemberId(), request.getYear(), request.getExcludeClaimId());
+                if (usage != null && Boolean.TRUE.equals(usage.get("hasLimit"))) {
+                    usageDetails = usage;
+                }
+            }
+
+            result.put("usageExceeded", usageDetails != null && Boolean.TRUE.equals(usageDetails.get("exceeded")));
+            result.put("usageDetails", usageDetails);
+
+            responses.add(result);
+        }
+        return responses;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CREATE OPERATIONS
     // ═══════════════════════════════════════════════════════════════════════════

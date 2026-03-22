@@ -21,8 +21,8 @@ export const formatCurrency = (amount, locale = 'en-US') => {
   }
 
   const formatter = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 
   return `${formatter.format(amount)} د.ل`;
@@ -39,12 +39,12 @@ export const formatCurrency = (amount, locale = 'en-US') => {
  */
 export const formatNumber = (amount, locale = 'en-US') => {
   if (amount === null || amount === undefined || isNaN(amount)) {
-    return '0.000';
+    return '0.00';
   }
 
   const formatter = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 
   return formatter.format(amount);

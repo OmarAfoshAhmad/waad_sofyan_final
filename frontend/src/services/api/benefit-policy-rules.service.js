@@ -171,6 +171,18 @@ export const checkServiceUsageLimit = async (
   return unwrap(response);
 };
 
+/**
+ * Bulk check coverage for multiple services
+ * Endpoint: POST /api/benefit-policies/{policyId}/coverage/bulk-check
+ * @param {number} policyId - Policy ID
+ * @param {Object} payload - { memberId, year, excludeClaimId, lines: [{ id, serviceId, categoryId, serviceCategoryId }] }
+ * @returns {Promise<Array>} List of coverage results
+ */
+export const checkBulkCoverage = async (policyId, payload) => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/coverage/bulk-check`, payload);
+  return unwrap(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CREATE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -312,6 +324,7 @@ export default {
   // Coverage lookup
   getCoverageForService,
   checkServiceCoverage,
+  checkBulkCoverage,
   checkServiceUsageLimit,
   // Create
   createPolicyRule,

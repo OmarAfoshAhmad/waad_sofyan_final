@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -54,7 +55,6 @@ import {
   LocalHospital as ProviderIcon,
   Business,
   LocationOn,
-  VerifiedUser,
   Handshake,
   People,
   Description,
@@ -109,6 +109,7 @@ const ProviderEdit = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
   const { provider, loading } = useProviderDetails(id);
   const { update, updating } = useUpdateProvider();
 
@@ -380,6 +381,11 @@ const ProviderEdit = () => {
     try {
       await providersService.updateAllowedEmployers(id, enabledIds);
       setPayers(newPayersState);
+      // Immediately update the list page cache with correct data (no flash on navigate back)
+      const updatedCacheData = newPayersState
+        .filter((p) => p.enabled)
+        .map((p) => ({ id: p.id, name: p.name, nameEn: p.name, isGlobal: false, isActive: true }));
+      queryClient.setQueryData(['provider-allowed-employers', Number(id)], updatedCacheData);
       enqueueSnackbar('تم تحديث قائمة الشركاء بنجاح', { variant: 'success' });
     } catch (error) {
       console.error('Failed to update allowed employers:', error);
@@ -648,64 +654,6 @@ const ProviderEdit = () => {
             control={providerControl}
             render={({ field, fieldState: { error } }) => (
               <TextField {...field} fullWidth label="البريد الإلكتروني" error={!!error} helperText={error?.message} />
-            )}
-          />
-        </Grid>
-      </Grid>
-    </Box>
-  );
-
-  const renderContractInfo = () => (
-    <Box sx={{ p: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: '1.5rem' }}>
-        <VerifiedUser color="primary" />
-        <Typography variant="h5">معلومات العقد</Typography>
-      </Box>
-      <Grid container spacing={3}>
-        {/* Contract Start Date - ✅ BUG-001 FIX */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Controller
-            name="contractStartDate"
-            control={providerControl}
-            render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
-              <GregorianDatePicker
-                {...field}
-                label="بداية العقد"
-                name="contractStartDate"
-                value={value || ''}
-                onChange={(event) => onChange(event.target.value)}
-                error={!!error}
-                helperText={error?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        {/* Contract End Date - ✅ BUG-001 FIX */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Controller
-            name="contractEndDate"
-            control={providerControl}
-            render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
-              <GregorianDatePicker
-                {...field}
-                label="نهاية العقد"
-                name="contract EndDate"
-                value={value || ''}
-                onChange={(event) => onChange(event.target.value)}
-                error={!!error}
-                helperText={error?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Controller
-            name="defaultDiscountRate"
-            control={providerControl}
-            render={({ field, fieldState: { error } }) => (
-              <TextField {...field} fullWidth type="number" label="نسبة الخصم %" error={!!error} helperText={error?.message} />
             )}
           />
         </Grid>

@@ -161,6 +161,23 @@ export default function ProviderAccountsList() {
   const sortBy = currentSort ? sortFieldMap[currentSort.id] || 'createdAt' : 'createdAt';
   const sortDir = currentSort?.desc ? 'desc' : 'asc';
 
+  // ─── إجماليات الخلفية (دقيقة وشاملة لكل السجلات المفلترة) ───
+  const { data: summaryData, isLoading: isSummaryLoading } = useQuery({
+    queryKey: ['settlement-claims-summary', appliedFilters],
+    queryFn: () =>
+      claimsService.getFinancialSummary({
+        status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
+        providerId: appliedFilters.providerId || undefined,
+        employerId: appliedFilters.employerId || undefined,
+        // ملاحظة: financial-summary لا يدعم createdDateFrom/To (قيد الـ backend)
+        // نُرسل فقط فلتر تاريخ الخدمة
+        dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
+        dateTo: formatDateParam(appliedFilters.serviceDateTo)
+      }),
+    staleTime: 2 * 60 * 1000,
+    keepPreviousData: true
+  });
+
   const { data: claimsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['settlement-claims', appliedFilters, tableState.page, tableState.pageSize, sortBy, sortDir],
     queryFn: () => {
@@ -234,22 +251,23 @@ export default function ProviderAccountsList() {
     return (payable * COMPANY_SHARE_PERCENT) / 100;
   };
 
+  // الإجماليات: العدد من الـ pagination (دقيق لكل الفلاتر)، المبالغ من financial-summary API
   const totals = useMemo(() => {
-    const totalPayable = claims.reduce((acc, curr) => acc + getPayableAmount(curr), 0);
-    const totalCompanyShare = claims.reduce((acc, curr) => acc + getCompanyShareAmount(curr), 0);
-    const totalRefused = claims.reduce((acc, curr) => acc + getRefusedAmount(curr), 0);
-
+    const s = summaryData || {};
+    const payable = Number(s.totalApprovedAmount) || 0;
+    const paid = Number(s.totalPaidAmount) || 0;
+    const companyShare = (payable * COMPANY_SHARE_PERCENT) / 100;
     return {
       count: totalElements,
-      gross: claims.reduce((acc, curr) => acc + (Number(curr.requestedAmount) || 0), 0),
-      refused: totalRefused,
-      payable: totalPayable,
-      companyShare: totalCompanyShare,
-      facilityShare: claims.reduce((acc, curr) => acc + getFacilityShareAmount(curr), 0)
+      gross: Number(s.totalClaimsAmount) || 0,
+      refused: Number(s.totalRefusedAmount) || 0,
+      payable,
+      companyShare,                    // 10% من إجمالي المستحق = حصة الشركة
+      facilityShare: payable - companyShare  // 90% من إجمالي المستحق = حصة المرفق
     };
-  }, [claims, totalElements, providerDiscountMap]);
+  }, [summaryData, totalElements]);
 
-  const renderSummaryCard = (title, value, icon, borderColor = 'primary.main') => (
+  const renderSummaryCard = (title, value, icon, borderColor = 'primary.main', loading = false) => (
     <Box
       sx={{
         minWidth: '10.625rem',
@@ -270,9 +288,13 @@ export default function ProviderAccountsList() {
         {title}
       </Typography>
       <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="space-between">
-        <Typography variant="body2" sx={{ lineHeight: 1.1, fontWeight: 700, whiteSpace: 'nowrap' }}>
-          {value}
-        </Typography>
+        {loading ? (
+          <Box sx={{ width: '5rem', height: '1rem', borderRadius: 0.5, bgcolor: 'action.hover', animation: 'pulse 1.5s ease-in-out infinite', '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.4 } } }} />
+        ) : (
+          <Typography variant="body2" sx={{ lineHeight: 1.1, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            {value}
+          </Typography>
+        )}
         {icon}
       </Stack>
     </Box>
@@ -466,174 +488,179 @@ export default function ProviderAccountsList() {
               }}
             >
               {renderSummaryCard('إجمالي المطالبات', String(totals.count), <ReceiptIcon fontSize="small" color="primary" />, 'primary.main')}
-              {renderSummaryCard('إجمالي قبل', formatCurrency(totals.gross), <UpIcon fontSize="small" color="info" />, 'info.main')}
-              {renderSummaryCard('إجمالي المرفوض', formatCurrency(totals.refused), <ClearIcon fontSize="small" color="error" />, 'error.main')}
-              {renderSummaryCard('إجمالي القيمة المستحقة', formatCurrency(totals.payable), <PaymentsIcon fontSize="small" color="secondary" />, 'secondary.main')}
-              {renderSummaryCard('حصة الشركة', formatCurrency(totals.companyShare), <PaymentsIcon fontSize="small" color="warning" />, 'warning.main')}
-              {renderSummaryCard('نصيب المرفق', formatCurrency(totals.facilityShare), <PaymentsIcon fontSize="small" color="success" />, 'success.main')}
+              {renderSummaryCard('إجمالي قبل', formatCurrency(totals.gross), <UpIcon fontSize="small" color="info" />, 'info.main', isSummaryLoading)}
+              {renderSummaryCard('إجمالي المرفوض', formatCurrency(totals.refused), <ClearIcon fontSize="small" color="error" />, 'error.main', isSummaryLoading)}
+              {renderSummaryCard('إجمالي المستحق', formatCurrency(totals.payable), <PaymentsIcon fontSize="small" color="secondary" />, 'secondary.main', isSummaryLoading)}
+              {renderSummaryCard('حصة الشركة', formatCurrency(totals.companyShare), <PaymentsIcon fontSize="small" color="warning" />, 'warning.main', isSummaryLoading)}
+              {renderSummaryCard('حصة المرفق', formatCurrency(totals.facilityShare), <PaymentsIcon fontSize="small" color="success" />, 'success.main', isSummaryLoading)}
             </Box>
           }
         />
 
         <MainCard sx={{ mt: -1.25 }}>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" sx={{ overflowX: 'auto', pb: 0.5 }}>
-                  <TextField
-                    select
-                    label="حالة المطالبة"
-                    value={filters.status}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
-                    sx={{ minWidth: '9rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+            <TextField
+              select
+              size="small"
+              label="حالة المطالبة"
+              value={filters.status}
+              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
+              sx={{ minWidth: '9rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
 
-                  <TextField
-                    select
-                    label="الوثيقة (جهة العمل)"
-                    value={filters.employerId}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, employerId: e.target.value }))}
-                    disabled={isEmployersLoading}
-                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
-                    sx={{ minWidth: '10rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
-                  >
-                    <MenuItem value="">الكل</MenuItem>
-                    {employerOptions.map((e) => (
-                      <MenuItem key={e.id} value={e.id}>
-                        {e.name || `وثيقة #${e.id}`}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+            <TextField
+              select
+              size="small"
+              label="الوثيقة (جهة العمل)"
+              value={filters.employerId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, employerId: e.target.value }))}
+              disabled={isEmployersLoading}
+              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
+              sx={{ minWidth: '10rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
+            >
+              <MenuItem value="">الكل</MenuItem>
+              {employerOptions.map((e) => (
+                <MenuItem key={e.id} value={e.id}>
+                  {e.name || `وثيقة #${e.id}`}
+                </MenuItem>
+              ))}
+            </TextField>
 
-                  <TextField
-                    select
-                    label="مقدم الخدمة"
-                    value={filters.providerId}
-                    onChange={(e) => setFilters((prev) => ({ ...prev, providerId: e.target.value }))}
-                    disabled={isProvidersLoading}
-                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
-                    sx={{ minWidth: '10rem', '& .MuiInputBase-root': { height: '2.5rem' } }}
-                  >
-                    <MenuItem value="">الكل</MenuItem>
-                    {providerOptions.map((p) => (
-                      <MenuItem key={p.id} value={p.id}>
-                        {p.name || `مقدم خدمة #${p.id}`}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+            <TextField
+              select
+              size="small"
+              label="مقدم الخدمة"
+              value={filters.providerId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, providerId: e.target.value }))}
+              disabled={isProvidersLoading}
+              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
+              sx={{ minWidth: '10rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
+            >
+              <MenuItem value="">الكل</MenuItem>
+              {providerOptions.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name || `مقدم خدمة #${p.id}`}
+                </MenuItem>
+              ))}
+            </TextField>
 
-                  <DatePicker
-                    label="من إدخال المطالبة"
-                    value={filters.dateFrom ? dayjs(filters.dateFrom) : null}
-                    onChange={(newValue) =>
-                      setFilters((prev) => ({ ...prev, dateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
-                    }
-                    format="DD/MM/YYYY"
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        sx: { minWidth: '8.5rem' }
-                      }
-                    }}
-                  />
+            <DatePicker
+              label="من إدخال المطالبة"
+              value={filters.dateFrom ? dayjs(filters.dateFrom) : null}
+              onChange={(newValue) =>
+                setFilters((prev) => ({ ...prev, dateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
+              }
+              format="DD/MM/YYYY"
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                }
+              }}
+            />
 
-                  <DatePicker
-                    label="إلى إدخال المطالبة"
-                    value={filters.dateTo ? dayjs(filters.dateTo) : null}
-                    onChange={(newValue) =>
-                      setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
-                    }
-                    format="DD/MM/YYYY"
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        sx: { minWidth: '8.5rem' }
-                      }
-                    }}
-                  />
+            <DatePicker
+              label="إلى إدخال المطالبة"
+              value={filters.dateTo ? dayjs(filters.dateTo) : null}
+              onChange={(newValue) =>
+                setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
+              }
+              format="DD/MM/YYYY"
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                }
+              }}
+            />
 
-                  <DatePicker
-                    label="تاريخ الخدمة من"
-                    value={filters.serviceDateFrom ? dayjs(filters.serviceDateFrom) : null}
-                    onChange={(newValue) =>
-                      setFilters((prev) => ({ ...prev, serviceDateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
-                    }
-                    format="DD/MM/YYYY"
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        sx: { minWidth: '8.5rem' }
-                      }
-                    }}
-                  />
+            <DatePicker
+              label="تاريخ الخدمة من"
+              value={filters.serviceDateFrom ? dayjs(filters.serviceDateFrom) : null}
+              onChange={(newValue) =>
+                setFilters((prev) => ({ ...prev, serviceDateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
+              }
+              format="DD/MM/YYYY"
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                }
+              }}
+            />
 
-                  <DatePicker
-                    label="تاريخ الخدمة إلى"
-                    value={filters.serviceDateTo ? dayjs(filters.serviceDateTo) : null}
-                    onChange={(newValue) =>
-                      setFilters((prev) => ({ ...prev, serviceDateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
-                    }
-                    format="DD/MM/YYYY"
-                    slotProps={{
-                      textField: {
-                        size: 'small',
-                        sx: { minWidth: '8.5rem' }
-                      }
-                    }}
-                  />
+            <DatePicker
+              label="تاريخ الخدمة إلى"
+              value={filters.serviceDateTo ? dayjs(filters.serviceDateTo) : null}
+              onChange={(newValue) =>
+                setFilters((prev) => ({ ...prev, serviceDateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
+              }
+              format="DD/MM/YYYY"
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                }
+              }}
+            />
 
-                  <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap' }}>
-                    بحث
-                  </Button>
-                  <Tooltip title="مسح الفلاتر">
-                    <IconButton color="default" onClick={clearFilters} sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1, flexShrink: 0 }}>
-                      <ClearIcon />
-                    </IconButton>
-                  </Tooltip>
+            <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap' }}>
+              بحث
+            </Button>
+            <Tooltip title="مسح الفلاتر">
+              <IconButton color="default" onClick={clearFilters} sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1, flexShrink: 0 }}>
+                <ClearIcon />
+              </IconButton>
+            </Tooltip>
 
-                  <Box sx={{ flexGrow: 1 }} />
+            <Box sx={{ flexGrow: 1 }} />
 
-                  <Tooltip title="تحديث">
-                    <IconButton
-                      onClick={refetch}
-                      color="primary"
-                      disabled={isLoading}
-                      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem', flexShrink: 0 }}
-                    >
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
+            <Tooltip title="تحديث">
+              <IconButton
+                onClick={refetch}
+                color="primary"
+                disabled={isLoading}
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem', flexShrink: 0 }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
 
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    startIcon={<PrintIcon />}
-                    onClick={handlePrint}
-                    sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1, flexShrink: 0 }}
-                  >
-                    طباعة
-                  </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<PrintIcon />}
+              onClick={handlePrint}
+              sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1, flexShrink: 0 }}
+            >
+              طباعة
+            </Button>
 
-                  <Button
-                    variant="outlined"
-                    color="success"
-                    startIcon={isExporting ? <CircularProgress size="0.9rem" color="inherit" /> : <FileDownloadIcon />}
-                    onClick={handleExport}
-                    disabled={isExporting || totalElements === 0}
-                    sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1, flexShrink: 0 }}
-                  >
-                    {isExporting ? 'جارٍ التصدير...' : 'تصدير'}
-                  </Button>
+            <Button
+              variant="outlined"
+              color="success"
+              startIcon={isExporting ? <CircularProgress size="0.9rem" color="inherit" /> : <FileDownloadIcon />}
+              onClick={handleExport}
+              disabled={isExporting || totalElements === 0}
+              sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1, flexShrink: 0 }}
+            >
+              {isExporting ? 'جارٍ التصدير...' : 'تصدير'}
+            </Button>
           </Stack>
         </MainCard>
 
-        <Alert severity="info" icon={false} sx={{ py: 0.25, px: 1.5, fontSize: '0.72rem', '& .MuiAlert-message': { lineHeight: 1.5 } }}>
-          تنبيه: المبالغ الظاهرة (المجاميع قبل / مرفوض / مستحق / حصة الشركة / نصيب المرفق) تخص الصفحة الحالية فقط. استخدم زر التصدير للحصول على إجماليات جميع السجلات المطابقة.
-        </Alert>
+        {(appliedFilters.dateFrom || appliedFilters.dateTo) && (
+          <Alert severity="warning" icon={false} sx={{ py: 0.25, px: 1.5, fontSize: '0.72rem', '& .MuiAlert-message': { lineHeight: 1.5 } }}>
+            ملاحظة: الإجماليات المالية (قبل / مرفوض / مستحق / مدفوع / غير مسوى) تعكس فلتر تاريخ الخدمة فقط — فلتر تاريخ الإدخال لا يُطبَّق على الإجماليات (قيد الـ backend). العدد الكلي للمطالبات دقيق لجميع الفلاتر.
+          </Alert>
+        )}
         {isError && <Alert severity="error">{error?.message || 'تعذر جلب البيانات. يرجى المحاولة مجدداً.'}</Alert>}
 
         <MainCard content={false}>

@@ -169,6 +169,18 @@ public class BenefitPolicyRuleController {
         return ResponseEntity.ok(ApiResponse.success("Usage check complete", result));
     }
 
+    @PostMapping("/coverage/bulk-check")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
+    @Operation(summary = "Bulk check coverage and usage for multiple services")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> checkBulkCoverage(
+            @PathVariable("policyId") Long policyId,
+            @Valid @RequestBody BulkCoverageCheckDto request) {
+
+        log.info("Bulk checking coverage for policy {}, {} lines", policyId, request.getLines() != null ? request.getLines().size() : 0);
+        List<Map<String, Object>> result = ruleService.checkBulkCoverage(policyId, request);
+        return ResponseEntity.ok(ApiResponse.success("Bulk coverage check complete", result));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CREATE ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════════

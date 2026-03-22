@@ -27,7 +27,14 @@ import {
   Autocomplete,
   Avatar,
   Switch,
-  LinearProgress
+  LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination
 } from '@mui/material';
 import {
   ArrowBack,
@@ -44,7 +51,6 @@ import {
   Link as LinkIcon,
   PersonAdd,
   Handshake,
-  VerifiedUser,
   Info
 } from '@mui/icons-material';
 import MainCard from 'components/MainCard';
@@ -131,6 +137,8 @@ const ProviderCreate = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [payers, setPayers] = useState([]);
   const [loadingPayers, setLoadingPayers] = useState(false);
+  const [payersPage, setPayersPage] = useState(0);
+  const [payersRowsPerPage, setPayersRowsPerPage] = useState(10);
   const [submitting, setSubmitting] = useState(false);
   const [savingStep, setSavingStep] = useState('');
 
@@ -166,10 +174,6 @@ const ProviderCreate = () => {
       if (providerErrors.licenseNumber) count++;
       if (providerErrors.providerType) count++;
       if (providerErrors.taxNumber) count++;
-    } else if (tabIndex === 2) {
-      if (providerErrors.contractStartDate) count++;
-      if (providerErrors.contractEndDate) count++;
-      if (providerErrors.defaultDiscountRate) count++;
     }
     return count;
   };
@@ -248,7 +252,7 @@ const ProviderCreate = () => {
   };
 
   const handleNext = () => {
-    setActiveTab((prev) => Math.min(prev + 1, 4));
+    setActiveTab((prev) => Math.min(prev + 1, 3));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -274,12 +278,6 @@ const ProviderCreate = () => {
       return;
     }
 
-    const contractErrors = ['contractStartDate', 'contractEndDate', 'defaultDiscountRate'];
-    if (contractErrors.some((field) => errors[field])) {
-      setActiveTab(2); // Contract
-      enqueueSnackbar('يرجى تصحيح الأخطاء في معلومات العقد', { variant: 'error' });
-      return;
-    }
   };
 
   const renderFooterActions = (currentTab) => (
@@ -292,7 +290,7 @@ const ProviderCreate = () => {
         <div />
       )}
 
-      {currentTab < 3 ? (
+      {currentTab < 2 ? (
         <Button variant="contained" onClick={handleNext} endIcon={<ArrowBack sx={{ transform: 'rotate(0deg)' }} />}>
           التالي
         </Button>
@@ -347,7 +345,7 @@ const ProviderCreate = () => {
 
         setSavingStep('اكتمل!');
         enqueueSnackbar('تم إنشاء مقدم الخدمة بنجاح', { variant: 'success' });
-        navigate(`/providers/edit/${newProviderId}`);
+        navigate('/providers');
       } else {
         enqueueSnackbar(result.error || 'فشل إنشاء مقدم الخدمة', { variant: 'error' });
       }
@@ -594,113 +592,40 @@ const ProviderCreate = () => {
     </Box>
   );
 
-  const renderContractInfo = () => (
-    <Box sx={{ p: 1 }}>
-      {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
-        <VerifiedUser color="primary" fontSize="large" />
-        <Box>
-          <Typography variant="h5" fontWeight={600}>
-            معلومات العقد
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            فترة العقد ونسبة الخصم الافتراضية
-          </Typography>
-        </Box>
-      </Stack>
-      <Alert severity="info" sx={{ mb: '1.5rem' }}>
-        إدخال بيانات العقد الآن يساعد في تفعيل مقدم الخدمة مباشرة على النظام.
-      </Alert>
-      <Grid container spacing={3}>
-        {/* Contract Start Date - 🔴 BUG-001 FIX: Using Controller properly */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Controller
-            name="contractStartDate"
-            control={providerControl}
-            render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
-              <GregorianDatePicker
-                {...field}
-                label="بداية العقد"
-                name="contractStartDate"
-                value={value || ''}
-                onChange={(event) => {
-                  // ✅ FIX: Extract value from event.target.value
-                  onChange(event.target.value);
-                }}
-                error={!!error}
-                helperText={error?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        {/* Contract End Date - 🔴 BUG-001 FIX: Using Controller properly */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Controller
-            name="contractEndDate"
-            control={providerControl}
-            render={({ field: { onChange, value, ...field }, fieldState: { error } }) => (
-              <GregorianDatePicker
-                {...field}
-                label="نهاية العقد"
-                name="contractEndDate"
-                value={value || ''}
-                onChange={(event) => {
-                  // ✅ FIX: Extract value from event.target.value
-                  onChange(event.target.value);
-                }}
-                error={!!error}
-                helperText={error?.message}
-              />
-            )}
-          />
-        </Grid>
-
-        {/* Default Discount Rate */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Controller
-            name="defaultDiscountRate"
-            control={providerControl}
-            render={({ field, fieldState: { error } }) => (
-              <TextField
-                {...field}
-                fullWidth
-                type="number"
-                label="نسبة الخصم %"
-                error={!!error}
-                helperText={error?.message}
-                InputProps={{
-                  endAdornment: <InputAdornment position="end">%</InputAdornment>
-                }}
-              />
-            )}
-          />
-        </Grid>
-      </Grid>
-    </Box>
-  );
-
   const renderPartners = () => (
     <Box sx={{ p: 1 }}>
-      {/* ✅ Section Header */}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.5rem', pb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}>
-        <Handshake color="primary" fontSize="large" />
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" fontWeight={600}>
-            الشركاء (شركات التأمين)
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            حدد الجهات المسموح لها بالتعامل مع هذا المزود
-          </Typography>
+      {/* Header */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: '1.5rem' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Handshake color="primary" fontSize="large" />
+          <Box>
+            <Typography variant="h5" fontWeight={600}>
+              الشركاء (شركات التأمين)
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              حدد الجهات المسموح لها بالتعامل مع هذا المزود
+            </Typography>
+          </Box>
         </Box>
-      </Stack>
+        <Controller
+          name="allowAllEmployers"
+          control={providerControl}
+          render={({ field: { value, onChange } }) => (
+            <FormControlLabel
+              control={<Switch checked={!!value} onChange={(e) => onChange(e.target.checked)} />}
+              label="شبكة عامة (السماح لجميع الجهات)"
+            />
+          )}
+        />
+      </Box>
 
-      {loadingPayers ? (
+      {watch('allowAllEmployers') ? (
+        <Alert severity="success">وضع الشبكة العامة مفعل. جميع الجهات مسموح بها.</Alert>
+      ) : loadingPayers ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: '2.0rem' }}>
           <CircularProgress />
         </Box>
       ) : payers.length === 0 ? (
-        /* ✅ Empty State */
         <Paper variant="outlined" sx={{ p: '2.0rem', textAlign: 'center', bgcolor: 'grey.50' }}>
           <Info sx={{ fontSize: '3.0rem', color: 'text.secondary', mb: '1.0rem' }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -711,40 +636,49 @@ const ProviderCreate = () => {
           </Typography>
         </Paper>
       ) : (
-        <Grid container spacing={2}>
-          {payers.map((payer) => (
-            <Grid key={payer.id} size={{ xs: 12, sm: 6, md: 4 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: '1.0rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  border: payer.enabled ? '2px solid' : '1px solid',
-                  borderColor: payer.enabled ? 'primary.main' : 'divider',
-                  bgcolor: payer.enabled ? 'primary.lighter' : 'background.paper',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Box>
-                  <Typography variant="subtitle2" fontWeight="bold">
-                    {payer.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {payer.code}
-                  </Typography>
-                </Box>
-                <Switch
-                  checked={payer.enabled}
-                  onChange={() => {
-                    setPayers((prev) => prev.map((p) => (p.id === payer.id ? { ...p, enabled: !p.enabled } : p)));
-                  }}
-                />
-              </Paper>
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>جهة العمل</TableCell>
+                  <TableCell align="center">الرمز</TableCell>
+                  <TableCell align="right">الحالة</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {payers.slice(payersPage * payersRowsPerPage, payersPage * payersRowsPerPage + payersRowsPerPage).map((payer) => (
+                  <TableRow key={payer.id} hover>
+                    <TableCell>{payer.name}</TableCell>
+                    <TableCell align="center">
+                      <Typography variant="caption" color="text.secondary">{payer.code}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Switch
+                        checked={payer.enabled}
+                        onChange={() =>
+                          setPayers((prev) => prev.map((p) => (p.id === payer.id ? { ...p, enabled: !p.enabled } : p)))
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={payers.length}
+            rowsPerPage={payersRowsPerPage}
+            page={payersPage}
+            onPageChange={(_, p) => setPayersPage(p)}
+            onRowsPerPageChange={(e) => {
+              setPayersRowsPerPage(parseInt(e.target.value));
+              setPayersPage(0);
+            }}
+          />
+        </>
       )}
     </Box>
   );
@@ -1026,15 +960,6 @@ const ProviderCreate = () => {
               label="الموقع والتواصل"
               iconPosition="start"
             />
-            <Tab
-              icon={
-                <Badge badgeContent={getTabErrors(2)} color="error">
-                  <VerifiedUser />
-                </Badge>
-              }
-              label="معلومات العقد"
-              iconPosition="start"
-            />
             <Tab icon={<Handshake />} label="الشركاء" iconPosition="start" />
           </Tabs>
         </Box>
@@ -1047,10 +972,7 @@ const ProviderCreate = () => {
             {activeTab === 1 && renderLocationContact()}
           </Box>
           <Box role="tabpanel" hidden={activeTab !== 2}>
-            {activeTab === 2 && renderContractInfo()}
-          </Box>
-          <Box role="tabpanel" hidden={activeTab !== 3}>
-            {activeTab === 3 && renderPartners()}
+            {activeTab === 2 && renderPartners()}
           </Box>
         </Box>
 

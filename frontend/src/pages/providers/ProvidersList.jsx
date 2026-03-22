@@ -141,7 +141,7 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
   } = useQuery({
     queryKey: ['provider-allowed-employers', providerId],
     queryFn: () => providersService.getAllowedEmployerIds(providerId),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 0,
     retry: 1
   });
 

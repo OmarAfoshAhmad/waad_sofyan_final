@@ -7,7 +7,8 @@ import benefitPoliciesService from 'services/api/benefit-policies.service';
 const { 
     checkServiceCoverage, 
     getCoverageForService, 
-    checkServiceUsageLimit 
+    checkServiceUsageLimit,
+    checkBulkCoverage
 } = benefitPolicyRulesService;
 
 export function useCoverageLogic({ 
@@ -29,21 +30,17 @@ export function useCoverageLogic({
     // Keep linesRef in sync (passed from parent or managed here)
     // For now, assume we'll use functional updates or passed lines
     
-    const fetchCoverage = useCallback(async (service, categoryCodeOverride) => {
+    const fetchCoverage = useCallback(async (service, categoryCodeOverride, lineId = null) => {
         // Full coverage: 100% with no limits, skip backend call
         if (fullCoverage || categoryCodeOverride === 'FULL_COVERAGE') {
             return { coveragePercent: 100, requiresPreApproval: false, notCovered: false, usageExceeded: false, usageDetails: null };
         }
 
-        // NOTE: Policy date range validation is handled at SAVE time (ClaimBatchEntry line 705).
-        // Do NOT block coverage calculation here — that would cause 0% to display
-        // whenever serviceDate falls outside the formal policy endDate (e.g. after
-        // policy year rollover), which breaks normal operation for ongoing claims.
-
+        // Keep single line fetch logic mostly the same for individual changes,
+        // but it's largely superseded by bulk.
         const sid = service?.medicalServiceId || 0;
         const serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
         let categoryId = serviceOwnCategoryId;
-        // Keep the service's own intrinsic category for precise rule matching
         const fallbackPercent = policyInfo?.defaultCoveragePercent ?? 100;
 
         if (!policyId || !applyBenefits)
@@ -53,72 +50,33 @@ export function useCoverageLogic({
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
 
         try {
-            // When a context (categoryCodeOverride) is explicitly set by the user, it always
-            // takes precedence so that context-level rules (e.g. "إيواء" vs "عيادات خارجية")
-            // are resolved correctly even when the service has its own intrinsic category.
-            // When no context is provided, fall back to the service's own category.
             if (categoryCodeOverride) {
                 const cat = rootCategories?.find(c => c.code === categoryCodeOverride);
                 if (cat) categoryId = cat.id;
             }
 
-            // Send both: categoryId (context/override) and serviceOwnCategoryId (intrinsic)
-            // so the backend can find the most specific matching rule.
-            // e.g. context=CAT-OP (51), serviceOwn=CAT-IP-PHYSIO (201) → finds CAT-OP-PHYSIO
             const contextCatId = categoryId;
             const serviceCatId = serviceOwnCategoryId;
 
-            const [r, fullRule] = await Promise.all([
-                checkServiceCoverage(policyId, sid, contextCatId, serviceCatId),
-                getCoverageForService(policyId, sid, contextCatId, serviceCatId).catch(() => null)
-            ]);
-
-            const timesLimit = r?.timesLimit ?? fullRule?.timesLimit ?? null;
-            const amountLimit = r?.amountLimit != null
-                ? parseFloat(r.amountLimit)
-                : (fullRule?.amountLimit != null ? parseFloat(fullRule.amountLimit) : null);
-
-            const hasLimits = (timesLimit != null) || (amountLimit != null);
-            let baseLimitDetails = hasLimits ? {
-                hasLimit: true,
-                timesLimit,
-                amountLimit,
-                usedCount: 0,
-                usedAmount: 0,
-                exceeded: false,
-                timesExceeded: false,
-                amountExceeded: false
-            } : null;
-
-            if (member?.id) {
-                // Pass serviceYear so the query matches the batch's year (not current year)
-                // e.g. batch for Jan 2025 → serviceDate = 2025-01-01 → year must be 2025
-                const usageYear = serviceYear || null;
-                // Use the context category (categoryId) for usage limits so they match the active rule context
-                const usage = await checkServiceUsageLimit(
-                    policyId,
-                    sid,
-                    member.id,
-                    contextCatId,
-                    usageYear,
-                    currentClaimId,
-                    serviceCatId
-                );
-                if (usage && usage.hasLimit) {
-                    baseLimitDetails = { ...baseLimitDetails, ...usage };
-                }
-            }
-
-            const isNotCovered = r?.covered === false;
-            return {
-                // When the service is explicitly NOT covered by the policy, coverage must be 0,
-                // not the policy default — otherwise company incorrectly pays the fallback %.
-                coveragePercent: isNotCovered ? 0 : (r?.coveragePercent ?? fallbackPercent),
-                requiresPreApproval: r?.requiresPreApproval ?? false,
-                notCovered: isNotCovered,
-                usageExceeded: baseLimitDetails?.exceeded ?? false,
-                usageDetails: baseLimitDetails
+            // USE SINGLE LINE BULK INSTEAD OF 3 APIS
+            const payload = {
+                memberId: member?.id,
+                year: serviceYear || null,
+                excludeClaimId: currentClaimId || null,
+                lines: [{ id: lineId || "single", serviceId: sid, categoryId: contextCatId, serviceCategoryId: serviceCatId }]
             };
+
+            const bulkResults = await checkBulkCoverage(policyId, payload);
+            if (bulkResults && bulkResults.length > 0) {
+                return {
+                    coveragePercent: bulkResults[0].notCovered ? 0 : (bulkResults[0].coveragePercent ?? fallbackPercent),
+                    requiresPreApproval: bulkResults[0].requiresPreApproval ?? false,
+                    notCovered: bulkResults[0].notCovered ?? false,
+                    usageExceeded: bulkResults[0].usageExceeded ?? false,
+                    usageDetails: bulkResults[0].usageDetails ?? null
+                };
+            }
+            return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         } catch (err) {
             console.error('[fetchCoverage] error:', err);
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
@@ -126,19 +84,74 @@ export function useCoverageLogic({
     }, [policyId, policyInfo?.defaultCoveragePercent, serviceDate, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
 
     const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
-        if (!policyId || !member?.id) return;
+        if (!policyId || !member?.id) return currentLines.map((l, i) => recompute(l, i, currentLines));
         const catCode = newCategoryCode !== undefined ? newCategoryCode : primaryCategoryCode;
 
-        const updated = await Promise.all(
-            currentLines.map(async (line) => {
-                if (!line.service) return line;
-                const cov = await fetchCoverage(line.service, catCode);
-                return { ...line, ...cov };
+        if (fullCoverage || catCode === 'FULL_COVERAGE') {
+             const updated = currentLines.map(line => ({ 
+                 ...line, 
+                 coveragePercent: 100, 
+                 requiresPreApproval: false, 
+                 notCovered: false, 
+                 usageExceeded: false, 
+                 usageDetails: null 
+             }));
+             return updated.map((line, i) => recompute(line, i, updated));
+        }
+
+        const linesToCheck = currentLines.filter(l => l.service);
+        if (linesToCheck.length === 0) return currentLines.map((l, i) => recompute(l, i, currentLines));
+
+        let contextCatId = null;
+        if (catCode) {
+            const cat = rootCategories?.find(c => c.code === catCode);
+            if (cat) contextCatId = cat.id;
+        }
+
+        const payload = {
+            memberId: member.id,
+            year: serviceYear || null,
+            excludeClaimId: currentClaimId || null,
+            lines: linesToCheck.map((l, idx) => {
+                const sid = l.service?.medicalServiceId || 0;
+                const serviceOwnCategoryId = l.service?.categoryId ?? l.service?.medicalCategoryId ?? l.service?.medicalCategory?.id ?? null;
+                
+                return {
+                    id: l.id || `line_${idx}`,
+                    serviceId: sid,
+                    categoryId: contextCatId || serviceOwnCategoryId,
+                    serviceCategoryId: serviceOwnCategoryId
+                };
             })
-        );
-        
-        return updated.map((line, i) => recompute(line, i, updated));
-    }, [policyId, member?.id, primaryCategoryCode, fetchCoverage, recompute]);
+        };
+
+        try {
+            const bulkResults = await checkBulkCoverage(policyId, payload);
+            
+            const updated = currentLines.map((line, idx) => {
+                if (!line.service) return line;
+                const lineId = line.id || `line_${idx}`;
+                const cov = bulkResults.find(b => b.id === lineId);
+                
+                if (cov) {
+                     return { 
+                         ...line, 
+                         coveragePercent: cov.notCovered ? 0 : cov.coveragePercent,
+                         requiresPreApproval: cov.requiresPreApproval,
+                         notCovered: cov.notCovered,
+                         usageExceeded: cov.usageExceeded,
+                         usageDetails: cov.usageDetails
+                     };
+                }
+                return line;
+            });
+            
+            return updated.map((line, i) => recompute(line, i, updated));
+        } catch (err) {
+            console.error('[refetchAllLinesCoverage] bulk error:', err);
+            return currentLines.map((l, i) => recompute(l, i, currentLines));
+        }
+    }, [policyId, member?.id, primaryCategoryCode, rootCategories, serviceYear, currentClaimId, recompute, fullCoverage]);
 
     return {
         fetchCoverage,
