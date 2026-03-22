@@ -507,22 +507,25 @@ export default function Dashboard() {
       p: { xs: 1.5, sm: '1.0rem' }
     }}>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', mb: '1.5rem' }}>
-        {/* Welcome Bar - Softer Professional Green */}
+        {/* Welcome Bar - Adheres to Global Theme Color */}
         <Card sx={{
-          background: 'linear-gradient(135deg, #0d9488 0%, #059669 100%)',
+          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
           borderRadius: '0.1875rem',
           color: '#fff',
           border: 'none',
-          boxShadow: '0 8px 24px rgba(13, 148, 136, 0.15)'
+          boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.35)}`
         }}>
           <CardContent sx={{ py: '0.75rem', px: '1.25rem', '&:last-child': { pb: '0.75rem' } }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
               <Stack>
                 <Typography variant="h6" fontWeight={800} sx={{ letterSpacing: -0.5 }}>👋 مرحباً بك، {displayName}</Typography>
                 <Typography sx={{ fontSize: '0.8rem', opacity: 0.9 }}>نظام إدارة العمليات الصحية - لوحة التحكم الموحدة</Typography>
               </Stack>
               <Stack direction="row" spacing={2} alignItems="center">
-                <EmployerFilterSelector size="small" sx={{ minWidth: '18.75rem', '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.15)', height: '2.5rem', borderRadius: '0.25rem' } }} />
+                <EmployerFilterSelector 
+                  size="small" 
+                  inverseColors={true}
+                />
                 <IconButton size="small" onClick={handleRefreshAll} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}>
                   <RefreshIcon sx={{ fontSize: '1.375rem' }} />
                 </IconButton>

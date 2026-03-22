@@ -47,7 +47,9 @@ const EmployerFilterSelector = ({
   size = 'small',
   label = 'الشريك',
   placeholder = 'اختر شريكاً...',
-  disabled = false
+  disabled = false,
+  inverseColors = false,
+  sx = {}
 }) => {
   const { user } = useAuth();
   const userRole = (user?.role || (Array.isArray(user?.roles) ? user.roles[0] : '') || '').toUpperCase();
@@ -169,7 +171,7 @@ const EmployerFilterSelector = ({
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ...sx }}>
       <Autocomplete
         value={selectedValue}
         onChange={handleChange}
@@ -179,7 +181,18 @@ const EmployerFilterSelector = ({
         loading={loading}
         disabled={disabled}
         size={size}
-        sx={{ minWidth: '18.75rem' }}
+        sx={{
+          minWidth: '18.75rem',
+          ...(inverseColors && {
+            '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' },
+            '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+            '& .MuiInputLabel-root.Mui-focused': { color: '#fff' },
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+            '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+            '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.8)' },
+          })
+        }}
         renderInput={(params) => (
           <TextField
             {...params}
@@ -190,7 +203,7 @@ const EmployerFilterSelector = ({
               ...params.InputProps,
               startAdornment: (
                 <>
-                  <BusinessIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                  <BusinessIcon sx={{ mr: 1, color: inverseColors ? 'rgba(255,255,255,0.7)' : 'text.secondary' }} />
                   {params.InputProps.startAdornment}
                 </>
               )
@@ -216,9 +229,23 @@ const EmployerFilterSelector = ({
           label={selectedValue?.label || selectedValue?.name || 'مُفلتر'}
           onDelete={handleClear}
           color="primary"
-          variant="outlined"
+          variant={inverseColors ? 'filled' : 'outlined'}
           size="small"
           deleteIcon={<ClearIcon />}
+          sx={{
+            flexShrink: 0,
+            ...(inverseColors && {
+              bgcolor: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              backdropFilter: 'blur(4px)',
+              fontWeight: 600,
+              border: '1px solid rgba(255,255,255,0.1)',
+              '& .MuiChip-deleteIcon': {
+                color: 'rgba(255,255,255,0.7)',
+                '&:hover': { color: '#fff' }
+              }
+            })
+          }}
         />
       )}
     </Box>
@@ -231,12 +258,14 @@ const EmployerFilterSelector = ({
 
 EmployerFilterSelector.propTypes = {
   selectedEmployerId: PropTypes.number,
-  onEmployerChange: PropTypes.func, // Now optional - auto-connects to context if not provided
+  onEmployerChange: PropTypes.func,
   showAllOption: PropTypes.bool,
   size: PropTypes.oneOf(['small', 'medium']),
   label: PropTypes.string,
   placeholder: PropTypes.string,
-  disabled: PropTypes.bool
+  disabled: PropTypes.bool,
+  inverseColors: PropTypes.bool,
+  sx: PropTypes.object
 };
 
 export default EmployerFilterSelector;
