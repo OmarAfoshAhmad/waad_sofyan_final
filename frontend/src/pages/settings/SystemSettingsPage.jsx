@@ -130,6 +130,24 @@ const cleanStr = (value, fallback) => {
   return value;
 };
 
+/**
+ * يضمن أن قيمة اللون الـ hex تبدأ بـ #
+ * مثال: '409c86' → '#409c86', '#409c86' → '#409c86'
+ * القيم من نوع rgba/rgb تُترك كما هي لأنها صالحة لـ MUI
+ */
+const ensureHash = (color, fallback = '#000000') => {
+  if (!color) return fallback;
+  const s = String(color).trim();
+  if (!s) return fallback;
+  // rgba/rgb/hsl — صالحة مباشرةً
+  if (/^(rgba?|hsla?)\(/.test(s)) return s;
+  // hex مع # — صالح
+  if (s.startsWith('#')) return s;
+  // hex بدون # — أضف #
+  if (/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(s)) return `#${s}`;
+  return fallback;
+};
+
 const SystemSettingsPage = () => {
   const theme = useTheme();
   const { setField } = useConfig();
@@ -169,11 +187,11 @@ const SystemSettingsPage = () => {
     fontFamily: 'Tajawal',
     fontSizeBase: 14,
     // إعدادات المظهر — القيم الافتراضية (تُستبدل من backend في loadData)
-    tableHeaderBg:   (visualSettings || {}).tableHeaderBg   || '#E0F2F1',
-    tableHeaderText: (visualSettings || {}).tableHeaderText || '#004D50',
+    tableHeaderBg:   ensureHash((visualSettings || {}).tableHeaderBg,   '#E0F2F1'),
+    tableHeaderText: ensureHash((visualSettings || {}).tableHeaderText, '#004D50'),
     tableRowEven:    (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
     selectionColor:  (visualSettings || {}).selectionColor  || 'rgba(0,131,143,0.08)',
-    primaryColor:    (visualSettings || {}).primaryColor    || '#00838F',
+    primaryColor:    ensureHash((visualSettings || {}).primaryColor,    '#00838F'),
     claimSlaDays: 10,
     preApprovalSlaDays: 3,
     claimBackdatedMonths: 3,
@@ -262,11 +280,11 @@ const SystemSettingsPage = () => {
         waitingPeriodDaysDefault: toInt(byKey.get(KEYS.waitingPeriodDaysDefault), 0),
         eligibilityGracePeriodDays: toInt(byKey.get(KEYS.eligibilityGracePeriodDays), 0),
         // إعدادات المظهر — من backend أولاً، ثم localStorage كاحتياطي
-        tableHeaderBg:   byKey.get(KEYS.tableHeaderBg)   || (visualSettings || {}).tableHeaderBg   || '#E0F2F1',
-        tableHeaderText: byKey.get(KEYS.tableHeaderText) || (visualSettings || {}).tableHeaderText || '#004D50',
+        tableHeaderBg:   ensureHash(byKey.get(KEYS.tableHeaderBg)   || (visualSettings || {}).tableHeaderBg,   '#E0F2F1'),
+        tableHeaderText: ensureHash(byKey.get(KEYS.tableHeaderText) || (visualSettings || {}).tableHeaderText, '#004D50'),
         tableRowEven:    byKey.get(KEYS.tableRowEven)    || (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
         selectionColor:  byKey.get(KEYS.selectionColor)  || (visualSettings || {}).selectionColor  || 'rgba(0,131,143,0.08)',
-        primaryColor:    byKey.get(KEYS.primaryColor)    || (visualSettings || {}).primaryColor    || '#00838F',
+        primaryColor:    ensureHash(byKey.get(KEYS.primaryColor)    || (visualSettings || {}).primaryColor,    '#00838F'),
         // Report Settings Fields
         pdfSettingsId: reportSettingsResponse?.id,
         claimReportTitle: reportSettingsResponse?.claimReportTitle || 'نظام وعد الطبي',
@@ -466,7 +484,7 @@ const SystemSettingsPage = () => {
           </Alert>
         )}
         {success && (
-          <Alert severity="success" sx={{ mb: '0.75rem' }} onClose={() => setSuccess(null)}>
+          <Alert severity="info" sx={{ mb: '0.75rem' }} onClose={() => setSuccess(null)}>
             {success}
           </Alert>
         )}

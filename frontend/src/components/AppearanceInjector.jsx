@@ -155,6 +155,15 @@ export function AppearanceInjector() {
       .MuiTableSortLabel-root.Mui-active .MuiTableSortLabel-icon {
         color: var(--tba-primary) !important;
       }
+
+      /* ══════════════════════════════════════
+         ترويسة الجداول — TableHead
+         ══════════════════════════════════════ */
+      .MuiTableHead-root .MuiTableCell-root {
+        background-color: var(--tba-th-bg) !important;
+        color: var(--tba-th-text) !important;
+      }
+
     `;
   }, [settings]);
 

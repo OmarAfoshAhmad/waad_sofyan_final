@@ -1875,7 +1875,7 @@ export default function ProviderClaimsSubmission() {
                   />
 
                   {formData.preAuthorizationId && (
-                    <Alert severity="success" sx={{ mt: '1.0rem', borderRadius: '0.25rem' }}>
+                    <Alert severity="info" sx={{ mt: '1.0rem', borderRadius: '0.25rem' }}>
                       تم اختيار موافقة مسبقة - سيتم ربطها بالمطالبة وتحديث حالتها إلى "مستخدم" تلقائياً
                     </Alert>
                   )}
@@ -2150,7 +2150,7 @@ export default function ProviderClaimsSubmission() {
               </Alert>
             )}
             {isFormValid && pendingFiles.length + existingAttachments.length > 0 && (
-              <Alert severity="success" sx={{ py: 0.5 }}>
+              <Alert severity="info" sx={{ py: 0.5 }}>
                 <Typography variant="body2">
                   ✅ جاهز للتقديم • {claimLines.length} خدمة • {formatCurrency(totalClaimAmount)} • {pendingFiles.length + existingAttachments.length}{' '}
                   مرفق

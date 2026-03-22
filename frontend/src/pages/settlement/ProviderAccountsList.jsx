@@ -38,8 +38,6 @@ import { formatCurrency as formatCurrencyGlobal } from 'utils/currency-formatter
 const STATUS_OPTIONS = [
   { value: 'ALL', label: 'الكل' },
   { value: 'APPROVED', label: 'موافق عليها' },
-  { value: 'BATCHED', label: 'مدرجة في دفعة' },
-  { value: 'SETTLED', label: 'تمت التسوية' },
   { value: 'REJECTED', label: 'مرفوضة' }
 ];
 

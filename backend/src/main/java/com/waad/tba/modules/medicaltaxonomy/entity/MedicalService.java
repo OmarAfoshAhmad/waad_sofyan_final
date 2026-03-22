@@ -16,18 +16,18 @@ import java.time.LocalDateTime;
  * ══════════════════════════════════════════════════════════════════════════════
  * 
  * 1. CATEGORY IS MANDATORY FOR ACTIVE SERVICES
- *    - Draft services can exist without category (Name-Only Import Safe Mode)
- *    - Active services MUST have a category
+ * - Draft services can exist without category (Name-Only Import Safe Mode)
+ * - Active services MUST have a category
  * 
  * 2. BASE PRICE IS REFERENCE ONLY
- *    - basePrice is for estimation and reporting
- *    - Actual price comes from ProviderContract.contractPrice
- *    - NEVER use basePrice for claim calculation
+ * - basePrice is for estimation and reporting
+ * - Actual price comes from ProviderContract.contractPrice
+ * - NEVER use basePrice for claim calculation
  * 
  * 3. PA REQUIREMENT COMES FROM POLICY
- *    - requiresPA field is DEPRECATED
- *    - Actual PA requirement is determined by BenefitPolicyRule
- *    - This field remains for backward compatibility only
+ * - requiresPA field is DEPRECATED
+ * - Actual PA requirement is determined by BenefitPolicyRule
+ * - This field remains for backward compatibility only
  * 
  * ══════════════════════════════════════════════════════════════════════════════
  * 
@@ -80,14 +80,8 @@ public class MedicalService {
     @Column(name = "category_id")
     private Long categoryId;
 
-    /**
-     * Clinical specialty this service belongs to.
-     * Added by V87 migration — nullable for safe evolution.
-     * Existing services without a specialty remain valid.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "specialty_id")
-    private MedicalSpecialty specialty;
+    @Column(name = "specialty_id")
+    private Long specialtyId;
 
     /**
      * Service description (optional)
@@ -98,17 +92,17 @@ public class MedicalService {
     /**
      * [REFERENCE ONLY] Base/reference price
      * 
-     * @deprecated This field is for reference only. 
-     * Actual price must come from ProviderContract.contractPrice
+     * @deprecated This field is for reference only.
+     *             Actual price must come from ProviderContract.contractPrice
      * 
-     * Purpose:
-     * - Baseline for price estimation
-     * - Out-of-network fallback
-     * - Reporting and analytics
+     *             Purpose:
+     *             - Baseline for price estimation
+     *             - Out-of-network fallback
+     *             - Reporting and analytics
      * 
-     * NOT used for:
-     * - Final claim calculation (use ProviderContract rate)
-     * - Coverage calculation (use BenefitPolicyRule)
+     *             NOT used for:
+     *             - Final claim calculation (use ProviderContract rate)
+     *             - Coverage calculation (use BenefitPolicyRule)
      */
     @Deprecated(since = "2026-01-22", forRemoval = false)
     @Column(name = "base_price", precision = 10, scale = 2)
@@ -118,10 +112,11 @@ public class MedicalService {
      * [DEPRECATED] Flag indicating if service requires pre-authorization
      * 
      * @deprecated PA requirement is now determined ONLY by BenefitPolicyRule.
-     * This field remains for backward compatibility but should not be used
-     * for business logic.
+     *             This field remains for backward compatibility but should not be
+     *             used
+     *             for business logic.
      * 
-     * Use BenefitPolicyCoverageService.requiresPreApproval() instead.
+     *             Use BenefitPolicyCoverageService.requiresPreApproval() instead.
      */
     @Deprecated(since = "2026-01-22", forRemoval = false)
     @Column(name = "requires_pa", nullable = false)
@@ -216,7 +211,7 @@ public class MedicalService {
         if ((status == MedicalServiceStatus.ACTIVE || active) && categoryId == null) {
             throw ArchitecturalViolationException.serviceWithoutCategory(code);
         }
-        
+
         // Auto-correct: If status is DRAFT, force active = false
         if (status == MedicalServiceStatus.DRAFT) {
             this.active = false;
@@ -232,6 +227,7 @@ public class MedicalService {
 
     /**
      * Get base price (reference only - not for calculation)
+     * 
      * @deprecated Use ProviderContract.contractPrice for actual pricing
      */
     @Deprecated
@@ -241,6 +237,7 @@ public class MedicalService {
 
     /**
      * Check if PA is required (deprecated - use policy rules instead)
+     * 
      * @deprecated Use BenefitPolicyCoverageService.requiresPreApproval()
      */
     @Deprecated

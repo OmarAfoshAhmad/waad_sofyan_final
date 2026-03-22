@@ -254,7 +254,8 @@ const GenericDataTable = ({
                 align={header.column.columnDef.align || 'center'}
                 sx={{
                   fontWeight: 'bold',
-                  backgroundColor: 'primary.lighter',
+                  backgroundColor: 'var(--tba-th-bg)',
+                  color: 'var(--tba-th-text)',
                   py: compact ? 1.5 : 1.5,
                   px: compact ? 1 : 2,
                   minWidth: header.column.columnDef.minWidth || 100,
@@ -271,14 +272,20 @@ const GenericDataTable = ({
                       direction={header.column.getIsSorted() || 'asc'}
                       onClick={header.column.getToggleSortingHandler()}
                       hideSortIcon
-                      sx={{ width: '100%', justifyContent: 'inherit', cursor: 'pointer' }}
+                      sx={{
+                        width: '100%',
+                        justifyContent: 'inherit',
+                        cursor: 'pointer',
+                        color: 'inherit !important',
+                        '& .MuiTableSortLabel-icon': { display: 'none' }
+                      }}
                     >
-                      <Typography variant="subtitle2" component="span">
+                      <Typography variant="subtitle2" component="span" sx={{ color: 'inherit' }}>
                         {flexRender(header.column.columnDef.header, header.getContext())}
                       </Typography>
                     </TableSortLabel>
                   ) : (
-                    <Typography variant="subtitle2">
+                    <Typography variant="subtitle2" sx={{ color: 'inherit' }}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
                     </Typography>
                   )

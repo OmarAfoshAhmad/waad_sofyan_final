@@ -67,11 +67,6 @@ public class PreAuthEmailRequest {
     @com.fasterxml.jackson.annotation.JsonIgnore
     private com.waad.tba.modules.member.entity.Member member;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "detected_service_id", insertable = false, updatable = false)
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    private com.waad.tba.modules.medicaltaxonomy.entity.MedicalService detectedService;
-
     @com.fasterxml.jackson.annotation.JsonProperty("providerName")
     public String getProviderName() {
         return provider != null ? provider.getName() : null;
@@ -84,7 +79,7 @@ public class PreAuthEmailRequest {
 
     @com.fasterxml.jackson.annotation.JsonProperty("serviceName")
     public String getServiceName() {
-        return detectedService != null ? detectedService.getName() : null;
+        return null;
     }
 
     @com.fasterxml.jackson.annotation.JsonProperty("attachmentsCount")

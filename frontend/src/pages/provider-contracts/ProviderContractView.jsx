@@ -24,6 +24,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -72,6 +73,8 @@ import {
   , CloudUpload as CloudUploadIcon
   , Download as DownloadIcon
   , InsertDriveFile as FileIcon
+  , ExpandMore as ExpandMoreIcon
+  , ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 
 // Project Components
@@ -254,6 +257,7 @@ const ProviderContractView = () => {
   // ─────────────────────────────────────────────────────────────────────────
 
   const [activeTab, setActiveTab] = useState(0);
+  const [notesExpanded, setNotesExpanded] = useState(true);
   const [pricingSearch, setPricingSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [pricingPage, setPricingPage] = useState(0);
@@ -882,10 +886,22 @@ const ProviderContractView = () => {
 
       {/* Notes Section */}
       {contract.notes && (
-        <MainCard title="ملاحظات" secondary={<NotesIcon color="action" />} sx={{ mb: '1.5rem' }}>
-          <Typography variant="body1" color="text.secondary">
-            {contract.notes}
-          </Typography>
+        <MainCard
+          title="ملاحظات"
+          secondary={
+            <Tooltip title={notesExpanded ? 'إخفاء الملاحظات' : 'إظهار الملاحظات'}>
+              <IconButton size="small" onClick={() => setNotesExpanded((v) => !v)}>
+                {notesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          }
+          sx={{ mb: '1.5rem' }}
+        >
+          <Collapse in={notesExpanded}>
+            <Typography variant="body1" color="text.secondary">
+              {contract.notes}
+            </Typography>
+          </Collapse>
         </MainCard>
       )}
 
@@ -1516,7 +1532,7 @@ const ProviderContractView = () => {
               </Box>
             </Alert>
 
-            <Alert severity="success" icon={<CloudUploadIcon />}>
+            <Alert severity="info" icon={<CloudUploadIcon />}>
               الخطوة 2: ارفع الملف المعبأ. إذا كان السعر فارغًا سيتم حفظه 0 تلقائيًا.
             </Alert>
 

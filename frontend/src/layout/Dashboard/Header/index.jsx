@@ -13,6 +13,7 @@ import IconButton from 'components/@extended/IconButton';
 import useConfig from 'hooks/useConfig';
 import { handlerDrawerOpen, useGetMenuMaster } from 'api/menu';
 import { MenuOrientation, DRAWER_WIDTH, MINI_DRAWER_WIDTH } from 'config';
+import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
 // assets
 import MenuFoldOutlined from '@ant-design/icons/MenuFoldOutlined';
@@ -23,11 +24,14 @@ import MenuUnfoldOutlined from '@ant-design/icons/MenuUnfoldOutlined';
 export default function Header() {
   const downLG = useMediaQuery((theme) => theme.breakpoints.down('lg'));
   const { state } = useConfig();
+  const { settings } = useCompanySettings();
 
   const { menuMaster } = useGetMenuMaster();
   const drawerOpen = menuMaster.isDashboardDrawerOpened;
 
   const isHorizontal = state.menuOrientation === MenuOrientation.HORIZONTAL && !downLG;
+
+  const headerBg = settings?.primaryColor || '#00838F';
 
   // header content
   const headerContent = useMemo(() => <HeaderContent />, []);
@@ -46,8 +50,10 @@ export default function Header() {
     color: 'inherit',
     elevation: 0,
     sx: {
+      bgcolor: headerBg,
+      color: '#ffffff',
       borderBottom: '1px solid',
-      borderBottomColor: 'divider',
+      borderBottomColor: 'rgba(255,255,255,0.15)',
       zIndex: 1200,
       width: '100%' // ✅ Full width - no sidebar offset
     }

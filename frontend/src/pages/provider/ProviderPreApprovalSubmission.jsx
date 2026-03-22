@@ -1250,7 +1250,7 @@ const ProviderPreApprovalSubmission = () => {
                 </Alert>
               )}
               {isFormValid && (
-                <Alert severity="success" sx={{ py: 0.5 }}>
+                <Alert severity="info" sx={{ py: 0.5 }}>
                   <Typography variant="body2">✅ جاهز للتقديم</Typography>
                 </Alert>
               )}

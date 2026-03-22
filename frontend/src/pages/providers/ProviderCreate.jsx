@@ -620,7 +620,7 @@ const ProviderCreate = () => {
       </Box>
 
       {watch('allowAllEmployers') ? (
-        <Alert severity="success">وضع الشبكة العامة مفعل. جميع الجهات مسموح بها.</Alert>
+        <Alert severity="info">وضع الشبكة العامة مفعل. جميع الجهات مسموح بها.</Alert>
       ) : loadingPayers ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: '2.0rem' }}>
           <CircularProgress />

@@ -45,7 +45,15 @@ function loadSettings() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      const parsed = JSON.parse(stored);
+      // تصحيح ألوان الـ hex المخزنة بدون # (مثل '409c86' → '#409c86')
+      const hexFields = ['primaryColor', 'secondaryColor', 'tableHeaderBg', 'tableHeaderText'];
+      for (const field of hexFields) {
+        if (parsed[field] && /^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(String(parsed[field]).trim())) {
+          parsed[field] = `#${parsed[field].trim()}`;
+        }
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (e) {
     console.warn('[CompanySettings] Failed to load from localStorage:', e);

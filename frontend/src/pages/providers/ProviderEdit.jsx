@@ -687,7 +687,7 @@ const ProviderEdit = () => {
       </Box>
 
       {watch('allowAllEmployers') ? (
-        <Alert severity="success">وضع الشبكة العامة مفعل. جميع الجهات مسموح بها.</Alert>
+        <Alert severity="info">وضع الشبكة العامة مفعل. جميع الجهات مسموح بها.</Alert>
       ) : loadingPayers ? (
         <CircularProgress />
       ) : (
