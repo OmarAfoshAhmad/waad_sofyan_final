@@ -402,7 +402,12 @@ const UnifiedMemberEdit = () => {
                 minHeight: '3.0rem',
                 fontSize: '0.8125rem',
                 px: '1.5rem',
-                '&.Mui-selected': { color: 'primary.main', bgcolor: 'primary.lighter', fontWeight: 600 }
+                '&.Mui-selected': { color: 'primary.main', bgcolor: 'rgba(var(--palette-primary-mainChannel) / 0.15)', fontWeight: 600 }
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: 'primary.main',
+                height: '0.1875rem',
+                borderRadius: '3px 3px 0 0'
               }
             }}
           >

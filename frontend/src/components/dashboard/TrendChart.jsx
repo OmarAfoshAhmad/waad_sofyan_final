@@ -1,10 +1,12 @@
 import { Card, CardContent, CardHeader } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 /**
  * Trend chart for PreAuth submissions over time
  */
 const TrendChart = ({ data, loading, days = 30 }) => {
+  const theme = useTheme();
   if (loading || !data || data.length === 0) {
     return (
       <Card>
@@ -35,7 +37,7 @@ const TrendChart = ({ data, loading, days = 30 }) => {
             <YAxis />
             <Tooltip formatter={(value) => [value.toLocaleString('en-US'), 'العدد']} contentStyle={{ direction: 'rtl' }} />
             <Legend wrapperStyle={{ direction: 'rtl' }} />
-            <Line type="monotone" dataKey="count" stroke="#1976d2" strokeWidth={2} name="عدد الطلبات" dot={{ r: 4 }} activeDot={{ r: 6 }} />
+            <Line type="monotone" dataKey="count" stroke={theme.palette.primary.main} strokeWidth={2} name="عدد الطلبات" dot={{ r: 4 }} activeDot={{ r: 6 }} />
           </LineChart>
         </ResponsiveContainer>
       </CardContent>

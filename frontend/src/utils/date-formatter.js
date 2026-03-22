@@ -23,17 +23,20 @@ export const formatDate = (date, format = 'medium') => {
 
   if (isNaN(dateObj.getTime())) return '-';
 
-  const options = {
-    full: { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
-    long: { year: 'numeric', month: 'long', day: 'numeric' },
-    medium: { year: 'numeric', month: 'short', day: 'numeric' },
-    short: { year: 'numeric', month: '2-digit', day: '2-digit' }
-  };
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
 
-  const locale = 'en-US';
-  const selectedOptions = options[format] || options.medium;
+  if (format === 'full' || format === 'long') {
+    return dateObj.toLocaleDateString('en-GB', {
+      weekday: format === 'full' ? 'long' : undefined,
+      year: 'numeric',
+      month: 'long',
+      day: '2-digit'
+    });
+  }
 
-  return dateObj.toLocaleDateString(locale, selectedOptions);
+  return `${day}/${month}/${year}`;
 };
 
 /**
@@ -70,15 +73,15 @@ export const formatDateTime = (datetime, includeSeconds = false) => {
 
   if (isNaN(dateObj.getTime())) return '-';
 
-  const dateOptions = { year: 'numeric', month: 'short', day: 'numeric' };
-  const timeOptions = includeSeconds
-    ? { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }
-    : { hour: '2-digit', minute: '2-digit', hour12: true };
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  const seconds = String(dateObj.getSeconds()).padStart(2, '0');
 
-  const locale = 'en-US';
-
-  const datePart = dateObj.toLocaleDateString(locale, dateOptions);
-  const timePart = dateObj.toLocaleTimeString(locale, timeOptions);
+  const datePart = `${day}/${month}/${year}`;
+  const timePart = includeSeconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
 
   return `${datePart} ${timePart}`;
 };

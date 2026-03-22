@@ -5,6 +5,7 @@ import java.util.List;
 import java.security.SecureRandom;
 
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -66,7 +67,7 @@ public class AuthService {
 
                 if (!user.getActive()) {
                         log.error("Inactive user attempted login: {}", user.getEmail());
-                        throw new RuntimeException("Account is not active");
+                        throw new DisabledException("Account is not active");
                 }
 
                 // ═══════════════════════════════════════════════════════════════════════════
@@ -242,11 +243,11 @@ public class AuthService {
 
                 // SECURITY FIX: Validate username extraction
                 if (username == null || username.isBlank()) {
-                        throw new RuntimeException("Invalid token: Unable to extract username");
+                        throw new BadCredentialsException("Invalid token: Unable to extract username");
                 }
 
                 User user = userRepository.findByUsername(username)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
 
                 String userRole = user.getUserType() != null ? user.getUserType() : "DATA_ENTRY";
                 List<String> roles = List.of(userRole);
@@ -433,7 +434,7 @@ public class AuthService {
 
                 if (!user.getActive()) {
                         log.error("Inactive user attempted token refresh: {}", user.getUsername());
-                        throw new RuntimeException("Account is not active");
+                        throw new DisabledException("Account is not active");
                 }
 
                 // Validate role bindings (same as login)

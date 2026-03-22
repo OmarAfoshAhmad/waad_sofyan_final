@@ -32,13 +32,18 @@ export default function Alert(theme) {
             {
               props: { variant: 'standard' },
               style: ({ ownerState }) => {
-                const ownerColor = ownerState.color || 'primary';
-                const paletteColor = theme.palette[ownerColor] || theme.palette.primary;
+                // Map 'info' severity → 'primary' so info alerts follow the theme color
+                const mappedColor = ownerState.color
+                  || (ownerState.severity === 'info' ? 'primary' : ownerState.severity)
+                  || 'primary';
+                const paletteColor = theme.palette[mappedColor] || theme.palette.primary;
+                const bgColor = paletteColor?.lighter ?? primaryVars.lighter ?? primaryVars.main;
+                const iconColor = paletteColor?.main ?? primaryVars.main;
                 return {
                   position: 'relative',
-                  backgroundColor: paletteColor?.lighter ?? primaryVars.lighter ?? primaryVars.main,
+                  backgroundColor: bgColor,
                   '& .MuiAlert-icon': {
-                    color: paletteColor?.main ?? primaryVars.main
+                    color: iconColor
                   },
                   ...theme.applyStyles('dark', {
                     backgroundColor: withAlpha(varsPalette.background?.default ?? theme.palette.background?.default, 0.99),
@@ -47,7 +52,7 @@ export default function Alert(theme) {
                       height: '100%',
                       position: 'absolute',
                       content: '""',
-                      backgroundColor: paletteColor?.main ?? primaryVars.main,
+                      backgroundColor: iconColor,
                       top: 0,
                       left: 0,
                       opacity: 0.05

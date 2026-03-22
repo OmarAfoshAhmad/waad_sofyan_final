@@ -102,7 +102,7 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
   const formatDate = (value) => {
     if (!value) return '—';
     try {
-      return new Date(value).toLocaleDateString('en-US');
+      return new Date(value).toLocaleDateString('en-GB');
     } catch {
       return value;
     }

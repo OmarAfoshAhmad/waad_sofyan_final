@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 // material-ui
 import { createTheme, StyledEngineProvider, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import GlobalStyles from '@mui/material/GlobalStyles';
 
 // project imports
 import { CSS_VAR_PREFIX, DEFAULT_THEME_MODE, ThemeMode } from 'config';
@@ -73,6 +74,16 @@ export default function ThemeCustomization({ children }) {
     <StyledEngineProvider injectFirst>
       <ThemeProvider disableTransitionOnChange theme={themes} modeStorageKey="theme-mode" defaultMode={DEFAULT_THEME_MODE}>
         <CssBaseline enableColorScheme />
+        {/* Override MUI Alert info severity to follow the theme's primary color instead of hardcoded info (blue) */}
+        <GlobalStyles styles={(theme) => ({
+          '.MuiAlert-standardInfo': {
+            backgroundColor: theme.palette.primary.lighter,
+            color: theme.palette.primary.dark,
+          },
+          '.MuiAlert-standardInfo .MuiAlert-icon': {
+            color: theme.palette.primary.main,
+          },
+        })} />
         {children}
       </ThemeProvider>
     </StyledEngineProvider>

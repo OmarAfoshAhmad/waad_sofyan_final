@@ -57,7 +57,7 @@ const StatusTimeline = ({ steps = [], currentStep, variant = 'horizontal', size 
 
   const formatDate = (date) => {
     if (!date) return '';
-    return dayjs(date).format('MMM DD');
+    return dayjs(date).format('DD/MM');
   };
 
   if (variant === 'vertical') {

@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import { Chip, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { CLAIM_STATUS, CLAIM_STATUS_LABELS } from 'hooks/useClaimsReport';
 
 /**
@@ -7,9 +8,9 @@ import { CLAIM_STATUS, CLAIM_STATUS_LABELS } from 'hooks/useClaimsReport';
  * Matches design spec exactly
  * ALL 7 statuses are mapped for future-proofing
  */
-const STATUS_COLORS = {
+const getStatusColors = (palette) => ({
   [CLAIM_STATUS.DRAFT]: { bg: '#9e9e9e', color: '#fff' }, // Gray
-  [CLAIM_STATUS.SUBMITTED]: { bg: '#2196f3', color: '#fff' }, // Blue
+  [CLAIM_STATUS.SUBMITTED]: { bg: palette.info.main, color: '#fff' }, // Theme Info
   [CLAIM_STATUS.UNDER_REVIEW]: { bg: '#ff9800', color: '#fff' }, // Orange
   [CLAIM_STATUS.APPROVAL_IN_PROGRESS]: { bg: '#ffb74d', color: '#fff' }, // Orange Light
   [CLAIM_STATUS.APPROVED]: { bg: '#4caf50', color: '#fff' }, // Green
@@ -17,7 +18,7 @@ const STATUS_COLORS = {
   [CLAIM_STATUS.REJECTED]: { bg: '#f44336', color: '#fff' }, // Red
   [CLAIM_STATUS.NEEDS_CORRECTION]: { bg: '#9c27b0', color: '#fff' }, // Purple
   [CLAIM_STATUS.SETTLED]: { bg: '#009688', color: '#fff' } // Teal
-};
+});
 
 /**
  * Default/fallback colors for unknown statuses
@@ -35,6 +36,8 @@ const FALLBACK_COLORS = { bg: '#757575', color: '#fff' };
  * @param {string} size - Chip size ('small' | 'medium')
  */
 const ClaimStatusChip = ({ status, size = 'small' }) => {
+  const theme = useTheme();
+  const STATUS_COLORS = getStatusColors(theme.palette);
   // Null-safe: Handle missing status
   if (!status) {
     return (

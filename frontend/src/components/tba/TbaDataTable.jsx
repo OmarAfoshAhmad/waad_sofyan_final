@@ -150,7 +150,7 @@ const printTable = (data, columns, title = 'تقرير') => {
       </style>
     </head>
     <body>
-      <div class="print-date">تاريخ الطباعة: ${new Date().toLocaleDateString('en-US')}</div>
+      <div class="print-date">تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</div>
       <h1>${title}</h1>
       <table>
         <thead>

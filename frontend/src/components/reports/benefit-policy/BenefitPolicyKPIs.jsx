@@ -18,8 +18,8 @@ const KPI_CONFIG = [
     title: 'إجمالي الوثائق',
     titleEn: 'Total Benefit Policies',
     icon: PolicyIcon,
-    color: '#1976d2',
-    bgColor: '#e3f2fd',
+    color: 'primary.main',
+    bgColor: 'primary.lighter',
     format: (val) => formatNumber(val)
   },
   {
@@ -45,8 +45,8 @@ const KPI_CONFIG = [
     title: 'متوسط الأعضاء / وثيقة',
     titleEn: 'Avg Members / Policy',
     icon: AvgIcon,
-    color: '#0288d1',
-    bgColor: '#e1f5fe',
+    color: 'info.main',
+    bgColor: 'info.lighter',
     format: (val) => formatNumber(val)
   },
   {

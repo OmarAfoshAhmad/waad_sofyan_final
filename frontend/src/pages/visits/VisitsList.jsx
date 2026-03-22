@@ -300,7 +300,7 @@ const VisitsList = () => {
         return (
           <Stack spacing={0.5}>
             <Typography variant="body2" fontWeight="medium">
-              {visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString('en-US') : '—'}
+              {visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString('en-GB') : '—'}
             </Typography>
             {visit?.visitType && (
               <Chip

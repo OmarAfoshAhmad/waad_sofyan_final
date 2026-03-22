@@ -438,7 +438,7 @@ const FinancialReports = () => {
 
   const formatDate = (value) => {
     if (!value) return '-';
-    return new Date(value).toLocaleDateString('en-US');
+    return new Date(value).toLocaleDateString('en-GB');
   };
 
   const summaryColumns = [
@@ -923,12 +923,12 @@ const FinancialReports = () => {
           >
             <Box ref={printRef} sx={{ p: '1.0rem' }}>
               {/* Print Header */}
-              <Box sx={{ textAlign: 'center', mb: '1.5rem', pb: '1.0rem', borderBottom: '2px solid #1976d2' }}>
+              <Box sx={{ textAlign: 'center', mb: '1.5rem', pb: '1.0rem', borderBottom: '2px solid', borderColor: 'primary.main' }}>
                 <Typography variant="h5" fontWeight="bold" color="primary">
                   {tabNames[activeTab]}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  تاريخ الطباعة: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                  تاريخ الطباعة: {new Date().toLocaleDateString('en-GB')}
                 </Typography>
                 {selectedProviderId && (
                   <Typography variant="body2" color="text.secondary">

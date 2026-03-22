@@ -54,7 +54,7 @@ const AttachmentList = ({
       return <PdfIcon sx={{ color: '#f44336' }} />;
     }
     if (fileType.startsWith('image/')) {
-      return <ImageIcon sx={{ color: '#2196f3' }} />;
+      return <ImageIcon sx={{ color: 'info.main' }} />;
     }
     return <FileIcon sx={{ color: 'text.secondary' }} />;
   };

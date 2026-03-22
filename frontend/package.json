@@ -28,7 +28,6 @@
     "@vitejs/plugin-react": "5.0.4",
     "apexcharts": "5.3.5",
     "axios": "^1.13.5",
-    "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "copy-to-clipboard": "3.3.3",
     "currency.js": "2.0.4",

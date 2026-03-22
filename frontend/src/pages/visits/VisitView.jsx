@@ -190,7 +190,7 @@ const VisitView = () => {
             </Box>
           </Stack>
         }
-        subtitle={`${memberName} - ${visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString('en-US', { dateStyle: 'long' }) : '—'}`}
+        subtitle={`${memberName} - ${visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString('en-GB') : '—'}`}
         icon={LocalHospitalIcon}
         breadcrumbs={breadcrumbs}
         actions={
@@ -219,7 +219,7 @@ const VisitView = () => {
           >
             <InfoRow
               label="تاريخ الزيارة"
-              value={visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString('en-US', { dateStyle: 'long' }) : '—'}
+              value={visit?.visitDate ? new Date(visit.visitDate).toLocaleDateString('en-GB') : '—'}
               icon={CalendarMonthIcon}
             />
             {visit?.visitType && <InfoRow label="نوع الزيارة" value={VISIT_TYPE_LABELS_AR[visit.visitType] ?? visit.visitType} />}

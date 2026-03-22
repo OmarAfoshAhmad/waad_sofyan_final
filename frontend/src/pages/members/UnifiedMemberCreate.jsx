@@ -476,13 +476,14 @@ const UnifiedMemberCreate = () => {
                 px: '1.5rem',
                 '&.Mui-selected': {
                   color: 'primary.main',
-                  bgcolor: 'primary.lighter',
+                  bgcolor: 'rgba(var(--palette-primary-mainChannel) / 0.15)',
                   fontWeight: 600
                 }
               },
               '& .MuiTabs-indicator': {
                 height: '0.1875rem',
-                borderRadius: '3px 3px 0 0'
+                borderRadius: '3px 3px 0 0',
+                backgroundColor: 'primary.main'
               }
             }}
           >
@@ -716,7 +717,7 @@ const UnifiedMemberCreate = () => {
                           fontSize: '4rem',
                           cursor: 'pointer',
                           border: '3px solid',
-                          borderColor: 'primary.light',
+                          borderColor: 'primary.main',
                           mb: '1.0rem'
                         }}
                         onClick={() => document.getElementById('photo-upload').click()}

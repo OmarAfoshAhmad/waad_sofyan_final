@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
 
 // material-ui
 import Box from '@mui/material/Box';
@@ -45,7 +47,7 @@ const availableReports = [
     titleEn: 'Claims Review Report',
     description: 'تقرير تشغيلي لتتبع دورة حياة المطالبات ومراجعة الحالات الطبية',
     icon: Receipt,
-    color: '#1976d2',
+    color: 'primary',
     path: '/reports/claims'
   },
   {
@@ -70,6 +72,8 @@ const availableReports = [
 
 export default function ReportsPage() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const getColor = (c) => theme.palette[c]?.main ?? c;
 
   const handleReportClick = (path) => {
     if (path) {
@@ -101,7 +105,7 @@ export default function ReportsPage() {
                     '&:hover': {
                       boxShadow: 10,
                       transform: 'translateY(-8px)',
-                      borderColor: report.color
+                      borderColor: getColor(report.color)
                     },
                     border: '1px solid rgba(0,0,0,0.05)'
                   }}
@@ -117,11 +121,11 @@ export default function ReportsPage() {
                             width: '4.0rem',
                             height: '4.0rem',
                             borderRadius: '1.0rem',
-                            bgcolor: `${report.color}15`,
-                            boxShadow: `0 8px 16px -4px ${report.color}33`
+                            bgcolor: alpha(getColor(report.color), 0.08),
+                            boxShadow: `0 8px 16px -4px ${alpha(getColor(report.color), 0.2)}`
                           }}
                         >
-                          <IconComponent sx={{ color: report.color, fontSize: '2.25rem' }} />
+                          <IconComponent sx={{ color: getColor(report.color), fontSize: '2.25rem' }} />
                         </Box>
 
                         <Box>
@@ -139,10 +143,10 @@ export default function ReportsPage() {
 
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Box sx={{ flexGrow: 1 }} />
-                          <Typography variant="button" sx={{ color: report.color, fontWeight: 700, fontSize: '0.75rem' }}>
+                          <Typography variant="button" sx={{ color: getColor(report.color), fontWeight: 700, fontSize: '0.75rem' }}>
                             دخول التقرير
                           </Typography>
-                          <ArrowForward sx={{ color: report.color, fontSize: '1.125rem' }} />
+                          <ArrowForward sx={{ color: getColor(report.color), fontSize: '1.125rem' }} />
                         </Stack>
                       </Stack>
                     </CardContent>

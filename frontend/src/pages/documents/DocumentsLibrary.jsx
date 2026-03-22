@@ -509,7 +509,7 @@ const DocumentsLibrary = () => {
       width: '9.375rem',
       valueFormatter: (params) => {
         if (!params.value) return '-';
-        return new Date(params.value).toLocaleDateString('en-US', {
+        return new Date(params.value).toLocaleDateString('en-GB', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit'
@@ -819,7 +819,7 @@ const DocumentsLibrary = () => {
                         <strong>تاريخ الرفع</strong>
                       </TableCell>
                       <TableCell>
-                        {new Date(selectedDocument.uploadedAt).toLocaleDateString('en-US', {
+                        {new Date(selectedDocument.uploadedAt).toLocaleDateString('en-GB', {
                           year: 'numeric',
                           month: '2-digit',
                           day: '2-digit',

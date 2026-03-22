@@ -78,7 +78,7 @@ const ExpiringAlerts = ({ data, loading, withinDays = 7 }) => {
                         {item.memberName}
                       </Typography>
                       <Typography variant="caption" display="block" color="text.secondary">
-                        ينتهي: {new Date(item.validUntil).toLocaleDateString('en-US')}
+                        ينتهي: {new Date(item.validUntil).toLocaleDateString('en-GB')}
                       </Typography>
                     </Box>
                   }

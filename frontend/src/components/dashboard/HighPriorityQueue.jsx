@@ -88,7 +88,7 @@ const HighPriorityQueue = ({ data, loading }) => {
                   </TableCell>
                   <TableCell>
                     <Typography variant="caption" color="text.secondary">
-                      {new Date(item.requestDate).toLocaleDateString('en-US')}
+                      {new Date(item.requestDate).toLocaleDateString('en-GB')}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">

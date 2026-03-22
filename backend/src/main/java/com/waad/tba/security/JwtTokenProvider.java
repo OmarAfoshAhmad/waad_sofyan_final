@@ -25,7 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
-    @Value("${jwt.secret:ThisIsAVeryLongSecretKeyForJWTTokenGenerationWithAtLeast256BitsLength12345678}")
+    @Value("${jwt.secret}")
     private String jwtSecret;
 
     @Value("${jwt.expiration:86400000}")

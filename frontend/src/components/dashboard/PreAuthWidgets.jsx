@@ -14,6 +14,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { TrendingUp, TrendingDown, CheckCircle, Cancel, Pending, Warning, Schedule, Visibility, Edit, Delete } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { PieChart } from '@mui/x-charts/PieChart';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { BarChart } from '@mui/x-charts/BarChart';
@@ -94,6 +95,7 @@ StatsCard.propTypes = {
 // ============================|| STATUS DISTRIBUTION PIE CHART ||============================ //
 
 export const StatusDistributionChart = ({ data, loading }) => {
+  const theme = useTheme();
   if (loading || !data || data.length === 0) {
     return (
       <Card>
@@ -110,7 +112,7 @@ export const StatusDistributionChart = ({ data, loading }) => {
   // Status colors mapping
   const statusColors = {
     PENDING: '#ff9800',
-    REQUESTED: '#2196f3',
+    REQUESTED: theme.palette.primary.main,
     APPROVED: '#4caf50',
     REJECTED: '#f44336',
     CANCELLED: '#9e9e9e',
@@ -210,7 +212,7 @@ export const HighPriorityQueue = ({ data, loading, onView, onEdit, onDelete }) =
       field: 'submittedDate',
       headerName: 'تاريخ التقديم',
       width: '8.75rem',
-      renderCell: (params) => dayjs(params.value).format('YYYY/MM/DD')
+      renderCell: (params) => dayjs(params.value).format('DD/MM/YYYY')
     },
     {
       field: 'actions',
@@ -335,7 +337,7 @@ export const ExpiringSoonAlerts = ({ data, loading, withinDays = 7 }) => {
                   <Stack alignItems="center" spacing={0.5}>
                     <Chip icon={<Schedule />} label={`${daysLeft} يوم`} color={isUrgent ? 'error' : 'warning'} size="small" />
                     <Typography variant="caption" color="text.secondary">
-                      ينتهي {dayjs(item.expiryDate).format('YYYY/MM/DD')}
+                      ينتهي {dayjs(item.expiryDate).format('DD/MM/YYYY')}
                     </Typography>
                   </Stack>
                 </Stack>
@@ -364,6 +366,7 @@ ExpiringSoonAlerts.propTypes = {
 // ============================|| TRENDS LINE CHART ||============================ //
 
 export const TrendsChart = ({ data, loading, days = 30 }) => {
+  const theme = useTheme();
   if (loading || !data || data.length === 0) {
     return (
       <Card>
@@ -378,7 +381,7 @@ export const TrendsChart = ({ data, loading, days = 30 }) => {
   }
 
   // Transform data for chart
-  const xLabels = data.map((item) => dayjs(item.date).format('MM/DD'));
+  const xLabels = data.map((item) => dayjs(item.date).format('DD/MM'));
 
   const requestedData = data.map((item) => item.requestedCount || 0);
   const approvedData = data.map((item) => item.approvedCount || 0);
@@ -390,7 +393,7 @@ export const TrendsChart = ({ data, loading, days = 30 }) => {
         <Box sx={{ height: '18.75rem' }}>
           <LineChart
             series={[
-              { data: requestedData, label: 'المطلوبة', color: '#2196f3' },
+              { data: requestedData, label: 'المطلوبة', color: theme.palette.primary.main },
               { data: approvedData, label: 'المعتمدة', color: '#4caf50' }
             ]}
             xAxis={[{ scaleType: 'point', data: xLabels }]}
@@ -424,6 +427,7 @@ TrendsChart.propTypes = {
 // ============================|| TOP PROVIDERS BAR CHART ||============================ //
 
 export const TopProvidersChart = ({ data, loading, limit = 10 }) => {
+  const theme = useTheme();
   if (loading || !data || data.length === 0) {
     return (
       <Card>
@@ -448,7 +452,7 @@ export const TopProvidersChart = ({ data, loading, limit = 10 }) => {
         <Box sx={{ height: '21.875rem' }}>
           <BarChart
             series={[
-              { data: requestsData, label: 'عدد الطلبات', stack: 'A', color: '#2196f3' },
+              { data: requestsData, label: 'عدد الطلبات', stack: 'A', color: theme.palette.primary.main },
               { data: approvalRateData, label: 'نسبة الموافقة %', stack: 'B', color: '#4caf50' }
             ]}
             xAxis={[

@@ -57,7 +57,7 @@ const CARD_STATUS_CONFIG = {
     color: 'info',
     icon: HourglassEmptyIcon,
     bgColor: '#E3F2FD',
-    borderColor: '#2196F3'
+    borderColor: 'primary.main'
   },
   INACTIVE: {
     labelAr: 'غير نشطة',

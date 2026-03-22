@@ -178,7 +178,7 @@ export const exportToExcel = async ({ title, titleEn = '', filename, columns, da
   // Row: Report Info (date, count)
   worksheet.mergeCells(currentRow, 1, currentRow, totalColumns);
   const infoCell = worksheet.getCell(currentRow, 1);
-  const reportDate = new Date().toLocaleDateString('en-US', {
+  const reportDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -276,7 +276,7 @@ export const exportToExcel = async ({ title, titleEn = '', filename, columns, da
   // Footer: Generated info
   worksheet.mergeCells(currentRow, 1, currentRow, totalColumns);
   const generatedCell = worksheet.getCell(currentRow, 1);
-  generatedCell.value = `تم إنشاء هذا التقرير بواسطة نظام وعد للتأمين الصحي - ${new Date().toLocaleDateString('en-US')}`;
+  generatedCell.value = `تم إنشاء هذا التقرير بواسطة نظام وعد للتأمين الصحي - ${new Date().toLocaleDateString('en-GB')}`;
   Object.assign(generatedCell, STYLES.footer);
 
   // ========================================

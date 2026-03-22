@@ -102,7 +102,7 @@ const getFileIcon = (fileType) => {
     case FILE_TYPES.PDF:
       return <PdfIcon sx={{ color: '#f44336' }} />;
     case FILE_TYPES.IMAGE:
-      return <ImageIcon sx={{ color: '#2196f3' }} />;
+      return <ImageIcon sx={{ color: 'info.main' }} />;
     default:
       return <FileIcon sx={{ color: 'text.secondary' }} />;
   }

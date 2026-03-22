@@ -137,7 +137,7 @@ const PreAuthAuditPage = () => {
       reference: audit.referenceNumber || '-',
       action: ACTION_TYPES.find((t) => t.value === audit.action)?.label || audit.action,
       user: audit.changedBy || '-',
-      date: dayjs(audit.changeDate).format('YYYY-MM-DD HH:mm'),
+      date: dayjs(audit.changeDate).format('DD/MM/YYYY HH:mm'),
       field: audit.fieldName || '-',
       oldValue: audit.oldValue || '-',
       newValue: audit.newValue || '-',
@@ -306,7 +306,7 @@ const PreAuthAuditPage = () => {
                     )}
                     {filters.startDate && (
                       <Chip
-                        label={`من: ${dayjs(filters.startDate).format('YYYY-MM-DD')}`}
+                        label={`من: ${dayjs(filters.startDate).format('DD/MM/YYYY')}`}
                         onDelete={() => handleFilterChange('startDate', null)}
                         size="small"
                         color="primary"
@@ -315,7 +315,7 @@ const PreAuthAuditPage = () => {
                     )}
                     {filters.endDate && (
                       <Chip
-                        label={`إلى: ${dayjs(filters.endDate).format('YYYY-MM-DD')}`}
+                        label={`إلى: ${dayjs(filters.endDate).format('DD/MM/YYYY')}`}
                         onDelete={() => handleFilterChange('endDate', null)}
                         size="small"
                         color="primary"

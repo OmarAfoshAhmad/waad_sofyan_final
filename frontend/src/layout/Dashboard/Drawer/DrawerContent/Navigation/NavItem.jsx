@@ -61,7 +61,6 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
   // Professional Dark Sidebar Colors
   const textColor = 'rgba(255, 255, 255, 0.7)';
   const iconSelectedColor = '#ffffff';
-  const selectedBgColor = '#0066e6'; // Primary Blue
   const hoverBgColor = 'rgba(255, 255, 255, 0.05)';
 
   return (
@@ -87,9 +86,9 @@ export default function NavItem({ item, level, isParents = false, setSelectedID 
               ...(drawerOpen && {
                 '&:hover': { bgcolor: hoverBgColor, color: '#fff' },
                 '&.Mui-selected': {
-                  bgcolor: selectedBgColor,
+                  bgcolor: 'primary.main',
                   color: '#fff',
-                  '&:hover': { bgcolor: '#0052b8' }, // Darker shade
+                  '&:hover': { bgcolor: 'primary.dark' },
                   '& .MuiTypography-root': { fontWeight: 600, color: '#fff' },
                   '& .MuiListItemIcon-root': { color: '#fff' }
                 }

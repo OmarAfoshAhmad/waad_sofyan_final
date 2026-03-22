@@ -90,7 +90,7 @@ const ClaimStatementPreview = () => {
             size="small"
             sx={{
               bgcolor: 'rgba(25,118,210,0.25)',
-              color: '#90caf9',
+              color: 'primary.light',
               border: '1px solid rgba(25,118,210,0.45)',
               height: '1.4rem',
               fontSize: '0.68rem',
@@ -160,7 +160,7 @@ const ClaimStatementPreview = () => {
                 gap: 1.5
               }}
             >
-              <CircularProgress size={40} thickness={3} sx={{ color: '#1976d2' }} />
+              <CircularProgress size={40} thickness={3} color="primary" />
               <Typography variant="body2" sx={{ color: '#555', fontWeight: 500, letterSpacing: 0.3 }}>
                 جارٍ تحضير التقرير...
               </Typography>

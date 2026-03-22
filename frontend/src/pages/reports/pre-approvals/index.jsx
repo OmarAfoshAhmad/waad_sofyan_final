@@ -127,7 +127,7 @@ const PreApprovalsReport = () => {
         'المبلغ المعتمد': pa.approvedAmount || '-',
         'تاريخ الطلب': pa.requestDate || '-',
         'صالح حتى': pa.validUntil || '-',
-        'آخر تحديث': pa.updatedAt ? new Date(pa.updatedAt).toLocaleDateString('en-US') : '-'
+        'آخر تحديث': pa.updatedAt ? new Date(pa.updatedAt).toLocaleDateString('en-GB') : '-'
       }));
 
       // Generate filename with timestamp

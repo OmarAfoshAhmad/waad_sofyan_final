@@ -110,10 +110,10 @@ import { useSnackbar } from 'notistack';
 const formatDate = (dateStr) => {
   if (!dateStr) return '-';
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString('en-GB', {
       year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      month: '2-digit',
+      day: '2-digit'
     });
   } catch {
     return dateStr;

@@ -23,7 +23,7 @@ export const exportToExcel = (data, filename = 'export', options = {}) => {
   // Add company name header if provided
   if (companyName) {
     csvContent += `"${companyName}"\n`;
-    csvContent += `"تاريخ التصدير: ${new Date().toLocaleDateString('en-US')}"\n`;
+    csvContent += `"تاريخ التصدير: ${new Date().toLocaleDateString('en-GB')}"\n`;
     csvContent += '\n'; // Empty row for spacing
   }
 

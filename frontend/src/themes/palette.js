@@ -66,6 +66,14 @@ export function buildPalette(presetColor = 'default') {
       background: {
         paper: '#ffffff',
         default: '#f4fafa'  // أبيض مع مسحة تيل خفيفة — بدلاً من الفضي #fafafb
+      },
+      // Override Alert CSS variables to use primary (theme color) instead of hardcoded info (blue)
+      Alert: {
+        infoStandardBg: lightPaletteColor.primary.lighter,
+        infoIconColor: lightPaletteColor.primary.main,
+        infoColor: lightPaletteColor.primary.dark,
+        infoFilledBg: lightPaletteColor.primary.main,
+        infoFilledColor: lightPaletteColor.primary.contrastText
       }
     },
     dark: {
@@ -82,6 +90,14 @@ export function buildPalette(presetColor = 'default') {
       background: {
         paper: extendedDark.grey[100],
         default: extendedDark.grey.A50
+      },
+      // Override Alert CSS variables for dark mode
+      Alert: {
+        infoStandardBg: darkPaletteColor.primary.darker,
+        infoIconColor: darkPaletteColor.primary.main,
+        infoColor: darkPaletteColor.primary.lighter,
+        infoFilledBg: darkPaletteColor.primary.main,
+        infoFilledColor: darkPaletteColor.primary.contrastText
       }
     }
   };

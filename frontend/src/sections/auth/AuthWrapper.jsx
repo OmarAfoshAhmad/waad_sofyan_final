@@ -35,7 +35,7 @@ export default function AuthWrapper({ children }) {
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%)', // Modern light medical background
+        background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.primary.lighter, 0.6)} 0%, ${theme.palette.background.default} 100%)`,
         color: 'inherit',
         position: 'relative'
       }}
@@ -54,7 +54,7 @@ export default function AuthWrapper({ children }) {
               alignItems: 'center'
             }}
           >
-            <Grid size={{ xs: 12, sm: 8, md: 6, lg: 5, xl: 4 }} sx={{ mx: 'auto' }}>
+            <Grid size={{ xs: 12, sm: 8, md: 6, lg: 4, xl: 4 }} sx={{ mx: 'auto' }}>
               <AuthCard>{children}</AuthCard>
             </Grid>
           </Grid>

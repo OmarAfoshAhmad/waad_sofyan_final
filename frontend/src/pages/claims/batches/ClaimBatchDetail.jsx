@@ -333,17 +333,17 @@ export default function ClaimBatchDetail() {
         const worksheet = workbook.addWorksheet('المطالبات');
 
         worksheet.columns = [
-            { header: '#', key: 'index', width: '0.625rem' },
-            { header: 'المرجع', key: 'ref', width: '1.5625rem' },
-            { header: 'مقدم الخدمة', key: 'provider', width: '3.125rem' },
-            { header: 'المستفيد', key: 'patient', width: '1.875rem' },
-            { header: 'تاريخ الخدمة', key: 'serviceDate', width: '1.125rem' },
-            { header: 'الحالة', key: 'status', width: '0.9375rem' },
-            { header: 'المبلغ الإجمالي', key: 'amount', width: '1.25rem' },
-            { header: 'المعتمد', key: 'covered', width: '1.25rem' },
-            { header: 'المرفوض', key: 'refused', width: '1.25rem' },
-            { header: 'نصيب المؤمن عليه', key: 'copay', width: '1.375rem' },
-            { header: 'المستحق للمزود', key: 'paid', width: '1.25rem' }
+            { header: '#', key: 'index', width: 6 },
+            { header: 'المرجع', key: 'ref', width: 22 },
+            { header: 'مقدم الخدمة', key: 'provider', width: 25 },
+            { header: 'المستفيد', key: 'patient', width: 28 },
+            { header: 'تاريخ الخدمة', key: 'serviceDate', width: 16 },
+            { header: 'الحالة', key: 'status', width: 14 },
+            { header: 'المبلغ الإجمالي', key: 'amount', width: 16 },
+            { header: 'المعتمد', key: 'covered', width: 14 },
+            { header: 'المرفوض', key: 'refused', width: 14 },
+            { header: 'نصيب المؤمن عليه', key: 'copay', width: 18 },
+            { header: 'المستحق للمزود', key: 'paid', width: 16 }
         ];
 
         worksheet.views = [{ rightToLeft: true }];
@@ -658,7 +658,7 @@ export default function ClaimBatchDetail() {
 
                         <Button
                             variant="outlined"
-                            color="info"
+                            color="primary"
                             startIcon={<ViewIcon />}
                             onClick={() => {
                                 if (selectedClaimIds.length === 0) {
@@ -669,12 +669,12 @@ export default function ClaimBatchDetail() {
                             }}
                             sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
                         >
-                            معاينة المحددة
+                            طباعة المحددة
                         </Button>
 
                         <Button
                             variant="outlined"
-                            color="info"
+                            color="primary"
                             startIcon={<PrintIcon />}
                             onClick={handlePrint}
                             sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
@@ -696,19 +696,21 @@ export default function ClaimBatchDetail() {
 
                         <Button
                             variant="outlined"
-                            sx={{
-                                color: '#1b5e20',
-                                borderColor: '#1b5e20',
-                                borderRadius: '0.375rem',
-                                height: '2.5rem',
-                                '&:hover': { backgroundColor: '#1b5e2010', borderColor: '#1b5e20' }
-                            }}
+                            color="primary"
+                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
                             startIcon={<ExcelIcon />}
                             onClick={handleExportExcel}
                         >
-                            إكسل
+                            تصدير إكسل
                         </Button>
 
+
+                        {canDelete && (
+                            <SoftDeleteToggle
+                                showDeleted={showDeleted}
+                                onToggle={() => setShowDeleted(!showDeleted)}
+                            />
+                        )}
 
                         <Button
                             variant="contained"
@@ -724,13 +726,6 @@ export default function ClaimBatchDetail() {
                         >
                             إضافة مطالبة
                         </Button>
-
-                        {canDelete && (
-                            <SoftDeleteToggle
-                                showDeleted={showDeleted}
-                                onToggle={() => setShowDeleted(!showDeleted)}
-                            />
-                        )}
                     </Stack>
                 }
             />

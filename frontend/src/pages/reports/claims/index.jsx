@@ -98,7 +98,7 @@ const ClaimsReport = () => {
         'المبلغ المطلوب': claim.requestedAmount,
         'المبلغ المعتمد': claim._raw?.approvedAmount || '-',
         'تاريخ الزيارة': claim.visitDate || '-',
-        'آخر تحديث': claim.updatedAt ? new Date(claim.updatedAt).toLocaleDateString('en-US') : '-'
+        'آخر تحديث': claim.updatedAt ? new Date(claim.updatedAt).toLocaleDateString('en-GB') : '-'
       }));
       const timestamp = new Date().toISOString().slice(0, 10);
       exportToExcel(exportData, `تقرير_المطالبات_${timestamp}`, { companyName });

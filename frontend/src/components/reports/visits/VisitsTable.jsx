@@ -31,11 +31,11 @@ const safeString = (value) => {
 const formatDate = (dateString) => {
   if (!dateString) return '—';
   try {
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(new Date(dateString));
+    const d = new Date(dateString);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
   } catch {
     return dateString;
   }

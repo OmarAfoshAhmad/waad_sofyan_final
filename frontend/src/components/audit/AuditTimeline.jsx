@@ -113,7 +113,7 @@ const formatValue = (value) => {
 
   // Handle dates
   if (value.match && value.match(/^\d{4}-\d{2}-\d{2}/)) {
-    return dayjs(value).format('YYYY-MM-DD');
+    return dayjs(value).format('DD/MM/YYYY');
   }
 
   // Handle numbers

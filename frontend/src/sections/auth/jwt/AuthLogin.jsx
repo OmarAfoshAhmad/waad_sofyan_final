@@ -229,12 +229,6 @@ export default function AuthLogin({ isDemo = false }) {
                       borderRadius: '0.25rem',
                       fontWeight: 600,
                       fontSize: '1rem',
-                      boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
-                      background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-                      '&:hover': {
-                        background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
-                        boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`
-                      }
                     }}
                   >
                     {isSubmitting ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}

@@ -269,7 +269,7 @@ const ProviderView = () => {
           <Grid size={12}>
             <Paper sx={{ p: '1.5rem' }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
-                <Badge sx={{ color: '#1890ff' }} />
+                <Badge sx={{ color: 'primary.main' }} />
                 <Typography variant="h5">البيانات الأساسية</Typography>
               </Stack>
               <Divider sx={{ mb: '1.0rem' }} />
@@ -449,7 +449,7 @@ const ProviderView = () => {
           <Grid size={12}>
             <Paper sx={{ p: '1.5rem' }}>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: '1.0rem' }}>
-                <VerifiedUser sx={{ color: '#1890ff' }} />
+                <VerifiedUser sx={{ color: 'primary.main' }} />
                 <Typography variant="h5">عقود مقدم الخدمة</Typography>
               </Stack>
               <Divider sx={{ mb: '1.0rem' }} />
@@ -554,7 +554,7 @@ const ProviderView = () => {
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <CategoryIcon fontSize="small" sx={{ color: '#1890ff' }} />
+                    <CategoryIcon fontSize="small" sx={{ color: 'primary.main' }} />
                     <Typography fontWeight={600}>{cat.name}</Typography>
                     <Chip label={cat.services.length} size="small" color="primary" variant="outlined" />
                   </Stack>
