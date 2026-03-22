@@ -215,7 +215,7 @@ export default function HorizontalNavigation() {
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
       {sidebarGroups?.map((group) => {
         if (!group.children || group.children.length === 0) return null;
 

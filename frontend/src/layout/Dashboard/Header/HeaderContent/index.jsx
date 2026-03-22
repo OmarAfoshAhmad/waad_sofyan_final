@@ -135,9 +135,9 @@ export default function HeaderContent() {
       {/* ✅ Navigation Horizontal - القائمة الأفقية */}
       {!downLG && <HorizontalNavigation />}
 
-      <Box sx={{ width: '0.0625rem', ml: 1 }} />
+      <Box sx={{ flexGrow: 1 }} />
 
-      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5 }}>
         {/* ✅ Welcome Message with Username */}
         {user && (
           <Chip

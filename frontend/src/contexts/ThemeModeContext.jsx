@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { createContext, useContext, useEffect, useCallback } from 'react';
+import { createContext, useContext, useEffect, useCallback, useMemo } from 'react';
 import { useColorScheme } from '@mui/material/styles';
 import AuthContext from 'contexts/AuthContext';
 
@@ -21,20 +21,44 @@ export const ThemeModeProvider = ({ children }) => {
   const userId = auth?.user?.id || 'guest';
   const storageKey = `theme-mode:${userId}`;
 
-  // 2️⃣ Rehydrate on user change
+  // 2️⃣ Sync MUI mode with our custom persistence on mount or user change
   useEffect(() => {
-    // Force 'light' mode at all times as per business requirement
-    if (mode !== 'light') {
-      setMode('light');
+    const savedMode = localStorage.getItem(storageKey);
+    console.debug(`[ThemeMode] userId: ${userId}, saved: ${savedMode}, current: ${mode}`);
+    
+    if (savedMode && (savedMode === 'light' || savedMode === 'dark')) {
+      if (mode !== savedMode) {
+        setMode(savedMode);
+      }
+    } else {
+      // If no user-specific setting, stick to current or light
+      if (!mode) {
+        setMode('light');
+      }
     }
-  }, [setMode, mode]);
+  }, [userId, setMode]);
 
-  // 4️⃣ Toggle function (DISABLED: Force light)
+  // 3️⃣ Toggle function
   const toggleTheme = useCallback(() => {
-    setMode('light');
-  }, [setMode]);
+    // If mode is undefined or system, we default to toggling away from light
+    const currentActiveMode = mode === 'dark' ? 'dark' : 'light';
+    const newMode = currentActiveMode === 'dark' ? 'light' : 'dark';
+    
+    console.debug(`[ThemeMode] Toggling: ${currentActiveMode} -> ${newMode}`);
+    
+    setMode(newMode);
+    localStorage.setItem(storageKey, newMode);
+    // Also sync with MUI's default key for safety
+    localStorage.setItem('theme-mode', newMode);
+  }, [mode, setMode, storageKey]);
 
-  return <ThemeModeContext.Provider value={{ mode: 'light', toggleTheme, userId }}>{children}</ThemeModeContext.Provider>;
+  const value = useMemo(() => ({
+    mode: mode || 'light',
+    toggleTheme,
+    userId
+  }), [mode, toggleTheme, userId]);
+
+  return <ThemeModeContext.Provider value={value}>{children}</ThemeModeContext.Provider>;
 };
 
 ThemeModeProvider.propTypes = {

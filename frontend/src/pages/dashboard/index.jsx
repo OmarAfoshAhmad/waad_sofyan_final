@@ -14,7 +14,8 @@ import {
   LinearProgress,
   useTheme,
   alpha,
-  Divider
+  Divider,
+  Tooltip
 } from '@mui/material';
 
 // Icons
@@ -526,6 +527,7 @@ export default function Dashboard() {
                   size="small" 
                   inverseColors={true}
                 />
+                
                 <IconButton size="small" onClick={handleRefreshAll} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}>
                   <RefreshIcon sx={{ fontSize: '1.375rem' }} />
                 </IconButton>

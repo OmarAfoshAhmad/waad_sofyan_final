@@ -31,13 +31,15 @@ export default function ProviderThemeToggle() {
           width: '2.5rem',
           height: '2.5rem',
           borderRadius: '0.25rem',
-          bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+          bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.15)',
           border: '1px solid',
-          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.2)',
+          color: '#ffffff',
           transition: 'all 0.3s ease',
           '&:hover': {
-            bgcolor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)',
-            transform: 'scale(1.05)'
+            bgcolor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.25)',
+            transform: 'scale(1.05)',
+            borderColor: 'rgba(255,255,255,0.3)'
           }
         }}
       >
@@ -54,14 +56,14 @@ export default function ProviderThemeToggle() {
               <LightModeIcon
                 sx={{
                   fontSize: '1.375rem',
-                  color: '#FFD54F'
+                  color: '#FFD54F' // Keep yellow for sun
                 }}
               />
             ) : (
               <DarkModeIcon
                 sx={{
                   fontSize: '1.375rem',
-                  color: '#5C6BC0'
+                  color: '#ffffff' // Change to white for visibility on teal
                 }}
               />
             )}
