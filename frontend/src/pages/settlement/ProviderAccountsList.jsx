@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 // MUI
-import { Box, Chip, Typography, Stack, Button, Alert, Tooltip, IconButton, TextField, MenuItem, Grid } from '@mui/material';
+import { Box, Chip, Typography, Stack, Button, Alert, Tooltip, IconButton, TextField, MenuItem, Grid, CircularProgress } from '@mui/material';
 import {
   ReceiptLong as ReceiptIcon,
   TrendingUp as UpIcon,
@@ -76,15 +76,17 @@ const getRefusedAmount = (row) => {
 };
 
 const getPayableAmount = (row) => {
-  const approved = Number(row?.approvedAmount);
-  if (Number.isFinite(approved) && approved > 0) return approved;
-
+  // إذا كان approvedAmount موجوداً صراحةً (حتى لو صفر = مرفوضة بالكامل) نستخدمه
+  if (row?.approvedAmount !== null && row?.approvedAmount !== undefined) {
+    const approved = Number(row.approvedAmount);
+    return Number.isFinite(approved) && approved >= 0 ? approved : 0;
+  }
+  // فولباك: المبلغ المطلوب بعد حذف المرفوض
   const requested = Number(row?.requestedAmount);
   if (Number.isFinite(requested) && requested > 0) {
     const payableAfterRefused = requested - getRefusedAmount(row);
     return payableAfterRefused > 0 ? payableAfterRefused : 0;
   }
-
   return 0;
 };
 
@@ -94,20 +96,23 @@ const sortFieldMap = {
   providerName: 'providerName',
   requestedAmount: 'requestedAmount',
   payableAmount: 'approvedAmount',
-  providerDiscountPercent: 'createdAt',
-  companyShare: 'createdAt',
-  facilityShare: 'createdAt',
+  providerDiscountPercent: 'approvedAmount',
+  companyShare: 'approvedAmount',
+  facilityShare: 'approvedAmount',
   status: 'status',
   createdAt: 'createdAt'
 };
 
 export default function ProviderAccountsList() {
+  const [isExporting, setIsExporting] = useState(false);
   const [filters, setFilters] = useState({
     status: 'ALL',
     providerId: '',
     employerId: '',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    serviceDateFrom: '',
+    serviceDateTo: ''
   });
 
   const [appliedFilters, setAppliedFilters] = useState({
@@ -115,7 +120,9 @@ export default function ProviderAccountsList() {
     providerId: '',
     employerId: '',
     dateFrom: '',
-    dateTo: ''
+    dateTo: '',
+    serviceDateFrom: '',
+    serviceDateTo: ''
   });
 
   const tableState = useTableState({
@@ -166,7 +173,9 @@ export default function ProviderAccountsList() {
         providerId: appliedFilters.providerId || undefined,
         employerId: appliedFilters.employerId || undefined,
         createdDateFrom: formatDateParam(appliedFilters.dateFrom),
-        createdDateTo: formatDateParam(appliedFilters.dateTo)
+        createdDateTo: formatDateParam(appliedFilters.dateTo),
+        dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
+        dateTo: formatDateParam(appliedFilters.serviceDateTo)
       };
       return claimsService.list(params);
     },
@@ -275,29 +284,50 @@ export default function ProviderAccountsList() {
   };
 
   const clearFilters = () => {
-    const reset = { status: 'ALL', providerId: '', employerId: '', dateFrom: '', dateTo: '' };
+    const reset = { status: 'ALL', providerId: '', employerId: '', dateFrom: '', dateTo: '', serviceDateFrom: '', serviceDateTo: '' };
     setFilters(reset);
     setAppliedFilters(reset);
     tableState.setPage(0);
   };
 
-  const handleExport = () => {
-    if (!claims.length) return;
-    const exportRows = claims.map((item) => ({
-      'رقم المطالبة': item.claimNumber || `CLM-${item.id}`,
-      'الوثيقة (جهة العمل)': item.employerName || '',
-      'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
-      'مقدم الخدمة': item.providerName || '',
-      'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
-      'المبلغ المرفوض': getRefusedAmount(item),
-      'القيمة المستحقة': getPayableAmount(item),
-      'نسبة التخفيض (%)': getDiscountPercent(item),
-      'حصة الشركة (10%)': getCompanyShareAmount(item),
-      'نصيب المرفق': getFacilityShareAmount(item),
-      'الحالة': STATUS_LABELS[item.status] || item.status || ''
-    }));
-
-    exportToExcel(exportRows, `مطالبات_مقدمي_الخدمة_${dayjs().format('YYYY-MM-DD')}`);
+  const handleExport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const allData = await claimsService.list({
+        status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
+        providerId: appliedFilters.providerId || undefined,
+        employerId: appliedFilters.employerId || undefined,
+        createdDateFrom: formatDateParam(appliedFilters.dateFrom),
+        createdDateTo: formatDateParam(appliedFilters.dateTo),
+        dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
+        dateTo: formatDateParam(appliedFilters.serviceDateTo),
+        page: 1,
+        size: 5000,
+        sortBy,
+        sortDir
+      });
+      const allClaims = allData?.items || allData?.content || [];
+      if (!allClaims.length) return;
+      const exportRows = allClaims.map((item) => ({
+        'رقم المطالبة': item.claimNumber || `CLM-${item.id}`,
+        'الوثيقة (جهة العمل)': item.employerName || '',
+        'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
+        'مقدم الخدمة': item.providerName || '',
+        'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
+        'المبلغ المرفوض': getRefusedAmount(item),
+        'القيمة المستحقة': getPayableAmount(item),
+        'نسبة التخفيض (%)': Number(item.providerDiscountPercent) || 0,
+        'حصة الشركة (10%)': getCompanyShareAmount(item),
+        'نصيب المرفق': getFacilityShareAmount(item),
+        'الحالة': STATUS_LABELS[item.status] || item.status || ''
+      }));
+      exportToExcel(exportRows, `مطالبات_مقدمي_الخدمة_${dayjs().format('YYYY-MM-DD')}`);
+    } catch (err) {
+      console.error('فشل التصدير:', err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handlePrint = () => {
@@ -411,7 +441,7 @@ export default function ProviderAccountsList() {
   );
 
   return (
-    <PermissionGuard requiredRole={['SUPER_ADMIN', 'FINANCE_MANAGER', 'INSURANCE_ADMIN']}>
+    <PermissionGuard requiredRole={['SUPER_ADMIN', 'FINANCE_MANAGER', 'INSURANCE_ADMIN', 'ACCOUNTANT']}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <ModernPageHeader
           title="مطالبات مقدمي الخدمة"
@@ -526,6 +556,36 @@ export default function ProviderAccountsList() {
                     }}
                   />
 
+                  <DatePicker
+                    label="تاريخ الخدمة من"
+                    value={filters.serviceDateFrom ? dayjs(filters.serviceDateFrom) : null}
+                    onChange={(newValue) =>
+                      setFilters((prev) => ({ ...prev, serviceDateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
+                    }
+                    format="DD/MM/YYYY"
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        sx: { minWidth: '8.5rem' }
+                      }
+                    }}
+                  />
+
+                  <DatePicker
+                    label="تاريخ الخدمة إلى"
+                    value={filters.serviceDateTo ? dayjs(filters.serviceDateTo) : null}
+                    onChange={(newValue) =>
+                      setFilters((prev) => ({ ...prev, serviceDateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
+                    }
+                    format="DD/MM/YYYY"
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        sx: { minWidth: '8.5rem' }
+                      }
+                    }}
+                  />
+
                   <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap' }}>
                     بحث
                   </Button>
@@ -561,16 +621,19 @@ export default function ProviderAccountsList() {
                   <Button
                     variant="outlined"
                     color="success"
-                    startIcon={<FileDownloadIcon />}
+                    startIcon={isExporting ? <CircularProgress size="0.9rem" color="inherit" /> : <FileDownloadIcon />}
                     onClick={handleExport}
-                    disabled={!claims.length}
+                    disabled={isExporting || totalElements === 0}
                     sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1, flexShrink: 0 }}
                   >
-                    تصدير
+                    {isExporting ? 'جارٍ التصدير...' : 'تصدير'}
                   </Button>
           </Stack>
         </MainCard>
 
+        <Alert severity="info" icon={false} sx={{ py: 0.25, px: 1.5, fontSize: '0.72rem', '& .MuiAlert-message': { lineHeight: 1.5 } }}>
+          تنبيه: المبالغ الظاهرة (المجاميع قبل / مرفوض / مستحق / حصة الشركة / نصيب المرفق) تخص الصفحة الحالية فقط. استخدم زر التصدير للحصول على إجماليات جميع السجلات المطابقة.
+        </Alert>
         {isError && <Alert severity="error">{error?.message || 'تعذر جلب البيانات. يرجى المحاولة مجدداً.'}</Alert>}
 
         <MainCard content={false}>
