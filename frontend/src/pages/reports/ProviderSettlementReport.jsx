@@ -103,6 +103,8 @@ const ProviderSettlementReport = () => {
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [claimNumberFilter, setClaimNumberFilter] = useState('');
   const [preAuthNumberFilter, setPreAuthNumberFilter] = useState('');
+  const [appliedDateFrom, setAppliedDateFrom] = useState('');
+  const [appliedDateTo, setAppliedDateTo] = useState('');
 
   const STATUS_OPTIONS = [
     { value: 'SUBMITTED', label: 'مقدم' },
@@ -187,8 +189,8 @@ const ProviderSettlementReport = () => {
 
       const params = {
         providerId: selectedProviderId,
-        fromDate: dateFrom || undefined,
-        toDate: dateTo || undefined,
+        fromDate: appliedDateFrom || undefined,
+        toDate: appliedDateTo || undefined,
         statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
         claimNumber: claimNumberFilter || undefined,
         preAuthNumber: preAuthNumberFilter || undefined
@@ -209,14 +211,16 @@ const ProviderSettlementReport = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedProviderId, dateFrom, dateTo, selectedStatuses, claimNumberFilter, preAuthNumberFilter]);
+  }, [selectedProviderId, appliedDateFrom, appliedDateTo, selectedStatuses, claimNumberFilter, preAuthNumberFilter]);
 
-  // Auto-fetch when provider changes
+  // Auto-fetch when any applied filter changes (debounced for text inputs)
   useEffect(() => {
-    if (selectedProviderId) {
+    if (!selectedProviderId) return;
+    const timer = setTimeout(() => {
       fetchReport();
-    }
-  }, [selectedProviderId]); // Only on provider change, not all filters
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [fetchReport]);
 
   // Print handler
   const handlePrint = useReactToPrint({
@@ -377,6 +381,8 @@ const ProviderSettlementReport = () => {
   const handleResetFilters = () => {
     setDateFrom('');
     setDateTo('');
+    setAppliedDateFrom('');
+    setAppliedDateTo('');
     setSelectedStatuses([]);
     setClaimNumberFilter('');
     setPreAuthNumberFilter('');
@@ -524,11 +530,35 @@ const ProviderSettlementReport = () => {
               </FormControl>
             </Grid>
 
+            {/* Claim Number Filter */}
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="رقم المطالبة"
+                placeholder="بحث برقم المطالبة"
+                value={claimNumberFilter}
+                onChange={(e) => setClaimNumberFilter(e.target.value)}
+              />
+            </Grid>
+
+            {/* Pre-Auth Number Filter */}
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="رقم الموافقة المسبقة"
+                placeholder="بحث برقم الموافقة"
+                value={preAuthNumberFilter}
+                onChange={(e) => setPreAuthNumberFilter(e.target.value)}
+              />
+            </Grid>
+
             {/* Search Actions */}
             <Grid size={{ xs: 12, md: 3 }}>
               <Stack direction="row" spacing={1}>
-                <Button variant="contained" startIcon={<FilterIcon />} onClick={fetchReport} disabled={loading || !selectedProviderId}>
-                  بحث وتحديث
+                <Button variant="contained" startIcon={<FilterIcon />} onClick={() => { setAppliedDateFrom(dateFrom); setAppliedDateTo(dateTo); }} disabled={loading || !selectedProviderId}>
+                  بحث بالتاريخ
                 </Button>
                 <Button variant="outlined" startIcon={<ClearAllIcon />} onClick={handleResetFilters}>
                   مسح

@@ -21,49 +21,55 @@ public class AccountSummaryDTO {
 
     private Long accountId;
     private Long providerId;
-    
+
     /**
      * Provider name from Provider entity
      */
     private String providerName;
-    
+
     /**
      * Current running balance (amount owed to provider)
      * INVARIANT: runningBalance = totalApproved - totalPaid
      */
     private BigDecimal runningBalance;
-    
+
     /**
      * Total amount approved across all claims
      */
     private BigDecimal totalApproved;
-    
+
     /**
      * Total amount paid across all batches
      */
     private BigDecimal totalPaid;
-    
+
     /**
      * Account status (ACTIVE, SUSPENDED, CLOSED)
      */
     private String status;
-    
+
     /**
      * Status in Arabic
      */
     private String statusArabic;
-    
+
     /**
      * Total number of transactions
      */
     private long transactionCount;
-    
+
     /**
      * Whether balance matches transaction history
      * Should always be true in a healthy system
      */
     private boolean balanceVerified;
-    
+
+    /**
+     * Whether runningBalance == totalApproved - totalPaid
+     * Second integrity check - formula invariant
+     */
+    private boolean formulaVerified;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

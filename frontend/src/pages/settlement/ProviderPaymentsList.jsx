@@ -76,7 +76,7 @@ export default function ProviderPaymentsList() {
   });
 
   const { data: accountsRaw, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['provider-accounts-list', appliedFilters],
+    queryKey: ['provider-accounts-list', appliedFilters.status, appliedFilters.hasBalance],
     queryFn: () =>
       providerAccountsService.getAll({
         status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
@@ -175,9 +175,15 @@ export default function ProviderPaymentsList() {
 
   const tableRows = useMemo(() => paginatedRows, [paginatedRows]);
 
+  const applyFilterNow = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setAppliedFilters((prev) => ({ ...prev, [key]: value }));
+    tableState.setPage(0);
+  };
+
   const handleApplyFilters = () => {
     tableState.setPage(0);
-    setAppliedFilters({ ...filters });
+    setAppliedFilters((prev) => ({ ...prev, dateFrom: filters.dateFrom, dateTo: filters.dateTo }));
   };
 
   const handleClearFilters = () => {
@@ -400,7 +406,7 @@ export default function ProviderPaymentsList() {
               fullWidth
               label="بحث باسم مقدم الخدمة أو الرقم"
               value={filters.search}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+              onChange={(e) => applyFilterNow('search', e.target.value)}
               sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             />
           </Grid>
@@ -410,7 +416,7 @@ export default function ProviderPaymentsList() {
               fullWidth
               label="حالة الحساب"
               value={filters.status}
-              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+              onChange={(e) => applyFilterNow('status', e.target.value)}
               sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             >
               {STATUS_OPTIONS.map((option) => (
@@ -426,12 +432,7 @@ export default function ProviderPaymentsList() {
               fullWidth
               label="الرصيد"
               value={filters.hasBalance ? 'HAS_BALANCE' : 'ALL'}
-              onChange={(e) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  hasBalance: e.target.value === 'HAS_BALANCE'
-                }))
-              }
+              onChange={(e) => applyFilterNow('hasBalance', e.target.value === 'HAS_BALANCE')}
               sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             >
               <MenuItem value="ALL">الكل</MenuItem>
@@ -444,7 +445,7 @@ export default function ProviderPaymentsList() {
               fullWidth
               label="نوع مقدم الخدمة"
               value={filters.providerType}
-              onChange={(e) => setFilters((prev) => ({ ...prev, providerType: e.target.value }))}
+              onChange={(e) => applyFilterNow('providerType', e.target.value)}
               sx={{ '& .MuiInputBase-root': { height: '2.5rem' } }}
             >
               {providerTypeOptions.map((type) => (

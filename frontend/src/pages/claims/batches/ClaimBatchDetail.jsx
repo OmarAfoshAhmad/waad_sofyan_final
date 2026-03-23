@@ -452,6 +452,7 @@ export default function ClaimBatchDetail() {
         { id: 'select',      label: <Checkbox size="small" checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} onClick={(e) => e.stopPropagation()} />, minWidth: '2.5rem',  align: 'center', sortable: false },
         { id: 'index',       label: '#',               minWidth: '2.5rem',  align: 'center', sortable: false },
         { id: 'ref',         label: 'المرجع',          minWidth: '8rem',    align: 'center', sortable: false },
+        { id: 'employer',    label: 'الوثيقة',          minWidth: '9rem',    align: 'center', sortable: false },
         { id: 'provider',    label: 'مقدم الخدمة',    minWidth: '7rem',    align: 'center', sortable: false },
         { id: 'patient',     label: 'الاسم (المستفيد)', minWidth: '10rem',  align: 'right',  sortable: true  },
         { id: 'serviceDate', label: 'تاريخ الخدمة',   minWidth: '7rem',    align: 'center', sortable: true  },
@@ -538,6 +539,12 @@ export default function ClaimBatchDetail() {
                         <BusinessIcon sx={{ fontSize: '1.0rem', color: 'text.disabled' }} />
                         <Typography variant="body2">{provider?.name}</Typography>
                     </Stack>
+                );
+            case 'employer':
+                return (
+                    <Typography variant="body2" noWrap>
+                        {claim.employerName || employer?.name || '-'}
+                    </Typography>
                 );
             case 'patient':
                 return (

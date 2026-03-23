@@ -156,10 +156,11 @@ public class ProviderAccountService {
                 }
 
                 // 4. Get net amount to credit = نصيب المرفق بعد خصم العقد
-                BigDecimal grossAmount = claim.getNetPayableAmount();
-                if (grossAmount == null || grossAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                BigDecimal companyApprovedShare = claim.getNetPayableAmount();
+                if (companyApprovedShare == null || companyApprovedShare.compareTo(BigDecimal.ZERO) <= 0) {
                         throw new IllegalStateException(
-                                        "Invalid net payable amount for claim " + claimId + ": " + grossAmount);
+                                        "Invalid net payable amount for claim " + claimId + ": "
+                                                        + companyApprovedShare);
                 }
 
                 // Apply provider contract discount (نسبة الخصم) to get actual provider share.
@@ -180,18 +181,20 @@ public class ProviderAccountService {
 
                 // One-step calculation with a single HALF_EVEN rounding to avoid cascading
                 // precision errors across thousands of claims.
+                // CALC_SCALE=4 for intermediate ratio; final amount rounded to scale=2.
                 BigDecimal amount;
                 if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
                         BigDecimal providerRatio = BigDecimal.ONE
-                                        .subtract(discountPercent.divide(new BigDecimal("100"), 10,
+                                        .subtract(discountPercent.divide(new BigDecimal("100"), 4,
                                                         java.math.RoundingMode.HALF_EVEN));
-                        amount = grossAmount.multiply(providerRatio).setScale(2, java.math.RoundingMode.HALF_EVEN);
+                        amount = companyApprovedShare.multiply(providerRatio).setScale(2,
+                                        java.math.RoundingMode.HALF_EVEN);
                 } else {
-                        amount = grossAmount;
+                        amount = companyApprovedShare;
                 }
 
-                log.info("Credit calculation: claim={}, gross={}, discountPercent={}, providerShare={}",
-                                claimId, grossAmount, discountPercent, amount);
+                log.info("Credit calculation: claim={}, companyApprovedShare={}, discountPercent={}, providerShare={}",
+                                claimId, companyApprovedShare, discountPercent, amount);
 
                 if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                         throw new IllegalStateException(
@@ -313,8 +316,12 @@ public class ProviderAccountService {
                                         "Cannot debit inactive account for provider " + providerId);
                 }
 
-                BigDecimal balance = account.getRunningBalance() != null ? account.getRunningBalance()
-                                : BigDecimal.ZERO;
+                BigDecimal balance = account.getRunningBalance();
+                if (balance == null) {
+                        throw new IllegalStateException(
+                                        "CRITICAL: Running balance is null for provider " + providerId
+                                                        + ". Possible data corruption — investigate immediately.");
+                }
                 if (balance.compareTo(amount) < 0) {
                         throw new IllegalStateException(
                                         "Insufficient balance for installment. Provider: " + providerId
@@ -402,19 +409,23 @@ public class ProviderAccountService {
                                 .orElse(null);
 
                 if (creditTx == null) {
-                        log.warn("⚠️ No credit transaction found for claim {} — skipping reversal debit", claimId);
+                        // No credit was ever recorded — nothing to reverse.
+                        // This can legitimately happen if the claim was rejected before credit,
+                        // so log a warning but return null gracefully.
+                        log.warn("No credit transaction found for claim {} — no reversal debit needed", claimId);
                         return null;
                 }
 
                 BigDecimal amount = creditTx.getAmount();
 
                 Long providerId = claimRepository.findById(claimId)
-                                .map(c -> c.getProviderId())
-                                .orElse(null);
+                                .map(Claim::getProviderId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Claim not found for reversal: " + claimId));
 
                 if (providerId == null) {
-                        log.warn("⚠️ Provider not found for claim {} — skipping reversal debit", claimId);
-                        return null;
+                        throw new IllegalStateException(
+                                        "Claim " + claimId + " has no provider — cannot process reversal debit");
                 }
 
                 AccountTransaction tx = debitOnInstallmentPayment(providerId, amount,
@@ -481,8 +492,12 @@ public class ProviderAccountService {
                                         "Cannot debit inactive account for provider " + providerId);
                 }
 
-                BigDecimal balance = account.getRunningBalance() != null ? account.getRunningBalance()
-                                : BigDecimal.ZERO;
+                BigDecimal balance = account.getRunningBalance();
+                if (balance == null) {
+                        throw new IllegalStateException(
+                                        "CRITICAL: Running balance is null for provider " + providerId
+                                                        + ". Possible data corruption — investigate immediately.");
+                }
                 if (balance.compareTo(amount) < 0) {
                         throw new IllegalStateException(
                                         "Insufficient balance for claim settlement. Provider: " + providerId
@@ -516,7 +531,7 @@ public class ProviderAccountService {
                                 .map(Provider::getName)
                                 .orElse("مقدم خدمة #" + providerId);
 
-                // Verify balance integrity
+                // Verify balance integrity (transactions check)
                 BigDecimal calculatedBalance = transactionRepository.getCalculatedBalance(account.getId());
                 if (calculatedBalance == null) {
                         calculatedBalance = BigDecimal.ZERO;
@@ -524,8 +539,16 @@ public class ProviderAccountService {
 
                 boolean balanceVerified = account.getRunningBalance().compareTo(calculatedBalance) == 0;
                 if (!balanceVerified) {
-                        log.error("BALANCE MISMATCH! Account {}: stored={}, calculated={}",
+                        log.error("BALANCE MISMATCH! Account {}: stored={}, calculated from transactions={}",
                                         account.getId(), account.getRunningBalance(), calculatedBalance);
+                }
+
+                // Verify formula invariant: runningBalance == totalApproved - totalPaid
+                BigDecimal formulaBalance = account.getTotalApproved().subtract(account.getTotalPaid());
+                boolean formulaVerified = account.getRunningBalance().compareTo(formulaBalance) == 0;
+                if (!formulaVerified) {
+                        log.error("FORMULA MISMATCH! Account {}: stored={}, formula (totalApproved - totalPaid)={}",
+                                        account.getId(), account.getRunningBalance(), formulaBalance);
                 }
 
                 long transactionCount = transactionRepository.countByProviderAccountId(account.getId());
@@ -541,6 +564,7 @@ public class ProviderAccountService {
                                 .statusArabic(account.getStatus().getArabicLabel())
                                 .transactionCount(transactionCount)
                                 .balanceVerified(balanceVerified)
+                                .formulaVerified(formulaVerified)
                                 .createdAt(account.getCreatedAt())
                                 .updatedAt(account.getUpdatedAt())
                                 .build();
@@ -607,20 +631,31 @@ public class ProviderAccountService {
         public boolean verifyAccountBalance(Long accountId) {
                 ProviderAccount account = getAccountById(accountId);
 
+                // Check 1: running_balance == SUM(credits) - SUM(debits)
                 BigDecimal calculatedBalance = transactionRepository.getCalculatedBalance(accountId);
                 if (calculatedBalance == null) {
                         calculatedBalance = BigDecimal.ZERO;
                 }
 
-                boolean match = account.getRunningBalance().compareTo(calculatedBalance) == 0;
+                boolean txMatch = account.getRunningBalance().compareTo(calculatedBalance) == 0;
 
-                if (!match) {
+                if (!txMatch) {
                         log.error("CRITICAL: Balance verification FAILED for account {}. " +
-                                        "Stored: {}, Calculated: {}",
+                                        "Stored: {}, Calculated from transactions: {}",
                                         accountId, account.getRunningBalance(), calculatedBalance);
                 }
 
-                return match;
+                // Check 2: running_balance == totalApproved - totalPaid (formula invariant)
+                BigDecimal formulaBalance = account.getTotalApproved().subtract(account.getTotalPaid());
+                boolean formulaMatch = account.getRunningBalance().compareTo(formulaBalance) == 0;
+
+                if (!formulaMatch) {
+                        log.error("CRITICAL: Formula verification FAILED for account {}. " +
+                                        "Stored: {}, Formula (totalApproved - totalPaid): {}",
+                                        accountId, account.getRunningBalance(), formulaBalance);
+                }
+
+                return txMatch && formulaMatch;
         }
 
         /**
@@ -638,20 +673,19 @@ public class ProviderAccountService {
          */
         @Transactional(readOnly = true)
         public List<ProviderAccountListDTO> getAccountsWithProviderNames() {
-                return getAccountsWithProviderNames(false);
+                return getAccountsWithProviderNames(null, false);
         }
 
         /**
-         * Get provider accounts as DTOs with provider names, with optional balance
-         * filter.
-         * Ensures ALL active providers appear in the list by lazily creating
-         * zero-balance
-         * accounts for providers that have no account yet.
-         * 
+         * Get provider accounts as DTOs with provider names, with optional status and
+         * balance filters.
+         *
+         * @param statusFilter   optional account status filter (ACTIVE, SUSPENDED,
+         *                       CLOSED); null = ACTIVE only
          * @param hasBalanceOnly if true, only return accounts where running_balance > 0
          */
         @Transactional // NOT read-only - may create accounts for new providers
-        public List<ProviderAccountListDTO> getAccountsWithProviderNames(boolean hasBalanceOnly) {
+        public List<ProviderAccountListDTO> getAccountsWithProviderNames(String statusFilter, boolean hasBalanceOnly) {
                 // Get all active providers to ensure every provider shows in the list
                 List<Provider> allProviders = providerRepository.findAll();
 
@@ -670,12 +704,27 @@ public class ProviderAccountService {
                         }
                 }
 
-                // Now fetch all active accounts
+                // Resolve target status (null = ALL statuses)
+                AccountStatus targetStatus = null;
+                if (statusFilter != null && !statusFilter.isBlank()) {
+                        try {
+                                targetStatus = AccountStatus.valueOf(statusFilter.toUpperCase());
+                        } catch (IllegalArgumentException ignored) {
+                                // Invalid status value — return all statuses
+                                log.warn("Invalid account status filter '{}', returning all statuses", statusFilter);
+                        }
+                }
+
+                // Now fetch accounts by status (null = all statuses)
                 List<ProviderAccount> accounts;
                 if (hasBalanceOnly) {
-                        accounts = accountRepository.findWithOutstandingBalance(AccountStatus.ACTIVE);
+                        accounts = targetStatus != null
+                                        ? accountRepository.findWithOutstandingBalance(targetStatus)
+                                        : accountRepository.findAllWithOutstandingBalance();
                 } else {
-                        accounts = accountRepository.findByStatus(AccountStatus.ACTIVE);
+                        accounts = targetStatus != null
+                                        ? accountRepository.findByStatus(targetStatus)
+                                        : accountRepository.findAll();
                 }
 
                 // Batch-load all providers in one query to avoid N+1 individual lookups

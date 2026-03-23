@@ -303,6 +303,13 @@ export default function ProviderAccountsList() {
     setAppliedFilters({ ...filters });
   };
 
+  // للفلاتر غير التاريخية: تُطبَّق فوراً دون الحاجة لزر البحث
+  const applyFilterNow = (field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+    setAppliedFilters((prev) => ({ ...prev, [field]: value }));
+    tableState.setPage(0);
+  };
+
   const clearFilters = () => {
     const reset = { status: 'ALL', providerId: '', employerId: '', dateFrom: '', dateTo: '', serviceDateFrom: '', serviceDateTo: '' };
     setFilters(reset);
@@ -351,7 +358,77 @@ export default function ProviderAccountsList() {
   };
 
   const handlePrint = () => {
-    window.print();
+    const printRows = claims.map((row, idx) => {
+      const discount = getDiscountPercent(row);
+      const payable = getPayableAmount(row);
+      const facilityShare = getFacilityShareAmount(row);
+      const companyShare = getCompanyShareAmount(row);
+      const status = STATUS_LABELS[row.status] || row.status || '';
+      return `<tr>
+        <td>${idx + 1}</td>
+        <td>${row.claimNumber || `CLM-${row.id}`}</td>
+        <td>${row.employerName || '-'}</td>
+        <td>${row.visitDate || row.serviceDate || '-'}</td>
+        <td>${row.providerName || '-'}</td>
+        <td>${formatCurrency(row.requestedAmount)}</td>
+        <td style="color:#cf1322">${formatCurrency(getRefusedAmount(row))}</td>
+        <td><b>${formatCurrency(payable)}</b></td>
+        <td>${discount}%</td>
+        <td style="color:#d46b08">${formatCurrency(companyShare)}</td>
+        <td style="color:#389e0d">${formatCurrency(facilityShare)}</td>
+        <td>${status}</td>
+      </tr>`;
+    }).join('');
+
+    const win = window.open('', '_blank', 'width=1200,height=800');
+    win.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <title>مطالبات مقدمي الخدمة</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; direction: rtl; margin: 1.5rem; font-size: 0.8rem; color: #222; }
+    h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    p { margin: 0.2rem 0; color: #555; font-size: 0.75rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th { background: #1677ff; color: #fff; padding: 0.4rem 0.5rem; text-align: center; font-weight: 600; font-size: 0.72rem; white-space: nowrap; }
+    td { padding: 0.35rem 0.5rem; text-align: center; border-bottom: 1px solid #f0f0f0; white-space: nowrap; font-size: 0.72rem; }
+    tr:nth-child(even) td { background: #fafafa; }
+    tfoot td { font-weight: bold; background: #f0f7ff; border-top: 2px solid #1677ff; }
+    @media print { body { margin: 0.5rem; } }
+  </style>
+</head>
+<body>
+  <h2>قائمة مطالبات مقدمي الخدمة</h2>
+  <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-LY')}</p>
+  ${appliedFilters.status !== 'ALL' ? `<p>الحالة: ${STATUS_LABELS[appliedFilters.status] || appliedFilters.status}</p>` : ''}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
+        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>المرفوض</th>
+        <th>المستحق</th><th>نسبة الخصم</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody>${printRows}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5"><b>الإجمالي (${totals.count} مطالبة)</b></td>
+        <td>${formatCurrency(totals.gross)}</td>
+        <td style="color:#cf1322">${formatCurrency(totals.refused)}</td>
+        <td>${formatCurrency(totals.payable)}</td>
+        <td>-</td>
+        <td style="color:#d46b08">${formatCurrency(totals.companyShare)}</td>
+        <td style="color:#389e0d">${formatCurrency(totals.facilityShare)}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
   };
 
   const columns = useMemo(
@@ -453,7 +530,14 @@ export default function ProviderAccountsList() {
         align: 'center',
         cell: ({ row }) => {
           const status = row.original.status || 'DRAFT';
-          return <Chip label={STATUS_LABELS[status] || status} color={STATUS_COLORS[status] || 'default'} size="small" />;
+          return (
+            <Chip
+              label={STATUS_LABELS[status] || status}
+              color={STATUS_COLORS[status] || 'default'}
+              size="small"
+              sx={{ minWidth: '7rem', justifyContent: 'center' }}
+            />
+          );
         }
       }
     ],
@@ -502,7 +586,7 @@ export default function ProviderAccountsList() {
               size="small"
               label="حالة المطالبة"
               value={filters.status}
-              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+              onChange={(e) => applyFilterNow('status', e.target.value)}
               SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
               sx={{ minWidth: '9rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
             >
@@ -518,7 +602,7 @@ export default function ProviderAccountsList() {
               size="small"
               label="الوثيقة (جهة العمل)"
               value={filters.employerId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, employerId: e.target.value }))}
+              onChange={(e) => applyFilterNow('employerId', e.target.value)}
               disabled={isEmployersLoading}
               SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
               sx={{ minWidth: '10rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
@@ -536,7 +620,7 @@ export default function ProviderAccountsList() {
               size="small"
               label="مقدم الخدمة"
               value={filters.providerId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, providerId: e.target.value }))}
+              onChange={(e) => applyFilterNow('providerId', e.target.value)}
               disabled={isProvidersLoading}
               SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
               sx={{ minWidth: '10rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
@@ -610,6 +694,7 @@ export default function ProviderAccountsList() {
             />
 
             <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap' }}>
+
               بحث
             </Button>
             <Tooltip title="مسح الفلاتر">
