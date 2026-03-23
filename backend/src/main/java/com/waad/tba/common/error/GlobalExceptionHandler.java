@@ -262,33 +262,43 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PropertyReferenceException.class)
     public ResponseEntity<ApiError> handlePropertyReference(PropertyReferenceException ex, HttpServletRequest request) {
         String trackingId = generateTrackingId();
-        String propertyName = ex.getPropertyName();
-        String entityType = ex.getType() != null && ex.getType().getType() != null
-                ? ex.getType().getType().getSimpleName()
-                : "Entity";
 
-        log.warn("Invalid sort field - Path: {}, Property: {}, Entity: {}, TrackingId: {}",
-                request.getRequestURI(), propertyName, entityType, trackingId);
+        // Log full details server-side only — do NOT expose entity/property names to
+        // client
+        log.warn("Invalid sort field - Path: {}, TrackingId: {}, Details: {}",
+                request.getRequestURI(), trackingId, ex.getMessage());
 
-        Map<String, Object> details = new HashMap<>();
-        details.put("invalidProperty", propertyName);
-        details.put("entityType", entityType);
-
-        String message = String.format("Invalid sort field '%s' for %s. Please use a valid field name.",
-                propertyName, entityType);
-        String messageAr = String.format("حقل الفرز '%s' غير صحيح لـ %s. الرجاء استخدام اسم حقل صالح.",
-                propertyName, entityType);
+        String message = "Invalid sort field. Please use a valid field name.";
+        String messageAr = "حقل الفرز غير صحيح. الرجاء استخدام اسم حقل صالح.";
 
         ApiError error = ApiError.of(
                 ErrorCode.VALIDATION_ERROR,
                 message,
                 request.getRequestURI(),
-                details,
+                null,
                 now(),
                 trackingId);
         error.setMessageAr(messageAr);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiError> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex,
+            HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.error("Data integrity violation - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
+
+        ApiError error = ApiError.of(
+                ErrorCode.BUSINESS_RULE_VIOLATION,
+                "Data integrity error. The operation violates a database constraint.",
+                request.getRequestURI(),
+                null,
+                now(),
+                trackingId);
+        error.setMessageAr("خطأ في تكامل البيانات. العملية تنتهك أحد قيود قاعدة البيانات.");
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -520,8 +530,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidResetTokenException.class)
     public ResponseEntity<ApiError> handleInvalidResetToken(InvalidResetTokenException ex, HttpServletRequest request) {
         String trackingId = generateTrackingId();
-        log.warn("Invalid reset token - Path: {}, Token: {}, TrackingId: {}",
-                request.getRequestURI(), ex.getToken(), trackingId);
+        log.warn("Invalid reset token - Path: {}, TrackingId: {}",
+                request.getRequestURI(), trackingId);
 
         ApiError error = ApiError.of(
                 ErrorCode.INVALID_TOKEN,
@@ -637,8 +647,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletRequest request) {
         String trackingId = generateTrackingId();
-        // Log the exception with full stack trace
+        // Log the exception with full stack trace — server-side only
         log.error("Unexpected error occurred - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR, ex.getMessage(), request, null);
+        // Return generic message to client — never expose internal details
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR,
+                "An unexpected error occurred. Reference: " + trackingId, request, null);
     }
 }

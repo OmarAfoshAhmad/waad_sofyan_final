@@ -55,12 +55,6 @@ export const GlobalImportProgressProvider = ({ children }) => {
       const response = await axios.get(`unified-members/import/status/${activeImport.batchId}`);
       const log = response.data?.data; // ApiResponse.data contains the MemberImportLog
 
-      console.log('🕵️‍♂️ IMPORT STATUS UPDATE:', {
-        batchId: activeImport.batchId,
-        internalStatus: log?.status,
-        fullData: log
-      });
-
       if (log) {
         const total = log.totalRows || 0;
         const processed = (log.createdCount || 0) + (log.updatedCount || 0) + (log.skippedCount || 0) + (log.errorCount || 0);

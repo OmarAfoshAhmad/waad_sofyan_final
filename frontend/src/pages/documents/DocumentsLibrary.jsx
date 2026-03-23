@@ -139,17 +139,11 @@ const DocumentsLibrary = () => {
           const claimsResponse = await claimsService.getAll({ page: 1, size: 500 });
           const claims = claimsResponse.items || claimsResponse.data?.items || [];
 
-          console.log(`📄 Fetching documents for ${claims.length} claims...`);
-
           // Fetch attachments for each claim
           for (const claim of claims) {
             try {
               const attachments = await claimsService.getAttachments(claim.id);
               const attachmentsArray = attachments.data || attachments || [];
-
-              if (attachmentsArray.length > 0) {
-                console.log(`✅ Found ${attachmentsArray.length} attachments for claim ${claim.id}`);
-              }
 
               attachmentsArray.forEach((att) => {
                 allDocs.push({
@@ -185,17 +179,11 @@ const DocumentsLibrary = () => {
           const preApprovalsResponse = await preApprovalsService.getAll({ page: 1, size: 500 });
           const preApprovals = preApprovalsResponse.items || preApprovalsResponse.data?.items || [];
 
-          console.log(`📄 Fetching documents for ${preApprovals.length} pre-approvals...`);
-
           // Fetch attachments for each pre-approval
           for (const preApproval of preApprovals) {
             try {
               const attachments = await preApprovalsService.getAttachments(preApproval.id);
               const attachmentsArray = attachments.data || attachments || [];
-
-              if (attachmentsArray.length > 0) {
-                console.log(`✅ Found ${attachmentsArray.length} attachments for pre-approval ${preApproval.id}`);
-              }
 
               attachmentsArray.forEach((att) => {
                 allDocs.push({
@@ -226,9 +214,6 @@ const DocumentsLibrary = () => {
       setDocuments(allDocs);
       calculateStats(allDocs);
 
-      console.log(`✅ Total documents loaded: ${allDocs.length}`);
-      console.log(`📊 Claims: ${allDocs.filter((d) => d.entityType === 'CLAIM').length}`);
-      console.log(`📊 Pre-Approvals: ${allDocs.filter((d) => d.entityType === 'PRE_APPROVAL').length}`);
     } catch (err) {
       console.error('❌ Error fetching documents:', err);
       setError('فشل في تحميل المستندات');

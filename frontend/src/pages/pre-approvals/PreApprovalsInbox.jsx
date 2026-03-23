@@ -148,26 +148,28 @@ const PreApprovalsInbox = () => {
 
           if (updated.status === 'APPROVED') {
             clearInterval(pollInterval);
+            clearTimeout(pollTimeout);
             setActionLoading(false);
             setSuccess('تمت الموافقة على الطلب بنجاح');
             fetchPreApprovals();
           } else if (updated.status === 'REJECTED') {
             clearInterval(pollInterval);
+            clearTimeout(pollTimeout);
             setActionLoading(false);
             setError('تم رفض الطلب: ' + (updated.rejectionReason || 'خطأ في المعالجة'));
             fetchPreApprovals();
           }
           // If still APPROVAL_IN_PROGRESS, continue polling
         } catch (pollError) {
-          console.error('Polling error:', pollError);
           clearInterval(pollInterval);
+          clearTimeout(pollTimeout);
           setActionLoading(false);
           setError('خطأ في التحقق من حالة الموافقة');
         }
       }, 3000); // Poll every 3 seconds
 
       // Timeout after 2 minutes
-      setTimeout(() => {
+      const pollTimeout = setTimeout(() => {
         clearInterval(pollInterval);
         if (actionLoading) {
           setActionLoading(false);

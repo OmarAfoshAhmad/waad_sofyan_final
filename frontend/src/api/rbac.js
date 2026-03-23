@@ -44,9 +44,7 @@ export const useRBACStore = create((set, get) => ({
       }
 
       set({ roles, user, isInitialized: true });
-      console.log('🔒 RBAC Initialized:', { roles, user: user?.username });
     } catch (error) {
-      console.error('Failed to initialize RBAC:', error);
       set({ isInitialized: true });
     }
   },

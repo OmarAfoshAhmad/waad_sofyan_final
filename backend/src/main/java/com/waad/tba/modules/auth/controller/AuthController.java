@@ -90,7 +90,11 @@ public class AuthController {
                 String username = authentication.getName();
                 userRepository.findByUsername(username).ifPresent(authService::validateRoleBindingsBeforeLogin);
 
-                // Create HTTP session
+                // Session fixation protection: invalidate old session and create new one
+                HttpSession oldSession = httpRequest.getSession(false);
+                if (oldSession != null) {
+                        oldSession.invalidate();
+                }
                 HttpSession session = httpRequest.getSession(true);
 
                 // Get user info from AuthService (using authenticated username)

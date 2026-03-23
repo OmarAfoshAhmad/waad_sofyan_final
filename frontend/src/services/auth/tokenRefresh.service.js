@@ -46,12 +46,8 @@ export const refreshToken = async () => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
 
-    console.log('✅ Token refreshed successfully!');
-    console.log('📋 Updated permissions:', user.permissions);
-
     return { token, user };
   } catch (error) {
-    console.error('❌ Failed to refresh token:', error);
 
     if (error.response?.status === 401) {
       // Token expired or invalid - redirect to login
@@ -116,7 +112,6 @@ export const triggerPermissionsChanged = () => {
   });
 
   window.dispatchEvent(event);
-  console.log('🔔 Permissions change event triggered');
 };
 
 // RefreshTokenButton example removed

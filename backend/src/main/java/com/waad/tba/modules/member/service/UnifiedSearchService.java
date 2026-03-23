@@ -66,13 +66,13 @@ public class UnifiedSearchService {
         switch (searchType) {
             case BARCODE:
                 return searchByBarcode(trimmedQuery);
-            
+
             case CARD_NUMBER:
                 return searchByCardNumber(trimmedQuery);
-            
+
             case NAME_FUZZY:
                 return searchByName(trimmedQuery);
-            
+
             default:
                 log.error("Unknown search type: {}", searchType);
                 return List.of();
@@ -85,16 +85,16 @@ public class UnifiedSearchService {
      */
     private List<MemberSearchDto> searchByBarcode(String barcode) {
         log.info("Executing barcode search for: {}", barcode);
-        
+
         Member member = memberRepository.findByBarcode(barcode)
                 .orElse(null);
-        
+
         if (member == null) {
             log.warn("No member found with barcode: {}", barcode);
             return List.of();
         }
         MemberSearchDto dto = MemberSearchDto.fromMember(member, "BARCODE", null);
-        
+
         log.info("Found member by barcode: {} (ID: {})", member.getFullName(), member.getId());
         return List.of(dto);
     }
@@ -104,18 +104,18 @@ public class UnifiedSearchService {
      * Performance: <100ms (B-tree index from Phase 1)
      */
     private List<MemberSearchDto> searchByCardNumber(String cardNumber) {
-        log.info("Executing card number search for: {}", cardNumber);
-        
+        log.debug("Executing card number search");
+
         Member member = memberRepository.findByCardNumber(cardNumber)
                 .orElse(null);
-        
+
         if (member == null) {
-            log.warn("No member found with card number: {}", cardNumber);
+            log.debug("No member found with provided card number");
             return List.of();
         }
         MemberSearchDto dto = MemberSearchDto.fromMember(member, "CARD_NUMBER", null);
-        
-        log.info("Found member by card number: {} (ID: {})", member.getFullName(), member.getId());
+
+        log.debug("Found member by card number (ID: {})", member.getId());
         return List.of(dto);
     }
 
@@ -125,7 +125,7 @@ public class UnifiedSearchService {
      */
     private List<MemberSearchDto> searchByName(String name) {
         log.info("Executing fuzzy name search for: {}", name);
-        
+
         // Minimum 3 characters required for fuzzy search
         if (name.length() < 3) {
             log.warn("Name search requires at least 3 characters, got: {}", name.length());
@@ -134,7 +134,7 @@ public class UnifiedSearchService {
 
         // Use Phase 2 fuzzy search service
         List<MemberAutocompleteDto> autocompleteResults = nameSearchService.searchMembersByName(name);
-        
+
         if (autocompleteResults.isEmpty()) {
             log.warn("No members found for name: {}", name);
             return List.of();
@@ -150,7 +150,7 @@ public class UnifiedSearchService {
                 })
                 .filter(dto -> dto != null)
                 .collect(Collectors.toList());
-        
+
         log.info("Found {} members for name search: {}", results.size(), name);
         return results;
     }
@@ -194,9 +194,9 @@ public class UnifiedSearchService {
      * Search type enumeration
      */
     private enum SearchType {
-        BARCODE,      // UUID exact match
-        CARD_NUMBER,  // Numeric exact match
-        NAME_FUZZY    // Arabic/English fuzzy match
+        BARCODE, // UUID exact match
+        CARD_NUMBER, // Numeric exact match
+        NAME_FUZZY // Arabic/English fuzzy match
     }
 
     /**
@@ -205,7 +205,7 @@ public class UnifiedSearchService {
      */
     public Optional<MemberSearchDto> getMemberById(Long id) {
         log.info("Fetching member by ID: {}", id);
-        
+
         return memberRepository.findById(id)
                 .map(member -> MemberSearchDto.fromMember(member, "DIRECT_ID", null));
     }

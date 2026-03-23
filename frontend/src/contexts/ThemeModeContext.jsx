@@ -24,7 +24,6 @@ export const ThemeModeProvider = ({ children }) => {
   // 2️⃣ Sync MUI mode with our custom persistence on mount or user change
   useEffect(() => {
     const savedMode = localStorage.getItem(storageKey);
-    console.debug(`[ThemeMode] userId: ${userId}, saved: ${savedMode}, current: ${mode}`);
     
     if (savedMode && (savedMode === 'light' || savedMode === 'dark')) {
       if (mode !== savedMode) {
@@ -43,8 +42,6 @@ export const ThemeModeProvider = ({ children }) => {
     // If mode is undefined or system, we default to toggling away from light
     const currentActiveMode = mode === 'dark' ? 'dark' : 'light';
     const newMode = currentActiveMode === 'dark' ? 'light' : 'dark';
-    
-    console.debug(`[ThemeMode] Toggling: ${currentActiveMode} -> ${newMode}`);
     
     setMode(newMode);
     localStorage.setItem(storageKey, newMode);

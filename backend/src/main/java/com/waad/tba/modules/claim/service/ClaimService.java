@@ -922,6 +922,11 @@ public class ClaimService {
      */
     @Transactional(readOnly = true)
     public CostCalculationService.CostBreakdown getCostBreakdown(Long id) {
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser != null && !authorizationService.canAccessClaim(currentUser, id)) {
+            throw new AccessDeniedException("Access denied to this claim's cost breakdown");
+        }
+
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
         return costCalculationService.calculateCosts(claim);

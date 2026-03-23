@@ -31,7 +31,6 @@ export default function Login() {
 
   const [searchParams] = useSearchParams();
   const auth = searchParams.get('auth');
-  console.log(auth);
 
   return (
     <AuthWrapper>

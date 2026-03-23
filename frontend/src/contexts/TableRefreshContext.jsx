@@ -52,7 +52,6 @@ export const TableRefreshProvider = ({ children }) => {
    */
   const triggerRefresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
-    console.log('[TableRefresh] Triggered refresh');
   }, []);
 
   // Memoize context value to prevent unnecessary re-renders
@@ -84,7 +83,6 @@ export const TableRefreshLayout = () => {
 
   const triggerRefresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
-    console.log('[TableRefresh] Triggered refresh');
   }, []);
 
   const value = useMemo(

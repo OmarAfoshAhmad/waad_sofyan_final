@@ -75,15 +75,18 @@ public class LocalFileStorageService implements FileStorageService {
 
     @Override
     public FileUploadResult upload(MultipartFile file, String folder) {
+        validateFile(file);
         try {
-            return upload(file.getInputStream(), file.getOriginalFilename(), file.getContentType(), file.getSize(), folder);
+            return upload(file.getInputStream(), file.getOriginalFilename(), file.getContentType(), file.getSize(),
+                    folder);
         } catch (IOException e) {
             throw new FileStorageException("Failed to read multipart file", e);
         }
     }
 
     @Override
-    public FileUploadResult upload(java.io.InputStream inputStream, String originalFilename, String contentType, long size, String folder) {
+    public FileUploadResult upload(java.io.InputStream inputStream, String originalFilename, String contentType,
+            long size, String folder) {
         // Sanitize folder and filename to prevent path traversal
         String sanitizedFolder = StringUtils.cleanPath(folder).replace("..", "").replace("/", "");
         String sanitizedFilename = StringUtils.cleanPath(Objects.requireNonNull(originalFilename))
