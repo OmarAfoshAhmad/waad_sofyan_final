@@ -158,6 +158,11 @@ public class ClaimService {
     // Jakarta persistence for native cleanup (RESTRICT constraint bypass)
     private final jakarta.persistence.EntityManager em;
 
+    // Settlement account reversal (lazy to avoid circular dependency)
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.waad.tba.modules.settlement.service.ProviderAccountService providerAccountService;
+
     /**
      * Search claims with explicit employer filtering.
      * UPDATED 2026-01-05: Added PROVIDER filtering (Global Best Practice)
@@ -339,7 +344,8 @@ public class ClaimService {
         log.info("✅ Claim {} created in APPROVED status (Direct Implementation)", savedClaim.getId());
 
         // Credit provider account immediately upon creation (same as approval event)
-        if (savedClaim.getProviderId() != null && savedClaim.getApprovedAmount() != null) {
+        if (savedClaim.getProviderId() != null
+                && savedClaim.getNetPayableAmount().compareTo(java.math.BigDecimal.ZERO) > 0) {
             eventPublisher.publishEvent(new ClaimApprovedEvent(
                     this,
                     savedClaim.getId(),
@@ -590,13 +596,16 @@ public class ClaimService {
             }
         } else if (dto.getStatus() != null && claim.getStatus() == ClaimStatus.APPROVED
                 && dto.getStatus() == ClaimStatus.REJECTED) {
-            // مطالبة مقبولة يريد المراجع رفضها — يجب وجود سبب رفض
+            // FIX #11 (Critical): مطالبة مقبولة يريد المراجع رفضها
+            // يجب استخدام StateMachine لفحص الصلاحيات + إطلاق ClaimReversalEvent لعكس القيد
+            // المالي
             if (claim.getReviewerComment() == null || claim.getReviewerComment().isBlank()) {
                 throw new ClaimStateTransitionException(
                         "Cannot reject claim without reviewer comment. Please provide rejection reason.");
             }
-            claim.setStatus(ClaimStatus.REJECTED);
-            log.info("🔴 APPROVED claim {} changed to REJECTED by {}", id, currentUser.getEmail());
+            // Use StateMachine — enforces role permission and business rules
+            claimStateMachine.transition(claim, ClaimStatus.REJECTED, currentUser);
+            log.info("🔴 APPROVED claim {} rejected via StateMachine by {}", id, currentUser.getEmail());
         }
 
         // DRAFT line edits (services/categories/quantities) with backend contract
@@ -618,6 +627,21 @@ public class ClaimService {
                     this, updatedClaim.getId(), updatedClaim.getProviderId(),
                     currentUser != null ? currentUser.getId() : null));
             log.info("📤 ClaimApprovedEvent published for REJECTED→APPROVED claim {}", updatedClaim.getId());
+        }
+
+        // FIX #11 (Critical): Fire ClaimReversalEvent when an APPROVED claim is
+        // rejected,
+        // so the provider account is debited (credit reversal) for the amount
+        // previously
+        // credited on approval.
+        if (prevStatus == ClaimStatus.APPROVED && updatedClaim.getStatus() == ClaimStatus.REJECTED
+                && updatedClaim.getProviderId() != null) {
+            eventPublisher.publishEvent(new ClaimReversalEvent(
+                    this, updatedClaim.getId(), updatedClaim.getProviderId(),
+                    currentUser != null ? currentUser.getId() : null));
+            log.info(
+                    "📤 ClaimReversalEvent published for APPROVED→REJECTED claim {} — provider account will be debited",
+                    updatedClaim.getId());
         }
 
         // Audit trail
@@ -1464,6 +1488,15 @@ public class ClaimService {
             throw new BusinessRuleException("لا يمكن حذف مطالبة في حالة مُفوتَرَة أو مُسوَّاة");
         }
 
+        // ── قبل الحذف: تحقق من الحالات التي تحتاج عكس القيد المالي ──────────────────
+        // APPROVED : القيد موجود ومباشر → عكسه
+        // NEEDS_CORRECTION : جاءت من APPROVED (تعليق) → القيد ما زال موجوداً → عكسه
+        // (debitOnClaimReversal مُصمَّمة لتتجاهل الطلب لو لا يوجد قيد)
+        boolean wasApproved = claim.getStatus() == ClaimStatus.APPROVED
+                || (claim.getStatus() == ClaimStatus.NEEDS_CORRECTION
+                        && claim.getApprovedAmount() != null
+                        && claim.getApprovedAmount().compareTo(java.math.BigDecimal.ZERO) > 0);
+
         claim.setActive(false);
         claim.setDeletedAt(java.time.LocalDateTime.now());
         claim.setDeletedBy(currentUser != null ? currentUser.getEmail() : "system");
@@ -1471,6 +1504,18 @@ public class ClaimService {
         claimRepository.save(claim);
         log.info("✅ Claim {} soft-deleted by {}. Annual limits automatically restored.", id,
                 currentUser != null ? currentUser.getEmail() : "system");
+
+        // المطالبة المعتمدة تحمل رصيداً في حساب مقدم الخدمة → يجب عكسه
+        if (wasApproved && claim.getProviderId() != null) {
+            log.info(
+                    "📤 Claim {} was APPROVED before deletion — publishing ClaimReversalEvent to debit provider account",
+                    id);
+            eventPublisher.publishEvent(new ClaimReversalEvent(
+                    this,
+                    claim.getId(),
+                    claim.getProviderId(),
+                    currentUser != null ? currentUser.getId() : null));
+        }
     }
 
     /**
@@ -1480,6 +1525,8 @@ public class ClaimService {
     public ClaimViewDto restoreClaim(Long id) {
         log.info("♻️ Restoring claim id: {}", id);
 
+        User currentUser = authorizationService.getCurrentUser();
+
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
@@ -1487,12 +1534,30 @@ public class ClaimService {
             throw new BusinessRuleException("المطالبة ليست محذوفة");
         }
 
+        boolean wasApproved = claim.getStatus() == ClaimStatus.APPROVED
+                || (claim.getStatus() == ClaimStatus.NEEDS_CORRECTION
+                        && claim.getApprovedAmount() != null
+                        && claim.getApprovedAmount().compareTo(java.math.BigDecimal.ZERO) > 0);
+
         claim.setActive(true);
         claim.setDeletedAt(null);
         claim.setDeletedBy(null);
 
         Claim saved = claimRepository.save(claim);
         log.info("✅ Claim {} restored successfully.", id);
+
+        // إعادة إضافة القيد المالي إذا كانت المطالبة تحمل رصيداً قبل الحذف
+        if (wasApproved && saved.getProviderId() != null) {
+            log.info(
+                    "📤 Claim {} was {} — publishing ClaimApprovedEvent to re-credit provider account",
+                    id, saved.getStatus());
+            eventPublisher.publishEvent(new ClaimApprovedEvent(
+                    this,
+                    saved.getId(),
+                    saved.getProviderId(),
+                    currentUser != null ? currentUser.getId() : null));
+        }
+
         return claimMapper.toViewDto(saved);
     }
 
@@ -1503,11 +1568,26 @@ public class ClaimService {
     public void hardDeleteClaim(Long id) {
         log.warn("🔥 HARD-deleting claim id: {}", id);
 
+        User currentUser = authorizationService.getCurrentUser();
+
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
         if (Boolean.TRUE.equals(claim.getActive())) {
             throw new BusinessRuleException("يجب حذف المطالبة ناعماً أولاً قبل الحذف النهائي");
+        }
+
+        // ── عكس القيد المالي إن لم يكن قد حُوِّل بعد (بيانات قديمة أو لأي سبب) ──
+        // يجب قبل حذف الكيان لأن debitOnClaimReversal يحتاج الـ claim للبحث عن
+        // providerId
+        if (claim.getProviderId() != null) {
+            try {
+                Long userId = currentUser != null ? currentUser.getId() : null;
+                providerAccountService.debitOnClaimReversal(claim.getId(), userId);
+                log.info("✅ Hard-delete reversal debit applied (or skipped if already done) for claim {}", id);
+            } catch (Exception e) {
+                log.warn("⚠️ Could not reverse provider account for hard-deleting claim {}: {}", id, e.getMessage());
+            }
         }
 
         em.createNativeQuery("DELETE FROM claim_audit_logs WHERE claim_id = :cid")

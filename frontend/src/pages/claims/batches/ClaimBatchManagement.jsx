@@ -126,15 +126,24 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                 dateTo: `${filterYear}-${String(filterMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
             });
         },
-        enabled: !!selectedEmployer?.id && !!provider?.id
+        enabled: !!selectedEmployer?.id && !!provider?.id,
+        refetchOnWindowFocus: true,
+        refetchOnMount: 'always',
+        staleTime: 0
     });
 
     // Map fetched stats or default to 0
+    // patientShare = المطلوب - المعتمد للمزود - المرفوض
+    // (المكوّن المفقود الذي يجعل الأرقام تبدو غير متطابقة إذا لم يُعرض)
+    const safeAmount  = summaryData?.totalClaimsAmount  || 0;
+    const safeCovered = summaryData?.totalApprovedAmount || 0;
+    const safeRefused = summaryData?.totalRefusedAmount  || 0;
     const stats = {
         requestsCount: summaryData?.claimsCount || 0,
-        amount: summaryData?.totalClaimsAmount || 0,
-        covered: summaryData?.totalApprovedAmount || 0,
-        refused: summaryData?.totalRefusedAmount || 0
+        amount:       safeAmount,
+        covered:      safeCovered,
+        refused:      safeRefused,
+        patientShare: Math.max(0, safeAmount - safeCovered - safeRefused)
     };
 
     return (
@@ -264,6 +273,27 @@ const ProviderBatchCard = ({ provider, selectedEmployer, onSelectBatch, filterMo
                         </Stack>
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>{stats.covered.toFixed(2)}</Typography>
                     </Box>
+
+                    {/* Patient Share Block — حصة المريض (تُعرض فقط إذا كانت > 0) */}
+                    {stats.patientShare > 0.004 && (
+                        <Box sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            bgcolor: '#e0923a',
+                            color: 'white',
+                            borderRadius: '0.625rem',
+                            px: '1.25rem',
+                            py: 0.6,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+                        }}>
+                            <Stack direction="row" alignItems="center" spacing={1.5}>
+                                <PeopleIcon sx={{ fontSize: '1.1rem' }} />
+                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.78rem' }}>حصة المريض</Typography>
+                            </Stack>
+                            <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.85rem' }}>{stats.patientShare.toFixed(2)}</Typography>
+                        </Box>
+                    )}
 
                     {/* Refused Block */}
                     <Box sx={{

@@ -10,21 +10,21 @@ import java.time.LocalDateTime;
  * Provider Account Entity
  * 
  * ╔═══════════════════════════════════════════════════════════════════════════════╗
- * ║                         PROVIDER ACCOUNT                                      ║
+ * ║ PROVIDER ACCOUNT ║
  * ║───────────────────────────────────────────────────────────────────────────────║
- * ║ Financial account for each healthcare provider.                               ║
- * ║ Tracks running balance, total approved, and total paid amounts.               ║
- * ║                                                                               ║
- * ║ Relationship: 1:1 with Provider                                               ║
- * ║ Each provider has exactly ONE account.                                        ║
+ * ║ Financial account for each healthcare provider. ║
+ * ║ Tracks running balance, total approved, and total paid amounts. ║
+ * ║ ║
+ * ║ Relationship: 1:1 with Provider ║
+ * ║ Each provider has exactly ONE account. ║
  * ╚═══════════════════════════════════════════════════════════════════════════════╝
  * 
  * Balance Formula:
- *   running_balance = total_approved - total_paid
+ * running_balance = total_approved - total_paid
  * 
  * Transaction Types:
- *   CREDIT: Claim approved → balance increases
- *   DEBIT:  Batch paid → balance decreases
+ * CREDIT: Claim approved → balance increases
+ * DEBIT: Batch paid → balance decreases
  */
 @Entity
 @Table(name = "provider_accounts")
@@ -131,6 +131,7 @@ public class ProviderAccount {
         this.runningBalance = this.runningBalance.add(amount);
         this.totalApproved = this.totalApproved.add(amount);
         this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
     }
 
     /**
@@ -148,13 +149,38 @@ public class ProviderAccount {
         }
         if (amount.compareTo(this.runningBalance) > 0) {
             throw new IllegalStateException(
-                String.format("Insufficient balance. Available: %s, Requested: %s", 
-                    this.runningBalance, amount)
-            );
+                    String.format("Insufficient balance. Available: %s, Requested: %s",
+                            this.runningBalance, amount));
         }
         this.runningBalance = this.runningBalance.subtract(amount);
         this.totalPaid = this.totalPaid.add(amount);
         this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
+    }
+
+    /**
+     * Reverse a prior credit (claim reversal / deletion of approved claim).
+     * Decreases both running_balance and total_approved so UI totals stay accurate.
+     * Does NOT touch total_paid (which represents actual settlement payments only).
+     *
+     * @param amount Amount to reverse (must be positive and <= running_balance)
+     */
+    public void reverseCredit(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Reversal amount must be positive");
+        }
+        if (status != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Cannot reverse credit on account with status: " + status);
+        }
+        if (amount.compareTo(this.runningBalance) > 0) {
+            throw new IllegalStateException(
+                    String.format("Insufficient balance for reversal. Available: %s, Requested: %s",
+                            this.runningBalance, amount));
+        }
+        this.runningBalance = this.runningBalance.subtract(amount);
+        this.totalApproved = this.totalApproved.subtract(amount);
+        this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
     }
 
     /**
@@ -198,6 +224,21 @@ public class ProviderAccount {
         return runningBalance.compareTo(BigDecimal.ZERO) > 0;
     }
 
+    /**
+     * Financial Invariant: running_balance MUST equal total_approved - total_paid.
+     * Called after every credit/debit/reverseCredit to catch arithmetic drift.
+     */
+    private void assertBalanceInvariant() {
+        BigDecimal expected = this.totalApproved.subtract(this.totalPaid);
+        if (expected.compareTo(this.runningBalance) != 0) {
+            throw new IllegalStateException(
+                    String.format("BALANCE INVARIANT VIOLATED for account %d (provider %d): "
+                            + "runningBalance=%s but totalApproved(%s) - totalPaid(%s) = %s",
+                            this.id, this.providerId,
+                            this.runningBalance, this.totalApproved, this.totalPaid, expected));
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ENUM: Account Status
     // ═══════════════════════════════════════════════════════════════════════════
@@ -205,10 +246,10 @@ public class ProviderAccount {
     public enum AccountStatus {
         /** Normal operations - can credit and debit */
         ACTIVE("نشط"),
-        
+
         /** Temporary hold - no transactions allowed */
         SUSPENDED("معلق"),
-        
+
         /** Permanently closed - no transactions allowed */
         CLOSED("مغلق");
 

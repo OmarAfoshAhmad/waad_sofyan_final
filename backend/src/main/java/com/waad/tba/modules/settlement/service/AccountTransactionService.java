@@ -177,6 +177,39 @@ public class AccountTransactionService {
         return transaction;
     }
 
+    /**
+     * FIX #12: Create a CLAIM_REVERSAL DEBIT transaction when an approved claim is
+     * reversed.
+     * Idempotent: throws if a CLAIM_REVERSAL tx already exists for this claimId.
+     */
+    @Transactional
+    public AccountTransaction createClaimReversalDebit(
+            ProviderAccount account,
+            Long claimId,
+            BigDecimal amount,
+            BigDecimal balanceBefore,
+            Long userId) {
+
+        if (transactionRepository.existsByReferenceTypeAndReferenceId(ReferenceType.CLAIM_REVERSAL, claimId)) {
+            throw new IllegalStateException(
+                    "Reversal transaction already exists for claim " + claimId + ". Cannot reverse twice.");
+        }
+
+        AccountTransaction transaction = AccountTransaction.createClaimReversalDebit(
+                account.getId(),
+                claimId,
+                amount,
+                balanceBefore,
+                userId);
+
+        transaction = transactionRepository.save(transaction);
+
+        log.info("CLAIM REVERSAL DEBIT transaction created: account={}, claim={}, amount={}, balanceAfter={}",
+                account.getId(), claimId, amount, transaction.getBalanceAfter());
+
+        return transaction;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -220,6 +253,11 @@ public class AccountTransactionService {
     @Transactional(readOnly = true)
     public boolean existsForReference(ReferenceType referenceType, Long referenceId) {
         return transactionRepository.existsByReferenceTypeAndReferenceId(referenceType, referenceId);
+    }
+
+    @Transactional(readOnly = true)
+    public long countForReference(ReferenceType referenceType, Long referenceId) {
+        return transactionRepository.countByReferenceTypeAndReferenceId(referenceType, referenceId);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

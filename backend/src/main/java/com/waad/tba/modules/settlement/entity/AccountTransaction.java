@@ -254,6 +254,33 @@ public class AccountTransaction {
                 .build();
     }
 
+    /**
+     * FIX #12: Create a dedicated CLAIM_REVERSAL DEBIT transaction.
+     * Uses CLAIM_REVERSAL referenceType + claimId as referenceId so that
+     * idempotency checks can find it by (CLAIM_REVERSAL, claimId).
+     */
+    public static AccountTransaction createClaimReversalDebit(
+            Long accountId,
+            Long claimId,
+            BigDecimal amount,
+            BigDecimal balanceBefore,
+            Long userId) {
+
+        BigDecimal balanceAfter = balanceBefore.subtract(amount);
+
+        return AccountTransaction.builder()
+                .providerAccountId(accountId)
+                .transactionType(TransactionType.DEBIT)
+                .amount(amount)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceAfter)
+                .referenceType(ReferenceType.CLAIM_REVERSAL)
+                .referenceId(claimId)
+                .description(String.format("عكس اعتماد مطالبة مرفوضة رقم %d - خصم %s", claimId, amount))
+                .createdBy(userId)
+                .build();
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ENUM: Transaction Type
     // ═══════════════════════════════════════════════════════════════════════════
@@ -289,6 +316,12 @@ public class AccountTransaction {
 
         /** Individual claim settlement (direct pay, not via batch) */
         CLAIM_SETTLEMENT("تسوية مطالبة فردية"),
+
+        /**
+         * FIX #12: Claim reversal — DEBIT that mirrors a prior CLAIM_APPROVAL CREDIT.
+         * Distinct from ADJUSTMENT so idempotency checks can find it by (type, claimId).
+         */
+        CLAIM_REVERSAL("عكس اعتماد مطالبة"),
 
         /** Manual adjustment */
         ADJUSTMENT("تسوية يدوية");

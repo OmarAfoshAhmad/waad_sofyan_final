@@ -161,6 +161,23 @@ export const providerAccountsService = {
     } catch (error) {
       throw handleSettlementErrors(error);
     }
+  },
+
+  /**
+   * Recalculate running_balance from transaction history (repair tool for SUPER_ADMIN).
+   * Use when balance is stale due to claims deleted before the reversal fix.
+   * @param {number} providerId - Provider ID
+   */
+  recalculateBalance: async (providerId) => {
+    try {
+      if (!providerId) throw new Error('معرف مقدم الخدمة مطلوب');
+      const response = await axiosClient.post(
+        `${PROVIDER_ACCOUNTS_URL}/by-provider/${providerId}/recalculate-balance`
+      );
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
   }
 };
 
@@ -408,7 +425,7 @@ export const providerPaymentsService = {
         ...(data.notes && { notes: String(data.notes) })
       };
 
-      const response = await axiosClient.post(`${PROVIDER_PAYMENTS_URL}/provider/${providerId}`, contractRequest);
+      const response = await axiosClient.post(`${PROVIDER_ACCOUNTS_URL}/by-provider/${providerId}/pay`, contractRequest);
       return unwrap(response);
     } catch (error) {
       throw handleSettlementErrors(error);

@@ -335,6 +335,7 @@ export default function ClaimBatchEntry() {
         queryClient.invalidateQueries({ queryKey: ['batch-claims-entry'] });
         queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
         queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['batch-global-stats'] });
         queryClient.invalidateQueries({ queryKey: ['claim-batch-current'] });
         queryClient.invalidateQueries({ queryKey: ['member-financial-summary'] });
         // Invalidate cached claim detail so re-opening a claim always triggers a fresh

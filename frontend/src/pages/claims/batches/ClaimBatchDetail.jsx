@@ -128,6 +128,7 @@ export default function ClaimBatchDetail() {
             setDeleteDialogOpen(false);
             setDeletingClaim(null);
             queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
+            queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
         },
         onError: (err) => {
             enqueueSnackbar(err?.response?.data?.messageAr || err?.response?.data?.message || 'حدث خطأ أثناء الحذف', { variant: 'error' });
@@ -140,6 +141,7 @@ export default function ClaimBatchDetail() {
             enqueueSnackbar('تمت استعادة المطالبة بنجاح', { variant: 'success' });
             queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
             queryClient.invalidateQueries({ queryKey: ['deleted-claims'] });
+            queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
         },
         onError: (err) => {
             enqueueSnackbar(err?.response?.data?.messageAr || err?.response?.data?.message || 'حدث خطأ أثناء الاستعادة', { variant: 'error' });
@@ -153,6 +155,8 @@ export default function ClaimBatchDetail() {
             setHardDeleteDialogOpen(false);
             setHardDeletingClaim(null);
             queryClient.invalidateQueries({ queryKey: ['deleted-claims'] });
+            queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
+            queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
         },
         onError: (err) => {
             enqueueSnackbar(err?.response?.data?.messageAr || err?.response?.data?.message || 'حدث خطأ أثناء الحذف النهائي', { variant: 'error' });
@@ -168,6 +172,8 @@ export default function ClaimBatchDetail() {
             setSuspendComment('');
             setSuspendingClaimId(null);
             queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
+            queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
+            queryClient.invalidateQueries({ queryKey: ['claim'] });
         },
         onError: (err) => {
             enqueueSnackbar(err?.response?.data?.message || 'حدث خطأ أثناء تعليق المطالبة', { variant: 'error' });

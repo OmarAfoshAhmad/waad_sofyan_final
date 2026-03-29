@@ -284,6 +284,82 @@ public class ProviderAccountController {
                 return ResponseEntity.ok(ApiResponse.success(result));
         }
 
+        // ═══════════════════════════════════════════════════════════════════════════
+        // BALANCE REPAIR
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Recalculate running_balance from transaction history for a provider.
+         *
+         * Use this endpoint to repair a provider account whose balance is out of sync
+         * because claims were deleted before the financial reversal fix was applied.
+         */
+        @PostMapping("/by-provider/{providerId}/recalculate-balance")
+        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @Operation(summary = "Recalculate account balance from transactions", description = "Repairs running_balance by recomputing from transaction history. Use after deleting claims without proper reversal.")
+        public ResponseEntity<ApiResponse<Map<String, Object>>> recalculateBalance(
+                        @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
+
+                log.warn("MANUAL BALANCE RECALC requested for provider {}", providerId);
+                Map<String, Object> result = providerAccountService.recalculateBalance(providerId);
+                return ResponseEntity.ok(ApiResponse.success(result));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // INSTALLMENT PAYMENTS
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Record an installment (partial) payment for a provider.
+         *
+         * Debits the provider account by the given amount.
+         * Expects: { amount, paymentReference, paymentMethod (ignored), notes
+         * (optional) }
+         */
+        @PostMapping("/by-provider/{providerId}/pay")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+        @Operation(summary = "Record installment payment", description = "Debits the provider account for a partial/installment payment")
+        public ResponseEntity<ApiResponse<AccountTransaction>> recordInstallmentPayment(
+                        @Parameter(description = "Provider ID", required = true) @PathVariable("providerId") Long providerId,
+                        @RequestBody Map<String, Object> request) {
+
+                Object amountRaw = request.get("amount");
+                if (amountRaw == null) {
+                        throw new IllegalArgumentException("مبلغ الدفعة مطلوب");
+                }
+                BigDecimal amount;
+                try {
+                        amount = new BigDecimal(String.valueOf(amountRaw));
+                } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("مبلغ الدفعة غير صالح");
+                }
+                if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalArgumentException("يجب أن يكون مبلغ الدفعة أكبر من الصفر");
+                }
+
+                String paymentReference = request.get("paymentReference") != null
+                                ? String.valueOf(request.get("paymentReference")).trim()
+                                : "";
+                if (paymentReference.isEmpty()) {
+                        throw new IllegalArgumentException("مرجع الدفع مطلوب");
+                }
+
+                String notes = request.get("notes") != null ? String.valueOf(request.get("notes")).trim() : "";
+                String description = notes.isEmpty() ? paymentReference : paymentReference + " - " + notes;
+
+                Long userId = authorizationService.getCurrentUser() != null
+                                ? authorizationService.getCurrentUser().getId()
+                                : null;
+
+                log.info("Recording installment payment: provider={}, amount={}, ref={}", providerId, amount,
+                                paymentReference);
+
+                AccountTransaction transaction = providerAccountService.debitOnInstallmentPayment(
+                                providerId, amount, description, userId);
+
+                return ResponseEntity.ok(ApiResponse.success(transaction));
+        }
+
         /**
          * Settle full remaining balance for provider account using manual adjustment
          * debit.

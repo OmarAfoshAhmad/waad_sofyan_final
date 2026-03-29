@@ -532,6 +532,23 @@ const ProviderAccountView = () => {
     }
   }, [accountData]);
 
+  const handleRecalculateBalance = useCallback(async () => {
+    if (!providerId) return;
+    try {
+      const result = await providerAccountsService.recalculateBalance(providerId);
+      openSnackbar({
+        message: `تم إعادة الحساب: الرصيد القديم ${result?.oldBalance ?? '-'} ← الجديد ${result?.newBalance ?? '-'}`,
+        variant: 'success'
+      });
+      queryClient.invalidateQueries({ queryKey: ['provider-account', providerId] });
+    } catch (error) {
+      openSnackbar({
+        message: error?.message || 'فشل إعادة حساب الرصيد',
+        variant: 'error'
+      });
+    }
+  }, [providerId, queryClient]);
+
   const handlePaymentSubmit = async () => {
     if (!paymentForm.amount || !paymentForm.paymentReference) {
       openSnackbar({ message: 'الرجاء تعبئة الحقول المطلوبة', variant: 'warning' });
@@ -854,6 +871,11 @@ const ProviderAccountView = () => {
       <Tooltip title="التحقق من الرصيد">
         <Button variant="outlined" color="info" startIcon={<VerifiedIcon />} onClick={handleVerifyBalance} disabled={!accountData}>
           التحقق من الرصيد
+        </Button>
+      </Tooltip>
+      <Tooltip title="إعادة حساب الرصيد من سجل المعاملات (لإصلاح الأرصدة القديمة)">
+        <Button variant="outlined" color="warning" startIcon={<RefreshIcon />} onClick={handleRecalculateBalance} disabled={!accountData}>
+          إعادة الحساب
         </Button>
       </Tooltip>
       <Tooltip title="تصدير Excel">

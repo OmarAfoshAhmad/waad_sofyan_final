@@ -395,13 +395,12 @@ public class ClaimReviewService {
 
         Claim savedClaim = claimRepository.save(claim);
 
-        // M4: Debit provider account to reflect payment
+        // FIX #8 (Critical): Debit MUST succeed for settlement to be valid.
+        // If debitOnClaimSettlement() throws, the @Transactional on this method will
+        // roll back the entire settlement — claim stays APPROVED, no orphaned SETTLED state.
         Long userId = currentUser != null ? currentUser.getId() : null;
-        try {
-            providerAccountService.debitOnClaimSettlement(savedClaim.getId(), userId);
-        } catch (Exception e) {
-            log.warn("⚠️ Failed to debit provider account for settled claim {}: {}", id, e.getMessage());
-        }
+        providerAccountService.debitOnClaimSettlement(savedClaim.getId(), userId);
+        log.info("✅ Provider account debited successfully for settled claim {}", savedClaim.getId());
 
         claimAuditService.recordSettlement(savedClaim, currentUser);
         return claimMapper.toViewDto(savedClaim);

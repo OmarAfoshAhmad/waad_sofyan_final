@@ -2,7 +2,9 @@ package com.waad.tba.modules.settlement.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -142,17 +144,24 @@ public class ProviderAccountService {
                 Claim claim = claimRepository.findByIdForUpdate(claimId)
                                 .orElseThrow(() -> new EntityNotFoundException("Claim not found: " + claimId));
 
-                // 2. Validate claim status — safe now because we hold the lock
-                if (claim.getStatus() != ClaimStatus.APPROVED) {
+                // 2. Validate claim status — APPROVED (normal) or NEEDS_CORRECTION
+                // (restore-after-delete)
+                if (claim.getStatus() != ClaimStatus.APPROVED
+                                && claim.getStatus() != ClaimStatus.NEEDS_CORRECTION) {
                         throw new IllegalStateException(
-                                        "Cannot credit for claim " + claimId + ". Status must be APPROVED, but is: "
+                                        "Cannot credit for claim " + claimId
+                                                        + ". Status must be APPROVED or NEEDS_CORRECTION, but is: "
                                                         + claim.getStatus());
                 }
 
-                // 3. Early idempotency check (non-locked, best-effort fast exit)
-                if (transactionService.existsForReference(ReferenceType.CLAIM_APPROVAL, claimId)) {
+                // 3. Cycle-safe idempotency: allow re-credit only when every prior credit
+                // has a matching reversal (delete→restore scenario).
+                long approvalCount = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
+                long reversalCount = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
+                if (approvalCount > reversalCount) {
                         throw new IllegalStateException(
-                                        "Claim " + claimId + " has already been credited. Cannot credit twice.");
+                                        "Claim " + claimId
+                                                        + " has an active (unreversed) credit. Cannot credit twice.");
                 }
 
                 // 4. Get net amount to credit = نصيب المرفق بعد خصم العقد
@@ -205,12 +214,13 @@ public class ProviderAccountService {
                 ProviderAccount account = accountRepository.findByProviderIdForUpdate(claim.getProviderId())
                                 .orElseGet(() -> getOrCreateAccount(claim.getProviderId()));
 
-                // 5a. Re-check for duplicate AFTER acquiring the lock — closes the TOCTOU
-                // window between the early check above and now.
-                if (transactionService.existsForReference(ReferenceType.CLAIM_APPROVAL, claimId)) {
+                // 5a. Re-check AFTER acquiring the lock — closes the TOCTOU window.
+                long approvalCountLocked = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
+                long reversalCountLocked = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
+                if (approvalCountLocked > reversalCountLocked) {
                         throw new IllegalStateException(
                                         "Claim " + claimId
-                                                        + " has already been credited (concurrent request). Cannot credit twice.");
+                                                        + " has an active credit (concurrent request). Cannot credit twice.");
                 }
 
                 // 6. Validate account is active
@@ -403,9 +413,19 @@ public class ProviderAccountService {
          */
         @Transactional
         public AccountTransaction debitOnClaimReversal(Long claimId, Long userId) {
-                // Find the original CREDIT transaction for this claim
+                // Cycle-safe idempotency: skip if every credit already has a matching reversal.
+                long creditCount = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
+                long reversalCount = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
+                if (reversalCount >= creditCount) {
+                        log.warn("⚠️ All credits already reversed for claim {} (credits={}, reversals={}) — skipping",
+                                        claimId, creditCount, reversalCount);
+                        return null;
+                }
+
+                // Find the most recent CREDIT transaction for this claim (handles multi-cycle)
                 AccountTransaction creditTx = transactionRepository
-                                .findByReferenceTypeAndReferenceId(ReferenceType.CLAIM_APPROVAL, claimId)
+                                .findFirstByReferenceTypeAndReferenceIdOrderByCreatedAtDesc(
+                                                ReferenceType.CLAIM_APPROVAL, claimId)
                                 .orElse(null);
 
                 if (creditTx == null) {
@@ -428,10 +448,34 @@ public class ProviderAccountService {
                                         "Claim " + claimId + " has no provider — cannot process reversal debit");
                 }
 
-                AccountTransaction tx = debitOnInstallmentPayment(providerId, amount,
-                                "عكس قيد موافقة مطالبة مرفوضة #" + claimId, userId);
+                // FIX #12: Lock account directly and use dedicated CLAIM_REVERSAL transaction
+                // (previously used debitOnInstallmentPayment which filed it as ADJUSTMENT)
+                ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found for provider: " + providerId));
 
-                log.info("REVERSAL DEBIT: claim={}, provider={}, amount={}", claimId, providerId, amount);
+                if (!account.isActive()) {
+                        throw new IllegalStateException("Cannot debit inactive account for provider " + providerId);
+                }
+
+                if (account.getRunningBalance().compareTo(amount) < 0) {
+                        log.error("REVERSAL: Insufficient balance for claim {}. Balance={}, ReversalAmount={}",
+                                        claimId, account.getRunningBalance(), amount);
+                        throw new IllegalStateException(
+                                        "Insufficient balance to reverse approved claim " + claimId
+                                                        + ". Balance: " + account.getRunningBalance()
+                                                        + ", Required: " + amount);
+                }
+
+                BigDecimal balanceBefore = account.getRunningBalance();
+                account.reverseCredit(amount);
+                accountRepository.save(account);
+
+                AccountTransaction tx = transactionService.createClaimReversalDebit(
+                                account, claimId, amount, balanceBefore, userId);
+
+                log.info("REVERSAL DEBIT: claim={}, provider={}, amount={}, newBalance={}",
+                                claimId, providerId, amount, account.getRunningBalance());
                 return tx;
         }
 
@@ -768,5 +812,99 @@ public class ProviderAccountService {
         @Transactional(readOnly = true)
         public BigDecimal getTotalOutstandingBalance() {
                 return accountRepository.getTotalOutstandingBalance();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // BALANCE REPAIR (for data inconsistency caused by claim deletion without
+        // reversal)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Repair orphaned CLAIM_APPROVAL credits: for every CLAIM_APPROVAL transaction
+         * on this provider's account whose claim no longer exists (hard-deleted) or is
+         * soft-deleted (active=false), create the missing CLAIM_REVERSAL debit so the
+         * running_balance reflects reality.
+         *
+         * This is the correct repair path. Simply recalculating from transactions would
+         * yield the same stale result because the orphaned credits are still in the
+         * transaction log. We must create the matching debit entries.
+         *
+         * @param providerId Provider ID
+         * @param userId     User performing the repair (for audit trail)
+         */
+        @Transactional
+        public java.util.Map<String, Object> recalculateBalance(Long providerId) {
+                ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
+                                .orElseThrow(() -> new EntityNotFoundException(
+                                                "Provider account not found for provider: " + providerId));
+
+                // Find all CLAIM_APPROVAL credits for this account
+                List<AccountTransaction> approvalCredits = transactionRepository
+                                .findClaimTransactionsByAccount(account.getId());
+
+                BigDecimal oldBalance = account.getRunningBalance();
+                int reversedCount = 0;
+                BigDecimal reversedTotal = BigDecimal.ZERO;
+
+                for (AccountTransaction credit : approvalCredits) {
+                        Long claimId = credit.getReferenceId();
+                        if (claimId == null)
+                                continue;
+
+                        // Skip if a CLAIM_REVERSAL already exists for this claim (idempotent)
+                        if (transactionService.existsForReference(
+                                        AccountTransaction.ReferenceType.CLAIM_REVERSAL, claimId)) {
+                                continue;
+                        }
+
+                        // Check whether the claim is active with a status that legitimately holds
+                        // credit
+                        final Set<ClaimStatus> CREDIT_BEARING_STATUSES = EnumSet.of(
+                                        ClaimStatus.APPROVED, ClaimStatus.NEEDS_CORRECTION,
+                                        ClaimStatus.BATCHED, ClaimStatus.SETTLED);
+                        boolean claimIsActive = claimRepository.findById(claimId)
+                                        .map(c -> Boolean.TRUE.equals(c.getActive())
+                                                        && CREDIT_BEARING_STATUSES.contains(c.getStatus()))
+                                        .orElse(false); // hard-deleted → not found → false
+
+                        if (claimIsActive) {
+                                // Claim is still live — credit is legitimate, skip
+                                continue;
+                        }
+
+                        // Orphaned credit — create the missing reversal debit
+                        BigDecimal amount = credit.getAmount();
+                        if (account.getRunningBalance().compareTo(amount) < 0) {
+                                // Safety guard: clamp to available balance to avoid negative balance
+                                log.warn("REPAIR: clamping reversal for claim {} to available balance {}",
+                                                claimId, account.getRunningBalance());
+                                amount = account.getRunningBalance();
+                        }
+                        if (amount.compareTo(BigDecimal.ZERO) <= 0)
+                                continue;
+
+                        BigDecimal balanceBefore = account.getRunningBalance();
+                        account.reverseCredit(amount);
+                        accountRepository.save(account);
+
+                        transactionService.createClaimReversalDebit(account, claimId, amount, balanceBefore, null);
+
+                        reversedCount++;
+                        reversedTotal = reversedTotal.add(amount);
+                        log.warn("REPAIR REVERSAL: claim={}, amount={}, newBalance={}",
+                                        claimId, amount, account.getRunningBalance());
+                }
+
+                java.util.Map<String, Object> result = new java.util.HashMap<>();
+                result.put("providerId", providerId);
+                result.put("accountId", account.getId());
+                result.put("oldBalance", oldBalance);
+                result.put("newBalance", account.getRunningBalance());
+                result.put("reversedClaimsCount", reversedCount);
+                result.put("reversedTotal", reversedTotal);
+                result.put("message", reversedCount > 0
+                                ? "تم إصلاح " + reversedCount + " قيد يتيم، المبلغ المُصحَّح: " + reversedTotal
+                                : "لا توجد قيود يتيمة — الرصيد سليم");
+                return result;
         }
 }

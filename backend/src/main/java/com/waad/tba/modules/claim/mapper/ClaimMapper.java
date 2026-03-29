@@ -265,20 +265,44 @@ public class ClaimMapper {
 
             boolean isRejected = Boolean.TRUE.equals(lineDto.getRejected());
 
-            // lineRefused = max(priceExcessRefusal, clientRefusedAmount)
-            // The client computes limit-based refusals (timesLimit / amountLimit) that the
-            // backend mapper cannot independently recompute here. We trust the larger
-            // value.
-            BigDecimal clientRefused = lineDto.getRefusedAmount() != null
-                    ? lineDto.getRefusedAmount()
-                    : BigDecimal.ZERO;
+            // FIX #2 (Critical): Compute limit-based refusal entirely on the Backend.
+            // Previously we trusted clientRefused from the DTO, which could be manipulated
+            // by a malicious user to bypass annual/times limits.
+            //
+            // BACKEND LOGIC:
+            //   netLineAmount  = contractPrice × quantity − priceExcessRefusal
+            //   limitRefused   = max(0, netLineAmount − remainingAmountFromPolicy)
+            //
+            // remainingAmount comes from BenefitPolicyCoverageService.resolveCoverage()
+            // (already captured in coverageResult / lineDto.getRemainingAmount()).
+            //
+            // We still take the max with the manually-entered reviewer refusal (manualRefused)
+            // so that a reviewer's explicit override is never silently discarded.
             BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
                     ? lineDto.getManualRefusedAmount()
                     : BigDecimal.ZERO;
 
+            BigDecimal backendLimitRefused = BigDecimal.ZERO;
+            if (!isRejected) {
+                BigDecimal netLineAmount = lineApprovedBase.multiply(quantityBd).subtract(priceExcessRefusal)
+                        .max(BigDecimal.ZERO);
+                BigDecimal remainingFromPolicy = lineDto.getRemainingAmount(); // set by resolveCoverage()
+                if (remainingFromPolicy != null && remainingFromPolicy.compareTo(BigDecimal.ZERO) >= 0
+                        && netLineAmount.compareTo(remainingFromPolicy) > 0) {
+                    backendLimitRefused = netLineAmount.subtract(remainingFromPolicy)
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
+                }
+            }
+
+            // Final limitRefused = max(backendLimitRefused, manualRefused) — never less
+            // than what the reviewer explicitly entered.
+            BigDecimal limitRefusedFinal = isRejected
+                    ? BigDecimal.ZERO
+                    : backendLimitRefused.max(manualRefused);
+
             BigDecimal lineRefused = isRejected
                     ? lineRequestedTotal
-                    : priceExcessRefusal.max(clientRefused);
+                    : priceExcessRefusal.add(limitRefusedFinal);
 
             ClaimLine line = ClaimLine.builder()
                     .claim(claim)
@@ -294,8 +318,7 @@ public class ClaimMapper {
                     .patientCopayPercentSnapshot(patientCopayPercentSnapshot)
                     .manualRefusedAmount(manualRefused)
                     .priceExcessRefused(isRejected ? BigDecimal.ZERO : priceExcessRefusal)
-                    .limitRefused(isRejected ? BigDecimal.ZERO
-                            : lineRefused.subtract(priceExcessRefusal).max(BigDecimal.ZERO))
+                    .limitRefused(limitRefusedFinal)
                     .quantity(quantity)
                     .unitPrice(lineApprovedBase)
                     .totalPrice(lineApprovedBase.multiply(quantityBd))
