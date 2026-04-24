@@ -83,6 +83,36 @@ export const claimsService = {
     }
   },
 
+  /**
+   * Coverage Engine - bulk calculate claim lines (backend-authoritative).
+   * @param {Object} payload - BulkCoverageEngineRequest
+   * @returns {Promise<Array>} Calculated line results
+   */
+  calculateCoverageBulk: async (payload) => {
+    try {
+      if (!payload) throw new Error('بيانات الحساب مطلوبة');
+      const response = await axiosClient.post(`${BASE_URL}/calculate-bulk`, payload);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /**
+   * Coverage Engine - single line calculate.
+   * @param {Object} payload - BulkCoverageEngineRequest with one line
+   * @returns {Promise<Object>} Calculated line result
+   */
+  calculateCoverageSingle: async (payload) => {
+    try {
+      if (!payload) throw new Error('بيانات الحساب مطلوبة');
+      const response = await axiosClient.post(`${BASE_URL}/calculate`, payload);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
 
 
   /**

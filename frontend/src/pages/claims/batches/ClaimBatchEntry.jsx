@@ -207,7 +207,8 @@ export default function ClaimBatchEntry() {
         serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : (year || new Date().getFullYear()),
         serviceDate,
         currentClaimId: editingClaimId,
-        fullCoverage
+        fullCoverage,
+        onCoverageError: (message) => enqueueSnackbar(message, { variant: 'warning' })
     });
 
     const refetchAllLinesCoverageCallback = useCallback(async (newCategoryCode) => {

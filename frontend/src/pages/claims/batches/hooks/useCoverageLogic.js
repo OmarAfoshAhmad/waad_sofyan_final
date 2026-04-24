@@ -1,15 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import * as benefitPolicyRulesService from 'services/api/benefit-policy-rules.service';
-import providerContractsService from 'services/api/provider-contracts.service';
-import benefitPoliciesService from 'services/api/benefit-policies.service';
-
-const { 
-    checkServiceCoverage, 
-    getCoverageForService, 
-    checkServiceUsageLimit,
-    checkBulkCoverage
-} = benefitPolicyRulesService;
+import { useCallback } from 'react';
+import claimsService from 'services/api/claims.service';
 
 export function useCoverageLogic({ 
     policyId, 
@@ -18,26 +8,73 @@ export function useCoverageLogic({
     applyBenefits, 
     rootCategories, 
     primaryCategoryCode,
-    setLines,
     recompute,
     currentClaimId,
     serviceYear,
-    serviceDate,
-    fullCoverage
+    fullCoverage,
+    onCoverageError
 }) {
-    const linesRef = useRef([]);
+    const toMoney = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? Number(num.toFixed(2)) : 0;
+    };
 
-    // Keep linesRef in sync (passed from parent or managed here)
-    // For now, assume we'll use functional updates or passed lines
-    
-    const fetchCoverage = useCallback(async (service, categoryCodeOverride, lineId = null) => {
-        // Full coverage: 100% with no limits, skip backend call
-        if (fullCoverage || categoryCodeOverride === 'FULL_COVERAGE') {
-            return { coveragePercent: 100, requiresPreApproval: false, notCovered: false, usageExceeded: false, usageDetails: null };
+    const toInt = (value, fallback = 0) => {
+        const num = Number.parseInt(value, 10);
+        return Number.isFinite(num) ? num : fallback;
+    };
+
+    const normalizeEngineResult = (result, fallbackPercent) => {
+        if (!result) {
+            return {
+                coveragePercent: fallbackPercent,
+                requiresPreApproval: false,
+                notCovered: false,
+                usageExceeded: false,
+                usageDetails: null,
+                total: 0,
+                byCompany: 0,
+                byEmployee: 0,
+                refusedAmount: 0,
+                rejectionReason: ''
+            };
         }
 
-        // Keep single line fetch logic mostly the same for individual changes,
-        // but it's largely superseded by bulk.
+        return {
+            coveragePercent: result.notCovered ? 0 : (result.coveragePercent ?? fallbackPercent),
+            requiresPreApproval: !!result.requiresPreApproval,
+            notCovered: !!result.notCovered,
+            usageExceeded: !!result.usageDetails?.exceeded,
+            usageDetails: result.usageDetails ?? null,
+            total: toMoney(result.requestedTotal),
+            byCompany: toMoney(result.companyShare),
+            byEmployee: toMoney(result.patientShare),
+            refusedAmount: toMoney(result.refusedAmount),
+            rejectionReason: result.refusalReason || ''
+        };
+    };
+
+    const buildEngineLineInput = (line, idx, contextCatId = null) => {
+        const serviceOwnCategoryId = line?.service?.categoryId
+            ?? line?.service?.medicalCategoryId
+            ?? line?.service?.medicalCategory?.id
+            ?? null;
+
+        return {
+            lineId: line?.id || `line_${idx}`,
+            serviceId: line?.service?.medicalServiceId || 0,
+            pricingItemId: line?.service?.pricingItemId || null,
+            quantity: Math.max(1, toInt(line?.quantity, 1)),
+            enteredUnitPrice: toMoney(line?.unitPrice),
+            contractPrice: toMoney(line?.contractPrice),
+            categoryId: contextCatId ?? serviceOwnCategoryId,
+            serviceCategoryId: serviceOwnCategoryId,
+            rejected: !!line?.rejected,
+            manualRefusedAmount: toMoney(line?.manualRefusedAmount)
+        };
+    };
+
+    const fetchCoverage = useCallback(async (service, categoryCodeOverride, lineId = null) => {
         const sid = service?.medicalServiceId || 0;
         const serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
         let categoryId = serviceOwnCategoryId;
@@ -55,49 +92,41 @@ export function useCoverageLogic({
                 if (cat) categoryId = cat.id;
             }
 
-            const contextCatId = categoryId;
-            const serviceCatId = serviceOwnCategoryId;
-
-            // USE SINGLE LINE BULK INSTEAD OF 3 APIS
             const payload = {
-                memberId: member?.id,
-                year: serviceYear || null,
+                policyId,
+                memberId: member?.id || null,
+                serviceYear: serviceYear || null,
                 excludeClaimId: currentClaimId || null,
-                lines: [{ id: lineId || "single", serviceId: sid, categoryId: contextCatId, serviceCategoryId: serviceCatId }]
+                fullCoverage: fullCoverage || categoryCodeOverride === 'FULL_COVERAGE',
+                lines: [{
+                    lineId: lineId || 'single',
+                    serviceId: sid,
+                    pricingItemId: service?.pricingItemId || null,
+                    quantity: 1,
+                    enteredUnitPrice: toMoney(service?.contractPrice),
+                    contractPrice: toMoney(service?.contractPrice),
+                    categoryId,
+                    serviceCategoryId: serviceOwnCategoryId,
+                    rejected: false,
+                    manualRefusedAmount: 0
+                }]
             };
 
-            const bulkResults = await checkBulkCoverage(policyId, payload);
+            const bulkResults = await claimsService.calculateCoverageBulk(payload);
             if (bulkResults && bulkResults.length > 0) {
-                return {
-                    coveragePercent: bulkResults[0].notCovered ? 0 : (bulkResults[0].coveragePercent ?? fallbackPercent),
-                    requiresPreApproval: bulkResults[0].requiresPreApproval ?? false,
-                    notCovered: bulkResults[0].notCovered ?? false,
-                    usageExceeded: bulkResults[0].usageExceeded ?? false,
-                    usageDetails: bulkResults[0].usageDetails ?? null
-                };
+                return normalizeEngineResult(bulkResults[0], fallbackPercent);
             }
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         } catch (err) {
             console.error('[fetchCoverage] error:', err);
+            onCoverageError?.('تعذر حساب التغطية للخدمة المختارة. سيتم استخدام التغطية الافتراضية مؤقتاً.');
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         }
-    }, [policyId, policyInfo?.defaultCoveragePercent, serviceDate, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage]);
+    }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage, onCoverageError]);
 
     const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
         if (!policyId || !member?.id) return currentLines.map((l, i) => recompute(l, i, currentLines));
         const catCode = newCategoryCode !== undefined ? newCategoryCode : primaryCategoryCode;
-
-        if (fullCoverage || catCode === 'FULL_COVERAGE') {
-             const updated = currentLines.map(line => ({ 
-                 ...line, 
-                 coveragePercent: 100, 
-                 requiresPreApproval: false, 
-                 notCovered: false, 
-                 usageExceeded: false, 
-                 usageDetails: null 
-             }));
-             return updated.map((line, i) => recompute(line, i, updated));
-        }
 
         const linesToCheck = currentLines.filter(l => l.service);
         if (linesToCheck.length === 0) return currentLines.map((l, i) => recompute(l, i, currentLines));
@@ -109,38 +138,27 @@ export function useCoverageLogic({
         }
 
         const payload = {
+            policyId,
             memberId: member.id,
-            year: serviceYear || null,
+            serviceYear: serviceYear || null,
             excludeClaimId: currentClaimId || null,
-            lines: linesToCheck.map((l, idx) => {
-                const sid = l.service?.medicalServiceId || 0;
-                const serviceOwnCategoryId = l.service?.categoryId ?? l.service?.medicalCategoryId ?? l.service?.medicalCategory?.id ?? null;
-                
-                return {
-                    id: l.id || `line_${idx}`,
-                    serviceId: sid,
-                    categoryId: contextCatId || serviceOwnCategoryId,
-                    serviceCategoryId: serviceOwnCategoryId
-                };
-            })
+            fullCoverage: fullCoverage || catCode === 'FULL_COVERAGE',
+            lines: linesToCheck.map((line, idx) => buildEngineLineInput(line, idx, contextCatId))
         };
 
         try {
-            const bulkResults = await checkBulkCoverage(policyId, payload);
+            const bulkResults = await claimsService.calculateCoverageBulk(payload);
             
             const updated = currentLines.map((line, idx) => {
                 if (!line.service) return line;
                 const lineId = line.id || `line_${idx}`;
-                const cov = bulkResults.find(b => b.id === lineId);
+                const cov = bulkResults.find(b => b.lineId === lineId);
                 
                 if (cov) {
+                    const normalized = normalizeEngineResult(cov, policyInfo?.defaultCoveragePercent ?? 100);
                      return { 
                          ...line, 
-                         coveragePercent: cov.notCovered ? 0 : cov.coveragePercent,
-                         requiresPreApproval: cov.requiresPreApproval,
-                         notCovered: cov.notCovered,
-                         usageExceeded: cov.usageExceeded,
-                         usageDetails: cov.usageDetails
+                         ...normalized
                      };
                 }
                 return line;
@@ -149,9 +167,10 @@ export function useCoverageLogic({
             return updated.map((line, i) => recompute(line, i, updated));
         } catch (err) {
             console.error('[refetchAllLinesCoverage] bulk error:', err);
+            onCoverageError?.('فشل تحديث تغطية جميع البنود. يرجى المحاولة مرة أخرى.');
             return currentLines.map((l, i) => recompute(l, i, currentLines));
         }
-    }, [policyId, member?.id, primaryCategoryCode, rootCategories, serviceYear, currentClaimId, recompute, fullCoverage]);
+    }, [policyId, member?.id, primaryCategoryCode, rootCategories, serviceYear, currentClaimId, recompute, fullCoverage, policyInfo?.defaultCoveragePercent, onCoverageError]);
 
     return {
         fetchCoverage,
