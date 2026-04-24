@@ -425,7 +425,7 @@ export default function ClaimBatchDetail() {
                 }
                 return (
                     (c.rejectedAmount != null && parseFloat(c.rejectedAmount) > 0) ||
-                    (c.totalRejected  != null && parseFloat(c.totalRejected)  > 0)
+                    (c.totalRejected != null && parseFloat(c.totalRejected) > 0)
                 );
             })
             .map(c => c.id);
@@ -457,33 +457,33 @@ export default function ClaimBatchDetail() {
 
     // Table Columns
     const columns = [
-        { id: 'select',      label: <Checkbox size="small" checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} onClick={(e) => e.stopPropagation()} />, minWidth: '2.5rem',  align: 'center', sortable: false },
-        { id: 'index',       label: '#',               minWidth: '2.5rem',  align: 'center', sortable: false },
-        { id: 'ref',         label: 'المرجع',          minWidth: '8rem',    align: 'center', sortable: false },
-        { id: 'employer',    label: 'الوثيقة',          minWidth: '9rem',    align: 'center', sortable: false },
-        { id: 'provider',    label: 'مقدم الخدمة',    minWidth: '7rem',    align: 'center', sortable: false },
-        { id: 'patient',     label: 'الاسم (المستفيد)', minWidth: '10rem',  align: 'right',  sortable: true  },
-        { id: 'serviceDate', label: 'تاريخ الخدمة',   minWidth: '7rem',    align: 'center', sortable: true  },
-        { id: 'status',      label: 'الحالة',           minWidth: '6rem',    align: 'center', sortable: true  },
-        { id: 'amount',      label: 'الإجمالي',         minWidth: '5rem',    align: 'center', sortable: true  },
-        { id: 'covered',     label: 'المعتمد',          minWidth: '5rem',    align: 'center', sortable: true  },
-        { id: 'refused',     label: 'المرفوض',          minWidth: '5.5rem',  align: 'center', sortable: true  },
-        { id: 'copay',       label: 'نصيب المستفيد',    minWidth: '5rem',    align: 'center', sortable: true  },
-        { id: 'actions',     label: 'إجراءات',          minWidth: '5rem',    align: 'center', sortable: false }
+        { id: 'select', label: <Checkbox size="small" checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} onClick={(e) => e.stopPropagation()} />, minWidth: '2.5rem', align: 'center', sortable: false },
+        { id: 'index', label: '#', minWidth: '2.5rem', align: 'center', sortable: false },
+        { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: false },
+        { id: 'employer', label: 'الوثيقة', minWidth: '9rem', align: 'center', sortable: false },
+        { id: 'provider', label: 'مقدم الخدمة', minWidth: '7rem', align: 'center', sortable: false },
+        { id: 'patient', label: 'الاسم (المستفيد)', minWidth: '10rem', align: 'right', sortable: true },
+        { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '7rem', align: 'center', sortable: true },
+        { id: 'status', label: 'الحالة', minWidth: '6rem', align: 'center', sortable: true },
+        { id: 'amount', label: 'الإجمالي', minWidth: '5rem', align: 'center', sortable: true },
+        { id: 'covered', label: 'المعتمد', minWidth: '5rem', align: 'center', sortable: true },
+        { id: 'refused', label: 'المرفوض', minWidth: '5.5rem', align: 'center', sortable: true },
+        { id: 'copay', label: 'نصيب المستفيد', minWidth: '5rem', align: 'center', sortable: true },
+        { id: 'actions', label: 'إجراءات', minWidth: '5rem', align: 'center', sortable: false }
     ];
 
     // Totals for footer
     const totals = useMemo(() => {
         return {
-            amount:  claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
+            amount: claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
             covered: claims.reduce((s, c) => s + (c.approvedAmount || 0), 0),
             refused: claims.reduce((s, c) => {
                 const r = (c.status === 'REJECTED' && (!c.refusedAmount || c.refusedAmount === 0))
                     ? c.requestedAmount : (c.refusedAmount || 0);
                 return s + r;
             }, 0),
-            copay:   claims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
-            paid:    claims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
+            copay: claims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
+            paid: claims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
         };
     }, [claims]);
 
@@ -582,9 +582,34 @@ export default function ClaimBatchDetail() {
                 const displayRefused = (claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0))
                     ? claim.requestedAmount
                     : (claim.refusedAmount || 0);
+
+                let linesReasons = '';
+                if (claim.lines && claim.lines.length > 0) {
+                    const extractedReasons = claim.lines
+                        .filter(l => (parseFloat(l.refusedAmount) > 0 || l.rejected))
+                        .map(l => {
+                            if (l.rejectionReason) {
+                                if (l.rejectionReason === 'USAGE_TIMES_LIMIT_EXCEEDED') return 'تجاوز حد مرات الاستخدام';
+                                if (l.rejectionReason === 'USAGE_AMOUNT_LIMIT_EXCEEDED') return 'تجاوز السقف المالي للمنفعة';
+                                if (l.rejectionReason === 'MANUAL_LINE_REJECTED') return 'رفض مباشر للخدمة';
+                                return l.rejectionReason;
+                            }
+                            if (l.notCovered || l.coveragePercent === 0) return 'الخدمة غير مغطاة';
+                            if (parseFloat(l.priceExcessRefused) > 0) return 'خصم فارق السعر التعاقدي';
+                            if (parseFloat(l.limitRefused) > 0) return 'تجاوز السقف';
+                            return 'خصم آلي (تجاوز سعر أو سقف)';
+                        });
+                    linesReasons = [...new Set(extractedReasons)].join(' | ');
+                }
+
+                let reasonText = claim.reviewerComment;
+                if (!reasonText && displayRefused > 0) {
+                    reasonText = linesReasons || (claim.status === 'REJECTED' ? 'مرفوضة بالكامل' : 'خصم للنظام الآلي');
+                }
+
                 return (
-                    <Tooltip title={claim.rejectionReason || ''} arrow placement="top">
-                        <Typography variant="body2" color="error.main" fontWeight={400}>
+                    <Tooltip title={reasonText || ''} arrow placement="top">
+                        <Typography variant="body2" color="error.main" fontWeight={400} sx={{ cursor: reasonText ? 'help' : 'default', textDecoration: reasonText ? 'underline dotted' : 'none' }}>
                             {displayRefused.toFixed(2)}
                         </Typography>
                     </Tooltip>
@@ -646,416 +671,416 @@ export default function ClaimBatchDetail() {
 
     return (
         <>
-        <Box sx={{ display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 }, pb: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 }, pb: 2 }}>
 
-            <ModernPageHeader
-                title={provider?.name || '...'}
-                subtitle={`دفعة لشهر ${MONTHS_AR[month - 1]} ${year} - ${batchCode}`}
-                icon={ReceiptIcon}
-                breadcrumbs={[
-                    { label: 'الرئيسية', path: '/' },
-                    { label: 'نظام الدفعات', path: '/claims/batches' },
-                    { label: batchCode }
-                ]}
-                actions={
-                    <Stack direction="row" spacing={1.5}>
-                        <Button
-                            variant="outlined"
-                            color="secondary"
-                            startIcon={<ArrowBackIcon />}
-                            onClick={() => navigate('/claims/batches')}
-                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                        >
-                            العودة
-                        </Button>
-
-                        <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            startIcon={<ViewIcon />}
-                            onClick={() => {
-                                if (selectedClaimIds.length === 0) {
-                                    enqueueSnackbar('الرجاء تحديد مطالبة واحدة على الأقل للمعاينة', { variant: 'warning' });
-                                    return;
-                                }
-                                navigate(`/reports/claims/statement-preview?ids=${selectedClaimIds.join(',')}`);
-                            }}
-                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                        >
-                            طباعة المحددة
-                        </Button>
-
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            startIcon={<PrintIcon />}
-                            onClick={handlePrint}
-                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                        >
-                            {selectedClaimIds.length > 0
-                                ? `طباعة (${selectedClaimIds.length})`
-                                : 'طباعة الكل'}
-                        </Button>
-
-                        <Button
-                            variant="outlined"
-                            color="error"
-                            startIcon={<PrintIcon />}
-                            onClick={handleRejectedReport}
-                            sx={{ borderRadius: '0.375rem', height: '2.5rem', borderColor: 'error.main', color: 'error.main' }}
-                        >
-                            تقرير المرفوضات
-                        </Button>
-
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                            startIcon={<ExcelIcon />}
-                            onClick={handleExportExcel}
-                        >
-                            تصدير إكسل
-                        </Button>
-
-
-                        {canDelete && (
-                            <SoftDeleteToggle
-                                showDeleted={showDeleted}
-                                onToggle={() => setShowDeleted(!showDeleted)}
-                            />
-                        )}
-
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={<AddIcon />}
-                            onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`)}
-                            sx={{
-                                borderRadius: '0.375rem',
-                                height: '2.5rem',
-                                px: '1.5rem',
-                                boxShadow: '0 4px 12px rgba(var(--mui-palette-primary-mainChannel), 0.2)'
-                            }}
-                        >
-                            إضافة مطالبة
-                        </Button>
-                    </Stack>
-                }
-            />
-
-            <Box sx={{ mt: -1 }}>
-                <Stack spacing={1.5}>
-                    {/* Filter Bar - Matches Beneficiaries standard */}
-                    <MainCard sx={{ p: '8px !important', flexShrink: 0 }}>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
-                            <Chip
-                                icon={<ReceiptIcon fontSize="small" />}
-                                label={`${claims.length} مطالبة`}
-                                variant="outlined"
-                                color="primary"
-                                sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: '0.75rem' }}
-                            />
-
-                            <TextField
-                                fullWidth
-                                size="small"
-                                placeholder="بحث بالاسم، رقم البطاقة، أو المرجع..."
-                                value={searchTerm}
-                                onChange={(e) => {
-                                    setSearchTerm(e.target.value);
-                                    tableState.setPage(0);
-                                }}
-                                sx={{ flexGrow: 1 }}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-                                        </InputAdornment>
-                                    ),
-                                    sx: { height: '2.5rem', borderRadius: 1, bgcolor: 'background.paper' }
-                                }}
-                            />
-
-                            <TextField
-                                select
-                                size="small"
-                                label="الحالة"
-                                value={statusFilter}
-                                onChange={(e) => {
-                                    setStatusFilter(e.target.value);
-                                    tableState.setPage(0);
-                                }}
-                                sx={{ minWidth: '8.125rem', bgcolor: 'background.paper' }}
-                                InputProps={{ sx: { height: '2.5rem', borderRadius: 1 } }}
-                                InputLabelProps={{ shrink: true }}
-                            >
-                                <MenuItem value=""><em>الكل</em></MenuItem>
-                                <MenuItem value="APPROVED">معتمدة</MenuItem>
-                                <MenuItem value="NEEDS_CORRECTION">معلقة للمراجعة</MenuItem>
-                                <MenuItem value="PENDING">قيد الانتظار</MenuItem>
-                                <MenuItem value="UNDER_REVIEW">تحت المراجعة</MenuItem>
-                                <MenuItem value="DRAFT">مسودة</MenuItem>
-                                <MenuItem value="REJECTED">مرفوضة</MenuItem>
-                            </TextField>
-
+                <ModernPageHeader
+                    title={provider?.name || '...'}
+                    subtitle={`دفعة لشهر ${MONTHS_AR[month - 1]} ${year} - ${batchCode}`}
+                    icon={ReceiptIcon}
+                    breadcrumbs={[
+                        { label: 'الرئيسية', path: '/' },
+                        { label: 'نظام الدفعات', path: '/claims/batches' },
+                        { label: batchCode }
+                    ]}
+                    actions={
+                        <Stack direction="row" spacing={1.5}>
                             <Button
                                 variant="outlined"
                                 color="secondary"
-                                startIcon={<FilterAltOffIcon />}
-                                onClick={() => {
-                                    setSearchTerm('');
-                                    setStatusFilter('');
-                                    tableState.setPage(0);
-                                }}
-                                sx={{ minWidth: '7.5rem', height: '2.5rem', borderRadius: 1 }}
+                                startIcon={<ArrowBackIcon />}
+                                onClick={() => navigate('/claims/batches')}
+                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
                             >
-                                إعادة ضبط
+                                العودة
                             </Button>
 
-                            {selectedClaimIds.length > 0 && (
-                                <Chip
-                                    label={`${selectedClaimIds.length} محددة`}
-                                    size="small"
-                                    color="primary"
-                                    variant="outlined"
-                                    onDelete={() => setSelectedClaimIds([])}
-                                    sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 600, fontSize: '0.8rem' }}
+                            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                startIcon={<ViewIcon />}
+                                onClick={() => {
+                                    if (selectedClaimIds.length === 0) {
+                                        enqueueSnackbar('الرجاء تحديد مطالبة واحدة على الأقل للمعاينة', { variant: 'warning' });
+                                        return;
+                                    }
+                                    navigate(`/reports/claims/statement-preview?ids=${selectedClaimIds.join(',')}`);
+                                }}
+                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
+                            >
+                                طباعة المحددة
+                            </Button>
+
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                startIcon={<PrintIcon />}
+                                onClick={handlePrint}
+                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
+                            >
+                                {selectedClaimIds.length > 0
+                                    ? `طباعة (${selectedClaimIds.length})`
+                                    : 'طباعة الكل'}
+                            </Button>
+
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<PrintIcon />}
+                                onClick={handleRejectedReport}
+                                sx={{ borderRadius: '0.375rem', height: '2.5rem', borderColor: 'error.main', color: 'error.main' }}
+                            >
+                                تقرير المرفوضات
+                            </Button>
+
+                            <Button
+                                variant="outlined"
+                                color="primary"
+                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
+                                startIcon={<ExcelIcon />}
+                                onClick={handleExportExcel}
+                            >
+                                تصدير إكسل
+                            </Button>
+
+
+                            {canDelete && (
+                                <SoftDeleteToggle
+                                    showDeleted={showDeleted}
+                                    onToggle={() => setShowDeleted(!showDeleted)}
                                 />
                             )}
+
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<AddIcon />}
+                                onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`)}
+                                sx={{
+                                    borderRadius: '0.375rem',
+                                    height: '2.5rem',
+                                    px: '1.5rem',
+                                    boxShadow: '0 4px 12px rgba(var(--mui-palette-primary-mainChannel), 0.2)'
+                                }}
+                            >
+                                إضافة مطالبة
+                            </Button>
                         </Stack>
-                    </MainCard>
+                    }
+                />
 
-                    {/* Table View */}
-                    {showDeleted ? (
-                        /* ── DELETED RECORDS VIEW ── */
-                        <MainCard sx={{ p: 0 }}>
-                            <Box sx={{ p: '12px 16px', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <HistoryIcon color="error" fontSize="small" />
-                                <Typography variant="subtitle2" color="error.main" fontWeight={600}>
-                                    سجل المطالبات المحذوفة
-                                </Typography>
-                                {deletedLoading && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>جاري التحميل...</Typography>
+                <Box sx={{ mt: -1 }}>
+                    <Stack spacing={1.5}>
+                        {/* Filter Bar - Matches Beneficiaries standard */}
+                        <MainCard sx={{ p: '8px !important', flexShrink: 0 }}>
+                            <Stack direction="row" spacing={1.5} alignItems="center">
+                                <Chip
+                                    icon={<ReceiptIcon fontSize="small" />}
+                                    label={`${claims.length} مطالبة`}
+                                    variant="outlined"
+                                    color="primary"
+                                    sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: '0.75rem' }}
+                                />
+
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    placeholder="بحث بالاسم، رقم البطاقة، أو المرجع..."
+                                    value={searchTerm}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        tableState.setPage(0);
+                                    }}
+                                    sx={{ flexGrow: 1 }}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                                            </InputAdornment>
+                                        ),
+                                        sx: { height: '2.5rem', borderRadius: 1, bgcolor: 'background.paper' }
+                                    }}
+                                />
+
+                                <TextField
+                                    select
+                                    size="small"
+                                    label="الحالة"
+                                    value={statusFilter}
+                                    onChange={(e) => {
+                                        setStatusFilter(e.target.value);
+                                        tableState.setPage(0);
+                                    }}
+                                    sx={{ minWidth: '8.125rem', bgcolor: 'background.paper' }}
+                                    InputProps={{ sx: { height: '2.5rem', borderRadius: 1 } }}
+                                    InputLabelProps={{ shrink: true }}
+                                >
+                                    <MenuItem value=""><em>الكل</em></MenuItem>
+                                    <MenuItem value="APPROVED">معتمدة</MenuItem>
+                                    <MenuItem value="NEEDS_CORRECTION">معلقة للمراجعة</MenuItem>
+                                    <MenuItem value="PENDING">قيد الانتظار</MenuItem>
+                                    <MenuItem value="UNDER_REVIEW">تحت المراجعة</MenuItem>
+                                    <MenuItem value="DRAFT">مسودة</MenuItem>
+                                    <MenuItem value="REJECTED">مرفوضة</MenuItem>
+                                </TextField>
+
+                                <Button
+                                    variant="outlined"
+                                    color="secondary"
+                                    startIcon={<FilterAltOffIcon />}
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        setStatusFilter('');
+                                        tableState.setPage(0);
+                                    }}
+                                    sx={{ minWidth: '7.5rem', height: '2.5rem', borderRadius: 1 }}
+                                >
+                                    إعادة ضبط
+                                </Button>
+
+                                {selectedClaimIds.length > 0 && (
+                                    <Chip
+                                        label={`${selectedClaimIds.length} محددة`}
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                        onDelete={() => setSelectedClaimIds([])}
+                                        sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 600, fontSize: '0.8rem' }}
+                                    />
                                 )}
-                            </Box>
-                            {(() => {
-                                const deletedItems = deletedClaimsResponse?.items || deletedClaimsResponse?.content || [];
-                                if (!deletedLoading && deletedItems.length === 0) {
-                                    return (
-                                        <Typography color="text.secondary" textAlign="center" py={5}>
-                                            لا توجد مطالبات محذوفة في هذه الدفعة
-                                        </Typography>
-                                    );
-                                }
-                                return (
-                                    <Box sx={{ overflowX: 'auto' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', direction: 'rtl' }}>
-                                            <thead>
-                                                <tr style={{ background: '#fdecea', borderBottom: '2px solid #e0e0e0' }}>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>#</th>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>المستفيد</th>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>تاريخ الخدمة</th>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الإجمالي</th>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الحالة</th>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>حُذف بواسطة</th>
-                                                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>إجراءات</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {deletedItems.map((c, i) => (
-                                                    <tr key={c.id} style={{ borderBottom: '1px solid #e0e0e0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                                                        <td style={{ padding: '8px 14px', color: '#888' }}>{i + 1}</td>
-                                                        <td style={{ padding: '8px 14px', fontWeight: 600 }}>{c.memberName}</td>
-                                                        <td style={{ padding: '8px 14px', textAlign: 'center', direction: 'ltr' }}>{c.serviceDate}</td>
-                                                        <td style={{ padding: '8px 14px', textAlign: 'center' }}>{(c.requestedAmount || 0).toFixed(2)}</td>
-                                                        <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888' }}>{c.status}</td>
-                                                        <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888', fontSize: '0.75rem' }}>{c.deletedBy || '—'}</td>
-                                                        <td style={{ padding: '8px 14px', textAlign: 'center' }}>
-                                                            <Stack direction="row" spacing={0.5} justifyContent="center">
-                                                                <Tooltip title="استعادة المطالبة">
-                                                                    <IconButton color="success" size="small"
-                                                                        onClick={() => { setRestoringClaim(c); setRestoreDialogOpen(true); }}
-                                                                        disabled={restoreMutation.isPending}
-                                                                    >
-                                                                        <RestoreIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </Tooltip>
-                                                                {canHardDelete && (
-                                                                    <Tooltip title="حذف نهائي">
-                                                                        <IconButton color="error" size="small"
-                                                                            onClick={() => { setHardDeletingClaim(c); setHardDeleteDialogOpen(true); }}
-                                                                        >
-                                                                            <DeleteForeverIcon fontSize="small" />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
-                                                            </Stack>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </Box>
-                                );
-                            })()}
-                        </MainCard>
-                    ) : (
-                        <UnifiedMedicalTable
-                            columns={columns}
-                            rows={tableRows}
-                            loading={isLoading}
-                            totalCount={sortedClaims.length}
-                            page={tableState.page}
-                            rowsPerPage={tableState.pageSize}
-                            onPageChange={(newPage) => tableState.setPage(newPage)}
-                            onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
-                            sortBy={tableState.sorting?.[0]?.id}
-                            sortDirection={tableState.sorting?.[0]?.desc ? 'desc' : 'asc'}
-                            onSort={(col, dir) => { tableState.setSorting([{ id: col, desc: dir === 'desc' }]); tableState.setPage(0); }}
-                            renderCell={renderCell}
-                            getRowKey={(claim) => claim.id}
-                            emptyMessage="لا توجد مطالبات في هذا الباتش حالياً."
-                            rowsPerPageOptions={[10, 25, 50, 100]}
-                            size="small"
-                            stickyHeader={false}
-                        />
-                    )}
-
-                    {/* Totals Footer */}
-                    {claims.length > 0 && (
-                        <MainCard sx={{ p: '10px 16px !important', flexShrink: 0, bgcolor: 'grey.50', borderTop: '2px solid', borderColor: 'divider' }}>
-                            <Stack direction="row" spacing={2} justifyContent="flex-start" alignItems="center" flexWrap="wrap">
-                                <Typography variant="caption" color="text.secondary" fontWeight={400} sx={{ mr: 'auto' }}>
-                                    الإجماليات ({claims.length} مطالبة)
-                                </Typography>
-                                <Chip label={`الإجمالي: ${totals.amount.toFixed(2)}`} size="small" sx={{ fontWeight: 400 }} />
-                                <Chip label={`المعتمد: ${totals.covered.toFixed(2)}`} color="success" size="small" sx={{ fontWeight: 400 }} />
-                                <Chip label={`المرفوض: ${totals.refused.toFixed(2)}`} color="error" size="small" sx={{ fontWeight: 400 }} />
-                                <Chip label={`نصيب المستفيد: ${totals.copay.toFixed(2)}`} color="info" size="small" sx={{ fontWeight: 400 }} />
                             </Stack>
                         </MainCard>
-                    )}
-                </Stack>
+
+                        {/* Table View */}
+                        {showDeleted ? (
+                            /* ── DELETED RECORDS VIEW ── */
+                            <MainCard sx={{ p: 0 }}>
+                                <Box sx={{ p: '12px 16px', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <HistoryIcon color="error" fontSize="small" />
+                                    <Typography variant="subtitle2" color="error.main" fontWeight={600}>
+                                        سجل المطالبات المحذوفة
+                                    </Typography>
+                                    {deletedLoading && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>جاري التحميل...</Typography>
+                                    )}
+                                </Box>
+                                {(() => {
+                                    const deletedItems = deletedClaimsResponse?.items || deletedClaimsResponse?.content || [];
+                                    if (!deletedLoading && deletedItems.length === 0) {
+                                        return (
+                                            <Typography color="text.secondary" textAlign="center" py={5}>
+                                                لا توجد مطالبات محذوفة في هذه الدفعة
+                                            </Typography>
+                                        );
+                                    }
+                                    return (
+                                        <Box sx={{ overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', direction: 'rtl' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#fdecea', borderBottom: '2px solid #e0e0e0' }}>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>#</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>المستفيد</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>تاريخ الخدمة</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الإجمالي</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الحالة</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>حُذف بواسطة</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>إجراءات</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {deletedItems.map((c, i) => (
+                                                        <tr key={c.id} style={{ borderBottom: '1px solid #e0e0e0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                                                            <td style={{ padding: '8px 14px', color: '#888' }}>{i + 1}</td>
+                                                            <td style={{ padding: '8px 14px', fontWeight: 600 }}>{c.memberName}</td>
+                                                            <td style={{ padding: '8px 14px', textAlign: 'center', direction: 'ltr' }}>{c.serviceDate}</td>
+                                                            <td style={{ padding: '8px 14px', textAlign: 'center' }}>{(c.requestedAmount || 0).toFixed(2)}</td>
+                                                            <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888' }}>{c.status}</td>
+                                                            <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888', fontSize: '0.75rem' }}>{c.deletedBy || '—'}</td>
+                                                            <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                                                                <Stack direction="row" spacing={0.5} justifyContent="center">
+                                                                    <Tooltip title="استعادة المطالبة">
+                                                                        <IconButton color="success" size="small"
+                                                                            onClick={() => { setRestoringClaim(c); setRestoreDialogOpen(true); }}
+                                                                            disabled={restoreMutation.isPending}
+                                                                        >
+                                                                            <RestoreIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </Tooltip>
+                                                                    {canHardDelete && (
+                                                                        <Tooltip title="حذف نهائي">
+                                                                            <IconButton color="error" size="small"
+                                                                                onClick={() => { setHardDeletingClaim(c); setHardDeleteDialogOpen(true); }}
+                                                                            >
+                                                                                <DeleteForeverIcon fontSize="small" />
+                                                                            </IconButton>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                </Stack>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </Box>
+                                    );
+                                })()}
+                            </MainCard>
+                        ) : (
+                            <UnifiedMedicalTable
+                                columns={columns}
+                                rows={tableRows}
+                                loading={isLoading}
+                                totalCount={sortedClaims.length}
+                                page={tableState.page}
+                                rowsPerPage={tableState.pageSize}
+                                onPageChange={(newPage) => tableState.setPage(newPage)}
+                                onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
+                                sortBy={tableState.sorting?.[0]?.id}
+                                sortDirection={tableState.sorting?.[0]?.desc ? 'desc' : 'asc'}
+                                onSort={(col, dir) => { tableState.setSorting([{ id: col, desc: dir === 'desc' }]); tableState.setPage(0); }}
+                                renderCell={renderCell}
+                                getRowKey={(claim) => claim.id}
+                                emptyMessage="لا توجد مطالبات في هذا الباتش حالياً."
+                                rowsPerPageOptions={[10, 25, 50, 100]}
+                                size="small"
+                                stickyHeader={false}
+                            />
+                        )}
+
+                        {/* Totals Footer */}
+                        {claims.length > 0 && (
+                            <MainCard sx={{ p: '10px 16px !important', flexShrink: 0, bgcolor: 'grey.50', borderTop: '2px solid', borderColor: 'divider' }}>
+                                <Stack direction="row" spacing={2} justifyContent="flex-start" alignItems="center" flexWrap="wrap">
+                                    <Typography variant="caption" color="text.secondary" fontWeight={400} sx={{ mr: 'auto' }}>
+                                        الإجماليات ({claims.length} مطالبة)
+                                    </Typography>
+                                    <Chip label={`الإجمالي: ${totals.amount.toFixed(2)}`} size="small" sx={{ fontWeight: 400 }} />
+                                    <Chip label={`المعتمد: ${totals.covered.toFixed(2)}`} color="success" size="small" sx={{ fontWeight: 400 }} />
+                                    <Chip label={`المرفوض: ${totals.refused.toFixed(2)}`} color="error" size="small" sx={{ fontWeight: 400 }} />
+                                    <Chip label={`نصيب المستفيد: ${totals.copay.toFixed(2)}`} color="info" size="small" sx={{ fontWeight: 400 }} />
+                                </Stack>
+                            </MainCard>
+                        )}
+                    </Stack>
+                </Box>
             </Box>
-        </Box>
 
-        {/* Suspend Dialog */}
-        <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontWeight: 400, borderBottom: '1px solid', borderColor: 'divider' }}>
-                تعليق المطالبة للمراجعة
-            </DialogTitle>
-            <DialogContent sx={{ pt: '1.0rem' }}>
-                <Typography variant="body2" color="text.secondary" mb={2}>
-                    سيتم تغيير حالة المطالبة إلى «يحتاج تصحيح». يجب إدخال سبب التعليق.
-                </Typography>
-                <TextField
-                    fullWidth
-                    multiline
-                    rows={3}
-                    label="سبب التعليق"
-                    value={suspendComment}
-                    onChange={(e) => setSuspendComment(e.target.value)}
-                    placeholder="اكتب سبب التعليق أو الخلل الذي وجدته..."
-                    autoFocus
-                />
-            </DialogContent>
-            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
-                <Button variant="outlined" onClick={() => setSuspendDialogOpen(false)}>إلغاء</Button>
-                <Button
-                    variant="contained"
-                    color="warning"
-                    onClick={handleConfirmSuspend}
-                    disabled={suspendMutation.isPending}
-                >
-                    تعليق المطالبة
-                </Button>
-            </DialogActions>
-        </Dialog>
+            {/* Suspend Dialog */}
+            <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 400, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    تعليق المطالبة للمراجعة
+                </DialogTitle>
+                <DialogContent sx={{ pt: '1.0rem' }}>
+                    <Typography variant="body2" color="text.secondary" mb={2}>
+                        سيتم تغيير حالة المطالبة إلى «يحتاج تصحيح». يجب إدخال سبب التعليق.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        multiline
+                        rows={3}
+                        label="سبب التعليق"
+                        value={suspendComment}
+                        onChange={(e) => setSuspendComment(e.target.value)}
+                        placeholder="اكتب سبب التعليق أو الخلل الذي وجدته..."
+                        autoFocus
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                    <Button variant="outlined" onClick={() => setSuspendDialogOpen(false)}>إلغاء</Button>
+                    <Button
+                        variant="contained"
+                        color="warning"
+                        onClick={handleConfirmSuspend}
+                        disabled={suspendMutation.isPending}
+                    >
+                        تعليق المطالبة
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-        {/* Soft Delete Confirmation Dialog */}
-        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.main' }}>
-                تأكيد حذف المطالبة
-            </DialogTitle>
-            <DialogContent sx={{ pt: '1.25rem' }}>
-                <Typography variant="body2" mb={1}>
-                    هل أنت متأكد من حذف المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong>؟
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    • سيتم إخفاء المطالبة من القوائم<br />
-                    • ستعود الأموال المحجوزة إلى السقف السنوي تلقائياً<br />
-                    • يمكن استعادتها لاحقاً من زر «سجل المحذوفات»
-                </Typography>
-            </DialogContent>
-            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
-                <Button variant="outlined" onClick={() => setDeleteDialogOpen(false)}>إلغاء</Button>
-                <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<DeleteOutlineIcon />}
-                    onClick={() => softDeleteMutation.mutate(deletingClaim?.id)}
-                    disabled={softDeleteMutation.isPending}
-                >
-                    حذف المطالبة
-                </Button>
-            </DialogActions>
-        </Dialog>
+            {/* Soft Delete Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.main' }}>
+                    تأكيد حذف المطالبة
+                </DialogTitle>
+                <DialogContent sx={{ pt: '1.25rem' }}>
+                    <Typography variant="body2" mb={1}>
+                        هل أنت متأكد من حذف المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong>؟
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        • سيتم إخفاء المطالبة من القوائم<br />
+                        • ستعود الأموال المحجوزة إلى السقف السنوي تلقائياً<br />
+                        • يمكن استعادتها لاحقاً من زر «سجل المحذوفات»
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                    <Button variant="outlined" onClick={() => setDeleteDialogOpen(false)}>إلغاء</Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        startIcon={<DeleteOutlineIcon />}
+                        onClick={() => softDeleteMutation.mutate(deletingClaim?.id)}
+                        disabled={softDeleteMutation.isPending}
+                    >
+                        حذف المطالبة
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-        {/* Restore Confirmation Dialog */}
-        <Dialog open={restoreDialogOpen} onClose={() => setRestoreDialogOpen(false)} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'success.dark' }}>
-                تأكيد استعادة المطالبة
-            </DialogTitle>
-            <DialogContent sx={{ pt: '1.25rem' }}>
-                <Typography variant="body2" color="text.secondary">
-                    هل أنت متأكد من استعادة مطالبة <strong>{restoringClaim?.memberName}</strong> بمبلغ <strong>{(restoringClaim?.requestedAmount || 0).toFixed(2)}</strong>؟
-                </Typography>
-                <Typography variant="body2" color="text.secondary" mt={1}>
-                    سيتم إعادة المطالبة إلى قائمة المطالبات النشطة.
-                </Typography>
-            </DialogContent>
-            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
-                <Button variant="outlined" onClick={() => setRestoreDialogOpen(false)}>إلغاء</Button>
-                <Button
-                    variant="contained"
-                    color="success"
-                    startIcon={<RestoreIcon />}
-                    onClick={() => { restoreMutation.mutate(restoringClaim?.id); setRestoreDialogOpen(false); setRestoringClaim(null); }}
-                    disabled={restoreMutation.isPending}
-                >
-                    استعادة
-                </Button>
-            </DialogActions>
-        </Dialog>
+            {/* Restore Confirmation Dialog */}
+            <Dialog open={restoreDialogOpen} onClose={() => setRestoreDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'success.dark' }}>
+                    تأكيد استعادة المطالبة
+                </DialogTitle>
+                <DialogContent sx={{ pt: '1.25rem' }}>
+                    <Typography variant="body2" color="text.secondary">
+                        هل أنت متأكد من استعادة مطالبة <strong>{restoringClaim?.memberName}</strong> بمبلغ <strong>{(restoringClaim?.requestedAmount || 0).toFixed(2)}</strong>؟
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" mt={1}>
+                        سيتم إعادة المطالبة إلى قائمة المطالبات النشطة.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                    <Button variant="outlined" onClick={() => setRestoreDialogOpen(false)}>إلغاء</Button>
+                    <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<RestoreIcon />}
+                        onClick={() => { restoreMutation.mutate(restoringClaim?.id); setRestoreDialogOpen(false); setRestoringClaim(null); }}
+                        disabled={restoreMutation.isPending}
+                    >
+                        استعادة
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-        {/* Hard Delete Confirmation Dialog */}
-        <Dialog open={hardDeleteDialogOpen} onClose={() => setHardDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.dark' }}>
-                ⚠️ حذف نهائي — لا يمكن التراجع
-            </DialogTitle>
-            <DialogContent sx={{ pt: '1.25rem' }}>
-                <Typography variant="body2" color="error.main" fontWeight={600} mb={1}>
-                    هذا الإجراء غير قابل للتراجع نهائياً!
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    سيتم حذف مطالبة <strong>{hardDeletingClaim?.memberName}</strong> من قاعدة البيانات بشكل دائم مع جميع بياناتها.
-                </Typography>
-            </DialogContent>
-            <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
-                <Button variant="outlined" onClick={() => setHardDeleteDialogOpen(false)}>إلغاء</Button>
-                <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<DeleteForeverIcon />}
-                    onClick={() => hardDeleteMutation.mutate(hardDeletingClaim?.id)}
-                    disabled={hardDeleteMutation.isPending}
-                >
-                    حذف نهائي
-                </Button>
-            </DialogActions>
-        </Dialog>
+            {/* Hard Delete Confirmation Dialog */}
+            <Dialog open={hardDeleteDialogOpen} onClose={() => setHardDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.dark' }}>
+                    ⚠️ حذف نهائي — لا يمكن التراجع
+                </DialogTitle>
+                <DialogContent sx={{ pt: '1.25rem' }}>
+                    <Typography variant="body2" color="error.main" fontWeight={600} mb={1}>
+                        هذا الإجراء غير قابل للتراجع نهائياً!
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        سيتم حذف مطالبة <strong>{hardDeletingClaim?.memberName}</strong> من قاعدة البيانات بشكل دائم مع جميع بياناتها.
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
+                    <Button variant="outlined" onClick={() => setHardDeleteDialogOpen(false)}>إلغاء</Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        startIcon={<DeleteForeverIcon />}
+                        onClick={() => hardDeleteMutation.mutate(hardDeletingClaim?.id)}
+                        disabled={hardDeleteMutation.isPending}
+                    >
+                        حذف نهائي
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
 
         </>

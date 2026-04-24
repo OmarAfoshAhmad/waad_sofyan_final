@@ -190,6 +190,11 @@ public class ProviderSettlementReportDto {
         private BigDecimal patientShare; // حصة المريض
 
         /**
+         * سبب الرفض على مستوى المطالبة (إن وجد)
+         */
+        private String rejectionReason;
+
+        /**
          * تفاصيل الخدمات (السطور)
          */
         @Builder.Default

@@ -326,12 +326,20 @@ public class BenefitPolicyRuleService {
 
         int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
 
+        List<Long> allCategoryIds = new java.util.ArrayList<>();
+        if (rule.getMedicalCategoryId() != null) {
+            allCategoryIds.add(rule.getMedicalCategoryId());
+            collectAllChildCategoryIds(rule.getMedicalCategoryId(), allCategoryIds);
+        }
+
         // All rules are category-level since V228.
         // Use COALESCE for backward-compat with old claim lines.
-        String q = "SELECT COUNT(DISTINCT c.id), SUM(cl.totalPrice) " +
+        // Authoritative: Sum (approvedUnitPrice * approvedQuantity) to match settlement
+        // logic.
+        String q = "SELECT COUNT(DISTINCT c.id), SUM(cl.approvedUnitPrice * cl.approvedQuantity) " +
                 "FROM ClaimLine cl JOIN cl.claim c " +
                 "WHERE c.member.id = :memberId " +
-                "AND COALESCE(cl.appliedCategoryId, cl.serviceCategoryId) = :catId " +
+                "AND COALESCE(cl.appliedCategoryId, cl.serviceCategoryId) IN :catIds " +
                 "AND c.status NOT IN :excludeStatuses " +
                 "AND c.active = true " +
                 (excludeClaimId != null ? "AND c.id <> :excludeClaimId " : "") +
@@ -339,7 +347,7 @@ public class BenefitPolicyRuleService {
 
         var query = em.createQuery(q)
                 .setParameter("memberId", memberId)
-                .setParameter("catId", rule.getMedicalCategoryId())
+                .setParameter("catIds", allCategoryIds)
                 .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED))
                 .setParameter("year", targetYear);
 
@@ -749,5 +757,15 @@ public class BenefitPolicyRuleService {
             return null;
         }
         return service.getCategoryId();
+    }
+
+    private void collectAllChildCategoryIds(Long parentId, List<Long> result) {
+        List<MedicalCategory> children = categoryRepository.findByParentId(parentId);
+        for (MedicalCategory child : children) {
+            if (!result.contains(child.getId())) {
+                result.add(child.getId());
+                collectAllChildCategoryIds(child.getId(), result);
+            }
+        }
     }
 }

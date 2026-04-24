@@ -44,11 +44,11 @@ export const ClaimLineRow = ({
 }) => {
     return (
         <Fragment>
-            <TableRow sx={{ 
+            <TableRow sx={{
                 bgcolor: line.rejected ? alpha(theme.palette.error.main, 0.05) :
-                        line.notCovered ? alpha(theme.palette.error.main, 0.04) :
+                    line.notCovered ? alpha(theme.palette.error.main, 0.04) :
                         ((line.manualRefusedAmount > 0) ? alpha(theme.palette.warning.main, 0.04) :
-                        (line.usageExceeded ? alpha(theme.palette.warning.main, 0.02) : 'transparent'))
+                            (line.usageExceeded ? alpha(theme.palette.warning.main, 0.02) : 'transparent'))
             }}>
                 <TableCell align="center" sx={{ fontWeight: 600, color: 'text.secondary', width: '2.5rem' }}>{idx + 1}</TableCell>
                 <TableCell align="right" sx={{ minWidth: '17.5rem' }}>
@@ -66,7 +66,7 @@ export const ClaimLineRow = ({
                                 (opt?.serviceCode != null && (opt.serviceCode === val?.serviceCode || opt.serviceCode === val?.medicalServiceCode))
                             }
                             renderInput={(params) => (
-                                <TextField {...params} variant="standard" 
+                                <TextField {...params} variant="standard"
                                     placeholder={loadingServices ? "جاري التحميل..." : "ابحث عن خدمة..."}
                                     inputProps={{ ...params.inputProps, style: { textAlign: 'right' } }}
                                 />
@@ -99,109 +99,115 @@ export const ClaimLineRow = ({
                     </Tooltip>
                 </TableCell>
                 {visibleColumns.coverage && (
-                <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>
-                        {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
-                    </Typography>
-                </TableCell>
+                    <TableCell align="center">
+                        <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 400, color: 'text.secondary' }}>
+                            {line.coveragePercent !== null ? `${line.coveragePercent}%` : `${policyInfo?.defaultCoveragePercent ?? 100}%`}
+                        </Typography>
+                    </TableCell>
                 )}
                 {visibleColumns.benefitLimit && (
-                <TableCell align="center">
-                    {line.usageDetails && (
-                        <Stack spacing={0.3} alignItems="center" justifyContent="center">
-                            {line.usageDetails.timesLimit > 0 && (
-                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.timesExceeded || line.usageDetails.totalUsedCount > line.usageDetails.timesLimit ? 'error.main' : 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                    مرات: {line.usageDetails.totalUsedCount}/{line.usageDetails.timesLimit}
-                                </Typography>
-                            )}
-                            {line.usageDetails.amountLimit > 0 && (
-                                <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.amountExceeded || line.usageDetails.totalUsedAmount > line.usageDetails.amountLimit ? 'error.main' : 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                    د.ل: {(line.usageDetails.totalUsedAmount ?? 0).toFixed(2)}/{line.usageDetails.amountLimit}
-                                </Typography>
-                            )}
-                        </Stack>
-                    )}
-                </TableCell>
+                    <TableCell align="center">
+                        {line.usageDetails && (
+                            <Stack spacing={0.3} alignItems="center" justifyContent="center">
+                                {line.usageDetails.timesLimit > 0 && (
+                                    <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.timesExceeded || (line.usageDetails.usedCount ?? 0) > line.usageDetails.timesLimit ? 'error.main' : 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        مرات: {line.usageDetails.usedCount ?? 0}/{line.usageDetails.timesLimit}
+                                    </Typography>
+                                )}
+                                {line.usageDetails.amountLimit > 0 && (
+                                    <Typography variant="caption" sx={{ fontSize: '0.75rem', color: line.usageDetails.amountExceeded || line.usageDetails.usedAmount > line.usageDetails.amountLimit ? 'error.main' : 'text.secondary', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        د.ل: {(line.usageDetails.usedAmount ?? 0).toFixed(2)}/{line.usageDetails.amountLimit}
+                                    </Typography>
+                                )}
+                            </Stack>
+                        )}
+                    </TableCell>
                 )}
                 {visibleColumns.remainingLimit && (
-                <TableCell align="center">
-                    {line.usageDetails && (
-                        <Stack spacing={0.3} alignItems="center" justifyContent="center">
-                            {line.usageDetails.timesLimit > 0 && (() => {
-                                const remaining = Math.max(0, line.usageDetails.timesLimit - line.usageDetails.totalUsedCount);
-                                return (
-                                    <Typography variant="caption" sx={{
-                                        fontSize: '0.75rem',
-                                        color: remaining === 0 ? 'error.main' : 'primary.main',
-                                        fontWeight: 600, whiteSpace: 'nowrap'
-                                    }}>
-                                        مرات: {remaining}
-                                    </Typography>
-                                );
-                            })()}
-                            {line.usageDetails.amountLimit > 0 && (() => {
-                                const remaining = line.usageDetails.remainingAmount != null
-                                    ? line.usageDetails.remainingAmount
-                                    : Math.max(0, line.usageDetails.amountLimit - (line.usageDetails.totalUsedAmount ?? 0));
-                                return (
-                                    <Typography variant="caption" sx={{
-                                        fontSize: '0.75rem',
-                                        color: remaining <= 0 ? 'error.main' : 'primary.main',
-                                        fontWeight: 600, whiteSpace: 'nowrap'
-                                    }}>
-                                        د.ل: {remaining.toFixed(2)}
-                                    </Typography>
-                                );
-                            })()}
-                        </Stack>
-                    )}
-                </TableCell>
+                    <TableCell align="center">
+                        {line.usageDetails ? (
+                            <Stack spacing={0.3} alignItems="center" justifyContent="center">
+                                {line.usageDetails.timesLimit > 0 && (() => {
+                                    // usedCount من الـ backend يتضمن الكمية الحالية بعد الإصلاح
+                                    const used = line.usageDetails.usedCount ?? 0;
+                                    const limit = line.usageDetails.timesLimit;
+                                    const remaining = Math.max(0, limit - used);
+                                    return (
+                                        <Typography variant="caption" sx={{
+                                            fontSize: '0.75rem',
+                                            color: remaining === 0 ? 'error.main' : 'primary.main',
+                                            fontWeight: 600, whiteSpace: 'nowrap'
+                                        }}>
+                                            مرات: {remaining}
+                                        </Typography>
+                                    );
+                                })()}
+                                {line.usageDetails.amountLimit > 0 && (() => {
+                                    // remainingAmount محسوب من الـ backend مباشرة
+                                    const remaining = Math.max(0, line.usageDetails.remainingAmount != null
+                                        ? line.usageDetails.remainingAmount
+                                        : line.usageDetails.amountLimit - (line.usageDetails.usedAmount ?? 0));
+                                    return (
+                                        <Typography variant="caption" sx={{
+                                            fontSize: '0.75rem',
+                                            color: remaining <= 0 ? 'error.main' : 'primary.main',
+                                            fontWeight: 600, whiteSpace: 'nowrap'
+                                        }}>
+                                            د.ل: {remaining.toFixed(2)}
+                                        </Typography>
+                                    );
+                                })()}
+                            </Stack>
+                        ) : line.service ? (
+                            <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.disabled' }}>—</Typography>
+                        ) : null}
+                    </TableCell>
                 )}
                 {visibleColumns.refused && (
-                <TableCell align="center">
-                    {(() => {
-                        // refusedAmount يتضمّن: تجاوز السعر + تجاوز السقف + الرفض اليدوي الجزئي + الرفض الكلي
-                        const refusedVal = parseFloat(line.refusedAmount) || 0;
-                        const isPartial = !line.rejected && (parseFloat(line.manualRefusedAmount) || 0) > 0;
-                        if (refusedVal <= 0) {
+                    <TableCell align="center">
+                        {(() => {
+                            // refusedAmount يتضمّن: تجاوز السعر + تجاوز السقف + الرفض اليدوي الجزئي + الرفض الكلي
+                            const refusedVal = parseFloat(line.refusedAmount) || 0;
+                            const isPartial = !line.rejected && (parseFloat(line.manualRefusedAmount) || 0) > 0;
+                            if (refusedVal <= 0) {
+                                return (
+                                    <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.disabled' }}>
+                                        —
+                                    </Typography>
+                                );
+                            }
+                            const tooltipTitle = line.rejected
+                                ? (line.rejectionReason || 'الخدمة مرفوضة بالكامل')
+                                : isPartial
+                                    ? `رفض جزئي: ${refusedVal.toFixed(2)} د.ل — ${line.rejectionReason || ''}`
+                                    : (line.rejectionReason || `تجاوز سعر العقد (${line.contractPrice > 0 ? line.contractPrice : '—'})`);
                             return (
-                                <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.disabled' }}>
-                                    —
-                                </Typography>
+                                <Tooltip title={tooltipTitle} arrow>
+                                    <Typography variant="body2" sx={{
+                                        fontSize: '0.85rem', fontWeight: 700,
+                                        color: isPartial ? 'warning.dark' : 'error.main'
+                                    }}>
+                                        {refusedVal.toFixed(2)}
+                                        {isPartial && <Typography component="span" sx={{ fontSize: '0.65rem', mr: 0.4 }}>جزئي</Typography>}
+                                    </Typography>
+                                </Tooltip>
                             );
-                        }
-                        const tooltipTitle = line.rejected
-                            ? (line.rejectionReason || 'الخدمة مرفوضة بالكامل')
-                            : isPartial
-                                ? `رفض جزئي: ${refusedVal.toFixed(2)} د.ل — ${line.rejectionReason || ''}`
-                                : (line.rejectionReason || `تجاوز سعر العقد (${line.contractPrice > 0 ? line.contractPrice : '—'})`);
-                        return (
-                            <Tooltip title={tooltipTitle} arrow>
-                                <Typography variant="body2" sx={{
-                                    fontSize: '0.85rem', fontWeight: 700,
-                                    color: isPartial ? 'warning.dark' : 'error.main'
-                                }}>
-                                    {refusedVal.toFixed(2)}
-                                    {isPartial && <Typography component="span" sx={{ fontSize: '0.65rem', mr: 0.4 }}>جزئي</Typography>}
-                                </Typography>
-                            </Tooltip>
-                        );
-                    })()}
-                </TableCell>
+                        })()}
+                    </TableCell>
                 )}
                 {visibleColumns.companyShare && (
-                <TableCell align="center">
-                    <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'success.main' }}>
-                        {line.byCompany?.toFixed(2)}
-                    </Typography>
-                </TableCell>
+                    <TableCell align="center">
+                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'success.main' }}>
+                            {line.byCompany?.toFixed(2)}
+                        </Typography>
+                    </TableCell>
                 )}
                 {visibleColumns.patientShare && (
-                <TableCell align="center">
-                    <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'warning.dark' }}>
-                        {line.byEmployee?.toFixed(2)}
-                    </Typography>
-                </TableCell>
+                    <TableCell align="center">
+                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'warning.dark' }}>
+                            {line.byEmployee?.toFixed(2)}
+                        </Typography>
+                    </TableCell>
                 )}
                 <TableCell align="center">
                     <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'primary.main' }}>
@@ -212,8 +218,8 @@ export const ClaimLineRow = ({
                     <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
                         <Tooltip title={
                             line.rejected ? 'إلغاء الرفض الكلي' :
-                            (line.manualRefusedAmount > 0) ? 'إلغاء الرفض الجزئي' :
-                            'رفض البند'
+                                (line.manualRefusedAmount > 0) ? 'إلغاء الرفض الجزئي' :
+                                    'رفض البند'
                         } arrow>
                             <IconButton size="small"
                                 color={line.rejected ? 'error' : (line.manualRefusedAmount > 0 ? 'warning' : 'default')}

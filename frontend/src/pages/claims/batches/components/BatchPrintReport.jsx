@@ -51,6 +51,20 @@ const extractServices = (claim) => {
             const patientShare = toNumber(line.patientCoPay ?? line.copayAmount);
             const net = approved > 0 ? approved - patientShare : Math.max(gross - rejected - patientShare, 0);
 
+            const detailedReason = (() => {
+                if (line.rejectionReason) return line.rejectionReason;
+                if (line.rejected) return 'الخدمة مرفوضة بالكامل';
+
+                const pr = parseFloat(line.priceExcessRefused) || 0;
+                const lr = parseFloat(line.limitRefused) || 0;
+
+                if (pr > 0 && lr > 0) return `خصم فارق السعر التعاقدي (${pr}) وتجاوز السقف (${lr})`;
+                if (pr > 0) return 'خصم فارق السعر التعاقدي';
+                if (lr > 0) return 'تجاوز السقف المالي/المرات';
+                if (rejected > 0) return 'خصم آلي (تجاوز سعر أو سقف)';
+                return '';
+            })();
+
             return {
                 key: line.id || `${claim.id || 'c'}-${idx}`,
                 serviceName: line.medicalServiceName || line.serviceName || line.name || line.description || line.medicalServiceCode || '-',
@@ -58,7 +72,7 @@ const extractServices = (claim) => {
                 gross,
                 net,
                 rejected,
-                rejectionReason: line.rejectionReason || line.notes || claim.rejectionReason || claim.reviewerComment || ''
+                rejectionReason: detailedReason || line.notes || claim.rejectionReason || claim.reviewerComment || ''
             };
         });
     }

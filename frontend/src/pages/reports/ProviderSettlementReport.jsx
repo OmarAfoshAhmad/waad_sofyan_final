@@ -53,6 +53,8 @@ import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import { reportsService } from 'services/api';
 import { exportToExcel } from 'utils/exportUtils';
 import { useAuth } from 'contexts/AuthContext';
+import { UnifiedMedicalTable } from 'components/common';
+import useTableState from 'hooks/useTableState';
 
 /**
  * Provider Settlement Reports - تقارير تسوية مقدمي الخدمة
@@ -92,6 +94,10 @@ const ProviderSettlementReport = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [reportData, setReportData] = useState(null);
+
+  const tableState = useTableState({
+    initialPageSize: 10,
+  });
 
   // Expanded claims (for collapsible rows)
   const [expandedClaims, setExpandedClaims] = useState({});
@@ -441,6 +447,78 @@ const ProviderSettlementReport = () => {
     }
   };
 
+  const tableRows = useMemo(() => {
+    if (!reportData?.claims) return [];
+    const flat = [];
+    reportData.claims.forEach((claim) => {
+      if (claim.lines && claim.lines.length > 0) {
+        claim.lines.forEach((line) => {
+          flat.push({
+            ...line,
+            rejectionReason: line.rejectionReason || claim.rejectionReason,
+            claimRef: claim.claimNumber,
+            patientName: claim.patientNameArabic || claim.patientName,
+            insuranceNumber: claim.insuranceNumber,
+          });
+        });
+      } else {
+        flat.push({
+          lineId: `c-${claim.claimId}`,
+          claimRef: claim.claimNumber,
+          patientName: claim.patientNameArabic || claim.patientName,
+          insuranceNumber: claim.insuranceNumber,
+          serviceName: 'إجمالي المطالبة',
+          serviceDate: claim.serviceDate,
+          grossAmount: claim.grossAmount,
+          approvedAmount: claim.netAmount,
+          rejectedAmount: claim.rejectedAmount,
+          rejectionReason: claim.rejectionReason,
+        });
+      }
+    });
+    return flat;
+  }, [reportData]);
+
+  const paginatedRows = useMemo(() => {
+    const start = tableState.page * tableState.pageSize;
+    const end = start + tableState.pageSize;
+    return tableRows.slice(start, end);
+  }, [tableRows, tableState.page, tableState.pageSize]);
+
+  const columns = [
+    { id: 'index', label: '#', width: '3.125rem', align: 'center' },
+    { id: 'claimNum', label: 'المرجع', width: '7.5rem', align: 'right' },
+    { id: 'patient', label: 'الاسم (المستفيد)', minWidth: '11.25rem', align: 'right' },
+    { id: 'service', label: 'الخدمة الطبية', minWidth: '12.5rem', align: 'right' },
+    { id: 'date', label: 'تاريخ الخدمة', width: '6.25rem', align: 'center' },
+    { id: 'gross', label: 'الإجمالي', width: '5.625rem', align: 'center' },
+    { id: 'net', label: 'المعتمد', width: '5.625rem', align: 'center' },
+    { id: 'rejected', label: 'المرفوض', width: '5.625rem', align: 'center' },
+    { id: 'reason', label: 'سبب الرفض', minWidth: '12.5rem', align: 'right' },
+    { id: 'status', label: 'الحالة', width: '6.25rem', align: 'center' }
+  ];
+
+  const renderCell = (row, column, rowIndex) => {
+    const index = tableState.page * tableState.pageSize + rowIndex;
+    switch (column.id) {
+      case 'index': return <Typography variant="body2" color="text.secondary">{index + 1}</Typography>;
+      case 'claimNum': return <Typography variant="body2" fontWeight={600} color="primary" dir="ltr">{row.claimRef}</Typography>;
+      case 'patient': return <Box><Typography variant="body2" fontWeight={600} noWrap>{row.patientName}</Typography><Typography variant="caption" color="text.secondary" noWrap>{row.insuranceNumber}</Typography></Box>;
+      case 'service': return <Typography variant="body2" noWrap>{row.serviceNameArabic || row.serviceName || 'إجمالي المطالبة'}</Typography>;
+      case 'date': return <Typography variant="body2" dir="ltr">{formatDate(row.serviceDate)}</Typography>;
+      case 'gross': return <Typography variant="body2" fontWeight={400}>{formatLYD(row.grossAmount)}</Typography>;
+      case 'net': return <Typography variant="body2" color="success.main" fontWeight={400}>{formatLYD(row.approvedAmount)}</Typography>;
+      case 'rejected':
+        return <Typography variant="body2" color={row.rejectedAmount > 0 ? "error.main" : "text.secondary"} fontWeight={400}>{formatLYD(row.rejectedAmount)}</Typography>;
+      case 'reason':
+        return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: '12.5rem', whiteSpace: 'normal', lineHeight: 1.2 }}>{row.rejectionReason || '-'}</Typography>;
+      case 'status':
+        const isRejected = (row.rejectedAmount > 0) || row.lineStatus === 'REJECTED';
+        return <Chip label={row.lineStatusArabic || (isRejected ? 'مرفوض' : 'معتمد')} size="small" variant="outlined" color={isRejected ? 'error' : 'success'} sx={{ height: '1.5rem', fontSize: '0.7rem' }} />;
+      default: return null;
+    }
+  };
+
   return (
     <MainCard>
       {/* Header */}
@@ -639,8 +717,28 @@ const ProviderSettlementReport = () => {
               </Grid>
             </Grid>
 
-            {/* PRINT & SCREEN: THE CLEAN PAPER FORMAT */}
-            <Box className="paper-printable-content">
+            {/* SCREEN ONLY: UNIFIED MEDICAL TABLE */}
+            <Box className="no-print" sx={{ mb: 2 }}>
+              <UnifiedMedicalTable
+                columns={columns}
+                rows={paginatedRows}
+                loading={loading}
+                totalCount={tableRows.length}
+                page={tableState.page}
+                rowsPerPage={tableState.pageSize}
+                onPageChange={(newPage) => tableState.setPage(newPage)}
+                onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
+                renderCell={renderCell}
+                getRowKey={(row) => row.lineId || Math.random()}
+                emptyMessage="لا يوجد تفاصيل مطالبات"
+                rowsPerPageOptions={[10, 25, 50, 100]}
+                size="small"
+                stickyHeader={false}
+              />
+            </Box>
+
+            {/* PRINT ONLY: THE CLEAN PAPER FORMAT */}
+            <Box className="paper-printable-content" sx={{ display: 'none', '@media print': { display: 'block' } }}>
               <style type="text/css">
                 {`
                         @media screen {
@@ -667,16 +765,16 @@ const ProviderSettlementReport = () => {
 
               {/* Report Top Meta with Logo */}
               <Box className="report-header-box">
-                  <Stack direction="row" justifyContent="center" sx={{ mb: '1.0rem' }}>
-                       {/* Professional Logo Placeholder */}
-                       <Box sx={{ width: '5.0rem', height: '3.125rem', border: '3px solid #000', borderRadius: '40%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Typography variant="caption" fontWeight="bold" sx={{ color: '#000', fontSize: '0.75rem' }}>WAAD TPA</Typography>
-                       </Box>
-                  </Stack>
-                  <Typography className="report-title-main">شركة وعد لإدارة النفقات الطبية</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>تقرير التسوية المالية الموحد (كشف حساب)</Typography>
-                  <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>{reportData.providerName}</Typography>
-                  <Typography variant="body2">الفترة: من {formatDate(reportData.fromDate)} إلى {formatDate(reportData.toDate)}</Typography>
+                <Stack direction="row" justifyContent="center" sx={{ mb: '1.0rem' }}>
+                  {/* Professional Logo Placeholder */}
+                  <Box sx={{ width: '5.0rem', height: '3.125rem', border: '3px solid #000', borderRadius: '40%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography variant="caption" fontWeight="bold" sx={{ color: '#000', fontSize: '0.75rem' }}>WAAD TPA</Typography>
+                  </Box>
+                </Stack>
+                <Typography className="report-title-main">شركة وعد لإدارة النفقات الطبية</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>تقرير التسوية المالية الموحد (كشف حساب)</Typography>
+                <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>{reportData.providerName}</Typography>
+                <Typography variant="body2">الفترة: من {formatDate(reportData.fromDate)} إلى {formatDate(reportData.toDate)}</Typography>
               </Box>
 
               {reportData.claims?.map((claim, idx) => (
@@ -711,7 +809,7 @@ const ProviderSettlementReport = () => {
                           <td>{formatLYD(line.grossAmount)}</td>
                           <td>{formatLYD(line.approvedAmount)}</td>
                           <td>{formatLYD(line.rejectedAmount)}</td>
-                          <td style={{ textAlign: 'right', fontSize: '0.75rem' }}>{line.rejectionReason || '-'}</td>
+                          <td style={{ textAlign: 'right', fontSize: '0.75rem' }}>{line.rejectionReason || claim.rejectionReason || '-'}</td>
                         </tr>
                       ))}
                       <tr className="subtotal-row">

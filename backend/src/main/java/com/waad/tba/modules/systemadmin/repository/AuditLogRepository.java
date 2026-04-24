@@ -17,52 +17,50 @@ import com.waad.tba.modules.systemadmin.entity.AuditLog;
  */
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
-    
+
     /**
      * Find audit logs by user ID (paginated)
      */
     Page<AuditLog> findByUserIdOrderByTimestampDesc(Long userId, Pageable pageable);
-    
+
     /**
      * Find audit logs by entity type and ID
      */
     Page<AuditLog> findByEntityTypeAndEntityIdOrderByTimestampDesc(
-        String entityType, 
-        Long entityId, 
-        Pageable pageable
-    );
-    
+            String entityType,
+            Long entityId,
+            Pageable pageable);
+
     /**
      * Find audit logs by action type
      */
     Page<AuditLog> findByActionOrderByTimestampDesc(String action, Pageable pageable);
-    
+
     /**
      * Find audit logs within time range
      */
     Page<AuditLog> findByTimestampBetweenOrderByTimestampDesc(
-        LocalDateTime start, 
-        LocalDateTime end, 
-        Pageable pageable
-    );
-    
+            LocalDateTime start,
+            LocalDateTime end,
+            Pageable pageable);
+
     /**
      * Get distinct action types
      */
-    @Query("SELECT DISTINCT a.action FROM AuditLog a ORDER BY a.action")
+    @Query("SELECT DISTINCT a.action FROM SystemAuditLog a ORDER BY a.action")
     List<String> findDistinctActions();
-    
+
     /**
      * Get distinct entity types
      */
-    @Query("SELECT DISTINCT a.entityType FROM AuditLog a WHERE a.entityType IS NOT NULL ORDER BY a.entityType")
+    @Query("SELECT DISTINCT a.entityType FROM SystemAuditLog a WHERE a.entityType IS NOT NULL ORDER BY a.entityType")
     List<String> findDistinctEntityTypes();
-    
+
     /**
      * Count logs by user
      */
     Long countByUserId(Long userId);
-    
+
     /**
      * Count logs by action
      */

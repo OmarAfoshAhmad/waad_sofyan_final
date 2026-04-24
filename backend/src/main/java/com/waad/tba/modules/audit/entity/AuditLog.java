@@ -31,7 +31,7 @@ import java.time.Instant;
  *
  * Insert-only entity: no updates and no deletes are allowed.
  */
-@Entity
+@Entity(name = "MedicalAuditLog")
 @Table(name = "medical_audit_logs", indexes = {
         @Index(name = "idx_med_audit_entity_id", columnList = "entity_id"),
         @Index(name = "idx_med_audit_timestamp", columnList = "event_timestamp"),

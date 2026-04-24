@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import claimsService from 'services/api/claims.service';
 
-export function useCoverageLogic({ 
-    policyId, 
-    policyInfo, 
-    member, 
-    applyBenefits, 
-    rootCategories, 
+export function useCoverageLogic({
+    policyId,
+    policyInfo,
+    member,
+    applyBenefits,
+    rootCategories,
     primaryCategoryCode,
     recompute,
     currentClaimId,
@@ -132,7 +132,7 @@ export function useCoverageLogic({
                     lineId: lineId || 'single',
                     serviceId: sid,
                     pricingItemId: service?.pricingItemId || null,
-                    quantity: 1,
+                    quantity: Math.max(1, toInt(service?.quantity, 1)),
                     enteredUnitPrice: toMoney(service?.contractPrice),
                     contractPrice: toMoney(service?.contractPrice),
                     categoryId,
@@ -214,22 +214,22 @@ export function useCoverageLogic({
                 debugLog('bulk:stale-ignored', { requestId, latest: bulkRequestIdRef.current });
                 return null;
             }
-            
+
             const updated = currentLines.map((line, idx) => {
                 if (!line.service) return line;
                 const lineId = line.id || `line_${idx}`;
                 const cov = bulkResults.find(b => b.lineId === lineId);
-                
+
                 if (cov) {
                     const normalized = normalizeEngineResult(cov, policyInfo?.defaultCoveragePercent ?? 100);
-                     return { 
-                         ...line, 
-                         ...normalized
-                     };
+                    return {
+                        ...line,
+                        ...normalized
+                    };
                 }
                 return line;
             });
-            
+
             return updated.map((line, i) => recompute(line, i, updated));
         } catch (err) {
             if (err?.name === 'CanceledError' || err?.name === 'AbortError') {

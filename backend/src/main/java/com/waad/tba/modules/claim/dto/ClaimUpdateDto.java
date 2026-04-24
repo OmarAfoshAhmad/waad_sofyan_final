@@ -2,6 +2,7 @@ package com.waad.tba.modules.claim.dto;
 
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -53,6 +54,34 @@ public class ClaimUpdateDto {
      * Diagnosis Description - correction only
      */
     private String diagnosisDescription;
+
+    @NotNull(message = "تاريخ الخدمة مطلوب")
+    private java.time.LocalDate serviceDate;
+
+    /**
+     * Complaint - as reported by the patient
+     */
+    private String complaint;
+
+    /**
+     * Rejection/Refusal Reason (Alternative to reviewerComment for some flows)
+     */
+    private String rejectionReason;
+
+    /**
+     * Category Identification (ICD-10 or local code)
+     */
+    private String primaryCategoryCode;
+
+    /**
+     * Manual Category override
+     */
+    private Boolean manualCategoryEnabled;
+
+    /**
+     * Full Coverage override (100% company share)
+     */
+    private Boolean fullCoverage;
 
     /**
      * @deprecated Status changes should use workflow endpoints:

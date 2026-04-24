@@ -21,11 +21,11 @@ import lombok.NoArgsConstructor;
  * Comprehensive tracking of all system actions.
  * Used by SUPER_ADMIN to monitor user activities.
  */
-@Entity
+@Entity(name = "SystemAuditLog")
 @Table(name = "audit_logs", indexes = {
-    @Index(name = "idx_user", columnList = "user_id"),
-    @Index(name = "idx_entity", columnList = "entity_type,entity_id"),
-    @Index(name = "idx_timestamp", columnList = "timestamp")
+        @Index(name = "idx_user", columnList = "user_id"),
+        @Index(name = "idx_entity", columnList = "entity_type,entity_id"),
+        @Index(name = "idx_timestamp", columnList = "timestamp")
 })
 @Data
 @Builder

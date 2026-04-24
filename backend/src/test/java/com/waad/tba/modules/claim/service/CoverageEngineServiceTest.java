@@ -2,6 +2,7 @@ package com.waad.tba.modules.claim.service;
 
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
@@ -28,6 +29,9 @@ class CoverageEngineServiceTest {
 
     @Mock
     private BenefitPolicyRuleService benefitPolicyRuleService;
+
+    @Mock
+    private MedicalAuditLogService medicalAuditLogService;
 
     @InjectMocks
     private CoverageEngineService coverageEngineService;
@@ -151,5 +155,282 @@ class CoverageEngineServiceTest {
         assertEquals(new BigDecimal("20.00"), result.getManualRefusedAmount());
         assertEquals(new BigDecimal("30.00"), result.getFinalRefusedAmount());
         assertEquals(new BigDecimal("30.00"), result.getRefusedAmount());
+    }
+
+    @Test
+    @DisplayName("timesLimit must hard-stop and reject entire service without amount-limit processing")
+    void should_hard_stop_when_times_limit_exceeded() {
+        when(benefitPolicyRuleService.findCoverageForService(any(), any(), any(), any()))
+                .thenReturn(Optional.of(BenefitPolicyRuleResponseDto.builder()
+                        .id(44L)
+                        .effectiveCoveragePercent(80)
+                        .requiresPreApproval(false)
+                        .medicalCategoryId(51L)
+                        .build()));
+
+        when(benefitPolicyRuleService.checkUsageLimit(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new HashMap<>() {
+                    {
+                        put("covered", true);
+                        put("hasLimit", true);
+                        put("ruleId", 44L);
+                        put("timesLimit", 5);
+                        put("amountLimit", new BigDecimal("1000.00"));
+                        put("usedCount", 5);
+                        put("usedAmount", new BigDecimal("100.00"));
+                    }
+                });
+
+        ClaimLineInput line = ClaimLineInput.builder()
+                .lineId("L-4")
+                .serviceId(400L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("100.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        BulkCoverageEngineRequest request = BulkCoverageEngineRequest.builder()
+                .policyId(3L)
+                .memberId(103L)
+                .serviceYear(2026)
+                .lines(List.of(line))
+                .build();
+
+        CoverageResult result = coverageEngineService.calculateBulk(request).get(0);
+
+        assertEquals(new BigDecimal("100.00"), result.getLimitRefused());
+        assertEquals(new BigDecimal("0.00"), result.getApprovedTotal());
+        assertEquals("USAGE_TIMES_LIMIT_EXCEEDED", result.getRefusalReason());
+        assertEquals(true, result.getUsageDetails().isTimesExceeded());
+        assertEquals(false, result.getUsageDetails().isAmountExceeded());
+    }
+
+    @Test
+    @DisplayName("amountLimit should partially cap approved total")
+    void should_partially_cap_when_amount_limit_exceeded() {
+        when(benefitPolicyRuleService.findCoverageForService(any(), any(), any(), any()))
+                .thenReturn(Optional.of(BenefitPolicyRuleResponseDto.builder()
+                        .id(55L)
+                        .effectiveCoveragePercent(80)
+                        .requiresPreApproval(false)
+                        .medicalCategoryId(51L)
+                        .build()));
+
+        when(benefitPolicyRuleService.checkUsageLimit(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new HashMap<>() {
+                    {
+                        put("covered", true);
+                        put("hasLimit", true);
+                        put("ruleId", 55L);
+                        put("timesLimit", null);
+                        put("amountLimit", new BigDecimal("1000.00"));
+                        put("usedCount", 1);
+                        put("usedAmount", new BigDecimal("900.00"));
+                    }
+                });
+
+        ClaimLineInput line = ClaimLineInput.builder()
+                .lineId("L-5")
+                .serviceId(500L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("200.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        BulkCoverageEngineRequest request = BulkCoverageEngineRequest.builder()
+                .policyId(4L)
+                .memberId(104L)
+                .serviceYear(2026)
+                .lines(List.of(line))
+                .build();
+
+        CoverageResult result = coverageEngineService.calculateBulk(request).get(0);
+
+        assertEquals(new BigDecimal("100.00"), result.getLimitRefused());
+        assertEquals(new BigDecimal("100.00"), result.getApprovedTotal());
+        assertEquals("USAGE_AMOUNT_LIMIT_EXCEEDED", result.getRefusalReason());
+    }
+
+    @Test
+    @DisplayName("must not increment usage counters when line is fully rejected by amount limit")
+    void should_prevent_double_deduction_when_amount_limit_already_exhausted() {
+        when(benefitPolicyRuleService.findCoverageForService(any(), any(), any(), any()))
+                .thenReturn(Optional.of(BenefitPolicyRuleResponseDto.builder()
+                        .id(66L)
+                        .effectiveCoveragePercent(80)
+                        .requiresPreApproval(false)
+                        .medicalCategoryId(51L)
+                        .build()));
+
+        Map<String, Object> exhaustedUsage = new HashMap<>();
+        exhaustedUsage.put("covered", true);
+        exhaustedUsage.put("hasLimit", true);
+        exhaustedUsage.put("ruleId", 66L);
+        exhaustedUsage.put("timesLimit", 1);
+        exhaustedUsage.put("amountLimit", new BigDecimal("50.00"));
+        exhaustedUsage.put("usedCount", 0);
+        exhaustedUsage.put("usedAmount", new BigDecimal("50.00"));
+
+        when(benefitPolicyRuleService.checkUsageLimit(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(exhaustedUsage)
+                .thenReturn(exhaustedUsage);
+
+        ClaimLineInput line1 = ClaimLineInput.builder()
+                .lineId("L-6-1")
+                .serviceId(600L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("100.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        ClaimLineInput line2 = ClaimLineInput.builder()
+                .lineId("L-6-2")
+                .serviceId(600L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("100.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        BulkCoverageEngineRequest request = BulkCoverageEngineRequest.builder()
+                .policyId(5L)
+                .memberId(105L)
+                .serviceYear(2026)
+                .lines(List.of(line1, line2))
+                .build();
+
+        List<CoverageResult> results = coverageEngineService.calculateBulk(request);
+
+        assertEquals("USAGE_AMOUNT_LIMIT_EXCEEDED", results.get(0).getRefusalReason());
+        assertEquals(false, results.get(0).getUsageDetails().isTimesExceeded());
+
+        assertEquals("USAGE_AMOUNT_LIMIT_EXCEEDED", results.get(1).getRefusalReason());
+        assertEquals(false, results.get(1).getUsageDetails().isTimesExceeded());
+    }
+
+    @Test
+    @DisplayName("bulk lines must share remaining amount cap and never exceed total amountLimit")
+    void should_cap_total_approved_across_bulk_lines_by_remaining_limit() {
+        when(benefitPolicyRuleService.findCoverageForService(any(), any(), any(), any()))
+                .thenReturn(Optional.of(BenefitPolicyRuleResponseDto.builder()
+                        .id(77L)
+                        .effectiveCoveragePercent(100)
+                        .requiresPreApproval(false)
+                        .medicalCategoryId(51L)
+                        .build()));
+
+        Map<String, Object> usage = new HashMap<>();
+        usage.put("covered", true);
+        usage.put("hasLimit", true);
+        usage.put("ruleId", 77L);
+        usage.put("timesLimit", null);
+        usage.put("amountLimit", new BigDecimal("100.00"));
+        usage.put("usedCount", 0);
+        usage.put("usedAmount", BigDecimal.ZERO);
+
+        when(benefitPolicyRuleService.checkUsageLimit(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(usage)
+                .thenReturn(usage);
+
+        ClaimLineInput line1 = ClaimLineInput.builder()
+                .lineId("L-7-1")
+                .serviceId(700L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("70.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        ClaimLineInput line2 = ClaimLineInput.builder()
+                .lineId("L-7-2")
+                .serviceId(700L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("70.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        BulkCoverageEngineRequest request = BulkCoverageEngineRequest.builder()
+                .policyId(6L)
+                .memberId(106L)
+                .serviceYear(2026)
+                .lines(List.of(line1, line2))
+                .build();
+
+        List<CoverageResult> results = coverageEngineService.calculateBulk(request);
+
+        assertEquals(new BigDecimal("70.00"), results.get(0).getApprovedTotal());
+        assertEquals(new BigDecimal("0.00"), results.get(0).getLimitRefused());
+
+        assertEquals(new BigDecimal("30.00"), results.get(1).getApprovedTotal());
+        assertEquals(new BigDecimal("40.00"), results.get(1).getLimitRefused());
+        assertEquals("USAGE_AMOUNT_LIMIT_EXCEEDED", results.get(1).getRefusalReason());
+
+        BigDecimal totalApproved = results.stream()
+                .map(CoverageResult::getApprovedTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("100.00"), totalApproved);
+    }
+
+    @Test
+    @DisplayName("amount cap must be applied before company/patient split when coverage percent is below 100")
+    void should_apply_amount_cap_before_financial_split_for_partial_coverage() {
+        when(benefitPolicyRuleService.findCoverageForService(any(), any(), any(), any()))
+                .thenReturn(Optional.of(BenefitPolicyRuleResponseDto.builder()
+                        .id(88L)
+                        .effectiveCoveragePercent(80)
+                        .requiresPreApproval(false)
+                        .medicalCategoryId(51L)
+                        .build()));
+
+        Map<String, Object> usage = new HashMap<>();
+        usage.put("covered", true);
+        usage.put("hasLimit", true);
+        usage.put("ruleId", 88L);
+        usage.put("timesLimit", null);
+        usage.put("amountLimit", new BigDecimal("100.00"));
+        usage.put("usedCount", 0);
+        usage.put("usedAmount", BigDecimal.ZERO);
+
+        when(benefitPolicyRuleService.checkUsageLimit(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(usage)
+                .thenReturn(usage);
+
+        ClaimLineInput line1 = ClaimLineInput.builder()
+                .lineId("L-8-1")
+                .serviceId(800L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("70.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        ClaimLineInput line2 = ClaimLineInput.builder()
+                .lineId("L-8-2")
+                .serviceId(800L)
+                .quantity(1)
+                .enteredUnitPrice(new BigDecimal("70.00"))
+                .contractPrice(BigDecimal.ZERO)
+                .build();
+
+        BulkCoverageEngineRequest request = BulkCoverageEngineRequest.builder()
+                .policyId(7L)
+                .memberId(107L)
+                .serviceYear(2026)
+                .lines(List.of(line1, line2))
+                .build();
+
+        List<CoverageResult> results = coverageEngineService.calculateBulk(request);
+
+        assertEquals(new BigDecimal("70.00"), results.get(0).getApprovedTotal());
+        assertEquals(new BigDecimal("56.00"), results.get(0).getCompanyShare());
+        assertEquals(new BigDecimal("14.00"), results.get(0).getPatientShare());
+
+        assertEquals(new BigDecimal("30.00"), results.get(1).getApprovedTotal());
+        assertEquals(new BigDecimal("40.00"), results.get(1).getLimitRefused());
+        assertEquals(new BigDecimal("24.00"), results.get(1).getCompanyShare());
+        assertEquals(new BigDecimal("6.00"), results.get(1).getPatientShare());
+        assertEquals("USAGE_AMOUNT_LIMIT_EXCEEDED", results.get(1).getRefusalReason());
+
+        BigDecimal totalApproved = results.stream()
+                .map(CoverageResult::getApprovedTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(new BigDecimal("100.00"), totalApproved);
     }
 }

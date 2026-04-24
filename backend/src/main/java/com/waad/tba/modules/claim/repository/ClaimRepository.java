@@ -17,7 +17,7 @@ import com.waad.tba.modules.claim.projection.MonthlyTrendProjection;
 import com.waad.tba.modules.claim.projection.CostsByProviderProjection;
 import com.waad.tba.modules.claim.projection.ServiceDistributionProjection;
 import com.waad.tba.modules.claim.projection.RecentClaimProjection;
-import com.waad.tba.modules.claim.projection.FinancialSummaryByProviderProjection;
+
 import com.waad.tba.modules.claim.projection.FinancialSummaryByStatusProjection;
 import com.waad.tba.modules.claim.projection.FinancialSummaryByEmployerProjection;
 

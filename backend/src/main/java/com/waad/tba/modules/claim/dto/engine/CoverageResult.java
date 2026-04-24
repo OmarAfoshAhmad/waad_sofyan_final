@@ -29,6 +29,12 @@ public class CoverageResult {
     /** نفس lineId المُرسَل في الطلب — للمطابقة في الـ Frontend */
     private String lineId;
 
+    /** كود الخدمة (للتدقيق والترابط) */
+    private String serviceCode;
+
+    /** اسم الخدمة (للتدقيق والترابط) */
+    private String serviceName;
+
     // ══════════════════════════════════════════════════════
     // PRICE RESOLUTION — خطوة 1: تحديد السعر الفعّال
     // ══════════════════════════════════════════════════════

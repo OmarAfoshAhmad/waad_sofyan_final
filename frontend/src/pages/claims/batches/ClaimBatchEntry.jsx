@@ -208,7 +208,7 @@ export default function ClaimBatchEntry() {
 
     // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
     const { recompute } = useCalculationLogic({ applyBenefits, policyInfo });
-    
+
     const { fetchCoverage, refetchAllLinesCoverage } = useCoverageLogic({
         policyId, policyInfo, member, applyBenefits, rootCategories, primaryCategoryCode,
         setLines, recompute,
@@ -542,6 +542,9 @@ export default function ClaimBatchEntry() {
 
     // ── المنطق المالي وتغطية الخدمات (مطبق في الأعلى) ───────────────────────────
 
+    // Debounce ref for quantity/price changes triggering backend coverage re-fetch
+    const coverageRefetchTimerRef = useRef(null);
+
     const updateLine = useCallback((idx, patch) => {
         setLines(prev => {
             const n = [...prev];
@@ -549,7 +552,18 @@ export default function ClaimBatchEntry() {
             return n.map((line, i) => recompute(line, i, n));
         });
         setIsDirty(true);
-    }, [recompute]);
+
+        // Re-fetch coverage from backend when quantity or price changes (affects usageDetails)
+        const needsBackendRefresh = 'quantity' in patch || 'unitPrice' in patch;
+        if (needsBackendRefresh && policyId && member?.id) {
+            if (coverageRefetchTimerRef.current) clearTimeout(coverageRefetchTimerRef.current);
+            coverageRefetchTimerRef.current = setTimeout(() => {
+                refetchAllLinesCoverage(primaryCategoryCode, linesRef.current).then(updated => {
+                    if (updated) setLines(updated);
+                });
+            }, 600);
+        }
+    }, [recompute, policyId, member?.id, refetchAllLinesCoverage, primaryCategoryCode]);
 
     const handleServiceChange = useCallback(async (idx, val) => {
         if (!val) {
@@ -565,7 +579,7 @@ export default function ClaimBatchEntry() {
         }
 
         const newName = svc.serviceName || svc.name;
-        
+
         const isDuplicate = lines.some((l, i) => {
             if (i === idx) return false;
             const existingName = l.serviceName || l.service?.serviceName || l.service?.name;
@@ -598,7 +612,7 @@ export default function ClaimBatchEntry() {
 
     useEffect(() => {
         if (!policyId || !member?.id) return;
-        
+
         // Force refetch usage/limits for ALL lines when member or policy changes
         refetchAllLinesCoverage(primaryCategoryCode, linesRef.current).then(updated => {
             if (updated) setLines(updated);
@@ -779,12 +793,15 @@ export default function ClaimBatchEntry() {
                 return;
             }
 
-            // الحالة REJECTED إذا كان هناك أي رفض: رفض صريح للمطالبة، أو بنود مرفوضة، أو فائض سعر
+            // الحالة REJECTED فقط إذا:
+            // 1. المستخدم ضغط "رفض المطالبة" صراحة (isClaimRejected)
+            // 2. جميع البنود مرفوضة يدوياً (allLinesManuallyRejected)
+            // ⚠️ الخصومات الآلية (تجاوز سعر/سقف) لا تجعل المطالبة "مرفوضة" — تبقى "معتمدة" مع مبالغ مرفوضة
             const activeLines = lines.filter(l => l.service || l.serviceName);
-            const anyLineRejected = activeLines.some(l => l.rejected);
-            const anyRefusedAmount = activeLines.some(l => parseFloat(l.refusedAmount) > 0);
+            const allLinesManuallyRejected = activeLines.length > 0
+                && activeLines.every(l => l.rejected);
 
-            const effectivelyRejected = isClaimRejected || anyLineRejected || anyRefusedAmount;
+            const effectivelyRejected = isClaimRejected || allLinesManuallyRejected;
 
             // إذا كانت المطالبة مرفوضة كلياً — يجب إدخال سبب رفض
             let effectiveRejectionReason = rejectionInput?.trim() || null;
@@ -794,10 +811,10 @@ export default function ClaimBatchEntry() {
                 isSavingRef.current = false;
                 return;
             }
-            // للبنود المرفوضة فقط (دون رفض كلي) — نأخذ أول سبب من البنود أو سبب السعر
+            // للبنود المرفوضة يدوياً فقط (دون رفض كلي) — نأخذ أول سبب من البنود
             if (effectivelyRejected && !effectiveRejectionReason) {
                 const autoReason = activeLines.find(l => l.rejectionReason)?.rejectionReason;
-                effectiveRejectionReason = autoReason || 'مبالغ مرفوضة بسبب تجاوز السعر أو السقف المتفق عليه';
+                effectiveRejectionReason = autoReason || 'جميع البنود مرفوضة';
             }
 
             const claimData = {
@@ -847,10 +864,10 @@ export default function ClaimBatchEntry() {
                             batchForSave
                         );
                     } catch (batchErr) {
-                         enqueueSnackbar(`فشل فتح الدفعة: ${batchErr?.response?.data?.message || batchErr?.message}`, { variant: 'error' });
-                         setSaving(false);
-                         isSavingRef.current = false;
-                         return;
+                        enqueueSnackbar(`فشل فتح الدفعة: ${batchErr?.response?.data?.message || batchErr?.message}`, { variant: 'error' });
+                        setSaving(false);
+                        isSavingRef.current = false;
+                        return;
                     }
                     claimData.claimBatchId = batchForSave?.id;
                 }
@@ -876,7 +893,7 @@ export default function ClaimBatchEntry() {
                     claimResponse = await claimsService.create(claimData);
                 } catch (claimErr) {
                     // Rollback orphan visit if claim creation fails
-                    try { await visitsService.remove(visitId); } catch (_) {}
+                    try { await visitsService.remove(visitId); } catch (_) { }
                     throw claimErr;
                 }
                 resultClaimId = claimResponse.id;
@@ -995,22 +1012,22 @@ export default function ClaimBatchEntry() {
                     icon={<ReceiptIcon />}
                     actions={
                         <Stack direction="row" spacing={1} alignItems="center">
-                             <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />}
+                            <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />}
                                 onClick={handleExport} disabled={!batchContent.length}
-                                 sx={{ color: '#1b5e20', borderColor: '#1b5e20', '&:hover': { bgcolor: '#1b5e2012' } }}>
+                                sx={{ color: '#1b5e20', borderColor: '#1b5e20', '&:hover': { bgcolor: '#1b5e2012' } }}>
                                 {/* FIX: Correct label — exports CSV not Excel */}
                                 تصدير CSV
                             </Button>
                             <Button variant="outlined" size="small" color="info" startIcon={<PrintIcon />}
                                 onClick={handlePrint}
-                                 sx={{}}>
+                                sx={{}}>
                                 {t('claimEntry.printTable')}
                             </Button>
                             <Divider orientation="vertical" flexItem />
                             {/* FIX: Finish batch goes to claim-batches management page (different from detail) */}
                             <Button variant="contained" size="small" color="success" startIcon={<DoneIcon />}
                                 onClick={() => navigate(`/claims/batches`)} disabled={!batchContent.length}
-                                 sx={{}}>
+                                sx={{}}>
                                 {t('claimEntry.finishBatch')}
                             </Button>
                             {/* FIX: Back goes to detail page (same month view) */}
@@ -1039,7 +1056,7 @@ export default function ClaimBatchEntry() {
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
                     <Paper variant="outlined" sx={{
                         flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-                         boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
                     }}>
 
                         {/* ── لوحة معلومات التعديل ── */}
@@ -1095,7 +1112,7 @@ export default function ClaimBatchEntry() {
                                 )}
                                 {(isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')) && !loadingBatchMeta && (
                                     <Chip icon={<LockIcon sx={{ fontSize: '0.75rem' }} />} size="small"
-                                        label={isExpiredBatch ? `فترة منتهية (>${allowedBackdatedMonths} أشهر)` : "الدفعة مغلقة — تعديل فقط"} 
+                                        label={isExpiredBatch ? `فترة منتهية (>${allowedBackdatedMonths} أشهر)` : "الدفعة مغلقة — تعديل فقط"}
                                         color="secondary" variant="filled"
                                         sx={{ fontWeight: 500, fontSize: '0.75rem' }}
                                     />
@@ -1113,7 +1130,7 @@ export default function ClaimBatchEntry() {
                                 {/* Save & New (The main button) */}
                                 <Button variant="contained" size="small" color="success"
                                     startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <AddIcon sx={{ fontSize: '0.8125rem' }} />}
-                                    onClick={() => handleSave(true)} 
+                                    onClick={() => handleSave(true)}
                                     disabled={saving || !isDirty || isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')}
                                     sx={{ fontWeight: 500, fontSize: '0.75rem', py: 0.4 }}>
                                     {saving ? t('claimEntry.saving') : t('claimEntry.saveAndAdd')}
@@ -1261,7 +1278,7 @@ export default function ClaimBatchEntry() {
                                             removeLine={removeLine}
                                             openRejectDialog={openRejectDialog}
                                             policyInfo={policyInfo}
-                                            visibleColumns={visibleColumns} 
+                                            visibleColumns={visibleColumns}
                                         />
                                     ))}
                                     <TableRow>
@@ -1390,9 +1407,11 @@ export default function ClaimBatchEntry() {
                         {showReasonsList && (
                             <Box sx={{ mt: 1, maxHeight: '13rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                 {rejectionReasons.map(r => (
-                                    <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5,
+                                    <Box key={r.id} sx={{
+                                        display: 'flex', alignItems: 'center', gap: 0.5,
                                         px: 1, py: 0.4, borderRadius: '0.25rem',
-                                        bgcolor: editingReasonId === r.id ? 'action.selected' : 'action.hover' }}>
+                                        bgcolor: editingReasonId === r.id ? 'action.selected' : 'action.hover'
+                                    }}>
                                         {editingReasonId === r.id ? (
                                             <>
                                                 <TextField

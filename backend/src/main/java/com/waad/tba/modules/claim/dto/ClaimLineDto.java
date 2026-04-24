@@ -89,6 +89,13 @@ public class ClaimLineDto {
     private String reviewerNotes;
     private BigDecimal refusedAmount;
     private BigDecimal manualRefusedAmount;
+    private BigDecimal priceExcessRefused;
+    private BigDecimal limitRefused;
+    private String manualRefusalReason;
+
+    public Long getServiceId() {
+        return medicalServiceId != null ? medicalServiceId : pricingItemId;
+    }
 
     // Financial Audit (READ-ONLY)
     private BigDecimal requestedUnitPrice;
@@ -104,6 +111,9 @@ public class ClaimLineDto {
     private BigDecimal remainingAmount;
     private BigDecimal companyShare;
     private BigDecimal patientShare;
+
+    private BigDecimal requestedTotal;
+    private BigDecimal approvedAmount;
 
     private Long appliedCategoryId;
     private String appliedCategoryName;

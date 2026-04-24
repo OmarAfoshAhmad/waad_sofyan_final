@@ -160,6 +160,26 @@ public class ClaimLine {
     @Builder.Default
     private Boolean requiresPA = false;
 
+    /**
+     * Total requested amount for this line (enteredUnitPrice * quantity).
+     * Added for direct mapping and reporting.
+     */
+    @Column(name = "requested_total", precision = 15, scale = 2)
+    private BigDecimal requestedTotal;
+
+    /**
+     * Total approved amount for this line (insurer share).
+     * Added for direct mapping and reporting.
+     */
+    @Column(name = "approved_amount", precision = 15, scale = 2)
+    private BigDecimal approvedAmount;
+
+    @Column(name = "company_share", precision = 15, scale = 2)
+    private BigDecimal companyShare;
+
+    @Column(name = "patient_share", precision = 15, scale = 2)
+    private BigDecimal patientShare;
+
     // ==================== COVERAGE SNAPSHOT (FINANCIAL AUDIT TRAIL)
     // ====================
 
@@ -227,6 +247,9 @@ public class ClaimLine {
     @Column(name = "limit_refused", precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal limitRefused = BigDecimal.ZERO;
+
+    @Column(name = "manual_refusal_reason", length = 500)
+    private String manualRefusalReason;
 
     // ==================== FINANCIAL AUDIT: REQUESTED VS APPROVED
     // ====================

@@ -330,6 +330,7 @@ public class ProviderSettlementReportService {
                                 .netAmount(claimApproved)
                                 .rejectedAmount(claimRejected)
                                 .patientShare(patientShare)
+                                .rejectionReason(claim.getReviewerComment())
                                 .lines(lineDetails)
                                 .build();
         }
@@ -369,21 +370,41 @@ public class ProviderSettlementReportService {
                 // in V229)
                 String serviceCode = line.getServiceCode();
                 String serviceName = line.getServiceName();
-                String serviceCategory = null;
+                // Construct Rejection Reason with detailed breakdown
+                String lineRejectionReason = line.getRejectionReason();
+                if (lineRejectionReason == null || lineRejectionReason.isBlank()) {
+                        if (Boolean.TRUE.equals(line.getRejected())) {
+                                lineRejectionReason = "الخدمة مرفوضة بالكامل";
+                        } else if (rejected.compareTo(BigDecimal.ZERO) > 0) {
+                                BigDecimal pr = line.getPriceExcessRefused() != null ? line.getPriceExcessRefused()
+                                                : BigDecimal.ZERO;
+                                BigDecimal lr = line.getLimitRefused() != null ? line.getLimitRefused()
+                                                : BigDecimal.ZERO;
+                                if (pr.compareTo(BigDecimal.ZERO) > 0 && lr.compareTo(BigDecimal.ZERO) > 0) {
+                                        lineRejectionReason = "خصم فارق السعر التعاقدي وتجاوز السقف";
+                                } else if (pr.compareTo(BigDecimal.ZERO) > 0) {
+                                        lineRejectionReason = "خصم فارق السعر التعاقدي";
+                                } else if (lr.compareTo(BigDecimal.ZERO) > 0) {
+                                        lineRejectionReason = "تجاوز السقف المالي/المرات";
+                                } else {
+                                        lineRejectionReason = "خصم آلي (تجاوز سعر أو سقف)";
+                                }
+                        }
+                }
 
                 return ServiceLineDetail.builder()
                                 .lineId(line.getId())
                                 .medicalServiceId(null)
                                 .serviceCode(serviceCode)
                                 .serviceName(serviceName)
-                                .serviceCategory(serviceCategory)
+                                .serviceCategory(line.getServiceCategoryName())
                                 .serviceDate(serviceDate)
                                 .quantity(line.getQuantity())
                                 .unitPrice(line.getUnitPrice())
                                 .grossAmount(gross)
                                 .approvedAmount(approved)
                                 .rejectedAmount(rejected)
-                                .rejectionReason(null) // Can be enhanced with line-level rejection reasons
+                                .rejectionReason(lineRejectionReason) // Detailed reason from engine or manual
                                 .patientShare(BigDecimal.ZERO) // Patient share is at claim level
                                 .lineStatus(lineStatus)
                                 .lineStatusArabic(lineStatus.getArabicLabel())
