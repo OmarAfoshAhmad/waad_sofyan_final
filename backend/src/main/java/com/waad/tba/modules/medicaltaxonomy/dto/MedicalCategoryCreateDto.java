@@ -2,6 +2,7 @@ package com.waad.tba.modules.medicaltaxonomy.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

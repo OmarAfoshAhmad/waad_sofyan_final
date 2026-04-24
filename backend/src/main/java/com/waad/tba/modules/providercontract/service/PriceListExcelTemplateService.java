@@ -43,6 +43,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class PriceListExcelTemplateService {
 
+    private static final String IMPORT_RUNTIME_MARKER = "PriceListImport-v2026-04-24-01";
+
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
@@ -69,6 +71,7 @@ public class PriceListExcelTemplateService {
      * "WE-001".
      */
     private static final Pattern CODE_IN_NAME_PATTERN = Pattern.compile("[A-Z]{2,4}-[A-Z0-9-]+");
+    private static final Pattern CATEGORY_CODE_PATTERN = Pattern.compile("(CAT[0-9A-Z-]+)", Pattern.CASE_INSENSITIVE);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // TEMPLATE GENERATION
@@ -275,7 +278,8 @@ public class PriceListExcelTemplateService {
      */
     public ExcelImportResult importFromExcel(Long contractId, MultipartFile file) {
         String safeFileName = file != null ? file.getOriginalFilename().replaceAll("[\\r\\n]", "_") : "null";
-        log.info("[PriceListImport] Starting import for contract ID: {} from file: {}", contractId, safeFileName);
+        log.info("[PriceListImport][{}] Starting import for contract ID: {} from file: {}",
+                IMPORT_RUNTIME_MARKER, contractId, safeFileName);
 
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
 
@@ -591,22 +595,31 @@ public class PriceListExcelTemplateService {
     private boolean upsertPricingItem(ProviderContract contract, ProviderContractPricingItem draft) {
         Optional<ProviderContractPricingItem> existing = Optional.empty();
 
-        if (draft.getServiceName() != null) {
-            existing = pricingRepository.findByContractIdAndImportIdentityActiveTrue(
-                    contract.getId(),
-                    draft.getServiceCode(),
-                    draft.getServiceName(),
-                    draft.getCategoryName(),
-                    draft.getSubCategoryName());
+        String safeServiceCode = draft.getServiceCode() == null ? "" : draft.getServiceCode().trim();
+        String safeServiceName = draft.getServiceName() == null ? "" : draft.getServiceName().trim();
+        String safeCategoryName = draft.getCategoryName() == null ? "" : draft.getCategoryName().trim();
+        String safeSubCategoryName = draft.getSubCategoryName() == null ? "" : draft.getSubCategoryName().trim();
+
+        // Prefer stable indexed lookups first, then validate category identity in Java.
+        if (!safeServiceName.isBlank()) {
+            if (!safeServiceCode.isBlank()) {
+                existing = pricingRepository.findByContractIdAndServiceCodeActiveTrue(contract.getId(), safeServiceCode)
+                        .filter(item -> sameImportIdentity(item, safeCategoryName, safeSubCategoryName));
+            }
+            if (existing.isEmpty()) {
+                existing = pricingRepository.findByContractIdAndServiceNameActiveTrue(contract.getId(), safeServiceName)
+                        .filter(item -> sameImportIdentity(item, safeCategoryName, safeSubCategoryName));
+            }
         }
-        if (existing.isEmpty() && draft.getServiceCode() != null && draft.getServiceName() == null) {
+
+        if (existing.isEmpty() && !safeServiceCode.isBlank() && safeServiceName.isBlank()) {
             existing = pricingRepository
-                    .findByContractIdAndServiceCodeActiveTrue(contract.getId(), draft.getServiceCode());
+                    .findByContractIdAndServiceCodeActiveTrue(contract.getId(), safeServiceCode);
         }
-        if (existing.isEmpty() && draft.getServiceCode() == null && draft.getServiceName() != null
-                && draft.getCategoryName() == null && draft.getSubCategoryName() == null) {
+        if (existing.isEmpty() && safeServiceCode.isBlank() && !safeServiceName.isBlank()
+                && safeCategoryName.isBlank() && safeSubCategoryName.isBlank()) {
             existing = pricingRepository
-                    .findByContractIdAndServiceNameActiveTrue(contract.getId(), draft.getServiceName());
+                    .findByContractIdAndServiceNameActiveTrue(contract.getId(), safeServiceName);
         }
 
         if (existing.isPresent()) {
@@ -625,6 +638,13 @@ public class PriceListExcelTemplateService {
 
         pricingRepository.save(draft);
         return false;
+    }
+
+    private boolean sameImportIdentity(ProviderContractPricingItem item, String categoryName, String subCategoryName) {
+        String itemCategory = item.getCategoryName() == null ? "" : item.getCategoryName().trim();
+        String itemSubCategory = item.getSubCategoryName() == null ? "" : item.getSubCategoryName().trim();
+
+        return itemCategory.equalsIgnoreCase(categoryName) && itemSubCategory.equalsIgnoreCase(subCategoryName);
     }
 
     /**
@@ -723,11 +743,58 @@ public class PriceListExcelTemplateService {
         if (trimmed == null || trimmed.isBlank()) {
             return null;
         }
-        return medicalCategoryRepository.findActiveByCode(trimmed)
+
+        java.util.regex.Matcher codeMatcher = CATEGORY_CODE_PATTERN.matcher(trimmed.toUpperCase());
+        if (codeMatcher.find()) {
+            String extractedCode = codeMatcher.group(1).toUpperCase();
+            Optional<MedicalCategory> byExtractedCode = medicalCategoryRepository.findActiveByCode(extractedCode);
+            if (byExtractedCode.isPresent()) {
+                return byExtractedCode.get();
+            }
+        }
+
+        Optional<MedicalCategory> exactMatch = medicalCategoryRepository.findActiveByCode(trimmed)
                 .or(() -> medicalCategoryRepository.findFirstByName(trimmed).filter(MedicalCategory::isActive))
                 .or(() -> medicalCategoryRepository.findFirstByNameAr(trimmed).filter(MedicalCategory::isActive))
-                .or(() -> medicalCategoryRepository.findFirstByNameEn(trimmed).filter(MedicalCategory::isActive))
+                .or(() -> medicalCategoryRepository.findFirstByNameEn(trimmed).filter(MedicalCategory::isActive));
+
+        if (exactMatch.isPresent()) {
+            return exactMatch.get();
+        }
+
+        String normalizedInput = normalizeCategoryToken(trimmed);
+        return medicalCategoryRepository.findByActiveTrue().stream()
+                .filter(cat -> {
+                    String code = normalizeCategoryToken(cat.getCode());
+                    String name = normalizeCategoryToken(cat.getName());
+                    String nameAr = normalizeCategoryToken(cat.getNameAr());
+                    String nameEn = normalizeCategoryToken(cat.getNameEn());
+
+                    return (!code.isBlank() && (normalizedInput.contains(code) || code.contains(normalizedInput))) ||
+                            (!name.isBlank() && (normalizedInput.contains(name) || name.contains(normalizedInput))) ||
+                            (!nameAr.isBlank()
+                                    && (normalizedInput.contains(nameAr) || nameAr.contains(normalizedInput)))
+                            ||
+                            (!nameEn.isBlank()
+                                    && (normalizedInput.contains(nameEn) || nameEn.contains(normalizedInput)));
+                })
+                .findFirst()
                 .orElse(null);
+    }
+
+    private String normalizeCategoryToken(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .toLowerCase()
+                .replace('(', ' ')
+                .replace(')', ' ')
+                .replace('-', ' ')
+                .replace('_', ' ')
+                .replace('،', ' ')
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private String displayCategoryName(MedicalCategory category) {

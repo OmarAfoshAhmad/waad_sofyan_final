@@ -64,6 +64,6 @@ echo.
 echo [INFO] Starting Spring Boot Application (dev profile)...
 echo ====================================================
 set DB_PASSWORD=12345
-call mvn spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--server.port=%PORT%"
+call mvn -DskipTests clean spring-boot:run "-Dspring-boot.run.profiles=dev" "-Dspring-boot.run.arguments=--server.port=%PORT%"
 
 endlocal

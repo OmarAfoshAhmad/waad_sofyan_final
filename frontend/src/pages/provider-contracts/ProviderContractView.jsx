@@ -378,24 +378,50 @@ const ProviderContractView = () => {
       try {
         setUploadingPricingFile(true);
         const result = await uploadContractPricingExcel(id, file);
+        const created = Number(result?.summary?.created || 0);
+        const updated = Number(result?.summary?.updated || 0);
+        const failed = Number(result?.summary?.failed || 0);
+        const successCount = created + updated;
 
-        if (result.success) {
-          const successCount = (result.summary?.created || 0) + (result.summary?.updated || 0);
-          enqueueSnackbar(result.messageAr || result.message || `تم استيراد ${successCount} بند تسعير بنجاح`, {
+        if (successCount > 0) {
+          enqueueSnackbar(result?.messageAr || result?.message || `تم استيراد ${successCount} بند تسعير بنجاح`, {
             variant: 'success'
           });
 
-          if (result.summary?.failed > 0) {
-            enqueueSnackbar(`تحذير: فشل استيراد ${result.summary.failed} بند`, { variant: 'warning' });
+          if (failed > 0) {
+            enqueueSnackbar(`تحذير: فشل استيراد ${failed} بند`, { variant: 'warning' });
           }
 
           // Refresh pricing items
           queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
           setExcelImportDialogOpen(false);
           setSelectedPricingFile(null);
+          return;
         }
+
+        // No successful rows imported: show explicit feedback instead of silent fail.
+        if (failed > 0) {
+          const firstError = Array.isArray(result?.errors) && result.errors.length > 0 ? result.errors[0] : null;
+          const firstErrorMessage = firstError
+            ? `أول خطأ (صف ${firstError.rowNumber || '-'}): ${firstError.messageAr || firstError.messageEn || 'خطأ غير معروف'}`
+            : null;
+
+          enqueueSnackbar(result?.messageAr || result?.message || 'لم يتم استيراد أي بند. تحقق من تنسيق الملف.', {
+            variant: 'error'
+          });
+
+          if (firstErrorMessage) {
+            enqueueSnackbar(firstErrorMessage, { variant: 'warning' });
+          }
+          return;
+        }
+
+        enqueueSnackbar(result?.messageAr || result?.message || 'لم يتم إجراء أي تغيير على الأسعار.', {
+          variant: 'warning'
+        });
       } catch (error) {
-        enqueueSnackbar(error?.message || 'فشل رفع الملف', { variant: 'error' });
+        const apiMessage = error?.response?.data?.message || error?.response?.data?.messageAr;
+        enqueueSnackbar(apiMessage || error?.message || 'فشل رفع الملف', { variant: 'error' });
       } finally {
         setUploadingPricingFile(false);
       }

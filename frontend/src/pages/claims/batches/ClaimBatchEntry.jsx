@@ -156,8 +156,8 @@ export default function ClaimBatchEntry() {
     // Column Visibility State (Clutter Reduction)
     const [visibleColumns, setVisibleColumns] = useState({
         coverage: true,
-        benefitLimit: false, // Default hidden
-        remainingLimit: false, // Default hidden
+        benefitLimit: true,
+        remainingLimit: true,
         refused: true,
         companyShare: true,
         patientShare: true
