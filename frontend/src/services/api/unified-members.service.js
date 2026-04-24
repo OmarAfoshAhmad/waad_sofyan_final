@@ -132,6 +132,24 @@ export const searchMembers = async (criteria = {}) => {
 };
 
 /**
+ * Deterministic beneficiary search (explicit mode, no guessing).
+ *
+ * Endpoint: GET /api/beneficiaries?type=BY_NAME&value=...
+ *
+ * @param {Object} params
+ * @param {'BY_ID'|'BY_NAME'|'BY_BARCODE'} params.type
+ * @param {string} params.value
+ * @param {number} [params.employerId]
+ * @param {string} [params.status='ACTIVE']
+ * @param {number} [params.size=20]
+ * @returns {Promise<Array>} List<MemberViewDto>
+ */
+export const searchBeneficiaries = async (params = {}) => {
+  const response = await api.get('/beneficiaries', { params });
+  return response?.data?.data || [];
+};
+
+/**
  * Check family eligibility by Principal's Barcode
  *
  * @param {string} barcode - Principal's barcode (WAHA-YYYY-NNNNNN)
@@ -523,6 +541,7 @@ export default {
   getMember,
   getAllMembers,
   searchMembers,
+  searchBeneficiaries,
   checkEligibility,
   updateMember,
   deleteMember,

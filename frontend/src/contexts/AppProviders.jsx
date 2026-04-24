@@ -12,6 +12,7 @@ import ScrollTop from 'components/ScrollTop';
 import Notistack from 'components/third-party/Notistack';
 import { AppearanceInjector } from 'components/AppearanceInjector';
 import { SystemErrorBoundary } from 'components/ErrorBoundary';
+import GlobalApiErrorToaster from 'components/GlobalApiErrorToaster';
 
 // Global State Contexts
 import { AuthProvider } from 'contexts/AuthContext';
@@ -42,6 +43,7 @@ export const AppProviders = ({ children }) => {
                         <ThemeModeProvider>
                           <GlobalImportProgressProvider>
                             <Notistack>
+                              <GlobalApiErrorToaster />
                               {children}
                             </Notistack>
                           </GlobalImportProgressProvider>

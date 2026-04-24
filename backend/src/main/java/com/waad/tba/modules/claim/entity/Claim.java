@@ -198,6 +198,22 @@ public class Claim {
     @Builder.Default
     private Boolean fullCoverage = false;
 
+    /**
+     * Indicates claim financial/coverage view is stale and requires recalculation.
+     * Used by strict state-machine guards before approval.
+     */
+    @Column(name = "pending_recalculation", nullable = false)
+    @Builder.Default
+    private Boolean pendingRecalculation = false;
+
+    /**
+     * Monotonic version for coverage context evolution on claim edits.
+     * Incremented whenever lines/category context materially change.
+     */
+    @Column(name = "coverage_version", nullable = false)
+    @Builder.Default
+    private Integer coverageVersion = 1;
+
     // ========== Financial Snapshot Fields (Phase MVP) ==========
 
     /**
@@ -637,6 +653,24 @@ public class Claim {
     public BigDecimal getNetPayableAmount() {
         return netProviderAmount != null ? netProviderAmount
                 : (approvedAmount != null ? approvedAmount : BigDecimal.ZERO);
+    }
+
+    /**
+     * Mark claim coverage snapshot as stale after any editable data mutation.
+     */
+    public void markCoverageDirty() {
+        this.pendingRecalculation = true;
+        this.coverageVersion = (this.coverageVersion == null ? 1 : this.coverageVersion + 1);
+    }
+
+    /**
+     * Mark claim coverage snapshot as synchronized after successful recalculation.
+     */
+    public void markCoverageSynced() {
+        this.pendingRecalculation = false;
+        if (this.coverageVersion == null || this.coverageVersion < 1) {
+            this.coverageVersion = 1;
+        }
     }
 
     /**

@@ -61,6 +61,7 @@ public class ClaimApiMapper {
                                 .rejectionReason(request.getRejectionReason())
                                 .manualCategoryEnabled(request.getManualCategoryEnabled())
                                 .primaryCategoryCode(request.getPrimaryCategoryCode())
+                                .fullCoverage(request.getFullCoverage())
                                 .build();
         }
 
@@ -110,6 +111,7 @@ public class ClaimApiMapper {
                                 .rejectionReason(request.getRejectionReason())
                                 .primaryCategoryCode(request.getPrimaryCategoryCode())
                                 .manualCategoryEnabled(request.getManualCategoryEnabled())
+                                .fullCoverage(request.getFullCoverage())
                                 .preAuthorizationId(request.getPreAuthorizationId())
                                 .status(request.getStatus() != null
                                                 ? com.waad.tba.modules.claim.entity.ClaimStatus

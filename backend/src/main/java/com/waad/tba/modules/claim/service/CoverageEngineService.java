@@ -1,5 +1,10 @@
 package com.waad.tba.modules.claim.service;
 
+import com.waad.tba.modules.audit.enums.AuditAction;
+import com.waad.tba.modules.audit.enums.AuditSource;
+import com.waad.tba.modules.audit.enums.EntityType;
+import com.waad.tba.modules.audit.service.AuditLogWriteRequest;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
@@ -38,6 +43,7 @@ public class CoverageEngineService {
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
     private final BenefitPolicyRuleService benefitPolicyRuleService;
+    private final MedicalAuditLogService medicalAuditLogService;
 
     /**
      * حساب bulk لجميع الأسطر بالترتيب مع الحفاظ على سياق التراكم داخل نفس الطلب.
@@ -54,6 +60,8 @@ public class CoverageEngineService {
             CoverageResult result = calculateSingleInternal(request, line, batchUsageContext);
             results.add(result);
         }
+
+        recordRecalculationAudit(request, results);
 
         return results;
     }
@@ -341,6 +349,54 @@ public class CoverageEngineService {
         if (safeRefused.compareTo(safeRequested) > 0) {
             throw new IllegalArgumentException(
                     String.format("Total refused exceeds claim amount for line %s", lineId));
+        }
+    }
+
+    private void recordRecalculationAudit(BulkCoverageEngineRequest request, List<CoverageResult> results) {
+        try {
+            BigDecimal totalRequested = results.stream()
+                    .map(CoverageResult::getRequestedTotal)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal totalApproved = results.stream()
+                    .map(CoverageResult::getApprovedTotal)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal totalRefused = results.stream()
+                    .map(CoverageResult::getFinalRefusedAmount)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            Map<String, Object> before = new HashMap<>();
+            before.put("policyId", request.getPolicyId());
+            before.put("memberId", request.getMemberId());
+            before.put("serviceYear", request.getServiceYear());
+            before.put("excludeClaimId", request.getExcludeClaimId());
+            before.put("lineCount", request.getLines() != null ? request.getLines().size() : 0);
+
+            Map<String, Object> after = new HashMap<>();
+            after.put("resultCount", results.size());
+            after.put("totalRequested", scale2(totalRequested));
+            after.put("totalApproved", scale2(totalApproved));
+            after.put("totalRefused", scale2(totalRefused));
+
+            String entityId = request.getExcludeClaimId() != null
+                    ? String.valueOf(request.getExcludeClaimId())
+                    : String.format("member:%s:policy:%s", request.getMemberId(), request.getPolicyId());
+
+            medicalAuditLogService.record(AuditLogWriteRequest.builder()
+                    .entityType(EntityType.CLAIM)
+                    .entityId(entityId)
+                    .action(AuditAction.RECALCULATION)
+                    .reason("Coverage engine bulk recalculation")
+                    .beforeState(before)
+                    .afterState(after)
+                    .source(AuditSource.API)
+                    .build());
+        } catch (Exception ex) {
+            log.warn("Coverage recalculation audit logging failed: {}", ex.getMessage());
         }
     }
 

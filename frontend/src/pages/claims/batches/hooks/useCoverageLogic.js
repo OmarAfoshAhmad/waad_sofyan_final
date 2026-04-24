@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import claimsService from 'services/api/claims.service';
 
 export function useCoverageLogic({ 
@@ -14,6 +14,36 @@ export function useCoverageLogic({
     fullCoverage,
     onCoverageError
 }) {
+    const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
+    const singleRequestIdRef = useRef(0);
+    const bulkRequestIdRef = useRef(0);
+    const singleAbortRef = useRef(null);
+    const bulkAbortRef = useRef(null);
+    const diagnosticsRef = useRef({
+        singleStarted: 0,
+        singleAborted: 0,
+        singleStaleIgnored: 0,
+        bulkStarted: 0,
+        bulkAborted: 0,
+        bulkStaleIgnored: 0
+    });
+
+    const debugLog = useCallback((event, extra = {}) => {
+        if (!isDev) return;
+        // eslint-disable-next-line no-console
+        console.debug('[coverage-race-guard]', event, {
+            ...diagnosticsRef.current,
+            ...extra
+        });
+    }, [isDev]);
+
+    useEffect(() => {
+        return () => {
+            singleAbortRef.current?.abort();
+            bulkAbortRef.current?.abort();
+        };
+    }, []);
+
     const toMoney = (value) => {
         const num = Number(value);
         return Number.isFinite(num) ? Number(num.toFixed(2)) : 0;
@@ -112,12 +142,33 @@ export function useCoverageLogic({
                 }]
             };
 
-            const bulkResults = await claimsService.calculateCoverageBulk(payload);
+            const requestId = ++singleRequestIdRef.current;
+            diagnosticsRef.current.singleStarted += 1;
+            singleAbortRef.current?.abort();
+            const controller = new AbortController();
+            singleAbortRef.current = controller;
+            debugLog('single:start', { requestId });
+
+            const bulkResults = await claimsService.calculateCoverageBulk(payload, {
+                signal: controller.signal
+            });
+
+            if (requestId !== singleRequestIdRef.current) {
+                diagnosticsRef.current.singleStaleIgnored += 1;
+                debugLog('single:stale-ignored', { requestId, latest: singleRequestIdRef.current });
+                return { __stale: true };
+            }
+
             if (bulkResults && bulkResults.length > 0) {
                 return normalizeEngineResult(bulkResults[0], fallbackPercent);
             }
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         } catch (err) {
+            if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
+                diagnosticsRef.current.singleAborted += 1;
+                debugLog('single:aborted', { latest: singleRequestIdRef.current });
+                return { __stale: true };
+            }
             console.error('[fetchCoverage] error:', err);
             onCoverageError?.('تعذر حساب التغطية للخدمة المختارة. سيتم استخدام التغطية الافتراضية مؤقتاً.');
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
@@ -147,7 +198,22 @@ export function useCoverageLogic({
         };
 
         try {
-            const bulkResults = await claimsService.calculateCoverageBulk(payload);
+            const requestId = ++bulkRequestIdRef.current;
+            diagnosticsRef.current.bulkStarted += 1;
+            bulkAbortRef.current?.abort();
+            const controller = new AbortController();
+            bulkAbortRef.current = controller;
+            debugLog('bulk:start', { requestId, lines: linesToCheck.length });
+
+            const bulkResults = await claimsService.calculateCoverageBulk(payload, {
+                signal: controller.signal
+            });
+
+            if (requestId !== bulkRequestIdRef.current) {
+                diagnosticsRef.current.bulkStaleIgnored += 1;
+                debugLog('bulk:stale-ignored', { requestId, latest: bulkRequestIdRef.current });
+                return null;
+            }
             
             const updated = currentLines.map((line, idx) => {
                 if (!line.service) return line;
@@ -166,6 +232,11 @@ export function useCoverageLogic({
             
             return updated.map((line, i) => recompute(line, i, updated));
         } catch (err) {
+            if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
+                diagnosticsRef.current.bulkAborted += 1;
+                debugLog('bulk:aborted', { latest: bulkRequestIdRef.current });
+                return null;
+            }
             console.error('[refetchAllLinesCoverage] bulk error:', err);
             onCoverageError?.('فشل تحديث تغطية جميع البنود. يرجى المحاولة مرة أخرى.');
             return currentLines.map((l, i) => recompute(l, i, currentLines));

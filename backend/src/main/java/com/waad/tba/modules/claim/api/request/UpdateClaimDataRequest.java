@@ -57,6 +57,7 @@ public class UpdateClaimDataRequest {
      */
     private String primaryCategoryCode;
     private Boolean manualCategoryEnabled;
+    private Boolean fullCoverage;
 
     @Data
     @Builder

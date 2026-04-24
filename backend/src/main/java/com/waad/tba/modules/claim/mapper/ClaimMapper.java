@@ -270,13 +270,14 @@ public class ClaimMapper {
             // by a malicious user to bypass annual/times limits.
             //
             // BACKEND LOGIC:
-            //   netLineAmount  = contractPrice × quantity − priceExcessRefusal
-            //   limitRefused   = max(0, netLineAmount − remainingAmountFromPolicy)
+            // netLineAmount = contractPrice × quantity − priceExcessRefusal
+            // limitRefused = max(0, netLineAmount − remainingAmountFromPolicy)
             //
             // remainingAmount comes from BenefitPolicyCoverageService.resolveCoverage()
             // (already captured in coverageResult / lineDto.getRemainingAmount()).
             //
-            // We still take the max with the manually-entered reviewer refusal (manualRefused)
+            // We still take the max with the manually-entered reviewer refusal
+            // (manualRefused)
             // so that a reviewer's explicit override is never silently discarded.
             BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
                     ? lineDto.getManualRefusedAmount()
@@ -651,6 +652,7 @@ public class ClaimMapper {
         claim.setApprovedAmount(totalApprovedAmount);
         claim.setPatientCoPay(totalPatientShare);
         claim.setNetProviderAmount(totalApprovedAmount); // Net = Approved (amount payable by insurance)
+        claim.markCoverageDirty();
     }
 
     public void updateEntityFromDto(Claim claim, ClaimUpdateDto dto, PreAuthorization preAuth) {

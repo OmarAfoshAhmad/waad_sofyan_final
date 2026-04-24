@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { logError, getUserFriendlyMessage, ErrorType } from 'services/errorLogger';
 import { clearToken } from 'utils/token-storage';
+import { normalizeApiError } from 'utils/api-error';
 
 // ==============================|| AXIOS CLIENT - CLEAN DOCKER VERSION ||============================== //
 
@@ -131,6 +132,13 @@ axiosServices.interceptors.response.use(
       error.userMessage = getUserFriendlyMessage(error);
       error.errorType = classification.type;
     }
+
+    const normalized = normalizeApiError(error);
+    window.dispatchEvent(
+      new CustomEvent('api:error', {
+        detail: normalized
+      })
+    );
 
     return Promise.reject(error);
   }

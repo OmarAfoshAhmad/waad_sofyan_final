@@ -649,8 +649,16 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         // Log the exception with full stack trace — server-side only
         log.error("Unexpected error occurred - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
-        // Return generic message to client — never expose internal details
+        // Return generic user message and safe technical details — never expose stack
+        // trace
+        Map<String, Object> details = new HashMap<>();
+        details.put("reference", trackingId);
+        details.put("exception", ex.getClass().getSimpleName());
+        if (ex.getMessage() != null && !ex.getMessage().isBlank()) {
+            details.put("reason", ex.getMessage());
+        }
+
         return build(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR,
-                "An unexpected error occurred. Reference: " + trackingId, request, null);
+                "An unexpected error occurred.", request, details);
     }
 }

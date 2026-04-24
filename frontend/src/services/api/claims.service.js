@@ -88,10 +88,10 @@ export const claimsService = {
    * @param {Object} payload - BulkCoverageEngineRequest
    * @returns {Promise<Array>} Calculated line results
    */
-  calculateCoverageBulk: async (payload) => {
+  calculateCoverageBulk: async (payload, config = {}) => {
     try {
       if (!payload) throw new Error('بيانات الحساب مطلوبة');
-      const response = await axiosClient.post(`${BASE_URL}/calculate-bulk`, payload);
+      const response = await axiosClient.post(`${BASE_URL}/calculate-bulk`, payload, config);
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);
@@ -103,10 +103,10 @@ export const claimsService = {
    * @param {Object} payload - BulkCoverageEngineRequest with one line
    * @returns {Promise<Object>} Calculated line result
    */
-  calculateCoverageSingle: async (payload) => {
+  calculateCoverageSingle: async (payload, config = {}) => {
     try {
       if (!payload) throw new Error('بيانات الحساب مطلوبة');
-      const response = await axiosClient.post(`${BASE_URL}/calculate`, payload);
+      const response = await axiosClient.post(`${BASE_URL}/calculate`, payload, config);
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);

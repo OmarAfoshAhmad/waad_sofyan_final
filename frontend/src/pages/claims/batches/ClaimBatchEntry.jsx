@@ -47,6 +47,7 @@ import providerContractsService from 'services/api/provider-contracts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
 import systemSettingsService from 'services/api/systemSettings.service';
+import { normalizeApiError, runWithRetry } from 'utils/api-error';
 
 import { useCalculationLogic } from './hooks/useCalculationLogic';
 import { useCoverageLogic } from './hooks/useCoverageLogic';
@@ -61,6 +62,12 @@ const MONTHS_AR = [
     'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
     'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
 ];
+
+const BENEFICIARY_SEARCH_TYPES = {
+    BY_ID: 'BY_ID',
+    BY_NAME: 'BY_NAME',
+    BY_BARCODE: 'BY_BARCODE'
+};
 
 const newLine = () => ({
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
@@ -116,6 +123,7 @@ export default function ClaimBatchEntry() {
 
     // ── حالة النموذج ─────────────────────────────────────────────────────────
     const [member, setMember] = useState(null);
+    const [memberSearchType, setMemberSearchType] = useState(BENEFICIARY_SEARCH_TYPES.BY_NAME);
     const [memberInput, setMemberInput] = useState('');
     const [debouncedMemberInput, setDebouncedMemberInput] = useState('');
     useEffect(() => {
@@ -268,26 +276,67 @@ export default function ClaimBatchEntry() {
         queryFn: () => providerContractsService.getActiveContractByProvider(providerId),
         enabled: !!providerId
     });
-    const memberSearchParams = useMemo(() => {
-        const q = debouncedMemberInput.trim();
-        // Smart detection: Arabic → fullName, digits → cardNumber, barcode pattern → barcode
-        if (/^[\u0600-\u06FF]/.test(q)) return { fullName: q };
-        if (/^[A-Z]{2,4}-\d{4}-\d+/i.test(q)) return { barcode: q };
-        if (/^\d+$/.test(q)) return { cardNumber: q };
-        return { fullName: q };
-    }, [debouncedMemberInput]);
+    const normalizedMemberSearchValue = useMemo(() => debouncedMemberInput.trim(), [debouncedMemberInput]);
 
-    const { data: memberResults, isFetching: searchingMember } = useQuery({
-        queryKey: ['member-search', debouncedMemberInput, employerId],
-        queryFn: () => unifiedMembersService.searchMembers({
-            ...memberSearchParams,
+    const memberSearchValidationError = useMemo(() => {
+        if (!normalizedMemberSearchValue) return '';
+
+        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_ID && !/^\d+$/.test(normalizedMemberSearchValue)) {
+            return 'البحث بالمعرف يتطلب أرقامًا فقط';
+        }
+
+        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_BARCODE && !/^[A-Za-z0-9-]+$/.test(normalizedMemberSearchValue)) {
+            return 'الباركود يقبل أحرف/أرقام وشرطة (-) فقط';
+        }
+
+        return '';
+    }, [memberSearchType, normalizedMemberSearchValue]);
+
+    const canSearchMember = useMemo(() => {
+        if (!normalizedMemberSearchValue || memberSearchValidationError) {
+            return false;
+        }
+
+        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_NAME) {
+            return normalizedMemberSearchValue.length >= 2;
+        }
+
+        return true;
+    }, [memberSearchType, normalizedMemberSearchValue, memberSearchValidationError]);
+
+    const memberSearchPlaceholder = useMemo(() => {
+        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_ID) return 'أدخل معرف المستفيد (أرقام فقط)';
+        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_BARCODE) return 'أدخل الباركود (A-Z, 0-9, -)';
+        return 'أدخل الاسم (يدعم الأسماء التي تبدأ بأرقام)';
+    }, [memberSearchType]);
+
+    const {
+        data: memberResults,
+        isFetching: searchingMember,
+        isError: memberSearchError,
+        error: memberSearchQueryError,
+        refetch: retryMemberSearch
+    } = useQuery({
+        queryKey: ['member-search', memberSearchType, normalizedMemberSearchValue, employerId],
+        queryFn: () => runWithRetry(() => unifiedMembersService.searchBeneficiaries({
+            type: memberSearchType,
+            value: normalizedMemberSearchValue,
             employerId,
             status: 'ACTIVE',
             size: 20
-        }),
-        enabled: debouncedMemberInput.length >= 2,
+        }), { maxRetries: 1 }),
+        enabled: canSearchMember,
         staleTime: 10000
     });
+
+    useEffect(() => {
+        if (!memberSearchError || !memberSearchQueryError) {
+            return;
+        }
+
+        const normalized = normalizeApiError(memberSearchQueryError);
+        enqueueSnackbar(normalized.message || 'فشل تحميل نتائج البحث', { variant: 'error' });
+    }, [memberSearchError, memberSearchQueryError, enqueueSnackbar]);
     const { data: summaryData } = useQuery({
         queryKey: ['batch-stats', employerId, providerId, month, year],
         queryFn: () => {
@@ -460,7 +509,7 @@ export default function ClaimBatchEntry() {
     }, [editingClaim, defaultDate, contractedRaw]);
 
     const memberOptions = useMemo(() => {
-        const c = memberResults?.data?.content ?? memberResults?.content;
+        const c = Array.isArray(memberResults) ? memberResults : (memberResults?.data?.content ?? memberResults?.content);
         const list = Array.isArray(c) ? c : [];
         // Always include the currently selected member (for edit mode where no search is active)
         if (member?.id && !list.find(m => m.id === member.id)) {
@@ -531,6 +580,9 @@ export default function ClaimBatchEntry() {
         let cov = { coveragePercent: policyInfo?.defaultCoveragePercent ?? 100, requiresPreApproval: false, notCovered: false };
         if (!isFreeText) {
             cov = await fetchCoverage(svc, primaryCategoryCode);
+            if (cov?.__stale) {
+                return;
+            }
         }
 
         const price = svc?.contractPrice ?? 0;
@@ -1076,6 +1128,12 @@ export default function ClaimBatchEntry() {
                                 setMember={setMember}
                                 memberOptions={memberOptions}
                                 searchingMember={searchingMember}
+                                memberSearchType={memberSearchType}
+                                setMemberSearchType={setMemberSearchType}
+                                memberSearchValidationError={memberSearchValidationError}
+                                memberSearchPlaceholder={memberSearchPlaceholder}
+                                memberSearchError={memberSearchError}
+                                onRetryMemberSearch={retryMemberSearch}
                                 setMemberInput={setMemberInput}
                                 memberRef={memberRef}
                                 diagnosis={diagnosis}

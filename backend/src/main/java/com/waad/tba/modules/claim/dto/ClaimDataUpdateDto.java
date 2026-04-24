@@ -57,6 +57,7 @@ public class ClaimDataUpdateDto {
     private String rejectionReason;
     private String primaryCategoryCode;
     private Boolean manualCategoryEnabled;
+    private Boolean fullCoverage;
 
     /**
      * New status — only honoured when current status is REJECTED (re-edit path).

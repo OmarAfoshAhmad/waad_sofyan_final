@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Chip
+    Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Chip, MenuItem, Alert, Button
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
@@ -15,6 +15,12 @@ export const ClaimHeaderFields = ({
     setMember,
     memberOptions,
     searchingMember,
+    memberSearchType,
+    setMemberSearchType,
+    memberSearchValidationError,
+    memberSearchPlaceholder,
+    memberSearchError,
+    onRetryMemberSearch,
     setMemberInput,
     memberRef,
     diagnosis,
@@ -50,6 +56,19 @@ export const ClaimHeaderFields = ({
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
                             {t('claimEntry.patient')} <Typography component="span" color="error.main">*</Typography>
                         </Typography>
+                        <TextField
+                            select
+                            fullWidth
+                            size="small"
+                            variant="standard"
+                            value={memberSearchType}
+                            onChange={(e) => setMemberSearchType(e.target.value)}
+                            sx={{ ...inlineSx, mb: 1 }}
+                        >
+                            <MenuItem value="BY_NAME">بحث بالاسم</MenuItem>
+                            <MenuItem value="BY_ID">بحث بالمعرف</MenuItem>
+                            <MenuItem value="BY_BARCODE">بحث بالباركود</MenuItem>
+                        </TextField>
                         <Autocomplete 
                             size="small" 
                             fullWidth 
@@ -69,10 +88,25 @@ export const ClaimHeaderFields = ({
                             isOptionEqualToValue={(o, v) => o.id === v?.id}
                             renderInput={params => (
                                 <TextField {...params} inputRef={memberRef} variant="standard" autoFocus
-                                    placeholder="ابحث بالاسم، رقم البطاقة..." 
+                                    placeholder={memberSearchPlaceholder}
+                                    error={!!memberSearchValidationError}
+                                    helperText={memberSearchValidationError || ' '}
                                     sx={inlineSx} />
                             )}
                         />
+                        {memberSearchError && (
+                            <Alert
+                                severity="error"
+                                sx={{ mt: 1, py: 0.5, '& .MuiAlert-message': { width: '100%' } }}
+                                action={
+                                    <Button color="inherit" size="small" onClick={onRetryMemberSearch}>
+                                        إعادة المحاولة
+                                    </Button>
+                                }
+                            >
+                                فشل تحميل نتائج البحث. حاول مرة أخرى.
+                            </Alert>
+                        )}
                     </Box>
                     <Box>
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>

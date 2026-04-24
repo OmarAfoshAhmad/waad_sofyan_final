@@ -14,7 +14,8 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * Filter to populate SLF4J MDC (Mapped Diagnostic Context) with request-specific information.
+ * Filter to populate SLF4J MDC (Mapped Diagnostic Context) with
+ * request-specific information.
  * This enables better log correlation and traceability in production.
  * 
  * Fields added to MDC:
@@ -30,6 +31,7 @@ import java.util.UUID;
 public class LogMdcFilter extends OncePerRequestFilter {
 
     private static final String TRACE_ID = "traceId";
+    private static final String CORRELATION_ID = "correlationId";
     private static final String USERNAME = "username";
     private static final String METHOD = "method";
     private static final String URI = "uri";
@@ -38,39 +40,59 @@ public class LogMdcFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Generate or extract Trace ID
+        // 1. Generate or extract Correlation/Trace IDs
+        String correlationId = request.getHeader("X-Correlation-ID");
+        if (correlationId != null) {
+            correlationId = correlationId.replaceAll("[\r\n]", "");
+        }
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = request.getHeader("X-Trace-ID");
+            if (correlationId != null) {
+                correlationId = correlationId.replaceAll("[\r\n]", "");
+            }
+        }
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+
         String traceId = request.getHeader("X-Trace-ID");
         if (traceId != null) {
             // Sanitize to prevent CRLF injection
             traceId = traceId.replaceAll("[\r\n]", "");
         }
         if (traceId == null || traceId.isBlank()) {
-            traceId = UUID.randomUUID().toString().substring(0, 8); // Short ID for readability
+            traceId = correlationId.substring(0, Math.min(8, correlationId.length()));
         }
 
         // 2. Clear and populate MDC
         MDC.put(TRACE_ID, traceId);
+        MDC.put(CORRELATION_ID, correlationId);
         MDC.put(METHOD, request.getMethod());
         MDC.put(URI, request.getRequestURI());
 
-        // Add traceId to response header for client-side debugging
+        // Add tracing headers to response for client-side debugging.
         response.setHeader("X-Trace-ID", traceId);
+        response.setHeader("X-Correlation-ID", correlationId);
 
         try {
             // Proceed through the chain
-            // Note: Username will be populated AFTER the authentication filters in the chain.
-            // However, we can also try to peek at the security context if it was already populated
-            // (e.g., by a previous filter in the chain if we re-enter or if configured strictly).
-            
+            // Note: Username will be populated AFTER the authentication filters in the
+            // chain.
+            // However, we can also try to peek at the security context if it was already
+            // populated
+            // (e.g., by a previous filter in the chain if we re-enter or if configured
+            // strictly).
+
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.getName() != null) {
                 MDC.put(USERNAME, auth.getName());
             }
 
             filterChain.doFilter(request, response);
-            
+
         } finally {
-            // ALWAYS clear MDC to prevent memory leaks and log pollution between threads in the pool
+            // ALWAYS clear MDC to prevent memory leaks and log pollution between threads in
+            // the pool
             MDC.clear();
         }
     }

@@ -4,8 +4,14 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.service.BusinessDaysCalculatorService;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.audit.enums.AuditAction;
+import com.waad.tba.modules.audit.enums.AuditSource;
+import com.waad.tba.modules.audit.enums.EntityType;
+import com.waad.tba.modules.audit.service.AuditLogWriteRequest;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import com.waad.tba.modules.claim.dto.*;
 import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
@@ -34,7 +40,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service dedicated to the review, approval, and settlement of claims.
@@ -56,6 +64,7 @@ public class ClaimReviewService {
     private final ClaimStateMachine claimStateMachine;
     private final BusinessDaysCalculatorService businessDaysCalculator;
     private final ClaimAuditService claimAuditService;
+    private final MedicalAuditLogService medicalAuditLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProviderAccountService providerAccountService;
 
@@ -84,6 +93,8 @@ public class ClaimReviewService {
         }
 
         ClaimStatus previousStatus = claim.getStatus();
+        BigDecimal previousApprovedAmount = claim.getApprovedAmount();
+        BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
 
         // Validate status transition
         if (dto.getStatus() != previousStatus) {
@@ -108,7 +119,12 @@ public class ClaimReviewService {
             }
 
             // Perform status transition
-            claimStateMachine.transition(claim, dto.getStatus(), currentUser);
+            claimStateMachine.transition(
+                    claim,
+                    dto.getStatus(),
+                    currentUser,
+                    buildTransitionContext(claim, dto.getStatus(), dto.getApprovedAmount(), dto.getReviewerComment(),
+                            false, null));
         }
 
         // Save and return
@@ -124,6 +140,15 @@ public class ClaimReviewService {
         } else {
             claimAuditService.recordStatusChange(updatedClaim, previousStatus, currentUser, dto.getReviewerComment());
         }
+
+        recordMedicalAudit(
+                updatedClaim,
+                mapAction(dto.getStatus()),
+                dto.getReviewerComment(),
+                snapshot(previousStatus, previousApprovedAmount, previousNetProviderAmount),
+                snapshot(updatedClaim.getStatus(), updatedClaim.getApprovedAmount(),
+                        updatedClaim.getNetProviderAmount()),
+                AuditSource.USER);
 
         log.info("✅ Claim reviewed: id={}, status={}", id, updatedClaim.getStatus());
 
@@ -141,13 +166,20 @@ public class ClaimReviewService {
 
         User currentUser = authorizationService.getCurrentUser();
         ClaimStatus previousStatus = claim.getStatus();
+        BigDecimal previousApprovedAmount = claim.getApprovedAmount();
+        BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
 
         if (claim.getStatus() != ClaimStatus.SUBMITTED) {
             throw new BusinessRuleException(
                     String.format("لا يمكن بدء المراجعة. الحالة الحالية: %s، المطلوب: SUBMITTED", claim.getStatus()));
         }
 
-        claimStateMachine.transition(claim, ClaimStatus.UNDER_REVIEW, currentUser);
+        claimStateMachine.transition(
+                claim,
+                ClaimStatus.UNDER_REVIEW,
+                currentUser,
+                buildTransitionContext(claim, ClaimStatus.UNDER_REVIEW, null, "تم استلام المطالبة للمراجعة", false,
+                        null));
 
         if (claim.getVisit() != null) {
             claim.getVisit().setStatus(com.waad.tba.modules.visit.entity.VisitStatus.IN_PROGRESS);
@@ -155,6 +187,13 @@ public class ClaimReviewService {
 
         Claim savedClaim = claimRepository.save(claim);
         claimAuditService.recordStatusChange(savedClaim, previousStatus, currentUser, "تم استلام المطالبة للمراجعة");
+        recordMedicalAudit(
+                savedClaim,
+                AuditAction.STATUS_CHANGE,
+                "تم استلام المطالبة للمراجعة",
+                snapshot(previousStatus, previousApprovedAmount, previousNetProviderAmount),
+                snapshot(savedClaim.getStatus(), savedClaim.getApprovedAmount(), savedClaim.getNetProviderAmount()),
+                AuditSource.USER);
         return claimMapper.toViewDto(savedClaim);
     }
 
@@ -166,6 +205,9 @@ public class ClaimReviewService {
         log.info("🚀 [SPLIT-PHASE] Phase 1: Requesting approval for claim {}", id);
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
+        ClaimStatus previousStatus = claim.getStatus();
+        BigDecimal previousApprovedAmount = claim.getApprovedAmount();
+        BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
 
         User currentUser = resolveWorkflowUser(authorizationService.getCurrentUser());
 
@@ -175,15 +217,32 @@ public class ClaimReviewService {
         }
 
         if (claim.getStatus() == ClaimStatus.SUBMITTED) {
-            claimStateMachine.transition(claim, ClaimStatus.UNDER_REVIEW, currentUser);
+            claimStateMachine.transition(
+                    claim,
+                    ClaimStatus.UNDER_REVIEW,
+                    currentUser,
+                    buildTransitionContext(claim, ClaimStatus.UNDER_REVIEW, null,
+                            "Auto transition before approval request", false, null));
         }
 
         if (dto.getNotes() != null && !dto.getNotes().isBlank()) {
             claim.setReviewerComment(dto.getNotes());
         }
 
-        claimStateMachine.transition(claim, ClaimStatus.APPROVAL_IN_PROGRESS, currentUser);
+        claimStateMachine.transition(
+                claim,
+                ClaimStatus.APPROVAL_IN_PROGRESS,
+                currentUser,
+                buildTransitionContext(claim, ClaimStatus.APPROVAL_IN_PROGRESS, null, dto.getNotes(), false, null));
         Claim savedClaim = claimRepository.save(claim);
+
+        recordMedicalAudit(
+                savedClaim,
+                AuditAction.STATUS_CHANGE,
+                "انتقال إلى APPROVAL_IN_PROGRESS",
+                snapshot(previousStatus, previousApprovedAmount, previousNetProviderAmount),
+                snapshot(savedClaim.getStatus(), savedClaim.getApprovedAmount(), savedClaim.getNetProviderAmount()),
+                AuditSource.USER);
 
         processApprovalAsync(id, dto);
         return claimMapper.toViewDto(savedClaim);
@@ -200,6 +259,8 @@ public class ClaimReviewService {
         try {
             Claim claim = claimRepository.findByIdForFinancialUpdate(id)
                     .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
+            BigDecimal previousApprovedAmount = claim.getApprovedAmount();
+            BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
 
             User currentUser = resolveWorkflowUser(authorizationService.getCurrentUser());
 
@@ -259,7 +320,14 @@ public class ClaimReviewService {
             claim.setDeductibleApplied(rawDeductible.min(patientCoPay));
             claim.setDifferenceAmount(claim.getRequestedAmount().subtract(netProviderAmount));
 
-            claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
+            // Recalculation completed successfully; claim coverage snapshot is now fresh.
+            claim.markCoverageSynced();
+
+            claimStateMachine.transition(
+                    claim,
+                    ClaimStatus.APPROVED,
+                    currentUser,
+                    buildTransitionContext(claim, ClaimStatus.APPROVED, approvedAmount, dto.getNotes(), false, true));
 
             if (claim.getVisit() != null) {
                 claim.getVisit().setStatus(com.waad.tba.modules.visit.entity.VisitStatus.COMPLETED);
@@ -284,6 +352,13 @@ public class ClaimReviewService {
 
             claimAuditService.recordApproval(savedClaim, ClaimStatus.APPROVAL_IN_PROGRESS, null, currentUser,
                     dto.getNotes());
+            recordMedicalAudit(
+                    savedClaim,
+                    AuditAction.APPROVED,
+                    dto.getNotes(),
+                    snapshot(ClaimStatus.APPROVAL_IN_PROGRESS, previousApprovedAmount, previousNetProviderAmount),
+                    snapshot(savedClaim.getStatus(), savedClaim.getApprovedAmount(), savedClaim.getNetProviderAmount()),
+                    AuditSource.SYSTEM);
             log.info("✅ [SPLIT-PHASE] Phase 2 complete: Claim {} approved successfully", id);
 
         } catch (Exception e) {
@@ -318,6 +393,8 @@ public class ClaimReviewService {
         reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
 
         ClaimStatus previousStatus = claim.getStatus();
+        BigDecimal previousApprovedAmount = claim.getApprovedAmount();
+        BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
         if (previousStatus != ClaimStatus.SUBMITTED && previousStatus != ClaimStatus.UNDER_REVIEW) {
             throw new BusinessRuleException("لا يمكن رفض المطالبة في حالتها الحالية");
         }
@@ -330,7 +407,11 @@ public class ClaimReviewService {
         claim.setApprovedAmount(BigDecimal.ZERO);
         claim.setNetProviderAmount(BigDecimal.ZERO);
 
-        claimStateMachine.transition(claim, ClaimStatus.REJECTED, currentUser);
+        claimStateMachine.transition(
+                claim,
+                ClaimStatus.REJECTED,
+                currentUser,
+                buildTransitionContext(claim, ClaimStatus.REJECTED, null, dto.getRejectionReason(), false, null));
 
         if (claim.getVisit() != null) {
             claim.getVisit().setStatus(com.waad.tba.modules.visit.entity.VisitStatus.CANCELLED);
@@ -348,6 +429,13 @@ public class ClaimReviewService {
 
         Claim savedClaim = claimRepository.save(claim);
         claimAuditService.recordRejection(savedClaim, previousStatus, currentUser, dto.getRejectionReason());
+        recordMedicalAudit(
+                savedClaim,
+                AuditAction.REJECTED,
+                dto.getRejectionReason(),
+                snapshot(previousStatus, previousApprovedAmount, previousNetProviderAmount),
+                snapshot(savedClaim.getStatus(), savedClaim.getApprovedAmount(), savedClaim.getNetProviderAmount()),
+                AuditSource.USER);
         return claimMapper.toViewDto(savedClaim);
     }
 
@@ -361,6 +449,9 @@ public class ClaimReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
         User currentUser = authorizationService.getCurrentUser();
+        ClaimStatus previousStatus = claim.getStatus();
+        BigDecimal previousApprovedAmount = claim.getApprovedAmount();
+        BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
 
         if (claim.getStatus() != ClaimStatus.APPROVED) {
             throw new BusinessRuleException("لا يمكن تسوية المطالبة. يجب أن تكون: APPROVED");
@@ -388,7 +479,12 @@ public class ClaimReviewService {
         BigDecimal settledAmount = dto.getSettlementAmount() != null ? dto.getSettlementAmount() : netProviderAmount;
         claim.setPaidAmount(settledAmount);
 
-        claimStateMachine.transition(claim, ClaimStatus.SETTLED, currentUser);
+        claimStateMachine.transition(
+                claim,
+                ClaimStatus.SETTLED,
+                currentUser,
+                buildTransitionContext(claim, ClaimStatus.SETTLED, claim.getApprovedAmount(), dto.getNotes(), false,
+                        null));
 
         if (claim.getVisit() != null) {
             claim.getVisit().setStatus(com.waad.tba.modules.visit.entity.VisitStatus.COMPLETED);
@@ -414,6 +510,13 @@ public class ClaimReviewService {
                 settledAmount));
 
         claimAuditService.recordSettlement(savedClaim, currentUser);
+        recordMedicalAudit(
+                savedClaim,
+                AuditAction.STATUS_CHANGE,
+                "تمت التسوية برقم المرجع: " + dto.getPaymentReference(),
+                snapshot(previousStatus, previousApprovedAmount, previousNetProviderAmount),
+                snapshot(savedClaim.getStatus(), savedClaim.getApprovedAmount(), savedClaim.getNetProviderAmount()),
+                AuditSource.USER);
         return claimMapper.toViewDto(savedClaim);
     }
 
@@ -478,5 +581,105 @@ public class ClaimReviewService {
         if (currentUser != null)
             return currentUser;
         return User.builder().username("system-async").userType("ACCOUNTANT").build();
+    }
+
+    private void recordMedicalAudit(
+            Claim claim,
+            AuditAction action,
+            String reason,
+            Map<String, Object> before,
+            Map<String, Object> after,
+            AuditSource source) {
+        medicalAuditLogService.record(AuditLogWriteRequest.builder()
+                .entityType(EntityType.CLAIM)
+                .entityId(String.valueOf(claim.getId()))
+                .action(action)
+                .reason(reason)
+                .beforeState(before)
+                .afterState(after)
+                .source(source)
+                .build());
+    }
+
+    private AuditAction mapAction(ClaimStatus status) {
+        if (status == ClaimStatus.APPROVED) {
+            return AuditAction.APPROVED;
+        }
+        if (status == ClaimStatus.REJECTED) {
+            return AuditAction.REJECTED;
+        }
+        return AuditAction.STATUS_CHANGE;
+    }
+
+    private Map<String, Object> snapshot(ClaimStatus status, BigDecimal approvedAmount, BigDecimal netProviderAmount) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("status", status != null ? status.name() : null);
+        data.put("approvedAmount", approvedAmount);
+        data.put("netProviderAmount", netProviderAmount);
+        return data;
+    }
+
+    private ClaimStateMachine.TransitionContext buildTransitionContext(
+            Claim claim,
+            ClaimStatus targetStatus,
+            BigDecimal totalApproved,
+            String reason,
+            boolean pendingRecalculation,
+            Boolean coverageUpToDateOverride) {
+
+        boolean claimComplete = isClaimComplete(claim);
+        boolean allLinesCalculated = areAllLinesCalculated(claim);
+        boolean coverageUpToDate = coverageUpToDateOverride != null
+                ? coverageUpToDateOverride
+                : isCoverageUpToDate(claim);
+
+        BigDecimal effectiveTotalApproved = totalApproved != null ? totalApproved : claim.getApprovedAmount();
+
+        boolean effectivePendingRecalculation = Boolean.TRUE.equals(claim.getPendingRecalculation())
+                || pendingRecalculation;
+
+        // For non-approval transitions these values are informational only.
+        if (targetStatus != ClaimStatus.APPROVED) {
+            effectivePendingRecalculation = false;
+        }
+
+        return new ClaimStateMachine.TransitionContext(
+                effectiveTotalApproved,
+                claimComplete,
+                allLinesCalculated,
+                effectivePendingRecalculation,
+                coverageUpToDate,
+                reason);
+    }
+
+    private boolean isClaimComplete(Claim claim) {
+        return claim != null
+                && claim.getMember() != null
+                && claim.getProviderId() != null
+                && claim.getServiceDate() != null
+                && claim.getLines() != null
+                && !claim.getLines().isEmpty();
+    }
+
+    private boolean areAllLinesCalculated(Claim claim) {
+        if (claim == null || claim.getLines() == null || claim.getLines().isEmpty()) {
+            return false;
+        }
+        return claim.getLines().stream().allMatch(this::isLineCalculated);
+    }
+
+    private boolean isCoverageUpToDate(Claim claim) {
+        if (claim == null || claim.getLines() == null || claim.getLines().isEmpty()) {
+            return false;
+        }
+        return claim.getLines().stream().allMatch(line -> line.getCoveragePercentSnapshot() != null);
+    }
+
+    private boolean isLineCalculated(ClaimLine line) {
+        return line != null
+                && line.getQuantity() != null
+                && line.getQuantity() > 0
+                && line.getUnitPrice() != null
+                && line.getTotalPrice() != null;
     }
 }

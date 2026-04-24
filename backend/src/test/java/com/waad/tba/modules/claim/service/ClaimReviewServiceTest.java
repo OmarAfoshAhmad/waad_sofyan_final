@@ -32,7 +32,9 @@ import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.settlement.service.ProviderAccountService;
 import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 
 @ExtendWith(MockitoExtension.class)
 class ClaimReviewServiceTest {
@@ -59,6 +61,10 @@ class ClaimReviewServiceTest {
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private ClaimAuditService claimAuditService;
+    @Mock
+    private ProviderAccountService providerAccountService;
+    @Mock
+    private MedicalAuditLogService medicalAuditLogService;
 
     @InjectMocks
     private ClaimReviewService claimReviewService;
@@ -89,7 +95,7 @@ class ClaimReviewServiceTest {
 
         claimReviewService.startReview(100L);
 
-        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.UNDER_REVIEW), eq(reviewer));
+        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.UNDER_REVIEW), eq(reviewer), any());
         verify(claimRepository).save(claim);
     }
 
@@ -117,7 +123,7 @@ class ClaimReviewServiceTest {
         claimReviewService.rejectClaim(100L, dto);
 
         verify(reviewerIsolationService).validateReviewerAccess(reviewer, 50L);
-        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.REJECTED), eq(reviewer));
+        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.REJECTED), eq(reviewer), any());
         assertThat(claim.getReviewerComment()).isEqualTo("Medical necessity not proven");
     }
 
@@ -139,7 +145,7 @@ class ClaimReviewServiceTest {
         claim.setStatus(ClaimStatus.APPROVED);
         claim.setApprovedAmount(new BigDecimal("800"));
         claim.setNetProviderAmount(new BigDecimal("800"));
-        
+
         ClaimSettleDto dto = new ClaimSettleDto();
         dto.setPaymentReference("PAY-123");
         dto.setSettlementAmount(new BigDecimal("800"));
@@ -151,7 +157,7 @@ class ClaimReviewServiceTest {
 
         claimReviewService.settleClaim(100L, dto);
 
-        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.SETTLED), eq(reviewer));
+        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.SETTLED), eq(reviewer), any());
         assertThat(claim.getPaymentReference()).isEqualTo("PAY-123");
         assertThat(claim.getSettledAt()).isNotNull();
     }
@@ -160,7 +166,7 @@ class ClaimReviewServiceTest {
     void settleClaim_excessiveAmount_shouldThrowException() {
         claim.setStatus(ClaimStatus.APPROVED);
         claim.setNetProviderAmount(new BigDecimal("800"));
-        
+
         ClaimSettleDto dto = new ClaimSettleDto();
         dto.setPaymentReference("PAY-123");
         dto.setSettlementAmount(new BigDecimal("900")); // Exceeds approved
@@ -185,8 +191,9 @@ class ClaimReviewServiceTest {
 
         claimReviewService.requestApproval(100L, dto);
 
-        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.APPROVAL_IN_PROGRESS), eq(reviewer));
-        // Note: processApprovalAsync is called after this, but since it's @Async it might be mocked or handled differently in full integration tests.
+        verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.APPROVAL_IN_PROGRESS), eq(reviewer), any());
+        // Note: processApprovalAsync is called after this, but since it's @Async it
+        // might be mocked or handled differently in full integration tests.
         // In unit tests, we just verify the first phase.
     }
 }

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -567,10 +568,25 @@ public class ClaimService {
         }
 
         if (dto.getPrimaryCategoryCode() != null) {
+            String previousPrimaryCategoryCode = claim.getPrimaryCategoryCode();
             claim.setPrimaryCategoryCode(dto.getPrimaryCategoryCode());
+            if (!Objects.equals(previousPrimaryCategoryCode, claim.getPrimaryCategoryCode())) {
+                claim.markCoverageDirty();
+            }
         }
         if (dto.getManualCategoryEnabled() != null) {
+            Boolean previousManualCategoryEnabled = claim.getManualCategoryEnabled();
             claim.setManualCategoryEnabled(dto.getManualCategoryEnabled());
+            if (!Objects.equals(previousManualCategoryEnabled, claim.getManualCategoryEnabled())) {
+                claim.markCoverageDirty();
+            }
+        }
+        if (dto.getFullCoverage() != null) {
+            Boolean previousFullCoverage = claim.getFullCoverage();
+            claim.setFullCoverage(dto.getFullCoverage());
+            if (!Objects.equals(previousFullCoverage, claim.getFullCoverage())) {
+                claim.markCoverageDirty();
+            }
         }
 
         // Allow status update when re-editing a REJECTED claim (admin corrects and

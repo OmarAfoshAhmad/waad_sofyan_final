@@ -17,6 +17,12 @@ public class ApiError {
     @Schema(description = "Standard error code identifying the failure type", example = "USER_NOT_FOUND")
     private final String errorCode;
 
+    @Schema(description = "Canonical error code (frontend contract)", example = "USER_NOT_FOUND")
+    private final String code;
+
+    @Schema(description = "Error category for analytics and monitoring", example = "BUSINESS")
+    private final String category;
+
     @Schema(description = "Human readable error message", example = "The requested user does not exist")
     private final String message;
 
@@ -36,15 +42,28 @@ public class ApiError {
     @Schema(description = "Optional additional details (validation errors, context, etc.)")
     private final Object details;
 
-    public static ApiError of(ErrorCode code, String message, String path, Object details, String timestamp, String trackingId) {
+    public static ApiError of(ErrorCode code, String message, String path, Object details, String timestamp,
+            String trackingId) {
+        ErrorCategory category = categorize(code);
         return ApiError.builder()
                 .success(false)
                 .errorCode(code.name())
+                .code(code.name())
+                .category(category.name())
                 .message(message)
                 .trackingId(trackingId)
                 .timestamp(timestamp)
                 .path(path)
                 .details(details)
                 .build();
+    }
+
+    private static ErrorCategory categorize(ErrorCode code) {
+        return switch (code) {
+            case INVALID_CREDENTIALS, TOKEN_EXPIRED, ACCESS_DENIED, ACCOUNT_LOCKED, EMAIL_NOT_VERIFIED, INVALID_TOKEN ->
+                ErrorCategory.SECURITY;
+            case INTERNAL_ERROR -> ErrorCategory.SYSTEM;
+            default -> ErrorCategory.BUSINESS;
+        };
     }
 }
