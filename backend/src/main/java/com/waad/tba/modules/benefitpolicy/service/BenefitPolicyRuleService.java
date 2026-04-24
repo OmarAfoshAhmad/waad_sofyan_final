@@ -72,7 +72,7 @@ public class BenefitPolicyRuleService {
     @Transactional(readOnly = true)
     public List<BenefitPolicyRuleResponseDto> findActiveByPolicy(Long policyId) {
         validatePolicyExists(policyId);
-        return ruleRepository.findByBenefitPolicyIdAndActiveTrue(policyId)
+        return ruleRepository.findByBenefitPolicyIdAndDeletedFalseAndActiveTrue(policyId)
                 .stream()
                 .map(BenefitPolicyRuleResponseDto::fromEntity)
                 .toList();
@@ -118,7 +118,7 @@ public class BenefitPolicyRuleService {
     @Transactional(readOnly = true)
     public List<BenefitPolicyRuleResponseDto> findPreApprovalRules(Long policyId) {
         validatePolicyExists(policyId);
-        return ruleRepository.findByBenefitPolicyIdAndRequiresPreApprovalTrue(policyId)
+        return ruleRepository.findByBenefitPolicyIdAndDeletedFalseAndRequiresPreApprovalTrue(policyId)
                 .stream()
                 .map(BenefitPolicyRuleResponseDto::fromEntity)
                 .toList();
@@ -167,7 +167,7 @@ public class BenefitPolicyRuleService {
         if (targetCategoryId != null) {
             // 1) ابحث عن قاعدة مطابقة تماماً للتصنيف الهدف
             Optional<BenefitPolicyRule> rule = ruleRepository
-                    .findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(policyId, targetCategoryId);
+                    .findByBenefitPolicyIdAndMedicalCategoryIdAndDeletedFalseAndActiveTrue(policyId, targetCategoryId);
             if (rule.isPresent()) {
                 return rule.map(BenefitPolicyRuleResponseDto::fromEntity);
             }
@@ -175,7 +175,8 @@ public class BenefitPolicyRuleService {
             // 2) إذا لم توجد قاعدة للتصنيف الفرعي، جرّب قاعدة الجذر
             if (categoryOverrideId != null && !categoryOverrideId.equals(targetCategoryId)) {
                 Optional<BenefitPolicyRule> rootRule = ruleRepository
-                        .findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(policyId, categoryOverrideId);
+                        .findByBenefitPolicyIdAndMedicalCategoryIdAndDeletedFalseAndActiveTrue(policyId,
+                                categoryOverrideId);
                 if (rootRule.isPresent()) {
                     return rootRule.map(BenefitPolicyRuleResponseDto::fromEntity);
                 }
@@ -373,9 +374,10 @@ public class BenefitPolicyRuleService {
      * Bulk check coverage for a list of items to avoid N+1 API calls from frontend.
      */
     @Transactional(readOnly = true)
-    public java.util.List<java.util.Map<String, Object>> checkBulkCoverage(Long policyId, BulkCoverageCheckDto request) {
+    public java.util.List<java.util.Map<String, Object>> checkBulkCoverage(Long policyId,
+            BulkCoverageCheckDto request) {
         java.util.List<java.util.Map<String, Object>> responses = new java.util.ArrayList<>();
-        
+
         if (request == null || request.getLines() == null || request.getLines().isEmpty()) {
             return responses;
         }
@@ -383,29 +385,32 @@ public class BenefitPolicyRuleService {
         for (BulkCoverageCheckDto.BulkCoverageLineDto line : request.getLines()) {
             java.util.Map<String, Object> result = new java.util.HashMap<>();
             result.put("id", line.getId());
-            
+
             // Check coverage for this specific line
             Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(
                     policyId, line.getServiceId(), line.getCategoryId(), line.getServiceCategoryId());
 
             boolean isCovered = ruleOpt.isPresent();
             int fallbackPercent = getDefaultCoveragePercent(policyId);
-            
-            // If the service has a specific rule and is not covered (active=false or not found but rule exists? Actually ruleOpt.isEmpty() means not covered or fallback to default)
+
+            // If the service has a specific rule and is not covered (active=false or not
+            // found but rule exists? Actually ruleOpt.isEmpty() means not covered or
+            // fallback to default)
             // The frontend logic applies fallback manually. Here we integrate it cleanly.
             boolean explicitlyNotCovered = ruleOpt.map(r -> !r.isActive()).orElse(false);
-            
+
             int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
                     .orElse(fallbackPercent);
-                    
+
             if (explicitlyNotCovered) {
                 coveragePercent = 0;
             }
 
-            boolean requiresPreApproval = ruleOpt.map(BenefitPolicyRuleResponseDto::isRequiresPreApproval).orElse(false);
+            boolean requiresPreApproval = ruleOpt.map(BenefitPolicyRuleResponseDto::isRequiresPreApproval)
+                    .orElse(false);
 
             result.put("covered", isCovered);
-            result.put("notCovered", explicitlyNotCovered || (ruleOpt.isEmpty() && fallbackPercent == 0)); 
+            result.put("notCovered", explicitlyNotCovered || (ruleOpt.isEmpty() && fallbackPercent == 0));
             result.put("coveragePercent", explicitlyNotCovered ? 0 : coveragePercent);
             result.put("requiresPreApproval", requiresPreApproval);
 
@@ -413,8 +418,10 @@ public class BenefitPolicyRuleService {
 
             if (request.getMemberId() != null) {
                 // Check usage using the same line args
-                java.util.Map<String, Object> usage = checkUsageLimit(policyId, line.getServiceId(), line.getCategoryId(),
-                        line.getServiceCategoryId(), request.getMemberId(), request.getYear(), request.getExcludeClaimId());
+                java.util.Map<String, Object> usage = checkUsageLimit(policyId, line.getServiceId(),
+                        line.getCategoryId(),
+                        line.getServiceCategoryId(), request.getMemberId(), request.getYear(),
+                        request.getExcludeClaimId());
                 if (usage != null && Boolean.TRUE.equals(usage.get("hasLimit"))) {
                     usageDetails = usage;
                 }
@@ -464,9 +471,30 @@ public class BenefitPolicyRuleService {
                     .orElseThrow(
                             () -> new ResourceNotFoundException("MedicalCategory", "id", dto.getMedicalCategoryId()));
 
-            // Check for duplicate category rule
-            if (ruleRepository.existsCategoryRule(policyId, dto.getMedicalCategoryId(), null)) {
-                throw new BusinessRuleException("يوجد قاعدة تغطية لهذا التصنيف بالفعل في هذه الوثيقة");
+            // Upsert behavior for same policy+category:
+            // - active existing rule: update it
+            // - soft-deleted existing rule: restore and update it
+            Optional<BenefitPolicyRule> existingRuleOpt = ruleRepository
+                    .findByBenefitPolicyIdAndMedicalCategoryId(policyId, dto.getMedicalCategoryId());
+
+            if (existingRuleOpt.isPresent()) {
+                BenefitPolicyRule existingRule = existingRuleOpt.get();
+                boolean wasActive = existingRule.isActive();
+
+                existingRule.setCoveragePercent(dto.getCoveragePercent());
+                existingRule.setAmountLimit(dto.getAmountLimit());
+                existingRule.setTimesLimit(dto.getTimesLimit());
+                existingRule.setWaitingPeriodDays(dto.getWaitingPeriodDays() != null ? dto.getWaitingPeriodDays() : 0);
+                existingRule.setRequiresPreApproval(
+                        dto.getRequiresPreApproval() != null ? dto.getRequiresPreApproval() : false);
+                existingRule.setNotes(dto.getNotes());
+                existingRule.setActive(dto.getActive() != null ? dto.getActive() : true);
+                existingRule.setDeleted(false);
+
+                BenefitPolicyRule restored = ruleRepository.save(existingRule);
+                log.info("Upserted existing rule {} for policy {} (category: {}, wasActive: {})",
+                        restored.getId(), policyId, dto.getMedicalCategoryId(), wasActive);
+                return BenefitPolicyRuleResponseDto.fromEntity(restored);
             }
 
             rule.setMedicalCategory(category);
@@ -591,6 +619,10 @@ public class BenefitPolicyRuleService {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
 
+        if (rule.isDeleted()) {
+            throw new BusinessRuleException("لا يمكن تغيير حالة قاعدة موجودة في سلة المحذوفات. قم بالاستعادة أولاً.");
+        }
+
         rule.setActive(!rule.isActive());
         BenefitPolicyRule saved = ruleRepository.save(rule);
 
@@ -603,16 +635,32 @@ public class BenefitPolicyRuleService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Delete a rule (soft delete by setting active=false)
+     * Delete a rule (soft delete by moving to trash)
      */
     public void delete(Long ruleId) {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
 
         rule.setActive(false);
+        rule.setDeleted(true);
         ruleRepository.save(rule);
 
         log.info("Soft deleted rule {}", ruleId);
+    }
+
+    /**
+     * Restore a soft-deleted rule from trash
+     */
+    public BenefitPolicyRuleResponseDto restore(Long ruleId) {
+        BenefitPolicyRule rule = ruleRepository.findById(ruleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
+
+        rule.setDeleted(false);
+        rule.setActive(true);
+        BenefitPolicyRule saved = ruleRepository.save(rule);
+
+        log.info("Restored rule {} from trash", ruleId);
+        return BenefitPolicyRuleResponseDto.fromEntity(saved);
     }
 
     /**
@@ -685,7 +733,7 @@ public class BenefitPolicyRuleService {
      */
     @Transactional(readOnly = true)
     public long countActiveByPolicy(Long policyId) {
-        return ruleRepository.countByBenefitPolicyIdAndActiveTrue(policyId);
+        return ruleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(policyId);
     }
 
     /**

@@ -193,6 +193,17 @@ const FinancialReports = () => {
     setPage(0);
   }, [effectiveEmployerId, selectedProviderId, status, dateFrom, dateTo]);
 
+  // Auto-refresh when page becomes visible (user returns from another tab/page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  });
+
   const fetchData = async () => {
     try {
       setLoading(true);

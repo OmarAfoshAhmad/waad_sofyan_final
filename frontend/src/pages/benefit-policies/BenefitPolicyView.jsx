@@ -204,7 +204,10 @@ const BenefitPolicyView = () => {
   } = useQuery({
     queryKey: ['benefit-policy', id],
     queryFn: () => getBenefitPolicyById(id),
-    enabled: !!id
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always'
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -213,9 +216,9 @@ const BenefitPolicyView = () => {
 
   const activateMutation = useMutation({
     mutationFn: () => activateBenefitPolicy(id),
-    onSuccess: () => {
+    onSuccess: async () => {
       enqueueSnackbar('تم تفعيل الوثيقة بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['benefit-policy', id]);
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy', id], exact: true });
       refetch();
     },
     onError: (err) => {
@@ -225,9 +228,9 @@ const BenefitPolicyView = () => {
 
   const suspendMutation = useMutation({
     mutationFn: () => suspendBenefitPolicy(id),
-    onSuccess: () => {
+    onSuccess: async () => {
       enqueueSnackbar('تم إيقاف الوثيقة مؤقتاً', { variant: 'warning' });
-      queryClient.invalidateQueries(['benefit-policy', id]);
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy', id], exact: true });
       refetch();
     },
     onError: (err) => {
@@ -237,9 +240,9 @@ const BenefitPolicyView = () => {
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelBenefitPolicy(id),
-    onSuccess: () => {
+    onSuccess: async () => {
       enqueueSnackbar('تم إلغاء الوثيقة', { variant: 'info' });
-      queryClient.invalidateQueries(['benefit-policy', id]);
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy', id], exact: true });
       refetch();
     },
     onError: (err) => {

@@ -224,6 +224,14 @@ public class Claim {
     @Column(name = "deductible_applied", precision = 15, scale = 2)
     private BigDecimal deductibleApplied;
 
+    /**
+     * نسبة خصم العقد المُطبَّقة فعلياً عند اعتماد المطالبة.
+     * تُسجَّل مرة واحدة في creditOnClaimApproval ولا تتغير بعد ذلك،
+     * بحيث يبقى التدقيق المالي دقيقاً حتى لو تغيّر العقد لاحقاً.
+     */
+    @Column(name = "applied_discount_percent", precision = 5, scale = 2)
+    private BigDecimal appliedDiscountPercent;
+
     // ========== Settlement Fields (Phase MVP) ==========
 
     /**
@@ -522,6 +530,24 @@ public class Claim {
             if (status == ClaimStatus.DRAFT || status == ClaimStatus.SUBMITTED || status == ClaimStatus.NEEDS_CORRECTION
                     || status == ClaimStatus.APPROVED
                     || (status == ClaimStatus.SETTLED && approvedAmount == null)) {
+
+                // ─────────────────────────────────────────────────────────────────────
+                // DYNAMIC RECALCULATION (PRE-APPROVAL STATES):
+                // For DRAFT / SUBMITTED / NEEDS_CORRECTION / UNDER_REVIEW we always
+                // recompute from the current line data so that any edit (price, qty,
+                // refusal) is reflected immediately without a manual trigger.
+                // APPROVED / SETTLED values are intentionally preserved – they were
+                // set by the reviewer and must not be silently overwritten.
+                // ─────────────────────────────────────────────────────────────────────
+                boolean preApproval = (status == ClaimStatus.DRAFT
+                        || status == ClaimStatus.SUBMITTED
+                        || status == ClaimStatus.NEEDS_CORRECTION
+                        || status == ClaimStatus.UNDER_REVIEW);
+                if (preApproval) {
+                    patientCoPay = null;
+                    approvedAmount = null;
+                    netProviderAmount = null;
+                }
 
                 // Calculate total patient share from lines
                 BigDecimal totalPatientShare = lines.stream()

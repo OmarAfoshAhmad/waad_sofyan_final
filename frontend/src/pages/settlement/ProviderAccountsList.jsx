@@ -172,7 +172,9 @@ export default function ProviderAccountsList() {
         dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
         dateTo: formatDateParam(appliedFilters.serviceDateTo)
       }),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always',
     keepPreviousData: true
   });
 
@@ -194,6 +196,9 @@ export default function ProviderAccountsList() {
       };
       return claimsService.list(params);
     },
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always',
     keepPreviousData: true
   });
 

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 
 // MUI
@@ -11,6 +11,8 @@ import ClearIcon from '@mui/icons-material/Clear';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PrintIcon from '@mui/icons-material/Print';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import BuildIcon from '@mui/icons-material/Build';
+import { CircularProgress } from '@mui/material';
 
 // Project Components
 import MainCard from 'components/MainCard';
@@ -21,6 +23,7 @@ import useTableState from 'hooks/useTableState';
 
 // Services
 import { providerAccountsService } from 'services/api/settlement.service';
+import { openSnackbar } from 'api/snackbar';
 
 // Utils
 import { exportAccountsListToExcel } from 'utils/settlementExcelExport';
@@ -52,6 +55,7 @@ const STATUS_LABELS = {
 
 export default function ProviderPaymentsList() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const tableState = useTableState({
     initialPageSize: 10,
     defaultSort: { field: 'providerName', direction: 'asc' }
@@ -82,7 +86,9 @@ export default function ProviderPaymentsList() {
         status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
         hasBalance: appliedFilters.hasBalance
       }),
-    staleTime: 1000 * 60 * 5
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always'
   });
 
   const accountsData = useMemo(() => {
@@ -208,6 +214,40 @@ export default function ProviderPaymentsList() {
     window.print();
   };
 
+  const [repairAllLoading, setRepairAllLoading] = useState(false);
+  const [repairRowId, setRepairRowId] = useState(null);
+
+  const handleRepairAll = useCallback(async () => {
+    if (!window.confirm('سيتم إصلاح جميع أرصدة مقدمي الخدمة بحذف القيود اليتيمة للمطالبات المحذوفة.\nهل تريد المتابعة؟')) return;
+    setRepairAllLoading(true);
+    try {
+      const result = await providerAccountsService.recalculateAllBalances();
+      openSnackbar({ message: result?.message || 'تم إصلاح الأرصدة بنجاح', variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['provider-accounts-list'] });
+      refetch();
+    } catch (error) {
+      openSnackbar({ message: error?.message || 'فشل إصلاح الأرصدة', variant: 'error' });
+    } finally {
+      setRepairAllLoading(false);
+    }
+  }, [queryClient, refetch]);
+
+  const handleRepairRow = useCallback(async (row) => {
+    const providerId = row.providerId || row.id;
+    if (!providerId) return;
+    setRepairRowId(providerId);
+    try {
+      const result = await providerAccountsService.recalculateBalance(providerId);
+      openSnackbar({ message: result?.message || 'تم إصلاح الرصيد بنجاح', variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['provider-accounts-list'] });
+      refetch();
+    } catch (error) {
+      openSnackbar({ message: error?.message || 'فشل إصلاح الرصيد', variant: 'error' });
+    } finally {
+      setRepairRowId(null);
+    }
+  }, [queryClient, refetch]);
+
   const renderSummaryCard = (title, value, icon, borderColor = 'primary.main') => (
     <Box
       sx={{
@@ -278,7 +318,7 @@ export default function ProviderPaymentsList() {
         id: 'runningBalance',
         label: 'الرصيد الحالي',
         minWidth: '8.125rem',
-        align: 'right',
+        align: 'center',
         renderCell: ({ row }) => {
           const balance = Number(row.runningBalance) || 0;
           return (
@@ -289,24 +329,17 @@ export default function ProviderPaymentsList() {
         }
       },
       {
-        id: 'totalApproved',
-        label: 'إجمالي المعتمد',
-        minWidth: '7.5rem',
-        align: 'right',
-        renderCell: ({ row }) => formatCurrency(row.totalApproved)
-      },
-      {
         id: 'totalPaid',
         label: 'إجمالي المدفوع',
         minWidth: '7.5rem',
-        align: 'right',
+        align: 'center',
         renderCell: ({ row }) => formatCurrency(row.totalPaid)
       },
       {
         id: 'gapAmount',
         label: 'فجوة السداد',
         minWidth: '6.875rem',
-        align: 'right',
+        align: 'center',
         renderCell: ({ row }) => {
           const gap = Number(row.gapAmount || 0);
           return <Typography color={gap > 0 ? 'error.main' : 'success.main'} fontWeight={700}>{formatCurrency(gap)}</Typography>;
@@ -343,26 +376,43 @@ export default function ProviderPaymentsList() {
       {
         id: 'actions',
         label: 'إجراءات',
-        minWidth: '6.5625rem',
+        minWidth: '10rem',
         align: 'center',
         sortable: false,
         renderCell: ({ row }) => (
           row.isTotalsRow ? '-' : (
-          <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            startIcon={<AccountBalanceWalletIcon />}
-            onClick={() => handleViewTransactions(row)}
-            sx={{ borderRadius: '0.25rem' }}
-          >
-            الدفعات
-          </Button>
+          <Stack direction="row" spacing={0.5} justifyContent="center">
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              startIcon={<AccountBalanceWalletIcon />}
+              onClick={() => handleViewTransactions(row)}
+              sx={{ borderRadius: '0.25rem' }}
+            >
+              الدفعات
+            </Button>
+            <Tooltip title="إصلاح رصيد هذا المزود (حذف القيود اليتيمة)">
+              <span>
+                <IconButton
+                  size="small"
+                  color="warning"
+                  onClick={() => handleRepairRow(row)}
+                  disabled={repairRowId === (row.providerId || row.id)}
+                  sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: '0.25rem' }}
+                >
+                  {repairRowId === (row.providerId || row.id)
+                    ? <CircularProgress size={14} color="warning" />
+                    : <BuildIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
           )
         )
       }
     ],
-    [navigate]
+    [navigate, handleRepairRow, repairRowId]
   );
 
   return (
@@ -390,7 +440,6 @@ export default function ProviderPaymentsList() {
             }}
           >
             {renderSummaryCard('إجمالي المرافق', String(withComputed.length), <ReceiptIcon fontSize="small" color="primary" />, 'primary.main')}
-            {renderSummaryCard('إجمالي المعتمد', formatCurrency(totals.approved), <PaymentsIcon fontSize="small" color="primary" />, 'primary.main')}
             {renderSummaryCard('إجمالي المدفوع', formatCurrency(totals.paid), <PaymentsIcon fontSize="small" color="success" />, 'success.main')}
             {renderSummaryCard('إجمالي المستحق', formatCurrency(totals.outstanding), <DownIcon fontSize="small" color="error" />, 'error.main')}
             {renderSummaryCard('فجوة السداد', formatCurrency(totals.gap), <DownIcon fontSize="small" color="warning" />, 'warning.main')}
@@ -501,6 +550,21 @@ export default function ProviderPaymentsList() {
               <Button variant="outlined" color="primary" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}>
                 طباعة
               </Button>
+
+              <Tooltip title="إصلاح جميع أرصدة مقدمي الخدمة بحذف القيود اليتيمة للمطالبات المحذوفة">
+                <span>
+                  <Button
+                    variant="outlined"
+                    color="warning"
+                    startIcon={repairAllLoading ? <CircularProgress size={14} color="warning" /> : <BuildIcon />}
+                    onClick={handleRepairAll}
+                    disabled={repairAllLoading}
+                    sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
+                  >
+                    إصلاح الأرصدة
+                  </Button>
+                </span>
+              </Tooltip>
 
               <Button
                 variant="outlined"

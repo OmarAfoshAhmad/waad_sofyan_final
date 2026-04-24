@@ -222,6 +222,17 @@ const ProviderSettlementReport = () => {
     return () => clearTimeout(timer);
   }, [fetchReport]);
 
+  // Auto-refresh when page becomes visible (user returns from another tab/page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchReport();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchReport]);
+
   // Print handler
   const handlePrint = useReactToPrint({
     contentRef: printRef,

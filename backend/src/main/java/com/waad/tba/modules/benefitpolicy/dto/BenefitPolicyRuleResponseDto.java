@@ -50,6 +50,7 @@ public class BenefitPolicyRuleResponseDto {
 
     private String notes;
     private boolean active;
+    private boolean deleted;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -68,6 +69,7 @@ public class BenefitPolicyRuleResponseDto {
                 .requiresPreApproval(rule.isRequiresPreApproval())
                 .notes(rule.getNotes())
                 .active(rule.isActive())
+                .deleted(rule.isDeleted())
                 .createdAt(rule.getCreatedAt())
                 .updatedAt(rule.getUpdatedAt())
                 .label(rule.getLabel());

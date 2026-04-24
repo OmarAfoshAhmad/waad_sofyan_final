@@ -210,6 +210,13 @@ public class ProviderAccountService {
                                         "Invalid credit amount after discount for claim " + claimId + ": " + amount);
                 }
 
+                // Persist the discount snapshot on the claim for audit trail.
+                // Recorded once – future contract changes will NOT alter this.
+                if (claim.getAppliedDiscountPercent() == null) {
+                        claim.setAppliedDiscountPercent(discountPercent);
+                        claimRepository.save(claim);
+                }
+
                 // 5. Get account with lock (create if not exists)
                 ProviderAccount account = accountRepository.findByProviderIdForUpdate(claim.getProviderId())
                                 .orElseGet(() -> getOrCreateAccount(claim.getProviderId()));
@@ -817,6 +824,18 @@ public class ProviderAccountService {
         // ═══════════════════════════════════════════════════════════════════════════
         // BALANCE REPAIR (for data inconsistency caused by claim deletion without
         // reversal)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Return all provider IDs that have an account (for bulk repair operations).
+         */
+        public java.util.List<Long> getAllProviderIds() {
+                return accountRepository.findAll().stream()
+                                .map(ProviderAccount::getProviderId)
+                                .filter(java.util.Objects::nonNull)
+                                .collect(java.util.stream.Collectors.toList());
+        }
+
         // ═══════════════════════════════════════════════════════════════════════════
 
         /**

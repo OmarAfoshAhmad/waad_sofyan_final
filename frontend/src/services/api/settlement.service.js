@@ -178,6 +178,20 @@ export const providerAccountsService = {
     } catch (error) {
       throw handleSettlementErrors(error);
     }
+  },
+
+  /**
+   * Recalculate running_balance for ALL provider accounts in one operation.
+   * Idempotent — safe to call multiple times.
+   * Requires SUPER_ADMIN role.
+   */
+  recalculateAllBalances: async () => {
+    try {
+      const response = await axiosClient.post(`${PROVIDER_ACCOUNTS_URL}/recalculate-all-balances`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
   }
 };
 

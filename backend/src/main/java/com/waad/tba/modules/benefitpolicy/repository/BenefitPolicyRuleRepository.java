@@ -35,7 +35,13 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   /**
    * Find all ACTIVE rules for a specific policy
    */
-  List<BenefitPolicyRule> findByBenefitPolicyIdAndActiveTrue(Long policyId);
+  List<BenefitPolicyRule> findByBenefitPolicyIdAndDeletedFalseAndActiveTrue(Long policyId);
+
+  /**
+   * Backward-compatible alias: active non-deleted rules only
+   */
+  @Query("SELECT r FROM BenefitPolicyRule r WHERE r.benefitPolicy.id = :policyId AND r.active = true AND r.deleted = false")
+  List<BenefitPolicyRule> findByBenefitPolicyIdAndActiveTrue(@Param("policyId") Long policyId);
 
   /**
    * Count rules for a policy
@@ -45,7 +51,13 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   /**
    * Count active rules for a policy
    */
-  long countByBenefitPolicyIdAndActiveTrue(Long policyId);
+  long countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(Long policyId);
+
+  /**
+   * Backward-compatible alias: count active non-deleted rules
+   */
+  @Query("SELECT COUNT(r) FROM BenefitPolicyRule r WHERE r.benefitPolicy.id = :policyId AND r.active = true AND r.deleted = false")
+  long countByBenefitPolicyIdAndActiveTrue(@Param("policyId") Long policyId);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // FIND BY CATEGORY
@@ -60,6 +72,9 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
    * Find active rule for a specific category within a policy
    */
   Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryIdAndActiveTrue(
+      Long policyId, Long categoryId);
+
+  Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryIdAndDeletedFalseAndActiveTrue(
       Long policyId, Long categoryId);
 
   /**
@@ -83,6 +98,7 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       SELECT r FROM BenefitPolicyRule r
       WHERE r.benefitPolicy.id = :policyId
         AND r.active = true
+        AND r.deleted = false
         AND r.medicalCategory.id = :categoryId
       ORDER BY r.id
       """)
@@ -101,6 +117,7 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       SELECT r FROM BenefitPolicyRule r
       WHERE r.benefitPolicy.id = :policyId
         AND r.active = true
+        AND r.deleted = false
         AND (
           (:overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId)
           OR (:overrideCategoryId IS NOT NULL AND r.medicalCategory.parentId = :overrideCategoryId)
@@ -134,6 +151,7 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       WHERE r.benefitPolicy.id = :policyId
         AND r.medicalCategory.id = :categoryId
         AND r.active = true
+        AND r.deleted = false
       ORDER BY r.id DESC
       """)
   List<BenefitPolicyRule> findActiveCategoryRules(
@@ -153,6 +171,7 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       FROM BenefitPolicyRule r
       WHERE r.benefitPolicy.id = :policyId
         AND r.medicalCategory.id = :categoryId
+        AND r.deleted = false
         AND (:excludeRuleId IS NULL OR r.id != :excludeRuleId)
       """)
   boolean existsCategoryRule(
@@ -172,6 +191,7 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
       WHERE r.benefitPolicy.id = :policyId
         AND r.medicalCategory IS NOT NULL
         AND r.active = true
+        AND r.deleted = false
       ORDER BY r.medicalCategory.name
       """)
   List<BenefitPolicyRule> findCategoryRulesForPolicy(@Param("policyId") Long policyId);
@@ -179,7 +199,13 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   /**
    * Find rules that require pre-approval
    */
-  List<BenefitPolicyRule> findByBenefitPolicyIdAndRequiresPreApprovalTrue(Long policyId);
+  List<BenefitPolicyRule> findByBenefitPolicyIdAndDeletedFalseAndRequiresPreApprovalTrue(Long policyId);
+
+  /**
+   * Backward-compatible alias: pre-approval rules excluding deleted
+   */
+  @Query("SELECT r FROM BenefitPolicyRule r WHERE r.benefitPolicy.id = :policyId AND r.requiresPreApproval = true AND r.deleted = false")
+  List<BenefitPolicyRule> findByBenefitPolicyIdAndRequiresPreApprovalTrue(@Param("policyId") Long policyId);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // BATCH OPERATIONS
@@ -193,6 +219,6 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   /**
    * Deactivate all rules for a policy (soft delete)
    */
-  @Query("UPDATE BenefitPolicyRule r SET r.active = false WHERE r.benefitPolicy.id = :policyId")
+  @Query("UPDATE BenefitPolicyRule r SET r.active = false WHERE r.benefitPolicy.id = :policyId AND r.deleted = false")
   int deactivateAllForPolicy(@Param("policyId") Long policyId);
 }

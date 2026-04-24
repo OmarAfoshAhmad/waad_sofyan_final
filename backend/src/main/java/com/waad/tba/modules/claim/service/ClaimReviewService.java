@@ -13,6 +13,7 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.settlement.event.ClaimApprovedEvent;
+import com.waad.tba.modules.settlement.event.ClaimSettledEvent;
 import com.waad.tba.modules.settlement.service.ProviderAccountService;
 import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
@@ -397,10 +398,20 @@ public class ClaimReviewService {
 
         // FIX #8 (Critical): Debit MUST succeed for settlement to be valid.
         // If debitOnClaimSettlement() throws, the @Transactional on this method will
-        // roll back the entire settlement — claim stays APPROVED, no orphaned SETTLED state.
+        // roll back the entire settlement — claim stays APPROVED, no orphaned SETTLED
+        // state.
         Long userId = currentUser != null ? currentUser.getId() : null;
         providerAccountService.debitOnClaimSettlement(savedClaim.getId(), userId);
         log.info("✅ Provider account debited successfully for settled claim {}", savedClaim.getId());
+
+        // Publish settlement event (AFTER_COMMIT) so downstream listeners react
+        // to a durably-settled claim and its provider-account debit.
+        eventPublisher.publishEvent(new ClaimSettledEvent(
+                this,
+                savedClaim.getId(),
+                savedClaim.getProviderId(),
+                userId,
+                settledAmount));
 
         claimAuditService.recordSettlement(savedClaim, currentUser);
         return claimMapper.toViewDto(savedClaim);

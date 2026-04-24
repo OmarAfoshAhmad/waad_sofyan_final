@@ -12,6 +12,7 @@ import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -21,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +42,8 @@ import java.util.stream.Collectors;
 @SuppressWarnings("deprecation")
 public class MedicalCategoryService {
 
+    private static final Pattern AUTO_CATEGORY_CODE_PATTERN = Pattern.compile("^CAT(\\d+)$");
+
     private final MedicalCategoryRepository categoryRepository;
     private final MedicalServiceRepository serviceRepository;
 
@@ -47,14 +53,8 @@ public class MedicalCategoryService {
 
     @Transactional
     public MedicalCategoryResponseDto create(MedicalCategoryCreateDto dto) {
-        String normalizedCode = dto.getCode() == null ? null : dto.getCode().trim().toUpperCase();
         String normalizedName = dto.getName() == null ? null : dto.getName().trim();
-        log.info("Creating medical category: {}", normalizedCode);
-
-        // Validate code uniqueness
-        if (categoryRepository.existsByCodeIgnoreCase(normalizedCode)) {
-            throw new BusinessRuleException("Category code already exists: " + normalizedCode);
-        }
+        log.info("Creating medical category with auto-generated code");
 
         // Validate parent category (if provided)
         String parentName = null;
@@ -67,7 +67,6 @@ public class MedicalCategoryService {
 
         // Create entity
         MedicalCategory category = MedicalCategory.builder()
-                .code(normalizedCode)
                 .name(normalizedName)
                 .parentId(dto.getParentId())
                 .active(dto.getActive() != null ? dto.getActive() : true)
@@ -82,10 +81,24 @@ public class MedicalCategoryService {
             category.setRoots(roots);
         }
 
-        category = categoryRepository.save(category);
-        log.info("✅ Created medical category: {} (ID: {})", category.getCode(), category.getId());
+        // Generate unique code server-side in CAT001 format (ignore any client code)
+        for (int attempt = 0; attempt < 3; attempt++) {
+            String generatedCode = generateNextCategoryCode();
+            category.setCode(generatedCode);
 
-        return toDto(category, parentName);
+            try {
+                category = categoryRepository.save(category);
+                log.info("✅ Created medical category: {} (ID: {})", category.getCode(), category.getId());
+                return toDto(category, parentName);
+            } catch (DataIntegrityViolationException ex) {
+                log.warn("Code collision while creating category with code {}. Retrying...", generatedCode);
+                if (attempt == 2) {
+                    throw new BusinessRuleException("Failed to generate unique category code. Please retry.");
+                }
+            }
+        }
+
+        throw new BusinessRuleException("Failed to create medical category due to code generation error.");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -424,6 +437,31 @@ public class MedicalCategoryService {
     // ═══════════════════════════════════════════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    private String generateNextCategoryCode() {
+        int maxSequence = categoryRepository.findAll().stream()
+                .map(MedicalCategory::getCode)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .map(String::toUpperCase)
+                .map(AUTO_CATEGORY_CODE_PATTERN::matcher)
+                .filter(Matcher::matches)
+                .mapToInt(m -> Integer.parseInt(m.group(1)))
+                .max()
+                .orElse(0);
+
+        int next = maxSequence + 1;
+        String candidate = formatCategoryCode(next);
+        while (categoryRepository.existsByCodeIgnoreCase(candidate)) {
+            next++;
+            candidate = formatCategoryCode(next);
+        }
+        return candidate;
+    }
+
+    private String formatCategoryCode(int sequence) {
+        return String.format("CAT%03d", sequence);
+    }
 
     /**
      * Safely parse a String into a

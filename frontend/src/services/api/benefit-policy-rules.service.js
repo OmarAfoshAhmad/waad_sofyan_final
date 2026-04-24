@@ -260,6 +260,18 @@ export const togglePolicyRuleActive = async (policyId, ruleId) => {
   return unwrap(response);
 };
 
+/**
+ * Restore a soft-deleted rule from trash
+ * Endpoint: POST /api/benefit-policies/{policyId}/rules/{ruleId}/restore
+ * @param {number} policyId - Policy ID
+ * @param {number} ruleId - Rule ID
+ * @returns {Promise<Object>} Restored rule
+ */
+export const restorePolicyRule = async (policyId, ruleId) => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/${ruleId}/restore`);
+  return unwrap(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // DELETE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -334,6 +346,7 @@ export default {
 
   updatePolicyRule,
   togglePolicyRuleActive,
+  restorePolicyRule,
   // Delete
   deletePolicyRule,
   hardDeletePolicyRule,

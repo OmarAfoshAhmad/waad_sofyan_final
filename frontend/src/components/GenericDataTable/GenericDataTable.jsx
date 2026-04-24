@@ -362,7 +362,7 @@ const GenericDataTable = ({
             {row.getVisibleCells().map((cell) => (
               <TableCell
                 key={cell.id}
-                align={cell.column.columnDef.align || 'right'}
+                align={cell.column.columnDef.align || 'center'}
                 sx={{
                   py: compact ? 1.3 : 1.2,
                   px: compact ? 1 : 2,

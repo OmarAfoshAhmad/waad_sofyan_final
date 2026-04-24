@@ -341,6 +341,12 @@ export default function ClaimBatchEntry() {
         // Invalidate cached claim detail so re-opening a claim always triggers a fresh
         // coverage/usage fetch (ensures سقف المنفعة reflects the latest consumed amounts)
         queryClient.invalidateQueries({ queryKey: ['claim'] });
+        // Invalidate provider account queries so الدفعات المالية reflects the reversal
+        // that fires synchronously on the backend after claim soft-delete
+        queryClient.invalidateQueries({ queryKey: ['provider-accounts-list'] });
+        queryClient.invalidateQueries({ queryKey: ['provider-account'] });
+        queryClient.invalidateQueries({ queryKey: ['settlement-claims-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['settlement-claims'] });
     }, [queryClient]);
 
     // الوثيقة التأمينية والمنافع (PHASE 5.6 - Decoupled from Member)

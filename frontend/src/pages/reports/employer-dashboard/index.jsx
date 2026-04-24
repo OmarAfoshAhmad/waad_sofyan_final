@@ -202,7 +202,7 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
             {/* Approved Amount */}
             <Paper
               sx={{
-                p: '1.0rem',
+                p: '0.75rem',
                 bgcolor: `${theme.palette.success.main}10`,
                 borderRadius: '0.25rem'
               }}
@@ -210,8 +210,8 @@ const AmountSummaryCard = ({ approvedAmount, rejectedAmount, loading }) => {
               <Stack direction="row" alignItems="center" spacing={1}>
                 <CheckCircleIcon sx={{ fontSize: '1.25rem', color: theme.palette.success.main }} />
                 <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    المبالغ المعتمدة (موافق عليها + تمت التسوية)
+                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                    المبالغ المعتمدة
                   </Typography>
                   <Typography variant="h5" fontWeight={600} color="success.main">
                     {formatCurrency(approvedAmount)}

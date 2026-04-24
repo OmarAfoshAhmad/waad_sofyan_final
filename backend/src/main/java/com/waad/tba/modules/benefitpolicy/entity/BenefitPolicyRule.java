@@ -32,7 +32,8 @@ import java.time.LocalDateTime;
 @Table(name = "benefit_policy_rules", indexes = {
         @Index(name = "idx_bpr_policy", columnList = "benefit_policy_id"),
         @Index(name = "idx_bpr_category", columnList = "medical_category_id"),
-        @Index(name = "idx_bpr_active", columnList = "active")
+        @Index(name = "idx_bpr_active", columnList = "active"),
+        @Index(name = "idx_bpr_deleted", columnList = "deleted")
 }, uniqueConstraints = {
         // Prevent duplicate category rules within same policy
         @UniqueConstraint(name = "uk_bpr_policy_category", columnNames = { "benefit_policy_id", "medical_category_id" })
@@ -133,6 +134,13 @@ public class BenefitPolicyRule {
     @Builder.Default
     private boolean active = true;
 
+    /**
+     * Whether this rule is soft-deleted (moved to trash)
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // AUDIT FIELDS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -174,7 +182,7 @@ public class BenefitPolicyRule {
      * Check if this rule applies to a given category
      */
     public boolean appliesToCategory(MedicalCategory category) {
-        if (!active) {
+        if (!active || deleted) {
             return false;
         }
         return medicalCategory != null && medicalCategory.getId().equals(category.getId());
@@ -185,7 +193,7 @@ public class BenefitPolicyRule {
      */
     public String getLabel() {
         if (medicalCategory != null) {
-            return  medicalCategory.getName();
+            return medicalCategory.getName();
         }
         return "Rule #" + id;
     }

@@ -1,7 +1,6 @@
 package com.waad.tba.modules.medicaltaxonomy.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,10 +22,9 @@ import lombok.NoArgsConstructor;
 public class MedicalCategoryCreateDto {
 
     /**
-     * Unique category code (immutable)
-     * Examples: "CONSULTATION", "SURGERY", "CARDIOLOGY_CONSULT"
+     * Unique category code (immutable).
+     * Optional on create: server auto-generates values like CAT001, CAT002...
      */
-    @NotBlank(message = "Category code is required")
     @Size(max = 50, message = "Category code must not exceed 50 characters")
     @JsonAlias({ "categoryCode", "code" })
     private String code;

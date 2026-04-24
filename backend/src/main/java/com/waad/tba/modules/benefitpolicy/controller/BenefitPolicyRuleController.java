@@ -176,7 +176,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @Valid @RequestBody BulkCoverageCheckDto request) {
 
-        log.info("Bulk checking coverage for policy {}, {} lines", policyId, request.getLines() != null ? request.getLines().size() : 0);
+        log.info("Bulk checking coverage for policy {}, {} lines", policyId,
+                request.getLines() != null ? request.getLines().size() : 0);
         List<Map<String, Object>> result = ruleService.checkBulkCoverage(policyId, request);
         return ResponseEntity.ok(ApiResponse.success("Bulk coverage check complete", result));
     }
@@ -253,6 +254,18 @@ public class BenefitPolicyRuleController {
 
         BenefitPolicyRuleResponseDto result = ruleService.toggleActive(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule toggled", result));
+    }
+
+    @PostMapping("/rules/{ruleId}/restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Restore a soft-deleted rule from trash")
+    public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> restore(
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("ruleId") Long ruleId) {
+
+        log.info("Restoring rule {} for policy {}", ruleId, policyId);
+        BenefitPolicyRuleResponseDto result = ruleService.restore(ruleId);
+        return ResponseEntity.ok(ApiResponse.success("Rule restored", result));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

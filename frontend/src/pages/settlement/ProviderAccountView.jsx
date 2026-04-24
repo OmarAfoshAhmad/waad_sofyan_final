@@ -424,7 +424,9 @@ const ProviderAccountView = () => {
     queryKey: ['provider-account', providerId],
     queryFn: () => providerAccountsService.getByProviderId(providerId),
     enabled: isValidProvider,
-    staleTime: 1000 * 60 * 2
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always'
   });
 
   // Fetch transactions
@@ -439,7 +441,9 @@ const ProviderAccountView = () => {
         size: paginationModel.pageSize
       }),
     enabled: isValidProvider,
-    staleTime: 1000 * 60 * 2
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always'
   });
 
   // Fetch recent transactions for quick view
@@ -447,7 +451,9 @@ const ProviderAccountView = () => {
     queryKey: ['provider-account', providerId, 'recent'],
     queryFn: () => providerAccountsService.getRecentTransactions(providerId),
     enabled: isValidProvider,
-    staleTime: 1000 * 60 * 2
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always'
   });
 
   // ========================================

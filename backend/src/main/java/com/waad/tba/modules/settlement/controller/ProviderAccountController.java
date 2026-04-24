@@ -305,6 +305,47 @@ public class ProviderAccountController {
                 return ResponseEntity.ok(ApiResponse.success(result));
         }
 
+        /**
+         * Recalculate running_balance for ALL provider accounts in one operation.
+         *
+         * Iterates every provider account and creates missing CLAIM_REVERSAL debits
+         * for any orphaned CLAIM_APPROVAL credits (from soft/hard deleted claims).
+         * Safe to call multiple times — idempotent per claim.
+         */
+        @PostMapping("/recalculate-all-balances")
+        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @Operation(summary = "Recalculate all provider account balances", description = "Bulk repair: scans every provider account and reverses orphaned credits from deleted claims.")
+        public ResponseEntity<ApiResponse<Map<String, Object>>> recalculateAllBalances() {
+                log.warn("MANUAL ALL-PROVIDERS BALANCE RECALC requested");
+
+                List<Long> providerIds = providerAccountService.getAllProviderIds();
+                java.util.List<Map<String, Object>> details = new java.util.ArrayList<>();
+                int totalFixed = 0;
+                BigDecimal totalReversed = BigDecimal.ZERO;
+
+                for (Long providerId : providerIds) {
+                        Map<String, Object> result = providerAccountService.recalculateBalance(providerId);
+                        int fixed = ((Number) result.get("reversedClaimsCount")).intValue();
+                        BigDecimal reversed = (BigDecimal) result.get("reversedTotal");
+                        if (fixed > 0) {
+                                totalFixed += fixed;
+                                totalReversed = totalReversed.add(reversed);
+                                details.add(result);
+                        }
+                }
+
+                Map<String, Object> summary = new java.util.HashMap<>();
+                summary.put("totalProvidersScanned", providerIds.size());
+                summary.put("totalOrphanedCreditsFixed", totalFixed);
+                summary.put("totalAmountReversed", totalReversed);
+                summary.put("affectedProviders", details.size());
+                summary.put("message", totalFixed > 0
+                                ? "تم إصلاح " + totalFixed + " قيد يتيم في " + details.size()
+                                                + " حساب، إجمالي المبلغ المُصحَّح: " + totalReversed
+                                : "جميع الأرصدة سليمة — لا توجد قيود يتيمة لأي مقدم خدمة");
+                return ResponseEntity.ok(ApiResponse.success(summary));
+        }
+
         // ═══════════════════════════════════════════════════════════════════════════
         // INSTALLMENT PAYMENTS
         // ═══════════════════════════════════════════════════════════════════════════

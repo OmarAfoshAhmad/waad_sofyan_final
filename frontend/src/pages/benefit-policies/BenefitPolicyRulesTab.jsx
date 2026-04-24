@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -11,14 +12,10 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  FormControl,
   FormControlLabel,
-  FormHelperText,
+  Grid,
   IconButton,
   InputAdornment,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   Switch,
   Table,
@@ -35,6 +32,8 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  DeleteForever as DeleteForeverIcon,
+  Replay as ReplayIcon,
   Category as CategoryIcon,
   MedicalServices as ServiceIcon,
   Search as SearchIcon,
@@ -54,16 +53,21 @@ import {
   createPolicyRule,
   updatePolicyRule,
   togglePolicyRuleActive,
-  deletePolicyRule
+  restorePolicyRule,
+  deletePolicyRule,
+  hardDeletePolicyRule
 } from 'services/api/benefit-policy-rules.service';
-import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+import { getMedicalCategories } from 'services/api/medical-categories.service';
+import { lookupMedicalServices } from 'services/api/medical-services.service';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RULE FORM COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
 const INITIAL_FORM_STATE = {
-  medicalCategoryId: '',
+  mainMedicalCategoryId: '',
+  childMedicalCategoryId: '',
+  serviceName: '',
   coveragePercent: '',
   amountLimit: '',
   timesLimit: '',
@@ -75,16 +79,91 @@ const INITIAL_FORM_STATE = {
 /**
  * Rule Form Modal
  */
-const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, categories, loadingCategories }) => {
+const RuleFormModal = ({
+  open,
+  onClose,
+  onSubmit,
+  initialData,
+  isEdit,
+  loading,
+  categories,
+  loadingCategories,
+  policyDefaultCoveragePercent
+}) => {
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [errors, setErrors] = useState({});
+
+  // Defense-in-depth: exclude inactive / soft-deleted categories even if API returns them
+  const activeCategories = useMemo(
+    () => categories.filter((cat) => cat?.active !== false && cat?.deleted !== true),
+    [categories]
+  );
+
+  const mainCategories = useMemo(
+    () => activeCategories.filter((cat) => !cat.parentId),
+    [activeCategories]
+  );
+
+  const childCategories = useMemo(
+    () => activeCategories.filter((cat) => Number(cat.parentId) === Number(formData.mainMedicalCategoryId)),
+    [activeCategories, formData.mainMedicalCategoryId]
+  );
+
+  const selectedMainCategory = useMemo(
+    () => mainCategories.find((cat) => Number(cat.id) === Number(formData.mainMedicalCategoryId)) || null,
+    [mainCategories, formData.mainMedicalCategoryId]
+  );
+
+  const selectedChildCategory = useMemo(
+    () => childCategories.find((cat) => Number(cat.id) === Number(formData.childMedicalCategoryId)) || null,
+    [childCategories, formData.childMedicalCategoryId]
+  );
+
+  const getCategoryOptionLabel = useCallback((option) => {
+    if (!option) return '';
+    return `${option.nameAr || option.name} (${option.code || '-'})`;
+  }, []);
+
+  const selectedTargetCategoryId = useMemo(
+    () => formData.childMedicalCategoryId || formData.mainMedicalCategoryId,
+    [formData.childMedicalCategoryId, formData.mainMedicalCategoryId]
+  );
+
+  const { data: similarServices = [], isFetching: searchingServices } = useQuery({
+    queryKey: ['rule-form-service-lookup', formData.serviceName, selectedTargetCategoryId],
+    queryFn: () =>
+      lookupMedicalServices({
+        q: formData.serviceName || '',
+        categoryId: selectedTargetCategoryId ? Number(selectedTargetCategoryId) : undefined
+      }),
+    enabled: !!selectedTargetCategoryId && !!formData.serviceName && formData.serviceName.trim().length >= 2,
+    staleTime: 15000
+  });
+
+  const exactNameMatch = useMemo(() => {
+    const term = (formData.serviceName || '').trim().toLowerCase();
+    if (!term) return null;
+    return (
+      similarServices.find((s) => {
+        const ar = (s.nameAr || s.name || '').trim().toLowerCase();
+        const en = (s.nameEn || '').trim().toLowerCase();
+        return ar === term || en === term;
+      }) || null
+    );
+  }, [formData.serviceName, similarServices]);
 
   // Initialize form data when modal opens
   useEffect(() => {
     if (open) {
       if (isEdit && initialData) {
+        const selectedCategory = activeCategories.find((cat) => Number(cat.id) === Number(initialData.medicalCategoryId));
+        const parentId = selectedCategory?.parentId ? String(selectedCategory.parentId) : String(initialData.medicalCategoryId || '');
+        const childId = selectedCategory?.parentId ? String(selectedCategory.id) : '';
+
         setFormData({
-          medicalCategoryId: initialData.medicalCategoryId || '',
+          mainMedicalCategoryId: parentId,
+          childMedicalCategoryId: childId,
+          serviceName: initialData.medicalServiceName || '',
           coveragePercent: initialData.coveragePercent ?? '',
           amountLimit: initialData.amountLimit ?? '',
           timesLimit: initialData.timesLimit ?? '',
@@ -93,17 +172,29 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
           notes: initialData.notes || ''
         });
       } else {
-        setFormData(INITIAL_FORM_STATE);
+        const defaultCoverage =
+          policyDefaultCoveragePercent !== null &&
+          policyDefaultCoveragePercent !== undefined &&
+          policyDefaultCoveragePercent !== ''
+            ? String(policyDefaultCoveragePercent)
+            : '';
+
+        setFormData({
+          ...INITIAL_FORM_STATE,
+          coveragePercent: defaultCoverage
+        });
       }
       setErrors({});
     }
-  }, [open, isEdit, initialData]);
+  }, [open, isEdit, initialData, activeCategories, policyDefaultCoveragePercent]);
 
   const handleChange = useCallback(
     (field) => (event) => {
       const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
 
-      setFormData((prev) => ({ ...prev, [field]: value }));
+      setFormData((prev) => {
+        return { ...prev, [field]: value };
+      });
 
       // Clear error for this field
       setErrors((prev) => ({ ...prev, [field]: null }));
@@ -111,11 +202,29 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
     []
   );
 
+  const handleMainCategoryChange = useCallback((_, option) => {
+    setFormData((prev) => ({
+      ...prev,
+      mainMedicalCategoryId: option ? String(option.id) : '',
+      childMedicalCategoryId: '',
+      serviceName: ''
+    }));
+    setErrors((prev) => ({ ...prev, mainMedicalCategoryId: null }));
+  }, []);
+
+  const handleChildCategoryChange = useCallback((_, option) => {
+    setFormData((prev) => ({
+      ...prev,
+      childMedicalCategoryId: option ? String(option.id) : '',
+      serviceName: ''
+    }));
+  }, []);
+
   const validate = useCallback(() => {
     const newErrors = {};
 
-    if (!formData.medicalCategoryId) {
-      newErrors.medicalCategoryId = 'يجب اختيار التصنيف الطبي';
+    if (!formData.mainMedicalCategoryId) {
+      newErrors.mainMedicalCategoryId = 'يجب اختيار التصنيف الرئيسي';
     }
 
     // Coverage percent validation
@@ -158,7 +267,7 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
     if (!validate()) return;
 
     const payload = {
-      medicalCategoryId: Number(formData.medicalCategoryId),
+      medicalCategoryId: Number(selectedTargetCategoryId),
       medicalServiceId: null,
       coveragePercent: formData.coveragePercent !== '' ? Number(formData.coveragePercent) : null,
       amountLimit: formData.amountLimit !== '' ? Number(formData.amountLimit) : null,
@@ -169,7 +278,7 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
     };
 
     onSubmit(payload);
-  }, [formData, validate, onSubmit]);
+  }, [formData, validate, onSubmit, selectedTargetCategoryId]);
 
   const handleClose = useCallback(() => {
     setFormData(INITIAL_FORM_STATE);
@@ -178,34 +287,112 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
   }, [onClose]);
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>{isEdit ? 'تعديل قاعدة التغطية' : 'إضافة قاعدة تغطية جديدة'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={3} sx={{ mt: 1 }}>
-          {/* Category Selector */}
-          <FormControl fullWidth error={!!errors.medicalCategoryId} disabled={isEdit}>
-            <InputLabel>التصنيف الطبي *</InputLabel>
-            <Select
-              value={formData.medicalCategoryId}
-              onChange={handleChange('medicalCategoryId')}
-              label="التصنيف الطبي *"
+      <DialogContent sx={{ pt: 1.5 }}>
+        <Grid container spacing={2}>
+          {/* Main Category Selector */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Autocomplete
+              options={mainCategories}
+              value={selectedMainCategory}
+              onChange={handleMainCategoryChange}
+              getOptionLabel={getCategoryOptionLabel}
+              isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
+              disableClearable
               disabled={loadingCategories}
-            >
-              {loadingCategories ? (
-                <MenuItem disabled>جاري التحميل...</MenuItem>
-              ) : (
-                categories.map((cat) => (
-                  <MenuItem key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.code})
-                  </MenuItem>
-                ))
+              noOptionsText={loadingCategories ? 'جاري التحميل...' : 'لا توجد نتائج'}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="التصنيف الرئيسي *"
+                  error={!!errors.mainMedicalCategoryId}
+                  helperText={errors.mainMedicalCategoryId}
+                />
               )}
-            </Select>
-            {errors.medicalCategoryId && <FormHelperText>{errors.medicalCategoryId}</FormHelperText>}
-          </FormControl>
+            />
+          </Grid>
+
+          {/* Child Category Selector */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Autocomplete
+              options={childCategories}
+              value={selectedChildCategory}
+              onChange={handleChildCategoryChange}
+              getOptionLabel={getCategoryOptionLabel}
+              isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
+              disabled={isEdit || loadingCategories || !formData.mainMedicalCategoryId}
+              noOptionsText={
+                !formData.mainMedicalCategoryId
+                  ? 'اختر التصنيف الرئيسي أولاً'
+                  : loadingCategories
+                    ? 'جاري التحميل...'
+                    : 'لا توجد نتائج'
+              }
+              clearText="إزالة"
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="التصنيف التابع (اختياري)"
+                  helperText="بعد اختيار التصنيف الرئيسي ستظهر قائمة التصنيفات التابعة له فقط"
+                />
+              )}
+            />
+          </Grid>
+
+          {/* Service Name Search (Optional - does not block free typing) */}
+          <Grid size={12}>
+            <TextField
+            label="اسم الخدمة (اختياري)"
+            value={formData.serviceName}
+            onChange={handleChange('serviceName')}
+            placeholder="اكتب اسم الخدمة..."
+            disabled={isEdit || loadingCategories || !selectedTargetCategoryId}
+            helperText="اختياري: للبحث عن خدمات مشابهة وتجنب التكرار. (تطبيق الاستثناء على خدمة بعينها يتطلب تفعيل دعم الخدمة في الخلفية)"
+            fullWidth
+            />
+          </Grid>
+
+          {!!formData.serviceName && !!selectedTargetCategoryId && (
+            <Grid size={12}>
+              <Box>
+              {searchingServices ? (
+                <Typography variant="caption" color="text.secondary">جاري البحث عن خدمات مشابهة...</Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {exactNameMatch && (
+                    <Alert severity="warning" sx={{ py: 0.25 }}>
+                      توجد خدمة مطابقة تقريبًا: {exactNameMatch.code} - {exactNameMatch.nameAr || exactNameMatch.name}
+                    </Alert>
+                  )}
+                  {similarServices.length > 0 ? (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        خدمات مشابهة موجودة مسبقًا:
+                      </Typography>
+                      <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
+                        {similarServices.slice(0, 6).map((svc) => (
+                          <Chip
+                            key={svc.id}
+                            size="small"
+                            variant="outlined"
+                            label={`${svc.code} - ${svc.nameAr || svc.name}`}
+                          />
+                        ))}
+                      </Stack>
+                    </Box>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">لا توجد خدمات مشابهة ضمن التصنيف المختار.</Typography>
+                  )}
+                </Stack>
+              )}
+              </Box>
+            </Grid>
+          )}
 
           {/* Coverage Percent */}
-          <TextField
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
             label="نسبة التغطية"
             type="number"
             value={formData.coveragePercent}
@@ -217,10 +404,12 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
               inputProps: { min: 0, max: 100 }
             }}
             fullWidth
-          />
+            />
+          </Grid>
 
           {/* Amount Limit */}
-          <TextField
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
             label="الحد الأقصى للمبلغ"
             type="number"
             value={formData.amountLimit}
@@ -232,10 +421,12 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
               inputProps: { min: 0 }
             }}
             fullWidth
-          />
+            />
+          </Grid>
 
           {/* Times Limit */}
-          <TextField
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
             label="الحد الأقصى للمرات"
             type="number"
             value={formData.timesLimit}
@@ -246,10 +437,12 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
               inputProps: { min: 0, step: 1 }
             }}
             fullWidth
-          />
+            />
+          </Grid>
 
           {/* Waiting Period */}
-          <TextField
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
             label="فترة الانتظار"
             type="number"
             value={formData.waitingPeriodDays}
@@ -261,17 +454,22 @@ const RuleFormModal = ({ open, onClose, onSubmit, initialData, isEdit, loading, 
               inputProps: { min: 0, step: 1 }
             }}
             fullWidth
-          />
+            />
+          </Grid>
 
           {/* Requires Pre-Approval */}
-          <FormControlLabel
-            control={<Switch checked={formData.requiresPreApproval} onChange={handleChange('requiresPreApproval')} color="primary" />}
-            label="تتطلب موافقة مسبقة"
-          />
+          <Grid size={{ xs: 12, md: 6 }}>
+            <FormControlLabel
+              control={<Switch checked={formData.requiresPreApproval} onChange={handleChange('requiresPreApproval')} color="primary" />}
+              label="تتطلب موافقة مسبقة"
+            />
+          </Grid>
 
           {/* Notes */}
-          <TextField label="ملاحظات" value={formData.notes} onChange={handleChange('notes')} multiline rows={2} fullWidth />
-        </Stack>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField label="ملاحظات" value={formData.notes} onChange={handleChange('notes')} multiline rows={1} fullWidth />
+          </Grid>
+        </Grid>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
@@ -299,21 +497,26 @@ RuleFormModal.propTypes = {
   isEdit: PropTypes.bool,
   loading: PropTypes.bool,
   categories: PropTypes.array,
-  loadingCategories: PropTypes.bool
+  loadingCategories: PropTypes.bool,
+  policyDefaultCoveragePercent: PropTypes.oneOfType([PropTypes.number, PropTypes.string])
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DELETE CONFIRMATION DIALOG
 // ═══════════════════════════════════════════════════════════════════════════
 
-const DeleteConfirmDialog = ({ open, ruleName, onConfirm, onCancel, loading }) => (
+const DeleteConfirmDialog = ({ open, ruleName, onConfirm, onCancel, loading, hardDeleteMode }) => (
   <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
-    <DialogTitle>حذف قاعدة التغطية</DialogTitle>
+    <DialogTitle>{hardDeleteMode ? 'حذف نهائي لقاعدة التغطية' : 'حذف ناعم لقاعدة التغطية'}</DialogTitle>
     <DialogContent>
       <DialogContentText>
-        هل أنت متأكد من حذف قاعدة التغطية "{ruleName}"؟
+        {hardDeleteMode
+          ? `هل أنت متأكد من الحذف النهائي لقاعدة التغطية "${ruleName}"؟`
+          : `هل أنت متأكد من تعطيل قاعدة التغطية "${ruleName}"؟`}
         <br />
-        سيتم إلغاء تفعيل هذه القاعدة.
+        {hardDeleteMode
+          ? 'سيتم حذف القاعدة نهائيًا ولا يمكن استعادتها.'
+          : 'سيتم تنفيذ حذف ناعم (إلغاء التفعيل) ويمكن إعادة التفعيل لاحقًا.'}
       </DialogContentText>
     </DialogContent>
     <DialogActions>
@@ -327,7 +530,7 @@ const DeleteConfirmDialog = ({ open, ruleName, onConfirm, onCancel, loading }) =
         disabled={loading}
         startIcon={loading && <CircularProgress size={16} color="inherit" />}
       >
-        حذف
+        {hardDeleteMode ? 'حذف نهائي' : 'تعطيل'}
       </Button>
     </DialogActions>
   </Dialog>
@@ -338,7 +541,8 @@ DeleteConfirmDialog.propTypes = {
   ruleName: PropTypes.string,
   onConfirm: PropTypes.func.isRequired,
   onCancel: PropTypes.func.isRequired,
-  loading: PropTypes.bool
+  loading: PropTypes.bool,
+  hardDeleteMode: PropTypes.bool
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -469,7 +673,7 @@ const CategoryCoverageModal = ({
                         حفظ
                       </Button>
                       {row.existingRule?.id && (
-                        <Tooltip title="حذف قاعدة هذا التصنيف">
+                        <Tooltip title="حذف ناعم (تعطيل) لقاعدة هذا التصنيف">
                           <span>
                             <IconButton
                               size="small"
@@ -532,6 +736,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [formModal, setFormModal] = useState({ open: false, data: null, isEdit: false });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, rule: null });
   const [ruleSearch, setRuleSearch] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
@@ -541,6 +746,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // Sort state
   const [sortBy, setSortBy] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
+  const defaultOrderRef = useRef({ active: [], deleted: [] });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -555,16 +761,28 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   } = useQuery({
     queryKey: ['benefit-policy-rules', policyId],
     queryFn: () => getPolicyRules(policyId),
-    enabled: !!policyId
+    enabled: !!policyId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always'
   });
 
-  // Fetch categories for selector
+  // Fetch categories for selector from the same source used in MedicalCategoriesList
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
     queryKey: ['medical-categories-all'],
-    queryFn: getAllMedicalCategories
+    queryFn: async () => {
+      const result = await getMedicalCategories({
+        page: 0,
+        size: 500,
+        sortBy: 'id',
+        sortDir: 'DESC',
+        active: true
+      });
+      return result?.items || [];
+    }
   });
 
-  // NOTE: Services are now fetched dynamically by MedicalServiceSelector component
+  // NOTE: Service name field now performs lightweight lookup while typing (duplicate hint only)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MUTATIONS
@@ -572,9 +790,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const createMutation = useMutation({
     mutationFn: (payload) => createPolicyRule(policyId, payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       enqueueSnackbar('تمت إضافة القاعدة بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
       setFormModal({ open: false, data: null, isEdit: false });
     },
     onError: (err) => {
@@ -584,9 +802,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const updateMutation = useMutation({
     mutationFn: ({ ruleId, payload }) => updatePolicyRule(policyId, ruleId, payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       enqueueSnackbar('تم تحديث القاعدة بنجاح', { variant: 'success' });
-      queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
       setFormModal({ open: false, data: null, isEdit: false });
     },
     onError: (err) => {
@@ -596,24 +814,47 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const toggleMutation = useMutation({
     mutationFn: (ruleId) => togglePolicyRuleActive(policyId, ruleId),
-    onSuccess: () => {
+    onSuccess: async () => {
       enqueueSnackbar('تم تغيير حالة القاعدة', { variant: 'success' });
-      queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
     },
     onError: (err) => {
       enqueueSnackbar(err.response?.data?.message || 'فشل تغيير الحالة', { variant: 'error' });
     }
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: (ruleId) => restorePolicyRule(policyId, ruleId),
+    onSuccess: async () => {
+      enqueueSnackbar('تمت استعادة القاعدة من سلة المحذوفات', { variant: 'success' });
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
+    },
+    onError: (err) => {
+      enqueueSnackbar(err.response?.data?.message || 'فشل استعادة القاعدة', { variant: 'error' });
+    }
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (ruleId) => deletePolicyRule(policyId, ruleId),
-    onSuccess: () => {
-      enqueueSnackbar('تم حذف القاعدة', { variant: 'success' });
-      queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
+    onSuccess: async () => {
+      enqueueSnackbar('تم تعطيل القاعدة (حذف ناعم)', { variant: 'success' });
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
       setDeleteDialog({ open: false, rule: null });
     },
     onError: (err) => {
-      enqueueSnackbar(err.response?.data?.message || 'فشل حذف القاعدة', { variant: 'error' });
+      enqueueSnackbar(err.response?.data?.message || 'فشل الحذف الناعم للقاعدة', { variant: 'error' });
+    }
+  });
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: (ruleId) => hardDeletePolicyRule(policyId, ruleId),
+    onSuccess: async () => {
+      enqueueSnackbar('تم الحذف النهائي للقاعدة', { variant: 'success' });
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
+      setDeleteDialog({ open: false, rule: null });
+    },
+    onError: (err) => {
+      enqueueSnackbar(err.response?.data?.message || 'فشل الحذف النهائي للقاعدة', { variant: 'error' });
     }
   });
 
@@ -633,6 +874,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const handleDeleteRule = useCallback((rule) => {
     setDeleteDialog({ open: true, rule });
   }, []);
+
+  const handleRestoreRule = useCallback(
+    (rule) => {
+      restoreMutation.mutate(rule.id);
+    },
+    [restoreMutation]
+  );
 
   const handleToggleActive = useCallback(
     (rule) => {
@@ -658,9 +906,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const handleDeleteConfirm = useCallback(() => {
     if (deleteDialog.rule) {
-      deleteMutation.mutate(deleteDialog.rule.id);
+      if (showDeleted) {
+        hardDeleteMutation.mutate(deleteDialog.rule.id);
+      } else {
+        deleteMutation.mutate(deleteDialog.rule.id);
+      }
     }
-  }, [deleteDialog.rule, deleteMutation]);
+  }, [deleteDialog.rule, deleteMutation, hardDeleteMutation, showDeleted]);
 
   const handleDeleteCancel = useCallback(() => {
     setDeleteDialog({ open: false, rule: null });
@@ -671,10 +923,16 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // ═══════════════════════════════════════════════════════════════════════════
 
   const canEdit = policyStatus !== 'CANCELLED';
-  const isLoading = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isLoading =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending ||
+    hardDeleteMutation.isPending ||
+    toggleMutation.isPending ||
+    restoreMutation.isPending;
 
   // reset page when search changes
-  useEffect(() => { setPage(0); }, [ruleSearch]);
+  useEffect(() => { setPage(0); }, [ruleSearch, showDeleted]);
 
   const handleSort = useCallback((columnId, direction) => {
     setSortBy(columnId);
@@ -740,15 +998,30 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           ? <Chip label="نعم" size="small" color="warning" />
           : <Chip label="لا" size="small" variant="outlined" />;
       case 'active':
+        if (rule.isDeleted) {
+          return <Chip label="في سلة المحذوفات" size="small" color="error" variant="outlined" />;
+        }
         return (
-          <Tooltip title={rule.active ? 'تعطيل القاعدة' : 'تفعيل القاعدة'}>
+          <Tooltip title={rule.isActive ? 'إيقاف القاعدة مؤقتاً' : 'تنشيط القاعدة'}>
             <span>
               <Switch
-                checked={!!rule.active}
+                checked={!!rule.isActive}
                 onChange={() => handleToggleActive(rule)}
                 size="small"
-                color="primary"
                 disabled={!canEdit || toggleMutation.isPending}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': {
+                    color: '#0f9d76'
+                  },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                    backgroundColor: '#19c18f',
+                    opacity: 1
+                  },
+                  '& .MuiSwitch-track': {
+                    backgroundColor: '#b7bfcb',
+                    opacity: 1
+                  }
+                }}
               />
             </span>
           </Tooltip>
@@ -762,22 +1035,39 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       case 'actions':
         return canEdit ? (
           <Stack direction="row" spacing={0} justifyContent="center">
-            <Tooltip title="تعديل">
-              <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)}>
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="حذف">
-              <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)}>
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {showDeleted ? (
+              <>
+                <Tooltip title="استعادة">
+                  <IconButton size="small" color="success" onClick={() => handleRestoreRule(rule)}>
+                    <ReplayIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="حذف نهائي">
+                  <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)}>
+                    <DeleteForeverIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            ) : (
+              <>
+                <Tooltip title="تعديل">
+                  <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="حذف ناعم (تعطيل)">
+                  <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
           </Stack>
         ) : null;
       default:
         return rule[column.id] ?? '-';
     }
-  }, [canEdit, handleEditRule, handleDeleteRule, handleToggleActive, toggleMutation.isPending]);
+  }, [canEdit, handleEditRule, handleDeleteRule, handleRestoreRule, handleToggleActive, toggleMutation.isPending, showDeleted]);
 
   const categoryMap = useMemo(() => {
     const map = new Map();
@@ -814,6 +1104,21 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const changedAt = rule.updatedAt || rule.lastModifiedAt || rule.modifiedAt || rule.createdAt || null;
       const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr}`.toLowerCase();
 
+      // Normalize active state defensively (backend may return boolean/string/number)
+      const activeRaw = rule.active;
+      const isActive =
+        activeRaw === true ||
+        activeRaw === 1 ||
+        activeRaw === '1' ||
+        String(activeRaw).toLowerCase() === 'true';
+
+      const deletedRaw = rule.deleted;
+      const isDeleted =
+        deletedRaw === true ||
+        deletedRaw === 1 ||
+        deletedRaw === '1' ||
+        String(deletedRaw).toLowerCase() === 'true';
+
       return {
         ...rule,
         code,
@@ -822,16 +1127,35 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         typeLabel,
         parentNameAr,
         changedAt,
-        searchable
+        searchable,
+        isActive,
+        isDeleted
       };
     });
   }, [rules, categoryMap]);
 
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
-    const filtered = !query ? normalizedRules : normalizedRules.filter((rule) => rule.searchable.includes(query));
+    const statusFiltered = normalizedRules.filter((rule) => (showDeleted ? rule.isDeleted : !rule.isDeleted));
+    const filtered = !query ? statusFiltered : statusFiltered.filter((rule) => rule.searchable.includes(query));
 
-    if (!sortBy) return filtered;
+    // Default ordering: keep visual order stable unless user explicitly sorts.
+    if (!sortBy) {
+      const modeKey = showDeleted ? 'deleted' : 'active';
+      const previousOrder = defaultOrderRef.current[modeKey] || [];
+      const currentIds = filtered.map((rule) => rule.id);
+      const currentIdSet = new Set(currentIds);
+
+      const nextOrder = [
+        ...previousOrder.filter((id) => currentIdSet.has(id)),
+        ...currentIds.filter((id) => !previousOrder.includes(id))
+      ];
+
+      defaultOrderRef.current[modeKey] = nextOrder;
+      const rank = new Map(nextOrder.map((id, index) => [id, index]));
+
+      return [...filtered].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+    }
 
     return [...filtered].sort((a, b) => {
       let aVal = a[sortBy];
@@ -853,19 +1177,23 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const cmp = String(aVal).localeCompare(String(bVal), 'ar');
       return sortDirection === 'asc' ? cmp : -cmp;
     });
-  }, [normalizedRules, ruleSearch, sortBy, sortDirection]);
+  }, [normalizedRules, ruleSearch, sortBy, sortDirection, showDeleted]);
 
   const pagedRules = useMemo(
     () => filteredRules.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
     [filteredRules, page, rowsPerPage]
   );
 
-  const activeRulesCount = useMemo(() => normalizedRules.filter((rule) => rule.active).length, [normalizedRules]);
+  const activeRulesCount = useMemo(
+    () => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive).length,
+    [normalizedRules]
+  );
+  const deletedRulesCount = useMemo(() => normalizedRules.filter((rule) => rule.isDeleted).length, [normalizedRules]);
 
   const categoryRulesByCategoryId = useMemo(() => {
     const map = new Map();
     normalizedRules
-      .filter((rule) => rule.ruleType === 'CATEGORY')
+      .filter((rule) => rule.ruleType === 'CATEGORY' && !rule.isDeleted)
       .forEach((rule) => {
         if (!map.has(rule.medicalCategoryId)) {
           map.set(rule.medicalCategoryId, rule);
@@ -878,7 +1206,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const serviceRulesCountByCategoryId = useMemo(() => {
     const map = new Map();
     normalizedRules
-      .filter((rule) => rule.ruleType === 'SERVICE' && rule.medicalCategoryId)
+      .filter((rule) => rule.ruleType === 'SERVICE' && rule.medicalCategoryId && !rule.isDeleted)
       .forEach((rule) => {
         map.set(rule.medicalCategoryId, (map.get(rule.medicalCategoryId) || 0) + 1);
       });
@@ -1050,7 +1378,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
       if (succeeded > 0) {
         setCategoryCoverageInputs({});
-        queryClient.invalidateQueries(['benefit-policy-rules', policyId]);
+        await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
       }
       if (failed === 0) {
         enqueueSnackbar(`تم حفظ ${succeeded} تصنيف بنجاح`, { variant: 'success' });
@@ -1086,6 +1414,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           قواعد التغطية التفصيلية
       ═══════════════════════════════════════════════════════════════════ */}
       <MainCard
+        key={showDeleted ? 'rules-mode-deleted' : 'rules-mode-active'}
         sx={{ mt: -2 }}
         title={
           <Stack direction="row" alignItems="center" spacing={1}>
@@ -1106,6 +1435,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 sx={{ height: '2.25rem' }}
               >
                 إضافة قالب
+              </Button>
+              <Button
+                size="small"
+                variant={showDeleted ? 'contained' : 'outlined'}
+                color={showDeleted ? 'error' : 'inherit'}
+                onClick={() => setShowDeleted((prev) => !prev)}
+                sx={{ height: '2.25rem' }}
+              >
+                {showDeleted ? `عرض النشطة (${activeRulesCount})` : `عرض المحذوفات (${deletedRulesCount})`}
               </Button>
               <Button
                 variant="contained"
@@ -1140,6 +1478,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             size="small"
             label={`${activeRulesCount} نشطة`}
             color="primary"
+            sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }}
+          />
+          <Chip
+            size="small"
+            label={showDeleted ? `وضع العرض: المحذوفات (${deletedRulesCount})` : 'وضع العرض: النشطة/الموقوفة'}
+            color={showDeleted ? 'error' : 'success'}
+            variant={showDeleted ? 'filled' : 'outlined'}
             sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }}
           />
           <TextField
@@ -1196,6 +1541,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         loading={createMutation.isPending || updateMutation.isPending}
         categories={categories}
         loadingCategories={loadingCategories}
+        policyDefaultCoveragePercent={policyDefaultCoveragePercent}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -1204,7 +1550,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         ruleName={deleteDialog.rule?.label || deleteDialog.rule?.medicalCategoryName || deleteDialog.rule?.medicalServiceName}
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
-        loading={deleteMutation.isPending}
+        loading={deleteMutation.isPending || hardDeleteMutation.isPending}
+        hardDeleteMode={showDeleted}
       />
 
       {/* Category Coverage Modal */}
