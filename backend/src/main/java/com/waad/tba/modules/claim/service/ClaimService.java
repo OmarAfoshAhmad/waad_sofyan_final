@@ -1488,8 +1488,12 @@ public class ClaimService {
      * يُصفّر حصة الشركة بإخفاء المطالبة من الحسابات → السقف يعود تلقائياً.
      */
     @Transactional
-    public void deleteClaim(Long id) {
-        log.info("🗑️ Soft-deleting claim id: {}", id);
+    public void deleteClaim(Long id, String reason) {
+        log.info("🗑️ Soft-deleting claim id: {} with reason: {}", id, reason);
+
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new BusinessRuleException("يجب إدخال سبب الإلغاء/الحذف");
+        }
 
         User currentUser = authorizationService.getCurrentUser();
 
@@ -1514,12 +1518,13 @@ public class ClaimService {
                         && claim.getApprovedAmount().compareTo(java.math.BigDecimal.ZERO) > 0);
 
         claim.setActive(false);
+        claim.setVoidReason(reason);
         claim.setDeletedAt(java.time.LocalDateTime.now());
         claim.setDeletedBy(currentUser != null ? currentUser.getEmail() : "system");
 
         claimRepository.save(claim);
-        log.info("✅ Claim {} soft-deleted by {}. Annual limits automatically restored.", id,
-                currentUser != null ? currentUser.getEmail() : "system");
+        log.info("✅ Claim {} soft-deleted by {}. Reason: {}. Annual limits automatically restored.", id,
+                currentUser != null ? currentUser.getEmail() : "system", reason);
 
         // المطالبة المعتمدة تحمل رصيداً في حساب مقدم الخدمة → يجب عكسه
         if (wasApproved && claim.getProviderId() != null) {

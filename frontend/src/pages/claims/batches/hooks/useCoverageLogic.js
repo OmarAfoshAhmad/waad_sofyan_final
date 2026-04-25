@@ -164,7 +164,12 @@ export function useCoverageLogic({
             }
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
         } catch (err) {
-            if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
+            const isCanceled = err?.name === 'CanceledError'
+                || err?.name === 'AbortError'
+                || err?.originalError?.name === 'CanceledError'
+                || err?.message === 'canceled';
+
+            if (isCanceled) {
                 diagnosticsRef.current.singleAborted += 1;
                 debugLog('single:aborted', { latest: singleRequestIdRef.current });
                 return { __stale: true };
@@ -175,15 +180,17 @@ export function useCoverageLogic({
         }
     }, [policyId, policyInfo?.defaultCoveragePercent, applyBenefits, member?.id, rootCategories, currentClaimId, serviceYear, fullCoverage, onCoverageError]);
 
-    const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines) => {
+    const refetchAllLinesCoverage = useCallback(async (newCategoryCode, currentLines, newFullCoverage) => {
         if (!policyId || !member?.id) return currentLines.map((l, i) => recompute(l, i, currentLines));
+
         const catCode = newCategoryCode !== undefined ? newCategoryCode : primaryCategoryCode;
+        const isFull = newFullCoverage !== undefined ? newFullCoverage : fullCoverage;
 
         const linesToCheck = currentLines.filter(l => l.service);
         if (linesToCheck.length === 0) return currentLines.map((l, i) => recompute(l, i, currentLines));
 
         let contextCatId = null;
-        if (catCode) {
+        if (catCode && catCode !== 'FULL_COVERAGE') {
             const cat = rootCategories?.find(c => c.code === catCode);
             if (cat) contextCatId = cat.id;
         }
@@ -193,7 +200,7 @@ export function useCoverageLogic({
             memberId: member.id,
             serviceYear: serviceYear || null,
             excludeClaimId: currentClaimId || null,
-            fullCoverage: fullCoverage || catCode === 'FULL_COVERAGE',
+            fullCoverage: isFull || catCode === 'FULL_COVERAGE',
             lines: linesToCheck.map((line, idx) => buildEngineLineInput(line, idx, contextCatId))
         };
 
@@ -232,7 +239,12 @@ export function useCoverageLogic({
 
             return updated.map((line, i) => recompute(line, i, updated));
         } catch (err) {
-            if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
+            const isCanceled = err?.name === 'CanceledError'
+                || err?.name === 'AbortError'
+                || err?.originalError?.name === 'CanceledError'
+                || err?.message === 'canceled';
+
+            if (isCanceled) {
                 diagnosticsRef.current.bulkAborted += 1;
                 debugLog('bulk:aborted', { latest: bulkRequestIdRef.current });
                 return null;

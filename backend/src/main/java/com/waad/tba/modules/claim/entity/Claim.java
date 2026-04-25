@@ -365,6 +365,10 @@ public class Claim {
     @Column(name = "deleted_by", length = 255)
     private String deletedBy;
 
+    /** سبب الإلغاء */
+    @Column(name = "void_reason", columnDefinition = "TEXT")
+    private String voidReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

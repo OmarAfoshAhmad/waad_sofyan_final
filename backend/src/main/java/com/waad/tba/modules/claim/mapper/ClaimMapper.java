@@ -281,6 +281,19 @@ public class ClaimMapper {
                 var member = claim.getMember();
                 var employer = (member != null) ? member.getEmployer() : null;
 
+                String primaryCategoryName = null;
+                if (claim.getPrimaryCategoryCode() != null) {
+                        primaryCategoryName = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
+                                        .map(MedicalCategory::getName)
+                                        .orElse(null);
+                }
+
+                if (Boolean.TRUE.equals(claim.getFullCoverage())) {
+                        primaryCategoryName = (primaryCategoryName != null)
+                                        ? primaryCategoryName + " (تغطية كاملة)"
+                                        : "تغطية كاملة";
+                }
+
                 return ClaimViewDto.builder()
                                 .id(claim.getId())
                                 .claimNumber(claim.getClaimNumber() != null ? claim.getClaimNumber()
@@ -308,11 +321,20 @@ public class ClaimMapper {
                                 .reviewerComment(claim.getReviewerComment())
                                 .manualCategoryEnabled(claim.getManualCategoryEnabled())
                                 .primaryCategoryCode(claim.getPrimaryCategoryCode())
+                                .primaryCategoryName(primaryCategoryName)
                                 .fullCoverage(claim.getFullCoverage())
                                 .claimBatchId(claim.getClaimBatch() != null ? claim.getClaimBatch().getId() : null)
                                 .claimBatchCode(claim.getClaimBatch() != null ? claim.getClaimBatch().getBatchCode()
                                                 : null)
                                 .lines(claim.getLines().stream().map(this::toLineDto).collect(Collectors.toList()))
+                                .active(claim.getActive())
+                                .createdAt(claim.getCreatedAt())
+                                .updatedAt(claim.getUpdatedAt())
+                                .createdBy(claim.getCreatedBy())
+                                .updatedBy(claim.getUpdatedBy())
+                                .deletedAt(claim.getDeletedAt())
+                                .deletedBy(claim.getDeletedBy())
+                                .voidReason(claim.getVoidReason())
                                 .build();
         }
 

@@ -48,6 +48,13 @@ axiosServices.interceptors.request.use(
 axiosServices.interceptors.response.use(
   (response) => response,
   (error) => {
+    // ==========================================
+    // Silently ignore aborted/cancelled requests
+    // ==========================================
+    if (axios.isCancel(error) || error?.name === 'CanceledError' || error?.message === 'canceled') {
+      return Promise.reject(error);
+    }
+
     const status = error.response?.status;
     const url = error.config?.url;
     const errorData = error.response?.data;

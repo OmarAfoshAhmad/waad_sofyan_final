@@ -160,6 +160,8 @@ export default function ClaimBatchEntry() {
     const [preAuthId, setPreAuthId] = useState('');
     const [preAuthSearch, setPreAuthSearch] = useState('');
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+    const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
+    const [showValidationErrors, setShowValidationErrors] = useState(false);
 
     // Column Visibility State (Clutter Reduction)
     const [visibleColumns, setVisibleColumns] = useState({
@@ -181,7 +183,7 @@ export default function ClaimBatchEntry() {
     // ✅ Claim Category Context (Manual Rule Selection)
     const [manualCategoryEnabled, setManualCategoryEnabled] = useState(true);
     const [primaryCategoryCode, setPrimaryCategoryCode] = useState('CAT-OP');
-    const fullCoverage = primaryCategoryCode === 'FULL_COVERAGE';
+    const [fullCoverage, setFullCoverage] = useState(false);
 
     const defaultDate = useMemo(
         () => (month && year) ? `${year}-${String(month).padStart(2, '0')}-01` : new Date().toISOString().split('T')[0],
@@ -219,8 +221,8 @@ export default function ClaimBatchEntry() {
         onCoverageError: (message) => enqueueSnackbar(message, { variant: 'warning' })
     });
 
-    const refetchAllLinesCoverageCallback = useCallback(async (newCategoryCode) => {
-        const updated = await refetchAllLinesCoverage(newCategoryCode, linesRef.current);
+    const refetchAllLinesCoverageCallback = useCallback(async (newCategoryCode, newFullCoverage) => {
+        const updated = await refetchAllLinesCoverage(newCategoryCode, linesRef.current, newFullCoverage);
         if (updated) setLines(updated);
     }, [refetchAllLinesCoverage]);
 
@@ -493,9 +495,8 @@ export default function ClaimBatchEntry() {
             setServiceDate(editingClaim.serviceDate || defaultDate);
             setPreAuthId(editingClaim.preAuthorizationId || '');
             setManualCategoryEnabled(editingClaim.manualCategoryEnabled ?? true);
-            setPrimaryCategoryCode(
-                editingClaim.fullCoverage ? 'FULL_COVERAGE' : (editingClaim.primaryCategoryCode || 'CAT-OP')
-            );
+            setPrimaryCategoryCode(editingClaim.primaryCategoryCode || 'CAT-OP');
+            setFullCoverage(!!editingClaim.fullCoverage);
             setIsDirty(false);
 
             // المرحلة 1.3: إعادة جلب التغطية والسقوف للمطالبة المحملة لضمان دقة العرض
@@ -764,10 +765,32 @@ export default function ClaimBatchEntry() {
 
     const handleSave = async (resetAfter = false) => {
         if (isSavingRef.current) return;
-        if (!member) { enqueueSnackbar(t('claimEntry.validationMember'), { variant: 'error' }); return; }
-        if (lines.some(l => !l.service && !l.serviceName)) { enqueueSnackbar(t('claimEntry.validationService'), { variant: 'error' }); return; }
-        if (!isClaimRejected && lines.some(l => !l.rejected && (parseFloat(l.unitPrice) || 0) <= 0)) {
-            enqueueSnackbar('يجب أن يكون سعر الوحدة أكبر من صفر لكل بند غير مرفوض', { variant: 'error' }); return;
+
+        // التحقق من الحقول المطلوبة بشكل احترافي
+        const missingFields = [];
+        if (!member) missingFields.push("المستفيد");
+        if (!diagnosis?.trim()) missingFields.push("التشخيص الطبي");
+        if (!serviceDate) missingFields.push("تاريخ الخدمة");
+
+        // التحقق من وجود خدمات صحيحة
+        const hasValidLines = lines.some(l => l.service || l.serviceName);
+        if (!hasValidLines) missingFields.push("بند خدمة طبي واحد على الأقل");
+
+        if (missingFields.length > 0) {
+            setShowValidationErrors(true);
+            enqueueSnackbar(`⚠️ لا يمكن الحفظ. يرجى إدخال الحقول التالية: ${missingFields.join('، ')}`, {
+                variant: 'error',
+                autoHideDuration: 5000
+            });
+            return;
+        }
+
+        setShowValidationErrors(false);
+
+        // تحققات إضافية لأسعار الخدمات
+        if (!isClaimRejected && lines.some(l => (l.service || l.serviceName) && !l.rejected && (parseFloat(l.unitPrice) || 0) <= 0)) {
+            enqueueSnackbar('يجب أن يكون سعر الوحدة أكبر من صفر لكل بند غير مرفوض', { variant: 'error' });
+            return;
         }
 
         isSavingRef.current = true;
@@ -830,7 +853,7 @@ export default function ClaimBatchEntry() {
                 preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
                 manualCategoryEnabled,
                 // Always send context category so backend can set appliedCategoryId on unmapped services
-                primaryCategoryCode: fullCoverage ? '' : primaryCategoryCode,
+                primaryCategoryCode: primaryCategoryCode,
                 fullCoverage: fullCoverage,
                 lines: lines.map(l => ({
                     pricingItemId: l.service?.pricingItemId || null,
@@ -978,13 +1001,18 @@ export default function ClaimBatchEntry() {
     const handleDeleteClaim = async (claimId, e) => {
         e.stopPropagation();
         setConfirmDeleteId(claimId);
+        setConfirmDeleteReason(''); // Reset reason
     };
 
     const confirmDeleteClaim = async () => {
         const claimId = confirmDeleteId;
         if (!claimId) return;
+        if (!confirmDeleteReason?.trim()) {
+            enqueueSnackbar('يرجى إدخال سبب الإلغاء', { variant: 'warning' });
+            return;
+        }
         try {
-            await claimsService.remove(claimId);
+            await claimsService.remove(claimId, confirmDeleteReason);
             enqueueSnackbar(`✅ تم إلغاء المطالبة #${claimId}`, { variant: 'success' });
             setConfirmDeleteId(null);
             invalidateBatchData();
@@ -1157,9 +1185,11 @@ export default function ClaimBatchEntry() {
                                 setDiagnosis={setDiagnosis}
                                 primaryCategoryCode={primaryCategoryCode}
                                 setPrimaryCategoryCode={setPrimaryCategoryCode}
+                                fullCoverage={fullCoverage}
+                                setFullCoverage={setFullCoverage}
                                 setManualCategoryEnabled={setManualCategoryEnabled}
                                 rootCategories={rootCategories}
-                                refetchAllLinesCoverage={refetchAllLinesCoverageCallback}
+                                onRefetchAll={refetchAllLinesCoverageCallback}
                                 linesRef={linesRef}
                                 preAuthResults={preAuthResults}
                                 searchingPreAuth={searchingPreAuth}
@@ -1172,6 +1202,7 @@ export default function ClaimBatchEntry() {
                                 financialSummary={memberFinancialSummary}
                                 loadingSummary={loadingSummary}
                                 t={t}
+                                showValidationErrors={showValidationErrors}
                             />
                         </Box>
 
@@ -1481,14 +1512,37 @@ export default function ClaimBatchEntry() {
                 </DialogActions>
             </Dialog>
 
-            <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)}>
-                <DialogTitle sx={{ fontWeight: 600 }}>تأكيد إلغاء المطالبة</DialogTitle>
+            <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>
+                    تأكيد إلغاء المطالبة
+                </DialogTitle>
                 <DialogContent>
-                    هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟ هذا الإجراء لا يمكن التراجع عنه.
+                    <Typography sx={{ mb: 2 }}>
+                        هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟ هذا الإجراء سيؤدي إلى استرجاع الأموال لسقف العضو.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        label="سبب الإلغاء (إجباري)"
+                        placeholder="اكتب سبب الإلغاء هنا..."
+                        value={confirmDeleteReason}
+                        onChange={(e) => setConfirmDeleteReason(e.target.value)}
+                        autoFocus
+                        error={!confirmDeleteReason?.trim()}
+                    />
                 </DialogContent>
                 <DialogActions sx={{ p: '1.0rem' }}>
                     <Button onClick={() => setConfirmDeleteId(null)} color="inherit">تراجع</Button>
-                    <Button onClick={confirmDeleteClaim} variant="contained" color="error">تأكيد الإلغاء</Button>
+                    <Button
+                        onClick={confirmDeleteClaim}
+                        variant="contained"
+                        color="error"
+                        disabled={!confirmDeleteReason?.trim()}
+                    >
+                        تأكيد الإلغاء
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

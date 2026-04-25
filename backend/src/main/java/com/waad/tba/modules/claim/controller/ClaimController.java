@@ -261,9 +261,11 @@ public class ClaimController {
 
     @DeleteMapping("/{id:\\d+}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
-    public ResponseEntity<ApiResponse<Void>> deleteClaim(@PathVariable("id") Long id) {
-        claimService.deleteClaim(id);
-        return ResponseEntity.ok(ApiResponse.success("تم حذف المطالبة (حذف ناعم) بنجاح", null));
+    public ResponseEntity<ApiResponse<Void>> deleteClaim(
+            @PathVariable("id") Long id,
+            @RequestParam(name = "reason") String reason) {
+        claimService.deleteClaim(id, reason);
+        return ResponseEntity.ok(ApiResponse.success("تم إلغاء المطالبة بنجاح", null));
     }
 
     @PutMapping("/{id:\\d+}/restore")

@@ -99,6 +99,7 @@ export default function ClaimBatchDetail() {
     const [hardDeletingClaim, setHardDeletingClaim] = useState(null);
     const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
     const [restoringClaim, setRestoringClaim] = useState(null);
+    const [voidReason, setVoidReason] = useState('');
     const tableState = useTableState({
         initialPageSize: 10,
         defaultSort: { field: 'serviceDate', direction: 'desc' }
@@ -122,11 +123,12 @@ export default function ClaimBatchDetail() {
     const canHardDelete = currentUserRole === 'SUPER_ADMIN';
 
     const softDeleteMutation = useMutation({
-        mutationFn: (claimId) => claimsService.softDelete(claimId),
+        mutationFn: ({ claimId, reason }) => claimsService.softDelete(claimId, reason),
         onSuccess: () => {
-            enqueueSnackbar('تم حذف المطالبة — تمت استعادة السقف تلقائياً', { variant: 'success' });
+            enqueueSnackbar('تم إلغاء المطالبة بنجاح — تمت استعادة السقف تلقائياً', { variant: 'success' });
             setDeleteDialogOpen(false);
             setDeletingClaim(null);
+            setVoidReason('');
             queryClient.invalidateQueries({ queryKey: ['batch-claims-detail'] });
             queryClient.invalidateQueries({ queryKey: ['batch-stats'] });
         },
@@ -1002,28 +1004,46 @@ export default function ClaimBatchDetail() {
             {/* Soft Delete Confirmation Dialog */}
             <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle sx={{ fontWeight: 600, borderBottom: '1px solid', borderColor: 'divider', color: 'error.main' }}>
-                    تأكيد حذف المطالبة
+                    تأكيد إلغاء المطالبة
                 </DialogTitle>
                 <DialogContent sx={{ pt: '1.25rem' }}>
                     <Typography variant="body2" mb={1}>
-                        هل أنت متأكد من حذف المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong>؟
+                        هل أنت متأكد من إلغاء المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong>؟
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        • سيتم إخفاء المطالبة من القوائم<br />
+                    <Typography variant="body2" color="text.secondary" mb={2}>
+                        • سيتم إخفاء المطالبة من القوائم النشطة<br />
                         • ستعود الأموال المحجوزة إلى السقف السنوي تلقائياً<br />
-                        • يمكن استعادتها لاحقاً من زر «سجل المحذوفات»
+                        • يمكن استعادتها لاحقاً من سجل المحذوفات
                     </Typography>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        label="سبب الإلغاء (إجباري)"
+                        placeholder="يرجى كتابة سبب الإلغاء لغايات التدقيق..."
+                        value={voidReason}
+                        onChange={(e) => setVoidReason(e.target.value)}
+                        autoFocus
+                        error={!voidReason.trim()}
+                    />
                 </DialogContent>
                 <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
-                    <Button variant="outlined" onClick={() => setDeleteDialogOpen(false)}>إلغاء</Button>
+                    <Button variant="outlined" onClick={() => setDeleteDialogOpen(false)}>تراجع</Button>
                     <Button
                         variant="contained"
                         color="error"
                         startIcon={<DeleteOutlineIcon />}
-                        onClick={() => softDeleteMutation.mutate(deletingClaim?.id)}
-                        disabled={softDeleteMutation.isPending}
+                        onClick={() => {
+                            if (!voidReason.trim()) {
+                                enqueueSnackbar('يجب إدخال سبب الإلغاء', { variant: 'warning' });
+                                return;
+                            }
+                            softDeleteMutation.mutate({ claimId: deletingClaim?.id, reason: voidReason });
+                        }}
+                        disabled={softDeleteMutation.isPending || !voidReason.trim()}
                     >
-                        حذف المطالبة
+                        تأكيد الإلغاء
                     </Button>
                 </DialogActions>
             </Dialog>

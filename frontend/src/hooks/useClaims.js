@@ -121,11 +121,11 @@ export const useDeleteClaim = () => {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
 
-  const remove = async (id) => {
+  const remove = async (id, reason) => {
     setDeleting(true);
     setError(null);
     try {
-      await claimsService.remove(id);
+      await claimsService.remove(id, reason);
       return { success: true };
     } catch (err) {
       const errorMsg = err.message || 'فشل حذف المطالبة';

@@ -193,10 +193,11 @@ export const claimsService = {
    * @param {number} id - Claim ID
    * @returns {Promise<void>}
    */
-  remove: async (id) => {
+  remove: async (id, reason) => {
     try {
       if (!id) throw new Error('معرف المطالبة مطلوب');
-      const response = await axiosClient.delete(`${BASE_URL}/${id}`);
+      if (!reason) throw new Error('سبب الإلغاء مطلوب');
+      const response = await axiosClient.delete(`${BASE_URL}/${id}?reason=${encodeURIComponent(reason)}`);
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);
@@ -646,10 +647,11 @@ export const claimsService = {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   /** حذف ناعم — تعود الأموال للسقف تلقائياً */
-  softDelete: async (id) => {
+  softDelete: async (id, reason) => {
     try {
       if (!id) throw new Error('معرف المطالبة مطلوب');
-      const response = await axiosClient.delete(`${BASE_URL}/${id}`);
+      if (!reason) throw new Error('سبب الإلغاء مطلوب');
+      const response = await axiosClient.delete(`${BASE_URL}/${id}?reason=${encodeURIComponent(reason)}`);
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);
