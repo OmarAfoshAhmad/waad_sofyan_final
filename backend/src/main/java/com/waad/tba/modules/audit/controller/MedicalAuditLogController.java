@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import com.waad.tba.modules.audit.service.AuditLogDeleteRequest;
+import java.util.List;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -33,78 +37,88 @@ import java.time.format.DateTimeFormatter;
 @PreAuthorize("hasAnyRole('SUPER_ADMIN','MEDICAL_REVIEWER')")
 public class MedicalAuditLogController {
 
-    private final MedicalAuditLogService medicalAuditLogService;
-    private final MedicalAuditLogExcelExportService medicalAuditLogExcelExportService;
+        private final MedicalAuditLogService medicalAuditLogService;
+        private final MedicalAuditLogExcelExportService medicalAuditLogExcelExportService;
 
-    @GetMapping
-    @Operation(summary = "Search claim audit logs", description = "Filter by claimId and/or correlationId with pagination")
-    public ResponseEntity<ApiResponse<Page<AuditLog>>> search(
-            @RequestParam(name = "claimId", required = false) Long claimId,
-            @RequestParam(name = "correlationId", required = false) String correlationId,
-            @RequestParam(name = "page", defaultValue = "1") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size,
-            @RequestParam(name = "sortBy", defaultValue = "timestamp") String sortBy,
-            @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir) {
+        @GetMapping
+        @Operation(summary = "Search claim audit logs", description = "Filter by claimId and/or correlationId with pagination")
+        public ResponseEntity<ApiResponse<Page<AuditLog>>> search(
+                        @RequestParam(name = "claimId", required = false) Long claimId,
+                        @RequestParam(name = "correlationId", required = false) String correlationId,
+                        @RequestParam(name = "page", defaultValue = "1") int page,
+                        @RequestParam(name = "size", defaultValue = "20") int size,
+                        @RequestParam(name = "sortBy", defaultValue = "timestamp") String sortBy,
+                        @RequestParam(name = "sortDir", defaultValue = "desc") String sortDir) {
 
-        String safeSortBy = "timestamp";
-        if ("id".equals(sortBy) || "timestamp".equals(sortBy)) {
-            safeSortBy = sortBy;
+                String safeSortBy = "timestamp";
+                if ("id".equals(sortBy) || "timestamp".equals(sortBy)) {
+                        safeSortBy = sortBy;
+                }
+
+                Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+                int safePage = Math.max(0, page - 1);
+                int safeSize = Math.min(Math.max(1, size), 100);
+                PageRequest pageable = PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
+
+                Page<AuditLog> result = medicalAuditLogService.searchClaimAuditLogs(claimId, correlationId, pageable);
+                return ResponseEntity.ok(ApiResponse.success(result));
         }
 
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
-        int safePage = Math.max(0, page - 1);
-        int safeSize = Math.min(Math.max(1, size), 100);
-        PageRequest pageable = PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
+        @GetMapping("/export.xlsx")
+        @Operation(summary = "Export claim audit logs to XLSX", description = "Export filtered claim audit logs in XLSX format")
+        public ResponseEntity<byte[]> exportXlsx(
+                        @RequestParam(name = "claimId", required = false) Long claimId,
+                        @RequestParam(name = "correlationId", required = false) String correlationId,
+                        @RequestParam(name = "maxRows", defaultValue = "5000") int maxRows) throws IOException {
 
-        Page<AuditLog> result = medicalAuditLogService.searchClaimAuditLogs(claimId, correlationId, pageable);
-        return ResponseEntity.ok(ApiResponse.success(result));
-    }
+                byte[] file = medicalAuditLogExcelExportService.exportClaimAuditLogs(claimId, correlationId, maxRows);
+                String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                String fileName = "medical_audit_logs_" + ts + ".xlsx";
 
-    @GetMapping("/export.xlsx")
-    @Operation(summary = "Export claim audit logs to XLSX", description = "Export filtered claim audit logs in XLSX format")
-    public ResponseEntity<byte[]> exportXlsx(
-            @RequestParam(name = "claimId", required = false) Long claimId,
-            @RequestParam(name = "correlationId", required = false) String correlationId,
-            @RequestParam(name = "maxRows", defaultValue = "5000") int maxRows) throws IOException {
-
-        byte[] file = medicalAuditLogExcelExportService.exportClaimAuditLogs(claimId, correlationId, maxRows);
-        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String fileName = "medical_audit_logs_" + ts + ".xlsx";
-
-        return ResponseEntity.ok()
-                .contentType(
-                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
-                .body(file);
-    }
-
-    @GetMapping("/export-by-date.xlsx")
-    @Operation(summary = "Export claim audit logs by date to XLSX", description = "Export filtered claim audit logs by date range (UTC) in XLSX format")
-    public ResponseEntity<byte[]> exportByDateXlsx(
-            @RequestParam(name = "fromDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            @RequestParam(name = "toDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-            @RequestParam(name = "claimId", required = false) Long claimId,
-            @RequestParam(name = "correlationId", required = false) String correlationId,
-            @RequestParam(name = "maxRows", defaultValue = "5000") int maxRows) throws IOException {
-
-        if (fromDate.isAfter(toDate)) {
-            throw new IllegalArgumentException("fromDate must be before or equal to toDate");
+                return ResponseEntity.ok()
+                                .contentType(
+                                                MediaType.parseMediaType(
+                                                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                                .body(file);
         }
 
-        byte[] file = medicalAuditLogExcelExportService.exportClaimAuditLogsByDate(
-                claimId,
-                correlationId,
-                fromDate.atStartOfDay().toInstant(ZoneOffset.UTC),
-                toDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC),
-                maxRows);
+        @GetMapping("/export-by-date.xlsx")
+        @Operation(summary = "Export claim audit logs by date to XLSX", description = "Export filtered claim audit logs by date range (UTC) in XLSX format")
+        public ResponseEntity<byte[]> exportByDateXlsx(
+                        @RequestParam(name = "fromDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+                        @RequestParam(name = "toDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+                        @RequestParam(name = "claimId", required = false) Long claimId,
+                        @RequestParam(name = "correlationId", required = false) String correlationId,
+                        @RequestParam(name = "maxRows", defaultValue = "5000") int maxRows) throws IOException {
 
-        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String fileName = "medical_audit_logs_" + fromDate + "_to_" + toDate + "_" + ts + ".xlsx";
+                if (fromDate.isAfter(toDate)) {
+                        throw new IllegalArgumentException("fromDate must be before or equal to toDate");
+                }
 
-        return ResponseEntity.ok()
-                .contentType(
-                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
-                .body(file);
-    }
+                byte[] file = medicalAuditLogExcelExportService.exportClaimAuditLogsByDate(
+                                claimId,
+                                correlationId,
+                                fromDate.atStartOfDay().toInstant(ZoneOffset.UTC),
+                                toDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC),
+                                maxRows);
+
+                String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                String fileName = "medical_audit_logs_" + fromDate + "_to_" + toDate + "_" + ts + ".xlsx";
+
+                return ResponseEntity.ok()
+                                .contentType(
+                                                MediaType.parseMediaType(
+                                                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                                .body(file);
+        }
+
+        @PostMapping("/bulk-delete")
+        @PreAuthorize("hasRole('SUPER_ADMIN')")
+        @Operation(summary = "Bulk delete audit logs", description = "Delete multiple audit logs by ID. Requires user password for confirmation.")
+        public ResponseEntity<ApiResponse<Void>> deleteBulk(@RequestBody AuditLogDeleteRequest request) {
+                medicalAuditLogService.bulkDeleteLogs(request.getIds(), request.getPassword());
+                return ResponseEntity.ok(ApiResponse.success(null));
+        }
 }

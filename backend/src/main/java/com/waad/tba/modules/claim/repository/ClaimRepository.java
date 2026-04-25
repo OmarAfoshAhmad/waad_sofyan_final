@@ -1289,4 +1289,21 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("dateFrom") java.time.LocalDate dateFrom,
                         @Param("dateTo") java.time.LocalDate dateTo,
                         Pageable pageable);
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // B-03 FIX: Generic count by status AND employer
+        // Used by ClaimFinancialSummaryService for per-employer status breakdowns
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /**
+         * Count active claims by exact status and employer organization.
+         * Generic method that works for ANY ClaimStatus, replacing the broken
+         * countByStatusAndEmployer helper that only handled APPROVED.
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true " +
+                        "AND c.status = :status " +
+                        "AND c.member.employer.id = :employerOrgId")
+        long countByStatusAndEmployerOrgId(
+                        @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
+                        @Param("employerOrgId") Long employerOrgId);
 }

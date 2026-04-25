@@ -887,6 +887,7 @@ export default function ClaimBatchDetail() {
                                                         <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الإجمالي</th>
                                                         <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>الحالة</th>
                                                         <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>حُذف بواسطة</th>
+                                                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>سبب الإلغاء</th>
                                                         <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600 }}>إجراءات</th>
                                                     </tr>
                                                 </thead>
@@ -899,6 +900,7 @@ export default function ClaimBatchDetail() {
                                                             <td style={{ padding: '8px 14px', textAlign: 'center' }}>{(c.requestedAmount || 0).toFixed(2)}</td>
                                                             <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888' }}>{c.status}</td>
                                                             <td style={{ padding: '8px 14px', textAlign: 'center', color: '#888', fontSize: '0.75rem' }}>{c.deletedBy || '—'}</td>
+                                                            <td style={{ padding: '8px 14px', textAlign: 'center', color: '#e74c3c', fontSize: '0.75rem', fontWeight: 500 }}>{c.voidReason || '—'}</td>
                                                             <td style={{ padding: '8px 14px', textAlign: 'center' }}>
                                                                 <Stack direction="row" spacing={0.5} justifyContent="center">
                                                                     <Tooltip title="استعادة المطالبة">

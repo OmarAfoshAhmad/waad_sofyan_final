@@ -522,15 +522,24 @@ public class ProviderAccountService {
                 // Use the recorded paidAmount if available (exact amount given to provider),
                 // otherwise fall back to the original CREDIT amount
                 BigDecimal amount = claim.getPaidAmount();
+                AccountTransaction creditTx = transactionRepository
+                                .findByReferenceTypeAndReferenceId(ReferenceType.CLAIM_APPROVAL, claimId)
+                                .orElse(null);
+
                 if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                        AccountTransaction creditTx = transactionRepository
-                                        .findByReferenceTypeAndReferenceId(ReferenceType.CLAIM_APPROVAL, claimId)
-                                        .orElse(null);
                         if (creditTx == null) {
                                 log.warn("⚠️ No credit transaction found for claim {} — skipping settlement debit",
                                                 claimId);
                                 return null;
                         }
+                        amount = creditTx.getAmount();
+                }
+
+                // B-05 FIX: Settlement debit must never exceed original credit.
+                // Without this guard, a custom paidAmount could create a negative balance.
+                if (creditTx != null && amount.compareTo(creditTx.getAmount()) > 0) {
+                        log.warn("⚠️ Settlement amount {} exceeds original credit {} for claim {} — capping to credit",
+                                        amount, creditTx.getAmount(), claimId);
                         amount = creditTx.getAmount();
                 }
 

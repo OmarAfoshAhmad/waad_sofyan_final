@@ -10,6 +10,8 @@ import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class MedicalAuditLogService {
     private final AuthorizationService authorizationService;
     private final CorrelationIdProvider correlationIdProvider;
     private final ObjectMapper objectMapper;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public AuditLog record(AuditLogWriteRequest request) {
@@ -71,6 +74,36 @@ public class MedicalAuditLogService {
                 .build();
 
         return repository.save(auditLog);
+    }
+
+    @Transactional
+    public void bulkDeleteLogs(List<Long> ids, String password) {
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("IDs are required for deletion");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("Password is required for deletion authorization");
+        }
+
+        User actor = authorizationService.getCurrentUser();
+        if (actor == null) {
+            throw new IllegalStateException("Authentication required");
+        }
+
+        log.info("🔐 Attempting bulk delete of {} audit logs by user {}", ids.size(), actor.getEmail());
+
+        if (!passwordEncoder.matches(password, actor.getPassword())) {
+            log.error("❌ Audit log deletion failed: Invalid password provided by user {}", actor.getEmail());
+            throw new IllegalArgumentException("كلمة المرور غير صحيحة. لا يمكن حذف سجل التدقيق.");
+        }
+
+        try {
+            int deleted = repository.bulkDeleteByIds(ids);
+            log.info("🗑️ Successfully deleted {} audit log entries.", deleted);
+        } catch (Exception e) {
+            log.error("❌ Database error during audit log deletion: {}", e.getMessage(), e);
+            throw new RuntimeException("حدث خطأ أثناء الحذف من قاعدة البيانات: " + e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)

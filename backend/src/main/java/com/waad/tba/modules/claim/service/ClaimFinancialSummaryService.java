@@ -328,14 +328,12 @@ public class ClaimFinancialSummaryService {
         }
 
         /**
-         * Helper method to count by status and employer.
-         * Uses existing repository count method with filter.
+         * B-03 FIX: Generic count by status and employer using dedicated repository
+         * query.
+         * Previously only handled APPROVED (returning 0 for all other statuses),
+         * causing financial reports to show zero counts for pending/rejected/settled.
          */
         private long countByStatusAndEmployer(ClaimStatus status, Long employerOrgId) {
-                if (status == ClaimStatus.APPROVED) {
-                        return claimRepository.countApprovedClaimsByEmployer(employerOrgId);
-                }
-                // Fallback - this should be improved with proper repository methods
-                return 0L;
+                return claimRepository.countByStatusAndEmployerOrgId(status, employerOrgId);
         }
 }

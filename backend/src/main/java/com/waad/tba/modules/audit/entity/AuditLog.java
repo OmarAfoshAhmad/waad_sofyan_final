@@ -37,7 +37,6 @@ import java.time.Instant;
         @Index(name = "idx_med_audit_timestamp", columnList = "event_timestamp"),
         @Index(name = "idx_med_audit_correlation", columnList = "correlation_id")
 })
-@Immutable
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -103,11 +102,7 @@ public class AuditLog {
 
     @PreUpdate
     void blockUpdate() {
-        throw new UnsupportedOperationException("AuditLog is immutable and cannot be updated");
-    }
-
-    @PreRemove
-    void blockDelete() {
-        throw new UnsupportedOperationException("AuditLog is immutable and cannot be deleted");
+        throw new UnsupportedOperationException(
+                "AuditLog content cannot be updated. Only deletion is allowed for maintenance.");
     }
 }

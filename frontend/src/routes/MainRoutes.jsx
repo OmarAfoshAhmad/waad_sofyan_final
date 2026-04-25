@@ -131,6 +131,7 @@ const AdminUsersList = Loadable(lazy(() => import('pages/rbac/users')));
 const AdminUserDetails = Loadable(lazy(() => import('pages/rbac/users/UserDetails')));
 const AdminUserCreate = Loadable(lazy(() => import('pages/rbac/users/UserCreate')));
 const AdminUserEdit = Loadable(lazy(() => import('pages/rbac/users/UserEdit')));
+const AdminMedicalAuditLogs = Loadable(lazy(() => import('pages/admin/MedicalAuditLogs')));
 // ==============================|| LAZY LOADING - SETTINGS ||============================== //
 
 const Settings = Loadable(lazy(() => import('pages/settings')));
@@ -803,6 +804,14 @@ const MainRoutes = {
               element: (
                 <PermissionGuard isRouteGuard>
                   <AdminUserEdit />
+                </PermissionGuard>
+              )
+            },
+            {
+              path: 'medical-audit-logs',
+              element: (
+                <PermissionGuard isRouteGuard>
+                  <AdminMedicalAuditLogs />
                 </PermissionGuard>
               )
             }

@@ -72,7 +72,13 @@ export const suppressMUIDeprecationWarnings = () => {
   // This is a false positive for client-side-only apps (Vite) but Emotion flags it anyway
   const originalError = console.error;
   console.error = (...args) => {
-    const message = args[0]?.toString?.() || '';
+    let message = '';
+    try {
+      message = (args[0] && typeof args[0] === 'object' && args[0].message) ? args[0].message : String(args[0] || '');
+    } catch (e) {
+      message = 'Unknown Error';
+    }
+
     if (message.includes('The pseudo class ":first-child" is potentially unsafe when doing server-side rendering')) {
       return; // Suppress
     }

@@ -407,6 +407,20 @@ public class ClaimReviewService {
         claim.setApprovedAmount(BigDecimal.ZERO);
         claim.setNetProviderAmount(BigDecimal.ZERO);
 
+        // B-01 FIX: Zero out the deductible snapshot on the rejected claim.
+        // The system calculates remaining deductible via sumDeductibleForYear()
+        // which only sums APPROVED/SETTLED claims. Rejecting automatically excludes
+        // this claim from future deductible calculations. We zero out the field
+        // here for audit trail clarity and to prevent stale data if the claim
+        // is ever re-submitted via NEEDS_CORRECTION flow.
+        if (claim.getDeductibleApplied() != null
+                && claim.getDeductibleApplied().compareTo(BigDecimal.ZERO) > 0) {
+            log.info("↩️ Zeroing deductible on rejection: claim={}, previousDeductible={}",
+                    id, claim.getDeductibleApplied());
+            claim.setDeductibleApplied(BigDecimal.ZERO);
+        }
+        claim.setPatientCoPay(BigDecimal.ZERO);
+
         claimStateMachine.transition(
                 claim,
                 ClaimStatus.REJECTED,

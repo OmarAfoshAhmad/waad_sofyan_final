@@ -594,6 +594,21 @@ const menuItem = [
           color: 'warning',
           size: 'small'
         }
+      },
+      {
+        id: 'medical-audit-logs',
+        title: 'سجل التدقيق الطبي',
+        titleEn: 'Medical Audit Logs',
+        type: 'item',
+        url: '/admin/users/medical-audit-logs',
+        icon: HistoryIcon,
+        resource: 'users',
+        action: 'view',
+        chip: {
+          label: '📜',
+          color: 'info',
+          size: 'small'
+        }
       }
     ]
   }

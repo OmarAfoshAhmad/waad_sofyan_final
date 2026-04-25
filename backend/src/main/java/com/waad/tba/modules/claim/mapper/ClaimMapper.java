@@ -268,7 +268,15 @@ public class ClaimMapper {
                 claim.setRefusedAmount(totalRefused);
                 claim.setApprovedAmount(totalApproved);
                 claim.setNetProviderAmount(totalApproved);
-                claim.setPatientCoPay(totalRequested.subtract(totalApproved));
+                // B-02 FIX: patientCoPay = Σ(per-line patientShare), NOT (requested -
+                // approved).
+                // The old formula incorrectly included refused amounts in patient
+                // responsibility.
+                // Refused amounts are the insurer's refusal, NOT the patient's out-of-pocket.
+                BigDecimal totalPatientShare = lines.stream()
+                                .map(l -> l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                claim.setPatientCoPay(totalPatientShare);
         }
 
         public void replaceClaimLinesForDraft(Claim claim, List<ClaimLineDto> lineDtos) {

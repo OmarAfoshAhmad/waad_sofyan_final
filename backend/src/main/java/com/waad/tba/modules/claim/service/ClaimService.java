@@ -58,6 +58,11 @@ import com.waad.tba.modules.settlement.event.ClaimApprovedEvent;
 import com.waad.tba.modules.settlement.event.ClaimReversalEvent;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.security.ProviderContextGuard;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
+import com.waad.tba.modules.audit.service.AuditLogWriteRequest;
+import com.waad.tba.modules.audit.enums.EntityType;
+import com.waad.tba.modules.audit.enums.AuditAction;
+import com.waad.tba.modules.audit.enums.AuditSource;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -113,6 +118,7 @@ public class ClaimService {
     private final ClaimMapper claimMapper;
     private final AuthorizationService authorizationService;
     private final ProviderContextGuard providerContextGuard;
+    private final MedicalAuditLogService medicalAuditLogService;
     private final MemberRepository memberRepository;
     private final ProviderRepository providerRepository;
     private final VisitRepository visitRepository;
@@ -1520,11 +1526,23 @@ public class ClaimService {
         claim.setActive(false);
         claim.setVoidReason(reason);
         claim.setDeletedAt(java.time.LocalDateTime.now());
-        claim.setDeletedBy(currentUser != null ? currentUser.getEmail() : "system");
+        claim.setDeletedBy(currentUser != null ? currentUser.getFullName() : "system");
 
         claimRepository.save(claim);
+
+        // Record Medical Audit Log (PHASE 10 - Secure Auditing)
+        medicalAuditLogService.record(AuditLogWriteRequest.builder()
+                .entityType(EntityType.CLAIM)
+                .entityId(String.valueOf(claim.getId()))
+                .action(AuditAction.CLAIM_VOIDED)
+                .reason(reason)
+                .beforeState("active=true, status=" + claim.getStatus())
+                .afterState("active=false, voidReason=" + reason)
+                .source(AuditSource.USER)
+                .build());
+
         log.info("✅ Claim {} soft-deleted by {}. Reason: {}. Annual limits automatically restored.", id,
-                currentUser != null ? currentUser.getEmail() : "system", reason);
+                currentUser != null ? currentUser.getFullName() : "system", reason);
 
         // المطالبة المعتمدة تحمل رصيداً في حساب مقدم الخدمة → يجب عكسه
         if (wasApproved && claim.getProviderId() != null) {

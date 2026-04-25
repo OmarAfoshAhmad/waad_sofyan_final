@@ -360,8 +360,18 @@ public class ProviderSettlementReportService {
                                 ? line.getRefusedAmount().max(BigDecimal.ZERO)
                                 : BigDecimal.ZERO;
 
-                // Approved (net to provider) = gross − rejected
-                BigDecimal approved = gross.subtract(rejected).max(BigDecimal.ZERO);
+                // B-04 FIX: Use the line's stored approvedAmount (company share, set by
+                // CoverageEngineService)
+                // as the authoritative value. The old formula (gross - rejected) incorrectly
+                // included
+                // patient co-pay share, inflating the reported "approved" amount.
+                BigDecimal approved;
+                if (line.getApprovedAmount() != null) {
+                        approved = line.getApprovedAmount().max(BigDecimal.ZERO);
+                } else {
+                        // Fallback for legacy lines without stored approvedAmount
+                        approved = gross.subtract(rejected).max(BigDecimal.ZERO);
+                }
 
                 // Determine line status
                 LineStatus lineStatus = ProviderSettlementReportDto.calculateLineStatus(gross, approved);
@@ -405,7 +415,7 @@ public class ProviderSettlementReportService {
                                 .approvedAmount(approved)
                                 .rejectedAmount(rejected)
                                 .rejectionReason(lineRejectionReason) // Detailed reason from engine or manual
-                                .patientShare(BigDecimal.ZERO) // Patient share is at claim level
+                                .patientShare(line.getPatientShare() != null ? line.getPatientShare() : BigDecimal.ZERO)
                                 .lineStatus(lineStatus)
                                 .lineStatusArabic(lineStatus.getArabicLabel())
                                 .build();
