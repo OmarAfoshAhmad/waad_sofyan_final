@@ -183,7 +183,10 @@ public class ClaimMapper {
                                         .contractPrice(resolvedUnitPrice)
                                         .quantity(quantity)
                                         .manualRefusedAmount(lineDto.getManualRefusedAmount())
-                                        .manualRefusalReason(lineDto.getManualRefusalReason())
+                                        .manualRefusalReason(lineDto.getRejectionReason() != null
+                                                        && !lineDto.getRejectionReason().isBlank()
+                                                                        ? lineDto.getRejectionReason()
+                                                                        : lineDto.getManualRefusalReason())
                                         .rejected(Boolean.TRUE.equals(lineDto.getRejected()))
                                         .build();
 
@@ -218,7 +221,10 @@ public class ClaimMapper {
                                                         ? 100 - result.getCoveragePercent()
                                                         : 0)
                                         .manualRefusedAmount(manualRefused)
-                                        .manualRefusalReason(lineDto.getManualRefusalReason())
+                                        .manualRefusalReason(lineDto.getRejectionReason() != null
+                                                        && !lineDto.getRejectionReason().isBlank()
+                                                                        ? lineDto.getRejectionReason()
+                                                                        : lineDto.getManualRefusalReason())
                                         .unitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
                                         .totalPrice(result.getEffectiveTotal())
                                         .requestedUnitPrice(enteredUnitPrice)
@@ -233,8 +239,11 @@ public class ClaimMapper {
                                         .priceExcessRefused(isRejected ? BigDecimal.ZERO : result.getPriceRefused())
                                         .limitRefused(isRejected ? BigDecimal.ZERO : result.getLimitRefused())
                                         .rejected(isRejected)
-                                        .rejectionReason(
-                                                        isRejected ? "REJECTED_BY_REVIEWER" : result.getRefusalReason())
+                                        .rejectionReason(lineDto.getRejectionReason() != null
+                                                        && !lineDto.getRejectionReason().isBlank()
+                                                                        ? lineDto.getRejectionReason()
+                                                                        : (isRejected ? "مرفوض كلياً من قبل المراجع"
+                                                                                        : result.getRefusalReason()))
                                         .approvedQuantity(isRejected ? 0 : quantity)
                                         .build();
 

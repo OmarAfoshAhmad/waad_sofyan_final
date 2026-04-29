@@ -76,7 +76,8 @@ const newLine = () => ({
     refusalTypes: '', total: 0, coveragePercent: null,
     requiresPreApproval: false, notCovered: false,
     rejected: false, rejectionReason: '',
-    manualRefusedAmount: 0
+    manualRefusedAmount: 0,
+    oldRejected: 0
 });
 
 // أنماط حقول الجدول القابلة للتعديل
@@ -162,6 +163,11 @@ export default function ClaimBatchEntry() {
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
     const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
     const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+    // Generic confirmation dialog
+    const [actionConfirm, setActionConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
+    const closeActionConfirm = () => setActionConfirm(prev => ({ ...prev, open: false }));
+    const triggerConfirm = (title, message, onConfirm) => setActionConfirm({ open: true, title, message, onConfirm });
 
     // Column Visibility State (Clutter Reduction)
     const [visibleColumns, setVisibleColumns] = useState({
@@ -451,8 +457,8 @@ export default function ClaimBatchEntry() {
     useEffect(() => {
         if (editingClaim) {
             setMember({ id: editingClaim.memberId, fullName: editingClaim.memberName, cardNumber: editingClaim.memberNationalNumber });
-            setDiagnosis(editingClaim.diagnosisCode || '');
-            setComplaint(editingClaim.diagnosisDescription || '');
+            setDiagnosis(editingClaim.diagnosisDescription || editingClaim.diagnosisCode || '');
+            setComplaint(editingClaim.complaint || '');
             setIsClaimRejected(editingClaim.status === 'REJECTED');
             setRejectionInput(editingClaim.reviewerComment || '');
 
@@ -488,7 +494,8 @@ export default function ClaimBatchEntry() {
                     coveragePercent: l.coveragePercent,
                     rejected: l.rejected,
                     rejectionReason: l.rejectionReason,
-                    manualRefusedAmount: parseFloat(l.manualRefusedAmount) || 0
+                    manualRefusedAmount: parseFloat(l.manualRefusedAmount) || 0,
+                    oldRejected: l.rejected ? 1 : 0
                 };
                 return recompute(line);
             }));
@@ -672,9 +679,19 @@ export default function ClaimBatchEntry() {
     const openRejectDialog = (type, idx = null) => {
         setRejectType(type);
         setRejectIdx(idx);
-        setRejectionMode('full');
-        setManualRefusedAmountInput('');
-        setRejectionInput(type === 'line' ? (lines[idx]?.rejectionReason || '') : (rejectionInput || ''));
+
+        if (type === 'line' && idx !== null) {
+            const line = lines[idx];
+            const isPartial = (line.manualRefusedAmount > 0 && !line.rejected);
+            setRejectionMode(isPartial ? 'partial' : 'full');
+            setManualRefusedAmountInput(isPartial ? String(line.manualRefusedAmount) : '');
+            setRejectionInput(line.rejectionReason || '');
+        } else {
+            setRejectionMode('full');
+            setManualRefusedAmountInput('');
+            setRejectionInput(type === 'line' ? (lines[idx]?.rejectionReason || '') : (rejectionInput || ''));
+        }
+
         setEditingReasonId(null);
         setEditingReasonText('');
         setShowReasonsList(false);
@@ -734,33 +751,60 @@ export default function ClaimBatchEntry() {
                 enqueueSnackbar('يجب إدخال سبب الرفض', { variant: 'warning' });
                 return;
             }
-            setIsClaimRejected(true);
-            setIsDirty(true);
+            triggerConfirm(
+                'تأكيد رفض المطالبة',
+                'أنت على وشك رفض هذه المطالبة بالكامل. سيتم تصفير جميع حصص الشركة. هل تريد الاستمرار؟',
+                () => {
+                    setIsClaimRejected(true);
+                    setIsDirty(true);
+                    setRejectDialogOpen(false);
+                }
+            );
+            return; // Don't close dialog yet
         } else {
             if (!rejectionInput?.trim()) {
                 enqueueSnackbar('يجب إدخال سبب رفض البند', { variant: 'warning' });
                 return;
             }
-            if (rejectionMode === 'partial') {
-                const amount = parseFloat(manualRefusedAmountInput) || 0;
-                const maxAmount = lines[rejectIdx]?.byCompany ?? 0;
-                if (amount <= 0 || amount > maxAmount + 0.001) {
-                    enqueueSnackbar(
-                        `مبلغ الرفض الجزئي يجب أن يكون بين 0.01 و ${maxAmount.toFixed(2)} د.ل`,
-                        { variant: 'warning' }
-                    );
-                    return;
+            const doUpdate = () => {
+                if (rejectionMode === 'partial') {
+                    const amount = parseFloat(manualRefusedAmountInput) || 0;
+                    const maxAmount = lines[rejectIdx]?.byCompany ?? 0;
+                    if (amount <= 0 || amount > maxAmount + 0.001) {
+                        enqueueSnackbar(
+                            `مبلغ الرفض الجزئي يجب أن يكون بين 0.01 و ${maxAmount.toFixed(2)} د.ل`,
+                            { variant: 'warning' }
+                        );
+                        return;
+                    }
+                    updateLine(rejectIdx, {
+                        manualRefusedAmount: parseFloat(amount.toFixed(2)),
+                        rejectionReason: rejectionInput,
+                        rejected: false,
+                        oldRejected: 0
+                    });
+                } else {
+                    updateLine(rejectIdx, {
+                        rejected: true,
+                        rejectionReason: rejectionInput,
+                        manualRefusedAmount: 0,
+                        oldRejected: 1
+                    });
                 }
-                updateLine(rejectIdx, {
-                    manualRefusedAmount: parseFloat(amount.toFixed(2)),
-                    rejectionReason: rejectionInput,
-                    rejected: false
-                });
+                setRejectDialogOpen(false);
+            };
+
+            if (rejectionMode === 'full') {
+                triggerConfirm(
+                    'تأكيد رفض البند',
+                    'هل تريد رفض هذا البند بالكامل (حصة الشركة ستصبح صفراً)؟',
+                    doUpdate
+                );
             } else {
-                updateLine(rejectIdx, { rejected: true, rejectionReason: rejectionInput, manualRefusedAmount: 0 });
+                doUpdate();
             }
+            return;
         }
-        setRejectDialogOpen(false);
     };
 
     const handleSave = async (resetAfter = false) => {
@@ -1310,6 +1354,7 @@ export default function ClaimBatchEntry() {
                                             openRejectDialog={openRejectDialog}
                                             policyInfo={policyInfo}
                                             visibleColumns={visibleColumns}
+                                            triggerConfirm={triggerConfirm}
                                         />
                                     ))}
                                     <TableRow>
@@ -1542,6 +1587,27 @@ export default function ClaimBatchEntry() {
                         disabled={!confirmDeleteReason?.trim()}
                     >
                         تأكيد الإلغاء
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Generic Action Confirmation */}
+            <Dialog open={actionConfirm.open} onClose={closeActionConfirm}>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <WarningIcon color="warning" />
+                    {actionConfirm.title}
+                </DialogTitle>
+                <DialogContent>
+                    <Typography>{actionConfirm.message}</Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa' }}>
+                    <Button onClick={closeActionConfirm} color="inherit">تراجع</Button>
+                    <Button
+                        onClick={() => { actionConfirm.onConfirm(); closeActionConfirm(); }}
+                        variant="contained"
+                        color="primary"
+                    >
+                        متابعة العملية
                     </Button>
                 </DialogActions>
             </Dialog>

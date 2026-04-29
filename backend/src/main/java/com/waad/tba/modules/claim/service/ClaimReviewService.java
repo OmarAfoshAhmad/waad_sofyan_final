@@ -318,7 +318,6 @@ public class ClaimReviewService {
             BigDecimal rawDeductible = breakdown.deductibleApplied() != null ? breakdown.deductibleApplied()
                     : BigDecimal.ZERO;
             claim.setDeductibleApplied(rawDeductible.min(patientCoPay));
-            claim.setDifferenceAmount(claim.getRequestedAmount().subtract(netProviderAmount));
 
             // Recalculation completed successfully; claim coverage snapshot is now fresh.
             claim.markCoverageSynced();

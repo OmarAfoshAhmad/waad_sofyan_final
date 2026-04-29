@@ -40,7 +40,8 @@ export const ClaimLineRow = ({
         refused: true,
         companyShare: true,
         patientShare: true
-    }
+    },
+    triggerConfirm
 }) => {
     return (
         <Fragment>
@@ -225,9 +226,28 @@ export const ClaimLineRow = ({
                                 color={line.rejected ? 'error' : (line.manualRefusedAmount > 0 ? 'warning' : 'default')}
                                 onClick={() => {
                                     if (line.rejected) {
-                                        updateLine(idx, { rejected: false, rejectionReason: '' });
+                                        triggerConfirm(
+                                            'إلغاء الرفض الكلي',
+                                            'هل أنت متأكد من إلغاء الرفض الكلي لهذا البند؟ سيتم إعادة احتساب التغطية والمبالغ.',
+                                            () => updateLine(idx, {
+                                                rejected: false,
+                                                rejectionReason: '',
+                                                byCompany: undefined,
+                                                refusedAmount: 0,
+                                                oldRejected: 0 // Reset status change tracker
+                                            })
+                                        );
                                     } else if (line.manualRefusedAmount > 0) {
-                                        updateLine(idx, { manualRefusedAmount: 0, rejectionReason: '' });
+                                        triggerConfirm(
+                                            'إلغاء الرفض الجزئي',
+                                            'هل تريد إلغاء مبلغ الرفض اليدوي (الجزئي) لهذا البند؟',
+                                            () => updateLine(idx, {
+                                                manualRefusedAmount: 0,
+                                                rejectionReason: '',
+                                                byCompany: undefined,
+                                                refusedAmount: 0
+                                            })
+                                        );
                                     } else {
                                         openRejectDialog('line', idx);
                                     }
@@ -250,11 +270,11 @@ export const ClaimLineRow = ({
                     </TableCell>
                 </TableRow>
             )}
-            {!line.rejected && (parseFloat(line.manualRefusedAmount) || 0) > 0 && (
+            {!line.rejected && (parseFloat(line.refusedAmount) || 0) > 0 && (
                 <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.03) }}>
                     <TableCell colSpan={12} sx={{ py: 0.5 }}>
                         <Typography variant="caption" color="warning.dark" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
-                            ⚠️ رفض جزئي: {parseFloat(line.manualRefusedAmount).toFixed(2)} د.ل من حصة الشركة — {line.rejectionReason}
+                            ⚠️ رفض جزئي: {parseFloat(line.refusedAmount).toFixed(2)} د.ل — {line.rejectionReason || 'تجاوز السعر التعاقدي و/أو سقف المنفعة'}
                         </Typography>
                     </TableCell>
                 </TableRow>

@@ -80,7 +80,7 @@ export function useCoverageLogic({
             byCompany: toMoney(result.companyShare),
             byEmployee: toMoney(result.patientShare),
             refusedAmount: toMoney(result.refusedAmount),
-            rejectionReason: result.refusalReason || ''
+            rejectionReason: result.refusalReason || undefined
         };
     };
 

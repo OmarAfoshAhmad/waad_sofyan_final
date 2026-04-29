@@ -610,8 +610,9 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          * Calculate SLA compliance rate (percentage of claims completed within SLA).
          * Returns value between 0-100.
          */
-        @Query("SELECT CAST(COUNT(CASE WHEN c.withinSla = true THEN 1 END) AS double) * 100.0 / " +
-                        "CAST(COUNT(c) AS double) " +
+        @Query("SELECT CASE WHEN COUNT(c) = 0 THEN 0.0 ELSE " +
+                        "CAST(COUNT(CASE WHEN c.withinSla = true THEN 1 END) AS double) * 100.0 / " +
+                        "CAST(COUNT(c) AS double) END " +
                         "FROM Claim c " +
                         "WHERE c.active = true " +
                         "AND c.withinSla IS NOT NULL")
@@ -1036,7 +1037,10 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         /**
          * Sum difference amounts (requested - approved).
          */
-        @Query("SELECT COALESCE(SUM(c.differenceAmount), 0) FROM Claim c " +
+        // B-07 OOP FIX: Computes difference natively in the database since the column
+        // is dropped.
+        @Query("SELECT COALESCE(SUM(c.requestedAmount - COALESCE(c.netProviderAmount, c.approvedAmount, 0)), 0) FROM Claim c "
+                        +
                         "WHERE c.active = true " +
                         "AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED)")
         java.math.BigDecimal sumTotalDifferenceAmounts();

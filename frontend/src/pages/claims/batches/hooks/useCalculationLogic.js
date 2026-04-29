@@ -33,7 +33,8 @@ export function useCalculationLogic({ policyInfo }) {
                 coveragePercent,
                 total: toMoney(calculatedTotal),
                 byCompany: 0,
-                byEmployee: toMoney(calculatedTotal),
+                byEmployee: 0, // Total rejection means company pays 0. Patient pays 0 or everything? 
+                // Usually Refused means it's simply NOT paid.
                 refusedAmount: toMoney(calculatedTotal),
                 rejectionReason: line.rejectionReason || 'الخدمة مرفوضة',
                 usageExceeded: !!line.usageExceeded || !!line.usageDetails?.exceeded,
@@ -51,9 +52,13 @@ export function useCalculationLogic({ policyInfo }) {
 
         // If usage details say exceeded, we don't naively override the backend's exact refusal
         // unless the calculatedTotal is completely different from the line's old total.
+        // Only keep backend values if total hasn't changed AND there's no manual change in rejection status
         const oldTotal = parseFloat(line.total) || 0;
-        if (Math.abs(oldTotal - calculatedTotal) < 0.01 && line.byCompany !== undefined) {
-            // Keep backend values if total hasn't changed
+        const hasManualRefusal = mRefused > 0;
+        const isRejectedStatusChanged = line.rejected !== (parseFloat(line.oldRejected) === 1); // Helper to track change
+
+        if (Math.abs(oldTotal - calculatedTotal) < 0.01 && line.byCompany !== undefined && !hasManualRefusal && !line.rejected) {
+            // Keep backend values if total hasn't changed and no manual rejection/status change
             estCompanyShare = parseFloat(line.byCompany) || 0;
             estPatientShare = parseFloat(line.byEmployee) || 0;
             estRefused = parseFloat(line.refusedAmount) || 0;

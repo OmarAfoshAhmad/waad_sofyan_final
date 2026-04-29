@@ -369,7 +369,6 @@ public class CostCalculationService {
         claim.setNetProviderAmount(breakdown.insuranceAmount());
         claim.setCoPayPercent(breakdown.coPayPercent());
         claim.setDeductibleApplied(breakdown.deductibleApplied());
-        claim.setDifferenceAmount(claim.getRequestedAmount().subtract(breakdown.insuranceAmount()));
 
         log.info("✅ Cost calculation persisted for claim {}: requested={}, deductible={}, copay={}, insurance={}",
                 claim.getId(),

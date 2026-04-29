@@ -156,8 +156,18 @@ public class Claim {
     @Builder.Default
     private BigDecimal refusedAmount = BigDecimal.ZERO;
 
-    @Column(name = "difference_amount", precision = 15, scale = 2)
+    // B-07 OOP FIX: differenceAmount is mathematically derived.
+    // Storing it physically creates a risk of silent sync drift (database anomaly).
+    // Now purely calculated at runtime.
+    @Transient
     private BigDecimal differenceAmount;
+
+    public BigDecimal getDifferenceAmount() {
+        BigDecimal req = this.requestedAmount != null ? this.requestedAmount : BigDecimal.ZERO;
+        BigDecimal net = this.netProviderAmount != null ? this.netProviderAmount
+                : (this.approvedAmount != null ? this.approvedAmount : BigDecimal.ZERO);
+        return req.subtract(net);
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
@@ -621,13 +631,9 @@ public class Claim {
             }
         }
 
-        // Calculate difference amount (Requested - Net Provider)
-        BigDecimal effectiveNetProvider = netProviderAmount != null ? netProviderAmount : approvedAmount;
-        if (requestedAmount != null && effectiveNetProvider != null) {
-            differenceAmount = requestedAmount.subtract(effectiveNetProvider);
-        } else {
-            differenceAmount = null;
-        }
+        // Validations and logic completed.
+        // differenceAmount is now transient and computed on-the-fly via
+        // getDifferenceAmount().
     }
 
     // Helper methods for bidirectional relationships

@@ -107,7 +107,20 @@ public class CoverageEngineService {
                 effectiveTotal);
 
         BigDecimal limitRefused = usageComputation.limitRefused();
-        String refusalReason = usageComputation.refusalReason();
+
+        // Build precise Arabic refusal reason
+        List<String> reasons = new ArrayList<>();
+        if (priceRefused.compareTo(ZERO) > 0) {
+            reasons.add("خصم فارق السعر التعاقدي");
+        }
+        if (limitRefused.compareTo(ZERO) > 0) {
+            if ("USAGE_TIMES_LIMIT_EXCEEDED".equals(usageComputation.refusalReason())) {
+                reasons.add("تجاوز عدد المرات المسموح بها");
+            } else {
+                reasons.add("تجاوز سقف المبلغ المسموح به");
+            }
+        }
+        String refusalReason = reasons.isEmpty() ? usageComputation.refusalReason() : String.join(" و ", reasons);
 
         BigDecimal approvedTotal = maxZero(scale2(effectiveTotal.subtract(limitRefused)));
 
@@ -132,7 +145,7 @@ public class CoverageEngineService {
         finalRefusedAmount = validateRefusedWithinRequested(finalRefusedAmount, requestedTotal, line.getLineId());
 
         if (line.isRejected() && (refusalReason == null || refusalReason.isBlank())) {
-            refusalReason = "MANUAL_LINE_REJECTED";
+            refusalReason = "مرفوض كلياً من قبل المراجع";
         }
 
         // 5) Build Result

@@ -809,7 +809,11 @@ const ProviderSettlementReport = () => {
                           <td>{formatLYD(line.grossAmount)}</td>
                           <td>{formatLYD(line.approvedAmount)}</td>
                           <td>{formatLYD(line.rejectedAmount)}</td>
-                          <td style={{ textAlign: 'right', fontSize: '0.75rem' }}>{line.rejectionReason || claim.rejectionReason || '-'}</td>
+                          <td style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                            {line.rejectionReason?.trim() ? line.rejectionReason :
+                              (claim.rejectionReason?.trim() ? claim.rejectionReason :
+                                (line.rejectedAmount > 0 ? "تجاوز السقف/السعر" : "مختبر"))}
+                          </td>
                         </tr>
                       ))}
                       <tr className="subtotal-row">
