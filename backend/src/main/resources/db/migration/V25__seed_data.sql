@@ -53,10 +53,10 @@ ON CONFLICT (setting_key) DO NOTHING;
 -- ------------------------------------------------------------
 -- 3) التصنيفات الطبية الهرمية (عربي)
 -- ------------------------------------------------------------
-INSERT INTO medical_categories (code, name, name_ar, name_en, context, parent_id, active)
+INSERT INTO medical_categories (code, name, name_ar, name_en, context, parent_id, active, category_name, category_code)
 VALUES
-    ('CAT-IP', 'إيواء',           'إيواء',           'Inpatient',  'INPATIENT',  NULL, true),
-    ('CAT-OP', 'عيادات خارجية',   'عيادات خارجية',   'Outpatient', 'OUTPATIENT', NULL, true)
+    ('CAT-IP', 'إيواء',           'إيواء',           'Inpatient',  'INPATIENT',  NULL, true, 'إيواء', 'CAT-IP'),
+    ('CAT-OP', 'عيادات خارجية',   'عيادات خارجية',   'Outpatient', 'OUTPATIENT', NULL, true, 'عيادات خارجية', 'CAT-OP')
 ON CONFLICT (code) DO UPDATE
 SET name       = EXCLUDED.name,
     name_ar    = EXCLUDED.name_ar,
@@ -64,24 +64,24 @@ SET name       = EXCLUDED.name,
     context    = EXCLUDED.context,
     active     = true;
 
-INSERT INTO medical_categories (code, name, name_ar, name_en, context, parent_id, active)
+INSERT INTO medical_categories (code, name, name_ar, name_en, context, parent_id, active, category_name, category_code)
 VALUES
-    ('CAT-IP-GEN',   'عام',                    'عام',                    'General',                    'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-IP-NURSE', 'تمريض منزلي',            'تمريض منزلي',            'Home Nursing',               'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-IP-PHYSIO','علاج طبيعي',             'علاج طبيعي',             'Physiotherapy',              'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-IP-WORK',  'إصابات عمل',             'إصابات عمل',             'Work Injuries',              'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-IP-PSYCH', 'طب نفسي',                'طب نفسي',                'Psychiatry',                 'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-IP-MATER', 'ولادة طبيعية وقيصرية',   'ولادة طبيعية وقيصرية',   'Maternity',                  'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-IP-COMPL', 'مضاعفات حمل',            'مضاعفات حمل',            'Pregnancy Complications',    'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true),
-    ('CAT-OP-GEN',   'عام',                     'عام',                     'General',                    'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-RAD',   'أشعة تحاليل رسوم أطباء', 'أشعة تحاليل رسوم أطباء', 'Radiology and Labs',         'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-MRI',   'رنين مغناطيسي',          'رنين مغناطيسي',          'MRI',                        'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-DRUG',  'علاجات وأدوية روتينية',  'علاجات وأدوية روتينية',  'Routine Drugs and Treatments','OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-EQUIP', 'أجهزة ومعدات',           'أجهزة ومعدات',           'Equipment and Devices',      'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-PHYSIO','علاج طبيعي',             'علاج طبيعي',             'Physiotherapy',              'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-DENT-R','أسنان روتيني',           'أسنان روتيني',           'Routine Dentistry',          'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-DENT-C','أسنان تجميلي',           'أسنان تجميلي',           'Cosmetic Dentistry',         'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true),
-    ('CAT-OP-GLASS', 'النظارة الطبية',          'النظارة الطبية',          'Medical Glasses',            'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true)
+    ('CAT-IP-GEN',   'عام',                    'عام',                    'General',                    'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'عام', 'CAT-IP-GEN'),
+    ('CAT-IP-NURSE', 'تمريض منزلي',            'تمريض منزلي',            'Home Nursing',               'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'تمريض منزلي', 'CAT-IP-NURSE'),
+    ('CAT-IP-PHYSIO','علاج طبيعي',             'علاج طبيعي',             'Physiotherapy',              'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'علاج طبيعي', 'CAT-IP-PHYSIO'),
+    ('CAT-IP-WORK',  'إصابات عمل',             'إصابات عمل',             'Work Injuries',              'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'إصابات عمل', 'CAT-IP-WORK'),
+    ('CAT-IP-PSYCH', 'طب نفسي',                'طب نفسي',                'Psychiatry',                 'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'طب نفسي', 'CAT-IP-PSYCH'),
+    ('CAT-IP-MATER', 'ولادة طبيعية وقيصرية',   'ولادة طبيعية وقيصرية',   'Maternity',                  'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'ولادة طبيعية وقيصرية', 'CAT-IP-MATER'),
+    ('CAT-IP-COMPL', 'مضاعفات حمل',            'مضاعفات حمل',            'Pregnancy Complications',    'INPATIENT',  (SELECT id FROM medical_categories WHERE code = 'CAT-IP'), true, 'مضاعفات حمل', 'CAT-IP-COMPL'),
+    ('CAT-OP-GEN',   'عام',                     'عام',                     'General',                    'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'عام', 'CAT-OP-GEN'),
+    ('CAT-OP-RAD',   'أشعة تحاليل رسوم أطباء', 'أشعة تحاليل رسوم أطباء', 'Radiology and Labs',         'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'أشعة تحاليل رسوم أطباء', 'CAT-OP-RAD'),
+    ('CAT-OP-MRI',   'رنين مغناطيسي',          'رنين مغناطيسي',          'MRI',                        'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'رنين مغناطيسي', 'CAT-OP-MRI'),
+    ('CAT-OP-DRUG',  'علاجات وأدوية روتينية',  'علاجات وأدوية روتينية',  'Routine Drugs and Treatments','OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'علاجات وأدوية روتينية', 'CAT-OP-DRUG'),
+    ('CAT-OP-EQUIP', 'أجهزة ومعدات',           'أجهزة ومعدات',           'Equipment and Devices',      'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'أجهزة ومعدات', 'CAT-OP-EQUIP'),
+    ('CAT-OP-PHYSIO','علاج طبيعي',             'علاج طبيعي',             'Physiotherapy',              'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'علاج طبيعي', 'CAT-OP-PHYSIO'),
+    ('CAT-OP-DENT-R','أسنان روتيني',           'أسنان روتيني',           'Routine Dentistry',          'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'أسنان روتيني', 'CAT-OP-DENT-R'),
+    ('CAT-OP-DENT-C','أسنان تجميلي',           'أسنان تجميلي',           'Cosmetic Dentistry',         'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'أسنان تجميلي', 'CAT-OP-DENT-C'),
+    ('CAT-OP-GLASS', 'النظارة الطبية',          'النظارة الطبية',          'Medical Glasses',            'OUTPATIENT', (SELECT id FROM medical_categories WHERE code = 'CAT-OP'), true, 'النظارة الطبية', 'CAT-OP-GLASS')
 ON CONFLICT (code) DO UPDATE
 SET name       = EXCLUDED.name,
     name_ar    = EXCLUDED.name_ar,
