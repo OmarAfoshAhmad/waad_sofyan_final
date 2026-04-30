@@ -25,7 +25,7 @@ import java.util.List;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/system-settings")
+@RequestMapping({"/api/v1/admin/system-settings", "/api/admin/system-settings"})
 @RequiredArgsConstructor
 @Tag(name = "Admin - System Settings", description = "Manage system-wide settings (SLA, configurations)")
 @PreAuthorize("isAuthenticated()")
