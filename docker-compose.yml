@@ -65,8 +65,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    volumes:
-      - ${SSL_CERT_PATH:-./ssl}:/etc/nginx/ssl:ro
     networks:
       - tba_network
     deploy:
