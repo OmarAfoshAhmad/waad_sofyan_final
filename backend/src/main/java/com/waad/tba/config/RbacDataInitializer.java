@@ -95,6 +95,7 @@ public class RbacDataInitializer implements CommandLineRunner {
                 .fullName("System Super Administrator")
                 .userType("SUPER_ADMIN")
                 .active(true)
+                .emailVerified(true)
                 .build();
 
         try {
@@ -116,9 +117,10 @@ public class RbacDataInitializer implements CommandLineRunner {
             String finalPassword = password;
             userRepository.findByUsername(username).ifPresent(user -> {
                 user.setPassword(passwordEncoder.encode(finalPassword));
+                user.setEmailVerified(true); // Force email verification for superadmin
                 user.unlockAccount(); // Reset lockout status and failed attempts
                 userRepository.save(user);
-                log.info("🔐 [SECURITY] Password synchronized and account UNLOCKED for user: {}.", username);
+                log.info("🔐 [SECURITY] Password synchronized, account UNLOCKED, and EMAIL VERIFIED for user: {}.", username);
             });
         } else {
             log.warn("⚠️ [SECURITY] Could not synchronize password: No password value found in env or config.");
