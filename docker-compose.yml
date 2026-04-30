@@ -59,7 +59,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://waadapp.ly/api
+        VITE_API_URL: /api
     container_name: waadapp-frontend
     restart: unless-stopped
     ports:
