@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/api/v1/visits", "/api/visits", "/visits"})
+@RequestMapping("/api/visits")
 @RequiredArgsConstructor
 @Tag(name = "Visits", description = "APIs for managing visit records")
 @PreAuthorize("isAuthenticated()")
