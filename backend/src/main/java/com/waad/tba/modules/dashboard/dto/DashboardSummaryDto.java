@@ -48,6 +48,11 @@ public class DashboardSummaryDto {
     private Long approvedClaims;
     
     /**
+     * Rejected claims (REJECTED)
+     */
+    private Long rejectedClaims;
+    
+    /**
      * Total providers count
      */
     private Long totalProviders;

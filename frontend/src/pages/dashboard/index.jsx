@@ -273,7 +273,7 @@ const ActivityTimeline = ({ claims, loading }) => {
                 sx={{
                   position: 'absolute',
                   right: '0.9375rem',
-                  top: '18.0rem',
+                  top: '1.5rem',
                   bottom: -8,
                   width: '0.125rem',
                   bgcolor: 'divider'
@@ -374,11 +374,20 @@ export default function Dashboard() {
 
   const getCurrentUserRoles = useCallback(() => {
     try {
-      const localUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const currentUser = user || localUser;
-      const roles = [];
+       let localUser = {};
+       try {
+         const stored = localStorage.getItem('user');
+         if (stored && stored !== 'undefined' && stored !== 'null') {
+           localUser = JSON.parse(stored);
+         }
+       } catch (e) {
+         console.warn('Failed to parse local user:', e);
+       }
+       
+       const currentUser = user || localUser;
+       const roles = [];
 
-      if (Array.isArray(currentUser?.roles)) {
+       if (currentUser && Array.isArray(currentUser.roles)) {
         roles.push(...currentUser.roles.map((role) => (typeof role === 'string' ? role : role?.name)).filter(Boolean));
       }
 
@@ -487,11 +496,18 @@ export default function Dashboard() {
 
   // ─── User display name ─────────────────────────────────────────────────────
 
-  const displayName = useMemo(() => {
-    const localUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const currentUser = user || localUser;
-    return currentUser?.fullName || currentUser?.username || 'المشرف';
-  }, [user]);
+   const displayName = useMemo(() => {
+     let localUser = {};
+     try {
+       const stored = localStorage.getItem('user');
+       if (stored && stored !== 'undefined' && stored !== 'null') {
+         localUser = JSON.parse(stored);
+       }
+     } catch (e) {}
+     
+     const currentUser = user || localUser;
+     return currentUser?.fullName || currentUser?.username || 'المشرف';
+   }, [user]);
 
   const maxNetworkValue = Math.max(activeMembers, activeProviders, summary?.activeContracts || 0, 1);
 

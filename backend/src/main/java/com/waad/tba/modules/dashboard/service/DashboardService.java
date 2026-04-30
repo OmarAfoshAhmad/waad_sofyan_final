@@ -64,6 +64,8 @@ public class DashboardService {
                 long totalClaims = claimRepository.countByProviderId(providerId);
                 long openClaims = claimRepository.countOpenClaimsByProvider(providerId);
                 long approvedClaims = claimRepository.countApprovedClaimsByProvider(providerId);
+                long rejectedClaims = claimRepository.countByStatusAndProviderId(
+                        com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED, providerId);
                 BigDecimal totalMedicalCost = claimRepository.sumApprovedAmountsByProvider(providerId);
 
                 return DashboardSummaryDto.builder()
@@ -72,6 +74,7 @@ public class DashboardService {
                         .totalClaims(totalClaims)
                         .openClaims(openClaims)
                         .approvedClaims(approvedClaims)
+                        .rejectedClaims(rejectedClaims)
                         .totalProviders(1L)
                         .activeProviders(1L)
                         .totalContracts(1L)
@@ -103,6 +106,10 @@ public class DashboardService {
         long approvedClaims = employerId != null
                 ? claimRepository.countApprovedClaimsByEmployer(employerId)
                 : claimRepository.countApprovedClaims();
+        long rejectedClaims = employerId != null
+                ? claimRepository.countByStatusAndEmployerOrgId(
+                        com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED, employerId)
+                : claimRepository.countByStatus(com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED);
 
         // Count providers (not filtered by employer - providers serve all employers)
         long totalProviders = providerRepository.count();
@@ -134,6 +141,7 @@ public class DashboardService {
                 .totalClaims(totalClaims)
                 .openClaims(openClaims)
                 .approvedClaims(approvedClaims)
+                .rejectedClaims(rejectedClaims)
                 .totalProviders(totalProviders)
                 .activeProviders(activeProviders)
                 .totalContracts(totalContracts)
@@ -166,7 +174,9 @@ public class DashboardService {
 
         return results.stream()
                 .map(projection -> MonthlyTrendDto.builder()
-                        .month(formatYearMonth(projection.getYear(), projection.getMonth()))
+                        .month(formatYearMonth(
+                                projection.getYear() != null ? ((Number) projection.getYear()).intValue() : 0,
+                                projection.getMonth() != null ? ((Number) projection.getMonth()).intValue() : 0))
                         .count(projection.getCount())
                         .build())
                 .collect(Collectors.toList());
@@ -189,9 +199,9 @@ public class DashboardService {
 
         return results.stream()
                 .map(row -> {
-                    Integer year = (Integer) row[0];
-                    Integer month = (Integer) row[1];
-                    Long count = ((Number) row[2]).longValue();
+                    Integer year = row[0] != null ? ((Number) row[0]).intValue() : 0;
+                    Integer month = row[1] != null ? ((Number) row[1]).intValue() : 0;
+                    Long count = row[2] != null ? ((Number) row[2]).longValue() : 0L;
 
                     return MonthlyTrendDto.builder()
                             .month(formatYearMonth(year, month))
@@ -324,9 +334,14 @@ public class DashboardService {
         // Get recent members
         List<Object[]> recentMembers = memberRepository.getRecentMembers(pageable);
         for (Object[] row : recentMembers) {
-            Long id = ((Number) row[0]).longValue();
+            Long id = row[0] != null ? ((Number) row[0]).longValue() : 0L;
             String name = (String) row[1];
-            LocalDateTime createdAt = (LocalDateTime) row[2];
+            LocalDateTime createdAt = null;
+            if (row[2] instanceof LocalDateTime) {
+                createdAt = (LocalDateTime) row[2];
+            } else if (row[2] instanceof java.sql.Timestamp) {
+                createdAt = ((java.sql.Timestamp) row[2]).toLocalDateTime();
+            }
 
             activities.add(RecentActivityDto.builder()
                     .id(id)
@@ -367,11 +382,15 @@ public class DashboardService {
             // Get recent contracts
             List<Object[]> recentContracts = contractRepository.getRecentContracts(pageable);
             for (Object[] row : recentContracts) {
-                Long id = ((Number) row[0]).longValue();
+                Long id = row[0] != null ? ((Number) row[0]).longValue() : 0L;
                 String contractCode = (String) row[1];
                 String providerName = (String) row[2];
-                // Object statusObj = row[3]; // Status available but not used in display
-                LocalDateTime createdAt = (LocalDateTime) row[4];
+                LocalDateTime createdAt = null;
+                if (row[4] instanceof LocalDateTime) {
+                    createdAt = (LocalDateTime) row[4];
+                } else if (row[4] instanceof java.sql.Timestamp) {
+                    createdAt = ((java.sql.Timestamp) row[4]).toLocalDateTime();
+                }
 
                 String description = "عقد " + contractCode + " - " + providerName;
 
