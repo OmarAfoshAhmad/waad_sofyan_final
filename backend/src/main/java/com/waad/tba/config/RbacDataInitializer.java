@@ -106,13 +106,21 @@ public class RbacDataInitializer implements CommandLineRunner {
     }
 
     private void updateSuperAdminPassword(String username) {
-        String envPassword = System.getenv("ADMIN_DEFAULT_PASSWORD");
-        if (envPassword != null && !envPassword.isBlank()) {
+        // We will use the same password logic as ensureSuperAdminUser
+        String password = System.getenv("ADMIN_DEFAULT_PASSWORD");
+        if (password == null || password.isBlank()) {
+            password = configuredAdminPassword;
+        }
+
+        if (password != null && !password.isBlank()) {
+            String finalPassword = password;
             userRepository.findByUsername(username).ifPresent(user -> {
-                user.setPassword(passwordEncoder.encode(envPassword));
+                user.setPassword(passwordEncoder.encode(finalPassword));
                 userRepository.save(user);
-                log.info("Successfully synchronized password for super admin.");
+                log.info("🔐 [SECURITY] Password synchronized for user: {} using value from environment.", username);
             });
+        } else {
+            log.warn("⚠️ [SECURITY] Could not synchronize password: No password value found in env or config.");
         }
     }
 
