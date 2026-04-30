@@ -67,7 +67,8 @@ public class RbacDataInitializer implements CommandLineRunner {
         }
 
         if (userExists) {
-            log.info("Super admin user already exists: {}", username);
+            log.info("Super admin user already exists: {}. Synchronizing password...", username);
+            updateSuperAdminPassword(username);
             return;
         }
 
@@ -101,6 +102,17 @@ public class RbacDataInitializer implements CommandLineRunner {
             log.info("Created super admin user: {} (role: SUPER_ADMIN)", username);
         } catch (Exception ex) {
             log.warn("Skipping user creation: {}", ex.getMessage());
+        }
+    }
+
+    private void updateSuperAdminPassword(String username) {
+        String envPassword = System.getenv("ADMIN_DEFAULT_PASSWORD");
+        if (envPassword != null && !envPassword.isBlank()) {
+            userRepository.findByUsername(username).ifPresent(user -> {
+                user.setPassword(passwordEncoder.encode(envPassword));
+                userRepository.save(user);
+                log.info("Successfully synchronized password for super admin.");
+            });
         }
     }
 
