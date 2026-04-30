@@ -98,6 +98,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/reports/**").permitAll()
                         // Docker/load-balancer health check — must stay public
                         .requestMatchers("/actuator/health").permitAll()
+                        // Feature Flags — public endpoints must stay public
+                        .requestMatchers("/api/v1/admin/features/public", "/api/admin/features/public").permitAll()
                         // Error page — Spring internal, must stay public
                         .requestMatchers("/error").permitAll()
                         // Actuator management endpoints — SUPER_ADMIN only (exposes metrics/env)

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/admin/features")
+@RequestMapping({"/api/v1/admin/features", "/api/admin/features"})
 @Tag(name = "Feature Flags", description = "Feature flag management (SUPER_ADMIN only)")
 @Slf4j
 @RequiredArgsConstructor
