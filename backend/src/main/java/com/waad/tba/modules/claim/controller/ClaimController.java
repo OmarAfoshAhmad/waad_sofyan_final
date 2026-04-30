@@ -66,7 +66,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RestController
-@RequestMapping({"/api/v1/claims", "/api/claims"})
+@RequestMapping("/api/v1/claims")
 @RequiredArgsConstructor
 @Tag(name = "Claims API v1", description = "Claims Management APIs - Full Lifecycle (Contract-Protected)")
 @PreAuthorize("isAuthenticated()")

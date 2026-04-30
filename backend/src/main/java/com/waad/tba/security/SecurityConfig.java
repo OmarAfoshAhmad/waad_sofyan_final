@@ -92,14 +92,14 @@ public class SecurityConfig {
 
                 // Authorization rules
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - Authentication (v1 and session-based)
-                        .requestMatchers("/api/v1/auth/**", "/auth/**", "/api/auth/**").permitAll()
+                        // Public endpoints - Authentication
+                        .requestMatchers("/api/v1/auth/**").permitAll()
                         // Public access to reports for preview (iframe friendly)
                         .requestMatchers("/api/reports/**").permitAll()
                         // Docker/load-balancer health check — must stay public
                         .requestMatchers("/actuator/health").permitAll()
-                        // Feature Flags — public endpoints must stay public
-                        .requestMatchers("/api/v1/admin/features/public", "/api/admin/features/public").permitAll()
+                        // Feature Flags — public endpoint (called before session is established)
+                        .requestMatchers("/api/v1/admin/features/public").permitAll()
                         // Error page — Spring internal, must stay public
                         .requestMatchers("/error").permitAll()
                         // Actuator management endpoints — SUPER_ADMIN only (exposes metrics/env)
