@@ -156,6 +156,19 @@ public class ClaimResponse {
      */
     private BigDecimal deductibleApplied;
 
+    /**
+     * Provider contract discount percentage applied to this claim
+     * نسبة خصم العقد المطبقة على المطالبة (لقطة من عقد مقدم الخدمة)
+     * READ-ONLY - Snapshot from ProviderContract.discountPercent at creation time
+     */
+    private BigDecimal providerDiscountPercent;
+
+    /**
+     * Discount timing: Before rejection (true) or After rejection (false)
+     * آلية تطبيق الخصم: قبل الاستبعاد أو بعد الاستبعاد
+     */
+    private Boolean discountBeforeRejection;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // SETTLEMENT INFORMATION (READ-ONLY)
     // ═══════════════════════════════════════════════════════════════════════════

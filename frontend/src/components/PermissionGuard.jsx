@@ -49,7 +49,9 @@ const RoleGuard = ({
   children,
   fallback = null
 }) => {
-  const { user } = useAuth();
+  const { user, authStatus } = useAuth();
+
+  if (authStatus === 'INITIALIZING') return null;
 
   if (!user) {
     return isRouteGuard ? <Navigate to="/login" replace /> : fallback;

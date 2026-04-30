@@ -122,27 +122,27 @@ public class CoverageEngineService {
         }
         String refusalReason = reasons.isEmpty() ? usageComputation.refusalReason() : String.join(" و ", reasons);
 
-        BigDecimal approvedTotal = maxZero(scale2(effectiveTotal.subtract(limitRefused)));
+        // 4) Financial Split (Strict sequence, no patient impact from rejection)
+        // Patient share is calculated first from gross and never changed by later
+        // adjustments.
+        BigDecimal patientRate = request.isFullCoverage()
+                ? ZERO
+                : maxZero(scale2(BigDecimal.valueOf(100 - coveragePercent)));
+        BigDecimal patientShare = scale2(requestedTotal.multiply(patientRate).divide(HUNDRED, 2, RoundingMode.HALF_UP));
 
-        // 4) Financial Split
-        BigDecimal grossCompanyShare = request.isFullCoverage()
-                ? approvedTotal
-                : scale2(approvedTotal.multiply(BigDecimal.valueOf(coveragePercent)).divide(HUNDRED, 2,
-                        RoundingMode.HALF_UP));
-
-        BigDecimal patientShareBase = maxZero(scale2(approvedTotal.subtract(grossCompanyShare)));
-
-        BigDecimal effectiveManualOnCompany = min(grossCompanyShare, manualRefusedInput);
-        BigDecimal companyShare = maxZero(scale2(grossCompanyShare.subtract(effectiveManualOnCompany)));
-
-        BigDecimal patientShare = line.isRejected()
-                ? approvedTotal
-                : patientShareBase;
+        BigDecimal providerShareBeforeRejection = maxZero(scale2(requestedTotal.subtract(patientShare)));
 
         BigDecimal systemRefusedAmount = maxZero(scale2(priceRefused.add(limitRefused)));
-        BigDecimal finalRefusedAmount = maxZero(scale2(systemRefusedAmount.add(manualRefusedInput)));
+        BigDecimal rejectionCandidate = line.isRejected()
+                ? providerShareBeforeRejection
+                : maxZero(scale2(systemRefusedAmount.add(manualRefusedInput)));
 
-        finalRefusedAmount = validateRefusedWithinRequested(finalRefusedAmount, requestedTotal, line.getLineId());
+        BigDecimal finalRefusedAmount = min(providerShareBeforeRejection, rejectionCandidate);
+        finalRefusedAmount = validateRefusedWithinRequested(finalRefusedAmount, providerShareBeforeRejection,
+                line.getLineId());
+
+        BigDecimal approvedTotal = maxZero(scale2(providerShareBeforeRejection.subtract(finalRefusedAmount)));
+        BigDecimal companyShare = approvedTotal;
 
         if (line.isRejected() && (refusalReason == null || refusalReason.isBlank())) {
             refusalReason = "مرفوض كلياً من قبل المراجع";

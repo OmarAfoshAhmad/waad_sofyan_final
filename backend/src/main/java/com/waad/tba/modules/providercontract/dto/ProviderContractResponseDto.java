@@ -66,6 +66,7 @@ public class ProviderContractResponseDto {
 
     // Financial
     private BigDecimal discountPercent;
+    private Boolean discountBeforeRejection;
     private BigDecimal totalValue;
     private String currency;
     private String paymentTerms;
@@ -128,6 +129,7 @@ public class ProviderContractResponseDto {
                 .pricingModel(entity.getPricingModel())
                 .pricingModelLabel(getPricingModelLabel(entity.getPricingModel()))
                 .discountPercent(entity.getDiscountPercent())
+                .discountBeforeRejection(entity.getDiscountBeforeRejection())
                 .totalValue(entity.getTotalValue())
                 .currency(entity.getCurrency())
                 .paymentTerms(entity.getPaymentTerms())

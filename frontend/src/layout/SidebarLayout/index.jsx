@@ -357,7 +357,7 @@ export const useSidebar = () => useContext(SidebarContext);
 
 export default function SidebarLayout() {
   const theme = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, authStatus } = useAuth();
   const { companyName, companyNameEn, getLogoSrc, settings, businessType } = useCompanySettings();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
 
@@ -365,6 +365,11 @@ export default function SidebarLayout() {
   const toggleMobile = useCallback(() => setMobileOpen(prev => !prev), []);
 
   const { sidebarGroups, loading } = useRBACSidebar();
+
+  // Wait for session check to complete before making redirect decisions
+  if (authStatus === 'INITIALIZING') {
+    return <Loader />;
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;

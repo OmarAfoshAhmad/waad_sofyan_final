@@ -9,11 +9,14 @@ import {
   Autocomplete,
   Button,
   CircularProgress,
+  FormControlLabel,
   Grid,
   InputAdornment,
   MenuItem,
   Stack,
+  Switch,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material';
 import { ArrowBack, Save, Add as AddIcon } from '@mui/icons-material';
@@ -49,6 +52,7 @@ const ProviderContractCreate = () => {
     endDate: addYears(new Date(), 1),
     pricingModel: 'DISCOUNT',
     discountPercent: 10,
+    discountBeforeRejection: false,
     notes: ''
   });
 
@@ -154,6 +158,7 @@ const ProviderContractCreate = () => {
       endDate: format(formData.endDate, 'yyyy-MM-dd'),
       pricingModel: formData.pricingModel,
       discountPercent: formData.pricingModel === 'DISCOUNT' ? Number(formData.discountPercent) : null,
+      discountBeforeRejection: formData.discountBeforeRejection,
       notes: formData.notes || null
     };
 
@@ -278,6 +283,25 @@ const ProviderContractCreate = () => {
                 InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
                 inputProps={{ min: 0, max: 100, step: 0.5 }}
               />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Tooltip title={formData.discountBeforeRejection
+                ? 'قبل: خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض'
+                : 'بعد: خصم المرفوض أولاً ثم تطبيق نسبة التخفيض'}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.discountBeforeRejection}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, discountBeforeRejection: e.target.checked }))}
+                      disabled={formData.pricingModel !== 'DISCOUNT'}
+                    />
+                  }
+                  label={formData.discountBeforeRejection ? 'الخصم قبل المرفوض' : 'الخصم بعد المرفوض'}
+                  sx={{ mt: 1 }}
+                />
+              </Tooltip>
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>

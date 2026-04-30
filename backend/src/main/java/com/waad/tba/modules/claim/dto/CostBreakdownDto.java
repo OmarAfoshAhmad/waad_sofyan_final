@@ -84,6 +84,11 @@ public class CostBreakdownDto {
      */
     private BigDecimal outOfPocketYTD;
     
+    /**
+     * المبلغ المرفوض (بسبب تجاوز السعر أو السقف أو الرفض اليدوي)
+     */
+    private BigDecimal refusedAmount;
+
     // ========== معلومات إضافية (Additional Info) ==========
     
     /**
@@ -122,12 +127,14 @@ public class CostBreakdownDto {
         BigDecimal patientTotal = breakdown.patientResponsibility();
         BigDecimal insuranceTotal = breakdown.insuranceAmount();
         BigDecimal requested = breakdown.requestedAmount();
+        BigDecimal refused = breakdown.refusedAmount() != null ? breakdown.refusedAmount() : BigDecimal.ZERO;
         
-        // Validate: requested = patient + insurance
-        boolean isValid = requested.compareTo(patientTotal.add(insuranceTotal)) == 0;
+        // Validate: requested = patient + insurance + refused
+        boolean isValid = requested.compareTo(patientTotal.add(insuranceTotal).add(refused)) == 0;
         
         return CostBreakdownDto.builder()
                 .requestedAmount(requested)
+                .refusedAmount(refused)
                 .patientCoPay(patientTotal)
                 .netProviderAmount(insuranceTotal)
                 .annualDeductible(breakdown.annualDeductible())
@@ -143,7 +150,7 @@ public class CostBreakdownDto {
                 .calculationsValid(isValid)
                 .validationMessage(isValid ? 
                         "الحسابات صحيحة ✓" : 
-                        "خطأ: مجموع التحمل والمستحق لا يساوي المطلوب!")
+                        "خطأ: مجموع التحمل والمستحق والمرفوض لا يساوي المطلوب!")
                 .build();
     }
     

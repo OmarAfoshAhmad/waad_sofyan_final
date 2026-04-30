@@ -253,6 +253,9 @@ public class ClaimApiMapper {
                                 .netProviderAmount(dto.getNetProviderAmount())
                                 .coPayPercent(dto.getCoPayPercent())
                                 .deductibleApplied(dto.getDeductibleApplied())
+                                // نسبة خصم العقد — لقطة محفوظة عند إنشاء المطالبة
+                                .providerDiscountPercent(dto.getProviderDiscountPercent())
+                                .discountBeforeRejection(dto.getDiscountBeforeRejection())
 
                                 // Settlement information (READ-ONLY)
                                 .paymentReference(dto.getPaymentReference())

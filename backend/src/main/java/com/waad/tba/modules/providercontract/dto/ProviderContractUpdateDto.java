@@ -36,6 +36,8 @@ public class ProviderContractUpdateDto {
     @DecimalMax(value = "100.00", message = "Discount must be <= 100")
     private BigDecimal discountPercent;
 
+    private Boolean discountBeforeRejection;
+
     /**
      * Contract start date
      */

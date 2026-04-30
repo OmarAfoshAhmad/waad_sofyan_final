@@ -80,6 +80,15 @@ const newLine = () => ({
     oldRejected: 0
 });
 
+const hasMeaningfulDraftData = (draft) => {
+    if (!draft) return false;
+    if (draft.member?.id) return true;
+    if ((draft.diagnosis || '').trim()) return true;
+    if ((draft.complaint || '').trim()) return true;
+    if ((draft.notes || '').trim()) return true;
+    return Array.isArray(draft.lines) && draft.lines.some((l) => (l?.serviceName || l?.serviceCode || l?.service));
+};
+
 // أنماط حقول الجدول القابلة للتعديل
 const inlineSx = {
     '& .MuiInput-root::before': { display: 'none' },
@@ -163,6 +172,11 @@ export default function ClaimBatchEntry() {
     const [confirmDeleteId, setConfirmDeleteId] = useState(null);
     const [confirmDeleteReason, setConfirmDeleteReason] = useState('');
     const [showValidationErrors, setShowValidationErrors] = useState(false);
+    const [autoSaveStatus, setAutoSaveStatus] = useState('idle');
+    const [lastSavedAt, setLastSavedAt] = useState(null);
+    const [draftVersion, setDraftVersion] = useState(null);
+    const [draftBatchId, setDraftBatchId] = useState(null);
+    const [recoveryDialog, setRecoveryDialog] = useState({ open: false, serverDraft: null, localDraft: null });
 
     // Generic confirmation dialog
     const [actionConfirm, setActionConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
@@ -200,6 +214,15 @@ export default function ClaimBatchEntry() {
 
     const memberRef = useRef(null);
     const linesRef = useRef(lines);
+    const saveQueueRef = useRef(Promise.resolve());
+    const autosaveTimerRef = useRef(null);
+    const recoveryCheckedRef = useRef(false);
+    const skipAutosaveRef = useRef(false);
+
+    const draftStorageKey = useMemo(() =>
+        `claim-draft:${employerId || 'none'}:${providerId || 'none'}:${year || 'none'}:${month || 'none'}`,
+        [employerId, providerId, year, month]
+    );
 
     // Keep linesRef in sync
     useEffect(() => {
@@ -259,6 +282,12 @@ export default function ClaimBatchEntry() {
         enabled: !!providerId && !!employerId && !isNaN(month) && !isNaN(year),
         retry: false
     });
+
+    useEffect(() => {
+        if (currentBatch?.id) {
+            setDraftBatchId(currentBatch.id);
+        }
+    }, [currentBatch]);
 
     const { data: batchData, isLoading: loadingBatch } = useQuery({
         queryKey: ['batch-claims-entry', employerId, providerId, month, year, page],
@@ -516,6 +545,174 @@ export default function ClaimBatchEntry() {
         }
     }, [editingClaim, defaultDate, contractedRaw]);
 
+    const draftPayload = useMemo(() => ({
+        member,
+        diagnosis,
+        complaint,
+        notes,
+        lines,
+        serviceDate,
+        preAuthId,
+        manualCategoryEnabled,
+        primaryCategoryCode,
+        fullCoverage,
+        applyBenefits,
+        isClaimRejected,
+        rejectionInput
+    }), [
+        member,
+        diagnosis,
+        complaint,
+        notes,
+        lines,
+        serviceDate,
+        preAuthId,
+        manualCategoryEnabled,
+        primaryCategoryCode,
+        fullCoverage,
+        applyBenefits,
+        isClaimRejected,
+        rejectionInput
+    ]);
+
+    const applyRecoveredDraft = useCallback((payload) => {
+        if (!payload) return;
+        setMember(payload.member || null);
+        setDiagnosis(payload.diagnosis || '');
+        setComplaint(payload.complaint || '');
+        setNotes(payload.notes || '');
+        setLines(Array.isArray(payload.lines) && payload.lines.length ? payload.lines : [newLine()]);
+        setServiceDate(payload.serviceDate || defaultDate);
+        setPreAuthId(payload.preAuthId || '');
+        setManualCategoryEnabled(payload.manualCategoryEnabled ?? true);
+        setPrimaryCategoryCode(payload.primaryCategoryCode || 'CAT-OP');
+        setFullCoverage(!!payload.fullCoverage);
+        setApplyBenefits(payload.applyBenefits ?? true);
+        setIsClaimRejected(!!payload.isClaimRejected);
+        setRejectionInput(payload.rejectionInput || '');
+        setIsDirty(true);
+    }, [defaultDate]);
+
+    useEffect(() => {
+        if (editingClaimId) return;
+        if (skipAutosaveRef.current) return;
+        if (!hasMeaningfulDraftData(draftPayload)) return;
+        try {
+            localStorage.setItem(draftStorageKey, JSON.stringify({
+                updatedAt: new Date().toISOString(),
+                data: draftPayload
+            }));
+        } catch (error) {
+            console.warn('Failed to write local draft backup', error);
+        }
+    }, [draftPayload, draftStorageKey, editingClaimId]);
+
+    useEffect(() => {
+        if (editingClaimId) return;
+        if (skipAutosaveRef.current) return;
+        if (!hasMeaningfulDraftData(draftPayload)) return;
+        if (!providerId || !employerId || !month || !year) return;
+
+        if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current);
+        }
+
+        autosaveTimerRef.current = setTimeout(() => {
+            saveQueueRef.current = saveQueueRef.current.then(async () => {
+                try {
+                    setAutoSaveStatus('saving');
+
+                    let resolvedBatchId = draftBatchId;
+                    if (!resolvedBatchId) {
+                        const batch = await claimBatchesService.openOrGetBatch(providerId, employerId, year, month);
+                        resolvedBatchId = batch?.id;
+                        if (resolvedBatchId) {
+                            setDraftBatchId(resolvedBatchId);
+                            queryClient.setQueryData(
+                                ['claim-batch-current', providerId, employerId, month, year],
+                                batch
+                            );
+                        }
+                    }
+
+                    if (!resolvedBatchId) {
+                        setAutoSaveStatus('error');
+                        return;
+                    }
+
+                    const saved = await claimsService.saveDraft({
+                        batchId: resolvedBatchId,
+                        data: draftPayload,
+                        version: draftVersion
+                    });
+
+                    setDraftVersion(saved?.version ?? null);
+                    if (saved?.conflictResolved) {
+                        enqueueSnackbar('تمت مزامنة المسودة بعد تعارض بسيط', { variant: 'info' });
+                    }
+                    setLastSavedAt(new Date());
+                    setAutoSaveStatus('saved');
+                } catch (error) {
+                    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                        setAutoSaveStatus('offline');
+                    } else {
+                        setAutoSaveStatus('error');
+                    }
+                }
+            });
+        }, 700);
+
+        return () => {
+            if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+        };
+    }, [
+        draftPayload,
+        draftBatchId,
+        draftVersion,
+        editingClaimId,
+        providerId,
+        employerId,
+        year,
+        month,
+        queryClient,
+        enqueueSnackbar
+    ]);
+
+    useEffect(() => {
+        if (editingClaimId) return;
+        if (loadingBatchMeta) return;
+        if (recoveryCheckedRef.current) return;
+
+        recoveryCheckedRef.current = true;
+
+        const runRecoveryCheck = async () => {
+            let localDraft = null;
+            try {
+                const raw = localStorage.getItem(draftStorageKey);
+                localDraft = raw ? JSON.parse(raw) : null;
+            } catch (_) {
+                localDraft = null;
+            }
+
+            let serverDraft = null;
+            try {
+                if (draftBatchId) {
+                    serverDraft = await claimsService.getDraft(draftBatchId);
+                }
+            } catch (_) {
+                serverDraft = null;
+            }
+
+            const hasServer = !!serverDraft?.data;
+            const hasLocal = !!localDraft?.data;
+            if (hasServer || hasLocal) {
+                setRecoveryDialog({ open: true, serverDraft, localDraft });
+            }
+        };
+
+        runRecoveryCheck();
+    }, [editingClaimId, loadingBatchMeta, draftStorageKey, draftBatchId]);
+
     const memberOptions = useMemo(() => {
         const c = Array.isArray(memberResults) ? memberResults : (memberResults?.data?.content ?? memberResults?.content);
         const list = Array.isArray(c) ? c : [];
@@ -667,6 +864,34 @@ export default function ClaimBatchEntry() {
         setEditingClaimId(null);
         setTimeout(() => memberRef.current?.focus(), 120);
     }, [defaultDate]);
+
+    const restoreServerDraft = useCallback(() => {
+        const payload = recoveryDialog.serverDraft?.data;
+        if (payload) {
+            skipAutosaveRef.current = true;
+            applyRecoveredDraft(payload);
+            setTimeout(() => {
+                skipAutosaveRef.current = false;
+            }, 0);
+        }
+        setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
+    }, [recoveryDialog.serverDraft, applyRecoveredDraft]);
+
+    const restoreLocalDraft = useCallback(() => {
+        const payload = recoveryDialog.localDraft?.data;
+        if (payload) {
+            skipAutosaveRef.current = true;
+            applyRecoveredDraft(payload);
+            setTimeout(() => {
+                skipAutosaveRef.current = false;
+            }, 0);
+        }
+        setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
+    }, [recoveryDialog.localDraft, applyRecoveredDraft]);
+
+    const dismissRecovery = useCallback(() => {
+        setRecoveryDialog({ open: false, serverDraft: null, localDraft: null });
+    }, []);
 
     // ── أسباب الرفض من قاعدة البيانات ─────────────────────────────────────
     const { data: rejectionReasons = [], refetch: refetchReasons } = useQuery({
@@ -985,6 +1210,24 @@ export default function ClaimBatchEntry() {
                 `✅ ${t('claimEntry.savedSuccess')} — #${resultClaimId}`,
                 { variant: 'success' }
             );
+
+            try {
+                const batchIdForDelete = draftBatchId || currentBatch?.id;
+                if (batchIdForDelete) {
+                    await claimsService.deleteDraft(batchIdForDelete);
+                }
+            } catch (_) {
+                // Non-blocking cleanup
+            }
+            try {
+                localStorage.removeItem(draftStorageKey);
+            } catch (_) {
+                // ignore local cleanup errors
+            }
+            setDraftVersion(null);
+            setAutoSaveStatus('idle');
+            setLastSavedAt(null);
+
             invalidateBatchData();
             setPage(0);
             if (resetAfter) {
@@ -1191,6 +1434,20 @@ export default function ClaimBatchEntry() {
                                 )}
                             </Stack>
                             <Stack direction="row" spacing={1} alignItems="center">
+                                {autoSaveStatus === 'saving' && (
+                                    <Typography variant="caption" color="warning.main" fontWeight={600}>Saving...</Typography>
+                                )}
+                                {autoSaveStatus === 'saved' && (
+                                    <Typography variant="caption" color="success.main" fontWeight={600}>
+                                        Saved{lastSavedAt ? ' just now' : ''}
+                                    </Typography>
+                                )}
+                                {autoSaveStatus === 'offline' && (
+                                    <Typography variant="caption" color="warning.main" fontWeight={600}>Offline - saved locally</Typography>
+                                )}
+                                {autoSaveStatus === 'error' && (
+                                    <Typography variant="caption" color="error.main" fontWeight={600}>Autosave failed</Typography>
+                                )}
                                 <Tooltip title={t('claimEntry.discardChanges')}>
                                     <span>
                                         <IconButton size="small" onClick={resetForm} disabled={!isDirty} color="error">
@@ -1387,6 +1644,34 @@ export default function ClaimBatchEntry() {
                     </Paper>
                 </Box>
             </Box>
+
+            <Dialog open={recoveryDialog.open} onClose={dismissRecovery} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 700 }}>استرجاع المسودة</DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                        تم العثور على بيانات محفوظة لهذه الدفعة. هل تريد استكمال الإدخال من المسودة؟
+                    </Typography>
+                    {recoveryDialog.serverDraft?.data && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            توجد مسودة محفوظة على الخادم.
+                        </Typography>
+                    )}
+                    {recoveryDialog.localDraft?.data && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                            توجد نسخة احتياطية على هذا الجهاز.
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    {recoveryDialog.serverDraft?.data && (
+                        <Button onClick={restoreServerDraft} variant="contained">استكمال من المسودة</Button>
+                    )}
+                    {recoveryDialog.localDraft?.data && (
+                        <Button onClick={restoreLocalDraft} variant="outlined">استرجاع من الجهاز</Button>
+                    )}
+                    <Button onClick={dismissRecovery} color="inherit">تجاهل</Button>
+                </DialogActions>
+            </Dialog>
 
             <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="sm" fullWidth
                 PaperProps={{ sx: { borderRadius: '0.375rem' } }}>

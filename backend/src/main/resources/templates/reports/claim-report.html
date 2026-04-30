@@ -305,6 +305,7 @@
       .svc-tbl {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
         font-size: 8.5pt;
       }
 
@@ -386,36 +387,43 @@
 
       /* Grand Total row at the end of report */
       .grand-total-wrap {
-        margin-top: 0;
-        border: 2px solid #ccc;
-        border-top: none;
+        margin-top: -1px;
       }
       .grand-total-wrap table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
       }
       .grand-total-wrap .gt-label {
-        padding: 7px 10px;
+        padding: 5px 8px;
         font-weight: bold;
-        font-size: 10pt;
-        background: #f0f0f0;
-        border: 1px solid #ccc;
-        width: 32%;
+        font-size: 8.5pt;
+        background: #ffffff;
+        border: 1px solid #e4e4e4;
+        text-align: right;
       }
       .grand-total-wrap .gt-cell {
-        padding: 7px 6px;
+        padding: 5px 5px;
         text-align: center;
         font-weight: bold;
-        font-size: 10pt;
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        font-size: 8.5pt;
+        border: 1px solid #e4e4e4;
         color: #fff;
-        width: 17%;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .grand-total-wrap .gt-empty {
+        background: #fafafa;
+        border: 1px solid #e4e4e4;
       }
       .gt-gross {
         background-color: #1976d2;
       }
       .gt-net {
         background-color: #00897b;
+      }
+      .gt-patient {
+        background-color: #f9a825;
       }
       .gt-rejected {
         background-color: #e53935;
@@ -424,6 +432,18 @@
         font-family: "Courier New", Courier, monospace;
         font-weight: bold;
         color: #fff;
+      }
+
+      .formula-note {
+        font-size: 7.5pt;
+        color: #666;
+        text-align: right;
+        padding: 4px 6px;
+      }
+
+      .formula-note.warn {
+        color: #b71c1c;
+        font-weight: bold;
       }
 
       /* Hide the PDF running header in browser – it lives in @page margin only */
@@ -504,9 +524,9 @@
           <td class="td-label">إجمالي القيمة المقدمة من المرفق:</td>
           <td
             class="td-value"
-            th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+            th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
           >
-            0.000 د.ل
+            0.00 د.ل
           </td>
         </tr>
         <tr>
@@ -514,9 +534,9 @@
           <td class="td-label">إجمالي القيمة الغير مستحقة:</td>
           <td
             class="td-value red"
-            th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+            th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
           >
-            0.000 د.ل
+            0.00 د.ل
           </td>
         </tr>
         <tr>
@@ -524,9 +544,9 @@
           <td class="td-label">إجمالي القيمة المدفوعة من المؤمّن:</td>
           <td
             class="td-value"
-            th:text="${#numbers.formatDecimal(report.grandTotalPatientShare, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+            th:text="${#numbers.formatDecimal(report.grandTotalPatientShare, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
           >
-            0.000 د.ل
+            0.00 د.ل
           </td>
         </tr>
         <tr class="row-net">
@@ -534,9 +554,9 @@
           <td class="td-label">صافي القيمة المستحق للمرفق:</td>
           <td
             class="td-value"
-            th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+            th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
           >
-            0.000 د.ل
+            0.00 د.ل
           </td>
         </tr>
         <tr>
@@ -573,13 +593,12 @@
               <span class="val" th:text="${claim.claimId}">-</span>
             </td>
             <td style="width: 50%">
-              <span class="lbl">Origin No.</span>
+              <span class="lbl">Beneficiary No.</span>
               <span class="val" th:text="${claim.originNo ?: ''}">-</span>
             </td>
           </tr>
           <tr>
             <td>
-              <span class="lbl">Insurance Number</span>
               <span class="val" th:text="${claim.insuranceNumber}">-</span>
             </td>
             <td>
@@ -601,6 +620,14 @@
 
         <!-- Services table -->
         <table class="svc-tbl">
+          <colgroup>
+            <col style="width: 32%" />
+            <col style="width: 10%" />
+            <col style="width: 13%" />
+            <col style="width: 13%" />
+            <col style="width: 13%" />
+            <col style="width: 19%" />
+          </colgroup>
           <thead>
             <tr>
               <th style="width: 32%; text-align: right; padding-right: 8px">Medical Service</th>
@@ -620,17 +647,17 @@
               >
                 -
               </td>
-              <td class="num" th:text="${#numbers.formatDecimal(item.grossAmount, 1, 'COMMA', 3, 'POINT')}">0.000</td>
-              <td class="num col-grn" th:text="${#numbers.formatDecimal(item.netAmount, 1, 'COMMA', 3, 'POINT')}">
-                0.000
+              <td class="num" th:text="${#numbers.formatDecimal(item.grossAmount, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+              <td class="num col-grn" th:text="${#numbers.formatDecimal(item.netAmount, 1, 'COMMA', 2, 'POINT')}">
+                0.00
               </td>
               <td
                 class="num col-red"
                 th:text="${item.rejectedAmount != null and item.rejectedAmount.compareTo(T(java.math.BigDecimal).ZERO) != 0}
-                                 ? ${#numbers.formatDecimal(item.rejectedAmount, 1, 'COMMA', 3, 'POINT')}
-                                 : '0.000'"
+                                 ? ${#numbers.formatDecimal(item.rejectedAmount, 1, 'COMMA', 2, 'POINT')}
+                                 : '0.00'"
               >
-                0.000
+                0.00
               </td>
               <td class="td-reason" th:text="${item.rejectionReasonArabic ?: (item.rejectionReason ?: '')}"></td>
             </tr>
@@ -641,20 +668,20 @@
               <td></td>
               <td
                 class="num sub-gross"
-                th:text="${#numbers.formatDecimal(claim.subTotalGross, 1, 'COMMA', 3, 'POINT')}"
+                th:text="${#numbers.formatDecimal(claim.subTotalGross, 1, 'COMMA', 2, 'POINT')}"
               >
-                0.000
+                0.00
               </td>
-              <td class="num sub-net" th:text="${#numbers.formatDecimal(claim.subTotalNet,   1, 'COMMA', 3, 'POINT')}">
-                0.000
+              <td class="num sub-net" th:text="${#numbers.formatDecimal(claim.subTotalNet,   1, 'COMMA', 2, 'POINT')}">
+                0.00
               </td>
               <td
                 class="num sub-rejected"
                 th:text="${claim.subTotalRejected != null and claim.subTotalRejected.compareTo(T(java.math.BigDecimal).ZERO) != 0}
-                                 ? ${#numbers.formatDecimal(claim.subTotalRejected, 1, 'COMMA', 3, 'POINT')}
-                                 : '0.000'"
+                                 ? ${#numbers.formatDecimal(claim.subTotalRejected, 1, 'COMMA', 2, 'POINT')}
+                                 : '0.00'"
               >
-                0.000
+                0.00
               </td>
               <td></td>
             </tr>
@@ -665,38 +692,46 @@
 
       <!-- ═══ GRAND TOTAL ═══ -->
       <div class="grand-total-wrap">
-        <table>
+        <table class="svc-tbl">
+          <colgroup>
+            <col style="width: 32%" />
+            <col style="width: 10%" />
+            <col style="width: 13%" />
+            <col style="width: 13%" />
+            <col style="width: 13%" />
+            <col style="width: 19%" />
+          </colgroup>
           <tr>
             <td class="gt-label">TOTAL</td>
+            <td class="gt-empty"></td>
             <td class="gt-cell gt-gross">
               <div style="font-size: 7.5pt; margin-bottom: 2px">Gross</div>
               <div
                 class="num"
-                th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+                th:text="${#numbers.formatDecimal(report.grandTotalGross, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
               >
-                0.000 د.ل
+                0.00 د.ل
               </div>
             </td>
-            <td class="gt-cell" style="background-color: #f0f0f0"></td>
             <td class="gt-cell gt-net">
               <div style="font-size: 7.5pt; margin-bottom: 2px">Net</div>
               <div
                 class="num"
-                th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+                th:text="${#numbers.formatDecimal(report.grandTotalNet, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
               >
-                0.000 د.ل
+                0.00 د.ل
               </div>
             </td>
             <td class="gt-cell gt-rejected">
               <div style="font-size: 7.5pt; margin-bottom: 2px">Rejected</div>
               <div
                 class="num"
-                th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 3, 'POINT')} + ' د.ل'"
+                th:text="${#numbers.formatDecimal(report.grandTotalRejected, 1, 'COMMA', 2, 'POINT')} + ' د.ل'"
               >
-                0.000 د.ل
+                0.00 د.ل
               </div>
             </td>
-            <td class="gt-label" style="width: 19%"></td>
+            <td class="gt-empty"></td>
           </tr>
         </table>
       </div>

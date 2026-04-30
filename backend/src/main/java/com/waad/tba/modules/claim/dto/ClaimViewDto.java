@@ -146,6 +146,11 @@ public class ClaimViewDto {
      */
     private BigDecimal deductibleApplied;
 
+    /**
+     * آلية الخصم: قبل المرفوض (true) أو بعد المرفوض (false)
+     */
+    private Boolean discountBeforeRejection;
+
     // ========== Settlement Fields (MVP Phase) ==========
 
     /**

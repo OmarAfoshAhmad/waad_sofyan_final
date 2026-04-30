@@ -36,6 +36,7 @@ public class ReportDataService {
                 BigDecimal grandTotalNet = BigDecimal.ZERO;
                 BigDecimal grandTotalRejected = BigDecimal.ZERO;
                 BigDecimal grandTotalPatientShare = BigDecimal.ZERO;
+                BigDecimal grandTotalExpectedNet = BigDecimal.ZERO;
 
                 String batchCode = "N/A";
                 String providerName = "N/A";
@@ -54,11 +55,21 @@ public class ReportDataService {
 
                 for (Claim claim : claims) {
                         String patientName = claim.getMember() != null ? claim.getMember().getFullName() : "غير معروف";
-                        String insuranceNumber = claim.getMember() != null
-                                        && claim.getMember().getPolicyNumber() != null
-                                                        ? claim.getMember().getPolicyNumber()
-                                                        : "غير معروف";
-                        String patientRef = claim.getMember() != null ? claim.getMember().getCardNumber() : "غير معروف";
+                        String insuranceNumber = "غير معروف";
+                        String patientRef = "غير معروف";
+                        if (claim.getMember() != null) {
+                                if (claim.getMember().getCardNumber() != null
+                                                && !claim.getMember().getCardNumber().isBlank()) {
+                                        patientRef = claim.getMember().getCardNumber();
+                                        insuranceNumber = claim.getMember().getCardNumber();
+                                } else if (claim.getMember().getPolicyNumber() != null
+                                                && !claim.getMember().getPolicyNumber().isBlank()) {
+                                        insuranceNumber = claim.getMember().getPolicyNumber();
+                                } else if (claim.getMember().getNationalNumber() != null
+                                                && !claim.getMember().getNationalNumber().isBlank()) {
+                                        insuranceNumber = claim.getMember().getNationalNumber();
+                                }
+                        }
 
                         String currentBatchCode = claim.getClaimBatch() != null ? claim.getClaimBatch().getBatchCode()
                                         : "N/A";
@@ -119,7 +130,14 @@ public class ReportDataService {
                                 subTotalRejected = subTotalRejected.add(rejected);
                         }
 
-                        BigDecimal subTotalNet = claim.getNetPayableAmount();
+                        BigDecimal subTotalNet = subTotalGross.subtract(subTotalRejected);
+                        BigDecimal subTotalExpectedNet = subTotalNet;
+                        if (subTotalExpectedNet.compareTo(BigDecimal.ZERO) < 0) {
+                                subTotalExpectedNet = BigDecimal.ZERO;
+                        }
+                        BigDecimal subTotalNetDifference = subTotalNet.subtract(subTotalExpectedNet);
+                        boolean subTotalInconsistent = subTotalNetDifference.abs()
+                                        .compareTo(new BigDecimal("0.001")) > 0;
 
                         groupedClaims.add(ClaimStatementReportDto.builder()
                                         .patientName(patientName)
@@ -137,13 +155,21 @@ public class ReportDataService {
                                         .subTotalGross(subTotalGross)
                                         .subTotalNet(subTotalNet)
                                         .subTotalRejected(subTotalRejected)
+                                        .subTotalPatientShare(subTotalPatientShare)
+                                        .subTotalExpectedNet(subTotalExpectedNet)
+                                        .subTotalNetDifference(subTotalNetDifference)
+                                        .subTotalInconsistent(subTotalInconsistent)
                                         .build());
 
                         grandTotalGross = grandTotalGross.add(subTotalGross);
                         grandTotalNet = grandTotalNet.add(subTotalNet);
                         grandTotalRejected = grandTotalRejected.add(subTotalRejected);
                         grandTotalPatientShare = grandTotalPatientShare.add(subTotalPatientShare);
+                        grandTotalExpectedNet = grandTotalExpectedNet.add(subTotalExpectedNet);
                 }
+
+                BigDecimal grandTotalNetDifference = grandTotalNet.subtract(grandTotalExpectedNet);
+                boolean grandTotalInconsistent = grandTotalNetDifference.abs().compareTo(new BigDecimal("0.001")) > 0;
 
                 String logoBase64 = settings.getLogoBase64DataUrl();
                 if (logoBase64 == null)
@@ -171,6 +197,9 @@ public class ReportDataService {
                                 .grandTotalNet(grandTotalNet)
                                 .grandTotalRejected(grandTotalRejected)
                                 .grandTotalPatientShare(grandTotalPatientShare)
+                                .grandTotalExpectedNet(grandTotalExpectedNet)
+                                .grandTotalNetDifference(grandTotalNetDifference)
+                                .grandTotalInconsistent(grandTotalInconsistent)
                                 // New specialized settings
                                 .reportTitle(settings.getClaimReportTitle() != null ? settings.getClaimReportTitle()
                                                 : "نظام وعد الطبي")

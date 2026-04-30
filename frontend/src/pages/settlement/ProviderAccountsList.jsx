@@ -347,9 +347,9 @@ export default function ProviderAccountsList() {
         'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
         'مقدم الخدمة': item.providerName || '',
         'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
+        'نسبة التخفيض (%)': Number(item.providerDiscountPercent) || 0,
         'المبلغ المرفوض': getRefusedAmount(item),
         'القيمة المستحقة': getPayableAmount(item),
-        'نسبة التخفيض (%)': Number(item.providerDiscountPercent) || 0,
         'حصة الشركة (10%)': getCompanyShareAmount(item),
         'نصيب المرفق': getFacilityShareAmount(item),
         'الحالة': STATUS_LABELS[item.status] || item.status || ''
@@ -376,9 +376,9 @@ export default function ProviderAccountsList() {
         <td>${row.visitDate || row.serviceDate || '-'}</td>
         <td>${row.providerName || '-'}</td>
         <td>${formatCurrency(row.requestedAmount)}</td>
+        <td>${discount}%</td>
         <td style="color:#cf1322">${formatCurrency(getRefusedAmount(row))}</td>
         <td><b>${formatCurrency(payable)}</b></td>
-        <td>${discount}%</td>
         <td style="color:#d46b08">${formatCurrency(companyShare)}</td>
         <td style="color:#389e0d">${formatCurrency(facilityShare)}</td>
         <td>${status}</td>
@@ -411,8 +411,8 @@ export default function ProviderAccountsList() {
     <thead>
       <tr>
         <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
-        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>المرفوض</th>
-        <th>المستحق</th><th>نسبة الخصم</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
+        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة الخصم</th>
+        <th>المرفوض</th><th>المستحق</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
       </tr>
     </thead>
     <tbody>${printRows}</tbody>
@@ -420,9 +420,9 @@ export default function ProviderAccountsList() {
       <tr>
         <td colspan="5"><b>الإجمالي (${totals.count} مطالبة)</b></td>
         <td>${formatCurrency(totals.gross)}</td>
+        <td>-</td>
         <td style="color:#cf1322">${formatCurrency(totals.refused)}</td>
         <td>${formatCurrency(totals.payable)}</td>
-        <td>-</td>
         <td style="color:#d46b08">${formatCurrency(totals.companyShare)}</td>
         <td style="color:#389e0d">${formatCurrency(totals.facilityShare)}</td>
         <td></td>
@@ -479,6 +479,16 @@ export default function ProviderAccountsList() {
         cell: ({ row }) => formatCurrency(row.original.requestedAmount)
       },
       {
+        accessorKey: 'providerDiscountPercent',
+        header: 'نسبة التخفيض',
+        minWidth: '7.5rem',
+        align: 'center',
+        cell: ({ row }) => {
+          const discount = getDiscountPercent(row.original);
+          return <Chip label={`${discount}%`} size="small" color={discount > 0 ? 'primary' : 'default'} variant="outlined" />;
+        }
+      },
+      {
         accessorKey: 'refusedAmount',
         header: 'المبلغ المرفوض',
         minWidth: '8.4375rem',
@@ -495,16 +505,6 @@ export default function ProviderAccountsList() {
         minWidth: '8.75rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
-      },
-      {
-        accessorKey: 'providerDiscountPercent',
-        header: 'نسبة التخفيض',
-        minWidth: '7.5rem',
-        align: 'center',
-        cell: ({ row }) => {
-          const discount = getDiscountPercent(row.original);
-          return <Chip label={`${discount}%`} size="small" color={discount > 0 ? 'primary' : 'default'} variant="outlined" />;
-        }
       },
       {
         accessorKey: 'companyShare',

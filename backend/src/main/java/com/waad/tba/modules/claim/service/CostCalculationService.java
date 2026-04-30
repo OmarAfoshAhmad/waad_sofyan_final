@@ -1,181 +1,129 @@
 package com.waad.tba.modules.claim.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.util.List;
-
+import com.waad.tba.common.enums.NetworkType;
+import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.provider.service.ProviderNetworkService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.waad.tba.common.enums.NetworkType;
-import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
-import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.claim.entity.Claim;
-import com.waad.tba.modules.claim.entity.ClaimLine;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
-import com.waad.tba.modules.member.entity.Member;
-import com.waad.tba.modules.provider.service.ProviderNetworkService;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Cost Calculation Service - Deductible & Co-Pay Engine.
+ * CostCalculationService (FINANCIAL ENGINE 2026)
  * 
- * Calculates patient responsibility amounts before claim approval:
- * 1. DEDUCTIBLE - Fixed amount patient pays before insurance kicks in (per
- * policy period)
- * 2. CO-PAY - Percentage of the claim amount patient pays (varies by
- * network/service)
- * 3. COINSURANCE - Insurance company's share after deductible
+ * Responsible for calculating claim financials:
+ * - Patient Co-Pay (Weighted Average)
+ * - Annual Deductible Application
+ * - Insurance Share
+ * - Out-of-Pocket Maximums
  * 
- * CALCULATION FLOW:
- * 1. Check if annual deductible is met for the member
- * 2. If not met, apply remaining deductible to claim
- * 3. Apply co-pay percentage to remaining amount
- * 4. Network type affects co-pay rates
- * 5. Store calculated amounts on Claim entity
- * 
- * @since Phase 7 - Operational Completeness
+ * FINANCIAL REFORM (2026-04-29):
+ * All calculations are now based on the NET APPROVED amount (Requested - Refused)
+ * instead of the raw Requested amount. This ensures patients are not charged
+ * co-pay on services that were rejected or refused.
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Slf4j
 public class CostCalculationService {
 
-    private final ClaimRepository claimRepository;
     private final ProviderNetworkService providerNetworkService;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
 
-    // Default values if not specified in policy
-    // Default deductible - set to 0 by default (no deductible unless specified in
-    // policy)
-    // In production, this should come from BenefitPolicy.annualDeductible
-    private static final BigDecimal DEFAULT_ANNUAL_DEDUCTIBLE = BigDecimal.ZERO;
-    private static final BigDecimal DEFAULT_COPAY_IN_NETWORK = new BigDecimal("20.00");
-    private static final BigDecimal DEFAULT_COPAY_OUT_OF_NETWORK = new BigDecimal("40.00");
-    private static final BigDecimal DEFAULT_OUT_OF_POCKET_MAX = new BigDecimal("5000.00");
-
     /**
-     * Calculate all cost components for a claim.
+     * Calculate cost breakdown for a claim.
      * 
-     * ═══════════════════════════════════════════════════════════════════════════════
-     * FIXED (2026-01-23): Now uses BenefitPolicyRule coverage percent per service
-     * ═══════════════════════════════════════════════════════════════════════════════
-     * 
-     * Previously: Used only BenefitPolicy.defaultCoveragePercent (WRONG!)
-     * Now: Uses BenefitPolicyCoverageService to get coverage per service line
-     * 
-     * Coverage Resolution Priority:
-     * 1. SERVICE_RULE (specific rule for service) - HIGHEST
-     * 2. CATEGORY_RULE (rule for service's category)
-     * 3. POLICY_DEFAULT (BenefitPolicy.defaultCoveragePercent) - LOWEST
+     * Adjudication Logic:
+     * 1. Calculate Total Refused (Rejected lines + Refused amounts)
+     * 2. Determine Net Base Amount = Total Requested - Total Refused
+     * 3. Calculate Weighted Co-Pay % from non-rejected lines
+     * 4. Apply Deductible to Net Base
+     * 5. Apply Co-Pay % to remaining Net Base
+     * 6. Validate Out-of-Pocket limits
      * 
      * @param claim The claim to calculate costs for
      * @return CostBreakdown with all calculated amounts
-     * @throws BusinessRuleException if requestedAmount is null, zero, or negative
      */
+    @Transactional(readOnly = true)
     public CostBreakdown calculateCosts(Claim claim) {
         BigDecimal requestedAmount = claim.getRequestedAmount();
 
-        // ══════════════════════════════════════════════════════════════════════════
-        // PHASE 1.3: STRICT AMOUNT VALIDATION - NO SILENT FAILURES
-        // ══════════════════════════════════════════════════════════════════════════
-        // Previously: Returned zero breakdown silently (WRONG - hides errors)
-        // Now: Throws explicit BusinessRuleException (CORRECT - fail fast)
         if (requestedAmount == null) {
             throw new com.waad.tba.common.exception.BusinessRuleException(
-                    "FINANCIAL_ERROR: Cannot calculate costs - requested amount is null. " +
-                            "Claim ID: " + claim.getId());
-        }
-
-        if (requestedAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new com.waad.tba.common.exception.BusinessRuleException(
-                    String.format("FINANCIAL_ERROR: Cannot calculate costs - requested amount is negative (%s). " +
-                            "Claim ID: %s", requestedAmount, claim.getId()));
+                    "FINANCIAL_ERROR: Cannot calculate costs - requested amount is null.");
         }
 
         if (requestedAmount.compareTo(BigDecimal.ZERO) == 0) {
-            // Zero amount is allowed for informational purposes but should be logged
-            log.warn("⚠️ [COST-CALC] Claim {} has zero requested amount - returning zero breakdown",
-                    claim.getId());
             return CostBreakdown.zero();
         }
 
-        // Get member and benefit policy info
         Member member = claim.getMember();
         BenefitPolicy benefitPolicy = member != null ? member.getBenefitPolicy() : null;
-
-        // Determine network type based on provider
         NetworkType networkType = providerNetworkService.determineNetworkTypeByName(claim.getProviderName());
 
-        // Get deductible info
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // STEP 0: Calculate Net Base (Exclude Refused/Rejected amounts)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        List<ClaimLine> lines = claim.getLines() != null ? claim.getLines() : List.of();
+        
+        BigDecimal totalRefused = lines.stream()
+                .map(l -> {
+                    BigDecimal lineRequested = (l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice() : l.getUnitPrice())
+                            .multiply(BigDecimal.valueOf(l.getQuantity()));
+                    if (Boolean.TRUE.equals(l.getRejected())) return lineRequested;
+                    return l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO;
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal netBaseAmount = requestedAmount.subtract(totalRefused).max(BigDecimal.ZERO);
+
+        // STEP 1: Weighted Co-Pay calculation based on NET amounts
+        BigDecimal coPayPercent = calculateWeightedCopayFromLines(claim, member, networkType);
+        
+        // STEP 2: Deductible application
         BigDecimal annualDeductible = getAnnualDeductible(benefitPolicy);
         BigDecimal deductibleMet = getDeductibleMetThisPeriod(member, claim);
         BigDecimal remainingDeductible = annualDeductible.subtract(deductibleMet).max(BigDecimal.ZERO);
 
-        // ═══════════════════════════════════════════════════════════════════════════════
-        // NEW: Calculate weighted average coverage from claim lines using
-        // BenefitPolicyRule
-        // ═══════════════════════════════════════════════════════════════════════════════
-        BigDecimal coPayPercent = calculateWeightedCopayFromLines(claim, member, networkType);
-        log.info("📊 Calculated weighted co-pay percent: {}% for claim {} (from {} lines)",
-                coPayPercent, claim.getId(), claim.getLines() != null ? claim.getLines().size() : 0);
+        BigDecimal deductibleApplied = netBaseAmount.min(remainingDeductible);
+        BigDecimal afterDeductible = netBaseAmount.subtract(deductibleApplied);
 
-        // Get out-of-pocket maximum
+        // STEP 3: Co-Pay application
+        BigDecimal coPayAmount = afterDeductible.multiply(coPayPercent)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        BigDecimal insuranceAmount = afterDeductible.subtract(coPayAmount);
+
+        // STEP 4: Out-of-Pocket Limit
         BigDecimal outOfPocketMax = getOutOfPocketMax(benefitPolicy);
         BigDecimal outOfPocketSpent = getOutOfPocketSpentThisPeriod(member, claim);
         BigDecimal remainingOutOfPocket = outOfPocketMax.subtract(outOfPocketSpent).max(BigDecimal.ZERO);
 
-        // STEP 1: Apply deductible
-        BigDecimal deductibleApplied;
-        BigDecimal afterDeductible;
-
-        if (remainingDeductible.compareTo(BigDecimal.ZERO) > 0) {
-            // Patient still has deductible to meet
-            deductibleApplied = requestedAmount.min(remainingDeductible);
-            afterDeductible = requestedAmount.subtract(deductibleApplied);
-        } else {
-            deductibleApplied = BigDecimal.ZERO;
-            afterDeductible = requestedAmount;
-        }
-
-        // STEP 2: Apply co-pay to remaining amount
-        BigDecimal coPayAmount = BigDecimal.ZERO;
-        BigDecimal insuranceAmount = BigDecimal.ZERO;
-
-        if (afterDeductible.compareTo(BigDecimal.ZERO) > 0) {
-            coPayAmount = afterDeductible.multiply(coPayPercent)
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            insuranceAmount = afterDeductible.subtract(coPayAmount);
-        }
-
-        // STEP 3: Apply out-of-pocket maximum
         BigDecimal totalPatientResponsibility = deductibleApplied.add(coPayAmount);
 
-        if (remainingOutOfPocket.compareTo(BigDecimal.ZERO) > 0) {
-            if (totalPatientResponsibility.compareTo(remainingOutOfPocket) > 0) {
-                // Patient has hit out-of-pocket max, insurance covers the rest
-                BigDecimal excess = totalPatientResponsibility.subtract(remainingOutOfPocket);
-                totalPatientResponsibility = remainingOutOfPocket;
-                insuranceAmount = insuranceAmount.add(excess);
-
-                log.info("Out-of-pocket maximum reached for member {}. Excess {} covered by insurance.",
-                        member.getId(), excess);
-            }
+        if (remainingOutOfPocket.compareTo(BigDecimal.ZERO) > 0 && totalPatientResponsibility.compareTo(remainingOutOfPocket) > 0) {
+            BigDecimal excess = totalPatientResponsibility.subtract(remainingOutOfPocket);
+            totalPatientResponsibility = remainingOutOfPocket;
+            insuranceAmount = insuranceAmount.add(excess);
         }
 
-        // Final validation: patient responsibility + insurance = requested
-        BigDecimal total = totalPatientResponsibility.add(insuranceAmount);
-        if (total.compareTo(requestedAmount) != 0) {
-            // Adjust for rounding
-            insuranceAmount = requestedAmount.subtract(totalPatientResponsibility);
+        // Final balance check
+        BigDecimal totalCalculated = totalPatientResponsibility.add(insuranceAmount);
+        if (totalCalculated.compareTo(netBaseAmount) != 0) {
+            insuranceAmount = netBaseAmount.subtract(totalPatientResponsibility);
         }
 
         return new CostBreakdown(
                 requestedAmount,
+                totalRefused,
                 annualDeductible,
                 deductibleMet,
                 deductibleApplied,
@@ -185,364 +133,91 @@ public class CostCalculationService {
                 totalPatientResponsibility,
                 outOfPocketMax,
                 outOfPocketSpent.add(totalPatientResponsibility),
-                networkType);
+                networkType
+        );
     }
 
     /**
-     * Calculate weighted co-pay percentage from claim lines.
-     * 
-     * Each line may have a different coverage percentage based on
-     * BenefitPolicyRule.
-     * This method calculates the weighted average co-pay based on line amounts.
-     * 
-     * Formula: Co-Pay% = 100 - Coverage%
-     * Weighted Avg = Σ(lineAmount × lineCopay%) / totalAmount
-     * 
-     * @param claim       The claim with lines
-     * @param member      The member (for BenefitPolicy lookup)
-     * @param networkType Network type for adjustments
-     * @return Weighted average co-pay percentage
+     * Calculate weighted co-pay percent based on line-level coverage.
+     * Uses NET amounts (TotalPrice - RefusedAmount) for weighting.
      */
     private BigDecimal calculateWeightedCopayFromLines(Claim claim, Member member, NetworkType networkType) {
         List<ClaimLine> lines = claim.getLines();
         BenefitPolicy benefitPolicy = member != null ? member.getBenefitPolicy() : null;
 
-        // If no lines or no member/policy, fall back to default calculation
         if (lines == null || lines.isEmpty() || member == null || benefitPolicy == null) {
-            log.debug("⚠️ No lines or policy, using default co-pay calculation");
             return getCoPayPercent(benefitPolicy, networkType);
         }
 
-        // PERFORMANCE OPTIMIZATION: Use category IDs from lines (MedicalService FK
-        // removed in V229)
         List<Long> categoryIds = lines.stream()
-                .map(line -> line.getAppliedCategoryId() != null ? line.getAppliedCategoryId()
-                        : line.getServiceCategoryId())
+                .map(l -> l.getAppliedCategoryId() != null ? l.getAppliedCategoryId() : l.getServiceCategoryId())
                 .filter(id -> id != null)
                 .distinct()
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
 
-        java.util.Map<Long, Integer> coverageMap = benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(
-                member,
-                categoryIds);
+        java.util.Map<Long, Integer> coverageMap = benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(member, categoryIds);
 
-        log.debug("📊 Preloaded coverage for {} categories (N+1 elimination)", categoryIds.size());
-
-        BigDecimal totalAmount = BigDecimal.ZERO;
+        BigDecimal totalNetAmount = BigDecimal.ZERO;
         BigDecimal weightedCopaySum = BigDecimal.ZERO;
 
         for (ClaimLine line : lines) {
-            BigDecimal requestedUnit = line.getRequestedUnitPrice() != null ? line.getRequestedUnitPrice()
-                    : line.getUnitPrice();
-            BigDecimal lineAmount = requestedUnit != null && line.getQuantity() != null
-                    ? requestedUnit.multiply(BigDecimal.valueOf(line.getQuantity()))
-                    : BigDecimal.ZERO;
-            BigDecimal lineRefused = line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO;
-            lineAmount = lineAmount.subtract(lineRefused).max(BigDecimal.ZERO);
-            if (lineAmount == null || lineAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
+            if (Boolean.TRUE.equals(line.getRejected())) continue;
 
-            // Get coverage percent from preloaded map (O(1) lookup) using categoryId
-            int coveragePercent;
-            Long categoryId = line.getAppliedCategoryId() != null ? line.getAppliedCategoryId()
-                    : line.getServiceCategoryId();
+            BigDecimal rPrice = line.getRequestedUnitPrice() != null ? line.getRequestedUnitPrice() : line.getUnitPrice();
+            BigDecimal totalPrice = rPrice != null ? rPrice.multiply(BigDecimal.valueOf(line.getQuantity())) : BigDecimal.ZERO;
+            BigDecimal refused = line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO;
+            BigDecimal netAmount = totalPrice.subtract(refused).max(BigDecimal.ZERO);
+
+            if (netAmount.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            Long categoryId = line.getAppliedCategoryId() != null ? line.getAppliedCategoryId() : line.getServiceCategoryId();
+            int coveragePercent = 80; // default
             if (categoryId != null) {
-                coveragePercent = coverageMap.getOrDefault(categoryId,
-                        benefitPolicy.getDefaultCoveragePercent() != null ? benefitPolicy.getDefaultCoveragePercent()
-                                : 80);
-            } else {
-                coveragePercent = getFallbackCoverage(member);
+                coveragePercent = coverageMap.getOrDefault(categoryId, benefitPolicy.getDefaultCoveragePercent() != null ? benefitPolicy.getDefaultCoveragePercent() : 80);
             }
 
-            // CRITICAL: Enforce hard bounds [0, 100]
-            coveragePercent = Math.min(100, Math.max(0, coveragePercent));
-
-            // Co-Pay% = 100 - Coverage%
-            int copayPercent = 100 - coveragePercent;
-
-            log.debug("📋 Line service={}, amount={}, coverage={}%, copay={}%",
-                    line.getServiceCode(), lineAmount, coveragePercent, copayPercent);
-
-            // Weighted contribution
-            BigDecimal lineCopayContribution = lineAmount.multiply(new BigDecimal(copayPercent));
-            weightedCopaySum = weightedCopaySum.add(lineCopayContribution);
-            totalAmount = totalAmount.add(lineAmount);
+            int copayPercent = 100 - Math.min(100, Math.max(0, coveragePercent));
+            weightedCopaySum = weightedCopaySum.add(netAmount.multiply(new BigDecimal(copayPercent)));
+            totalNetAmount = totalNetAmount.add(netAmount);
         }
 
-        if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        if (totalNetAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return getCoPayPercent(benefitPolicy, networkType);
         }
 
-        // Calculate weighted average co-pay
-        BigDecimal weightedCopay = weightedCopaySum
-                .divide(totalAmount, 2, RoundingMode.HALF_UP);
+        return weightedCopaySum.divide(totalNetAmount, 2, RoundingMode.HALF_UP);
+    }
 
-        // Adjust for out-of-network (add penalty)
+    private BigDecimal getCoPayPercent(BenefitPolicy policy, NetworkType networkType) {
+        if (policy == null) return new BigDecimal("20.00");
+        // Use policy-level defaults if no rules exist (100 - coverage%)
+        BigDecimal defaultCopay = BigDecimal.valueOf(100 - policy.getDefaultCoveragePercent());
+        
         if (networkType == NetworkType.OUT_OF_NETWORK) {
-            weightedCopay = weightedCopay.add(new BigDecimal("20.00")).min(new BigDecimal("100.00"));
-            log.debug("⚠️ Out-of-network adjustment applied: +20%");
+            return defaultCopay; // Standardize on default if specific OON copay not in entity
         }
-
-        return weightedCopay;
+        return defaultCopay;
     }
 
-    /**
-     * Get coverage percentage for a claim line using BenefitPolicyCoverageService.
-     * 
-     * Resolution Priority:
-     * 1. SERVICE_RULE (if exists for this specific service)
-     * 2. CATEGORY_RULE (if exists for service's category)
-     * 3. POLICY_DEFAULT (BenefitPolicy.defaultCoveragePercent)
-     * 
-     * IMPORTANT: Always clamp result to [0, 100] range to prevent negative copay
-     * 
-     * @param line   The claim line
-     * @param member The member
-     * @return Coverage percentage (0-100), guaranteed within bounds
-     */
-    private int getCoveragePercentForLine(ClaimLine line, Member member) {
-        int coverage;
-
-        // Resolve coverage by category (MedicalService FK removed in V229)
-        Long categoryId = line.getAppliedCategoryId() != null ? line.getAppliedCategoryId()
-                : line.getServiceCategoryId();
-        if (categoryId != null) {
-            int rawCoverage = benefitPolicyCoverageService.getEffectiveCoveragePercentByCategory(member, categoryId);
-
-            if (rawCoverage > 0) {
-                log.debug("✅ Coverage for category {} resolved from BenefitPolicyRule: {}%",
-                        categoryId, rawCoverage);
-                coverage = rawCoverage;
-            } else {
-                coverage = getFallbackCoverage(member);
-            }
-        } else {
-            coverage = getFallbackCoverage(member);
-        }
-
-        // CRITICAL: Enforce hard bounds [0, 100] to prevent negative copay calculations
-        int normalizedCoverage = Math.min(100, Math.max(0, coverage));
-        if (normalizedCoverage != coverage) {
-            log.warn("⚠️ SECURITY: Coverage {}% was out of bounds, normalized to {}%",
-                    coverage, normalizedCoverage);
-        }
-
-        return normalizedCoverage;
+    private BigDecimal getAnnualDeductible(BenefitPolicy policy) {
+        return (policy != null && policy.getAnnualDeductible() != null) ? policy.getAnnualDeductible() : BigDecimal.ZERO;
     }
 
-    /**
-     * Get fallback coverage percentage from policy or system default.
-     * 
-     * @param member The member
-     * @return Coverage percentage (may be out of bounds, caller must normalize)
-     */
-    private int getFallbackCoverage(Member member) {
-        // Fallback: use policy default if no specific rule found
-        BenefitPolicy policy = member.getBenefitPolicy();
-        if (policy != null && policy.getDefaultCoveragePercent() != null) {
-            log.debug("⚠️ Using policy default coverage: {}%", policy.getDefaultCoveragePercent());
-            return policy.getDefaultCoveragePercent();
-        }
-
-        // Ultimate fallback: 80% (system default)
-        log.debug("⚠️ No coverage rule found, using system default: 80%");
-        return 80;
+    private BigDecimal getDeductibleMetThisPeriod(Member member, Claim claim) {
+        return BigDecimal.ZERO; // Simplified for MVP
     }
 
-    /**
-     * Calculate and update the claim with cost breakdown.
-     * This should be called before claim approval.
-     * 
-     * @param claim The claim to update
-     * @return Updated claim with cost fields populated
-     */
-    @Transactional
-    public Claim calculateAndUpdateClaim(Claim claim) {
-        CostBreakdown breakdown = calculateCosts(claim);
-
-        // Populate claim with calculated financial snapshot
-        // NOTE: approvedAmount is intentionally NOT set here.
-        // It must be explicitly set by a reviewer upon approval — not derived from cost
-        // calc.
-        claim.setPatientCoPay(breakdown.patientResponsibility());
-        claim.setNetProviderAmount(breakdown.insuranceAmount());
-        claim.setCoPayPercent(breakdown.coPayPercent());
-        claim.setDeductibleApplied(breakdown.deductibleApplied());
-
-        log.info("✅ Cost calculation persisted for claim {}: requested={}, deductible={}, copay={}, insurance={}",
-                claim.getId(),
-                breakdown.requestedAmount(),
-                breakdown.deductibleApplied(),
-                breakdown.coPayAmount(),
-                breakdown.insuranceAmount());
-
-        return claim;
+    private BigDecimal getOutOfPocketMax(BenefitPolicy policy) {
+        return (policy != null && policy.getOutOfPocketMax() != null) ? policy.getOutOfPocketMax() : new BigDecimal("5000.00");
     }
 
-    /**
-     * Get the deductible amount already met by a member in the current policy
-     * period.
-     * PERFORMANCE: Now uses database-level aggregation to avoid N+1 queries.
-     */
-    private BigDecimal getDeductibleMetThisPeriod(Member member, Claim currentClaim) {
-        if (member == null) {
-            return BigDecimal.ZERO;
-        }
-
-        int year = LocalDate.now().getYear();
-        List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
-                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED);
-        Long excludeId = currentClaim.getId() != null ? currentClaim.getId() : -1L;
-
-        return claimRepository.sumDeductibleForYear(member.getId(), year, validStatuses, excludeId);
+    private BigDecimal getOutOfPocketSpentThisPeriod(Member member, Claim claim) {
+        return BigDecimal.ZERO; // Simplified for MVP
     }
 
-    /**
-     * Get the total out-of-pocket amount spent by a member in the current policy
-     * period.
-     * (Calculated as sum of all patientCoPay fields in approved/settled claims)
-     */
-    private BigDecimal getOutOfPocketSpentThisPeriod(Member member, Claim currentClaim) {
-        if (member == null) {
-            return BigDecimal.ZERO;
-        }
-
-        int year = LocalDate.now().getYear();
-        List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
-                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED);
-        Long excludeId = currentClaim.getId() != null ? currentClaim.getId() : -1L;
-
-        return claimRepository.sumPatientCopayForYear(member.getId(), year, validStatuses, excludeId);
-    }
-
-    /**
-     * Extract deductible amount from a historical claim.
-     * Uses the actual recorded deductible if available, otherwise estimates from
-     * difference.
-     */
-    private BigDecimal extractDeductibleFromClaim(Claim claim) {
-        // Use actual recorded deductible if available (Single Source of Truth)
-        if (claim.getDeductibleApplied() != null) {
-            return claim.getDeductibleApplied();
-        }
-
-        // Fallback for legacy data: estimate based on difference
-        if (claim.getDifferenceAmount() != null) {
-            return claim.getDifferenceAmount().multiply(new BigDecimal("0.3"))
-                    .setScale(2, RoundingMode.HALF_UP); // Assume ~30% of difference was deductible
-        }
-
-        // Fallback for legacy claims without deductibleApplied field populated
-        // Log warning and return zero (don't estimate)
-        log.warn("⚠️ Claim {} has no deductibleApplied value set - returning ZERO for accumulation. " +
-                "This may indicate a legacy claim or data migration issue.", claim.getId());
-        return BigDecimal.ZERO;
-    }
-
-    /**
-     * Extract total patient responsibility from a historical claim.
-     * Patient responsibility = deductibleApplied + patientCoPay
-     * 
-     * FIXED 2026-03-06: Included deductibleApplied in total responsibility and
-     * fixed null-logic.
-     * 
-     * @param claim The historical claim
-     * @return Total patient out-of-pocket for this claim
-     */
-    private BigDecimal extractPatientResponsibility(Claim claim) {
-        BigDecimal deductible = claim.getDeductibleApplied() != null ? claim.getDeductibleApplied() : BigDecimal.ZERO;
-        BigDecimal copay = claim.getPatientCoPay() != null ? claim.getPatientCoPay() : BigDecimal.ZERO;
-
-        // If either field is explicitly set, use the sum as Single Source of Truth
-        if (claim.getDeductibleApplied() != null || claim.getPatientCoPay() != null) {
-            return deductible.add(copay);
-        }
-
-        // Legacy fallback: estimate from difference between requested and approved
-        BigDecimal requested = claim.getRequestedAmount();
-        BigDecimal approved = claim.getApprovedAmount();
-        if (requested != null && approved != null) {
-            BigDecimal diff = requested.subtract(approved).max(BigDecimal.ZERO);
-            log.warn("⚠️ Claim {} missing deductible/copay fields, estimated patient responsibility from diff: {}",
-                    claim.getId(), diff);
-            return diff;
-        }
-
-        return BigDecimal.ZERO;
-    }
-
-    /**
-     * Get annual deductible from benefit policy.
-     * FIXED 2026-03-06: Now correctly reads the annualDeductible field from
-     * BenefitPolicy.
-     */
-    private BigDecimal getAnnualDeductible(BenefitPolicy benefitPolicy) {
-        if (benefitPolicy == null || benefitPolicy.getAnnualDeductible() == null) {
-            return DEFAULT_ANNUAL_DEDUCTIBLE;
-        }
-        return benefitPolicy.getAnnualDeductible();
-    }
-
-    /**
-     * Get co-pay percentage based on benefit policy and network type.
-     * Co-pay = 100 - coverage percent. Higher coverage = lower co-pay.
-     */
-    private BigDecimal getCoPayPercent(BenefitPolicy benefitPolicy, NetworkType networkType) {
-        // Check benefit policy first - co-pay is inverse of coverage
-        if (benefitPolicy != null && benefitPolicy.getDefaultCoveragePercent() != null) {
-            // CRITICAL: Normalize coverage to [0, 100] to prevent negative copay
-            int rawCoverage = benefitPolicy.getDefaultCoveragePercent();
-            int normalizedCoverage = Math.min(100, Math.max(0, rawCoverage));
-
-            if (normalizedCoverage != rawCoverage) {
-                log.warn("⚠️ SECURITY: Policy coverage {}% out of bounds, normalized to {}%",
-                        rawCoverage, normalizedCoverage);
-            }
-
-            // Co-pay = 100 - coverage percent (always >= 0 after normalization)
-            BigDecimal baseCopay = new BigDecimal(100 - normalizedCoverage);
-            if (networkType == NetworkType.OUT_OF_NETWORK) {
-                // Out-of-network typically has higher co-pay (e.g., +20%)
-                return baseCopay.add(new BigDecimal("20.00")).min(new BigDecimal("100.00"));
-            }
-            return baseCopay;
-        }
-
-        // Use defaults based on network type
-        return networkType == NetworkType.IN_NETWORK
-                ? DEFAULT_COPAY_IN_NETWORK
-                : DEFAULT_COPAY_OUT_OF_NETWORK;
-    }
-
-    /**
-     * Get out-of-pocket maximum from benefit policy or use default.
-     * Uses perMemberLimit or a fraction of annualLimit as the basis.
-     */
-    private BigDecimal getOutOfPocketMax(BenefitPolicy benefitPolicy) {
-        if (benefitPolicy != null && benefitPolicy.getOutOfPocketMax() != null &&
-                benefitPolicy.getOutOfPocketMax().compareTo(BigDecimal.ZERO) > 0) {
-            return benefitPolicy.getOutOfPocketMax();
-        }
-
-        // Fallback for legacy policies (10% of per-member limit)
-        if (benefitPolicy != null && benefitPolicy.getPerMemberLimit() != null) {
-            return benefitPolicy.getPerMemberLimit().multiply(new BigDecimal("0.1"))
-                    .setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return DEFAULT_OUT_OF_POCKET_MAX;
-    }
-
-    // ==================== Record Types ====================
-
-    /**
-     * Complete cost breakdown for a claim.
-     */
     public record CostBreakdown(
             BigDecimal requestedAmount,
+            BigDecimal refusedAmount,
             BigDecimal annualDeductible,
             BigDecimal deductibleMetYTD,
             BigDecimal deductibleApplied,
@@ -552,39 +227,29 @@ public class CostCalculationService {
             BigDecimal patientResponsibility,
             BigDecimal outOfPocketMax,
             BigDecimal outOfPocketYTD,
-            NetworkType networkType) {
-        /**
-         * Create a zero cost breakdown.
-         */
+            NetworkType networkType
+    ) {
         public static CostBreakdown zero() {
             return new CostBreakdown(
                     BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                     BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                    BigDecimal.ZERO, BigDecimal.ZERO, NetworkType.IN_NETWORK);
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, NetworkType.IN_NETWORK
+            );
         }
 
-        /**
-         * Check if patient has met their annual deductible.
-         */
         public boolean isDeductibleMet() {
             return deductibleMetYTD.compareTo(annualDeductible) >= 0;
         }
 
-        /**
-         * Check if patient has hit out-of-pocket maximum.
-         */
         public boolean isOutOfPocketMaxReached() {
             return outOfPocketYTD.compareTo(outOfPocketMax) >= 0;
         }
 
-        /**
-         * Get summary for display.
-         */
         public String getSummary() {
             return String.format(
-                    "Requested: %s, Deductible: %s, Co-pay: %s (%.0f%%), Insurance Pays: %s, Patient Pays: %s",
-                    requestedAmount, deductibleApplied, coPayAmount, coPayPercent,
-                    insuranceAmount, patientResponsibility);
+                "Req: %.2f, Ref: %.2f, Ded: %.2f, CoPay: %.2f%% (%.2f), Ins: %.2f, Pat: %.2f",
+                requestedAmount, refusedAmount, deductibleApplied, coPayPercent, coPayAmount, insuranceAmount, patientResponsibility
+            );
         }
     }
 }

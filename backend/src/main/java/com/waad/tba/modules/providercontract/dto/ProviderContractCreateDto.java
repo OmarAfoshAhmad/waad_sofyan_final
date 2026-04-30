@@ -54,6 +54,12 @@ public class ProviderContractCreateDto {
     private BigDecimal discountPercent;
 
     /**
+     * هل يُطبَّق خصم العقد قبل خصم المرفوض؟ (الافتراضي: false = بعد)
+     */
+    @Builder.Default
+    private Boolean discountBeforeRejection = false;
+
+    /**
      * Contract start date (required)
      */
     @NotNull(message = "Start date is required")

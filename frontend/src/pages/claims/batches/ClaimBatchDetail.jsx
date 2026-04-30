@@ -249,6 +249,14 @@ export default function ClaimBatchDetail() {
     const claims = useMemo(() => {
         let items = claimsResponse?.items || claimsResponse?.content || [];
 
+        // Keep newest claims first by default (before any table-level sorting).
+        items = [...items].sort((a, b) => {
+            const aTime = new Date(a?.createdAt || 0).getTime() || 0;
+            const bTime = new Date(b?.createdAt || 0).getTime() || 0;
+            if (aTime !== bTime) return bTime - aTime;
+            return (Number(b?.id) || 0) - (Number(a?.id) || 0);
+        });
+
         // 1. Search Filter
         if (searchTerm) {
             const lowerSearch = searchTerm.toLowerCase();
@@ -266,6 +274,82 @@ export default function ClaimBatchDetail() {
 
         return items;
     }, [claimsResponse, searchTerm, statusFilter]);
+
+    const getDisplayRefused = (claim) => {
+        if (!claim) return 0;
+        return (claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0))
+            ? (claim.requestedAmount || 0)
+            : (claim.refusedAmount || 0);
+    };
+
+    const getDiscountPercent = (claim) => {
+        // نسبة الخصم تأتي من حقل providerDiscountPercent الذي يحمل لقطة من عقد المرفق
+        // Priority 1: providerDiscountPercent (mapped from appliedDiscountPercent in ClaimApiMapper)
+        // Priority 2: appliedDiscountPercent / discountPercent (legacy field names)
+        const raw = claim?.providerDiscountPercent
+            ?? claim?.appliedDiscountPercent
+            ?? claim?.discountPercent
+            ?? null;
+        if (raw === null || raw === undefined) return 0;
+        const percent = Number(raw);
+        if (!Number.isFinite(percent) || percent < 0) return 0;
+        return Math.min(percent, 100);
+    };
+
+    const getDiscountAmount = (claim) => {
+        const gross = Number(claim?.requestedAmount) || 0;
+        const copay = Number(claim?.patientCoPay) || 0;
+        const providerShare = Math.max(0, gross - copay);
+        const percent = getDiscountPercent(claim);
+        const refused = Number(getDisplayRefused(claim)) || 0;
+        const isBefore = claim?.discountBeforeRejection !== false;
+
+        if (isBefore) {
+            return providerShare * percent / 100;
+        } else {
+            return Math.max(0, providerShare - refused) * percent / 100;
+        }
+    };
+
+    const getApprovedAfterDiscount = (claim) => {
+        const gross = Number(claim?.requestedAmount) || 0;
+        const copay = Number(claim?.patientCoPay) || 0;
+        const providerShare = Math.max(0, gross - copay);
+        
+        const isBefore = claim?.discountBeforeRejection !== false; // Default true
+        const percent = getDiscountPercent(claim);
+        const refused = Number(getDisplayRefused(claim)) || 0;
+
+        if (isBefore) {
+            // الحالة قبل: يخصم التخفيض من حصة المرفق ليعطينا المعتمد
+            const discountAmount = providerShare * percent / 100;
+            return Math.max(0, providerShare - discountAmount);
+        } else {
+            // الحالة بعد: لا يتم خصم التخفيض للحصول على المعتمد (الخصم يتم بعد المرفوض)
+            return providerShare;
+        }
+    };
+
+    const getDueAfterRefused = (claim) => {
+        const gross = Number(claim?.requestedAmount) || 0;
+        const copay = Number(claim?.patientCoPay) || 0;
+        const providerShare = Math.max(0, gross - copay);
+        const refused = Number(getDisplayRefused(claim)) || 0;
+        const isBefore = claim?.discountBeforeRejection !== false;
+        const percent = getDiscountPercent(claim);
+
+        if (isBefore) {
+            // في حال قبل يتم خصم نسبة التخفيض من نسبة المرفق ثم يطرح المرفوض
+            const discountAmount = providerShare * percent / 100;
+            const approved = Math.max(0, providerShare - discountAmount);
+            return Math.max(0, approved - refused);
+        } else {
+            // أما في الحالة بعد يتم خصم المرفوض اولا ثم نسبة التخفيض من المتبقي من حصة المرفق
+            const afterRefused = Math.max(0, providerShare - refused);
+            const discountAmount = afterRefused * percent / 100;
+            return Math.max(0, afterRefused - discountAmount);
+        }
+    };
 
     const sortedClaims = useMemo(() => {
         const sorting = tableState.sorting?.[0];
@@ -285,13 +369,15 @@ export default function ClaimBatchDetail() {
                 case 'amount':
                     return Number(claim.requestedAmount) || 0;
                 case 'covered':
-                    return Number(claim.approvedAmount) || 0;
+                    return Number(getApprovedAfterDiscount(claim)) || 0;
+                case 'discountPercent':
+                    return Number(getDiscountPercent(claim)) || 0;
                 case 'refused': {
-                    const refused = (claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0))
-                        ? claim.requestedAmount
-                        : (claim.refusedAmount || 0);
+                    const refused = getDisplayRefused(claim);
                     return Number(refused) || 0;
                 }
+                case 'dueAfterRefused':
+                    return Number(getDueAfterRefused(claim)) || 0;
                 case 'copay':
                     return Number(claim.patientCoPay) || 0;
                 case 'paid':
@@ -400,10 +486,6 @@ export default function ClaimBatchDetail() {
         navigate(`/reports/claims/statement-preview?ids=${ids.join(',')}`);
     };
 
-    const handlePrintSingle = (claimId) => {
-        navigate(`/reports/claims/statement-preview?ids=${claimId}`);
-    };
-
     // فتح تقرير المرفوضات - يجلب التفاصيل ويفلتر المطالبات التي فيها بند واحد مرفوض على الأقل
     const handleRejectedReport = async () => {
         if (!claims || claims.length === 0) {
@@ -463,14 +545,16 @@ export default function ClaimBatchDetail() {
         { id: 'index', label: '#', minWidth: '2.5rem', align: 'center', sortable: false },
         { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: false },
         { id: 'employer', label: 'الوثيقة', minWidth: '9rem', align: 'center', sortable: false },
-        { id: 'provider', label: 'مقدم الخدمة', minWidth: '7rem', align: 'center', sortable: false },
         { id: 'patient', label: 'الاسم (المستفيد)', minWidth: '10rem', align: 'right', sortable: true },
         { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '7rem', align: 'center', sortable: true },
         { id: 'status', label: 'الحالة', minWidth: '6rem', align: 'center', sortable: true },
         { id: 'amount', label: 'الإجمالي', minWidth: '5rem', align: 'center', sortable: true },
-        { id: 'covered', label: 'المعتمد', minWidth: '5rem', align: 'center', sortable: true },
-        { id: 'refused', label: 'المرفوض', minWidth: '5.5rem', align: 'center', sortable: true },
         { id: 'copay', label: 'نصيب المستفيد', minWidth: '5rem', align: 'center', sortable: true },
+        { id: 'discountPercent', label: 'نسبة التخفيض', minWidth: '6.5rem', align: 'center', sortable: true },
+        { id: 'covered', label: 'المعتمد', minWidth: '5rem', align: 'center', sortable: true },
+        { id: 'discountTiming', label: 'آلية الخصم', minWidth: '6rem', align: 'center', sortable: true },
+        { id: 'refused', label: 'المرفوض', minWidth: '5.5rem', align: 'center', sortable: true },
+        { id: 'dueAfterRefused', label: 'المستحق', minWidth: '8.5rem', align: 'center', sortable: true },
         { id: 'actions', label: 'إجراءات', minWidth: '5rem', align: 'center', sortable: false }
     ];
 
@@ -478,12 +562,9 @@ export default function ClaimBatchDetail() {
     const totals = useMemo(() => {
         return {
             amount: claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
-            covered: claims.reduce((s, c) => s + (c.approvedAmount || 0), 0),
-            refused: claims.reduce((s, c) => {
-                const r = (c.status === 'REJECTED' && (!c.refusedAmount || c.refusedAmount === 0))
-                    ? c.requestedAmount : (c.refusedAmount || 0);
-                return s + r;
-            }, 0),
+            covered: claims.reduce((s, c) => s + getApprovedAfterDiscount(c), 0),
+            refused: claims.reduce((s, c) => s + getDisplayRefused(c), 0),
+            dueAfterRefused: claims.reduce((s, c) => s + getDueAfterRefused(c), 0),
             copay: claims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
             paid: claims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
         };
@@ -543,13 +624,6 @@ export default function ClaimBatchDetail() {
                         {batchCode}/{String(index + 1).padStart(4, '0')}
                     </Typography>
                 );
-            case 'provider':
-                return (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <BusinessIcon sx={{ fontSize: '1.0rem', color: 'text.disabled' }} />
-                        <Typography variant="body2">{provider?.name}</Typography>
-                    </Stack>
-                );
             case 'employer':
                 return (
                     <Typography variant="body2" noWrap>
@@ -558,11 +632,11 @@ export default function ClaimBatchDetail() {
                 );
             case 'patient':
                 return (
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ overflow: 'hidden', minWidth: 0 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end" sx={{ overflow: 'hidden', minWidth: 0, width: '100%' }}>
                         <Avatar sx={{ width: '1.5rem', height: '1.5rem', fontSize: '0.7rem', bgcolor: 'secondary.light', flexShrink: 0 }}>
                             {claim.memberName?.charAt(0)}
                         </Avatar>
-                        <Box sx={{ overflow: 'hidden', minWidth: 0 }}>
+                        <Box sx={{ overflow: 'hidden', minWidth: 0, textAlign: 'right' }}>
                             <Typography variant="body2" fontWeight={600} noWrap>{claim.memberName}</Typography>
                             <Typography variant="caption" color="text.secondary" noWrap>{claim.memberCardNumber}</Typography>
                         </Box>
@@ -578,12 +652,38 @@ export default function ClaimBatchDetail() {
                 return getStatusChip(claim.status || 'APPROVED', claim.refusedAmount || 0);
             case 'amount':
                 return <Typography variant="body2" fontWeight={400}>{claim.requestedAmount?.toFixed(2)}</Typography>;
+            case 'discountPercent':
+                return (
+                    <Stack spacing={0} alignItems="center">
+                        <Typography variant="body2" color="warning.main" fontWeight={600}>
+                            {getDiscountAmount(claim).toFixed(2)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 500 }}>
+                            ({getDiscountPercent(claim).toFixed(0)}%)
+                        </Typography>
+                    </Stack>
+                );
+            case 'discountTiming':
+                const isBefore = claim.discountBeforeRejection !== false; // Default to true (Before)
+                return (
+                    <Typography 
+                        variant="caption" 
+                        sx={{ 
+                            px: 1, 
+                            py: 0.5, 
+                            borderRadius: 1, 
+                            bgcolor: isBefore ? 'rgba(25, 118, 210, 0.08)' : 'rgba(156, 39, 176, 0.08)',
+                            color: isBefore ? 'primary.main' : 'secondary.main',
+                            fontWeight: 600
+                        }}
+                    >
+                        {isBefore ? 'قبل الاستبعاد' : 'بعد الاستبعاد'}
+                    </Typography>
+                );
             case 'covered':
-                return <Typography variant="body2" color="success.main" fontWeight={400}>{(claim.approvedAmount || 0).toFixed(2)}</Typography>;
+                return <Typography variant="body2" color="success.main" fontWeight={400}>{getApprovedAfterDiscount(claim).toFixed(2)}</Typography>;
             case 'refused':
-                const displayRefused = (claim.status === 'REJECTED' && (!claim.refusedAmount || claim.refusedAmount === 0))
-                    ? claim.requestedAmount
-                    : (claim.refusedAmount || 0);
+                const displayRefused = getDisplayRefused(claim);
 
                 let linesReasons = '';
                 if (claim.lines && claim.lines.length > 0) {
@@ -616,6 +716,12 @@ export default function ClaimBatchDetail() {
                         </Typography>
                     </Tooltip>
                 );
+            case 'dueAfterRefused':
+                return (
+                    <Typography variant="body2" color="primary.main" fontWeight={600}>
+                        {getDueAfterRefused(claim).toFixed(2)}
+                    </Typography>
+                );
             case 'copay':
                 return (
                     <Typography variant="body2" color="info.main" fontWeight={600}>
@@ -646,14 +752,6 @@ export default function ClaimBatchDetail() {
                                 </IconButton>
                             </Tooltip>
                         )}
-                        <Tooltip title="طباعة مطالبة واحدة">
-                            <IconButton
-                                color="info"
-                                onClick={() => handlePrintSingle(claim.id)}
-                            >
-                                <PrintIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
-                            </IconButton>
-                        </Tooltip>
                         {canDelete && !showDeleted && claim.status !== 'BATCHED' && claim.status !== 'SETTLED' && (
                             <Tooltip title="حذف المطالبة">
                                 <IconButton
@@ -962,6 +1060,7 @@ export default function ClaimBatchDetail() {
                                     <Chip label={`الإجمالي: ${totals.amount.toFixed(2)}`} size="small" sx={{ fontWeight: 400 }} />
                                     <Chip label={`المعتمد: ${totals.covered.toFixed(2)}`} color="success" size="small" sx={{ fontWeight: 400 }} />
                                     <Chip label={`المرفوض: ${totals.refused.toFixed(2)}`} color="error" size="small" sx={{ fontWeight: 400 }} />
+                                    <Chip label={`المستحق بعد طرح المرفوض: ${totals.dueAfterRefused.toFixed(2)}`} color="primary" size="small" sx={{ fontWeight: 400 }} />
                                     <Chip label={`نصيب المستفيد: ${totals.copay.toFixed(2)}`} color="info" size="small" sx={{ fontWeight: 400 }} />
                                 </Stack>
                             </MainCard>

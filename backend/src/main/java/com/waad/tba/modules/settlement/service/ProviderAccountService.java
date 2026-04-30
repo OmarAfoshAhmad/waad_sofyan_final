@@ -164,7 +164,7 @@ public class ProviderAccountService {
                                                         + " has an active (unreversed) credit. Cannot credit twice.");
                 }
 
-                // 4. Get net amount to credit = نصيب المرفق بعد خصم العقد
+                // 4. Get net amount to credit (already calculated by claim financial pipeline)
                 BigDecimal companyApprovedShare = claim.getNetPayableAmount();
                 if (companyApprovedShare == null || companyApprovedShare.compareTo(BigDecimal.ZERO) <= 0) {
                         throw new IllegalStateException(
@@ -172,50 +172,76 @@ public class ProviderAccountService {
                                                         + companyApprovedShare);
                 }
 
-                // Apply provider contract discount (نسبة الخصم) to get actual provider share.
-                // A missing active contract is a configuration error — fail loudly.
-                BigDecimal discountPercent = contractRepository.findActiveContractByProvider(claim.getProviderId())
-                                .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent() : BigDecimal.ZERO)
-                                .orElseThrow(() -> new IllegalStateException(
-                                                "لا يوجد عقد نشط لمقدم الخدمة " + claim.getProviderId()
-                                                                + ". تعذّر حساب نصيب المرفق — تأكد من إعداد العقد أولاً."));
+                // ═══════════════════════════════════════════════════════════════════════
+                // FINANCIAL PIPELINE: Discount Timing (discountBeforeRejection)
+                // ═══════════════════════════════════════════════════════════════════════
+                // Co-Pay is ALWAYS calculated first (already done in claim pipeline).
+                // companyApprovedShare = provider's share AFTER co-pay split.
+                //
+                // Mode "قبل" (true):  Discount → then subtract Rejection
+                //   amount = providerShare × (1 - discount%) - rejected
+                //
+                // Mode "بعد" (false): Rejection → then Discount
+                //   amount = (providerShare - rejected) × (1 - discount%)
+                // ═══════════════════════════════════════════════════════════════════════
 
-                // Validate discount is within [0, 100]
-                if (discountPercent.compareTo(BigDecimal.ZERO) < 0
-                                || discountPercent.compareTo(new BigDecimal("100")) > 0) {
-                        throw new IllegalStateException(
-                                        "نسبة الخصم غير صالحة لمقدم الخدمة " + claim.getProviderId()
-                                                        + ": " + discountPercent + ". يجب أن تكون بين 0 و 100.");
-                }
-
-                // One-step calculation with a single HALF_EVEN rounding to avoid cascading
-                // precision errors across thousands of claims.
-                // CALC_SCALE=4 for intermediate ratio; final amount rounded to scale=2.
                 BigDecimal amount;
-                if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal providerRatio = BigDecimal.ONE
-                                        .subtract(discountPercent.divide(new BigDecimal("100"), 4,
-                                                        java.math.RoundingMode.HALF_EVEN));
-                        amount = companyApprovedShare.multiply(providerRatio).setScale(2,
-                                        java.math.RoundingMode.HALF_EVEN);
-                } else {
-                        amount = companyApprovedShare;
+                BigDecimal discountPercent = claim.getAppliedDiscountPercent();
+                boolean beforeRejection = Boolean.TRUE.equals(claim.getDiscountBeforeRejection());
+                BigDecimal rejected = claim.getRefusedAmount() != null ? claim.getRefusedAmount() : BigDecimal.ZERO;
+
+                // Legacy fallback: fetch from contract if no snapshot exists
+                if (discountPercent == null) {
+                        var contractOpt = contractRepository.findActiveContractByProvider(claim.getProviderId());
+                        discountPercent = contractOpt
+                                        .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent()
+                                                        : BigDecimal.ZERO)
+                                        .orElse(BigDecimal.ZERO);
+                        beforeRejection = contractOpt
+                                        .map(c -> Boolean.TRUE.equals(c.getDiscountBeforeRejection()))
+                                        .orElse(false);
+
+                        if (discountPercent.compareTo(BigDecimal.ZERO) < 0
+                                        || discountPercent.compareTo(new BigDecimal("100")) > 0) {
+                                throw new IllegalStateException(
+                                                "نسبة الخصم غير صالحة لمقدم الخدمة " + claim.getProviderId()
+                                                                + ": " + discountPercent
+                                                                + ". يجب أن تكون بين 0 و 100.");
+                        }
                 }
 
-                log.info("Credit calculation: claim={}, companyApprovedShare={}, discountPercent={}, providerShare={}",
-                                claimId, companyApprovedShare, discountPercent, amount);
+                BigDecimal discountMultiplier = BigDecimal.ONE
+                                .subtract(discountPercent.divide(new BigDecimal("100"), 4,
+                                                java.math.RoundingMode.HALF_EVEN));
+
+                if (beforeRejection) {
+                        // الوضع "قبل": خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض
+                        BigDecimal afterDiscount = companyApprovedShare.multiply(discountMultiplier)
+                                        .setScale(2, java.math.RoundingMode.HALF_EVEN);
+                        amount = afterDiscount.subtract(rejected).max(BigDecimal.ZERO);
+                        log.info("BEFORE-REJECTION mode: claim={}, providerShare={}, discount={}%, afterDiscount={}, rejected={}, credit={}",
+                                        claimId, companyApprovedShare, discountPercent, afterDiscount, rejected, amount);
+                } else {
+                        // الوضع "بعد": خصم المرفوض أولاً ثم نسبة التخفيض
+                        BigDecimal afterRejection = companyApprovedShare.subtract(rejected).max(BigDecimal.ZERO);
+                        amount = afterRejection.multiply(discountMultiplier)
+                                        .setScale(2, java.math.RoundingMode.HALF_EVEN);
+                        log.info("AFTER-REJECTION mode: claim={}, providerShare={}, rejected={}, afterRejection={}, discount={}%, credit={}",
+                                        claimId, companyApprovedShare, rejected, afterRejection, discountPercent, amount);
+                }
 
                 if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                         throw new IllegalStateException(
                                         "Invalid credit amount after discount for claim " + claimId + ": " + amount);
                 }
 
-                // Persist the discount snapshot on the claim for audit trail.
-                // Recorded once – future contract changes will NOT alter this.
+                // Persist snapshots for legacy claims
                 if (claim.getAppliedDiscountPercent() == null) {
                         claim.setAppliedDiscountPercent(discountPercent);
+                        claim.setDiscountBeforeRejection(beforeRejection);
                         claimRepository.save(claim);
                 }
+
 
                 // 5. Get account with lock (create if not exists)
                 ProviderAccount account = accountRepository.findByProviderIdForUpdate(claim.getProviderId())

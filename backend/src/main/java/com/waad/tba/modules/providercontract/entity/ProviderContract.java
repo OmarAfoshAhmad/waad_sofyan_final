@@ -67,6 +67,17 @@ public class ProviderContract {
     @Builder.Default
     private BigDecimal discountPercent = BigDecimal.ZERO;
 
+    /**
+     * تحديد توقيت تطبيق نسبة خصم العقد على حصة المرفق:
+     * - true  = "قبل": خصم نسبة التخفيض أولاً ثم خصم المرفوض
+     * - false = "بعد": خصم المرفوض أولاً ثم نسبة التخفيض (الافتراضي)
+     *
+     * في كلتا الحالتين، يُحسب الدفع المشترك (Co-Pay) أولاً من المبلغ الإجمالي.
+     */
+    @Column(name = "discount_before_rejection", nullable = false)
+    @Builder.Default
+    private Boolean discountBeforeRejection = true;
+
     /** @deprecated Use ProviderContractPricingItem.discountPercent instead */
     @Deprecated(since = "2026-01-22", forRemoval = false)
     @Column(name = "discount_rate", precision = 5, scale = 2)

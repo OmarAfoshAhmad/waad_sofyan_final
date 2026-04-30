@@ -6,6 +6,7 @@ import { normalizePaginatedResponse } from 'utils/api-response-normalizer';
 // ==============================|| CLAIMS SERVICE ||============================== //
 
 const BASE_URL = '/claims';
+const DRAFT_URL = '/claims/draft';
 
 /**
  * Helper function to unwrap ApiResponse
@@ -187,6 +188,48 @@ export const claimsService = {
 
   // Backward-compatible alias (internally aligned to /data)
   update: async (id, data) => claimsService.updateData(id, data),
+
+  /**
+   * Get autosave draft for batch
+   * @param {number} batchId - Claim batch ID
+   */
+  getDraft: async (batchId) => {
+    try {
+      if (!batchId) throw new Error('معرف الدفعة مطلوب');
+      const response = await axiosClient.get(`${DRAFT_URL}?batchId=${batchId}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /**
+   * Save autosave draft for batch
+   * @param {Object} payload - {batchId, data, version}
+   */
+  saveDraft: async (payload) => {
+    try {
+      if (!payload?.batchId) throw new Error('معرف الدفعة مطلوب');
+      const response = await axiosClient.post(DRAFT_URL, payload);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  /**
+   * Delete autosave draft for batch
+   * @param {number} batchId - Claim batch ID
+   */
+  deleteDraft: async (batchId) => {
+    try {
+      if (!batchId) throw new Error('معرف الدفعة مطلوب');
+      const response = await axiosClient.delete(`${DRAFT_URL}?batchId=${batchId}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
 
   /**
    * Delete claim

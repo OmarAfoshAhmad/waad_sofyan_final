@@ -9,12 +9,15 @@ import {
   Box,
   Button,
   CircularProgress,
+  FormControlLabel,
   Grid,
   InputAdornment,
   MenuItem,
   Paper,
   Stack,
+  Switch,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material';
 import { ArrowBack, Save, Edit as EditIcon } from '@mui/icons-material';
@@ -61,6 +64,7 @@ const ProviderContractEdit = () => {
         endDate: null,
         pricingModel: 'DISCOUNT',
         discountPercent: 0,
+        discountBeforeRejection: false,
         notes: ''
       };
     }
@@ -71,6 +75,7 @@ const ProviderContractEdit = () => {
       endDate: contract.endDate ? new Date(contract.endDate) : null,
       pricingModel: contract.pricingModel || 'DISCOUNT',
       discountPercent: contract.discountPercent ?? 0,
+      discountBeforeRejection: contract.discountBeforeRejection ?? false,
       notes: contract.notes || ''
     };
   }, [contract]);
@@ -147,6 +152,7 @@ const ProviderContractEdit = () => {
       endDate: format(formData.endDate, 'yyyy-MM-dd'),
       pricingModel: formData.pricingModel,
       discountPercent: formData.pricingModel === 'DISCOUNT' ? Number(formData.discountPercent) : null,
+      discountBeforeRejection: formData.discountBeforeRejection,
       notes: formData.notes || null
     };
 
@@ -261,6 +267,25 @@ const ProviderContractEdit = () => {
                 InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
                 inputProps={{ min: 0, max: 100, step: 0.5 }}
               />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Tooltip title={formData.discountBeforeRejection
+                ? 'قبل: خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض'
+                : 'بعد: خصم المرفوض أولاً ثم تطبيق نسبة التخفيض'}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.discountBeforeRejection}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, discountBeforeRejection: e.target.checked }))}
+                      disabled={formData.pricingModel !== 'DISCOUNT'}
+                    />
+                  }
+                  label={formData.discountBeforeRejection ? 'الخصم قبل المرفوض' : 'الخصم بعد المرفوض'}
+                  sx={{ mt: 1 }}
+                />
+              </Tooltip>
             </Grid>
 
             <Grid size={12}>

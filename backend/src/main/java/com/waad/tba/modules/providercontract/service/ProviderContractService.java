@@ -240,6 +240,7 @@ public class ProviderContractService {
                 .status(dto.getStatus() != null ? dto.getStatus() : ContractStatus.DRAFT)
                 .pricingModel(dto.getPricingModel() != null ? dto.getPricingModel() : PricingModel.DISCOUNT)
                 .discountPercent(dto.getDiscountPercent() != null ? dto.getDiscountPercent() : BigDecimal.ZERO)
+                .discountBeforeRejection(dto.getDiscountBeforeRejection() != null ? dto.getDiscountBeforeRejection() : false)
                 .startDate(dto.getStartDate())
                 .endDate(dto.getEndDate())
                 .signedDate(dto.getSignedDate())
@@ -300,6 +301,9 @@ public class ProviderContractService {
         }
         if (dto.getDiscountPercent() != null) {
             contract.setDiscountPercent(dto.getDiscountPercent());
+        }
+        if (dto.getDiscountBeforeRejection() != null) {
+            contract.setDiscountBeforeRejection(dto.getDiscountBeforeRejection());
         }
         if (dto.getStartDate() != null) {
             contract.setStartDate(dto.getStartDate());

@@ -254,6 +254,13 @@ const ProviderContractsList = () => {
         sortable: false
       },
       {
+        id: 'discountTiming',
+        label: 'آلية الخصم',
+        minWidth: '7.5rem',
+        align: 'center',
+        sortable: false
+      },
+      {
         id: 'startDate',
         label: 'تاريخ البدء',
         minWidth: '8.125rem',
@@ -323,6 +330,24 @@ const ProviderContractsList = () => {
             <Chip label={`${contract.discountPercent}%`} size="small" variant="outlined" color="info" />
           ) : (
             <Typography variant="body2">-</Typography>
+          );
+
+        case 'discountTiming':
+          const isBefore = contract.discountBeforeRejection !== false; // Default to true (Before)
+          return (
+            <Typography
+              variant="caption"
+              sx={{
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                bgcolor: isBefore ? 'rgba(76, 175, 80, 0.08)' : 'rgba(244, 67, 54, 0.08)',
+                color: isBefore ? 'success.main' : 'error.main',
+                fontWeight: 600
+              }}
+            >
+              {isBefore ? 'قبل المرفوض' : 'بعد المرفوض'}
+            </Typography>
           );
 
         case 'startDate':

@@ -34,4 +34,8 @@ public class ClaimStatementReportDto {
     private BigDecimal subTotalGross;
     private BigDecimal subTotalNet;
     private BigDecimal subTotalRejected;
+    private BigDecimal subTotalPatientShare;
+    private BigDecimal subTotalExpectedNet;
+    private BigDecimal subTotalNetDifference;
+    private boolean subTotalInconsistent;
 }
