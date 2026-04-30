@@ -61,10 +61,10 @@ public class DashboardService {
             Long providerId = currentUser.getProviderId();
             if (providerId != null) {
                 log.debug("📊 Fetching dashboard summary for PROVIDER {}", providerId);
-                long totalClaims = claimRepository.countByProviderId(providerId);
+                long totalClaims = claimRepository.countByProviderIdAndActiveTrue(providerId);
                 long openClaims = claimRepository.countOpenClaimsByProvider(providerId);
                 long approvedClaims = claimRepository.countApprovedClaimsByProvider(providerId);
-                long rejectedClaims = claimRepository.countByStatusAndProviderId(
+                long rejectedClaims = claimRepository.countByStatusAndProviderIdAndActiveTrue(
                         com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED, providerId);
                 BigDecimal totalMedicalCost = claimRepository.sumApprovedAmountsByProvider(providerId);
 
@@ -109,7 +109,7 @@ public class DashboardService {
         long rejectedClaims = employerId != null
                 ? claimRepository.countByStatusAndEmployerOrgId(
                         com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED, employerId)
-                : claimRepository.countByStatus(com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED);
+                : claimRepository.countByStatusAndActiveTrue(com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED);
 
         // Count providers (not filtered by employer - providers serve all employers)
         long totalProviders = providerRepository.count();

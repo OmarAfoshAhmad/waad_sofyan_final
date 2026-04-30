@@ -949,6 +949,16 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         java.math.BigDecimal sumSettledAmountsByProvider(@Param("providerId") Long providerId);
 
         /**
+         * Count all active claims for a provider.
+         */
+        long countByProviderIdAndActiveTrue(Long providerId);
+
+        /**
+         * Count claims by status and provider.
+         */
+        long countByStatusAndProviderIdAndActiveTrue(com.waad.tba.modules.claim.entity.ClaimStatus status, Long providerId);
+
+        /**
          * Get recent claims by provider ID.
          * ✅ TYPE-SAFE: Uses interface projection instead of Object[]
          */
@@ -1310,4 +1320,39 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         long countByStatusAndEmployerOrgId(
                         @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
                         @Param("employerOrgId") Long employerOrgId);
+
+        /**
+         * Count all active claims.
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true")
+        long countActive();
+
+        /**
+         * Count global claims by status.
+         */
+        long countByStatusAndActiveTrue(com.waad.tba.modules.claim.entity.ClaimStatus status);
+
+        /**
+         * Count open claims (DRAFT, SUBMITTED, UNDER_REVIEW, NEEDS_CORRECTION).
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT, com.waad.tba.modules.claim.entity.ClaimStatus.SUBMITTED, com.waad.tba.modules.claim.entity.ClaimStatus.UNDER_REVIEW, com.waad.tba.modules.claim.entity.ClaimStatus.NEEDS_CORRECTION)")
+        long countOpenClaims();
+
+        /**
+         * Count approved claims (APPROVED, SETTLED, BATCHED).
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED)")
+        long countApprovedClaims();
+
+        /**
+         * Count open claims by employer.
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.member.employer.id = :employerId AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT, com.waad.tba.modules.claim.entity.ClaimStatus.SUBMITTED, com.waad.tba.modules.claim.entity.ClaimStatus.UNDER_REVIEW, com.waad.tba.modules.claim.entity.ClaimStatus.NEEDS_CORRECTION)")
+        long countOpenClaimsByEmployer(@Param("employerId") Long employerId);
+
+        /**
+         * Count approved claims by employer.
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.member.employer.id = :employerId AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED)")
+        long countApprovedClaimsByEmployer(@Param("employerId") Long employerId);
 }
