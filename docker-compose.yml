@@ -34,7 +34,7 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_PASSWORD}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/tba_waad_system
       JAVA_OPTS: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
@@ -59,7 +59,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL}
+        VITE_API_URL: http://waadapp.ly/api
     container_name: waadapp-frontend
     restart: unless-stopped
     ports:
