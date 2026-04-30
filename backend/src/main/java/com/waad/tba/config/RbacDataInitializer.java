@@ -116,8 +116,9 @@ public class RbacDataInitializer implements CommandLineRunner {
             String finalPassword = password;
             userRepository.findByUsername(username).ifPresent(user -> {
                 user.setPassword(passwordEncoder.encode(finalPassword));
+                user.unlockAccount(); // Reset lockout status and failed attempts
                 userRepository.save(user);
-                log.info("🔐 [SECURITY] Password synchronized for user: {} using value from environment.", username);
+                log.info("🔐 [SECURITY] Password synchronized and account UNLOCKED for user: {}.", username);
             });
         } else {
             log.warn("⚠️ [SECURITY] Could not synchronize password: No password value found in env or config.");
