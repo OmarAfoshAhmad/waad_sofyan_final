@@ -34,7 +34,9 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
-      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/tba_waad_system
       JAVA_OPTS: "-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
     volumes:
       - ./uploads:/app/uploads
