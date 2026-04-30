@@ -44,9 +44,10 @@ public class ReportController {
     @ResponseBody
     public ResponseEntity<byte[]> getClaimReportPdf(
             @RequestParam List<Long> claimIds,
-            @RequestParam(required = false, defaultValue = "false") Boolean onlyRejected) {
+            @RequestParam(required = false, defaultValue = "false") Boolean onlyRejected,
+            @RequestParam(required = false) String batchCode) {
         try {
-            ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds, onlyRejected);
+            ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds, onlyRejected, batchCode);
 
             Context context = new Context();
             context.setVariable("report", reportData);
