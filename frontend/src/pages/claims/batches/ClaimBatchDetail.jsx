@@ -483,7 +483,7 @@ export default function ClaimBatchDetail() {
             enqueueSnackbar('لا توجد مطالبات للطباعة', { variant: 'warning' });
             return;
         }
-        navigate(`/reports/claims/statement-preview?ids=${ids.join(',')}`);
+        navigate(`/reports/claims/statement-preview?ids=${ids.join(',')}&batchCode=${batchCode}`);
     };
 
     // فتح تقرير المرفوضات - يجلب التفاصيل ويفلتر المطالبات التي فيها بند واحد مرفوض على الأقل
@@ -517,7 +517,7 @@ export default function ClaimBatchDetail() {
             enqueueSnackbar('لا توجد مطالبات مرفوضة في هذه الدفعة', { variant: 'warning' });
             return;
         }
-        navigate(`/reports/claims/statement-preview?ids=${rejectedIds.join(',')}`);
+        navigate(`/reports/claims/statement-preview?ids=${rejectedIds.join(',')}&onlyRejected=true&batchCode=${batchCode}`);
     };
 
     // Row selection helpers
@@ -542,7 +542,6 @@ export default function ClaimBatchDetail() {
     // Table Columns
     const columns = [
         { id: 'select', label: <Checkbox size="small" checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} onClick={(e) => e.stopPropagation()} />, minWidth: '2.5rem', align: 'center', sortable: false },
-        { id: 'index', label: '#', minWidth: '2.5rem', align: 'center', sortable: false },
         { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: false },
         { id: 'employer', label: 'الوثيقة', minWidth: '9rem', align: 'center', sortable: false },
         { id: 'patient', label: 'الاسم (المستفيد)', minWidth: '10rem', align: 'right', sortable: true },
@@ -552,7 +551,6 @@ export default function ClaimBatchDetail() {
         { id: 'copay', label: 'نصيب المستفيد', minWidth: '5rem', align: 'center', sortable: true },
         { id: 'discountPercent', label: 'نسبة التخفيض', minWidth: '6.5rem', align: 'center', sortable: true },
         { id: 'covered', label: 'المعتمد', minWidth: '5rem', align: 'center', sortable: true },
-        { id: 'discountTiming', label: 'آلية الخصم', minWidth: '6rem', align: 'center', sortable: true },
         { id: 'refused', label: 'المرفوض', minWidth: '5.5rem', align: 'center', sortable: true },
         { id: 'dueAfterRefused', label: 'المستحق', minWidth: '8.5rem', align: 'center', sortable: true },
         { id: 'actions', label: 'إجراءات', minWidth: '5rem', align: 'center', sortable: false }
@@ -616,8 +614,6 @@ export default function ClaimBatchDetail() {
                         onClick={(e) => e.stopPropagation()}
                     />
                 );
-            case 'index':
-                return <Typography variant="body2" sx={{ color: 'text.disabled' }}>{index + 1}</Typography>;
             case 'ref':
                 return (
                     <Typography variant="body2" fontWeight={400} color="primary.main" dir="ltr">
@@ -662,23 +658,6 @@ export default function ClaimBatchDetail() {
                             ({getDiscountPercent(claim).toFixed(0)}%)
                         </Typography>
                     </Stack>
-                );
-            case 'discountTiming':
-                const isBefore = claim.discountBeforeRejection !== false; // Default to true (Before)
-                return (
-                    <Typography 
-                        variant="caption" 
-                        sx={{ 
-                            px: 1, 
-                            py: 0.5, 
-                            borderRadius: 1, 
-                            bgcolor: isBefore ? 'rgba(25, 118, 210, 0.08)' : 'rgba(156, 39, 176, 0.08)',
-                            color: isBefore ? 'primary.main' : 'secondary.main',
-                            fontWeight: 600
-                        }}
-                    >
-                        {isBefore ? 'قبل الاستبعاد' : 'بعد الاستبعاد'}
-                    </Typography>
                 );
             case 'covered':
                 return <Typography variant="body2" color="success.main" fontWeight={400}>{getApprovedAfterDiscount(claim).toFixed(2)}</Typography>;

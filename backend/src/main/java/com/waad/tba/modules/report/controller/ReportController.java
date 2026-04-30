@@ -29,8 +29,12 @@ public class ReportController {
 
     /** معاينة HTML في iframe */
     @GetMapping("/claims/html")
-    public String getClaimReportHtml(@RequestParam List<Long> claimIds, Model model) {
-        ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds);
+    public String getClaimReportHtml(
+            @RequestParam List<Long> claimIds,
+            @RequestParam(required = false, defaultValue = "false") Boolean onlyRejected,
+            @RequestParam(required = false) String batchCode,
+            Model model) {
+        ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds, onlyRejected, batchCode);
         model.addAttribute("report", reportData);
         return "reports/claim-report";
     }
@@ -38,9 +42,11 @@ public class ReportController {
     /** تنزيل PDF - الآلية الموحدة (HTML → PDF) */
     @GetMapping("/claims/pdf")
     @ResponseBody
-    public ResponseEntity<byte[]> getClaimReportPdf(@RequestParam List<Long> claimIds) {
+    public ResponseEntity<byte[]> getClaimReportPdf(
+            @RequestParam List<Long> claimIds,
+            @RequestParam(required = false, defaultValue = "false") Boolean onlyRejected) {
         try {
-            ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds);
+            ClaimReportDto reportData = reportDataService.getClaimReportData(claimIds, onlyRejected);
 
             Context context = new Context();
             context.setVariable("report", reportData);

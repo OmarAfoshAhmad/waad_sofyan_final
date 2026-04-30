@@ -23,10 +23,12 @@ const ClaimStatementPreview = () => {
 
   const queryParams = new URLSearchParams(location.search);
   const claimIds = queryParams.get('ids');
+  const onlyRejected = queryParams.get('onlyRejected') === 'true';
+  const batchCode = queryParams.get('batchCode') || '';
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
 
-  const previewUrl = `/api/reports/claims/html?claimIds=${claimIds}`;
+  const previewUrl = `/api/reports/claims/html?claimIds=${claimIds}&onlyRejected=${onlyRejected}&batchCode=${encodeURIComponent(batchCode)}`;
   const claimCount = claimIds ? claimIds.split(',').length : 0;
 
   useEffect(() => {

@@ -27,7 +27,8 @@ public class ReportDataService {
         private final PdfCompanySettingsService settingsService;
 
         @Transactional(readOnly = true)
-        public ClaimReportDto getClaimReportData(List<Long> claimIds) {
+        public ClaimReportDto getClaimReportData(List<Long> claimIds, Boolean onlyRejected, String providedBatchCode) {
+                if (onlyRejected == null) onlyRejected = false;
                 List<Claim> claims = claimRepository.findAllById(claimIds);
                 PdfCompanySettings settings = settingsService.getActiveSettings();
 
@@ -38,7 +39,7 @@ public class ReportDataService {
                 BigDecimal grandTotalPatientShare = BigDecimal.ZERO;
                 BigDecimal grandTotalExpectedNet = BigDecimal.ZERO;
 
-                String batchCode = "N/A";
+                String batchCode = (providedBatchCode != null && !providedBatchCode.isEmpty()) ? providedBatchCode : "N/A";
                 String providerName = "N/A";
 
                 // Find first valid provider name and batch code from all claims
@@ -55,24 +56,34 @@ public class ReportDataService {
 
                 for (Claim claim : claims) {
                         String patientName = claim.getMember() != null ? claim.getMember().getFullName() : "غير معروف";
-                        String insuranceNumber = "غير معروف";
-                        String patientRef = "غير معروف";
+                        String insuranceNumber = "—";
+                        String patientRef = "—";
                         if (claim.getMember() != null) {
-                                if (claim.getMember().getCardNumber() != null
-                                                && !claim.getMember().getCardNumber().isBlank()) {
+                                // patientRef = Beneficiary No. (Card Number)
+                                if (claim.getMember().getCardNumber() != null && !claim.getMember().getCardNumber().isBlank()) {
                                         patientRef = claim.getMember().getCardNumber();
-                                        insuranceNumber = claim.getMember().getCardNumber();
-                                } else if (claim.getMember().getPolicyNumber() != null
-                                                && !claim.getMember().getPolicyNumber().isBlank()) {
+                                }
+                                
+                                // insuranceNumber = Employee No. (True Employee ID)
+                                if (claim.getMember().getEmployeeNumber() != null && !claim.getMember().getEmployeeNumber().isBlank()) {
+                                        insuranceNumber = claim.getMember().getEmployeeNumber();
+                                } else if (claim.getMember().getPolicyNumber() != null && !claim.getMember().getPolicyNumber().isBlank()) {
                                         insuranceNumber = claim.getMember().getPolicyNumber();
-                                } else if (claim.getMember().getNationalNumber() != null
-                                                && !claim.getMember().getNationalNumber().isBlank()) {
+                                } else if (claim.getMember().getNationalNumber() != null && !claim.getMember().getNationalNumber().isBlank()) {
                                         insuranceNumber = claim.getMember().getNationalNumber();
+                                } else if (patientRef != null && !patientRef.equals("—")) {
+                                        insuranceNumber = patientRef;
                                 }
                         }
 
-                        String currentBatchCode = claim.getClaimBatch() != null ? claim.getClaimBatch().getBatchCode()
-                                        : "N/A";
+                        // Try to get batch code from multiple sources
+                        String currentBatchCode = "N/A";
+                        if (claim.getClaimBatch() != null && claim.getClaimBatch().getBatchCode() != null) {
+                                currentBatchCode = claim.getClaimBatch().getBatchCode();
+                        } else if (!batchCode.equals("N/A")) {
+                                currentBatchCode = batchCode;
+                        }
+                        
                         String diagnosis = claim.getDiagnosisDescription() != null ? claim.getDiagnosisDescription()
                                         : claim.getDiagnosisCode();
 
@@ -86,7 +97,7 @@ public class ReportDataService {
                                 BigDecimal gross = line.getRequestedUnitPrice() != null
                                                 ? line.getRequestedUnitPrice()
                                                                 .multiply(BigDecimal.valueOf(line.getQuantity()))
-                                                : line.getTotalPrice();
+                                                : (line.getTotalPrice() != null ? line.getTotalPrice() : BigDecimal.ZERO);
 
                                 BigDecimal rejected = line.getRefusedAmount() != null ? line.getRefusedAmount()
                                                 : BigDecimal.ZERO;
@@ -94,6 +105,11 @@ public class ReportDataService {
                                                 .getStatus() == com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED;
                                 if (Boolean.TRUE.equals(line.getRejected()) || claimIsRejected) {
                                         rejected = gross;
+                                }
+
+                                // Skip if onlyRejected is true and this item is NOT rejected
+                                if (Boolean.TRUE.equals(onlyRejected) && rejected.compareTo(BigDecimal.ZERO) == 0) {
+                                        continue;
                                 }
 
                                 BigDecimal lineNet = gross.subtract(rejected);
@@ -105,13 +121,9 @@ public class ReportDataService {
                                         if (Boolean.TRUE.equals(line.getRejected()) || claimIsRejected) {
                                                 reportReason = "الخدمة مرفوضة بالكامل";
                                         } else if (rejected.compareTo(BigDecimal.ZERO) > 0) {
-                                                if (reportReason == null || reportReason.isBlank()) {
-                                                        reportReason = "تجاوز السعر التعاقدي و/أو سقف المنفعة";
-                                                }
+                                                reportReason = "تجاوز السعر التعاقدي و/أو سقف المنفعة";
                                         } else if (claim.getReviewerComment() != null
                                                         && !claim.getReviewerComment().isBlank()) {
-                                                // Fallback to claim level comment if line has no specific reason but
-                                                // has refusal
                                                 reportReason = claim.getReviewerComment();
                                         }
                                 }
@@ -128,6 +140,11 @@ public class ReportDataService {
 
                                 subTotalGross = subTotalGross.add(gross);
                                 subTotalRejected = subTotalRejected.add(rejected);
+                        }
+
+                        // If filtering only rejections and no items left, skip the whole claim card
+                        if (Boolean.TRUE.equals(onlyRejected) && items.isEmpty()) {
+                                continue;
                         }
 
                         BigDecimal subTotalNet = subTotalGross.subtract(subTotalRejected);
@@ -192,7 +209,7 @@ public class ReportDataService {
                                 .groupedClaims(groupedClaims)
                                 .batchCode(batchCode)
                                 .providerName(providerName)
-                                .claimCount(claims.size())
+                                .claimCount(groupedClaims.size())
                                 .grandTotalGross(grandTotalGross)
                                 .grandTotalNet(grandTotalNet)
                                 .grandTotalRejected(grandTotalRejected)

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ar" dir="rtl" xmlns:th="http://www.thymeleaf.org">
   <head>
     <meta charset="UTF-8" />
@@ -589,19 +589,26 @@
         <table class="meta-tbl">
           <tr>
             <td style="width: 50%">
-              <span class="lbl">No.</span>
+              <span class="lbl">Claim No.</span>
               <span class="val" th:text="${claim.claimId}">-</span>
             </td>
             <td style="width: 50%">
-              <span class="lbl">Beneficiary No.</span>
-              <span class="val" th:text="${claim.originNo ?: ''}">-</span>
+              <span class="lbl">Batch No.</span>
+              <span class="val" th:text="${claim.batchCode}">-</span>
             </td>
           </tr>
           <tr>
             <td>
+              <span class="lbl">Employee No.</span>
               <span class="val" th:text="${claim.insuranceNumber}">-</span>
             </td>
             <td>
+              <span class="lbl">Beneficiary No.</span>
+              <span class="val" th:text="${claim.patientRef}">-</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
               <span class="lbl">Patient Name</span>
               <span class="val" th:text="${claim.patientName}">-</span>
             </td>
