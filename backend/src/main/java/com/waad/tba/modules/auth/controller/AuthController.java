@@ -46,7 +46,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/v1/auth", "/api/auth"})
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "APIs for user authentication, registration, and password reset")
 public class AuthController {
