@@ -42,7 +42,7 @@ import lombok.RequiredArgsConstructor;
  * @version 2.0 - RBAC Hardening
  */
 @RestController
-@RequestMapping("/api/v1/admin/users")
+@RequestMapping({"/api/v1/admin/users", "/api/admin/users", "/admin/users"})
 @RequiredArgsConstructor
 @Tag(name = "RBAC - Users", description = "APIs for managing users and their roles/permissions")
 @PreAuthorize("hasRole('SUPER_ADMIN')")
