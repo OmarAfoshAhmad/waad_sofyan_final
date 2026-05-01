@@ -277,15 +277,6 @@ public class ClaimService {
         validateAndEnforceProviderId(dto, currentUser);
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // ARCHITECTURAL GUARD: Validate system invariants before processing
-        // ═══════════════════════════════════════════════════════════════════════════
-        List<Long> pricingItemIds = dto.getLines() != null
-                ? dto.getLines().stream().map(ClaimLineDto::getPricingItemId)
-                        .filter(java.util.Objects::nonNull).toList()
-                : List.of();
-        architecturalGuard.guardClaimCreation(dto.getVisitId(), pricingItemIds);
-
-        // ═══════════════════════════════════════════════════════════════════════════
         // STEP 2: Pre-fetch data for Pure Mapping (Phase 2 Performance Hardening)
         // ═══════════════════════════════════════════════════════════════════════════
         Visit visit = visitRepository.findById(dto.getVisitId())
@@ -293,6 +284,20 @@ public class ClaimService {
 
         Provider provider = providerRepository.findById(visit.getProviderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Provider", "id", visit.getProviderId()));
+
+        // ══════════════════════════════════════════════════════════════════════════
+        // MEDICAL REVIEWER ISOLATION: Validation (Creation)
+        // ══════════════════════════════════════════════════════════════════════════
+        reviewerIsolationService.validateReviewerAccess(currentUser, dto.getProviderId() != null ? dto.getProviderId() : visit.getProviderId());
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ARCHITECTURAL GUARD: Validate system invariants before processing
+        // ═══════════════════════════════════════════════════════════════════════════
+        List<Long> pricingItemIds = dto.getLines() != null
+                ? dto.getLines().stream().map(ClaimLineDto::getPricingItemId)
+                        .filter(java.util.Objects::nonNull).toList()
+                : List.of();
+        architecturalGuard.guardClaimCreation(dto.getVisitId(), pricingItemIds);
 
         // SECURITY: Verify provider is authorized for this member's employer
         // (Prevent cross-tenant claim creation)
@@ -440,6 +445,11 @@ public class ClaimService {
         User currentUser = authorizationService.getCurrentUser();
         ClaimStatus previousStatus = claim.getStatus();
 
+        // ══════════════════════════════════════════════════════════════════════════
+        // MEDICAL REVIEWER ISOLATION: Validation (Update)
+        // ══════════════════════════════════════════════════════════════════════════
+        reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
+
         // PART 2 — CLAIM SAFETY: Protect Claim Modification After Submission
         // Allow editing: APPROVED (direct entry state), NEEDS_CORRECTION (suspended for
         // review),
@@ -554,6 +564,11 @@ public class ClaimService {
         if (!authorizationService.canModifyClaim(currentUser, id)) {
             throw new AccessDeniedException("You do not have permission to modify this claim");
         }
+
+        // ══════════════════════════════════════════════════════════════════════════
+        // MEDICAL REVIEWER ISOLATION: Validation (Update Data)
+        // ══════════════════════════════════════════════════════════════════════════
+        reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
 
         // SECURITY: Verify claim is in editable status
         if (!claim.getStatus().allowsEdit()) {
@@ -928,7 +943,7 @@ public class ClaimService {
                     currentUser.getId(), allowedProviderIds.size());
 
             claimsPage = claimRepository.searchPagedWithFiltersAndReviewerProviders(
-                    keyword, allowedProviderIds, employerId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
+                    keyword, allowedProviderIds, providerId, employerId, status, dateFrom, dateTo, createdAtFrom, createdAtTo,
                     pageable);
         } else {
             // Admin/SuperAdmin - see all claims (bypass isolation)
@@ -969,8 +984,16 @@ public class ClaimService {
      */
     @Transactional(readOnly = true)
     public List<ClaimViewDto> getClaimsByPreAuthorization(Long preAuthorizationId) {
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+
         List<Claim> claims = claimRepository.findByPreAuthorizationId(preAuthorizationId);
+
+        // SECURITY: Prevent IDOR — only return claims the user can access
         return claims.stream()
+                .filter(c -> c != null && c.getId() != null && authorizationService.canAccessClaim(currentUser, c.getId()))
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());
     }
@@ -1440,13 +1463,66 @@ public class ClaimService {
      */
     public Page<ClaimViewDto> getClaimsByStatus(ClaimStatus status, int page, int size, String sortBy, String sortDir) {
         log.info("🔍 Fetching claims by status: {}", status);
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
                 : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Claim> claims = claimRepository.findByStatus(status, pageable);
-        return claims.map(claimMapper::toViewDto);
+        // Enforce data-boundary scope (provider/employer/reviewer isolation)
+        Long effectiveEmployerId = null;
+        Long effectiveProviderId = null;
+
+        if (authorizationService.isProvider(currentUser)) {
+            providerContextGuard.validateProviderBinding(currentUser);
+            effectiveProviderId = currentUser.getProviderId();
+        }
+
+        if (authorizationService.isEmployerAdmin(currentUser)) {
+            effectiveEmployerId = currentUser.getEmployerId();
+        }
+
+        // Medical reviewers: must be limited to assigned providers
+        if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            if (allowedProviderIds.isEmpty()) {
+                return Page.empty();
+            }
+
+            // If caller provided provider scope via other routes, enforce it here as well
+            if (effectiveProviderId != null && !allowedProviderIds.contains(effectiveProviderId)) {
+                return Page.empty();
+            }
+
+            return claimRepository.searchPagedWithFiltersAndReviewerProviders(
+                    "",
+                    allowedProviderIds,
+                    effectiveProviderId, // Newly added providerId parameter
+                    effectiveEmployerId,
+                    status,
+                    null,
+                    null,
+                    null,
+                    null,
+                    pageable).map(claimMapper::toViewDto);
+        }
+
+        // Non-reviewer users: use standard filterable query (still enforces provider/employer locks above)
+        return claimRepository.searchPagedWithFilters(
+                "",
+                effectiveEmployerId,
+                effectiveProviderId,
+                status,
+                null,
+                null,
+                null,
+                null,
+                pageable).map(claimMapper::toViewDto);
     }
 
     /**
@@ -1458,6 +1534,67 @@ public class ClaimService {
             LocalDate dateFrom, LocalDate dateTo) {
         log.info("📊 Fetching financial summary: employer={}, provider={}, status={}, from={}, to={}",
                 employerId, providerId, status, dateFrom, dateTo);
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Authentication required");
+        }
+
+        // Enforce data-boundary scope:
+        // - PROVIDER_STAFF: can only query their own providerId
+        // - EMPLOYER_ADMIN: can only query their own employerId
+        // - MEDICAL_REVIEWER (isolated): must be limited to assigned providers (require providerId to be within assignment)
+        if (authorizationService.isProvider(currentUser)) {
+            providerContextGuard.validateProviderBinding(currentUser);
+            providerId = currentUser.getProviderId();
+        }
+
+        if (authorizationService.isEmployerAdmin(currentUser)) {
+            employerId = currentUser.getEmployerId();
+        }
+
+        if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
+            List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            if (allowedProviderIds.isEmpty()) {
+                return FinancialSummaryDto.builder()
+                        .totalClaimsAmount(BigDecimal.ZERO)
+                        .totalApprovedAmount(BigDecimal.ZERO)
+                        .totalRefusedAmount(BigDecimal.ZERO)
+                        .totalPaidAmount(BigDecimal.ZERO)
+                        .outstandingAmount(BigDecimal.ZERO)
+                        .claimsCount(0L)
+                        .approvedCount(0L)
+                        .settledCount(0L)
+                        .build();
+            }
+
+            // If reviewer is querying without providerId, force them to specify one to avoid global leakage
+            if (providerId == null) {
+                return FinancialSummaryDto.builder()
+                        .totalClaimsAmount(BigDecimal.ZERO)
+                        .totalApprovedAmount(BigDecimal.ZERO)
+                        .totalRefusedAmount(BigDecimal.ZERO)
+                        .totalPaidAmount(BigDecimal.ZERO)
+                        .outstandingAmount(BigDecimal.ZERO)
+                        .claimsCount(0L)
+                        .approvedCount(0L)
+                        .settledCount(0L)
+                        .build();
+            }
+
+            if (!allowedProviderIds.contains(providerId)) {
+                return FinancialSummaryDto.builder()
+                        .totalClaimsAmount(BigDecimal.ZERO)
+                        .totalApprovedAmount(BigDecimal.ZERO)
+                        .totalRefusedAmount(BigDecimal.ZERO)
+                        .totalPaidAmount(BigDecimal.ZERO)
+                        .outstandingAmount(BigDecimal.ZERO)
+                        .claimsCount(0L)
+                        .approvedCount(0L)
+                        .settledCount(0L)
+                        .build();
+            }
+        }
 
         List<Object[]> queryResult = claimRepository.getFinancialSummary(employerId, providerId, status, dateFrom,
                 dateTo);

@@ -64,7 +64,7 @@ public class ReportsController {
      * - المبالغ المستحقة للدفع
      */
     @GetMapping("/adjudication")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "تقرير التدقيق المالي",
         description = "يُظهر: المطلوب | المستقطع (تحمل المريض) | المستحق للمستشفى"
@@ -95,7 +95,7 @@ public class ReportsController {
      * - المطالبات الموافق عليها والجاهزة للدفع
      */
     @GetMapping("/provider-settlement")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "تقرير تسوية مقدم الخدمة",
         description = "المطالبات الموافق عليها والجاهزة للتسوية"
@@ -116,7 +116,7 @@ public class ReportsController {
      * - إجمالي المدفوعات والتحملات
      */
     @GetMapping("/member-statement/{memberId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "كشف حساب العضو",
         description = "جميع مطالبات العضو مع الإجماليات"
@@ -148,7 +148,7 @@ public class ReportsController {
      * Get Summary Statistics for Dashboard.
      */
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "ملخص الإحصائيات",
         description = "إحصائيات سريعة للوحة التحكم"
@@ -179,7 +179,7 @@ public class ReportsController {
      * - يمنع الواجهة من حساب المبالغ محلياً
      */
     @GetMapping("/financial-summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "الملخص المالي الشامل",
         description = "إجماليات مالية محسوبة من قاعدة البيانات - المصدر الوحيد للحقيقة"
@@ -208,7 +208,7 @@ public class ReportsController {
      * - المبالغ المعلقة للدفع
      */
     @GetMapping("/settlement-summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "ملخص التسويات",
         description = "إجماليات للمطالبات الموافق عليها والمسددة"
@@ -242,7 +242,7 @@ public class ReportsController {
      * - PROVIDER: Can only view their own provider (providerId ignored, uses token)
      */
     @GetMapping("/provider-settlements")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "تقرير تسوية مقدم الخدمة",
         description = "تقرير مفصل على مستوى الخدمة/السطر يطابق التقارير الورقية"
@@ -305,7 +305,7 @@ public class ReportsController {
      * Provider: returns only their provider
      */
     @GetMapping("/provider-settlements/providers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "قائمة مقدمي الخدمة للتقارير",
         description = "قائمة مقدمي الخدمة المتاحين لتقارير التسوية"
@@ -343,7 +343,7 @@ public class ReportsController {
      * - PROVIDER: Can only export their own provider
      */
     @GetMapping("/provider-settlements/export/excel")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "تصدير تقرير التسوية إلى Excel",
         description = "تصدير تقرير تسوية مقدم الخدمة بصيغة Excel - نفس أرقام الشاشة"

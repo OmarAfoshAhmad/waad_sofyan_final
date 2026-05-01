@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.waad.tba.modules.claim.entity.Claim;
@@ -110,6 +111,46 @@ public class AuthorizationService {
 
         String username = authentication.getName();
         return userRepository.findByUsername(username).orElse(null);
+    }
+
+    /**
+     * Require an authenticated user.
+     * Use this for service-layer enforcement to avoid returning partial data on unauthenticated access.
+     */
+    public User requireCurrentUser() {
+        User user = getCurrentUser();
+        if (user == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+        return user;
+    }
+
+    /**
+     * Resolve (enforce) employer scope for the given user.
+     *
+     * RULES:
+     * - EMPLOYER_ADMIN: always forced to user.employerId (ignores requestedEmployerId)
+     * - Other roles: requestedEmployerId is allowed (may be null)
+     */
+    public Long resolveEmployerScope(User user, Long requestedEmployerId) {
+        if (user != null && isEmployerAdmin(user)) {
+            return user.getEmployerId();
+        }
+        return requestedEmployerId;
+    }
+
+    /**
+     * Resolve (enforce) provider scope for the given user.
+     *
+     * RULES:
+     * - PROVIDER_STAFF: always forced to user.providerId (ignores requestedProviderId)
+     * - Other roles: requestedProviderId is allowed (may be null)
+     */
+    public Long resolveProviderScope(User user, Long requestedProviderId) {
+        if (user != null && isProvider(user)) {
+            return user.getProviderId();
+        }
+        return requestedProviderId;
     }
 
     // =============================================================================================

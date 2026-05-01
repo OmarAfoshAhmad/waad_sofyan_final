@@ -8,9 +8,12 @@ import com.waad.tba.modules.pdf.service.PdfCompanySettingsService;
 import com.waad.tba.modules.report.dto.ClaimReportDto;
 import com.waad.tba.modules.report.dto.ClaimStatementItemDto;
 import com.waad.tba.modules.report.dto.ClaimStatementReportDto;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -25,11 +28,24 @@ public class ReportDataService {
 
         private final ClaimRepository claimRepository;
         private final PdfCompanySettingsService settingsService;
+        private final AuthorizationService authorizationService;
 
         @Transactional(readOnly = true)
         public ClaimReportDto getClaimReportData(List<Long> claimIds, Boolean onlyRejected, String providedBatchCode) {
                 if (onlyRejected == null) onlyRejected = false;
+                User currentUser = authorizationService.getCurrentUser();
+                if (currentUser == null) {
+                        throw new AccessDeniedException("Authentication required");
+                }
+
                 List<Claim> claims = claimRepository.findAllById(claimIds);
+
+                // SECURITY: Prevent IDOR — user must be allowed to access ALL requested claims
+                for (Claim c : claims) {
+                        if (c == null || c.getId() == null || !authorizationService.canAccessClaim(currentUser, c.getId())) {
+                                throw new AccessDeniedException("Access denied to one or more claims in report request");
+                        }
+                }
                 PdfCompanySettings settings = settingsService.getActiveSettings();
 
                 List<ClaimStatementReportDto> groupedClaims = new ArrayList<>();

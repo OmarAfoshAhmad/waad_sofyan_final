@@ -94,8 +94,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints - Authentication
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        // Public access to reports for preview (iframe friendly)
-                        .requestMatchers("/api/reports/**").permitAll()
+                        // Reports are NOT public — contain sensitive claim data
+                        .requestMatchers("/api/reports/**").authenticated()
                         // Docker/load-balancer health check — must stay public
                         .requestMatchers("/actuator/health").permitAll()
                         // Feature Flags — public endpoint (called before session is established)

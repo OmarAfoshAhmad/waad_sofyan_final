@@ -69,11 +69,11 @@ public class UserService {
         log.info("Creating new user: {}", dto.getUsername());
         
         // Uniqueness checks
-        if (userRepository.existsByUsername(dto.getUsername())) {
+        if (userRepository.existsByUsernameIgnoreCase(dto.getUsername())) {
             throw new IllegalArgumentException("اسم المستخدم '" + dto.getUsername() + "' موجود مسبقاً");
         }
         
-        if (userRepository.existsByEmail(dto.getEmail())) {
+        if (userRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new IllegalArgumentException("البريد الإلكتروني '" + dto.getEmail() + "' مسجل مسبقاً");
         }
 
@@ -110,8 +110,8 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
 
         // Check email uniqueness if changed
-        if (!user.getEmail().equals(dto.getEmail()) && userRepository.existsByEmail(dto.getEmail())) {
-            throw new IllegalArgumentException("Email already exists");
+        if (!user.getEmail().equalsIgnoreCase(dto.getEmail()) && userRepository.existsByEmailIgnoreCase(dto.getEmail())) {
+            throw new IllegalArgumentException("البريد الإلكتروني '" + dto.getEmail() + "' مسجل مسبقاً");
         }
 
         String oldEmail = user.getEmail();

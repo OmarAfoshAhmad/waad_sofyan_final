@@ -1230,6 +1230,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "LEFT JOIN FETCH c.preAuthorization pa " +
                         "WHERE c.active = true " +
                         "AND c.providerId IN :providerIds " +
+                        "AND (:providerId IS NULL OR c.providerId = :providerId) " +
                         "AND (:employerId IS NULL OR m.employer.id = :employerId) " +
                         "AND (:status IS NULL OR c.status = :status) " +
                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
@@ -1242,6 +1243,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))", countQuery = "SELECT COUNT(c) FROM Claim c LEFT JOIN c.member m "
                                         +
                                         "WHERE c.active = true AND c.providerId IN :providerIds " +
+                                        "AND (:providerId IS NULL OR c.providerId = :providerId) " +
                                         "AND (:employerId IS NULL OR m.employer.id = :employerId) " +
                                         "AND (:status IS NULL OR c.status = :status) " +
                                         "AND (CAST(:dateFrom AS date) IS NULL OR c.serviceDate >= :dateFrom) " +
@@ -1258,6 +1260,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         Page<Claim> searchPagedWithFiltersAndReviewerProviders(
                         @Param("keyword") String keyword,
                         @Param("providerIds") List<Long> providerIds,
+                        @Param("providerId") Long providerId,
                         @Param("employerId") Long employerId,
                         @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
                         @Param("dateFrom") java.time.LocalDate dateFrom,

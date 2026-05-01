@@ -46,8 +46,14 @@ public class PasswordResetToken {
     @Column(name = "expires_at", nullable = true)
     private LocalDateTime expiresAt;
 
-    @Column(name = "expiry_time", nullable = true)
-    private LocalDateTime expiryTime;
+    @Column(name = "expiry_date", nullable = true)
+    private LocalDateTime expiryDate;
+
+    @PrePersist
+    public void syncExpiry() {
+        if (expiryDate == null) expiryDate = expiresAt;
+        if (expiresAt == null) expiresAt = expiryDate;
+    }
 
     @Column(nullable = false)
     @Builder.Default
@@ -64,9 +70,9 @@ public class PasswordResetToken {
         if (expiresAt != null) {
             return LocalDateTime.now().isAfter(expiresAt);
         }
-        // Fallback for OTP-based flow which uses expiryTime
-        if (expiryTime != null) {
-            return LocalDateTime.now().isAfter(expiryTime);
+        // Fallback for OTP-based flow which uses expiryDate
+        if (expiryDate != null) {
+            return LocalDateTime.now().isAfter(expiryDate);
         }
         // No expiry set — treat as expired
         return true;

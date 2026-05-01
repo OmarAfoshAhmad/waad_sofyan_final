@@ -932,7 +932,7 @@ public class ProviderPortalController {
      * @return Paginated list of services with contract prices
      */
     @GetMapping("/my-contract/services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'PROVIDER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(
         summary = "Get my contract services with pricing (Provider Portal)",
         description = "Returns all services available in the provider's active contract with prices. " +
@@ -1243,7 +1243,7 @@ public class ProviderPortalController {
      * @return List of active medical categories
      */
     @GetMapping("/medical-categories")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'PROVIDER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     @Operation(
         summary = "Get medical categories for provider forms",
         description = "Returns all active medical categories for use in claims and pre-approval forms."

@@ -52,18 +52,21 @@ public class CustomUserDetailsService implements UserDetailsService {
                 user.getPassword(),
                 (user.getActive() == null || user.getActive()),
                 true, true, true,
-                authorities
-        );
+                authorities);
     }
 
     /**
      * Build authorities from user's static role (userType field).
      * Returns a single authority: ROLE_{userType}
+     * 
+     * Normalizes role to uppercase to prevent mismatches due to database case
+     * sensitivity.
      */
     private Collection<? extends GrantedAuthority> getAuthorities(User user) {
-        String role = user.getUserType() != null ? user.getUserType() : "DATA_ENTRY";
+        String role = user.getUserType() != null ? user.getUserType().trim().toUpperCase() : "DATA_ENTRY";
         SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
         log.debug("LOGIN: User {} loaded with role authority: {}", user.getUsername(), authority.getAuthority());
+        log.debug("LOGIN: Raw userType from DB: '{}', Normalized: 'ROLE_{}'", user.getUserType(), role);
         return List.of(authority);
     }
 }

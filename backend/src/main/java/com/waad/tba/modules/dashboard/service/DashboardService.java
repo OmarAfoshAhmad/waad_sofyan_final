@@ -55,8 +55,10 @@ public class DashboardService {
      */
     @Transactional(readOnly = true)
     public DashboardSummaryDto getSummary(Long employerId) {
-        // Check for PROVIDER context
         User currentUser = authorizationService.getCurrentUser();
+        employerId = authorizationService.resolveEmployerScope(currentUser, employerId);
+
+        // Check for PROVIDER context
         if (authorizationService.isProvider(currentUser)) {
             Long providerId = currentUser.getProviderId();
             if (providerId != null) {
@@ -164,6 +166,9 @@ public class DashboardService {
         log.debug("📊 Fetching monthly trends for last {} months"
                 + (employerId != null ? " for employerId=" + employerId : ""), months);
 
+        User currentUser = authorizationService.getCurrentUser();
+        employerId = authorizationService.resolveEmployerScope(currentUser, employerId);
+
         LocalDateTime endDate = LocalDateTime.now();
         LocalDateTime startDate = endDate.minusMonths(months);
 
@@ -230,6 +235,9 @@ public class DashboardService {
         log.debug("📊 Fetching costs by provider (limit: {})"
                 + (employerId != null ? " for employerId=" + employerId : ""), limit);
 
+        User currentUser = authorizationService.getCurrentUser();
+        employerId = authorizationService.resolveEmployerScope(currentUser, employerId);
+
         // ✅ TYPE-SAFE: Using interface projection instead of Object[]
         List<CostsByProviderProjection> results = employerId != null
                 ? claimRepository.getCostsByProviderByEmployer(employerId)
@@ -256,6 +264,9 @@ public class DashboardService {
     @Transactional(readOnly = true)
     public List<ServiceDistributionDto> getServiceDistribution(Long employerId) {
         log.debug("📊 Fetching service distribution" + (employerId != null ? " for employerId=" + employerId : ""));
+
+        User currentUser = authorizationService.getCurrentUser();
+        employerId = authorizationService.resolveEmployerScope(currentUser, employerId);
 
         // ✅ TYPE-SAFE: Using interface projection instead of Object[]
         List<ServiceDistributionProjection> results = employerId != null

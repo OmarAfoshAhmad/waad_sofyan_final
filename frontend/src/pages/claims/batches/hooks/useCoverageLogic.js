@@ -110,7 +110,7 @@ export function useCoverageLogic({
         let categoryId = serviceOwnCategoryId;
         const fallbackPercent = policyInfo?.defaultCoveragePercent ?? 100;
 
-        if (!policyId || !applyBenefits)
+        if (!policyId || !member?.id || !applyBenefits)
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
 
         if (!sid && !categoryId && !categoryCodeOverride)

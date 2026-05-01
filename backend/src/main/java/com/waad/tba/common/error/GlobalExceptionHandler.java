@@ -289,6 +289,17 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         log.error("Data integrity violation - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
 
+        String messageAr = "خطأ في تكامل البيانات. العملية تنتهك أحد قيود قاعدة البيانات.";
+        String rootMsg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
+
+        if (rootMsg != null) {
+            if (rootMsg.contains("users_username_key") || rootMsg.toLowerCase().contains("duplicate key") && rootMsg.contains("username")) {
+                messageAr = "اسم المستخدم هذا مسجل مسبقاً بنظام آخر أو بحالة مختلفة.";
+            } else if (rootMsg.contains("users_email_key") || rootMsg.toLowerCase().contains("duplicate key") && rootMsg.contains("email")) {
+                messageAr = "البريد الإلكتروني هذا مسجل مسبقاً بنظام آخر أو بحالة مختلفة.";
+            }
+        }
+
         ApiError error = ApiError.of(
                 ErrorCode.BUSINESS_RULE_VIOLATION,
                 "Data integrity error. The operation violates a database constraint.",
@@ -296,7 +307,7 @@ public class GlobalExceptionHandler {
                 null,
                 now(),
                 trackingId);
-        error.setMessageAr("خطأ في تكامل البيانات. العملية تنتهك أحد قيود قاعدة البيانات.");
+        error.setMessageAr(messageAr);
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }

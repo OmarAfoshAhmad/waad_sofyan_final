@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,7 @@ public class ReportController {
 
     /** معاينة HTML في iframe */
     @GetMapping("/claims/html")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     public String getClaimReportHtml(
             @RequestParam List<Long> claimIds,
             @RequestParam(required = false, defaultValue = "false") Boolean onlyRejected,
@@ -42,6 +44,7 @@ public class ReportController {
     /** تنزيل PDF - الآلية الموحدة (HTML → PDF) */
     @GetMapping("/claims/pdf")
     @ResponseBody
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     public ResponseEntity<byte[]> getClaimReportPdf(
             @RequestParam List<Long> claimIds,
             @RequestParam(required = false, defaultValue = "false") Boolean onlyRejected,

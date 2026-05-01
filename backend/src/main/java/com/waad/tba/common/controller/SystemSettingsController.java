@@ -55,7 +55,7 @@ public class SystemSettingsController {
      * GET /api/admin/system-settings
      */
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get all editable system settings")
     public ResponseEntity<List<SystemSetting>> getAllSettings() {
         List<SystemSetting> settings = systemSettingsService.getEditableSettings();
@@ -68,7 +68,7 @@ public class SystemSettingsController {
      * GET /api/admin/system-settings/category/{category}
      */
     @GetMapping("/category/{category}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get settings by category")
     public ResponseEntity<List<SystemSetting>> getSettingsByCategory(@PathVariable("category") String category) {
         log.info("📋 Getting settings for category: {}", category);
@@ -83,7 +83,7 @@ public class SystemSettingsController {
      * GET /api/admin/system-settings/claim-sla-days
      */
     @GetMapping("/claim-sla-days")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get current claim SLA days")
     public ResponseEntity<ClaimSlaDaysResponse> getClaimSlaDays() {
         int slaDays = systemSettingsService.getClaimSlaDays();
@@ -159,7 +159,7 @@ public class SystemSettingsController {
      * GET /api/admin/system-settings/sla-compliance-report
      */
     @GetMapping("/sla-compliance-report")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get SLA compliance report")
     public ResponseEntity<SlaMonitoringScheduler.SlaComplianceReport> getSlaComplianceReport() {
         log.info("📊 Generating SLA compliance report");

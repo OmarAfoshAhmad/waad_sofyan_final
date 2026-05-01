@@ -100,7 +100,7 @@ public class ProviderContractController {
      * Search contracts
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Search contracts", description = "Search contracts by code or provider name")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> search(
             @Parameter(description = "Search query") @RequestParam(name = "q", required = false) String q,
@@ -117,7 +117,7 @@ public class ProviderContractController {
      * Get contract statistics
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get statistics", description = "Get contract statistics summary")
     public ResponseEntity<ApiResponse<ProviderContractStatsDto>> getStats() {
         log.debug("REST request to get contract statistics");
@@ -130,7 +130,7 @@ public class ProviderContractController {
      * Get contracts expiring within N days
      */
     @GetMapping("/expiring")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get expiring contracts", description = "List contracts expiring within specified days")
     public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getExpiring(
             @Parameter(description = "Days until expiration") @RequestParam(name = "days", defaultValue = "30") int days) {
@@ -145,7 +145,7 @@ public class ProviderContractController {
      * Get contracts by status
      */
     @GetMapping("/status/{status}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get contracts by status", description = "List contracts filtered by status")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getByStatus(
             @Parameter(description = "Contract status") @PathVariable("status") ContractStatus status,
@@ -161,7 +161,7 @@ public class ProviderContractController {
      * Get contract by ID
      */
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get contract by ID", description = "Get detailed contract information")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getById(
             @Parameter(description = "Contract ID") @PathVariable("id") Long id) {
@@ -176,7 +176,7 @@ public class ProviderContractController {
      * Get contract by code
      */
     @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get contract by code", description = "Get contract by contract code")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getByCode(
             @Parameter(description = "Contract code") @PathVariable("code") String code) {
@@ -207,7 +207,7 @@ public class ProviderContractController {
      * Get active contract for a provider
      */
     @GetMapping("/provider/{providerId}/active")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get active contract", description = "Get the active contract for a provider")
     public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getActiveByProvider(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
@@ -230,7 +230,7 @@ public class ProviderContractController {
      * Direct MedicalCategory queries are NOT allowed for this purpose
      */
     @GetMapping("/provider/{providerId}/categories")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get contracted categories", description = "Get medical categories available in provider's active contract. Use this for claims/preauth creation.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractCategoryDto>>> getContractedCategories(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
@@ -250,7 +250,7 @@ public class ProviderContractController {
      * Direct MedicalService queries are NOT allowed for this purpose
      */
     @GetMapping("/provider/{providerId}/categories/{categoryId}/services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get contracted services by category", description = "Get medical services for a category in provider's active contract. Use this for claims/preauth creation.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getContractedServicesByCategory(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId,
@@ -268,7 +268,7 @@ public class ProviderContractController {
      * filter)
      */
     @GetMapping("/provider/{providerId}/services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'ACCOUNTANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get all contracted services", description = "Get all medical services in provider's active contract.")
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getAllContractedServices(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {

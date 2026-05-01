@@ -198,11 +198,11 @@ public class AuthService {
         public LoginResponse register(RegisterRequest request) {
                 log.info("Registration attempt for username: {}", request.getUsername());
 
-                if (userRepository.existsByUsername(request.getUsername())) {
+                if (userRepository.existsByUsernameIgnoreCase(request.getUsername())) {
                         throw new IllegalArgumentException("Username already exists");
                 }
 
-                if (userRepository.existsByEmail(request.getEmail())) {
+                if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
                         throw new IllegalArgumentException("Email already exists");
                 }
 
@@ -342,7 +342,7 @@ public class AuthService {
                 PasswordResetToken token = PasswordResetToken.builder()
                                 .email(email)
                                 .otp(otp)
-                                .expiryTime(expiry)
+                                .expiryDate(expiry)
                                 .build();
                 passwordResetTokenRepository.save(token);
 
@@ -391,7 +391,7 @@ public class AuthService {
                 }
 
                 // 3) Validate expiry
-                if (token.getExpiryTime().isBefore(LocalDateTime.now())) {
+                if (token.getExpiryDate().isBefore(LocalDateTime.now())) {
                         throw new IllegalArgumentException("OTP has expired");
                 }
 

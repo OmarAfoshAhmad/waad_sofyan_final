@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/claim-rejection-reasons")
 @RequiredArgsConstructor
 @Tag(name = "Claim Rejection Reasons")
+@PreAuthorize("isAuthenticated()")
 public class ClaimRejectionReasonController {
 
     private final ClaimRejectionReasonService service;
@@ -30,6 +32,7 @@ public class ClaimRejectionReasonController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> create(
             @RequestBody Map<String, String> body) {
         String text = body.get("reasonText");
@@ -43,6 +46,7 @@ public class ClaimRejectionReasonController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> update(
             @PathVariable Long id,
             @RequestBody Map<String, String> body) {
@@ -57,6 +61,7 @@ public class ClaimRejectionReasonController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));

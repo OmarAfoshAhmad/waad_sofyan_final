@@ -1067,6 +1067,16 @@ export default function ClaimBatchEntry() {
         try {
             const actualDate = serviceDate || defaultDate;
 
+            // المرحلة 2.1: التحقق من مطابقة التاريخ لشهر الدفعة الحالي
+            const d = new Date(actualDate);
+            if (d.getMonth() + 1 !== month || d.getFullYear() !== year) {
+                enqueueSnackbar(`⚠️ تاريخ الخدمة (${actualDate}) لا يتبع لشهر الدفعة الحالي (${MONTHS_AR[month - 1]} ${year}). يرجى التأكد من التاريخ أو الانتقال لدفعة الشهر الصحيح.`, 
+                    { variant: 'warning', autoHideDuration: 8000 });
+                setSaving(false);
+                isSavingRef.current = false;
+                return;
+            }
+
             // التحقق: تاريخ الخدمة لا يجوز أن يكون في المستقبل
             if (actualDate && new Date(actualDate) > new Date()) {
                 enqueueSnackbar(`⚠️ تاريخ الخدمة (${actualDate}) في المستقبل — يجب إدخال تاريخ صحيح`,

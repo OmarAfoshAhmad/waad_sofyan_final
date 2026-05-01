@@ -69,7 +69,7 @@ public class MedicalCategoryController {
     // ═══════════════════════════════════════════════════════════════════════════
 
     @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "List all active categories", description = "Get list of all active medical categories (non-paginated)")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findAllList() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/all");
@@ -80,7 +80,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get category by ID", description = "Retrieve a medical category by its ID")
     public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findById(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}", id);
@@ -91,7 +91,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "List all categories", description = "Get paginated list of all medical categories with optional filters")
     public ResponseEntity<ApiResponse<Page<MedicalCategoryResponseDto>>> findAll(
             @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
@@ -123,7 +123,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get category by code", description = "Retrieve a medical category by its unique code")
     public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findByCode(@PathVariable("code") String code) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/code/{}", code);
@@ -134,7 +134,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/{id}/children")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get subcategories", description = "Get all direct children of a category")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findChildren(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/children", id);
@@ -159,7 +159,7 @@ public class MedicalCategoryController {
      * Resolution
      */
     @GetMapping("/{id}/medical-services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get services by category (CANONICAL)", description = "Get all active medical services belonging to this category. "
             +
             "This is the canonical endpoint for service selection - services MUST be filtered by category first.")
@@ -180,7 +180,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/tree")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get category tree", description = "Get full hierarchical tree of all categories")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> getCategoryTree() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/tree");
@@ -191,7 +191,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/root")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get root categories", description = "Get all root categories (parentId = null)")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findRootCategories() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/root");

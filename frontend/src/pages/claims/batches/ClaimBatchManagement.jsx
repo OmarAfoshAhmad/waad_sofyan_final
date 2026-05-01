@@ -460,7 +460,7 @@ export default function ClaimBatchManagement() {
         }
 
         return list;
-    }, [allowedProviders, providerContracts, selectedEmployer, searchTerm, isProviderUser, userProviderId]);
+    }, [allowedProviders, providerContracts, selectedEmployer, searchTerm, isProviderUser, userProviderId, realBatches, filterMonth, filterYear]);
 
     const handleSelectBatch = (provider, month, year) => {
         // Navigate to batch detail view (the list shown in your reference image)

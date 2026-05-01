@@ -39,7 +39,7 @@ public class CoverageEngineController {
     private final ProviderContextGuard providerContextGuard;
 
     @PostMapping("/calculate")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN','MEDICAL_REVIEWER','PROVIDER_STAFF','EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ACCOUNTANT','MEDICAL_REVIEWER','PROVIDER_STAFF','EMPLOYER_ADMIN')")
     @Operation(summary = "Calculate single claim line", description = "Calculates one claim line using backend coverage engine")
     public ResponseEntity<ApiResponse<CoverageResult>> calculateSingle(
             @Valid @RequestBody BulkCoverageEngineRequest request) {
@@ -56,7 +56,7 @@ public class CoverageEngineController {
     }
 
     @PostMapping("/calculate-bulk")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN','MEDICAL_REVIEWER','PROVIDER_STAFF','EMPLOYER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ACCOUNTANT','MEDICAL_REVIEWER','PROVIDER_STAFF','EMPLOYER_ADMIN')")
     @Operation(summary = "Calculate bulk claim lines", description = "Calculates all claim lines using backend coverage engine with batch context")
     public ResponseEntity<ApiResponse<List<CoverageResult>>> calculateBulk(
             @Valid @RequestBody BulkCoverageEngineRequest request) {

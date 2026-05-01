@@ -73,10 +73,10 @@ public class UserManagementService {
         log.info("Creating user: {} by {}", dto.getUsername(), createdBy);
 
         // Validation
-        if (userRepository.existsByUsername(dto.getUsername())) {
+        if (userRepository.existsByUsernameIgnoreCase(dto.getUsername())) {
             throw new IllegalArgumentException("Username already exists: " + dto.getUsername());
         }
-        if (userRepository.existsByEmail(dto.getEmail())) {
+        if (userRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new IllegalArgumentException("Email already exists: " + dto.getEmail());
         }
 
@@ -125,7 +125,7 @@ public class UserManagementService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         // Check email uniqueness (if changed)
-        if (!user.getEmail().equals(dto.getEmail()) && userRepository.existsByEmail(dto.getEmail())) {
+        if (!user.getEmail().equalsIgnoreCase(dto.getEmail()) && userRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new IllegalArgumentException("Email already exists: " + dto.getEmail());
         }
 

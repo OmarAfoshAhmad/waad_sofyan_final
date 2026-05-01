@@ -90,7 +90,7 @@ export const ClaimHeaderFields = ({
                         getOptionLabel={o => `${o.fullName || ''} · ${o.cardNumber || o.nationalNumber || ''}`}
                         isOptionEqualToValue={(o, v) => o.id === v?.id}
                         renderInput={params => (
-                            <TextField {...params} inputRef={memberRef} variant="standard" autoFocus
+                            <TextField {...params} inputRef={memberRef} variant="standard"
                                 placeholder={memberSearchPlaceholder}
                                 error={!!memberSearchValidationError || (showValidationErrors && !member)}
                                 helperText={memberSearchValidationError || (showValidationErrors && !member ? 'يرجى اختيار المستفيد' : ' ')}

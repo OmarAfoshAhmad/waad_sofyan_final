@@ -60,7 +60,7 @@ public class RbacDataInitializer implements CommandLineRunner {
 
         boolean userExists;
         try {
-            userExists = userRepository.existsByUsername(username);
+            userExists = userRepository.existsByUsernameIgnoreCase(username);
         } catch (Exception ex) {
             log.warn("Skipping: users table schema incomplete: {}", ex.getMessage());
             return;

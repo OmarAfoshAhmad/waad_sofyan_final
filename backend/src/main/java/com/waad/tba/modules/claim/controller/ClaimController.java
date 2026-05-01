@@ -430,7 +430,7 @@ public class ClaimController {
      * - Member can then edit and resubmit
      */
     @PostMapping("/{id:\\d+}/return-for-info")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'INSURANCE_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Return claim for info", description = "Transitions claim from UNDER_REVIEW back to NEEDS_CORRECTION.")
     public ResponseEntity<ApiResponse<ClaimResponse>> returnForInfo(
             @PathVariable("id") Long id,

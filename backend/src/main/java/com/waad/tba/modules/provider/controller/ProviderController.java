@@ -33,6 +33,7 @@ public class ProviderController {
     private final ProviderContractService providerContractService;
     private final ProviderAdminDocumentService providerAdminDocumentService;
     private final AuthorizationService authorizationService;
+    private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
 
     /**
      * Get provider selector options with pagination
@@ -56,8 +57,9 @@ public class ProviderController {
 
         Page<ProviderSelectorDto> options = providerService.getSelectorOptions(Math.max(0, page - 1), size);
 
-        // Filter for Provider Users
         var currentUser = authorizationService.getCurrentUser();
+
+        // Filter for Provider Users
         if (currentUser != null && authorizationService.isProvider(currentUser)) {
             Long providerId = authorizationService.getProviderFilterForUser(currentUser);
             if (providerId != null) {
@@ -74,6 +76,23 @@ public class ProviderController {
 
                 return ResponseEntity.ok(ApiResponse.success(response));
             }
+        }
+
+        // Filter for Medical Reviewers (Phase 11 Isolation)
+        if (currentUser != null && "MEDICAL_REVIEWER".equals(currentUser.getUserType())) {
+            List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            List<ProviderSelectorDto> filtered = options.getContent().stream()
+                    .filter(p -> allowedProviderIds.contains(p.getId()))
+                    .collect(Collectors.toList());
+
+            PaginationResponse<ProviderSelectorDto> response = PaginationResponse.<ProviderSelectorDto>builder()
+                    .items(filtered)
+                    .total((long) filtered.size())
+                    .page(page)
+                    .size(size)
+                    .build();
+
+            return ResponseEntity.ok(ApiResponse.success(response));
         }
 
         PaginationResponse<ProviderSelectorDto> response = PaginationResponse.<ProviderSelectorDto>builder()
@@ -104,7 +123,7 @@ public class ProviderController {
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'DATA_ENTRY', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> getProvider(@PathVariable("id") Long id) {
         ProviderViewDto provider = providerService.getProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider retrieved successfully", provider));
@@ -219,7 +238,7 @@ public class ProviderController {
      * Get all services offered by a provider
      */
     @GetMapping("/{id}/services")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
     public ResponseEntity<ApiResponse<List<ProviderServiceResponseDto>>> getProviderServices(
             @PathVariable("id") Long id) {
 
@@ -234,7 +253,7 @@ public class ProviderController {
      * Get service codes for a provider (lightweight)
      */
     @GetMapping("/{id}/service-codes")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
     public ResponseEntity<ApiResponse<List<String>>> getProviderServiceCodes(@PathVariable("id") Long id) {
         log.info("[PROVIDER-SERVICES] GET /api/providers/{}/service-codes", id);
 
@@ -247,7 +266,7 @@ public class ProviderController {
      * Check if provider offers a specific service
      */
     @GetMapping("/{id}/services/{serviceCode}/check")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
     public ResponseEntity<ApiResponse<Boolean>> checkProviderService(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode) {
@@ -343,7 +362,7 @@ public class ProviderController {
      * Get currently effective contracts for a provider
      */
     @GetMapping("/{id}/contracts/current")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
     public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getCurrentContracts(
             @PathVariable("id") Long id) {
 
@@ -374,7 +393,7 @@ public class ProviderController {
      * Get effective price for a service on a specific date
      */
     @GetMapping("/{id}/services/{serviceCode}/price")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
     public ResponseEntity<ApiResponse<EffectivePriceResponseDto>> getEffectivePrice(
             @PathVariable("id") Long id,
             @PathVariable("serviceCode") String serviceCode,
@@ -540,6 +559,28 @@ public class ProviderController {
             @PathVariable("employerId") Long employerId) {
         log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", employerId);
         List<ProviderViewDto> providers = providerService.getProvidersByEmployer(employerId);
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // MEDICAL REVIEWER ISOLATION (Phase 11)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Note: Per user request, reviewers can see all provider cards for an employer
+        // to monitor batch availability. However, claim-level isolation remains
+        // strictly enforced in ClaimService.
+        /* 
+        var currentUser = authorizationService.getCurrentUser();
+        if (currentUser != null && "MEDICAL_REVIEWER".equals(currentUser.getUserType())) {
+            List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+            log.info("[ISOLATION] Reviewer {} is assigned to {} providers: {}", currentUser.getUsername(), allowedProviderIds.size(), allowedProviderIds);
+            
+            providers = providers.stream()
+                    .filter(p -> allowedProviderIds.contains(p.getId()))
+                    .collect(Collectors.toList());
+            
+            log.info("[ISOLATION] After filtering, reviewer {} can see {} providers for employer {}", currentUser.getUsername(), providers.size(), employerId);
+        }
+        */
+        log.info("[ISOLATION] Medical Reviewer isolation for provider list bypassed per request. Found {} providers.", providers.size());
+
         return ResponseEntity.ok(ApiResponse.success(providers));
     }
 }

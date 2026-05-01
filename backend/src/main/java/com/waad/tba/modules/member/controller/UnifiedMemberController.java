@@ -349,7 +349,7 @@ public class UnifiedMemberController {
          * @throws NotFoundException if Member not found
          */
         @GetMapping("/{id}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get Member by ID", description = "Retrieves a Member by ID. If the Member is a Principal, returns Principal data with list of Dependents. "
                         +
                         "If the Member is a Dependent, returns only the Dependent's data without nested children. " +
@@ -481,7 +481,7 @@ public class UnifiedMemberController {
          * @return ResponseEntity with search results
          */
         @GetMapping("/search")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, Civil ID, Barcode, and Card Number. "
                         +
                         "Combines filters with AND logic. Returns paginated results. " +
@@ -592,7 +592,7 @@ public class UnifiedMemberController {
          * @throws BusinessException if Barcode belongs to Dependent (invalid)
          */
         @GetMapping("/eligibility/{barcode}")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Check Family Eligibility by Barcode", description = "Scans Principal's Barcode and returns entire family (Principal + Dependents) for member selection at point of service. "
                         +
                         "This is the PRIMARY eligibility check method in the unified architecture. " +
@@ -922,7 +922,7 @@ public class UnifiedMemberController {
          * @throws BusinessException if member is not a Principal
          */
         @GetMapping("/{principalId}/dependents")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get all Dependents of a Principal", description = "Retrieves all Dependents associated with a specific Principal member. "
                         +
                         "Returns empty list if Principal has no Dependents. " +
@@ -993,7 +993,7 @@ public class UnifiedMemberController {
          * @return Remaining limit data
          */
         @GetMapping("/{memberId}/remaining-limit")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get Member Remaining Limit", description = "Returns the remaining coverage limit for a member. Used in Provider Portal during claim creation.")
         public ResponseEntity<java.util.Map<String, Object>> getRemainingLimit(
                         @PathVariable("memberId") Long memberId) {
@@ -1066,7 +1066,7 @@ public class UnifiedMemberController {
          * @return Comprehensive financial summary
          */
         @GetMapping("/{memberId}/financial-summary")
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get Member Financial Summary", description = "Returns comprehensive financial overview including policy info, utilization metrics, "
                         +
                         "claim statistics, and alerts. **PHASE 1 Critical Endpoint** for financial visibility.", parameters = {
@@ -1177,7 +1177,7 @@ public class UnifiedMemberController {
          * @return Photo binary content
          */
         @GetMapping(value = "/{id}/photo", produces = { MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE })
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER', 'PROVIDER_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Get Member Photo", description = "Retrieve member profile photo as image binary")
         public ResponseEntity<byte[]> getPhoto(@PathVariable("id") Long id) {
                 log.debug("📸 Photo request: memberId={}", id);

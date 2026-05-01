@@ -40,6 +40,16 @@ public class EmailVerificationToken {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    @Column(name = "expiry_date", nullable = false)
+    private LocalDateTime expiryDate;
+
+    @PrePersist
+    public void prePersist() {
+        if (expiryDate == null) {
+            expiryDate = expiresAt;
+        }
+    }
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean verified = false;

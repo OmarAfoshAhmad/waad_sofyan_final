@@ -63,7 +63,7 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                         return;
                     }
 
-                    String role = user.getUserType() != null ? user.getUserType() : "DATA_ENTRY";
+                    String role = user.getUserType() != null ? user.getUserType().trim().toUpperCase() : "DATA_ENTRY";
 
                     List<SimpleGrantedAuthority> authorities = List.of(
                             new SimpleGrantedAuthority("ROLE_" + role));
@@ -76,6 +76,8 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
 
                     log.debug("Session auth OK — User: {}, Role: {}, Path: {}",
                             username, role, request.getRequestURI());
+                    log.debug("Session: Raw userType from DB: '{}', Normalized: 'ROLE_{}'",
+                            user.getUserType(), role);
                 }
             }
         } catch (Exception ex) {

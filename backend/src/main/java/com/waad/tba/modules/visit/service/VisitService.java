@@ -207,10 +207,19 @@ public class VisitService {
     public Page<VisitResponseDto> findAllPaginated(Long employerId, Pageable pageable, String search) {
         log.debug("Finding visits with pagination. employerId={}, search={}", employerId, search);
 
-        User currentUser = authorizationService.getCurrentUser();
+        User currentUser = authorizationService.requireCurrentUser();
+
+        // Enforce employer scope for EMPLOYER_ADMIN (ignore requested employerId)
+        if (authorizationService.isEmployerAdmin(currentUser)) {
+            employerId = authorizationService.resolveEmployerScope(currentUser, employerId);
+            if (employerId == null) {
+                return Page.empty();
+            }
+        }
+
         Page<Visit> visitsPage;
 
-        if (currentUser != null && authorizationService.isProvider(currentUser)) {
+        if (authorizationService.isProvider(currentUser)) {
             providerContextGuard.validateProviderBinding(currentUser);
             Long providerId = currentUser.getProviderId();
             if (search == null || search.isBlank()) {
