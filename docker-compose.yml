@@ -64,9 +64,12 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
     networks:
       - tba_network
     deploy:
