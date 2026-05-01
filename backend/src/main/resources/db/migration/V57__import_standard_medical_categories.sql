@@ -1,7 +1,7 @@
 -- =================================================================================
--- V57: Import EXACT Medical Categories and Rules from Local Database
--- Description: Syncs 33 medical categories and their corresponding benefit rules
---              to match the user's local system exactly as shown in screenshots.
+-- V57: Import Medical Categories (33 Categories)
+-- Description: Syncs medical categories to match the production/reference database
+--              with codes CAT001 through CAT033 and policy sub-categories.
 -- =================================================================================
 
 -- 1. Insert/Update all 33 Categories with exact names from screenshots
@@ -51,80 +51,8 @@ SET name    = EXCLUDED.name,
     name_ar = EXCLUDED.name_ar,
     active  = true;
 
--- 2. Create the Default Policy
-INSERT INTO benefit_policies (name, description, annual_limit, start_date, end_date, active, created_at, updated_at)
-VALUES ('الوثيقة القياسية', 'وثيقة المنفعة الافتراضية للنظام مع إعدادات التغطية القياسية', 50000.00, '2024-01-01', '2030-12-31', true, NOW(), NOW())
-ON CONFLICT DO NOTHING;
+-- 2. Cleanup roots and re-link
+DELETE FROM medical_category_roots;
 
--- 3. Populate Rules with exact values from screenshots
-DO $$
-DECLARE
-    policy_id BIGINT;
-BEGIN
-    SELECT id INTO policy_id FROM benefit_policies WHERE name = 'الوثيقة القياسية' LIMIT 1;
-    
-    IF policy_id IS NOT NULL THEN
-        -- Rules with Specific Percentages/Limits
-        -- CAT031: 50%
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, active)
-        SELECT policy_id, id, 50.00, true FROM medical_categories WHERE code = 'CAT031'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 50.00;
-
-        -- CAT028: 75%
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, active)
-        SELECT policy_id, id, 75.00, true FROM medical_categories WHERE code = 'CAT028'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00;
-
-        -- CAT027: 75%, 20 times
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, times_limit, active)
-        SELECT policy_id, id, 75.00, 20, true FROM medical_categories WHERE code = 'CAT027'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, times_limit = 20;
-
-        -- CAT026: 75%, 1 time, 1500 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, times_limit, amount_limit, active)
-        SELECT policy_id, id, 75.00, 1, 1500.00, true FROM medical_categories WHERE code = 'CAT026'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, times_limit = 1, amount_limit = 1500.00;
-
-        -- CAT025: 75%, 15000 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 15000.00, true FROM medical_categories WHERE code = 'CAT025'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 15000.00;
-
-        -- CAT024: 75%, 1500 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 1500.00, true FROM medical_categories WHERE code = 'CAT024'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 1500.00;
-
-        -- CAT023: 75%, 3000 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 3000.00, true FROM medical_categories WHERE code = 'CAT023'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 3000.00;
-
-        -- CAT022: 75%, 1500 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 1500.00, true FROM medical_categories WHERE code = 'CAT022'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 1500.00;
-
-        -- CAT021: 75%, 4000 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 4000.00, true FROM medical_categories WHERE code = 'CAT021'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 4000.00;
-
-        -- CAT009: 75%, 10000 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 10000.00, true FROM medical_categories WHERE code = 'CAT009'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 10000.00;
-
-        -- CAT008: 75%, 1000 limit
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, amount_limit, active)
-        SELECT policy_id, id, 75.00, 1000.00, true FROM medical_categories WHERE code = 'CAT008'
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = 75.00, amount_limit = 1000.00;
-
-        -- All others marked as "Default" in screenshot (NULL coverage_percent to use policy default)
-        INSERT INTO benefit_policy_rules (benefit_policy_id, medical_category_id, coverage_percent, active)
-        SELECT policy_id, id, NULL, true FROM medical_categories 
-        WHERE code IN ('CAT029', 'CAT020', 'CAT019', 'CAT018', 'CAT017', 'CAT016', 'CAT015', 'CAT014', 'CAT013', 'CAT012', 'CAT011', 'CAT010', 'CAT007')
-        ON CONFLICT ON CONSTRAINT uk_bpr_policy_category DO UPDATE SET coverage_percent = NULL;
-
-    END IF;
-END $$;
+INSERT INTO medical_category_roots (category_id, root_id)
+SELECT id, id FROM medical_categories WHERE active = true;
