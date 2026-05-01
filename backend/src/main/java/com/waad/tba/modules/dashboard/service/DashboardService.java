@@ -415,6 +415,11 @@ public class DashboardService {
                     createdAt = ((java.sql.Timestamp) row[4]).toLocalDateTime();
                 }
 
+                // If still null, default to now
+                if (createdAt == null) {
+                    createdAt = LocalDateTime.now();
+                }
+
                 String description = "عقد " + contractCode + " - " + providerName;
 
                 activities.add(RecentActivityDto.builder()
