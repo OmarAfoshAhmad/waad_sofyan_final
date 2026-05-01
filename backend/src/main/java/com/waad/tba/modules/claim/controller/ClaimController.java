@@ -82,7 +82,8 @@ public class ClaimController {
      */
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id", "createdAt", "updatedAt", "status", "requestedAmount",
-            "approvedAmount", "serviceDate", "providerName", "memberName");
+            "approvedAmount", "serviceDate", "providerName", "memberName",
+            "primaryCategoryCode", "categoryNameAr", "categoryNameEn");
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")

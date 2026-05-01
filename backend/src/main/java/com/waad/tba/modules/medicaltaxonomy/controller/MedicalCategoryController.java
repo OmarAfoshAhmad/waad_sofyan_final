@@ -106,7 +106,16 @@ public class MedicalCategoryController {
                 "[MEDICAL-CATEGORIES] GET /api/medical-categories - page={}, size={}, parentId={}, active={}, search={}",
                 page, size, parentId, active, search);
 
-        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+        // Safe Sort Mapping to prevent InvalidDataAccessApiUsageException
+        String safeSortBy = switch (sortBy) {
+            case "name", "nameAr", "nameEn", "code", "id", "active", "createdAt", "updatedAt" -> sortBy;
+            case "categoryNameAr" -> "nameAr";
+            case "categoryNameEn" -> "nameEn";
+            case "parentName" -> "parentId"; // Map complex UI fields to base fields
+            default -> "id"; // Default fallback
+        };
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), safeSortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<MedicalCategoryResponseDto> result = categoryService.findAll(pageable, parentId, active, search);
 

@@ -81,11 +81,16 @@ public class ClaimBatchService {
         }
 
         int allowedMonths = systemSettingsService.getClaimBackdatedMonths();
+        log.info("🔍 Validating backdated claim: requested={}/{}, current={}, allowedMonths={}", 
+                month, year, current, allowedMonths);
+
         if (allowedMonths == 0 && !requested.equals(current)) {
             throw new BusinessRuleException(
                     "يُسمح بإدخال مطالبات الشهر الحالي فقط. الفترة المطلوبة: " + month + "/" + year);
         }
         if (allowedMonths > 0 && requested.isBefore(current.minusMonths(allowedMonths))) {
+            log.warn("🚨 Backdated limit exceeded: requested {} is before limit {}", 
+                    requested, current.minusMonths(allowedMonths));
             throw new BusinessRuleException(
                     "لا يمكن فتح دفعات لفترات تتجاوز " + allowedMonths + " أشهر سابقة. الفترة المطلوبة: " + month + "/"
                             + year);
