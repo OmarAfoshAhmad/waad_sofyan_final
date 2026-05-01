@@ -62,7 +62,7 @@ public class DashboardController {
      * @param employerId Optional employer ID filter for partner-specific reports
      */
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get dashboard summary", description = "Returns aggregated statistics for dashboard KPIs. All calculations done server-side. Optionally filter by employer.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Summary retrieved successfully"),
@@ -84,7 +84,7 @@ public class DashboardController {
      * Default: last 12 months
      */
     @GetMapping("/monthly-trends")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get monthly trends", description = "Returns monthly aggregated data for claims. Used for line charts. Optionally filter by employer.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Trends retrieved successfully"),
@@ -107,7 +107,7 @@ public class DashboardController {
      * Default: last 12 months
      */
     @GetMapping("/members-growth")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get members monthly growth", description = "Returns monthly aggregated member data for area charts.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Members growth retrieved successfully"),
@@ -129,7 +129,7 @@ public class DashboardController {
      * Used for bar charts.
      */
     @GetMapping("/cost-by-provider")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get costs by provider", description = "Returns aggregated costs grouped by provider. Used for bar charts.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Costs retrieved successfully"),
@@ -152,7 +152,7 @@ public class DashboardController {
      * Used for donut charts.
      */
     @GetMapping("/service-distribution")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get service distribution", description = "Returns aggregated data grouped by service type. Used for donut charts.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Service distribution retrieved successfully"),
@@ -172,7 +172,7 @@ public class DashboardController {
      * Returns recent system activities for timeline display.
      */
     @GetMapping("/recent-activities")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get recent activities", description = "Returns recent system activities for timeline display.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recent activities retrieved successfully"),
@@ -195,7 +195,7 @@ public class DashboardController {
      * Legacy endpoint - kept for backward compatibility
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get dashboard stats (legacy)", description = "Legacy endpoint. Use /summary instead.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Stats retrieved successfully"),
@@ -216,7 +216,7 @@ public class DashboardController {
      * Legacy endpoint - kept for backward compatibility
      */
     @GetMapping("/claims-per-day")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get claims per day (legacy)", description = "Legacy endpoint. Use /monthly-trends instead.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Data retrieved successfully"),

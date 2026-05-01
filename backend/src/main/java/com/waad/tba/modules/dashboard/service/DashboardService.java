@@ -303,26 +303,33 @@ public class DashboardService {
                 List<RecentClaimProjection> recentClaims = claimRepository.getRecentClaimsByProvider(providerId,
                         pageable);
 
-                return recentClaims.stream().map(projection -> {
-                    Long id = projection.getId();
-                    String memberName = projection.getMemberName();
-                    String diagnosis = projection.getDiagnosisDescription();
-                    Object statusObj = projection.getStatus();
-                    LocalDateTime createdAt = projection.getCreatedAt();
+                return recentClaims.stream()
+                        .filter(p -> p != null)
+                        .map(projection -> {
+                            Long id = projection.getId();
+                            String memberName = projection.getMemberName();
+                            String diagnosis = projection.getDiagnosisDescription();
+                            Object statusObj = projection.getStatus();
+                            LocalDateTime createdAt = projection.getCreatedAt();
 
-                    String statusLabel = statusObj != null ? statusObj.toString() : "";
-                    String description = memberName + (diagnosis != null ? " - " + diagnosis : "");
+                            // Default to current time if createdAt is missing to prevent sorting crashes
+                            if (createdAt == null) {
+                                createdAt = LocalDateTime.now();
+                            }
 
-                    return RecentActivityDto.builder()
-                            .id(id)
-                            .type("CLAIM_SUBMITTED")
-                            .title("مطالبة " + statusLabel)
-                            .description(description)
-                            .entityName(memberName)
-                            .entityId(id)
-                            .createdAt(createdAt)
-                            .build();
-                }).collect(Collectors.toList());
+                            String statusLabel = statusObj != null ? statusObj.toString() : "";
+                            String description = memberName + (diagnosis != null ? " - " + diagnosis : "");
+
+                            return RecentActivityDto.builder()
+                                    .id(id)
+                                    .type("CLAIM_SUBMITTED")
+                                    .title("مطالبة " + statusLabel)
+                                    .description(description)
+                                    .entityName(memberName)
+                                    .entityId(id)
+                                    .createdAt(createdAt)
+                                    .build();
+                        }).collect(Collectors.toList());
             }
         }
 
@@ -331,51 +338,67 @@ public class DashboardService {
         List<RecentActivityDto> activities = new ArrayList<>();
         Pageable pageable = PageRequest.of(0, limit / 3 + 1); // Get a few from each category
 
-        // Get recent members
-        List<Object[]> recentMembers = memberRepository.getRecentMembers(pageable);
-        for (Object[] row : recentMembers) {
-            Long id = row[0] != null ? ((Number) row[0]).longValue() : 0L;
-            String name = (String) row[1];
-            LocalDateTime createdAt = null;
-            if (row[2] instanceof LocalDateTime) {
-                createdAt = (LocalDateTime) row[2];
-            } else if (row[2] instanceof java.sql.Timestamp) {
-                createdAt = ((java.sql.Timestamp) row[2]).toLocalDateTime();
-            }
+        try {
+            // Get recent members
+            List<Object[]> recentMembers = memberRepository.getRecentMembers(pageable);
+            for (Object[] row : recentMembers) {
+                Long id = row[0] != null ? ((Number) row[0]).longValue() : 0L;
+                String name = (String) row[1];
+                LocalDateTime createdAt = null;
+                if (row[2] instanceof LocalDateTime) {
+                    createdAt = (LocalDateTime) row[2];
+                } else if (row[2] instanceof java.sql.Timestamp) {
+                    createdAt = ((java.sql.Timestamp) row[2]).toLocalDateTime();
+                }
 
-            activities.add(RecentActivityDto.builder()
-                    .id(id)
-                    .type("MEMBER_ADDED")
-                    .title("تمت إضافة عضو جديد")
-                    .description(name)
-                    .entityName(name)
-                    .entityId(id)
-                    .createdAt(createdAt)
-                    .build());
+                // If still null, default to now
+                if (createdAt == null) {
+                    createdAt = LocalDateTime.now();
+                }
+
+                activities.add(RecentActivityDto.builder()
+                        .id(id)
+                        .type("MEMBER_ADDED")
+                        .title("تمت إضافة عضو جديد")
+                        .description(name)
+                        .entityName(name)
+                        .entityId(id)
+                        .createdAt(createdAt)
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch recent members for dashboard: {}", e.getMessage());
         }
 
-        // Get recent claims
-        // ✅ TYPE-SAFE: Using interface projection instead of Object[]
-        List<RecentClaimProjection> recentClaims = claimRepository.getRecentClaims(pageable);
-        for (RecentClaimProjection projection : recentClaims) {
-            Long id = projection.getId();
-            String memberName = projection.getMemberName();
-            String diagnosis = projection.getDiagnosisDescription();
-            // ClaimStatus status = projection.getStatus(); // Status available but not used
-            // in display
-            LocalDateTime createdAt = projection.getCreatedAt();
+        try {
+            // Get recent claims
+            // ✅ TYPE-SAFE: Using interface projection instead of Object[]
+            List<RecentClaimProjection> recentClaims = claimRepository.getRecentClaims(pageable);
+            for (RecentClaimProjection projection : recentClaims) {
+                Long id = projection.getId();
+                String memberName = projection.getMemberName();
+                String diagnosis = projection.getDiagnosisDescription();
+                LocalDateTime createdAt = projection.getCreatedAt();
 
-            String description = memberName + (diagnosis != null ? " - " + diagnosis : "");
+                // If still null, default to now
+                if (createdAt == null) {
+                    createdAt = LocalDateTime.now();
+                }
 
-            activities.add(RecentActivityDto.builder()
-                    .id(id)
-                    .type("CLAIM_SUBMITTED")
-                    .title("مطالبة جديدة")
-                    .description(description)
-                    .entityName(memberName)
-                    .entityId(id)
-                    .createdAt(createdAt)
-                    .build());
+                String description = memberName + (diagnosis != null ? " - " + diagnosis : "");
+
+                activities.add(RecentActivityDto.builder()
+                        .id(id)
+                        .type("CLAIM_SUBMITTED")
+                        .title("مطالبة جديدة")
+                        .description(description)
+                        .entityName(memberName)
+                        .entityId(id)
+                        .createdAt(createdAt)
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch recent claims for dashboard: {}", e.getMessage());
         }
 
         try {
@@ -411,6 +434,7 @@ public class DashboardService {
 
         // Sort all activities by date (most recent first) and limit
         return activities.stream()
+                .filter(a -> a != null && a.getCreatedAt() != null)
                 .sorted((a1, a2) -> a2.getCreatedAt().compareTo(a1.getCreatedAt()))
                 .limit(limit)
                 .collect(Collectors.toList());
