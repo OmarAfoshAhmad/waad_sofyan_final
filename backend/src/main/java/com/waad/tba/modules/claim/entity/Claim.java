@@ -538,19 +538,39 @@ public class Claim {
             
             // Only generate a default patient co-pay if it's completely missing
             if (this.patientCoPay == null) {
-                // Default to a 20% preview if no lines have percentages
                 this.patientCoPay = netAccepted.multiply(new BigDecimal("0.20")).setScale(2, RoundingMode.HALF_UP);
             }
             
-            // Cap patient co-pay to not exceed the net accepted amount
-            if (this.patientCoPay.compareTo(netAccepted) > 0) {
-                this.patientCoPay = netAccepted;
+            // Cap patient co-pay to not exceed the requested amount
+            if (this.patientCoPay.compareTo(this.requestedAmount) > 0) {
+                this.patientCoPay = this.requestedAmount;
             }
             
-            // ALWAYS force recalculate to maintain strict financial identity 
-            // Identity: Gross = PatientShare + RefusedAmount + ApprovedAmount
-            this.approvedAmount = netAccepted.subtract(this.patientCoPay).max(BigDecimal.ZERO);
-            this.netProviderAmount = this.approvedAmount;
+            // ALWAYS force recalculate using the EXACT validation math to maintain strict financial identity
+            BigDecimal gross = scale2(this.requestedAmount);
+            BigDecimal patient = scale2(this.patientCoPay);
+            BigDecimal rejected = scale2(this.refusedAmount);
+            BigDecimal discountRate = scale2(this.appliedDiscountPercent);
+            boolean beforeRejection = this.discountBeforeRejection != Boolean.FALSE;
+
+            BigDecimal providerShare = scale2(gross.subtract(patient));
+            
+            BigDecimal expectedPayable;
+            if (beforeRejection) {
+                BigDecimal discount = scale2(providerShare.multiply(discountRate)
+                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
+                BigDecimal afterDiscount = scale2(providerShare.subtract(discount));
+                expectedPayable = scale2(afterDiscount.subtract(rejected));
+            } else {
+                BigDecimal afterRejection = scale2(providerShare.subtract(rejected));
+                BigDecimal discount = scale2(afterRejection.multiply(discountRate)
+                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
+                expectedPayable = scale2(afterRejection.subtract(discount));
+            }
+
+            // Assign identical expected payable to prevent mismatch in validateFinancialIdentity()
+            this.approvedAmount = expectedPayable;
+            this.netProviderAmount = expectedPayable;
         }
 
         // Ensure difference amount is always set

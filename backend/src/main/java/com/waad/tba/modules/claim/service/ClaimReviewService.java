@@ -291,11 +291,47 @@ public class ClaimReviewService {
             atomicFinancialService.validateApprovedAmount(approvedAmount, netAcceptedAmount);
 
             BigDecimal patientCoPay = netAcceptedAmount.subtract(approvedAmount);
-            BigDecimal netProviderAmount = approvedAmount;
 
-            if (patientCoPay.add(netProviderAmount).compareTo(netAcceptedAmount) != 0) {
-                netProviderAmount = netAcceptedAmount.subtract(patientCoPay).max(BigDecimal.ZERO);
-                approvedAmount = netProviderAmount;
+            // ═══════════════════════════════════════════════════════════════════════
+            // CONTRACT DISCOUNT APPLICATION (FIX: was missing in review path)
+            // ═══════════════════════════════════════════════════════════════════════
+            // netProviderAmount MUST include the contract discount to match:
+            //   1. ClaimMapper.calculateClaimTotals (direct-entry path)
+            //   2. Claim.validateFinancialIdentity (entity-level guard)
+            //   3. creditOnClaimApproval (account credit)
+            // Formula:
+            //   providerShare = requestedAmount - patientCoPay
+            //   BEFORE mode: netProvider = (providerShare × (1 - discount%)) - refused
+            //   AFTER  mode: netProvider = (providerShare - refused) × (1 - discount%)
+            // ═══════════════════════════════════════════════════════════════════════
+            BigDecimal discountRate = claim.getAppliedDiscountPercent() != null
+                    ? claim.getAppliedDiscountPercent() : BigDecimal.ZERO;
+            boolean discBeforeRejection = claim.getDiscountBeforeRejection() != Boolean.FALSE;
+            BigDecimal providerShare = requestedAmount.subtract(patientCoPay);
+
+            BigDecimal netProviderAmount;
+            if (discountRate.compareTo(BigDecimal.ZERO) > 0) {
+                if (discBeforeRejection) {
+                    BigDecimal discount = providerShare.multiply(discountRate)
+                            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                    BigDecimal afterDiscount = providerShare.subtract(discount);
+                    netProviderAmount = afterDiscount.subtract(refusedAmount).max(BigDecimal.ZERO);
+                } else {
+                    BigDecimal afterRejection = providerShare.subtract(refusedAmount).max(BigDecimal.ZERO);
+                    BigDecimal discount = afterRejection.multiply(discountRate)
+                            .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                    netProviderAmount = afterRejection.subtract(discount);
+                }
+            } else {
+                // No contract discount — simple subtraction
+                netProviderAmount = providerShare.subtract(refusedAmount).max(BigDecimal.ZERO);
+            }
+            approvedAmount = netProviderAmount;
+
+            if (patientCoPay.add(netProviderAmount).add(refusedAmount)
+                    .compareTo(requestedAmount) != 0) {
+                log.warn("⚠️ [APPROVAL] Rounding adjustment: req={}, patient={}, net={}, refused={}",
+                        requestedAmount, patientCoPay, netProviderAmount, refusedAmount);
             }
 
             Member member = claim.getMember();
