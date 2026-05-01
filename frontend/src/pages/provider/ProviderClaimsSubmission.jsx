@@ -82,6 +82,7 @@ import SuccessDialog from 'components/SuccessDialog';
 import { useAuth } from 'contexts/AuthContext';
 import axiosClient from 'utils/axios';
 import { MEDICAL_COLORS } from 'themes/provider-theme';
+import claimBatchesService from 'services/api/claim-batches.service';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS & LABELS
@@ -409,6 +410,8 @@ export default function ProviderClaimsSubmission() {
   const [localDraftRestored, setLocalDraftRestored] = useState(false);
   const [providerChatMessages, setProviderChatMessages] = useState([]);
   const [providerChatInput, setProviderChatInput] = useState('');
+  const [activeBatchId, setActiveBatchId] = useState(null);
+  const [loadingBatch, setLoadingBatch] = useState(false);
 
   const providerChatStorageKey = useMemo(
     () => `provider-claim-chat-${activeClaimId || linkedVisitId || 'new'}`,
@@ -583,16 +586,20 @@ export default function ProviderClaimsSubmission() {
   const initializePage = async () => {
     setLoading(true);
     try {
+      // 1. Fetch visit details FIRST to get employerId for batching
+      const visitData = await fetchVisitDetails();
+      
+      // 2. Fetch other resources in parallel
       const results = await Promise.allSettled([
-        fetchVisitDetails(),
         fetchAvailableServices(),
         fetchMemberLimit(),
         fetchMedicalCategories(),
-        fetchAvailablePreAuths()
+        fetchAvailablePreAuths(),
+        ensureActiveBatch(visitData?.member?.employer?.id)
       ]);
 
       results.forEach((result, index) => {
-        const names = ['Visit Details', 'Services', 'Member Limit', 'Medical Categories', 'Pre-Authorizations'];
+        const names = ['Services', 'Member Limit', 'Medical Categories', 'Pre-Authorizations', 'Batch Linkage'];
         if (result.status === 'rejected') {
           console.warn(`Failed to load ${names[index]}:`, result.reason);
         }
@@ -602,6 +609,47 @@ export default function ProviderClaimsSubmission() {
       setError('فشل في تحميل البيانات');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * PHASE 11: Mandatory Batch Linkage
+   * Ensures an active monthly batch exists for the current Provider + Employer.
+   * If missing (404), triggers creation.
+   */
+  const ensureActiveBatch = async (retryEmployerId = null) => {
+    const providerId = user?.providerId;
+    // Try to get employerId from visitDetails first, then from state/params fallback
+    const employerId = retryEmployerId || visitDetails?.member?.employer?.id || linkedMemberId;
+
+    if (!providerId || !employerId) {
+      console.warn('⚠️ Cannot ensure batch: providerId or employerId missing', { providerId, employerId });
+      return;
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    setLoadingBatch(true);
+    try {
+      console.log(`🔍 Checking batch for Provider:${providerId}, Employer:${employerId}, Period:${month}/${year}`);
+      let batch = await claimBatchesService.getCurrentBatch(providerId, employerId, year, month);
+      
+      if (!batch) {
+        console.log('🆕 No active batch found. Triggering mandatory creation workflow...');
+        batch = await claimBatchesService.openOrGetBatch(providerId, employerId, year, month);
+      }
+
+      if (batch) {
+        setActiveBatchId(batch.id);
+        console.log(`✅ Active batch confirmed: ${batch.batchNumber} (ID: ${batch.id})`);
+      }
+    } catch (err) {
+      console.error('❌ Failed to ensure active claim batch:', err);
+      // Don't block the whole page, but log the error
+    } finally {
+      setLoadingBatch(false);
     }
   };
 
@@ -1266,6 +1314,7 @@ export default function ProviderClaimsSubmission() {
         visitId: parseInt(linkedVisitId),
         memberId: parseInt(linkedMemberId),
         providerId: userProviderId,
+        claimBatchId: activeBatchId,
         preAuthorizationId: formData.preAuthorizationId || null,
         diagnosisCode: formData.diagnosisCode || null,
         diagnosisDescription: formData.diagnosisDescription || null,

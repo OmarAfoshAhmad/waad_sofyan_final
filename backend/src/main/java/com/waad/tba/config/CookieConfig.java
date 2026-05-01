@@ -80,7 +80,7 @@ public class CookieConfig {
             // SameSite=Strict: CRITICAL CSRF PROTECTION
             // Prevents browser from sending cookie on ANY cross-site request
             // This is the core defense against CSRF attacks
-            cookieSerializer.setSameSite("Strict");
+            cookieSerializer.setSameSite("Lax");
             
             // HttpOnly=true: XSS MITIGATION
             // Prevents JavaScript from accessing cookie

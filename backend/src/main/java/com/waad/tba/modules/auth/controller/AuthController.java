@@ -107,6 +107,8 @@ public class AuthController {
                 session.setAttribute("username", userInfo.getUsername());
                 // Note: employerId is used for employer scoping
                 session.setAttribute("employerId", userInfo.getEmployerId());
+                // Ensure providerId is persisted for provider-level isolation
+                session.setAttribute("providerId", userInfo.getProviderId());
 
                 return ResponseEntity.ok(ApiResponse.success("Login successful", userInfo));
         }

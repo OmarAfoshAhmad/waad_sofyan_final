@@ -333,6 +333,19 @@ public class ClaimService {
                     throw new BusinessRuleException("الدفعة المختارة لا تتطابق مع المزود أو جهة العمل للمطالبة.");
                 }
             }
+        } else {
+            // AUTO-RESOLVE CURRENT BATCH (Phase 11 Law)
+            // If no batch ID is provided, we MUST find or create the current open batch
+            // for this Provider + Employer + Period.
+            LocalDate date = dto.getServiceDate() != null ? dto.getServiceDate() : LocalDate.now();
+            log.info("🔄 Auto-resolving batch for provider {}, employer {}, period {}/{}", 
+                    provider.getId(), visit.getMember().getEmployer().getId(), date.getMonthValue(), date.getYear());
+            
+            claimBatch = claimBatchService.getOrCreateBatch(
+                    provider.getId(),
+                    visit.getMember().getEmployer().getId(),
+                    date.getYear(),
+                    date.getMonthValue());
         }
 
         Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch);

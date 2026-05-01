@@ -279,23 +279,29 @@ public class AuthService {
          */
         @Transactional(readOnly = true)
         public LoginResponse.UserInfo getUserInfo(String username) {
+                log.debug("Fetching user info for username: {}", username);
+                if (username == null) {
+                        log.error("Username is null in getUserInfo!");
+                        throw new IllegalArgumentException("Username cannot be null");
+                }
+
                 User user = userRepository.findByUsername(username)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "User not found with username: " + username));
+                                .orElseThrow(() -> {
+                                        log.warn("User not found: {}", username);
+                                        return new ResourceNotFoundException("User not found with username: " + username);
+                                });
 
                 String userRole = user.getUserType() != null ? user.getUserType() : "DATA_ENTRY";
                 List<String> roles = List.of(userRole);
-
-                // Permissions handled by backend @PreAuthorize — no dynamic permissions list
-                // needed
                 List<String> permissions = List.of();
 
                 // Fetch provider name if user is a PROVIDER
                 String providerName = null;
                 if (user.getProviderId() != null) {
+                        log.debug("Fetching provider info for ID: {}", user.getProviderId());
                         providerName = providerRepository.findById(user.getProviderId())
                                         .map(Provider::getName)
-                                        .orElse(null);
+                                        .orElse("Unknown Provider");
                 }
 
                 return LoginResponse.UserInfo.builder()

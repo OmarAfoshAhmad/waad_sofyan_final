@@ -140,12 +140,22 @@ axiosServices.interceptors.response.use(
       error.errorType = classification.type;
     }
 
-    const normalized = normalizeApiError(error);
-    window.dispatchEvent(
-      new CustomEvent('api:error', {
-        detail: normalized
-      })
+    // ==========================================
+    // Suppress expected 404s (e.g. batch lookup)
+    // ==========================================
+    const isExpected404 = status === 404 && (
+      url?.includes('/claim-batches/current') ||
+      error.config?.suppressGlobalError === true
     );
+
+    if (!isExpected404) {
+      const normalized = normalizeApiError(error);
+      window.dispatchEvent(
+        new CustomEvent('api:error', {
+          detail: normalized
+        })
+      );
+    }
 
     return Promise.reject(error);
   }

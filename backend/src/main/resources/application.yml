@@ -116,7 +116,7 @@ email:
 
 app:
   admin:
-    default-password: ${ADMIN_DEFAULT_PASSWORD:}
+    default-password: ${ADMIN_DEFAULT_PASSWORD:Admin@123}
   frontend:
     url: ${APP_FRONTEND_URL:http://localhost:3000}
   cors:

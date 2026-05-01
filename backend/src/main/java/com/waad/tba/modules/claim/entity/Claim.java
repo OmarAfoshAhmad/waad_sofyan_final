@@ -532,7 +532,7 @@ public class Claim {
         // But for APPROVED/SETTLED, we MUST NOT overwrite what the service/reviewer set.
         boolean finalized = (status == ClaimStatus.APPROVED || status == ClaimStatus.SETTLED);
         
-        if (!finalized) {
+        if (!finalized || this.approvedAmount == null) {
             // Provide a naive preview for UI/Drafts
             BigDecimal netAccepted = this.requestedAmount.subtract(this.refusedAmount).max(BigDecimal.ZERO);
             
