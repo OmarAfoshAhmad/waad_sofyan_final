@@ -534,21 +534,23 @@ public class Claim {
         
         if (!finalized) {
             // Provide a naive preview for UI/Drafts
-            BigDecimal netApproved = this.requestedAmount.subtract(this.refusedAmount).max(BigDecimal.ZERO);
+            BigDecimal netAccepted = this.requestedAmount.subtract(this.refusedAmount).max(BigDecimal.ZERO);
             
-            // Only overwrite if null to allow manual overrides in drafts if ever needed
+            // Only generate a default patient co-pay if it's completely missing
             if (this.patientCoPay == null) {
                 // Default to a 20% preview if no lines have percentages
-                this.patientCoPay = netApproved.multiply(new BigDecimal("0.20")).setScale(2, RoundingMode.HALF_UP);
+                this.patientCoPay = netAccepted.multiply(new BigDecimal("0.20")).setScale(2, RoundingMode.HALF_UP);
             }
             
-            if (this.approvedAmount == null) {
-                this.approvedAmount = netApproved.subtract(this.patientCoPay).max(BigDecimal.ZERO);
+            // Cap patient co-pay to not exceed the net accepted amount
+            if (this.patientCoPay.compareTo(netAccepted) > 0) {
+                this.patientCoPay = netAccepted;
             }
             
-            if (this.netProviderAmount == null) {
-                this.netProviderAmount = this.approvedAmount;
-            }
+            // ALWAYS force recalculate to maintain strict financial identity 
+            // Identity: Gross = PatientShare + RefusedAmount + ApprovedAmount
+            this.approvedAmount = netAccepted.subtract(this.patientCoPay).max(BigDecimal.ZERO);
+            this.netProviderAmount = this.approvedAmount;
         }
 
         // Ensure difference amount is always set
