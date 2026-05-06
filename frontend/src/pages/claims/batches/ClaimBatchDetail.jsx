@@ -18,6 +18,7 @@ import {
     Tooltip,
     Avatar,
     Divider,
+    Menu,
     MenuItem,
     FormControl,
     alpha,
@@ -100,6 +101,8 @@ export default function ClaimBatchDetail() {
     const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
     const [restoringClaim, setRestoringClaim] = useState(null);
     const [voidReason, setVoidReason] = useState('');
+    const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+    const menuOpen = Boolean(menuAnchorEl);
     const tableState = useTableState({
         initialPageSize: 10,
         defaultSort: { field: 'serviceDate', direction: 'desc' }
@@ -543,13 +546,11 @@ export default function ClaimBatchDetail() {
     const columns = [
         { id: 'select', label: <Checkbox size="small" checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} onClick={(e) => e.stopPropagation()} />, minWidth: '2.5rem', align: 'center', sortable: false },
         { id: 'ref', label: 'المرجع', minWidth: '8rem', align: 'center', sortable: false },
-        { id: 'employer', label: 'الوثيقة', minWidth: '9rem', align: 'center', sortable: false },
         { id: 'patient', label: 'الاسم (المستفيد)', minWidth: '10rem', align: 'right', sortable: true },
         { id: 'serviceDate', label: 'تاريخ الخدمة', minWidth: '7rem', align: 'center', sortable: true },
         { id: 'status', label: 'الحالة', minWidth: '6rem', align: 'center', sortable: true },
         { id: 'amount', label: 'الإجمالي', minWidth: '5rem', align: 'center', sortable: true },
         { id: 'copay', label: 'نصيب المستفيد', minWidth: '5rem', align: 'center', sortable: true },
-        { id: 'discountPercent', label: 'نسبة التخفيض', minWidth: '6.5rem', align: 'center', sortable: true },
         { id: 'covered', label: 'المعتمد', minWidth: '5rem', align: 'center', sortable: true },
         { id: 'refused', label: 'المرفوض', minWidth: '5.5rem', align: 'center', sortable: true },
         { id: 'dueAfterRefused', label: 'المستحق', minWidth: '8.5rem', align: 'center', sortable: true },
@@ -762,7 +763,40 @@ export default function ClaimBatchDetail() {
                         { label: batchCode }
                     ]}
                     actions={
-                        <Stack direction="row" spacing={1.5}>
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<AddIcon />}
+                                onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`)}
+                                sx={{
+                                    borderRadius: '0.375rem',
+                                    height: '2.5rem',
+                                    px: '1.5rem',
+                                    bgcolor: '#008b8b',
+                                    '&:hover': { bgcolor: '#007070' }
+                                }}
+                            >
+                                إضافة مطالبة
+                            </Button>
+
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={(e) => setMenuAnchorEl(e.currentTarget)}
+                                endIcon={<FilterIcon sx={{ transform: menuOpen ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />}
+                                sx={{
+                                    height: '2.5rem',
+                                    borderRadius: '0.375rem',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.875rem',
+                                    px: '1.5rem',
+                                    boxShadow: '0 4px 12px rgba(var(--mui-palette-primary-mainChannel), 0.2)'
+                                }}
+                            >
+                                الإجراءات
+                            </Button>
+
                             <Button
                                 variant="outlined"
                                 color="secondary"
@@ -773,78 +807,58 @@ export default function ClaimBatchDetail() {
                                 العودة
                             </Button>
 
-                            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-                            <Button
-                                variant="outlined"
-                                color="primary"
-                                startIcon={<ViewIcon />}
-                                onClick={() => {
+                            <Menu
+                                anchorEl={menuAnchorEl}
+                                open={menuOpen}
+                                onClose={() => setMenuAnchorEl(null)}
+                                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                                PaperProps={{
+                                    sx: {
+                                        minWidth: 200,
+                                        mt: 1,
+                                        boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+                                        borderRadius: 2,
+                                        border: '1px solid',
+                                        borderColor: 'divider'
+                                    }
+                                }}
+                            >
+                                <MenuItem onClick={() => {
+                                    setMenuAnchorEl(null);
                                     if (selectedClaimIds.length === 0) {
                                         enqueueSnackbar('الرجاء تحديد مطالبة واحدة على الأقل للمعاينة', { variant: 'warning' });
                                         return;
                                     }
                                     navigate(`/reports/claims/statement-preview?ids=${selectedClaimIds.join(',')}`);
-                                }}
-                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                            >
-                                طباعة المحددة
-                            </Button>
+                                }}>
+                                    <ViewIcon fontSize="small" sx={{ ml: 1.5, color: 'text.secondary' }} />
+                                    <Typography variant="body2">طباعة المحددة</Typography>
+                                </MenuItem>
 
-                            <Button
-                                variant="outlined"
-                                color="primary"
-                                startIcon={<PrintIcon />}
-                                onClick={handlePrint}
-                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                            >
-                                {selectedClaimIds.length > 0
-                                    ? `طباعة (${selectedClaimIds.length})`
-                                    : 'طباعة الكل'}
-                            </Button>
+                                <MenuItem onClick={() => { setMenuAnchorEl(null); handlePrint(); }}>
+                                    <PrintIcon fontSize="small" sx={{ ml: 1.5, color: 'text.secondary' }} />
+                                    <Typography variant="body2">{selectedClaimIds.length > 0 ? `طباعة (${selectedClaimIds.length})` : 'طباعة الكل'}</Typography>
+                                </MenuItem>
 
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                startIcon={<PrintIcon />}
-                                onClick={handleRejectedReport}
-                                sx={{ borderRadius: '0.375rem', height: '2.5rem', borderColor: 'error.main', color: 'error.main' }}
-                            >
-                                تقرير المرفوضات
-                            </Button>
+                                <MenuItem onClick={() => { setMenuAnchorEl(null); handleRejectedReport(); }}>
+                                    <PrintIcon fontSize="small" sx={{ ml: 1.5, color: 'error.main' }} />
+                                    <Typography variant="body2" color="error.main">تقرير المرفوضات</Typography>
+                                </MenuItem>
 
-                            <Button
-                                variant="outlined"
-                                color="primary"
-                                sx={{ borderRadius: '0.375rem', height: '2.5rem' }}
-                                startIcon={<ExcelIcon />}
-                                onClick={handleExportExcel}
-                            >
-                                تصدير إكسل
-                            </Button>
+                                <MenuItem onClick={() => { setMenuAnchorEl(null); handleExportExcel(); }}>
+                                    <ExcelIcon fontSize="small" sx={{ ml: 1.5, color: 'success.main' }} />
+                                    <Typography variant="body2">تصدير إكسل</Typography>
+                                </MenuItem>
 
-
-                            {canDelete && (
-                                <SoftDeleteToggle
-                                    showDeleted={showDeleted}
-                                    onToggle={() => setShowDeleted(!showDeleted)}
-                                />
-                            )}
-
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                startIcon={<AddIcon />}
-                                onClick={() => navigate(`/claims/batches/entry?employerId=${employerId}&providerId=${providerId}&month=${month}&year=${year}`)}
-                                sx={{
-                                    borderRadius: '0.375rem',
-                                    height: '2.5rem',
-                                    px: '1.5rem',
-                                    boxShadow: '0 4px 12px rgba(var(--mui-palette-primary-mainChannel), 0.2)'
-                                }}
-                            >
-                                إضافة مطالبة
-                            </Button>
+                                {canDelete && <Divider sx={{ my: 0.5 }} />}
+                                {canDelete && (
+                                    <MenuItem onClick={() => { setMenuAnchorEl(null); setShowDeleted(!showDeleted); }}>
+                                        <HistoryIcon fontSize="small" sx={{ ml: 1.5, color: showDeleted ? 'primary.main' : 'text.secondary' }} />
+                                        <Typography variant="body2">{showDeleted ? 'عرض النشطة' : 'سجل المحفوظات'}</Typography>
+                                    </MenuItem>
+                                )}
+                            </Menu>
                         </Stack>
                     }
                 />

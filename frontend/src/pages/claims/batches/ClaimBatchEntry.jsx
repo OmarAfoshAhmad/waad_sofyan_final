@@ -1294,24 +1294,6 @@ export default function ClaimBatchEntry() {
                     icon={<ReceiptIcon />}
                     actions={
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <Button variant="outlined" size="small" startIcon={<FileDownloadIcon />}
-                                onClick={handleExport} disabled={!batchContent.length}
-                                sx={{ color: '#1b5e20', borderColor: '#1b5e20', '&:hover': { bgcolor: '#1b5e2012' } }}>
-                                {/* FIX: Correct label — exports CSV not Excel */}
-                                تصدير CSV
-                            </Button>
-                            <Button variant="outlined" size="small" color="info" startIcon={<PrintIcon />}
-                                onClick={handlePrint}
-                                sx={{}}>
-                                {t('claimEntry.printTable')}
-                            </Button>
-                            <Divider orientation="vertical" flexItem />
-                            {/* FIX: Finish batch goes to claim-batches management page (different from detail) */}
-                            <Button variant="contained" size="small" color="success" startIcon={<DoneIcon />}
-                                onClick={() => navigate(`/claims/batches`)} disabled={!batchContent.length}
-                                sx={{}}>
-                                {t('claimEntry.finishBatch')}
-                            </Button>
                             {/* FIX: Back goes to detail page (same month view) */}
                             <Button variant="outlined" size="small" color="secondary"
                                 startIcon={<BackIcon sx={{ ml: 1, mr: 0 }} />}
