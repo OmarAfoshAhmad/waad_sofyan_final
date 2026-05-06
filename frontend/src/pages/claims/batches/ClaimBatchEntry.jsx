@@ -319,7 +319,7 @@ export default function ClaimBatchEntry() {
     } = useQuery({
         queryKey: ['member-search', normalizedMemberSearchValue, employerId],
         queryFn: () => runWithRetry(() => unifiedMembersService.unifiedSearch(normalizedMemberSearchValue), { maxRetries: 1 }),
-        enabled: normalizedMemberSearchValue.length >= 2 && !!employerId,
+        enabled: true, // No character restriction
         staleTime: 10000
     });
 
@@ -1271,7 +1271,6 @@ export default function ClaimBatchEntry() {
             setConfirmDeleteId(null);
             invalidateBatchData();
             // ✅ FIX: Restore ceiling in current form after deletion
-            // If the deleted claim used the same service, the remaining should go back up
             if (member?.id && policyId) {
                 setTimeout(() => refetchCoverageOnEditRef.current(primaryCategoryCode), 200);
             }
@@ -1290,11 +1289,49 @@ export default function ClaimBatchEntry() {
             <Box sx={{ flexShrink: 0, mb: 0.5 }}>
                 <ModernPageHeader
                     title={`${t('claimEntry.pageTitle')} — ${monthLabel} ${year || ''}`}
-                    subtitle={`${t('providers.singular')}: ${provider?.name || '...'} | الوثيقة: ${policyInfo?.name || policyInfo?.policyNumber || '...'} | رقم العقد: ${activeContract?.contractNumber || '—'} | المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`}
+                    titleExtras={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip size="small" variant="filled"
+                                label={isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')}
+                                color={isDirty ? 'warning' : 'primary'}
+                                sx={{ fontWeight: 600, fontSize: '0.85rem' }}
+                            />
+                            {policyInfo && (
+                                <Chip icon={<PolicyIcon sx={{ fontSize: '0.85rem' }} />} size="small"
+                                    label={`${t('claimEntry.benefitPolicy')}: ${policyInfo.policyNumber || policyInfo.name || 'مفعّلة'}`}
+                                    color="success" variant="outlined"
+                                    sx={{ fontWeight: 600, fontSize: '0.85rem', borderColor: 'success.main', color: 'success.main' }}
+                                />
+                            )}
+                            {isClaimRejected && (
+                                <Chip icon={<RejectIcon sx={{ fontSize: '0.85rem' }} />} size="small"
+                                    label="مطالبة مرفوضة" color="error" variant="filled"
+                                    sx={{ fontWeight: 600, fontSize: '0.85rem' }}
+                                />
+                            )}
+                        </Stack>
+                    }
+                    subtitle={`${t('providers.singular')}: ${provider?.name || '...'} | رقم العقد: ${activeContract?.contractNumber || '—'} | المؤمن عليه: ${member?.fullName || '...'} (${member?.cardNumber || '—'})`}
                     icon={<ReceiptIcon />}
                     actions={
                         <Stack direction="row" spacing={1} alignItems="center">
-                            {/* FIX: Back goes to detail page (same month view) */}
+                            {autoSaveStatus === 'saving' && (
+                                <Typography variant="caption" color="warning.main" fontWeight={600}>Saving...</Typography>
+                            )}
+                            {autoSaveStatus === 'saved' && (
+                                <Typography variant="caption" color="success.main" fontWeight={600}>
+                                    Saved{lastSavedAt ? ' just now' : ''}
+                                </Typography>
+                            )}
+                            
+                            <Tooltip title={t('claimEntry.discardChanges')}>
+                                <span>
+                                    <IconButton size="small" onClick={resetForm} disabled={!isDirty} color="error">
+                                        <DiscardIcon sx={{ fontSize: '1.2rem' }} />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+
                             <Button variant="outlined" size="small" color="secondary"
                                 startIcon={<BackIcon sx={{ ml: 1, mr: 0 }} />}
                                 onClick={() => navigate(detailUrl)} sx={{}}>
@@ -1347,74 +1384,6 @@ export default function ClaimBatchEntry() {
                                 </Button>
                             </Box>
                         )}
-
-                        {/* ── شريط الحالة ── */}
-                        <Box sx={{
-                            flexShrink: 0, px: '1.25rem', py: 0.75,
-                            bgcolor: isDirty ? alpha(theme.palette.warning.main, 0.07) : alpha(theme.palette.primary.main, 0.04),
-                            borderBottom: `1px solid ${theme.palette.divider}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                        }}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <Chip size="small" variant="filled"
-                                    label={isDirty ? t('claimEntry.statusDraft') : t('claimEntry.statusNew')}
-                                    color={isDirty ? 'warning' : 'primary'}
-                                    sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-                                />
-                                {policyInfo && (
-                                    <Chip icon={<PolicyIcon sx={{ fontSize: '0.75rem' }} />} size="small"
-                                        label={`${t('claimEntry.benefitPolicy')}: ${policyInfo.policyNumber || policyInfo.name || 'مفعّلة'}`}
-                                        color="success" variant="outlined"
-                                        sx={{ fontWeight: 400, fontSize: '0.7rem' }}
-                                    />
-                                )}
-                                {isClaimRejected && (
-                                    <Chip icon={<RejectIcon sx={{ fontSize: '0.75rem' }} />} size="small"
-                                        label="مطالبة مرفوضة" color="error" variant="filled"
-                                        sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-                                    />
-                                )}
-                                {(isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')) && !loadingBatchMeta && (
-                                    <Chip icon={<LockIcon sx={{ fontSize: '0.75rem' }} />} size="small"
-                                        label={isExpiredBatch ? `فترة منتهية (>${allowedBackdatedMonths} أشهر)` : "الدفعة مغلقة — تعديل فقط"}
-                                        color="secondary" variant="filled"
-                                        sx={{ fontWeight: 500, fontSize: '0.75rem' }}
-                                    />
-                                )}
-                            </Stack>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                {autoSaveStatus === 'saving' && (
-                                    <Typography variant="caption" color="warning.main" fontWeight={600}>Saving...</Typography>
-                                )}
-                                {autoSaveStatus === 'saved' && (
-                                    <Typography variant="caption" color="success.main" fontWeight={600}>
-                                        Saved{lastSavedAt ? ' just now' : ''}
-                                    </Typography>
-                                )}
-                                {autoSaveStatus === 'offline' && (
-                                    <Typography variant="caption" color="warning.main" fontWeight={600}>Offline - saved locally</Typography>
-                                )}
-                                {autoSaveStatus === 'error' && (
-                                    <Typography variant="caption" color="error.main" fontWeight={600}>Autosave failed</Typography>
-                                )}
-                                <Tooltip title={t('claimEntry.discardChanges')}>
-                                    <span>
-                                        <IconButton size="small" onClick={resetForm} disabled={!isDirty} color="error">
-                                            <DiscardIcon sx={{ fontSize: '0.9375rem' }} />
-                                        </IconButton>
-                                    </span>
-                                </Tooltip>
-
-                                {/* Save & New (The main button) */}
-                                <Button variant="contained" size="small" color="success"
-                                    startIcon={saving ? <CircularProgress size={11} color="inherit" /> : <AddIcon sx={{ fontSize: '0.8125rem' }} />}
-                                    onClick={() => handleSave(true)}
-                                    disabled={saving || !isDirty || isExpiredBatch || (currentBatch && currentBatch.status !== 'OPEN')}
-                                    sx={{ fontWeight: 500, fontSize: '0.75rem', py: 0.4 }}>
-                                    {saving ? t('claimEntry.saving') : t('claimEntry.saveAndAdd')}
-                                </Button>
-                            </Stack>
-                        </Box>
 
                         {/* ── حقول الرأس (مكون منفصل) ── */}
                         <Box sx={{ flexShrink: 0, px: '1.25rem', py: '0.75rem', bgcolor: 'background.paper' }}>
@@ -1560,10 +1529,13 @@ export default function ClaimBatchEntry() {
                                         />
                                     ))}
                                     <TableRow>
-                                        <TableCell colSpan={12} sx={{ py: 1, textAlign: 'center' }}>
-                                            <Button size="small" startIcon={<AddIcon />} onClick={addLine} sx={{ fontWeight: 500 }}>
-                                                {t('claimEntry.addLine')}
-                                            </Button>
+                                        <TableCell colSpan={12} sx={{ py: 0.5, borderRight: 'none' }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                                                <Button size="small" startIcon={<AddIcon />} onClick={addLine} 
+                                                    sx={{ fontWeight: 700, color: 'primary.main', px: 0 }}>
+                                                    {t('claimEntry.addLine')}
+                                                </Button>
+                                            </Box>
                                         </TableCell>
                                     </TableRow>
                                 </TableBody>

@@ -5,7 +5,8 @@ import {
 import { alpha } from '@mui/material/styles';
 
 const inlineSx = {
-    '& .MuiInputBase-root': { fontSize: '0.8rem' }
+    '& .MuiInputBase-root': { fontSize: '0.9rem' },
+    '& .MuiInput-input': { fontSize: '0.9rem' }
 };
 
 const FULL_COVERAGE_OPTION = { id: -1, code: 'FULL_COVERAGE', name: '✦ تغطية كاملة' };
@@ -81,7 +82,7 @@ export const ClaimHeaderFields = ({
                             helperText={showValidationErrors && !member ? 'يرجى اختيار المستفيد' : null}
                             sx={inlineSx} />
                     )}
-                    noOptionsText="لا توجد نتائج (أدخل 3 أحرف على الأقل)"
+                    noOptionsText="لا توجد نتائج لمطابقة بحثك"
                 />
                 {memberSearchError && (
                     <Alert
@@ -120,7 +121,10 @@ export const ClaimHeaderFields = ({
                     value={serviceDate || ''}
                     onChange={e => { setServiceDate(e.target.value); setIsDirty(true); }}
                     error={showValidationErrors && !serviceDate}
-                    sx={inlineSx}
+                    sx={{ 
+                        ...inlineSx,
+                        '& input': { fontSize: '0.9rem' } // Force date input font size
+                    }}
                 />
             </Box>
 

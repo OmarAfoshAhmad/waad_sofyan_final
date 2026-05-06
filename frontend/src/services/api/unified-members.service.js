@@ -140,7 +140,41 @@ export const searchMembers = async (criteria = {}) => {
 export const unifiedSearch = async (query) => {
   try {
     const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/unified-search`, { params: { query } });
-    return response.data?.data || [];
+    let results = response.data?.data || [];
+
+    // Fallback: If results are empty and query is not empty, try a broader search.
+    // The backend's unifiedSearch can be strict (exact match for numbers, 3-char min for names).
+    if (results.length === 0 && query && query.trim().length > 0) {
+      const trimmedQuery = query.trim();
+      const criteria = {};
+
+      // If it looks like a number, search specifically by card number (partial)
+      if (/^\d+$/.test(trimmedQuery)) {
+        criteria.cardNumber = trimmedQuery;
+      } else {
+        // Otherwise search by full name (partial)
+        criteria.fullName = trimmedQuery;
+      }
+
+      // Call searchMembers (GET /unified-members/search) which uses LIKE %...%
+      const advancedResponse = await searchMembers({ ...criteria, size: 20 });
+      if (advancedResponse?.content?.length > 0) {
+        results = advancedResponse.content.map(m => ({
+          id: m.id,
+          fullName: m.fullName,
+          cardNumber: m.cardNumber,
+          barcode: m.barcode,
+          status: m.status,
+          cardStatus: m.cardStatus,
+          eligible: m.eligibilityStatus,
+          employerName: m.employerName,
+          policyName: m.benefitPolicyName,
+          searchType: 'PARTIAL_MATCH'
+        }));
+      }
+    }
+
+    return results;
   } catch (error) {
     console.error('Unified search failed:', error);
     throw error;

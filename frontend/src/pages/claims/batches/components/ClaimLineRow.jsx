@@ -198,20 +198,20 @@ export const ClaimLineRow = ({
                 )}
                 {visibleColumns.companyShare && (
                     <TableCell align="center">
-                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'success.main' }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.95rem', fontWeight: 700, color: 'success.main' }}>
                             {line.byCompany?.toFixed(2)}
                         </Typography>
                     </TableCell>
                 )}
                 {visibleColumns.patientShare && (
                     <TableCell align="center">
-                        <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 600, color: 'warning.dark' }}>
+                        <Typography variant="caption" sx={{ fontSize: '0.95rem', fontWeight: 700, color: 'warning.dark' }}>
                             {line.byEmployee?.toFixed(2)}
                         </Typography>
                     </TableCell>
                 )}
                 <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontSize: '0.85rem', fontWeight: 600, color: 'primary.main' }}>
+                    <Typography variant="body2" sx={{ fontSize: '1.0rem', fontWeight: 800, color: 'primary.main' }}>
                         {line.total?.toFixed(2)}
                     </Typography>
                 </TableCell>

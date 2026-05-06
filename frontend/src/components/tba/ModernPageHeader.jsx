@@ -12,7 +12,7 @@ import { Link as RouterLink } from 'react-router-dom';
  * - A React component (e.g., PeopleAltIcon) - will be rendered as <Icon sx={...} />
  * - A JSX element (e.g., <LocalHospitalIcon />) - will be cloned with sx props
  */
-const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusChip, icon }) => {
+const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, titleExtras, statusChip, icon }) => {
   // Render icon - handles both ComponentType and JSX Element
   const renderIcon = () => {
     if (!icon) return null;
@@ -95,10 +95,15 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
         <Stack direction="row" alignItems="center" spacing={1.5}>
           {renderIcon()}
           <Box>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
-              <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
-                {title}
-              </Typography>
+            <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
+              {typeof title === 'string' ? (
+                <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
+                  {title}
+                </Typography>
+              ) : (
+                title
+              )}
+              {titleExtras}
               {statusChip && <Chip label={statusChip.label} color={statusChip.color || 'primary'} size="small" sx={{ height: '1.5rem' }} />}
             </Stack>
             {subtitle && (
@@ -121,7 +126,7 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, statusCh
 };
 
 ModernPageHeader.propTypes = {
-  title: PropTypes.string.isRequired,
+  title: PropTypes.node.isRequired,
   subtitle: PropTypes.string,
   breadcrumbs: PropTypes.arrayOf(
     PropTypes.shape({
@@ -130,6 +135,7 @@ ModernPageHeader.propTypes = {
     })
   ),
   actions: PropTypes.node,
+  titleExtras: PropTypes.node,
   statusChip: PropTypes.shape({
     label: PropTypes.string.isRequired,
     color: PropTypes.oneOf(['default', 'primary', 'secondary', 'error', 'warning', 'info', 'success'])

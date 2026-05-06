@@ -58,31 +58,34 @@ export const ClaimTotalsFooter = ({
                 </Tooltip>
             )}
 
-            <Box sx={{ mr: 'auto', display: 'flex', gap: '1.5rem' }}>
+            <Box sx={{ mr: 'auto', display: 'flex', gap: '2.0rem', alignItems: 'flex-start' }}>
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>الإجمالي المطلوب</Typography>
-                    <Typography variant="subtitle2" fontWeight={600} color="text.primary" sx={{ fontSize: '0.9rem' }}>{totals.total.toFixed(2)}</Typography>
+                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>الإجمالي</Typography>
+                    <Typography variant="subtitle2" fontWeight={800} color="text.primary" sx={{ fontSize: '1.15rem' }}>{totals.total.toFixed(2)}</Typography>
                 </Box>
+
                 {totals.refused > 0 && (
                     <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="caption" display="block" color="error.main" sx={{ fontSize: '0.75rem' }}>المرفوض</Typography>
-                        <Typography variant="subtitle2" fontWeight={700} color="error.main" sx={{ fontSize: '0.9rem' }}>−{totals.refused.toFixed(2)}</Typography>
+                        <Typography variant="caption" display="block" color="error.main" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>المرفوض</Typography>
+                        <Typography variant="subtitle2" fontWeight={800} color="error.main" sx={{ fontSize: '1.15rem' }}>{totals.refused.toFixed(2)}</Typography>
                     </Box>
                 )}
+
                 <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="caption" display="block" color="text.secondary" sx={{ fontSize: '0.75rem' }}>الصافي المعتمد</Typography>
-                    <Typography variant="subtitle2" fontWeight={600} color={netApproved > 0 ? 'primary.main' : 'text.disabled'} sx={{ fontSize: '0.9rem' }}>{netApproved.toFixed(2)}</Typography>
+                    <Typography variant="caption" display="block" color="primary.main" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>الصافي</Typography>
+                    <Typography variant="subtitle2" fontWeight={800} color={netApproved > 0 ? 'primary.main' : 'text.disabled'} sx={{ fontSize: '1.15rem' }}>{netApproved.toFixed(2)}</Typography>
                 </Box>
+
                 {visibleColumns.companyShare && (
                     <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="caption" display="block" color="success.main" sx={{ fontSize: '0.75rem', fontWeight: 700 }}>التزام الشركة</Typography>
-                        <Typography variant="subtitle2" fontWeight={700} color="success.main" sx={{ fontSize: '1.0rem' }}>{totals.company.toFixed(2)}</Typography>
+                        <Typography variant="caption" display="block" color="success.main" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>التزام الشركة</Typography>
+                        <Typography variant="subtitle2" fontWeight={800} color="success.main" sx={{ fontSize: '1.15rem' }}>{totals.company.toFixed(2)}</Typography>
                     </Box>
                 )}
                 {visibleColumns.patientShare && (
                     <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="caption" display="block" color="warning.dark" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>التزام المشترك</Typography>
-                        <Typography variant="subtitle2" fontWeight={600} color="warning.dark" sx={{ fontSize: '0.9rem' }}>{totals.employee.toFixed(2)}</Typography>
+                        <Typography variant="caption" display="block" color="warning.dark" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>التزام المشترك</Typography>
+                        <Typography variant="subtitle2" fontWeight={800} color="warning.dark" sx={{ fontSize: '1.15rem' }}>{totals.employee.toFixed(2)}</Typography>
                     </Box>
                 )}
             </Box>

@@ -102,32 +102,28 @@ public class UnifiedSearchService {
     private List<MemberSearchDto> searchByCardNumber(String cardNumber) {
         log.debug("Executing card number search for: {}", cardNumber);
 
-        Member member = memberRepository.findByCardNumber(cardNumber)
-                .orElse(null);
+        // 1. Try exact match first (Priority 1)
+        Optional<Member> exactMatch = memberRepository.findByCardNumber(cardNumber);
+        if (exactMatch.isPresent()) {
+            return List.of(MemberSearchDto.fromMember(exactMatch.get(), "CARD_NUMBER", 1.0));
+        }
 
-        // Fallback: If no card number matches and the input is purely numeric, try searching by Primary ID
-        String searchSource = "CARD_NUMBER";
-        if (member == null && cardNumber.matches("\\d+")) {
+        // 2. Try ID exact match (Priority 2)
+        if (cardNumber.matches("\\d+")) {
             try {
                 Long id = Long.parseLong(cardNumber);
-                member = memberRepository.findById(id).orElse(null);
-                if (member != null) {
-                    searchSource = "DIRECT_ID";
-                    log.info("Member found by Primary ID fallback: {}", id);
+                Optional<Member> idMatch = memberRepository.findById(id);
+                if (idMatch.isPresent()) {
+                    return List.of(MemberSearchDto.fromMember(idMatch.get(), "DIRECT_ID", 1.0));
                 }
             } catch (NumberFormatException e) {
-                // Input too large for a Long ID, ignore fallback
+                // Ignore
             }
         }
 
-        if (member == null) {
-            log.debug("No member found with provided card number or ID");
-            return List.of();
-        }
-        
-        MemberSearchDto dto = MemberSearchDto.fromMember(member, searchSource, null);
-        log.debug("Found member by {} (ID: {})", searchSource, member.getId());
-        return List.of(dto);
+        // 3. Fallback to partial search (Priority 3)
+        // This allows searching for '2025' to find 'JFZ2025...'
+        return searchByName(cardNumber);
     }
 
     /**
@@ -135,12 +131,6 @@ public class UnifiedSearchService {
      */
     private List<MemberSearchDto> searchByName(String name) {
         log.info("Executing stable name search for: {}", name);
-
-        // Minimum 3 characters required for search performance
-        if (name.length() < 3) {
-            log.warn("Search requires at least 3 characters, got: {}", name.length());
-            return List.of();
-        }
 
         // Use the robust search method with JOIN FETCH to prevent 500 errors (LazyInitialization)
         // This method also searches by civilId and cardNumber as fallback
