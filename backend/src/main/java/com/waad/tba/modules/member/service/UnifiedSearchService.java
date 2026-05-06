@@ -99,59 +99,65 @@ public class UnifiedSearchService {
         return List.of(dto);
     }
 
-    /**
-     * Search by card number - exact match
-     * Performance: <100ms (B-tree index from Phase 1)
-     */
     private List<MemberSearchDto> searchByCardNumber(String cardNumber) {
-        log.debug("Executing card number search");
+        log.debug("Executing card number search for: {}", cardNumber);
 
         Member member = memberRepository.findByCardNumber(cardNumber)
                 .orElse(null);
 
+        // Fallback: If no card number matches and the input is purely numeric, try searching by Primary ID
+        String searchSource = "CARD_NUMBER";
+        if (member == null && cardNumber.matches("\\d+")) {
+            try {
+                Long id = Long.parseLong(cardNumber);
+                member = memberRepository.findById(id).orElse(null);
+                if (member != null) {
+                    searchSource = "DIRECT_ID";
+                    log.info("Member found by Primary ID fallback: {}", id);
+                }
+            } catch (NumberFormatException e) {
+                // Input too large for a Long ID, ignore fallback
+            }
+        }
+
         if (member == null) {
-            log.debug("No member found with provided card number");
+            log.debug("No member found with provided card number or ID");
             return List.of();
         }
-        MemberSearchDto dto = MemberSearchDto.fromMember(member, "CARD_NUMBER", null);
-
-        log.debug("Found member by card number (ID: {})", member.getId());
+        
+        MemberSearchDto dto = MemberSearchDto.fromMember(member, searchSource, null);
+        log.debug("Found member by {} (ID: {})", searchSource, member.getId());
         return List.of(dto);
     }
 
     /**
-     * Search by name - fuzzy match with Arabic support
-     * Performance: <150ms (GIN trigram index from Phase 2)
+     * Search by name - stable pattern match with eager loading
      */
     private List<MemberSearchDto> searchByName(String name) {
-        log.info("Executing fuzzy name search for: {}", name);
+        log.info("Executing stable name search for: {}", name);
 
-        // Minimum 3 characters required for fuzzy search
+        // Minimum 3 characters required for search performance
         if (name.length() < 3) {
-            log.warn("Name search requires at least 3 characters, got: {}", name.length());
+            log.warn("Search requires at least 3 characters, got: {}", name.length());
             return List.of();
         }
 
-        // Use Phase 2 fuzzy search service
-        List<MemberAutocompleteDto> autocompleteResults = nameSearchService.searchMembersByName(name);
+        // Use the robust search method with JOIN FETCH to prevent 500 errors (LazyInitialization)
+        // This method also searches by civilId and cardNumber as fallback
+        List<Member> members = memberRepository.search(name);
 
-        if (autocompleteResults.isEmpty()) {
-            log.warn("No members found for name: {}", name);
+        if (members.isEmpty()) {
+            log.warn("No members found for query: {}", name);
             return List.of();
         }
 
-        // Convert autocomplete DTOs to full search DTOs
-        List<MemberSearchDto> results = autocompleteResults.stream()
-                .map(auto -> {
-                    // Fetch full member details
-                    return memberRepository.findById(auto.getMemberId())
-                            .map(member -> MemberSearchDto.fromMember(member, "NAME_FUZZY", auto.getSimilarity()))
-                            .orElse(null);
-                })
-                .filter(dto -> dto != null)
+        // Convert entities to Search DTOs
+        List<MemberSearchDto> results = members.stream()
+                .limit(20) // Safety limit
+                .map(member -> MemberSearchDto.fromMember(member, "NAME_PATTERN", 1.0))
                 .collect(Collectors.toList());
 
-        log.info("Found {} members for name search: {}", results.size(), name);
+        log.info("Found {} members for query: {}", results.size(), name);
         return results;
     }
 
@@ -160,13 +166,12 @@ public class UnifiedSearchService {
      */
     private SearchType detectSearchType(String query) {
         // Check for UUID pattern (barcode)
-        // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         if (isUUID(query)) {
             return SearchType.BARCODE;
         }
 
-        // Check for numeric (card number)
-        if (isNumeric(query)) {
+        // Check for card number pattern (Numeric OR Alphanumeric format like WAB-2025-001)
+        if (isCardNumberPattern(query)) {
             return SearchType.CARD_NUMBER;
         }
 
@@ -178,16 +183,23 @@ public class UnifiedSearchService {
      * Check if string is a valid UUID
      */
     private boolean isUUID(String str) {
-        // UUID regex pattern: 8-4-4-4-12 hexadecimal characters
         String uuidPattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
         return str.matches(uuidPattern);
     }
 
     /**
-     * Check if string contains only digits
+     * Check if string matches a card number pattern
+     * Supports:
+     * 1. Purely numeric (legacy)
+     * 2. Modern format: CODE-YEAR-NUMBER (e.g. WAB-2025-12345)
      */
-    private boolean isNumeric(String str) {
-        return str.matches("\\d+");
+    private boolean isCardNumberPattern(String str) {
+        // Pure numeric
+        if (str.matches("\\d+")) return true;
+        
+        // Modern alphanumeric format: [CHARS]-[4 DIGITS]-[ANYTHING]
+        // Matches CardNumberGeneratorService.isValidCardNumberFormat pattern
+        return str.matches("^[A-Z0-9]+-\\d{4}-.+");
     }
 
     /**

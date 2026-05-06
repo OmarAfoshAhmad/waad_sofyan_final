@@ -31,12 +31,12 @@ import java.util.List;
  * @version 3.0
  */
 @RestController
-@RequestMapping("/api/v1/members")
+@RequestMapping("/api/v1/members-deprecated")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Member Search", description = "Unified member search API - supports Card/Name/Barcode")
+@Tag(name = "Member Search [DEPRECATED]", description = "OLD SEARCH - DO NOT USE")
 @PreAuthorize("isAuthenticated()")
-public class UnifiedSearchController {
+class UnifiedSearchControllerDeprecated {
 
     private final UnifiedSearchService unifiedSearchService;
 
@@ -52,7 +52,7 @@ public class UnifiedSearchController {
      * @return List of matching members (1 for exact match, multiple for fuzzy)
      */
     @GetMapping("/unified-search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "Unified member search",
         description = "Search members by card number, name (fuzzy), or barcode/QR. " +
@@ -117,7 +117,7 @@ public class UnifiedSearchController {
      * @return Member details
      */
     @GetMapping("/{id}/details")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "Get member details by ID",
         description = "Retrieve complete member information after search selection"

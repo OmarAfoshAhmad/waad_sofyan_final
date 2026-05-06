@@ -63,12 +63,6 @@ const MONTHS_AR = [
     'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
 ];
 
-const BENEFICIARY_SEARCH_TYPES = {
-    BY_ID: 'BY_ID',
-    BY_NAME: 'BY_NAME',
-    BY_BARCODE: 'BY_BARCODE'
-};
-
 const newLine = () => ({
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
     service: null, serviceName: '', serviceCode: '',
@@ -133,7 +127,6 @@ export default function ClaimBatchEntry() {
 
     // ── حالة النموذج ─────────────────────────────────────────────────────────
     const [member, setMember] = useState(null);
-    const [memberSearchType, setMemberSearchType] = useState(BENEFICIARY_SEARCH_TYPES.BY_NAME);
     const [memberInput, setMemberInput] = useState('');
     const [debouncedMemberInput, setDebouncedMemberInput] = useState('');
     useEffect(() => {
@@ -315,37 +308,7 @@ export default function ClaimBatchEntry() {
     });
     const normalizedMemberSearchValue = useMemo(() => debouncedMemberInput.trim(), [debouncedMemberInput]);
 
-    const memberSearchValidationError = useMemo(() => {
-        if (!normalizedMemberSearchValue) return '';
-
-        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_ID && !/^\d+$/.test(normalizedMemberSearchValue)) {
-            return 'البحث بالمعرف يتطلب أرقامًا فقط';
-        }
-
-        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_BARCODE && !/^[A-Za-z0-9-]+$/.test(normalizedMemberSearchValue)) {
-            return 'الباركود يقبل أحرف/أرقام وشرطة (-) فقط';
-        }
-
-        return '';
-    }, [memberSearchType, normalizedMemberSearchValue]);
-
-    const canSearchMember = useMemo(() => {
-        if (!normalizedMemberSearchValue || memberSearchValidationError) {
-            return false;
-        }
-
-        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_NAME) {
-            return normalizedMemberSearchValue.length >= 2;
-        }
-
-        return true;
-    }, [memberSearchType, normalizedMemberSearchValue, memberSearchValidationError]);
-
-    const memberSearchPlaceholder = useMemo(() => {
-        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_ID) return 'أدخل معرف المستفيد (أرقام فقط)';
-        if (memberSearchType === BENEFICIARY_SEARCH_TYPES.BY_BARCODE) return 'أدخل الباركود (A-Z, 0-9, -)';
-        return 'أدخل الاسم (يدعم الأسماء التي تبدأ بأرقام)';
-    }, [memberSearchType]);
+    // Search logic is handled automatically by the backend UnifiedSearchService
 
     const {
         data: memberResults,
@@ -354,15 +317,9 @@ export default function ClaimBatchEntry() {
         error: memberSearchQueryError,
         refetch: retryMemberSearch
     } = useQuery({
-        queryKey: ['member-search', memberSearchType, normalizedMemberSearchValue, employerId],
-        queryFn: () => runWithRetry(() => unifiedMembersService.searchBeneficiaries({
-            type: memberSearchType,
-            value: normalizedMemberSearchValue,
-            employerId,
-            status: 'ACTIVE',
-            size: 20
-        }), { maxRetries: 1 }),
-        enabled: canSearchMember,
+        queryKey: ['member-search', normalizedMemberSearchValue, employerId],
+        queryFn: () => runWithRetry(() => unifiedMembersService.unifiedSearch(normalizedMemberSearchValue), { maxRetries: 1 }),
+        enabled: normalizedMemberSearchValue.length >= 2 && !!employerId,
         staleTime: 10000
     });
 
@@ -1484,10 +1441,6 @@ export default function ClaimBatchEntry() {
                                 setMember={setMember}
                                 memberOptions={memberOptions}
                                 searchingMember={searchingMember}
-                                memberSearchType={memberSearchType}
-                                setMemberSearchType={setMemberSearchType}
-                                memberSearchValidationError={memberSearchValidationError}
-                                memberSearchPlaceholder={memberSearchPlaceholder}
                                 memberSearchError={memberSearchError}
                                 onRetryMemberSearch={retryMemberSearch}
                                 setMemberInput={setMemberInput}

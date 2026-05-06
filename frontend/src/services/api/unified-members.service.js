@@ -132,6 +132,22 @@ export const searchMembers = async (criteria = {}) => {
 };
 
 /**
+ * Unified search for members (Auto-detects type)
+ *
+ * @param {string} query - Search query
+ * @returns {Promise<Array>} List of results
+ */
+export const unifiedSearch = async (query) => {
+  try {
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/unified-search`, { params: { query } });
+    return response.data?.data || [];
+  } catch (error) {
+    console.error('Unified search failed:', error);
+    throw error;
+  }
+};
+
+/**
  * Deterministic beneficiary search (explicit mode, no guessing).
  *
  * Endpoint: GET /api/beneficiaries?type=BY_NAME&value=...
@@ -540,6 +556,7 @@ export default {
   addDependent,
   getMember,
   getAllMembers,
+  unifiedSearch,
   searchMembers,
   searchBeneficiaries,
   checkEligibility,

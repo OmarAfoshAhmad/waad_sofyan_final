@@ -15,10 +15,6 @@ export const ClaimHeaderFields = ({
     setMember,
     memberOptions,
     searchingMember,
-    memberSearchType,
-    setMemberSearchType,
-    memberSearchValidationError,
-    memberSearchPlaceholder,
     memberSearchError,
     onRetryMemberSearch,
     setMemberInput,
@@ -59,19 +55,7 @@ export const ClaimHeaderFields = ({
                     <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
                         {t('claimEntry.patient')} <Typography component="span" color="error.main">*</Typography>
                     </Typography>
-                    <TextField
-                        select
-                        fullWidth
-                        size="small"
-                        variant="standard"
-                        value={memberSearchType}
-                        onChange={(e) => setMemberSearchType(e.target.value)}
-                        sx={{ ...inlineSx, mb: 1 }}
-                    >
-                        <MenuItem value="BY_NAME">بحث بالاسم</MenuItem>
-                        <MenuItem value="BY_ID">بحث بالمعرف</MenuItem>
-                        <MenuItem value="BY_BARCODE">بحث بالباركود</MenuItem>
-                    </TextField>
+                    
                     <Autocomplete
                         size="small"
                         fullWidth
@@ -91,11 +75,12 @@ export const ClaimHeaderFields = ({
                         isOptionEqualToValue={(o, v) => o.id === v?.id}
                         renderInput={params => (
                             <TextField {...params} inputRef={memberRef} variant="standard"
-                                placeholder={memberSearchPlaceholder}
-                                error={!!memberSearchValidationError || (showValidationErrors && !member)}
-                                helperText={memberSearchValidationError || (showValidationErrors && !member ? 'يرجى اختيار المستفيد' : ' ')}
+                                placeholder="ابحث بالاسم، المعرف، أو رقم البطاقة..."
+                                error={!!memberSearchError || (showValidationErrors && !member)}
+                                helperText={showValidationErrors && !member ? 'يرجى اختيار المستفيد' : 'اكتب للبحث...'}
                                 sx={inlineSx} />
                         )}
+                        noOptionsText="لا توجد نتائج (أدخل 3 أحرف على الأقل)"
                     />
                     {memberSearchError && (
                         <Alert

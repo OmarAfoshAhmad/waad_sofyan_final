@@ -11,6 +11,8 @@ import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedMemberService;
 import com.waad.tba.modules.member.service.MemberExcelExportService;
+import com.waad.tba.modules.member.service.UnifiedSearchService;
+import com.waad.tba.modules.member.dto.MemberSearchDto;
 import com.waad.tba.common.file.FileStorageService;
 import com.waad.tba.common.file.FileUploadResult;
 import com.waad.tba.services.pdf.HtmlToPdfService;
@@ -114,6 +116,7 @@ import java.util.Map;
 public class UnifiedMemberController {
 
         private final UnifiedMemberService unifiedMemberService;
+        private final UnifiedSearchService unifiedSearchService;
         private final MemberFinancialSummaryService financialSummaryService;
         private final PdfTemplateService pdfTemplateService;
         private final HtmlToPdfService htmlToPdfService;
@@ -1339,5 +1342,34 @@ public class UnifiedMemberController {
                         log.error("❌ Excel export failed: error={}", e.getMessage(), e);
                         return ResponseEntity.internalServerError().build();
                 }
+        }
+
+        /**
+         * Unified search endpoint - auto-detects search type
+         * 
+         * @param query Search query (card number, name, or barcode/QR UUID)
+         * @return List of matching members
+         */
+        @GetMapping("/unified-search")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @Operation(summary = "Unified member search (Auto-detect type)", description = "Search members by card number, name (fuzzy), or barcode/QR.")
+        public ResponseEntity<ApiResponse<List<MemberSearchDto>>> unifiedSearch(
+                        @RequestParam(name = "query") String query) {
+                log.info("Unified search request: query={}", query);
+                List<MemberSearchDto> results = unifiedSearchService.search(query);
+                return ResponseEntity.ok(ApiResponse.success("Search completed", results));
+        }
+
+        /**
+         * Get member details by ID - for detailed view after search
+         */
+        @GetMapping("/{id}/details")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+        @Operation(summary = "Get member details by ID", description = "Retrieve complete member info after search selection")
+        public ResponseEntity<ApiResponse<MemberSearchDto>> getMemberDetails(
+                        @PathVariable("id") Long id) {
+                return unifiedSearchService.getMemberById(id)
+                                .map(member -> ResponseEntity.ok(ApiResponse.success("Member found", member)))
+                                .orElseGet(() -> ResponseEntity.status(404).body(ApiResponse.error("Member not found")));
         }
 }

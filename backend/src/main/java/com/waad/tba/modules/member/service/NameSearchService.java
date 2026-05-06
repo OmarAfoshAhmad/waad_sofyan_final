@@ -49,20 +49,25 @@ public class NameSearchService {
 
         log.debug("Searching members by name: {}", trimmedQuery);
 
-        // Normalize Arabic text (remove diacritics, normalize characters)
-        String normalizedQuery = normalizeArabicText(trimmedQuery);
-
-        // Execute fuzzy search with pg_trgm similarity
-        List<Object[]> results = memberRepository.searchByNameFuzzy(normalizedQuery);
-
-        // Convert to DTO
-        List<MemberAutocompleteDto> suggestions = results.stream()
-                .map(this::mapToAutocompleteDto)
-                .collect(Collectors.toList());
-
-        log.debug("Found {} autocomplete suggestions for query: {}", suggestions.size(), trimmedQuery);
-
-        return suggestions;
+        try {
+            // Normalize Arabic text (remove diacritics, normalize characters)
+            String normalizedQuery = normalizeArabicText(trimmedQuery);
+    
+            // Execute fuzzy search with pg_trgm similarity
+            List<Object[]> results = memberRepository.searchByNameFuzzy(normalizedQuery);
+    
+            // Convert to DTO
+            List<MemberAutocompleteDto> suggestions = results.stream()
+                    .map(this::mapToAutocompleteDto)
+                    .collect(Collectors.toList());
+    
+            log.debug("Found {} fuzzy autocomplete suggestions for query: {}", suggestions.size(), trimmedQuery);
+            return suggestions;
+        } catch (Exception e) {
+            log.warn("Fuzzy search failed (possible missing pg_trgm extension), falling back to pattern search: {}", e.getMessage());
+            // Fallback to simple pattern search
+            return searchMembersByNamePattern(trimmedQuery);
+        }
     }
 
     /**
