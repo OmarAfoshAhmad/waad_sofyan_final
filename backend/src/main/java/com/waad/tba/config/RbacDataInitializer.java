@@ -127,15 +127,6 @@ public class RbacDataInitializer implements CommandLineRunner {
             log.info("🔐 [SECURITY] Password synced for superadmin.");
         });
 
-        // Handle nada (Medical Reviewer)
-        userRepository.findByUsername("nada").ifPresent(user -> {
-            // Force a known password for testing if not already set or needing reset
-            user.setPassword(passwordEncoder.encode("nada123"));
-            user.setEmailVerified(true);
-            user.unlockAccount();
-            userRepository.save(user);
-            log.info("🔐 [SECURITY] Password synced for user 'nada' to 'nada123'.");
-        });
     }
 
     private boolean hasColumn(String tableName, String columnName) {

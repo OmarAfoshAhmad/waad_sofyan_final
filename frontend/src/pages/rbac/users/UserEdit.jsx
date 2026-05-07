@@ -863,6 +863,19 @@ const UserEdit = () => {
         payload.canViewBenefitPolicies = form.canViewBenefitPolicies;
       }
 
+      // Automatically reset password if password fields are filled
+      if (form.newPassword && form.newPassword.trim() !== '') {
+        if (form.newPassword.length < 8) {
+          setErrors((prev) => ({ ...prev, newPassword: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' }));
+          throw new Error('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+        }
+        if (form.newPassword !== form.confirmPassword) {
+          setErrors((prev) => ({ ...prev, confirmPassword: 'كلمات المرور غير متطابقة' }));
+          throw new Error('كلمات المرور غير متطابقة');
+        }
+        await usersService.resetPassword(id, form.newPassword.trim());
+      }
+
       await usersService.updateUser(id, payload);
 
       // Success

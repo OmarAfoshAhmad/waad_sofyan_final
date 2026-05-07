@@ -51,6 +51,7 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import usersService from 'services/rbac/users.service';
 import { openSnackbar } from 'api/snackbar';
+import { getRoleDisplayName } from 'constants/rbac';
 
 /**
  * Get initials from name
@@ -350,25 +351,28 @@ const UsersList = () => {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {user?.roles?.length > 0 ? (
-                            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                              {user.roles.slice(0, 3).map((role) => (
-                                <Chip
-                                  key={role?.id || role?.name}
-                                  label={role?.name || '-'}
-                                  size="small"
-                                  color={getRoleColor(role?.name)}
-                                  variant="outlined"
-                                  icon={<AdminPanelSettingsIcon sx={{ fontSize: '14px !important' }} />}
-                                />
-                              ))}
-                              {user.roles.length > 3 && <Chip label={`+${user.roles.length - 3}`} size="small" variant="outlined" />}
-                            </Stack>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">
-                              لا توجد أدوار
-                            </Typography>
-                          )}
+                          {(() => {
+                            const userRoles = user?.roles || (user?.role ? [{ name: user.role }] : []);
+                            return userRoles.length > 0 ? (
+                              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                                {userRoles.slice(0, 3).map((role) => (
+                                  <Chip
+                                    key={role?.id || role?.name}
+                                    label={getRoleDisplayName(role?.name, 'ar') || role?.name || '-'}
+                                    size="small"
+                                    color={getRoleColor(role?.name)}
+                                    variant="outlined"
+                                    icon={<AdminPanelSettingsIcon sx={{ fontSize: '14px !important' }} />}
+                                  />
+                                ))}
+                                {userRoles.length > 3 && <Chip label={`+${userRoles.length - 3}`} size="small" variant="outlined" />}
+                              </Stack>
+                            ) : (
+                              <Typography variant="caption" color="text.disabled">
+                                لا توجد أدوار
+                              </Typography>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>{getStatusChip(user)}</TableCell>
                         <TableCell align="center">

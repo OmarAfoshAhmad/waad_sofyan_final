@@ -43,7 +43,6 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         // Security checks
         securityService.checkAccountLocked(user);
-        securityService.checkEmailVerified(user);
 
         Collection<? extends GrantedAuthority> authorities = getAuthorities(user);
 

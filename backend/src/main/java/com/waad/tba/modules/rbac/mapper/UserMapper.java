@@ -33,6 +33,7 @@ public class UserMapper {
                 .email(dto.getEmail())
                 .phone(dto.getPhone())
                 .active(true)
+                .emailVerified(true)
                 // Employer/Provider associations (2026-01-16)
                 .employerId(dto.getEmployerId())
                 .providerId(dto.getProviderId())

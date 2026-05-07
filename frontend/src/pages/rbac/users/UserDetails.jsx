@@ -31,7 +31,7 @@ import CircularLoader from 'components/CircularLoader';
 
 // Services
 import usersService from 'services/rbac/users.service';
-import { SystemRole, RoleDisplayNames } from 'constants/rbac';
+import { SystemRole, RoleDisplayNames, getRoleDisplayName } from 'constants/rbac';
 
 // Hooks
 import useAuth from 'hooks/useAuth';
@@ -158,7 +158,16 @@ const UserDetails = () => {
   const [error, setError] = useState(null);
 
   // Derived state
-  const userRoleIds = useMemo(() => (user?.roles || []).map((r) => r?.id), [user]);
+  const userRoleIds = useMemo(() => {
+    if (!user) return [];
+    const roles = user.roles || (user.role ? [{ name: user.role }] : []);
+    return roles
+      .map((r) => {
+        const found = allRoles.find((ar) => ar.name === r.name);
+        return found ? found.id : null;
+      })
+      .filter(Boolean);
+  }, [user, allRoles]);
 
   // Check if current user is SUPER_ADMIN
   const isSuperAdmin = currentUser?.roles?.includes('SUPER_ADMIN');
@@ -274,8 +283,14 @@ const UserDetails = () => {
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip label={user?.enabled !== false ? 'نشط' : 'معطل'} color={user?.enabled !== false ? 'success' : 'default'} size="small" />
-              {(user?.roles || []).map((role) => (
-                <Chip key={role?.id} label={role?.name} color={getRoleColor(role?.name)} size="small" variant="light" />
+              {(user?.roles || (user?.role ? [{ name: user.role }] : [])).map((role) => (
+                <Chip
+                  key={role?.id || role?.name}
+                  label={getRoleDisplayName(role?.name, 'ar') || role?.name || '-'}
+                  color={getRoleColor(role?.name)}
+                  size="small"
+                  variant="light"
+                />
               ))}
             </Stack>
           </Box>
