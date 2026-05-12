@@ -303,13 +303,55 @@ public class MemberExcelTemplateService {
                     Set<String> existingNames = existingPrincipalNamesCache.computeIfAbsent(employerId,
                             id -> new HashSet<>(memberRepository.findActivePrincipalNamesByEmployerId(id)));
                     if (existingNames.contains(fullNameLower)) {
-                        // Principal already in DB — load it via name+employer (reliable).
-                        // Pre-pass card mapping was fragile; direct DB query is guaranteed.
+                        // Principal already in DB — load it via name+employer and UPDATE instead of skipping
                         inFileKeys.add(inFileKey);
+                        final int finalRowNum = rowNum;
                         memberRepository.findActivePrincipalByFullNameLowerAndEmployerId(fullNameLower, employerId)
-                                .ifPresent(p -> importedPrincipalsCache.put(p.getCardNumber(), p));
-                        summary.setSkipped(summary.getSkipped() + 1);
-                        summary.setPrincipalsSkipped(summary.getPrincipalsSkipped() + 1);
+                                .ifPresent(existingPrincipal -> {
+                                    String oldCardNumber = existingPrincipal.getCardNumber();
+                                    if (oldCardNumber != null && !oldCardNumber.isBlank()) {
+                                        // Cache the old card number so PASS-2 dependents can still resolve parent using the sheet's old card number
+                                        importedPrincipalsCache.put(oldCardNumber, existingPrincipal);
+                                    }
+                                    
+                                    // Determine the new clean format card number
+                                    String targetCardNumber = member.getCardNumber();
+                                    if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                                        targetCardNumber = principalRowToCardNumber.get(finalRowNum);
+                                    }
+                                    if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                                        targetCardNumber = cardNumberGeneratorService.generateUniqueForPrincipal(existingPrincipal);
+                                    }
+                                    
+                                    // Update card number if changed and not already used
+                                    if (!targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
+                                        log.info("[MemberImport] Updating principal '{}' card number from '{}' to '{}'", 
+                                                existingPrincipal.getFullName(), oldCardNumber, targetCardNumber);
+                                        existingPrincipal.setCardNumber(targetCardNumber);
+                                    }
+                                    
+                                    // Update other fields if available in Excel
+                                    if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
+                                        existingPrincipal.setNationalNumber(member.getNationalNumber());
+                                    }
+                                    if (member.getBirthDate() != null) {
+                                        existingPrincipal.setBirthDate(member.getBirthDate());
+                                    }
+                                    if (member.getGender() != null) {
+                                        existingPrincipal.setGender(member.getGender());
+                                    }
+                                    if (member.getPhone() != null && !member.getPhone().isBlank()) {
+                                        existingPrincipal.setPhone(member.getPhone());
+                                    }
+                                    if (member.getMaritalStatus() != null) {
+                                        existingPrincipal.setMaritalStatus(member.getMaritalStatus());
+                                    }
+                                    
+                                    Member saved = memberRepository.save(existingPrincipal);
+                                    usedCardNumbers.add(saved.getCardNumber());
+                                    importedPrincipalsCache.put(saved.getCardNumber(), saved);
+                                    summary.setUpdated(summary.getUpdated() + 1);
+                                });
                         pass1Processed++;
                         continue;
                     }
@@ -435,8 +477,50 @@ public class MemberExcelTemplateService {
                             this::buildDependentKeySet);
                     if (existingDepKeys.contains(parentId + "::" + fullNameLower)) {
                         inFileKeys.add(inFileKey);
-                        summary.setSkipped(summary.getSkipped() + 1);
-                        summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
+                        
+                        // Load the existing dependent from the DB under this parent and with this name
+                        List<Member> parentDeps = memberRepository.findByParentId(parentId);
+                        Member existingDependent = parentDeps.stream()
+                                .filter(d -> d.getFullName().trim().toLowerCase().equals(fullNameLower))
+                                .findFirst()
+                                .orElse(null);
+                        
+                        if (existingDependent != null) {
+                            String oldCardNumber = existingDependent.getCardNumber();
+                            String targetCardNumber = member.getCardNumber();
+                            
+                            // If not specified in Excel, generate a clean hyphenless card number based on current parent's card
+                            if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                                targetCardNumber = cardNumberGeneratorService.generateForDependent(existingDependent.getParent(), existingDependent.getRelationship());
+                            }
+                            
+                            if (targetCardNumber != null && !targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
+                                log.info("[MemberImport] Updating dependent '{}' card number from '{}' to '{}'", 
+                                        existingDependent.getFullName(), oldCardNumber, targetCardNumber);
+                                existingDependent.setCardNumber(targetCardNumber);
+                            }
+                            
+                            // Update other fields if available in Excel
+                            if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
+                                existingDependent.setNationalNumber(member.getNationalNumber());
+                            }
+                            if (member.getBirthDate() != null) {
+                                existingDependent.setBirthDate(member.getBirthDate());
+                            }
+                            if (member.getGender() != null) {
+                                existingDependent.setGender(member.getGender());
+                            }
+                            if (member.getPhone() != null && !member.getPhone().isBlank()) {
+                                existingDependent.setPhone(member.getPhone());
+                            }
+                            if (member.getMaritalStatus() != null) {
+                                existingDependent.setMaritalStatus(member.getMaritalStatus());
+                            }
+                            
+                            memberRepository.save(existingDependent);
+                            usedCardNumbers.add(existingDependent.getCardNumber());
+                            summary.setUpdated(summary.getUpdated() + 1);
+                        }
                         pass2Processed++;
                         continue;
                     }
@@ -456,7 +540,7 @@ public class MemberExcelTemplateService {
                         currentOrdinal++;
                         ordinalCounters.put(ordinalKey, currentOrdinal);
                         member.setCardNumber(member.getParent().getCardNumber()
-                                + "-" + rel.getCardCode() + currentOrdinal);
+                                + rel.getCardCode() + currentOrdinal);
                     }
                     if (usedCardNumbers.contains(member.getCardNumber())) {
                         // Real collision (card already exists in DB or was assigned this session)
@@ -469,7 +553,7 @@ public class MemberExcelTemplateService {
                         do {
                             ordinal++;
                             candidate = member.getParent().getCardNumber()
-                                    + "-" + rel.getCardCode() + ordinal;
+                                    + rel.getCardCode() + ordinal;
                         } while (usedCardNumbers.contains(candidate) && ordinal < 999);
                         ordinalCounters.put(ordinalKey, ordinal);
                         member.setCardNumber(candidate);
@@ -637,7 +721,21 @@ public class MemberExcelTemplateService {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return value.trim().toUpperCase(Locale.ROOT);
+        String clean = value.trim().toUpperCase(Locale.ROOT);
+        
+        // Remove hyphens if any (to support the clean hyphenless format like JFZ13544D1)
+        clean = clean.replace("-", "");
+        
+        // Convert any relationship suffix without a digit to end with 1 (e.g. W -> W1)
+        String regex = "(W|H|S|D|F|M|B|SR)$";
+        if (clean.matches(".+" + regex)) {
+            clean = clean + "1";
+        }
+        
+        // Strip leading zeros in ordinals (e.g., D01 -> D1, W02 -> W2)
+        clean = clean.replaceAll("(W|H|S|D|F|M|B|SR)0+([1-9][0-9]*)$", "$1$2");
+        
+        return clean;
     }
 
     private Map<String, Employer> buildEmployerLookup() {

@@ -133,6 +133,7 @@ public class CoverageEngineService {
         BigDecimal providerShareBeforeRejection = maxZero(scale2(requestedTotal.subtract(patientShare)));
 
         BigDecimal systemRefusedAmount = maxZero(scale2(priceRefused.add(limitRefused)));
+        // Option 2: If rejected, the patient still pays their share, and the provider share is fully refused
         BigDecimal rejectionCandidate = line.isRejected()
                 ? providerShareBeforeRejection
                 : maxZero(scale2(systemRefusedAmount.add(manualRefusedInput)));

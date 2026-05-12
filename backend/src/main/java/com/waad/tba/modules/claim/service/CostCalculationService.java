@@ -71,36 +71,51 @@ public class CostCalculationService {
         NetworkType networkType = providerNetworkService.determineNetworkTypeByName(claim.getProviderName());
 
         // ═══════════════════════════════════════════════════════════════════════════════
-        // STEP 0: Calculate Net Base (Exclude Refused/Rejected amounts)
+        // STEP 0: Split into Approved and Rejected Lines to calculate Net Base
         // ═══════════════════════════════════════════════════════════════════════════════
         List<ClaimLine> lines = claim.getLines() != null ? claim.getLines() : List.of();
         
-        BigDecimal totalRefused = lines.stream()
-                .map(l -> {
-                    BigDecimal lineRequested = (l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice() : l.getUnitPrice())
-                            .multiply(BigDecimal.valueOf(l.getQuantity()));
-                    if (Boolean.TRUE.equals(l.getRejected())) return lineRequested;
-                    return l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO;
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalRefused = BigDecimal.ZERO;
+        BigDecimal rejectedLinesPatientShare = BigDecimal.ZERO;
+        BigDecimal approvedNetBaseAmount = BigDecimal.ZERO;
 
-        BigDecimal netBaseAmount = requestedAmount.subtract(totalRefused).max(BigDecimal.ZERO);
+        for (ClaimLine l : lines) {
+            BigDecimal lineRequested = (l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice() : l.getUnitPrice())
+                    .multiply(BigDecimal.valueOf(l.getQuantity()));
+            
+            if (Boolean.TRUE.equals(l.getRejected())) {
+                // Option 2: Patient pays normal share, Facility loses the rest
+                BigDecimal pShare = l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO;
+                if (pShare.compareTo(lineRequested) > 0) pShare = lineRequested;
+                
+                rejectedLinesPatientShare = rejectedLinesPatientShare.add(pShare);
+                totalRefused = totalRefused.add(lineRequested.subtract(pShare));
+            } else {
+                BigDecimal lineRefused = l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO;
+                totalRefused = totalRefused.add(lineRefused);
+                approvedNetBaseAmount = approvedNetBaseAmount.add(lineRequested.subtract(lineRefused).max(BigDecimal.ZERO));
+            }
+        }
 
-        // STEP 1: Weighted Co-Pay calculation based on NET amounts
+        // STEP 1: Weighted Co-Pay calculation based on NET amounts of approved lines
         BigDecimal coPayPercent = calculateWeightedCopayFromLines(claim, member, networkType);
         
-        // STEP 2: Deductible application
+        // STEP 2: Deductible application (applied only to approved net base)
         BigDecimal annualDeductible = getAnnualDeductible(benefitPolicy);
         BigDecimal deductibleMet = getDeductibleMetThisPeriod(member, claim);
         BigDecimal remainingDeductible = annualDeductible.subtract(deductibleMet).max(BigDecimal.ZERO);
 
-        BigDecimal deductibleApplied = netBaseAmount.min(remainingDeductible);
-        BigDecimal afterDeductible = netBaseAmount.subtract(deductibleApplied);
+        BigDecimal deductibleApplied = approvedNetBaseAmount.min(remainingDeductible);
+        BigDecimal afterDeductible = approvedNetBaseAmount.subtract(deductibleApplied);
 
         // STEP 3: Co-Pay application
         BigDecimal coPayAmount = afterDeductible.multiply(coPayPercent)
                 .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-        BigDecimal insuranceAmount = afterDeductible.subtract(coPayAmount);
+        
+        // Add the patient share from rejected lines to the total Co-Pay amount
+        coPayAmount = coPayAmount.add(rejectedLinesPatientShare);
+        
+        BigDecimal insuranceAmount = afterDeductible.subtract(coPayAmount.subtract(rejectedLinesPatientShare));
 
         // STEP 4: Out-of-Pocket Limit
         BigDecimal outOfPocketMax = getOutOfPocketMax(benefitPolicy);
@@ -117,8 +132,9 @@ public class CostCalculationService {
 
         // Final balance check
         BigDecimal totalCalculated = totalPatientResponsibility.add(insuranceAmount);
-        if (totalCalculated.compareTo(netBaseAmount) != 0) {
-            insuranceAmount = netBaseAmount.subtract(totalPatientResponsibility);
+        BigDecimal expectedTotal = approvedNetBaseAmount.add(rejectedLinesPatientShare);
+        if (totalCalculated.compareTo(expectedTotal) != 0) {
+            insuranceAmount = expectedTotal.subtract(totalPatientResponsibility);
         }
 
         return new CostBreakdown(

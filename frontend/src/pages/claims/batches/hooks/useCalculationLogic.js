@@ -28,14 +28,15 @@ export function useCalculationLogic({ policyInfo }) {
 
         // If line is completely rejected
         if (line.rejected) {
+            const patientShare = (calculatedTotal * (100 - coveragePercent)) / 100.0;
+            const providerShare = Math.max(0, calculatedTotal - patientShare);
             return {
                 ...line,
                 coveragePercent,
                 total: toMoney(calculatedTotal),
                 byCompany: 0,
-                byEmployee: 0, // Total rejection means company pays 0. Patient pays 0 or everything? 
-                // Usually Refused means it's simply NOT paid.
-                refusedAmount: toMoney(calculatedTotal),
+                byEmployee: toMoney(patientShare), // Option 2: Patient pays their normal co-pay percentage
+                refusedAmount: toMoney(providerShare), // Facility absorbs the rest as refused
                 rejectionReason: line.rejectionReason || 'الخدمة مرفوضة',
                 usageExceeded: !!line.usageExceeded || !!line.usageDetails?.exceeded,
                 usageExhausted: !!line.usageDetails?.exceeded,

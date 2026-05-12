@@ -58,10 +58,9 @@ public class CardNumberGeneratorService {
         }
 
         String employerCode = member.getEmployer().getCode().trim().toUpperCase();
-        int year = resolveYear(member);
         String empNum = resolveEmployeeNumber(member);
 
-        String cardNumber = employerCode + "-" + year + "-" + empNum;
+        String cardNumber = employerCode + empNum;
         log.info("Generated card number for PRINCIPAL: {}", cardNumber);
         return cardNumber;
     }
@@ -107,12 +106,11 @@ public class CardNumberGeneratorService {
 
         // Random fallback: retry until unique
         String employerCode = member.getEmployer().getCode().trim().toUpperCase();
-        int year = resolveYear(member);
         final int MAX_ATTEMPTS = 50;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             String randomNum = String.format("%08d",
                     ThreadLocalRandom.current().nextInt(1, 100_000_000));
-            String cardNumber = employerCode + "-" + year + "-" + randomNum;
+            String cardNumber = employerCode + randomNum;
             if (!memberRepository.existsByCardNumber(cardNumber)) {
                 log.warn("employeeNumber is null for member '{}' – assigned random card number: {}",
                         member.getFullName(), cardNumber);
@@ -164,7 +162,7 @@ public class CardNumberGeneratorService {
                 principal.getId(), relationship);
         int ordinal = (int) sameTypeCount + 1;
 
-        String cardNumber = principalCard + "-" + relationship.getCardCode() + ordinal;
+        String cardNumber = principalCard + relationship.getCardCode() + ordinal;
         log.info("Generated card number for DEPENDENT ({}) of principal {}: {}",
                 relationship, principal.getId(), cardNumber);
         return cardNumber;
@@ -187,8 +185,8 @@ public class CardNumberGeneratorService {
         if (cardNumber == null || cardNumber.trim().isEmpty()) {
             return false;
         }
-        // At minimum: NON_EMPTY-4DIGITS-NON_EMPTY
-        return cardNumber.matches("^[A-Z0-9]+-\\d{4}-.+");
+        // Allow alphanumeric characters with optional hyphens (supports both legacy formats and the new clean format)
+        return cardNumber.matches("^[A-Z0-9-]+$");
     }
 
     /**
@@ -200,30 +198,45 @@ public class CardNumberGeneratorService {
         if (cardNumber == null || cardNumber.trim().isEmpty()) {
             return false;
         }
-        // Dependent suffixes end with one or more letters followed by digits (e.g. D1,
-        // SR2)
-        return !cardNumber.matches(".+-[A-Z]+(R?)[0-9]+$");
+        // Normalize for checking format (remove hyphens to handle all suffix formats)
+        String clean = cardNumber.trim().toUpperCase(java.util.Locale.ROOT).replace("-", "");
+        
+        // Dependent suffixes end with a relationship code followed by optional digits (e.g. W, D1, SR2)
+        boolean hasHyphenlessSuffix = clean.matches(".+(W|H|S|D|F|M|B|SR)[0-9]*$");
+        return !hasHyphenlessSuffix;
     }
 
     /**
      * Extract the principal's card number from a dependent card number.
-     * Returns everything before the last "-SUFFIX" segment.
+     * Returns everything before the last relationship suffix segment.
      *
-     * Example: "JFZ-2025-126565-D1" → "JFZ-2025-126565"
+     * Example: "JFZ-2025-126565-D1" → "JFZ2025126565"
+     *          "JFZ13544D1" → "JFZ13544"
+     *          "JFZ13544-W" → "JFZ13544"
      */
     public String extractBaseCardNumber(String dependentCardNumber) {
         if (dependentCardNumber == null) {
             return null;
         }
-        // Strip last segment if it looks like a relationship suffix (letters+digits)
-        int lastHyphen = dependentCardNumber.lastIndexOf('-');
+        // Normalize to upper case and trim
+        String clean = dependentCardNumber.trim().toUpperCase(java.util.Locale.ROOT);
+        
+        // 1. Check legacy hyphenated format (e.g., JFZ-2025-126565-D1, JFZ13544-W, or JFZ13544-D1)
+        int lastHyphen = clean.lastIndexOf('-');
         if (lastHyphen > 0) {
-            String suffix = dependentCardNumber.substring(lastHyphen + 1);
-            if (suffix.matches("[A-Z]+[0-9]+")) {
-                return dependentCardNumber.substring(0, lastHyphen);
+            String suffix = clean.substring(lastHyphen + 1);
+            if (suffix.matches("[A-Z]+[0-9]*")) {
+                return clean.substring(0, lastHyphen).replace("-", "");
             }
         }
-        return dependentCardNumber;
+        
+        // 2. Check new hyphenless format (e.g., JFZ13544D1 or JFZ13544W)
+        String cleanHyphenless = clean.replace("-", "");
+        String regex = "(W|H|S|D|F|M|B|SR)[0-9]*$";
+        if (cleanHyphenless.matches(".+" + regex)) {
+            return cleanHyphenless.replaceAll(regex, "");
+        }
+        return cleanHyphenless;
     }
 
     // ----------------------------------------------------------------
