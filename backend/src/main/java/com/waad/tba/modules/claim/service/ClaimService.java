@@ -1212,8 +1212,11 @@ public class ClaimService {
         // Validate each line has identification (medicalServiceId OR pricingItemId)
         for (ClaimLineDto line : dto.getLines()) {
             if (line.getMedicalServiceId() == null && line.getPricingItemId() == null) {
-                throw new IllegalArgumentException(
-                        "ARCHITECTURAL VIOLATION: Each line MUST have either medicalServiceId or pricingItemId - no free-text services");
+                String code = line.getServiceCode();
+                if (!"GEN-MEDICATION".equals(code) && !"GEN-MEDICAL-SERVICE".equals(code)) {
+                    throw new IllegalArgumentException(
+                            "ARCHITECTURAL VIOLATION: Each line MUST have either medicalServiceId or pricingItemId - no free-text services");
+                }
             }
         }
     }
@@ -1645,11 +1648,8 @@ public class ClaimService {
      */
     @Transactional
     public void deleteClaim(Long id, String reason) {
-        log.info("🗑️ Soft-deleting claim id: {} with reason: {}", id, reason);
-
-        if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("يجب إدخال سبب الإلغاء/الحذف");
-        }
+        String finalReason = (reason == null || reason.trim().isEmpty()) ? "تم إلغاء المطالبة" : reason;
+        log.info("🗑️ Soft-deleting claim id: {} with reason: {}", id, finalReason);
 
         User currentUser = authorizationService.getCurrentUser();
 
@@ -1674,7 +1674,7 @@ public class ClaimService {
                         && claim.getApprovedAmount().compareTo(java.math.BigDecimal.ZERO) > 0);
 
         claim.setActive(false);
-        claim.setVoidReason(reason);
+        claim.setVoidReason(finalReason);
         claim.setDeletedAt(java.time.LocalDateTime.now());
         claim.setDeletedBy(currentUser != null ? currentUser.getFullName() : "system");
 
@@ -1685,14 +1685,14 @@ public class ClaimService {
                 .entityType(EntityType.CLAIM)
                 .entityId(String.valueOf(claim.getId()))
                 .action(AuditAction.CLAIM_VOIDED)
-                .reason(reason)
-                .beforeState("active=true, status=" + claim.getStatus())
-                .afterState("active=false, voidReason=" + reason)
+                .reason(finalReason)
+                .beforeState("{\"active\":true,\"status\":\"" + claim.getStatus() + "\"}")
+                .afterState("{\"active\":false,\"voidReason\":\"" + finalReason.replace("\"", "'") + "\"}")
                 .source(AuditSource.USER)
                 .build());
 
         log.info("✅ Claim {} soft-deleted by {}. Reason: {}. Annual limits automatically restored.", id,
-                currentUser != null ? currentUser.getFullName() : "system", reason);
+                currentUser != null ? currentUser.getFullName() : "system", finalReason);
 
         // المطالبة المعتمدة تحمل رصيداً في حساب مقدم الخدمة → يجب عكسه
         if (wasApproved && claim.getProviderId() != null) {

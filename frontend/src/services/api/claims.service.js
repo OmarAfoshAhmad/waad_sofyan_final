@@ -239,8 +239,8 @@ export const claimsService = {
   remove: async (id, reason) => {
     try {
       if (!id) throw new Error('معرف المطالبة مطلوب');
-      if (!reason) throw new Error('سبب الإلغاء مطلوب');
-      const response = await axiosClient.delete(`${BASE_URL}/${id}?reason=${encodeURIComponent(reason)}`);
+      const url = reason ? `${BASE_URL}/${id}?reason=${encodeURIComponent(reason)}` : `${BASE_URL}/${id}`;
+      const response = await axiosClient.delete(url);
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);
@@ -693,8 +693,8 @@ export const claimsService = {
   softDelete: async (id, reason) => {
     try {
       if (!id) throw new Error('معرف المطالبة مطلوب');
-      if (!reason) throw new Error('سبب الإلغاء مطلوب');
-      const response = await axiosClient.delete(`${BASE_URL}/${id}?reason=${encodeURIComponent(reason)}`);
+      const url = reason ? `${BASE_URL}/${id}?reason=${encodeURIComponent(reason)}` : `${BASE_URL}/${id}`;
+      const response = await axiosClient.delete(url);
       return unwrap(response);
     } catch (error) {
       throw handleClaimErrors(error);

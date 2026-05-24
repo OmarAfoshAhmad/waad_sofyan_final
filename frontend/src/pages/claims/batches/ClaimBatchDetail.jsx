@@ -122,7 +122,7 @@ export default function ClaimBatchDetail() {
         return '';
     })();
     const canSuspend = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'ACCOUNTANT';
-    const canDelete = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'DATA_ENTRY' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'PROVIDER_STAFF';
+    const canDelete = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'INSURANCE_ADMIN' || currentUserRole === 'DATA_ENTRY' || currentUserRole === 'MEDICAL_REVIEWER' || currentUserRole === 'PROVIDER_STAFF';
     const canHardDelete = currentUserRole === 'SUPER_ADMIN';
 
     const softDeleteMutation = useMutation({
@@ -1102,25 +1102,13 @@ export default function ClaimBatchDetail() {
                 </DialogTitle>
                 <DialogContent sx={{ pt: '1.25rem' }}>
                     <Typography variant="body2" mb={1}>
-                        هل أنت متأكد من إلغاء المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong>؟
+                        هل أنت متأكد من إلغاء المطالبة الخاصة بـ <strong>{deletingClaim?.memberName}</strong> بمبلغ <strong>{(deletingClaim?.requestedAmount || 0).toFixed(2)}</strong>؟
                     </Typography>
                     <Typography variant="body2" color="text.secondary" mb={2}>
                         • سيتم إخفاء المطالبة من القوائم النشطة<br />
                         • ستعود الأموال المحجوزة إلى السقف السنوي تلقائياً<br />
                         • يمكن استعادتها لاحقاً من سجل المحذوفات
                     </Typography>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        multiline
-                        rows={2}
-                        label="سبب الإلغاء (إجباري)"
-                        placeholder="يرجى كتابة سبب الإلغاء لغايات التدقيق..."
-                        value={voidReason}
-                        onChange={(e) => setVoidReason(e.target.value)}
-                        autoFocus
-                        error={!voidReason.trim()}
-                    />
                 </DialogContent>
                 <DialogActions sx={{ px: '1.5rem', pb: '1.0rem', gap: 1 }}>
                     <Button variant="outlined" onClick={() => setDeleteDialogOpen(false)}>تراجع</Button>
@@ -1129,13 +1117,9 @@ export default function ClaimBatchDetail() {
                         color="error"
                         startIcon={<DeleteOutlineIcon />}
                         onClick={() => {
-                            if (!voidReason.trim()) {
-                                enqueueSnackbar('يجب إدخال سبب الإلغاء', { variant: 'warning' });
-                                return;
-                            }
-                            softDeleteMutation.mutate({ claimId: deletingClaim?.id, reason: voidReason });
+                            softDeleteMutation.mutate({ claimId: deletingClaim?.id, reason: 'تم إلغاء المطالبة' });
                         }}
-                        disabled={softDeleteMutation.isPending || !voidReason.trim()}
+                        disabled={softDeleteMutation.isPending}
                     >
                         تأكيد الإلغاء
                     </Button>

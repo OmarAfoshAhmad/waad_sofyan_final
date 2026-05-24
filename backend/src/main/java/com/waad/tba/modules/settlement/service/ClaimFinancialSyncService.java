@@ -53,6 +53,9 @@ public class ClaimFinancialSyncService {
     /**
      * إضافة قيد مدين لحساب مقدم الخدمة عند حذف مطالبة معتمدة.
      * يعمل في transaction مستقلة بعد commit الحذف مباشرة (synchronous).
+     *
+     * ملاحظة مهمة: الحذف تمّ بالفعل (AFTER_COMMIT). إذا فشل عكس الرصيد
+     * نسجّل تحذيراً للمراجعة اليدوية دون أن نوقف الحذف.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void reverseForClaim(Long claimId, Long userId) {
@@ -60,9 +63,14 @@ public class ClaimFinancialSyncService {
         try {
             providerAccountService.debitOnClaimReversal(claimId, userId);
             log.info("✅ [SYNC] Provider account reversed for claim {}", claimId);
+        } catch (IllegalStateException e) {
+            // رصيد غير كافٍ أو حالة غير متوقعة — الحذف تمّ بالفعل، لا نُوقفه
+            log.warn("⚠️ [SYNC] Could not reverse provider account for claim {} (claim already deleted): {}",
+                    claimId, e.getMessage());
         } catch (Exception e) {
-            log.error("🚨 [SYNC] Failed to reverse provider account for claim {}: {}", claimId, e.getMessage(), e);
-            throw e;
+            // أي خطأ آخر — نسجّل ونتجاهل لأن الحذف لا يجب أن يُعاد
+            log.error("🚨 [SYNC] Unexpected error reversing provider account for claim {}: {}",
+                    claimId, e.getMessage(), e);
         }
     }
 }

@@ -202,7 +202,20 @@ public class MedicalAuditLogService {
         }
         if (payload instanceof String value) {
             String trimmed = value.trim();
-            return trimmed.isEmpty() ? null : trimmed;
+            if (trimmed.isEmpty()) return null;
+            // If already a valid JSON object, array, or quoted string — pass through
+            if ((trimmed.startsWith("{") && trimmed.endsWith("}"))
+                    || (trimmed.startsWith("[") && trimmed.endsWith("]"))
+                    || (trimmed.startsWith("\"") && trimmed.endsWith("\""))) {
+                return trimmed;
+            }
+            // Plain text — wrap as a JSON string value to satisfy json column constraint
+            try {
+                return objectMapper.writeValueAsString(trimmed);
+            } catch (JsonProcessingException ex) {
+                // Last resort: manual escaping
+                return "\"" + trimmed.replace("\\", "\\\\").replace("\"", "'") + "\"";
+            }
         }
         try {
             return objectMapper.writeValueAsString(payload);

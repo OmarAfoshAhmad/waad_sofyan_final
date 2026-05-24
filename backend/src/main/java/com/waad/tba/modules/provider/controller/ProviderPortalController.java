@@ -35,6 +35,8 @@ import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.provider.service.ProviderPortalService;
 import com.waad.tba.modules.provider.service.ProviderServiceService;
 import com.waad.tba.modules.provider.service.ProviderVisitService;
+import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemCreateDto;
+import com.waad.tba.modules.providercontract.dto.ProviderContractPricingItemResponseDto;
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.visit.entity.VisitType;
@@ -1227,6 +1229,109 @@ public class ProviderPortalController {
          * Set to null in general listings, computed per-member in specific endpoints
          */
         private Boolean requiresPreApproval;
+    }
+
+    /**
+     * Add a custom pricing item to the current provider's active contract.
+     * 
+     * SECURITY: Provider can only add pricing to their own active contract.
+     * 
+     * POST /api/v1/provider/my-contract/pricing
+     */
+    @PostMapping("/my-contract/pricing")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
+    @Operation(
+        summary = "Add custom service pricing to my active contract (Provider Portal)",
+        description = "Adds a custom service pricing item to the active contract of the current provider."
+    )
+    public ResponseEntity<ApiResponse<MyContractServiceDto>> addMyContractPricing(
+            @Valid @RequestBody ProviderContractPricingItemCreateDto dto,
+            @RequestParam(value = "providerId", required = false) Long paramProviderId) {
+        
+        Long providerId = paramProviderId;
+        if (providerId == null && dto != null) {
+            providerId = dto.getProviderId();
+        }
+        if (providerId == null) {
+            providerId = providerContextGuard.getProviderFilter();
+        }
+        if (providerId == null) {
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("No provider bound to current user"));
+        }
+        
+        providerContextGuard.validateProviderAccess(providerId);
+        
+        log.info("[PROVIDER-PORTAL] POST /api/v1/provider/my-contract/pricing, providerId={}", providerId);
+        
+        try {
+            com.waad.tba.modules.providercontract.dto.ProviderContractResponseDto activeContract = 
+                modernContractService.findActiveByProvider(providerId);
+            
+            if (activeContract == null) {
+                return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("No active contract found for this provider."));
+            }
+            
+            // Set default dates if not provided
+            if (dto.getEffectiveFrom() == null) {
+                dto.setEffectiveFrom(LocalDate.now());
+            }
+            
+            // Set basePrice same as contractPrice if not provided or 0, to satisfy ValidPricingRange constraint
+            if (dto.getBasePrice() == null || dto.getBasePrice().compareTo(java.math.BigDecimal.ZERO) == 0) {
+                dto.setBasePrice(dto.getContractPrice());
+            }
+            
+            // Call modern pricingItemService to create the pricing item under this contract
+            ProviderContractPricingItemResponseDto pricingItem = 
+                pricingItemService.create(activeContract.getId(), dto);
+            
+            // Map the result to MyContractServiceDto for the frontend to consume
+            Long medicalServiceId = null;
+            String serviceCode = pricingItem.getServiceCode();
+            String serviceName = pricingItem.getServiceName();
+            Long medicalCategoryId = null;
+            String categoryCode = null;
+            String categoryName = pricingItem.getCategoryName();
+            
+            if (pricingItem.getMedicalService() != null) {
+                medicalServiceId = pricingItem.getMedicalService().getId();
+                serviceCode = pricingItem.getMedicalService().getCode();
+                serviceName = pricingItem.getMedicalService().getName();
+            }
+            
+            if (pricingItem.getEffectiveCategory() != null) {
+                medicalCategoryId = pricingItem.getEffectiveCategory().getId();
+                categoryCode = pricingItem.getEffectiveCategory().getCode();
+                categoryName = pricingItem.getEffectiveCategory().getName();
+            } else if (pricingItem.getMedicalCategory() != null) {
+                medicalCategoryId = pricingItem.getMedicalCategory().getId();
+                categoryCode = pricingItem.getMedicalCategory().getCode();
+                categoryName = pricingItem.getMedicalCategory().getName();
+            }
+            
+            MyContractServiceDto mappedDto = MyContractServiceDto.builder()
+                .id(pricingItem.getId())
+                .medicalServiceId(medicalServiceId)
+                .serviceCode(serviceCode)
+                .serviceName(serviceName)
+                .medicalCategoryId(medicalCategoryId)
+                .categoryCode(categoryCode)
+                .categoryName(categoryName)
+                .contractPrice(pricingItem.getContractPrice())
+                .currency(pricingItem.getCurrency())
+                .effectiveFrom(pricingItem.getEffectiveFrom())
+                .effectiveTo(pricingItem.getEffectiveTo())
+                .hasContract(true)
+                .requiresPreApproval(false)
+                .build();
+            
+            return ResponseEntity.ok(ApiResponse.success("Pricing item added successfully", mappedDto));
+        } catch (Exception e) {
+            log.error("[PROVIDER-PORTAL] Error adding contract pricing: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════

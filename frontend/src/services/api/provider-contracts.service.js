@@ -549,6 +549,18 @@ export const getMyContractServices = async (params = {}) => {
   return unwrap(response);
 };
 
+/**
+ * Add a custom pricing item to the current provider's active contract
+ * Endpoint: POST /api/provider/my-contract/pricing
+ *
+ * @param {Object} data - Pricing item creation payload
+ * @returns {Promise<Object>} Created pricing item
+ */
+export const addMyContractPricing = async (data) => {
+  const response = await axiosClient.post(`${PROVIDER_PORTAL_URL}/my-contract/pricing`, data);
+  return unwrap(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // UNIFIED HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -598,6 +610,7 @@ const providerContractsService = {
   uploadContractPricingExcel,
   getMyActiveContract,
   getMyContractServices,
+  addMyContractPricing,
   getAllContractedServices
 };
 

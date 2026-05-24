@@ -1,7 +1,8 @@
 import React, { Fragment } from 'react';
 import {
     TableRow, TableCell, Stack, Autocomplete, TextField, Chip,
-    Tooltip, Typography, IconButton, alpha, createFilterOptions
+    Tooltip, Typography, IconButton, alpha, createFilterOptions,
+    Button, Box
 } from '@mui/material';
 
 const serviceFilter = createFilterOptions({
@@ -14,7 +15,9 @@ const serviceFilter = createFilterOptions({
 import {
     Block as RejectIcon,
     Delete as DeleteIcon,
-    WarningAmber as WarningIcon
+    WarningAmber as WarningIcon,
+    Add as AddIcon,
+    MedicalServices as MedicalServicesIcon
 } from '@mui/icons-material';
 
 const inlineSx = {
@@ -41,7 +44,8 @@ export const ClaimLineRow = ({
         companyShare: true,
         patientShare: true
     },
-    triggerConfirm
+    triggerConfirm,
+    onOpenCustomServiceDialog
 }) => {
     return (
         <Fragment>
@@ -72,9 +76,46 @@ export const ClaimLineRow = ({
                                     inputProps={{ ...params.inputProps, style: { textAlign: 'right' } }}
                                 />
                             )}
-                            noOptionsText={loadingServices ? "جاري تحميل خدمات العقد..." : "لم يتم العثور على خدمات في العقد"}
+                            noOptionsText={
+                                <Stack spacing={1} alignItems="center" sx={{ py: 1 }}>
+                                    <Typography variant="body2">
+                                        {loadingServices ? "جاري تحميل خدمات العقد..." : "لم يتم العثور على خدمات في العقد"}
+                                    </Typography>
+                                    {!loadingServices && onOpenCustomServiceDialog && (
+                                        <Button
+                                            size="small"
+                                            variant="contained"
+                                            color="primary"
+                                            startIcon={<MedicalServicesIcon sx={{ ml: 1, mr: 0 }} />}
+                                            onMouseDown={(e) => {
+                                                // Prevents Autocomplete blur before click event fires
+                                                e.preventDefault();
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onOpenCustomServiceDialog();
+                                            }}
+                                            sx={{ fontSize: '0.75rem', py: 0.5 }}
+                                        >
+                                            إضافة خدمة جديدة لعقد مقدم الخدمة
+                                        </Button>
+                                    )}
+                                </Stack>
+                            }
                         />
-
+                        {onOpenCustomServiceDialog && (
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                                <Button
+                                    size="small"
+                                    color="secondary"
+                                    startIcon={<AddIcon sx={{ ml: 0.5, mr: 0 }} />}
+                                    onClick={onOpenCustomServiceDialog}
+                                    sx={{ fontSize: '0.7rem', p: 0, minWidth: 0, height: 'auto', mt: 0.2 }}
+                                >
+                                    خدمة غير متوفرة؟ أضفها هنا
+                                </Button>
+                            </Box>
+                        )}
                     </Stack>
                 </TableCell>
                 <TableCell align="center">

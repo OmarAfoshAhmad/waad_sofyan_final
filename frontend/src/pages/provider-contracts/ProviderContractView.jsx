@@ -345,6 +345,7 @@ const ProviderContractView = () => {
 
   const [availableServices, setAvailableServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(false);
+  const [serviceInputValue, setServiceInputValue] = useState('');
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -546,6 +547,7 @@ const ProviderContractView = () => {
       enqueueSnackbar('تم إضافة الخدمة بنجاح', { variant: 'success' });
       queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
       setAddPricingDialogOpen(false);
+      setServiceInputValue('');
       setPricingForm({
         medicalServiceId: null,
         mainCategoryId: null,
@@ -686,23 +688,29 @@ const ProviderContractView = () => {
 
   const handleAddPricingSubmit = useCallback(async () => {
     const effectiveCategoryId = pricingForm.medicalCategoryId?.id || pricingForm.mainCategoryId?.id;
-    if (!effectiveCategoryId || !pricingForm.medicalServiceId || !pricingForm.contractPrice)
-      return;
+    if (!effectiveCategoryId || !pricingForm.contractPrice) return;
 
     const selectedService = pricingForm.medicalServiceId;
+    const freeTextName = serviceInputValue?.trim();
+    const finalServiceName = selectedService?.nameAr || selectedService?.name || freeTextName || null;
+    const finalServiceCode = selectedService?.code || null;
+    const finalServiceId = selectedService?.id || null;
+
+    if (!finalServiceName) return;
+
     const parsedContractPrice = parseFloat(pricingForm.contractPrice);
     const parsedBasePrice = parseFloat(pricingForm.basePrice);
 
     addPricingMutation.mutate({
-      medicalServiceId: selectedService?.id || null,
+      medicalServiceId: finalServiceId,
       medicalCategoryId: effectiveCategoryId || null,
-      serviceCode: selectedService?.code || null,
-      serviceName: selectedService?.nameAr || selectedService?.name || null,
+      serviceCode: finalServiceCode,
+      serviceName: finalServiceName,
       basePrice: Number.isFinite(parsedBasePrice) && parsedBasePrice > 0 ? parsedBasePrice : parsedContractPrice,
       contractPrice: parsedContractPrice,
       notes: pricingForm.notes
     });
-  }, [addPricingMutation, pricingForm]);
+  }, [addPricingMutation, pricingForm, serviceInputValue]);
 
   const handleOpenEditPricing = useCallback(
     (item) => {
@@ -1295,7 +1303,7 @@ const ProviderContractView = () => {
       </Dialog>
 
       {/* Add Pricing Item Dialog */}
-      <Dialog open={addPricingDialogOpen} onClose={() => setAddPricingDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addPricingDialogOpen} onClose={() => { setAddPricingDialogOpen(false); setServiceInputValue(''); }} maxWidth="sm" fullWidth>
         <DialogTitle>إضافة خدمة طبية للتسعير</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: '1.5rem' }}>
@@ -1340,13 +1348,22 @@ const ProviderContractView = () => {
             {(pricingForm.mainCategoryId) && (
               <Autocomplete
                 fullWidth
+                freeSolo
                 options={availableServices}
                 getOptionLabel={(option) =>
+                  typeof option === 'string' ? option :
                   `[${option.code || ''}] ${option.nameAr || option.name || ''}`
                 }
                 ListboxProps={{ style: { maxHeight: '20.0rem', minHeight: '7.5rem' } }}
                 loading={servicesLoading}
                 value={pricingForm.medicalServiceId}
+                inputValue={serviceInputValue}
+                onInputChange={(e, newVal, reason) => {
+                  setServiceInputValue(newVal);
+                  if (reason === 'clear') {
+                    setPricingForm(prev => ({ ...prev, medicalServiceId: null }));
+                  }
+                }}
                 renderOption={(props, option) => (
                   <li {...props} key={option.id}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1358,17 +1375,39 @@ const ProviderContractView = () => {
                   </li>
                 )}
                 onChange={(e, newValue) => {
-                  setPricingForm({
-                    ...pricingForm,
-                    medicalServiceId: newValue,
-                    basePrice: newValue?.basePrice ?? '',
-                    contractPrice:
-                      newValue?.basePrice && pricingForm.discountPercent
-                        ? (newValue.basePrice * (1 - parseFloat(pricingForm.discountPercent) / 100)).toFixed(2)
-                        : pricingForm.contractPrice
-                  });
+                  if (typeof newValue === 'string') {
+                    // free text typed
+                    setPricingForm(prev => ({ ...prev, medicalServiceId: null }));
+                    setServiceInputValue(newValue);
+                  } else {
+                    setPricingForm(prev => ({
+                      ...prev,
+                      medicalServiceId: newValue,
+                      basePrice: newValue?.basePrice ?? '',
+                      contractPrice:
+                        newValue?.basePrice && prev.discountPercent
+                          ? (newValue.basePrice * (1 - parseFloat(prev.discountPercent) / 100)).toFixed(2)
+                          : prev.contractPrice
+                    }));
+                    setServiceInputValue(newValue ? `[${newValue.code || ''}] ${newValue.nameAr || newValue.name || ''}` : '');
+                  }
                 }}
-                renderInput={(params) => <TextField {...params} label="الخدمة الطبية *" required fullWidth />}
+                noOptionsText={
+                  servicesLoading ? 'جاري التحميل...' :
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}>
+                    لا توجد خدمات مسجلة — اكتب اسم الخدمة مباشرة لإضافتها
+                  </span>
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="الخدمة الطبية *"
+                    required
+                    fullWidth
+                    placeholder="ابحث من القائمة أو اكتب اسم خدمة جديدة..."
+                    helperText="يمكنك اختيار خدمة موجودة أو كتابة اسم خدمة جديدة بحرية"
+                  />
+                )}
               />
             )}
 
@@ -1394,13 +1433,13 @@ const ProviderContractView = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddPricingDialogOpen(false)}>إلغاء</Button>
+          <Button onClick={() => { setAddPricingDialogOpen(false); setServiceInputValue(''); }}>إلغاء</Button>
           <Button
             onClick={handleAddPricingSubmit}
             variant="contained"
             disabled={
-              !pricingForm.mainCategoryId ||
-              !pricingForm.medicalServiceId ||
+            !pricingForm.mainCategoryId ||
+              !(pricingForm.medicalServiceId || serviceInputValue?.trim()) ||
               !pricingForm.contractPrice ||
               addPricingMutation.isLoading
             }

@@ -152,7 +152,9 @@ public class ClaimMapper {
                                                 .orElse(null);
                         }
 
-                        if (codeToLookup != null) {
+                        if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
+                                resolvedUnitPrice = enteredUnitPrice;
+                        } else if (codeToLookup != null) {
                                 EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
                                                 claim.getProviderId(), codeToLookup, claim.getServiceDate());
 
@@ -182,6 +184,21 @@ public class ClaimMapper {
 
                         Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
                                         : lineDto.getServiceCategoryId();
+                        String serviceCatName = lineDto.getServiceCategoryName();
+
+                        if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
+                                String targetCode = "CAT-OP-GEN";
+                                if ("CAT-IP".equals(claim.getPrimaryCategoryCode())) {
+                                        targetCode = "CAT-IP-GEN";
+                                } else if ("GEN-MEDICATION".equals(codeToLookup)) {
+                                        targetCode = "CAT-OP-DRUG";
+                                }
+                                var optionalCat = medicalCategoryRepository.findByCode(targetCode);
+                                if (optionalCat.isPresent()) {
+                                        serviceCatIdForCoverage = optionalCat.get().getId();
+                                        serviceCatName = optionalCat.get().getName();
+                                }
+                        }
 
                         ClaimLineInput lineInput = ClaimLineInput.builder()
                                         .lineId(String.valueOf(lines.size()))
@@ -252,8 +269,8 @@ public class ClaimMapper {
                                                         : (lineDto.getServiceName() != null ? lineDto.getServiceName()
                                                                         : "Unknown Service"))
                                         .pricingItemId(resolvedPricingItemId)
-                                        .serviceCategoryId(lineDto.getServiceCategoryId())
-                                        .serviceCategoryName(lineDto.getServiceCategoryName())
+                                        .serviceCategoryId(serviceCatIdForCoverage)
+                                        .serviceCategoryName(serviceCatName)
                                         .appliedCategoryId(result.getResolvedCategoryId())
                                         .appliedCategoryName(result.getResolvedCategoryId() != null
                                                         ? medicalCategoryRepository

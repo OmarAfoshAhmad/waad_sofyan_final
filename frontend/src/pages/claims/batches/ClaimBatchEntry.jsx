@@ -13,7 +13,8 @@ import {
     Checkbox, FormControlLabel, Radio, RadioGroup,
     Tooltip, alpha, TableFooter,
     InputAdornment, Alert, Dialog, DialogTitle, DialogContent,
-    DialogActions, Pagination, Menu, MenuItem, ListItemIcon, ListItemText
+    DialogActions, Pagination, Menu, MenuItem, ListItemIcon, ListItemText,
+    FormControl, InputLabel, Select
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -26,7 +27,8 @@ import {
     Cancel as CancelIcon, AttachFile as AttachFileIcon,
     Lock as LockIcon, AddCircleOutline as AddReasonIcon,
     ViewColumn as ViewColumnIcon,
-    Edit as EditIcon, Check as CheckIcon, ExpandMore as ExpandMoreIcon
+    Edit as EditIcon, Check as CheckIcon, ExpandMore as ExpandMoreIcon,
+    MedicalServices as MedicalServicesIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -48,6 +50,7 @@ import claimBatchesService from 'services/api/claim-batches.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
 import systemSettingsService from 'services/api/systemSettings.service';
 import { normalizeApiError, runWithRetry } from 'utils/api-error';
+import axiosClient from 'utils/axios';
 
 import { useCalculationLogic } from './hooks/useCalculationLogic';
 import { useCoverageLogic } from './hooks/useCoverageLogic';
@@ -223,18 +226,23 @@ export default function ClaimBatchEntry() {
     }, [lines]);
 
     // ── الاستعلامات الأساسية اللازمة للمنطق ──────────────────────────────────────
-    const { data: rootCategories } = useQuery({
-        queryKey: ['medical-categories-root'],
+    const { data: allCategories } = useQuery({
+        queryKey: ['medical-categories-all'],
         queryFn: () => medicalCategoriesService.getAllMedicalCategories(),
-        select: (data) => data.filter(c => !c.parentId),
         staleTime: Infinity
     });
+
+    const medicalCategories = useMemo(() => allCategories || [], [allCategories]);
+
+    const rootCategories = useMemo(() => {
+        return medicalCategories.filter(c => !c.parentId);
+    }, [medicalCategories]);
 
     // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
     const { recompute } = useCalculationLogic({ applyBenefits, policyInfo });
 
     const { fetchCoverage, refetchAllLinesCoverage } = useCoverageLogic({
-        policyId, policyInfo, member, applyBenefits, rootCategories, primaryCategoryCode,
+        policyId, policyInfo, member, applyBenefits, rootCategories, medicalCategories, primaryCategoryCode,
         setLines, recompute,
         serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : (year || new Date().getFullYear()),
         serviceDate,
@@ -256,6 +264,136 @@ export default function ClaimBatchEntry() {
     }, [refetchAllLinesCoverageCallback]);
 
     const isSavingRef = useRef(false);
+
+    // Custom Service Addition States
+    const [customServiceDialogOpen, setCustomServiceDialogOpen] = useState(false);
+    const [activeLineIdForCustomService, setActiveLineIdForCustomService] = useState(null);
+    const [customServiceData, setCustomServiceData] = useState({
+        mainCategoryId: '',
+        subCategoryId: '',
+        serviceName: '',
+        serviceCode: '',
+        contractPrice: ''
+    });
+    const [customServiceError, setCustomServiceError] = useState(null);
+    const [addingCustomService, setAddingCustomService] = useState(false);
+
+    const handleOpenCustomServiceDialog = (lineId) => {
+        setCustomServiceData({
+            mainCategoryId: '',
+            subCategoryId: '',
+            serviceName: '',
+            serviceCode: '',
+            contractPrice: ''
+        });
+        setCustomServiceError(null);
+        setActiveLineIdForCustomService(lineId);
+        setCustomServiceDialogOpen(true);
+    };
+
+    const handleCloseCustomServiceDialog = () => {
+        setCustomServiceDialogOpen(false);
+        setActiveLineIdForCustomService(null);
+    };
+
+    const handleCustomServiceDataChange = (field, value) => {
+        setCustomServiceData(prev => {
+            const next = { ...prev, [field]: value };
+            if (field === 'mainCategoryId') {
+                next.subCategoryId = '';
+            }
+            return next;
+        });
+    };
+
+    const handleSubmitCustomService = async () => {
+        setCustomServiceError(null);
+        
+        // Validation
+        if (!customServiceData.mainCategoryId) {
+            setCustomServiceError('يرجى اختيار التصنيف الرئيسي');
+            return;
+        }
+        if (!customServiceData.serviceName.trim()) {
+            setCustomServiceError('يرجى إدخال اسم الخدمة');
+            return;
+        }
+        const priceNum = parseFloat(customServiceData.contractPrice);
+        if (isNaN(priceNum) || priceNum <= 0) {
+            setCustomServiceError('يرجى إدخال سعر تعاقدي صحيح أكبر من صفر');
+            return;
+        }
+
+        setAddingCustomService(true);
+        try {
+            // Determine final category id (subCategory if chosen, else mainCategory)
+            const finalCategoryId = customServiceData.subCategoryId || customServiceData.mainCategoryId;
+            
+            // Auto-generate service code if not provided
+            const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
+
+            const payload = {
+                serviceName: customServiceData.serviceName.trim(),
+                serviceCode: finalServiceCode,
+                medicalCategoryId: Number(finalCategoryId),
+                contractPrice: priceNum,
+                basePrice: priceNum,
+                unit: 'service',
+                currency: 'LYD',
+                providerId: providerId ? Number(providerId) : null
+            };
+
+            // Call the modified backend endpoint, passing the active providerId from search params
+            const response = await axiosClient.post(`/provider/my-contract/pricing?providerId=${providerId}`, payload);
+            const createdItem = response.data?.data || response.data;
+            
+            const newServiceId = createdItem.medicalServiceId || createdItem.serviceId || createdItem.id;
+
+            const newServiceObject = {
+                id: newServiceId,
+                pricingItemId: createdItem.pricingItemId || createdItem.id,
+                serviceCode: finalServiceCode,
+                serviceName: payload.serviceName,
+                categoryId: Number(finalCategoryId),
+                label: `[${finalServiceCode}] ${payload.serviceName}`,
+                contractPrice: priceNum,
+                price: priceNum
+            };
+
+            // Invalidate queries to refresh contracted services lists
+            queryClient.invalidateQueries({ queryKey: ['contracted-services', providerId] });
+
+            // Update the active claim line to select this newly added service
+            if (activeLineIdForCustomService) {
+                setLines((prev) =>
+                    prev.map((line) => {
+                        if (line.id !== activeLineIdForCustomService) return line;
+
+                        const linePatch = {
+                            service: newServiceObject,
+                            serviceName: payload.serviceName,
+                            serviceCode: finalServiceCode,
+                            unitPrice: priceNum,
+                            contractPrice: priceNum
+                        };
+                        
+                        return {
+                            ...line,
+                            ...linePatch
+                        };
+                    }).map((line, i, arr) => recompute(line, i, arr))
+                );
+            }
+
+            setCustomServiceDialogOpen(false);
+            enqueueSnackbar('تمت إضافة الخدمة وتحديدها بنجاح', { variant: 'success' });
+        } catch (err) {
+            console.error('Failed to add custom service pricing:', err);
+            setCustomServiceError(err?.response?.data?.message || 'فشل في حفظ الخدمة الجديدة في قائمة أسعار مقدم الخدمة. تأكد من صحة البيانات.');
+        } finally {
+            setAddingCustomService(false);
+        }
+    };
 
     // ── الاستعلامات ──────────────────────────────────────────────────────────
     const { data: employer } = useQuery({
@@ -682,7 +820,7 @@ export default function ClaimBatchEntry() {
 
     const serviceOptions = useMemo(() => {
         const items = Array.isArray(contractedRaw) ? contractedRaw : (contractedRaw?.items || []);
-        return items.map(s => {
+        const mapped = items.map(s => {
             const code = s.serviceCode || s.code || '';
             const name = s.serviceName || s.name || '';
             const normalizedCategoryId = s.categoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? null;
@@ -696,6 +834,29 @@ export default function ClaimBatchEntry() {
                 contractPrice: s.contractPrice || 0
             };
         });
+
+        const generalOptions = [
+            {
+                id: 'GEN-MEDICATION',
+                pricingItemId: null,
+                serviceCode: 'GEN-MEDICATION',
+                serviceName: 'دواء عام / General Medication',
+                label: '[GEN-MEDICATION] دواء عام / General Medication',
+                contractPrice: 0,
+                categoryId: null
+            },
+            {
+                id: 'GEN-MEDICAL-SERVICE',
+                pricingItemId: null,
+                serviceCode: 'GEN-MEDICAL-SERVICE',
+                serviceName: 'خدمة طبية عامة / General Medical Service',
+                label: '[GEN-MEDICAL-SERVICE] خدمة طبية عامة / General Medical Service',
+                contractPrice: 0,
+                categoryId: null
+            }
+        ];
+
+        return [...generalOptions, ...mapped];
     }, [contractedRaw]);
 
     const batchContent = useMemo(() =>
@@ -742,7 +903,10 @@ export default function ClaimBatchEntry() {
 
         const newName = svc.serviceName || svc.name;
 
-        const isDuplicate = lines.some((l, i) => {
+        const code = svc?.serviceCode || svc?.code;
+        const isGeneralService = code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE';
+
+        const isDuplicate = !isGeneralService && lines.some((l, i) => {
             if (i === idx) return false;
             const existingName = l.serviceName || l.service?.serviceName || l.service?.name;
             return newName && existingName && existingName === newName;
@@ -1261,12 +1425,8 @@ export default function ClaimBatchEntry() {
     const confirmDeleteClaim = async () => {
         const claimId = confirmDeleteId;
         if (!claimId) return;
-        if (!confirmDeleteReason?.trim()) {
-            enqueueSnackbar('يرجى إدخال سبب الإلغاء', { variant: 'warning' });
-            return;
-        }
         try {
-            await claimsService.remove(claimId, confirmDeleteReason);
+            await claimsService.remove(claimId, confirmDeleteReason || 'تم الإلغاء');
             enqueueSnackbar(`✅ تم إلغاء المطالبة #${claimId}`, { variant: 'success' });
             setConfirmDeleteId(null);
             invalidateBatchData();
@@ -1526,6 +1686,7 @@ export default function ClaimBatchEntry() {
                                             policyInfo={policyInfo}
                                             visibleColumns={visibleColumns}
                                             triggerConfirm={triggerConfirm}
+                                            onOpenCustomServiceDialog={() => handleOpenCustomServiceDialog(line.id)}
                                         />
                                     ))}
                                     <TableRow>
@@ -1759,26 +1920,17 @@ export default function ClaimBatchEntry() {
                 </DialogActions>
             </Dialog>
 
-            <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} maxWidth="sm" fullWidth>
+            <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} maxWidth="xs" fullWidth>
                 <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>
                     تأكيد إلغاء المطالبة
                 </DialogTitle>
                 <DialogContent>
-                    <Typography sx={{ mb: 2 }}>
-                        هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟ هذا الإجراء سيؤدي إلى استرجاع الأموال لسقف العضو.
+                    <Typography>
+                        هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟
                     </Typography>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        multiline
-                        rows={2}
-                        label="سبب الإلغاء (إجباري)"
-                        placeholder="اكتب سبب الإلغاء هنا..."
-                        value={confirmDeleteReason}
-                        onChange={(e) => setConfirmDeleteReason(e.target.value)}
-                        autoFocus
-                        error={!confirmDeleteReason?.trim()}
-                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                        سيتم استرجاع الأموال لسقف العضو تلقائياً.
+                    </Typography>
                 </DialogContent>
                 <DialogActions sx={{ p: '1.0rem' }}>
                     <Button onClick={() => setConfirmDeleteId(null)} color="inherit">تراجع</Button>
@@ -1786,7 +1938,6 @@ export default function ClaimBatchEntry() {
                         onClick={confirmDeleteClaim}
                         variant="contained"
                         color="error"
-                        disabled={!confirmDeleteReason?.trim()}
                     >
                         تأكيد الإلغاء
                     </Button>
@@ -1810,6 +1961,104 @@ export default function ClaimBatchEntry() {
                         color="primary"
                     >
                         متابعة العملية
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Custom Service Pricing Addition Dialog */}
+            <Dialog open={customServiceDialogOpen} onClose={handleCloseCustomServiceDialog} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <MedicalServicesIcon color="primary" />
+                    إضافة خدمة طبية جديدة لقائمة الأسعار
+                </DialogTitle>
+                <DialogContent dividers>
+                    <Stack spacing={3} sx={{ mt: 1 }}>
+                        {customServiceError && (
+                            <Alert severity="error" onClose={() => setCustomServiceError(null)}>
+                                {customServiceError}
+                            </Alert>
+                        )}
+
+                        {/* Main Category */}
+                        <FormControl fullWidth required>
+                            <InputLabel id="custom-service-main-cat-label">التصنيف الرئيسي *</InputLabel>
+                            <Select
+                                labelId="custom-service-main-cat-label"
+                                value={customServiceData.mainCategoryId || ''}
+                                onChange={(e) => handleCustomServiceDataChange('mainCategoryId', e.target.value)}
+                                label="التصنيف الرئيسي *"
+                            >
+                                {medicalCategories.filter(c => !c.parentId).map((cat) => (
+                                    <MenuItem key={cat.id} value={cat.id}>
+                                        {cat.name} ({cat.code})
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+
+                        {/* Sub-Category */}
+                        <FormControl fullWidth disabled={!customServiceData.mainCategoryId}>
+                            <InputLabel id="custom-service-sub-cat-label">التصنيف الفرعي</InputLabel>
+                            <Select
+                                labelId="custom-service-sub-cat-label"
+                                value={customServiceData.subCategoryId || ''}
+                                onChange={(e) => handleCustomServiceDataChange('subCategoryId', e.target.value)}
+                                label="التصنيف الفرعي"
+                            >
+                                <MenuItem value=""><em>بلا تصنيف فرعي (استخدام الرئيسي)</em></MenuItem>
+                                {medicalCategories.filter(c => c.parentId && String(c.parentId) === String(customServiceData.mainCategoryId)).map((cat) => (
+                                    <MenuItem key={cat.id} value={cat.id}>
+                                        {cat.name} ({cat.code})
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+
+                        {/* Service Name */}
+                        <TextField
+                            fullWidth
+                            required
+                            label="اسم الخدمة الطبية"
+                            placeholder="مثال: كشف طبيب عام، تحليل دم كامل..."
+                            value={customServiceData.serviceName}
+                            onChange={(e) => handleCustomServiceDataChange('serviceName', e.target.value)}
+                        />
+
+                        {/* Service Code */}
+                        <TextField
+                            fullWidth
+                            label="رمز الخدمة (تلقائي/اختياري)"
+                            placeholder="سيتم إنشاؤه تلقائياً إذا ترك فارغاً"
+                            value={customServiceData.serviceCode}
+                            onChange={(e) => handleCustomServiceDataChange('serviceCode', e.target.value)}
+                            helperText="رمز فريد للخدمة (مثل: SRV-01, LAB-05)"
+                        />
+
+                        {/* Price */}
+                        <TextField
+                            fullWidth
+                            required
+                            type="number"
+                            label="السعر التعاقدي (دينار ليبي)"
+                            placeholder="0.00"
+                            value={customServiceData.contractPrice}
+                            onChange={(e) => handleCustomServiceDataChange('contractPrice', e.target.value)}
+                            InputProps={{
+                                endAdornment: <Typography variant="body2" color="text.secondary">LYD</Typography>
+                            }}
+                        />
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2 }}>
+                    <Button onClick={handleCloseCustomServiceDialog} disabled={addingCustomService}>
+                        إلغاء
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleSubmitCustomService}
+                        disabled={addingCustomService || !customServiceData.mainCategoryId || !customServiceData.serviceName || !customServiceData.contractPrice}
+                    >
+                        {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة وحفظ لقائمة الأسعار'}
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -26,6 +26,11 @@ import java.time.LocalDate;
 public class ProviderContractPricingItemCreateDto {
 
     /**
+     * Optional provider ID for admin users adding pricing context
+     */
+    private Long providerId;
+
+    /**
      * Medical service ID (DEPRECATED - use serviceCode + medicalCategoryId instead)
      */
     @Deprecated

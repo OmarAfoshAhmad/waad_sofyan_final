@@ -44,6 +44,10 @@ import {
   Step,
   StepLabel,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   alpha
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -412,6 +416,163 @@ export default function ProviderClaimsSubmission() {
   const [providerChatInput, setProviderChatInput] = useState('');
   const [activeBatchId, setActiveBatchId] = useState(null);
   const [loadingBatch, setLoadingBatch] = useState(false);
+
+  // Custom Service Addition States
+  const [customServiceDialogOpen, setCustomServiceDialogOpen] = useState(false);
+  const [activeLineIdForCustomService, setActiveLineIdForCustomService] = useState(null);
+  const [customServiceData, setCustomServiceData] = useState({
+    mainCategoryId: '',
+    subCategoryId: '',
+    serviceName: '',
+    serviceCode: '',
+    contractPrice: ''
+  });
+  const [customServiceError, setCustomServiceError] = useState(null);
+  const [addingCustomService, setAddingCustomService] = useState(false);
+
+  const handleOpenCustomServiceDialog = (lineId) => {
+    const line = claimLines.find(l => l.id === lineId);
+    let initialMainCategoryId = '';
+    let initialSubCategoryId = '';
+
+    if (line && line.medicalCategoryId) {
+      const category = medicalCategories.find(c => normalizeId(c.id) === normalizeId(line.medicalCategoryId));
+      if (category) {
+        if (category.parentId) {
+          initialMainCategoryId = normalizeId(category.parentId);
+          initialSubCategoryId = normalizeId(category.id);
+        } else {
+          initialMainCategoryId = normalizeId(category.id);
+        }
+      }
+    }
+
+    setCustomServiceData({
+      mainCategoryId: initialMainCategoryId,
+      subCategoryId: initialSubCategoryId,
+      serviceName: '',
+      serviceCode: '',
+      contractPrice: ''
+    });
+    setCustomServiceError(null);
+    setActiveLineIdForCustomService(lineId);
+    setCustomServiceDialogOpen(true);
+  };
+
+  const handleCloseCustomServiceDialog = () => {
+    setCustomServiceDialogOpen(false);
+    setActiveLineIdForCustomService(null);
+  };
+
+  const handleCustomServiceDataChange = (field, value) => {
+    setCustomServiceData(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'mainCategoryId') {
+        next.subCategoryId = '';
+      }
+      return next;
+    });
+  };
+
+  const handleSubmitCustomService = async () => {
+    setCustomServiceError(null);
+    
+    // Validation
+    if (!customServiceData.mainCategoryId) {
+      setCustomServiceError('يرجير اختيار التصنيف الرئيسي');
+      return;
+    }
+    if (!customServiceData.serviceName.trim()) {
+      setCustomServiceError('يرجى إدخال اسم الخدمة');
+      return;
+    }
+    const priceNum = parseFloat(customServiceData.contractPrice);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setCustomServiceError('يرجى إدخال سعر تعاقدي صحيح أكبر من صفر');
+      return;
+    }
+
+    setAddingCustomService(true);
+    try {
+      // Determine final category id (subCategory if chosen, else mainCategory)
+      const finalCategoryId = customServiceData.subCategoryId || customServiceData.mainCategoryId;
+      
+      // Auto-generate service code if not provided
+      const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
+
+      const payload = {
+        serviceName: customServiceData.serviceName.trim(),
+        serviceCode: finalServiceCode,
+        medicalCategoryId: normalizeId(finalCategoryId),
+        contractPrice: priceNum,
+        basePrice: priceNum,
+        unit: 'service',
+        currency: 'LYD'
+      };
+
+      const response = await axiosClient.post('/provider/my-contract/pricing', payload);
+      const createdItem = response.data?.data || response.data;
+      
+      // Map the created item to match client-side service DTO structure
+      const newServiceId = normalizeId(createdItem.medicalServiceId || createdItem.serviceId || createdItem.id);
+      const matchingCategory = medicalCategories.find(c => normalizeId(c.id) === normalizeId(finalCategoryId)) || null;
+
+      const newServiceObject = {
+        id: newServiceId,
+        code: finalServiceCode,
+        name: payload.serviceName,
+        categoryId: normalizeId(finalCategoryId),
+        category: matchingCategory ? matchingCategory.name : '',
+        categoryCode: matchingCategory ? matchingCategory.code : '',
+        requiresPA: false,
+        price: priceNum,
+        basePrice: priceNum,
+        hasContract: true
+      };
+
+      setAvailableServices((prev) => {
+        if (prev.some(s => normalizeId(s.id) === newServiceId)) return prev;
+        return [...prev, newServiceObject];
+      });
+
+      // Update the active claim line to select this newly added service
+      if (activeLineIdForCustomService) {
+        setClaimLines((prev) =>
+          prev.map((line) => {
+            if (line.id !== activeLineIdForCustomService) return line;
+
+            const nextCategoryServices = [
+              ...(line.filteredServices || []).filter(s => normalizeId(s.id) !== newServiceId),
+              newServiceObject
+            ];
+
+            return {
+              ...line,
+              medicalCategoryId: normalizeId(finalCategoryId),
+              medicalCategoryName: matchingCategory ? matchingCategory.name : '',
+              medicalServiceId: newServiceId,
+              serviceName: payload.serviceName,
+              serviceCode: finalServiceCode,
+              unitPrice: priceNum,
+              hasContract: true,
+              filteredServices: nextCategoryServices,
+              priceError: null,
+              requiresPA: false
+            };
+          })
+        );
+      }
+
+      setCustomServiceDialogOpen(false);
+      // Trigger background refetch to be absolutely sync'd
+      fetchAvailableServices();
+    } catch (err) {
+      console.error('Failed to add custom service pricing:', err);
+      setCustomServiceError(err?.response?.data?.message || 'فشل في حفظ الخدمة الجديدة في قائمة أسعارك. تأكد من صحة البيانات.');
+    } finally {
+      setAddingCustomService(false);
+    }
+  };
 
   const providerChatStorageKey = useMemo(
     () => `provider-claim-chat-${activeClaimId || linkedVisitId || 'new'}`,
@@ -1445,6 +1606,104 @@ export default function ProviderClaimsSubmission() {
         ]}
       />
 
+      {/* Custom Service Pricing Addition Dialog */}
+      <Dialog open={customServiceDialogOpen} onClose={handleCloseCustomServiceDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <MedicalServicesIcon color="primary" />
+          إضافة خدمة طبية جديدة لقائمة الأسعار
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            {customServiceError && (
+              <Alert severity="error" onClose={() => setCustomServiceError(null)}>
+                {customServiceError}
+              </Alert>
+            )}
+
+            {/* Main Category */}
+            <FormControl fullWidth required>
+              <InputLabel id="custom-service-main-cat-label">التصنيف الرئيسي *</InputLabel>
+              <Select
+                labelId="custom-service-main-cat-label"
+                value={customServiceData.mainCategoryId || ''}
+                onChange={(e) => handleCustomServiceDataChange('mainCategoryId', e.target.value)}
+                label="التصنيف الرئيسي *"
+              >
+                {medicalCategories.filter(c => !c.parentId).map((cat) => (
+                  <MenuItem key={cat.id} value={cat.id}>
+                    {cat.name} ({cat.code})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Sub-Category */}
+            <FormControl fullWidth disabled={!customServiceData.mainCategoryId}>
+              <InputLabel id="custom-service-sub-cat-label">التصنيف الفرعي</InputLabel>
+              <Select
+                labelId="custom-service-sub-cat-label"
+                value={customServiceData.subCategoryId || ''}
+                onChange={(e) => handleCustomServiceDataChange('subCategoryId', e.target.value)}
+                label="التصنيف الفرعي"
+              >
+                <MenuItem value=""><em>بلا تصنيف فرعي (استخدام الرئيسي)</em></MenuItem>
+                {medicalCategories.filter(c => c.parentId && normalizeId(c.parentId) === normalizeId(customServiceData.mainCategoryId)).map((cat) => (
+                  <MenuItem key={cat.id} value={cat.id}>
+                    {cat.name} ({cat.code})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Service Name */}
+            <TextField
+              fullWidth
+              required
+              label="اسم الخدمة الطبية"
+              placeholder="مثال: كشف طبيب عام، تحليل دم كامل..."
+              value={customServiceData.serviceName}
+              onChange={(e) => handleCustomServiceDataChange('serviceName', e.target.value)}
+            />
+
+            {/* Service Code */}
+            <TextField
+              fullWidth
+              label="رمز الخدمة (تلقائي/اختياري)"
+              placeholder="سيتم إنشاؤه تلقائياً إذا ترك فارغاً"
+              value={customServiceData.serviceCode}
+              onChange={(e) => handleCustomServiceDataChange('serviceCode', e.target.value)}
+              helperText="رمز فريد للخدمة (مثل: SRV-01, LAB-05)"
+            />
+
+            {/* Price */}
+            <TextField
+              fullWidth
+              required
+              type="number"
+              label="السعر التعاقدي (دينار ليبي)"
+              placeholder="0.00"
+              value={customServiceData.contractPrice}
+              onChange={(e) => handleCustomServiceDataChange('contractPrice', e.target.value)}
+              InputProps={{
+                endAdornment: <Typography variant="body2" color="text.secondary">LYD</Typography>
+              }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleCloseCustomServiceDialog} disabled={addingCustomService}>
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitCustomService}
+            disabled={addingCustomService || !customServiceData.mainCategoryId || !customServiceData.serviceName || !customServiceData.contractPrice}
+          >
+            {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة وحفظ لقائمة الأسعار'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Grid container spacing={3} alignItems="flex-start">
         <Grid size={{ xs: 12, lg: 8.5 }}>
           <Stack spacing={3}>
@@ -1723,6 +1982,25 @@ export default function ProviderClaimsSubmission() {
                                 );
                               }}
                             />
+                            {line.medicalCategoryId && (
+                              <Button
+                                size="small"
+                                onClick={() => handleOpenCustomServiceDialog(line.id)}
+                                sx={{
+                                  mt: 0.5,
+                                  fontSize: '0.75rem',
+                                  p: 0,
+                                  minWidth: 0,
+                                  alignSelf: 'flex-start',
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  color: 'primary.main',
+                                  '&:hover': { textDecoration: 'underline', bgcolor: 'transparent' }
+                                }}
+                              >
+                                + إضافة خدمة جديدة لقائمة الأسعار
+                              </Button>
+                            )}
                           </TableCell>
 
                           {/* 💡 Diagnosis Association column (New) */}

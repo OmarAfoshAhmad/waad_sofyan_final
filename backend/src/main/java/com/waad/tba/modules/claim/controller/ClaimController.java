@@ -261,16 +261,16 @@ public class ClaimController {
     }
 
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Void>> deleteClaim(
             @PathVariable("id") Long id,
-            @RequestParam(name = "reason") String reason) {
+            @RequestParam(name = "reason", required = false) String reason) {
         claimService.deleteClaim(id, reason);
         return ResponseEntity.ok(ApiResponse.success("تم إلغاء المطالبة بنجاح", null));
     }
 
     @PutMapping("/{id:\\d+}/restore")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<ClaimViewDto>> restoreClaim(@PathVariable("id") Long id) {
         ClaimViewDto restored = claimService.restoreClaim(id);
         return ResponseEntity.ok(ApiResponse.success("تمت استعادة المطالبة بنجاح", restored));

@@ -7,6 +7,7 @@ export function useCoverageLogic({
     member,
     applyBenefits,
     rootCategories,
+    medicalCategories,
     primaryCategoryCode,
     recompute,
     currentClaimId,
@@ -85,10 +86,24 @@ export function useCoverageLogic({
     };
 
     const buildEngineLineInput = (line, idx, contextCatId = null) => {
-        const serviceOwnCategoryId = line?.service?.categoryId
+        let serviceOwnCategoryId = line?.service?.categoryId
             ?? line?.service?.medicalCategoryId
             ?? line?.service?.medicalCategory?.id
             ?? null;
+
+        const code = line?.serviceCode || line?.service?.serviceCode || line?.service?.code;
+        if (code === "GEN-MEDICATION" || code === "GEN-MEDICAL-SERVICE") {
+            let targetCode = "CAT-OP-GEN";
+            if (code === "GEN-MEDICATION") {
+                targetCode = "CAT-OP-DRUG";
+            } else if (primaryCategoryCode === "CAT-IP") {
+                targetCode = "CAT-IP-GEN";
+            }
+            const foundCat = medicalCategories?.find(c => c.code === targetCode);
+            if (foundCat) {
+                serviceOwnCategoryId = foundCat.id;
+            }
+        }
 
         return {
             lineId: line?.id || `line_${idx}`,
@@ -106,7 +121,22 @@ export function useCoverageLogic({
 
     const fetchCoverage = useCallback(async (service, categoryCodeOverride, lineId = null) => {
         const sid = service?.medicalServiceId || 0;
-        const serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
+        let serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
+        let isGeneralSvc = false;
+        const code = service?.serviceCode || service?.code;
+        if (code === "GEN-MEDICATION" || code === "GEN-MEDICAL-SERVICE") {
+            isGeneralSvc = true;
+            let targetCode = "CAT-OP-GEN";
+            if (code === "GEN-MEDICATION") {
+                targetCode = "CAT-OP-DRUG";
+            } else if (categoryCodeOverride === "CAT-IP") {
+                targetCode = "CAT-IP-GEN";
+            }
+            const foundCat = medicalCategories?.find(c => c.code === targetCode);
+            if (foundCat) {
+                serviceOwnCategoryId = foundCat.id;
+            }
+        }
         let categoryId = serviceOwnCategoryId;
         const fallbackPercent = policyInfo?.defaultCoveragePercent ?? 100;
 
@@ -117,7 +147,7 @@ export function useCoverageLogic({
             return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
 
         try {
-            if (categoryCodeOverride) {
+            if (!isGeneralSvc && categoryCodeOverride) {
                 const cat = rootCategories?.find(c => c.code === categoryCodeOverride);
                 if (cat) categoryId = cat.id;
             }
