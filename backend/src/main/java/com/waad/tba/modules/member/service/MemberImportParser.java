@@ -12,6 +12,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.springframework.stereotype.Component;
 
 import com.waad.tba.modules.member.entity.Member.Gender;
+import com.waad.tba.modules.member.entity.Member.Relationship;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -140,6 +141,43 @@ public class MemberImportParser {
         }
         return null;
     }
+
+    public Relationship parseRelationship(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String val = normalizeExcelValue(value).toLowerCase();
+        if (val.contains("موظف") || val.contains("موظفه") || val.contains("موظفة") || val.contains("مشترك") || val.contains("رئيسي")) {
+            return null; // Principal
+        }
+        if (val.contains("زوجة") || val.contains("زوجه") || val.contains("زوجة شهيد") || val.contains("زوجة شهيد")) {
+            return Relationship.WIFE;
+        }
+        if (val.equals("زوج")) {
+            return Relationship.HUSBAND;
+        }
+        if (val.contains("ابن") || val.contains("ولد") || val.contains("ابناء")) {
+            return Relationship.SON;
+        }
+        if (val.contains("ابنة") || val.contains("ابنه") || val.contains("بنت")) {
+            return Relationship.DAUGHTER;
+        }
+        if (val.contains("أب") || val.contains("اب") || val.contains("والد")) {
+            return Relationship.FATHER;
+        }
+        if (val.contains("أم") || val.contains("ام") || val.contains("والدة") || val.contains("والده")) {
+            return Relationship.MOTHER;
+        }
+        if (val.contains("أخ") || val.contains("اخ") || val.contains("شقيق")) {
+            return Relationship.BROTHER;
+        }
+        if (val.contains("أخت") || val.contains("اخت") || val.contains("شقيقة") || val.contains("شقيقه")) {
+            return Relationship.SISTER;
+        }
+        return null;
+    }
+
+
 
     public String getFieldValue(Row row, Map<String, Integer> fieldToColumnIndex, String field) {
         Integer colIndex = fieldToColumnIndex.get(field);

@@ -21,6 +21,7 @@ import com.waad.tba.modules.member.dto.MemberImportPreviewDto.MemberImportRowDto
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.Member.Gender;
 import com.waad.tba.modules.member.entity.Member.MemberStatus;
+import com.waad.tba.modules.member.entity.Member.Relationship;
 import com.waad.tba.modules.member.entity.MemberAttribute;
 import com.waad.tba.modules.member.entity.MemberAttribute.AttributeSource;
 
@@ -40,6 +41,17 @@ public class MemberImportRowProcessor {
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final Map<String, Optional<Employer>> employerCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Optional<Employer> findEmployerCached(String nameOrCode) {
+        if (nameOrCode == null || nameOrCode.isBlank()) return Optional.empty();
+        String normalized = nameOrCode.trim().toLowerCase();
+        return employerCache.computeIfAbsent(normalized, key -> {
+            return employerRepository.findByNameIgnoreCase(key)
+                    .or(() -> employerRepository.findByCode(key));
+        });
+    }
+
 
     public MemberImportRowDto parseRowForPreview(Row row, int rowNum,
             Map<String, Integer> fieldToColumnIndex,
@@ -84,8 +96,7 @@ public class MemberImportRowProcessor {
                 hasWarning = true;
             }
         } else {
-            Optional<Employer> employerOpt = employerRepository.findByNameIgnoreCase(employerName)
-                    .or(() -> employerRepository.findByCode(employerName));
+            Optional<Employer> employerOpt = findEmployerCached(employerName);
 
             if (employerOpt.isEmpty()) {
                 if (defaultEmployer == null) {
@@ -135,7 +146,10 @@ public class MemberImportRowProcessor {
     public Member processRowForImport(Row row, int rowNum,
             Map<String, Integer> fieldToColumnIndex,
             Employer defaultEmployer,
-            BenefitPolicy benefitPolicy) {
+            BenefitPolicy benefitPolicy,
+            Member parent,
+            Relationship relationship,
+            Member existingMember) {
 
         String fullName = parser.getFieldValue(row, fieldToColumnIndex, "fullName");
         String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
@@ -155,23 +169,50 @@ public class MemberImportRowProcessor {
                     .orElse(null);
         }
 
-        Member member = Member.builder()
-                .fullName(fullName)
-                .employer(rowEmployer)
-                .benefitPolicy(resolvedPolicy)
-                .status(MemberStatus.ACTIVE)
-                .cardStatus(Member.CardStatus.ACTIVE)
-                .active(true)
-                .barcode(barcodeGeneratorService.generateForPrincipal())
-                .build();
+        // If parent is present, use parent's policy, policyNumber and employer
+        Employer finalEmployer = parent != null ? parent.getEmployer() : rowEmployer;
+        BenefitPolicy finalPolicy = parent != null ? parent.getBenefitPolicy() : resolvedPolicy;
+        String finalPolicyNumber = parent != null ? parent.getPolicyNumber() : policyNumber;
 
-        // Set card number: use value from Excel if present, otherwise generate a unique
-        // one
+        Member member;
+        if (existingMember != null) {
+            member = existingMember;
+            member.setFullName(fullName);
+            member.setEmployer(finalEmployer);
+            member.setBenefitPolicy(finalPolicy);
+            member.setParent(parent);
+            member.setRelationship(relationship);
+            member.setStatus(MemberStatus.ACTIVE);
+            member.setCardStatus(Member.CardStatus.ACTIVE);
+            member.setActive(true);
+            member.getAttributes().clear();
+            if (parent == null && member.getBarcode() == null) {
+                member.setBarcode(barcodeGeneratorService.generateForPrincipal());
+            }
+        } else {
+            member = Member.builder()
+                    .fullName(fullName)
+                    .employer(finalEmployer)
+                    .benefitPolicy(finalPolicy)
+                    .status(MemberStatus.ACTIVE)
+                    .cardStatus(Member.CardStatus.ACTIVE)
+                    .active(true)
+                    .parent(parent)
+                    .relationship(relationship)
+                    .barcode(parent == null ? barcodeGeneratorService.generateForPrincipal() : null)
+                    .build();
+        }
+
+        // Set card number: use value from Excel if present, otherwise generate a unique one
         String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
         if (cardNumber != null && !cardNumber.isBlank()) {
             member.setCardNumber(cardNumber.trim());
-        } else {
-            member.setCardNumber(cardNumberGeneratorService.generateUniqueForPrincipal(member));
+        } else if (member.getCardNumber() == null) {
+            if (parent == null) {
+                member.setCardNumber(cardNumberGeneratorService.generateUniqueForPrincipal(member));
+            } else {
+                member.setCardNumber(cardNumberGeneratorService.generateForDependent(parent, relationship));
+            }
         }
 
         if (civilId != null && !civilId.isBlank())
@@ -204,8 +245,8 @@ public class MemberImportRowProcessor {
         if (employeeNumber != null && !employeeNumber.isBlank())
             member.setEmployeeNumber(employeeNumber);
 
-        if (policyNumber != null && !policyNumber.isBlank())
-            member.setPolicyNumber(policyNumber);
+        if (finalPolicyNumber != null && !finalPolicyNumber.isBlank())
+            member.setPolicyNumber(finalPolicyNumber);
 
         if (startDateStr != null && !startDateStr.isBlank()) {
             LocalDate parsedStartDate = parser.parseDate(startDateStr);
@@ -241,8 +282,7 @@ public class MemberImportRowProcessor {
         }
 
         String normalized = employerNameOrCode.trim();
-        Optional<Employer> resolvedOptional = employerRepository.findByNameIgnoreCase(normalized)
-                .or(() -> employerRepository.findByCode(normalized));
+        Optional<Employer> resolvedOptional = findEmployerCached(normalized);
 
         if (resolvedOptional.isEmpty()) {
             if (defaultEmployer != null)

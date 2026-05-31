@@ -34,6 +34,7 @@ import com.waad.tba.modules.member.dto.MemberImportPreviewDto.MemberImportRowDto
 import com.waad.tba.modules.member.dto.MemberImportResultDto;
 import com.waad.tba.modules.member.dto.MemberImportResultDto.ImportErrorDetailDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.Member.Relationship;
 import com.waad.tba.modules.member.entity.MemberImportError;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
@@ -73,6 +74,7 @@ public class MemberExcelImportService {
     private final MemberImportParser parser;
     private final MemberImportMapper mapper;
     private final MemberImportRowProcessor rowProcessor;
+    private final BarcodeGeneratorService barcodeGeneratorService;
 
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
@@ -301,6 +303,13 @@ public class MemberExcelImportService {
                 mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
             }
 
+            Map<String, Member> memberCache = new HashMap<>();
+            for (Member m : memberRepository.findAll()) {
+                if (m.getCardNumber() != null) {
+                    memberCache.put(m.getCardNumber().trim().toUpperCase(), m);
+                }
+            }
+
             for (int rowIndex = resolvedHeaderRowNumber + 1; rowIndex <= physicalLastRow; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
                 if (row == null || parser.isEmptyRow(row)) { skippedCount++; continue; }
@@ -308,8 +317,40 @@ public class MemberExcelImportService {
                 int rowNum = rowIndex - resolvedHeaderRowNumber;
 
                 try {
-                    Member member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy);
-                    memberBuffer.add(member);
+                    String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
+                    CardInfo cardInfo = parseCardNumber(cardNumber);
+                    Relationship relationship = cardInfo.relationship;
+                    String parentCardNumber = cardInfo.parentCardNumber;
+
+                    Member parent = null;
+                    if (parentCardNumber != null) {
+                        String parentCardKey = parentCardNumber.trim().toUpperCase();
+                        parent = memberCache.get(parentCardKey);
+                        if (parent == null) {
+                            parent = createDummyParent(parentCardNumber, row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy);
+                            memberCache.put(parentCardKey, parent);
+                        }
+                    }
+
+                    Member existingMember = null;
+                    if (cardNumber != null && !cardNumber.isBlank()) {
+                        String cardKey = cardNumber.trim().toUpperCase();
+                        existingMember = memberCache.get(cardKey);
+                    }
+
+                    Member member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
+                    if (parent == null) {
+                        member = memberRepository.save(member);
+                        if (member.getCardNumber() != null) {
+                            memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
+                        }
+                    } else {
+                        memberBuffer.add(member);
+                        if (member.getCardNumber() != null) {
+                            memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
+                        }
+                    }
+
                     createdCount++;
                     importLog.incrementCreated();
                     if (memberBuffer.size() >= BATCH_SIZE) {
@@ -439,5 +480,68 @@ public class MemberExcelImportService {
             memberRepository.deleteMembersByIds(principalsToDelete);
             log.info("🧹 Deleted {} principal members in bulk", principalsToDelete.size());
         }
+    }
+
+    public static class CardInfo {
+        public final Relationship relationship;
+        public final String parentCardNumber;
+
+        public CardInfo(Relationship relationship, String parentCardNumber) {
+            this.relationship = relationship;
+            this.parentCardNumber = parentCardNumber;
+        }
+    }
+
+    public CardInfo parseCardNumber(String card) {
+        if (card == null || card.isBlank()) {
+            return new CardInfo(null, null);
+        }
+        card = card.trim();
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("^(.*?[0-9]+)-?([WwHhSsDdMmFfBbZz]|[Ss][Rr])(\\d*)$");
+        java.util.regex.Matcher matcher = pattern.matcher(card);
+        if (matcher.find()) {
+            String parentCard = matcher.group(1);
+            String relChar = matcher.group(2).toUpperCase();
+            Relationship rel = switch (relChar) {
+                case "W" -> Relationship.WIFE;
+                case "H" -> Relationship.HUSBAND;
+                case "S" -> Relationship.SON;
+                case "D" -> Relationship.DAUGHTER;
+                case "M" -> Relationship.MOTHER;
+                case "F" -> Relationship.FATHER;
+                case "B" -> Relationship.BROTHER;
+                case "Z", "SR" -> Relationship.SISTER;
+                default -> null;
+            };
+            return new CardInfo(rel, parentCard);
+        }
+        return new CardInfo(null, null);
+    }
+
+
+    private Member createDummyParent(String parentCardNumber, Row row, int rowNum,
+                                     Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer,
+                                     BenefitPolicy benefitPolicy) {
+        Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
+        BenefitPolicy resolvedPolicy = benefitPolicy;
+        if (resolvedPolicy == null && rowEmployer != null) {
+            resolvedPolicy = benefitPolicyRepository
+                    .findActiveEffectivePolicyForEmployer(rowEmployer.getId(), java.time.LocalDate.now())
+                    .orElse(null);
+        }
+        String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
+        
+        Member parent = Member.builder()
+                .cardNumber(parentCardNumber)
+                .fullName("حامل بطاقة " + parentCardNumber.replace("JFZ2025", ""))
+                .employer(rowEmployer)
+                .benefitPolicy(resolvedPolicy)
+                .policyNumber(policyNumber)
+                .status(Member.MemberStatus.ACTIVE)
+                .cardStatus(Member.CardStatus.ACTIVE)
+                .active(true)
+                .barcode(barcodeGeneratorService.generateForPrincipal())
+                .build();
+        return memberRepository.save(parent);
     }
 }

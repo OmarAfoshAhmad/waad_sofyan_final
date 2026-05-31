@@ -201,8 +201,9 @@ public class CardNumberGeneratorService {
         // Normalize for checking format (remove hyphens to handle all suffix formats)
         String clean = cardNumber.trim().toUpperCase(java.util.Locale.ROOT).replace("-", "");
         
-        // Dependent suffixes end with a relationship code followed by optional digits (e.g. W, D1, SR2)
-        boolean hasHyphenlessSuffix = clean.matches(".+(W|H|S|D|F|M|B|SR)[0-9]*$");
+        // Dependent suffixes end with a relationship code followed by optional digits (e.g. W, D1, SR2, Z1)
+        // Must be preceded by digits to avoid matching prefix characters (e.g. 'Z' in 'JFZ')
+        boolean hasHyphenlessSuffix = clean.matches(".+[0-9]+(W|H|S|D|F|M|B|SR|Z)[0-9]*$");
         return !hasHyphenlessSuffix;
     }
 
@@ -232,8 +233,8 @@ public class CardNumberGeneratorService {
         
         // 2. Check new hyphenless format (e.g., JFZ13544D1 or JFZ13544W)
         String cleanHyphenless = clean.replace("-", "");
-        String regex = "(W|H|S|D|F|M|B|SR)[0-9]*$";
-        if (cleanHyphenless.matches(".+" + regex)) {
+        String regex = "(W|H|S|D|F|M|B|SR|Z)[0-9]*$";
+        if (cleanHyphenless.matches(".+[0-9]+" + regex)) {
             return cleanHyphenless.replaceAll(regex, "");
         }
         return cleanHyphenless;

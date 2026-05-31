@@ -121,6 +121,11 @@ public class MemberImportFieldConfig {
             Map.entry("maritalStatus", new String[] {
                     "marital_status", "marital", "status_marital",
                     "الحالة الاجتماعية", "الحالة الزوجية"
+            }),
+            // Relationship - الصلة
+            Map.entry("relationship", new String[] {
+                    "relationship", "relation", "relative_relation", "rel",
+                    "الصلة", "صلة القرابة", "صلة", "الصلة بالموظف", "القرابة"
             }));
 
     /**

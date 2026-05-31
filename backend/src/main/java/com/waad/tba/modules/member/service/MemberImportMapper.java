@@ -148,7 +148,7 @@ public class MemberImportMapper {
         // Substring match:
         // Only allow substring matching if variant is longer (like "fullname", "employeeid") to prevent false positives for short keys
         if (cleanVariant.length() >= 4) {
-            return cleanHeader.contains(cleanVariant) || cleanVariant.contains(cleanHeader);
+            return cleanHeader.contains(cleanVariant);
         }
 
         return false;

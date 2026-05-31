@@ -99,6 +99,7 @@ class MemberExcelImportServiceTest {
                 parser,
                 mapper,
                 rowProcessor,
+                barcodeGeneratorService,
                 visitRepository,
                 claimRepository,
                 preAuthorizationRepository,
@@ -206,6 +207,25 @@ class MemberExcelImportServiceTest {
         assertThat(result.getUpdatedCount()).isEqualTo(0);
         assertThat(result.getErrorCount()).isEqualTo(1);
         assertThat(result.getStatus()).isEqualTo("PARTIAL");
+    }
+
+    @Test
+    void parseCardNumber_shouldCorrectlyParsePrefixAndRelationship() {
+        var card1 = service.parseCardNumber("JFZ20255001S1");
+        assertThat(card1.relationship).isEqualTo(com.waad.tba.modules.member.entity.Member.Relationship.SON);
+        assertThat(card1.parentCardNumber).isEqualTo("JFZ20255001");
+
+        var card2 = service.parseCardNumber("JFZ20255005");
+        assertThat(card2.relationship).isNull();
+        assertThat(card2.parentCardNumber).isNull();
+
+        var card3 = service.parseCardNumber("JFZ202531982A");
+        assertThat(card3.relationship).isNull();
+        assertThat(card3.parentCardNumber).isNull();
+
+        var card4 = service.parseCardNumber("LCC-2025-12345-D1");
+        assertThat(card4.relationship).isEqualTo(com.waad.tba.modules.member.entity.Member.Relationship.DAUGHTER);
+        assertThat(card4.parentCardNumber).isEqualTo("LCC-2025-12345");
     }
 
     private MockMultipartFile buildExcelFile(List<String[]> rows) throws Exception {
