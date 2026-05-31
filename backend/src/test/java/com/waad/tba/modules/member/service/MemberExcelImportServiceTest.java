@@ -38,6 +38,10 @@ import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.visit.repository.VisitRepository;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthEmailRequestRepository;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -61,6 +65,14 @@ class MemberExcelImportServiceTest {
     private BarcodeGeneratorService barcodeGeneratorService;
     @Mock
     private CardNumberGeneratorService cardNumberGeneratorService;
+    @Mock
+    private VisitRepository visitRepository;
+    @Mock
+    private ClaimRepository claimRepository;
+    @Mock
+    private PreAuthorizationRepository preAuthorizationRepository;
+    @Mock
+    private PreAuthEmailRequestRepository preAuthEmailRequestRepository;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -77,6 +89,7 @@ class MemberExcelImportServiceTest {
 
         service = new MemberExcelImportService(
                 memberRepository,
+                attributeRepository,
                 importLogRepository,
                 importErrorRepository,
                 employerRepository,
@@ -85,7 +98,11 @@ class MemberExcelImportServiceTest {
                 new ObjectMapper(),
                 parser,
                 mapper,
-                rowProcessor);
+                rowProcessor,
+                visitRepository,
+                claimRepository,
+                preAuthorizationRepository,
+                preAuthEmailRequestRepository);
 
         employer = Employer.builder().id(10L).code("EMP1").name("Employer One").active(true).build();
 
@@ -160,6 +177,20 @@ class MemberExcelImportServiceTest {
         assertThat(preview.getErrors())
                 .anyMatch(error -> "employer".equals(error.getField())
                         && error.getMessage().contains("Employer not found"));
+    }
+
+    @Test
+    void parsePreview_smartColumnMapping_shouldSuccessfullyMapColumns() throws Exception {
+        MockMultipartFile file = buildExcelFile(List.of(
+                new String[] { "  اسم المستفيد  * ", " جهة العمل (الشركه) ", "الرقم الوطني للمستفيد", "تاريخ البدء", "رقم العقد" },
+                new String[] { "Ali Hasan", "EMP1", "1234567890", "2026-02-01", "POL-1" }));
+
+        MemberImportPreviewDto preview = service.parseAndPreview(file, null, 0);
+
+        assertThat(preview.getTotalRows()).isEqualTo(1);
+        assertThat(preview.getValidRows()).isEqualTo(1);
+        assertThat(preview.getInvalidRows()).isEqualTo(0);
+        assertThat(preview.isCanProceed()).isTrue();
     }
 
     @Test

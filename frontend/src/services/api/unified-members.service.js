@@ -335,10 +335,16 @@ export const countDependents = async (principalId) => {
  * @param {File} file - Excel file
  * @returns {Promise<any>} Import result
  */
-export const importMembers = async (file) => {
+export const importMembers = async (file, clearOldMembers = false, employerId = null) => {
   try {
     const formData = new FormData();
     formData.append('file', file);
+    if (clearOldMembers) {
+      formData.append('clearOldMembers', clearOldMembers);
+    }
+    if (employerId) {
+      formData.append('employerId', employerId);
+    }
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
@@ -425,6 +431,9 @@ export const executeImport = async (file, params) => {
     }
     if (params.importPolicy) {
       formData.append('importPolicy', params.importPolicy);
+    }
+    if (params.clearOldMembers !== undefined) {
+      formData.append('clearOldMembers', params.clearOldMembers);
     }
 
     const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/import/execute`, formData, {

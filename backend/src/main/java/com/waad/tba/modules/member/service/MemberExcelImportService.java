@@ -36,10 +36,15 @@ import com.waad.tba.modules.member.dto.MemberImportResultDto.ImportErrorDetailDt
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.MemberImportError;
 import com.waad.tba.modules.member.entity.MemberImportLog;
+import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberImportErrorRepository;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.visit.repository.VisitRepository;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthEmailRequestRepository;
 import com.waad.tba.security.AuthorizationService;
 
 import lombok.RequiredArgsConstructor;
@@ -57,6 +62,7 @@ public class MemberExcelImportService {
     private static final int BATCH_SIZE = 100;
 
     private final MemberRepository memberRepository;
+    private final MemberAttributeRepository memberAttributeRepository;
     private final MemberImportLogRepository importLogRepository;
     private final MemberImportErrorRepository importErrorRepository;
     private final EmployerRepository employerRepository;
@@ -67,6 +73,11 @@ public class MemberExcelImportService {
     private final MemberImportParser parser;
     private final MemberImportMapper mapper;
     private final MemberImportRowProcessor rowProcessor;
+
+    private final VisitRepository visitRepository;
+    private final ClaimRepository claimRepository;
+    private final PreAuthorizationRepository preAuthorizationRepository;
+    private final PreAuthEmailRequestRepository preAuthEmailRequestRepository;
 
     public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws Exception {
         return parseAndPreview(file, null, null, null);
@@ -199,11 +210,59 @@ public class MemberExcelImportService {
     }
 
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId) throws Exception {
-        return executeImport(file, batchId, employerId, benefitPolicyId, null);
+        return executeImport(file, batchId, employerId, benefitPolicyId, null, false);
     }
 
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber) throws Exception {
-        log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId);
+        return executeImport(file, batchId, employerId, benefitPolicyId, headerRowNumber, false);
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void clearOldMembersForFile(MultipartFile file, Long employerId, Integer headerRowNumber) {
+        if (employerId != null) {
+            clearOldMembers(employerId);
+        } else {
+            Set<Long> detectedEmployerIds = new HashSet<>();
+            try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
+                Sheet sheet = workbook.getSheetAt(0);
+                int physicalLastRow = sheet.getLastRowNum();
+                int resolvedHeaderRowNumber = headerRowNumber != null ? Math.max(0, headerRowNumber) : mapper.detectHeaderRowNumber(sheet);
+                Row headerRow = sheet.getRow(resolvedHeaderRowNumber);
+                if (headerRow != null) {
+                    Map<String, Integer> fieldToColumnIndex = new HashMap<>();
+                    for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                        String colName = parser.cleanColumnName(parser.getCellStringValue(headerRow.getCell(i))).toLowerCase();
+                        mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
+                    }
+                    for (int rowIndex = resolvedHeaderRowNumber + 1; rowIndex <= physicalLastRow; rowIndex++) {
+                        Row row = sheet.getRow(rowIndex);
+                        if (row == null || parser.isEmptyRow(row)) continue;
+                        try {
+                            Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowIndex - resolvedHeaderRowNumber, fieldToColumnIndex, null);
+                            if (rowEmployer != null) {
+                                detectedEmployerIds.add(rowEmployer.getId());
+                            }
+                        } catch (Exception e) {
+                            // Ignore row parsing errors during scan
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error scanning file for employers to clear", e);
+            }
+            for (Long empId : detectedEmployerIds) {
+                clearOldMembers(empId);
+            }
+        }
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws Exception {
+        log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}, clearOldMembers={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId, clearOldMembers);
+
+        if (Boolean.TRUE.equals(clearOldMembers)) {
+            clearOldMembersForFile(file, employerId, headerRowNumber);
+        }
 
         MemberImportPreviewDto previewGuard = parseAndPreview(file, null, headerRowNumber, employerId);
         if (previewGuard.getValidRows() <= 0) throw new BusinessRuleException("لا يوجد صفوف صالحة للاستيراد");
@@ -307,5 +366,78 @@ public class MemberExcelImportService {
             if (value != null) data.put(entry.getValue(), value);
         }
         try { return objectMapper.writeValueAsString(data); } catch (JsonProcessingException e) { return "{}"; }
+    }
+
+    private void clearOldMembers(Long employerId) {
+        log.info("🧹 Clearing old members for employerId={} who do not have financial movements", employerId);
+        List<Member> allMembers = memberRepository.findByEmployerId(employerId);
+        if (allMembers.isEmpty()) {
+            return;
+        }
+
+        Set<Long> allMemberIds = new HashSet<>();
+        Map<Long, Member> memberMap = new HashMap<>();
+        for (Member m : allMembers) {
+            allMemberIds.add(m.getId());
+            memberMap.put(m.getId(), m);
+        }
+
+        // Fetch movements in bulk (3 fast queries)
+        Set<Long> idsWithMovements = new HashSet<>();
+        idsWithMovements.addAll(visitRepository.findMemberIdsWithVisits(allMemberIds));
+        idsWithMovements.addAll(claimRepository.findMemberIdsWithClaims(allMemberIds));
+        idsWithMovements.addAll(preAuthorizationRepository.findMemberIdsWithPreAuths(allMemberIds));
+
+        // Determine which members to keep:
+        // A member is kept if they have movements, or if they are a principal and have a dependent with movements.
+        Set<Long> keepIds = new HashSet<>();
+        for (Long id : idsWithMovements) {
+            keepIds.add(id);
+            Member m = memberMap.get(id);
+            if (m != null && m.getParent() != null) {
+                keepIds.add(m.getParent().getId());
+            }
+        }
+
+        // Members to delete are those not in keepIds
+        Set<Long> memberIdsToDelete = new HashSet<>(allMemberIds);
+        memberIdsToDelete.removeAll(keepIds);
+
+        if (memberIdsToDelete.isEmpty()) {
+            return;
+        }
+
+        // Nullify in PreAuthEmailRequest in bulk
+        preAuthEmailRequestRepository.nullifyMemberIds(memberIdsToDelete);
+
+        // Separate dependents and principals to delete
+        List<Long> dependentsToDelete = new ArrayList<>();
+        List<Long> principalsToDelete = new ArrayList<>();
+
+        for (Long id : memberIdsToDelete) {
+            Member m = memberMap.get(id);
+            if (m != null) {
+                if (m.isDependent()) {
+                    dependentsToDelete.add(id);
+                } else {
+                    principalsToDelete.add(id);
+                }
+            }
+        }
+
+        // Delete member attributes for all members to delete in bulk to prevent FK issues
+        memberAttributeRepository.deleteByMemberIdIn(memberIdsToDelete);
+
+        // Delete dependents first to avoid parent dependency constraints
+        if (!dependentsToDelete.isEmpty()) {
+            memberRepository.deleteMembersByIds(dependentsToDelete);
+            log.info("🧹 Deleted {} dependent members in bulk", dependentsToDelete.size());
+        }
+
+        // Delete principals in bulk
+        if (!principalsToDelete.isEmpty()) {
+            memberRepository.deleteMembersByIds(principalsToDelete);
+            log.info("🧹 Deleted {} principal members in bulk", principalsToDelete.size());
+        }
     }
 }

@@ -33,6 +33,24 @@ import useAuth from 'hooks/useAuth';
 // Services
 import { getEmployerSelectors } from 'services/api/employers.service';
 
+// Module-level cache — shared across ALL instances to prevent duplicate API calls
+let _cachedSelectors = null;
+let _cachePromise = null;
+
+const getEmployerSelectorsCached = async () => {
+  if (_cachedSelectors) return _cachedSelectors;
+  if (_cachePromise) return _cachePromise;
+  _cachePromise = getEmployerSelectors().then((data) => {
+    _cachedSelectors = data;
+    _cachePromise = null;
+    return data;
+  }).catch((err) => {
+    _cachePromise = null;
+    throw err;
+  });
+  return _cachePromise;
+};
+
 // Context - for auto-connect mode
 import { useEmployerFilter } from 'contexts/EmployerFilterContext';
 
@@ -87,7 +105,7 @@ const EmployerFilterSelector = ({
     const loadEmployers = async () => {
       try {
         setLoading(true);
-        const response = await getEmployerSelectors();
+        const response = await getEmployerSelectorsCached();
 
         // Response should be array of { id, label, code }
         let items = Array.isArray(response) ? response : [];

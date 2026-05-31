@@ -1337,4 +1337,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
                         @Param("employerOrgId") Long employerOrgId);
 
+        @Query("SELECT DISTINCT c.member.id FROM Claim c WHERE c.member.id IN :memberIds")
+        List<Long> findMemberIdsWithClaims(@Param("memberIds") java.util.Collection<Long> memberIds);
+
 }

@@ -25,44 +25,54 @@ public class MemberImportFieldConfig {
     /**
      * Mandatory columns (at least one variant required)
      */
-    public static final List<String[]> MANDATORY_COLUMNS = List.of(
+    public static final List<String[]> MANDATORY_COLUMNS = java.util.Collections.singletonList(
             // Full Name - الاسم الكامل (MANDATORY)
             new String[] {
                     "full_name", "name", "full_name_arabic", "fullname", "member_name",
+                    "full-name", "full name", "member name", "beneficiary name", "beneficiary_name",
+                    "subscriber name", "subscriber_name", "patient name", "patient_name",
                     "الاسم الكامل", "الاسم", "اسم الموظف", "الاسم بالعربية", "اسم العضو",
-                    "الاسم الثلاثي", "الاسم الرباعي", "اسم المؤمن عليه"
-            },
-            // Employer - جهة العمل (MANDATORY)
-            new String[] {
-                    "employer", "company", "company_id", "company_name", "employer_name",
-                    "work_company", "organization", "employer_code",
-                    "جهة العمل", "الشركة", "اسم الشركة", "المؤسسة", "جهة الانتساب",
-                    "صاحب العمل", "الجهة", "مكان العمل", "كود الجهة"
+                    "الاسم الثلاثي", "الاسم الرباعي", "اسم المؤمن عليه", "اسم المستفيد",
+                    "اسم المشترك", "اسم المريض", "الاسم بالكامل", "الاسم العربي", "المستفيد",
+                    "اسم المؤمن"
             });
 
     /**
      * Optional core field mappings
      */
     public static final Map<String, String[]> OPTIONAL_FIELD_MAPPINGS = Map.ofEntries(
+            // Employer - جهة العمل (OPTIONAL)
+            Map.entry("employer", new String[] {
+                    "employer", "company", "company_id", "company_name", "employer_name",
+                    "work_company", "organization", "employer_code", "employer name", "company name",
+                    "جهة العمل", "الشركة", "اسم الشركة", "المؤسسة", "جهة الانتساب",
+                    "صاحب العمل", "الجهة", "مكان العمل", "كود الجهة", "اسم جهة العمل",
+                    "الشركه"
+            }),
             // Civil ID - الرقم الوطني
             Map.entry("nationalNumber", new String[] {
                     "national_id", "identification_id", "civil_id", "civilid", "national_number",
-                    "id_number", "identity_number",
+                    "id_number", "identity_number", "national id", "civil id", "id number",
+                    "identity number", "national number", "identity",
                     "الرقم الوطني", "رقم الهوية", "الرقم المدني", "رقم البطاقة الشخصية",
-                    "رقم الهوية الوطنية"
+                    "رقم الهوية الوطنية", "رقم بطاقة الاحوال", "رقم الهويه", "الرقم الوطني للمستفيد",
+                    "الرقم الوطني للعضو", "رقم بطاقة الهوية"
             }),
             // Card Number / Barcode - IGNORED by logic but defined for mapping
             Map.entry("cardNumber", new String[] {
                     "card_number", "cardnumber", "card number", "member_no", "member_number",
                     "insurance_no", "insurance_number", "membership_no", "membership_number",
-                    "barcode", "badge_id", "employee_id",
+                    "barcode", "badge_id", "employee_id", "card no", "member no", "member number",
+                    "insurance number", "card_no", "card-number", "card-no", "principal_card_number",
+                    "principal card number", "principal-card-number",
                     "رقم البطاقة", "رقم العضوية", "رقم التأمين", "رقم العضو", "رقم بطاقة التأمين",
-                    "الباركود", "رقم الشارة"
+                    "الباركود", "رقم الشارة", "رقم بطاقة المستفيد", "رقم بطاقة المؤمن عليه", "رقم الكارت",
+                    "رقم بطاقة الرئيسي"
             }),
             // Birth Date - تاريخ الميلاد
             Map.entry("birthDate", new String[] {
-                    "birth_date", "birthday", "dob", "date_of_birth", "birthdate",
-                    "تاريخ الميلاد", "تاريخ الولادة", "الميلاد"
+                    "birth_date", "birthday", "dob", "date_of_birth", "birthdate", "birth date", "date of birth",
+                    "تاريخ الميلاد", "تاريخ الولادة", "الميلاد", "تاريخ ميلاد"
             }),
             // Gender - الجنس
             Map.entry("gender", new String[] {
@@ -72,14 +82,14 @@ public class MemberImportFieldConfig {
             // Phone - الهاتف
             Map.entry("phone", new String[] {
                     "phone", "mobile", "mobile_phone", "work_phone", "phone_number",
-                    "telephone", "tel", "cell", "cellphone",
+                    "telephone", "tel", "cell", "cellphone", "phone number", "mobile number",
                     "الهاتف", "الجوال", "رقم الهاتف", "رقم الجوال", "هاتف العمل",
-                    "الموبايل", "رقم التواصل"
+                    "الموبايل", "رقم التواصل", "رقم موبايل", "رقم جوال", "التواصل"
             }),
             // Email - البريد الإلكتروني
             Map.entry("email", new String[] {
-                    "email", "work_email", "email_address", "e_mail",
-                    "البريد الإلكتروني", "الإيميل", "البريد"
+                    "email", "work_email", "email_address", "e_mail", "email address",
+                    "البريد الإلكتروني", "الإيميل", "البريد", "البريد الالكتروني", "ايميل"
             }),
             // Nationality - الجنسية
             Map.entry("nationality", new String[] {
@@ -95,12 +105,12 @@ public class MemberImportFieldConfig {
             // Policy Number - رقم الوثيقة
             Map.entry("policyNumber", new String[] {
                     "policy_number", "policy", "benefit_policy", "insurance_policy",
-                    "رقم الوثيقة", "رقم البوليصة", "الوثيقة"
+                    "رقم الوثيقة", "رقم البوليصة", "الوثيقة", "البوليصة", "رقم العقد", "العقد"
             }),
             // Start Date - تاريخ البداية
             Map.entry("startDate", new String[] {
                     "start_date", "join_date", "hire_date", "employment_date",
-                    "تاريخ البداية", "تاريخ الالتحاق", "تاريخ التعيين"
+                    "تاريخ البداية", "تاريخ الالتحاق", "تاريخ التعيين", "تاريخ بدء التغطية", "تاريخ التفعيل", "تاريخ البدء"
             }),
             // Address - العنوان
             Map.entry("address", new String[] {

@@ -231,7 +231,7 @@ public class MemberImportRowProcessor {
         return member;
     }
 
-    private Employer resolveEmployerForRow(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex,
+    Employer resolveEmployerForRow(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex,
             Employer defaultEmployer) {
         String employerNameOrCode = parser.getFieldValue(row, fieldToColumnIndex, "employer");
         if (employerNameOrCode == null || employerNameOrCode.isBlank()) {

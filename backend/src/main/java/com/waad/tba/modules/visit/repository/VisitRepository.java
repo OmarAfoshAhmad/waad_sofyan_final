@@ -113,5 +113,8 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
      */
     @Query("SELECT v FROM Visit v LEFT JOIN FETCH v.member WHERE v.providerId = :providerId AND v.active = true ORDER BY v.visitDate DESC")
     List<Visit> findByProviderIdAndActiveTrue(@Param("providerId") Long providerId);
+
+    @Query("SELECT DISTINCT v.member.id FROM Visit v WHERE v.member.id IN :memberIds")
+    List<Long> findMemberIdsWithVisits(@Param("memberIds") java.util.Collection<Long> memberIds);
 }
 

@@ -12,7 +12,9 @@ import {
   LinearProgress,
   IconButton,
   Grid,
-  Paper
+  Paper,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -22,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { downloadTemplate, importMembers } from 'services/api/unified-members.service';
+import EmployerFilterSelector from 'components/tba/EmployerFilterSelector';
 
 // Static Arabic labels
 const LABELS = {
@@ -48,6 +51,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
   const [downloading, setDownloading] = useState(false);
   const [result, setResult] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [clearOldMembers, setClearOldMembers] = useState(false);
+  const [selectedEmployerId, setSelectedEmployerId] = useState('');
   const progressTimerRef = useRef(null);
 
   const startProgressSimulation = () => {
@@ -111,7 +116,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     setResult(null);
     startProgressSimulation();
     try {
-      const response = await importMembers(selectedFile);
+      const response = await importMembers(selectedFile, clearOldMembers, selectedEmployerId);
       const data = response?.data || response;
       stopProgressSimulation(100);
       setResult(data);
@@ -138,6 +143,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
       setSelectedFile(null);
       setResult(null);
       setProgress(0);
+      setClearOldMembers(false);
+      setSelectedEmployerId('');
       onClose();
     }
   };
@@ -147,6 +154,8 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
     setSelectedFile(null);
     setResult(null);
     setProgress(0);
+    setClearOldMembers(false);
+    setSelectedEmployerId('');
   };
 
   return (
@@ -180,6 +189,16 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   </Button>
                 </Box>
               </Alert>
+
+              <EmployerFilterSelector
+                selectedEmployerId={selectedEmployerId}
+                onEmployerChange={(employer) => setSelectedEmployerId(employer?.id || '')}
+                showAllOption={false}
+                label="جهة العمل (الشريك)"
+                placeholder="اختر جهة العمل التي ترغب بالاستيراد إليها..."
+                disabled={uploading}
+                sx={{ width: '100%' }}
+              />
 
               <Box
                 component="label"
@@ -225,6 +244,22 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
                   )}
                 </Stack>
               </Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={clearOldMembers}
+                    onChange={(e) => setClearOldMembers(e.target.checked)}
+                    color="primary"
+                    disabled={uploading}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
+                  </Typography>
+                }
+                sx={{ alignSelf: 'flex-start', mt: 1 }}
+              />
             </>
           )}
 
@@ -314,7 +349,7 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
         {!result && ( // Only show upload button if no result is displayed
           <Button
             onClick={handleUpload}
-            disabled={!selectedFile || uploading}
+            disabled={!selectedFile || !selectedEmployerId || uploading}
             variant="contained"
             color="primary"
             startIcon={<CloudUploadIcon />}

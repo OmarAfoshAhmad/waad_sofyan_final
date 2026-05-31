@@ -102,11 +102,17 @@ public class MemberExcelTemplateController {
                      "Card numbers are auto-generated. Employer lookup is mandatory."
     )
     public ResponseEntity<ApiResponse<ExcelImportResult>> importMembers(
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "employerId", required = false) Long employerId,
+            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers
     ) {
-        log.info("[MemberImport] Import requested: {}", file.getOriginalFilename());
+        log.info("[MemberImport] Import requested: {}, employerId: {}, clearOldMembers: {}", file.getOriginalFilename(), employerId, clearOldMembers);
         
-        ExcelImportResult result = templateService.importFromExcel(file);
+        if (Boolean.TRUE.equals(clearOldMembers)) {
+            importService.clearOldMembersForFile(file, employerId, null);
+        }
+        
+        ExcelImportResult result = templateService.importFromExcel(file, employerId);
         
         log.info("[MemberImport] Import completed - Created: {}, Rejected: {}, Failed: {}",
             result.getSummary().getCreated(),
@@ -248,10 +254,12 @@ public class MemberExcelTemplateController {
             @Parameter(description = "Header row number (0-indexed)")
             @RequestParam(value = "headerRowNumber", required = false) Integer headerRowNumber,
             @Parameter(description = "Import policy: CREATE_ONLY, UPDATE_ONLY, CREATE_OR_UPDATE")
-            @RequestParam(value = "importPolicy", required = false) String importPolicy) {
+            @RequestParam(value = "importPolicy", required = false) String importPolicy,
+            @Parameter(description = "Clear old members (only if they have no financial movements)")
+            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers) {
         
-        log.info("📥 Execute import: file={}, employer={}, policy={}, batch={}", 
-                file.getOriginalFilename(), employerId, benefitPolicyId, batchId);
+        log.info("📥 Execute import: file={}, employer={}, policy={}, batch={}, clearOldMembers={}", 
+                file.getOriginalFilename(), employerId, benefitPolicyId, batchId, clearOldMembers);
         
         if (file.isEmpty()) {
             return ResponseEntity.badRequest()
@@ -264,7 +272,7 @@ public class MemberExcelTemplateController {
         
         try {
             MemberImportResultDto result = importService.executeImport(
-                file, batchId, employerId, benefitPolicyId, headerRowNumber);
+                file, batchId, employerId, benefitPolicyId, headerRowNumber, clearOldMembers);
             
             String status = result.getStatus();
             if ("COMPLETED".equals(status)) {

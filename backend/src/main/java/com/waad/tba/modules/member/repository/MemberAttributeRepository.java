@@ -99,4 +99,9 @@ public interface MemberAttributeRepository extends JpaRepository<MemberAttribute
      */
     @Query("SELECT ma FROM MemberAttribute ma WHERE ma.member.id IN :memberIds")
     List<MemberAttribute> findByMemberIdIn(@Param("memberIds") List<Long> memberIds);
+
+    @Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("DELETE FROM MemberAttribute ma WHERE ma.member.id IN :memberIds")
+    void deleteByMemberIdIn(@Param("memberIds") java.util.Collection<Long> memberIds);
 }

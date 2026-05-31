@@ -25,4 +25,14 @@ public interface PreAuthEmailRequestRepository extends JpaRepository<PreAuthEmai
     @Override
     @EntityGraph(attributePaths = { "provider", "member", "attachments" })
     Page<PreAuthEmailRequest> findAll(Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query("UPDATE PreAuthEmailRequest r SET r.memberId = null WHERE r.memberId = :memberId")
+    void nullifyMemberId(@org.springframework.data.repository.query.Param("memberId") Long memberId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Query("UPDATE PreAuthEmailRequest r SET r.memberId = null WHERE r.memberId IN :memberIds")
+    void nullifyMemberIds(@org.springframework.data.repository.query.Param("memberIds") java.util.Collection<Long> memberIds);
 }

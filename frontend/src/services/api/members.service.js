@@ -467,11 +467,12 @@ export const previewImport = async (file, customMappings = null) => {
  * @param {number} benefitPolicyId - Selected Benefit Policy ID (OPTIONAL)
  * @returns {Promise<Object>} MemberImportResultDto
  */
-export const executeImport = async (file, batchId, employerId, benefitPolicyId = null) => {
+export const executeImport = async (file, batchId, employerId, benefitPolicyId = null, clearOldMembers = false) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('batchId', batchId);
   formData.append('employerId', employerId);
+  formData.append('clearOldMembers', clearOldMembers);
 
   if (benefitPolicyId) {
     formData.append('benefitPolicyId', benefitPolicyId);

@@ -23,7 +23,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip
+  Chip,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import { CloudUpload, Code, Business, CheckCircle, Warning, Error as ErrorIcon } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
@@ -53,6 +55,7 @@ const DataImportWizard = ({
   const [allEmployers, setAllEmployers] = useState([]);
   const [selectedEmployer, setSelectedEmployer] = useState(null); // { id, nameAr }
   const [selectedPolicy, setSelectedPolicy] = useState(null); // { id, policyNumber }
+  const [clearOldMembers, setClearOldMembers] = useState(false);
 
   const { startImport } = useImportProgress();
 
@@ -65,6 +68,7 @@ const DataImportWizard = ({
       setSelectedEmployer(null);
       setSelectedPolicy(null);
       setError(null);
+      setClearOldMembers(false);
       fetchEmployers();
     }
   }, [open]);
@@ -162,6 +166,9 @@ const DataImportWizard = ({
 
     // Default Policy
     formData.append('importPolicy', 'UPDATE');
+    if (clearOldMembers) {
+      formData.append('clearOldMembers', 'true');
+    }
 
     try {
       const response = await axios.post(`${baseApiUrl}/execute`, formData, {
@@ -315,6 +322,26 @@ const DataImportWizard = ({
                 </Grid>
               )}
             </Grid>
+
+            {baseApiUrl.includes('unified-members') && (
+              <Box sx={{ mb: '1.5rem', p: '1.0rem', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={clearOldMembers}
+                      onChange={(e) => setClearOldMembers(e.target.checked)}
+                      color="primary"
+                      disabled={loading}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      مسح المستفيدين القدامى قبل الاستيراد (سيتم الإبقاء على المستفيدين الذين لديهم حركات مالية)
+                    </Typography>
+                  }
+                />
+              </Box>
+            )}
 
             {/* Data Preview */}
             <Typography variant="subtitle2" gutterBottom>

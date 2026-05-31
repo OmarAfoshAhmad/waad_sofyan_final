@@ -17,6 +17,7 @@ import com.waad.tba.modules.member.entity.Member.MemberStatus;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -67,50 +69,15 @@ public class MemberExcelTemplateService {
 
     private List<ExcelTemplateColumn> buildColumnDefinitions() {
         return List.of(
-                // Mandatory Fields
                 ExcelTemplateColumn.builder()
                         .name("full_name")
-                        .nameAr("الاسم الكامل")
+                        .nameAr("اسم المستفيد")
                         .type(ColumnType.TEXT)
                         .required(true)
                         .example("أحمد محمد علي")
-                        .description("Full name in Arabic (mandatory)")
-                        .descriptionAr("الاسم الكامل بالعربية (إجباري)")
+                        .description("Full name (mandatory)")
+                        .descriptionAr("اسم المستفيد (إجباري)")
                         .width(25)
-                        .build(),
-
-                ExcelTemplateColumn.builder()
-                        .name("employer")
-                        .nameAr("جهة العمل")
-                        .type(ColumnType.TEXT)
-                        .required(false)
-                        .example("شركة النفط الليبية")
-                        .description("Required for principals only (must match lookup sheet)")
-                        .descriptionAr("إجباري للعضو الرئيسي فقط (يجب أن يطابق ورقة البحث)")
-                        .width(30)
-                        .build(),
-
-                ExcelTemplateColumn.builder()
-                        .name("principal_card_number")
-                        .nameAr("رقم بطاقة الرئيسي")
-                        .type(ColumnType.TEXT)
-                        .required(false)
-                        .example("000123")
-                        .description("If provided with relationship, row is imported as a dependent")
-                        .descriptionAr("عند إدخاله مع القرابة يتم استيراد الصف كتابع")
-                        .width(20)
-                        .build(),
-
-                ExcelTemplateColumn.builder()
-                        .name("relationship")
-                        .nameAr("القرابة")
-                        .type(ColumnType.TEXT)
-                        .required(false)
-                        .example("SON")
-                        .description(
-                                "Dependent relationship (WIFE, HUSBAND, SON, DAUGHTER, FATHER, MOTHER, BROTHER, SISTER)")
-                        .descriptionAr("قرابة التابع (WIFE, HUSBAND, SON, DAUGHTER, FATHER, MOTHER, BROTHER, SISTER)")
-                        .width(22)
                         .build(),
 
                 ExcelTemplateColumn.builder()
@@ -122,42 +89,23 @@ public class MemberExcelTemplateService {
                         .description("Member card number (optional, system will generate if empty)")
                         .descriptionAr("رقم بطاقة العضو (اختياري، سيقوم النظام بالتوليد إذا كان فارغاً)")
                         .width(20)
-                        .build());
+                        .build(),
+
+                ExcelTemplateColumn.builder()
+                        .name("birth_date")
+                        .nameAr("المواليد")
+                        .type(ColumnType.DATE)
+                        .required(false)
+                        .example("1990-05-15")
+                        .description("Birth date (optional, format: YYYY-MM-DD)")
+                        .descriptionAr("تاريخ الميلاد (اختياري، بصيغة: YYYY-MM-DD)")
+                        .width(20)
+                        .build()
+        );
     }
 
     private List<ExcelLookupData> buildLookupSheets() {
-        // Fetch all employers
-        List<Employer> employers = employerRepository.findByActiveTrue();
-
-        List<List<String>> employerData = employers.stream()
-                .map(emp -> Arrays.<String>asList(
-                        emp.getId().toString(),
-                        emp.getName() != null ? emp.getName() : ""))
-                .collect(Collectors.toList());
-
-        ExcelLookupData employersLookup = ExcelLookupData.builder()
-                .sheetName("Employers")
-                .sheetNameAr("جهات العمل")
-                .headers(Arrays.asList("ID", "Name"))
-                .data(employerData)
-                .description("List of valid employers - Use exact name from this sheet")
-                .descriptionAr("قائمة جهات العمل الصالحة - استخدم الاسم المطابق تماماً من هذه الورقة")
-                .build();
-
-        List<List<String>> relationshipData = Arrays.stream(Member.Relationship.values())
-                .map(r -> Arrays.asList(r.name(), relationshipAr(r)))
-                .collect(Collectors.toList());
-
-        ExcelLookupData relationshipsLookup = ExcelLookupData.builder()
-                .sheetName("Relationships")
-                .sheetNameAr("القرابة")
-                .headers(Arrays.asList("Code", "Arabic"))
-                .data(relationshipData)
-                .description("Valid dependent relationship values")
-                .descriptionAr("قيم القرابة المسموح بها للتابعين")
-                .build();
-
-        return List.of(employersLookup, relationshipsLookup);
+        return List.of();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -170,11 +118,16 @@ public class MemberExcelTemplateService {
      * Pass 1 — save all PRINCIPALS so they exist in DB.
      * Pass 2 — save all DEPENDENTS (their principal is guaranteed to be in DB).
      */
-    public ExcelImportResult importFromExcel(MultipartFile file) {
-        log.info("[MemberImport] Starting import from file: {}", file.getOriginalFilename());
+    public ExcelImportResult importFromExcel(MultipartFile file, Long employerId) {
+        log.info("[MemberImport] Starting import from file: {} for employerId: {}", file.getOriginalFilename(), employerId);
 
         ImportSummary summary = ImportSummary.builder().build();
         List<ImportError> errors = new ArrayList<>();
+
+        Employer selectedEmployer = null;
+        if (employerId != null) {
+            selectedEmployer = employerRepository.findById(employerId).orElse(null);
+        }
 
         try (Workbook workbook = parserService.openWorkbook(file)) {
             Sheet sheet = parserService.getDataSheet(workbook);
@@ -197,6 +150,8 @@ public class MemberExcelTemplateService {
 
             // card_number → saved Member (principals saved in pass 1)
             Map<String, Member> importedPrincipalsCache = new HashMap<>();
+            // rowNum → saved Member — lets PASS-2 find the principal by row order (most reliable)
+            Map<Integer, Member> principalRowToMember = new HashMap<>();
             Set<String> usedCardNumbers = new HashSet<>(memberRepository.findAllCardNumbers());
             // In-file dedup keys:
             // principals → "P::employerId::fullNameLower"
@@ -248,8 +203,20 @@ public class MemberExcelTemplateService {
                 if (isDependentRow(row, columnIndices)) {
                     // First dependent after a principal tells us that principal's card number
                     if (lastSeenPrincipalRow != -1 && !principalRowToCardNumber.containsKey(lastSeenPrincipalRow)) {
-                        String pCard = normalizeCardNumber(
-                                getCellValue(row, columnIndices.get("principal_card_number")));
+                        String pCard = null;
+                        Integer pCardIdx = columnIndices.get("principal_card_number");
+                        if (pCardIdx != null) {
+                            pCard = normalizeCardNumber(getCellValue(row, pCardIdx));
+                        }
+                        if ((pCard == null || pCard.isBlank()) && columnIndices.get("card_number") != null) {
+                            String excelCard = getCellValue(row, columnIndices.get("card_number"));
+                            if (excelCard != null && !excelCard.isBlank()) {
+                                String extracted = extractPrincipalCardNumber(excelCard);
+                                if (extracted != null && !extracted.equalsIgnoreCase(normalizeCardNumber(excelCard))) {
+                                    pCard = extracted;
+                                }
+                            }
+                        }
                         if (pCard != null && !pCard.isBlank()) {
                             principalRowToCardNumber.put(lastSeenPrincipalRow, pCard);
                         }
@@ -266,13 +233,36 @@ public class MemberExcelTemplateService {
             // PASS 1 — PRINCIPALS ONLY
             // ══════════════════════════════════════════════════════════════
             List<Member> principalBatch = new ArrayList<>();
+            List<Integer> principalBatchRowNums = new ArrayList<>();
+            List<Member> updateBatch = new ArrayList<>();
+            Map<String, Member> existingPrincipalsByName = new HashMap<>();
+
+            if (selectedEmployer != null) {
+                log.info("[MemberImport] Pre-loading active principal members for employer Org ID: {}", selectedEmployer.getId());
+                List<Member> activePrincipals = memberRepository.findActivePrincipalsByEmployerId(selectedEmployer.getId());
+                for (Member p : activePrincipals) {
+                    if (p.getFullName() != null) {
+                        existingPrincipalsByName.put(p.getFullName().trim().toLowerCase(), p);
+                    }
+                }
+                log.info("[MemberImport] Pre-loaded {} active principal members from DB", existingPrincipalsByName.size());
+            }
+
+            // ── بناء خريطة البحث بالرقم لتجنب تكرار المفتاح ─────────────────────
+            Map<String, Member> existingPrincipalsByCardNumber = new HashMap<>();
+            for (Member p : existingPrincipalsByName.values()) {
+                if (p.getCardNumber() != null && !p.getCardNumber().isBlank()) {
+                    existingPrincipalsByCardNumber.put(p.getCardNumber().trim(), p);
+                }
+            }
+
             int pass1Processed = 0;
 
             log.info("[MemberImport] PASS-1 بدء — {} صف رئيسي للمعالجة", pass1Total);
 
             for (int rowNum = firstDataRow; rowNum <= lastRow; rowNum++) {
                 Row row = sheet.getRow(rowNum);
-                if (parserService.isEmptyRow(row))
+                if (row == null || parserService.isEmptyRow(row))
                     continue;
 
                 // Skip dependent rows entirely in pass 1
@@ -281,7 +271,7 @@ public class MemberExcelTemplateService {
 
                 try {
                     Member member = parseAndCreateMember(row, rowNum, columnIndices,
-                            employerLookup, importedPrincipalsCache, errors);
+                            employerLookup, importedPrincipalsCache, null, selectedEmployer, errors);
 
                     if (member == null) {
                         summary.setRejected(summary.getRejected() + 1);
@@ -290,8 +280,8 @@ public class MemberExcelTemplateService {
                     }
 
                     String fullNameLower = member.getFullName().trim().toLowerCase();
-                    Long employerId = member.getEmployer().getId();
-                    String inFileKey = "P::" + employerId + "::" + fullNameLower;
+                    Long rowEmployerId = member.getEmployer().getId();
+                    String inFileKey = "P::" + rowEmployerId + "::" + fullNameLower;
 
                     if (inFileKeys.contains(inFileKey)) {
                         summary.setSkipped(summary.getSkipped() + 1);
@@ -300,63 +290,97 @@ public class MemberExcelTemplateService {
                         continue;
                     }
 
-                    Set<String> existingNames = existingPrincipalNamesCache.computeIfAbsent(employerId,
-                            id -> new HashSet<>(memberRepository.findActivePrincipalNamesByEmployerId(id)));
-                    if (existingNames.contains(fullNameLower)) {
-                        // Principal already in DB — load it via name+employer and UPDATE instead of skipping
+                    if (existingPrincipalsByName.containsKey(fullNameLower)) {
                         inFileKeys.add(inFileKey);
-                        final int finalRowNum = rowNum;
-                        memberRepository.findActivePrincipalByFullNameLowerAndEmployerId(fullNameLower, employerId)
-                                .ifPresent(existingPrincipal -> {
-                                    String oldCardNumber = existingPrincipal.getCardNumber();
-                                    if (oldCardNumber != null && !oldCardNumber.isBlank()) {
-                                        // Cache the old card number so PASS-2 dependents can still resolve parent using the sheet's old card number
-                                        importedPrincipalsCache.put(oldCardNumber, existingPrincipal);
-                                    }
-                                    
-                                    // Determine the new clean format card number
-                                    String targetCardNumber = member.getCardNumber();
-                                    if (targetCardNumber == null || targetCardNumber.isBlank()) {
-                                        targetCardNumber = principalRowToCardNumber.get(finalRowNum);
-                                    }
-                                    if (targetCardNumber == null || targetCardNumber.isBlank()) {
-                                        targetCardNumber = cardNumberGeneratorService.generateUniqueForPrincipal(existingPrincipal);
-                                    }
-                                    
-                                    // Update card number if changed and not already used
-                                    if (!targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
-                                        log.info("[MemberImport] Updating principal '{}' card number from '{}' to '{}'", 
-                                                existingPrincipal.getFullName(), oldCardNumber, targetCardNumber);
-                                        existingPrincipal.setCardNumber(targetCardNumber);
-                                    }
-                                    
-                                    // Update other fields if available in Excel
-                                    if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
-                                        existingPrincipal.setNationalNumber(member.getNationalNumber());
-                                    }
-                                    if (member.getBirthDate() != null) {
-                                        existingPrincipal.setBirthDate(member.getBirthDate());
-                                    }
-                                    if (member.getGender() != null) {
-                                        existingPrincipal.setGender(member.getGender());
-                                    }
-                                    if (member.getPhone() != null && !member.getPhone().isBlank()) {
-                                        existingPrincipal.setPhone(member.getPhone());
-                                    }
-                                    if (member.getMaritalStatus() != null) {
-                                        existingPrincipal.setMaritalStatus(member.getMaritalStatus());
-                                    }
-                                    
-                                    Member saved = memberRepository.save(existingPrincipal);
-                                    usedCardNumbers.add(saved.getCardNumber());
-                                    importedPrincipalsCache.put(saved.getCardNumber(), saved);
-                                    summary.setUpdated(summary.getUpdated() + 1);
-                                });
+                        Member existingPrincipal = existingPrincipalsByName.get(fullNameLower);
+                        String oldCardNumber = existingPrincipal.getCardNumber();
+                        if (oldCardNumber != null && !oldCardNumber.isBlank()) {
+                            importedPrincipalsCache.put(oldCardNumber, existingPrincipal);
+                        }
+
+                        // Determine the new clean format card number
+                        String targetCardNumber = member.getCardNumber();
+                        if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                            targetCardNumber = principalRowToCardNumber.get(rowNum);
+                        }
+                        if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                            targetCardNumber = cardNumberGeneratorService.generateUniqueForPrincipal(existingPrincipal);
+                        }
+
+                        // Update card number if changed and not already used
+                        if (!targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
+                            log.info("[MemberImport] Updating principal '{}' card number from '{}' to '{}'", 
+                                    existingPrincipal.getFullName(), oldCardNumber, targetCardNumber);
+                            existingPrincipal.setCardNumber(targetCardNumber);
+                        }
+
+                        // Update other fields if available in Excel
+                        if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
+                            existingPrincipal.setNationalNumber(member.getNationalNumber());
+                        }
+                        if (member.getBirthDate() != null) {
+                            existingPrincipal.setBirthDate(member.getBirthDate());
+                        }
+                        if (member.getGender() != null) {
+                            existingPrincipal.setGender(member.getGender());
+                        }
+                        if (member.getPhone() != null && !member.getPhone().isBlank()) {
+                            existingPrincipal.setPhone(member.getPhone());
+                        }
+                        if (member.getMaritalStatus() != null) {
+                            existingPrincipal.setMaritalStatus(member.getMaritalStatus());
+                        }
+
+                        updateBatch.add(existingPrincipal);
+
+                        if (updateBatch.size() >= BATCH_SIZE) {
+                            List<Member> savedList = memberRepository.saveAll(updateBatch);
+                            for (Member s : savedList) {
+                                usedCardNumbers.add(s.getCardNumber());
+                                importedPrincipalsCache.put(s.getCardNumber(), s);
+                                existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                            }
+                            summary.setUpdated(summary.getUpdated() + updateBatch.size());
+                            updateBatch.clear();
+                        }
+
+                        // سجّل الصف → الرئيسي حتى يجده PASS-2 بالترتيب
+                        principalRowToMember.put(rowNum, existingPrincipal);
                         pass1Processed++;
                         continue;
                     }
 
                     inFileKeys.add(inFileKey);
+
+                    // ── تحديث بالرقم إذا كان رقم البطاقة موجوداً في DB ─────────────────────
+                    String excelCardForCheck = member.getCardNumber();
+                    if (excelCardForCheck != null && !excelCardForCheck.isBlank()
+                            && existingPrincipalsByCardNumber.containsKey(excelCardForCheck)) {
+                        Member existingByCard = existingPrincipalsByCardNumber.get(excelCardForCheck);
+                        if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank())
+                            existingByCard.setNationalNumber(member.getNationalNumber());
+                        if (member.getBirthDate() != null)
+                            existingByCard.setBirthDate(member.getBirthDate());
+                        if (member.getGender() != null)
+                            existingByCard.setGender(member.getGender());
+                        if (member.getPhone() != null && !member.getPhone().isBlank())
+                            existingByCard.setPhone(member.getPhone());
+                        updateBatch.add(existingByCard);
+                        if (updateBatch.size() >= BATCH_SIZE) {
+                            List<Member> savedList = memberRepository.saveAll(updateBatch);
+                            for (Member s : savedList) {
+                                usedCardNumbers.add(s.getCardNumber());
+                                importedPrincipalsCache.put(s.getCardNumber(), s);
+                                existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                            }
+                            summary.setUpdated(summary.getUpdated() + updateBatch.size());
+                            updateBatch.clear();
+                        }
+                        // سجّل الصف → الرئيسي الموجود (تحديث بالرقم)
+                        principalRowToMember.put(rowNum, existingByCard);
+                        pass1Processed++;
+                        continue;
+                    }
 
                     // Assign card number: prefer the value dependents already reference
                     // (pre-pass), then fall back to auto-generate.
@@ -365,8 +389,9 @@ public class MemberExcelTemplateService {
                         if (mappedCard != null && !usedCardNumbers.contains(mappedCard)) {
                             member.setCardNumber(mappedCard);
                         } else {
+                            // توليد رقم فريد مع مراعاة الأرقام المولّدة في نفس الدفعة (usedCardNumbers)
                             member.setCardNumber(
-                                    cardNumberGeneratorService.generateUniqueForPrincipal(member));
+                                    generateUniqueCardNumberWithCache(member, usedCardNumbers));
                         }
                     }
                     if (usedCardNumbers.contains(member.getCardNumber())) {
@@ -375,24 +400,29 @@ public class MemberExcelTemplateService {
                         pass1Processed++;
                         continue;
                     }
+                    // ── تسجيل الرقم فوراً لمنع التكرار داخل نفس الدفعة ───────────────────
+                    usedCardNumbers.add(member.getCardNumber());
 
                     member.setBarcode(barcodeGeneratorService.generateUniqueBarcodeForPrincipal());
                     principalBatch.add(member);
+                    principalBatchRowNums.add(rowNum);
                     pass1Processed++;
 
                     if (principalBatch.size() >= BATCH_SIZE) {
                         List<Member> saved = memberRepository.saveAll(principalBatch);
-                        for (Member s : saved) {
+                        for (int i = 0; i < saved.size(); i++) {
+                            Member s = saved.get(i);
                             usedCardNumbers.add(s.getCardNumber());
                             importedPrincipalsCache.put(s.getCardNumber(), s);
-                            // Keep cache fresh — newly saved principals are now in DB
-                            existingPrincipalNamesCache
-                                    .computeIfAbsent(s.getEmployer().getId(), k -> new HashSet<>())
-                                    .add(s.getFullName().trim().toLowerCase());
+                            existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                            if (i < principalBatchRowNums.size()) {
+                                principalRowToMember.put(principalBatchRowNums.get(i), s);
+                            }
                         }
                         summary.setCreated(summary.getCreated() + saved.size());
                         summary.setPrincipalsCreated(summary.getPrincipalsCreated() + saved.size());
                         principalBatch.clear();
+                        principalBatchRowNums.clear();
                         log.info("[MemberImport] PASS-1 تقدم — {}/{} رئيسي (أُنشئ {} حتى الآن)",
                                 pass1Processed, pass1Total, summary.getPrincipalsCreated());
                     }
@@ -410,20 +440,35 @@ public class MemberExcelTemplateService {
                 }
             }
 
+            // Flush remaining updates
+            if (!updateBatch.isEmpty()) {
+                List<Member> savedList = memberRepository.saveAll(updateBatch);
+                for (Member s : savedList) {
+                    usedCardNumbers.add(s.getCardNumber());
+                    importedPrincipalsCache.put(s.getCardNumber(), s);
+                }
+                summary.setUpdated(summary.getUpdated() + updateBatch.size());
+                updateBatch.clear();
+            }
+
             // Flush remaining principals
             if (!principalBatch.isEmpty()) {
                 List<Member> saved = memberRepository.saveAll(principalBatch);
-                for (Member s : saved) {
+                for (int i = 0; i < saved.size(); i++) {
+                    Member s = saved.get(i);
                     usedCardNumbers.add(s.getCardNumber());
                     importedPrincipalsCache.put(s.getCardNumber(), s);
-                    existingPrincipalNamesCache
-                            .computeIfAbsent(s.getEmployer().getId(), k -> new HashSet<>())
-                            .add(s.getFullName().trim().toLowerCase());
+                    existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                    if (i < principalBatchRowNums.size()) {
+                        principalRowToMember.put(principalBatchRowNums.get(i), s);
+                    }
                 }
                 summary.setCreated(summary.getCreated() + saved.size());
                 summary.setPrincipalsCreated(summary.getPrincipalsCreated() + saved.size());
                 principalBatch.clear();
+                principalBatchRowNums.clear();
             }
+
 
             log.info("[MemberImport] PASS-1 اكتمل — أُنشئ {} رئيسي، تُخطّي {} رئيسي",
                     summary.getPrincipalsCreated(), summary.getPrincipalsSkipped());
@@ -431,185 +476,214 @@ public class MemberExcelTemplateService {
             // ══════════════════════════════════════════════════════════════
             // PASS 2 — DEPENDENTS ONLY
             // ══════════════════════════════════════════════════════════════
-            List<Member> dependentBatch = new ArrayList<>();
-            int pass2Processed = 0;
-            // In-memory ordinal counter per (parentId::RELATIONSHIP) to avoid DB-count lag
-            // during batching. generateForDependent queries countByParentIdAndRelationship
-            // from DB, but pending batch members aren't saved yet → all same-type deps
-            // under one parent get ordinal 1 → card collision → wrongly skipped.
-            // Fix: seed from DB once per key, then increment in memory.
-            Map<String, Integer> ordinalCounters = new HashMap<>();
-            log.info("[MemberImport] PASS-2 بدء — {} صف تابع للمعالجة", pass2Total);
+            if (pass2Total > 0) {
+                List<Member> dependentBatch = new ArrayList<>();
+                int pass2Processed = 0;
+                Map<String, Integer> ordinalCounters = new HashMap<>();
+                log.info("[MemberImport] PASS-2 بدء — {} صف تابع للمعالجة", pass2Total);
 
-            for (int rowNum = firstDataRow; rowNum <= lastRow; rowNum++) {
-                Row row = sheet.getRow(rowNum);
-                if (parserService.isEmptyRow(row))
-                    continue;
-
-                // Skip principal rows — already saved in pass 1
-                if (!isDependentRow(row, columnIndices))
-                    continue;
-
-                try {
-                    Member member = parseAndCreateMember(row, rowNum, columnIndices,
-                            employerLookup, importedPrincipalsCache, errors);
-
-                    if (member == null) {
-                        summary.setRejected(summary.getRejected() + 1);
-                        pass2Processed++;
+                Member lastSeenPrincipal = null;
+                for (int rowNum = firstDataRow; rowNum <= lastRow; rowNum++) {
+                    Row row = sheet.getRow(rowNum);
+                    if (parserService.isEmptyRow(row))
                         continue;
-                    }
 
-                    String fullNameLower = member.getFullName().trim().toLowerCase();
-                    Long employerId = member.getEmployer().getId();
-                    Long parentId = member.getParent() != null ? member.getParent().getId() : null;
-                    String inFileKey = "D::" + parentId + "::" + fullNameLower;
+                    // Skip principal rows — already saved in pass 1
+                    if (!isDependentRow(row, columnIndices)) {
+                        String fullName = normalizeMemberName(getCellValue(row, columnIndices.get("full_name")));
+                        String excelCardNumber = normalizeCardNumber(getCellValue(row, columnIndices.get("card_number")));
 
-                    if (inFileKeys.contains(inFileKey)) {
-                        summary.setSkipped(summary.getSkipped() + 1);
-                        summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
-                        pass2Processed++;
-                        continue;
-                    }
+                        // 1) أسرع وأدق طريقة: خريطة الصف → الرئيسي المحفوظ في PASS-1
+                        lastSeenPrincipal = principalRowToMember.get(rowNum);
 
-                    // DB duplicate check — uses Object[] to avoid JPQL CONCAT type mismatch
-                    Set<String> existingDepKeys = existingDependentKeysCache.computeIfAbsent(employerId,
-                            this::buildDependentKeySet);
-                    if (existingDepKeys.contains(parentId + "::" + fullNameLower)) {
-                        inFileKeys.add(inFileKey);
-                        
-                        // Load the existing dependent from the DB under this parent and with this name
-                        List<Member> parentDeps = memberRepository.findByParentId(parentId);
-                        Member existingDependent = parentDeps.stream()
-                                .filter(d -> d.getFullName().trim().toLowerCase().equals(fullNameLower))
-                                .findFirst()
-                                .orElse(null);
-                        
-                        if (existingDependent != null) {
-                            String oldCardNumber = existingDependent.getCardNumber();
-                            String targetCardNumber = member.getCardNumber();
-                            
-                            // If not specified in Excel, generate a clean hyphenless card number based on current parent's card
-                            if (targetCardNumber == null || targetCardNumber.isBlank()) {
-                                targetCardNumber = cardNumberGeneratorService.generateForDependent(existingDependent.getParent(), existingDependent.getRelationship());
-                            }
-                            
-                            if (targetCardNumber != null && !targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
-                                log.info("[MemberImport] Updating dependent '{}' card number from '{}' to '{}'", 
-                                        existingDependent.getFullName(), oldCardNumber, targetCardNumber);
-                                existingDependent.setCardNumber(targetCardNumber);
-                            }
-                            
-                            // Update other fields if available in Excel
-                            if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
-                                existingDependent.setNationalNumber(member.getNationalNumber());
-                            }
-                            if (member.getBirthDate() != null) {
-                                existingDependent.setBirthDate(member.getBirthDate());
-                            }
-                            if (member.getGender() != null) {
-                                existingDependent.setGender(member.getGender());
-                            }
-                            if (member.getPhone() != null && !member.getPhone().isBlank()) {
-                                existingDependent.setPhone(member.getPhone());
-                            }
-                            if (member.getMaritalStatus() != null) {
-                                existingDependent.setMaritalStatus(member.getMaritalStatus());
-                            }
-                            
-                            memberRepository.save(existingDependent);
-                            usedCardNumbers.add(existingDependent.getCardNumber());
-                            summary.setUpdated(summary.getUpdated() + 1);
+                        // 2) بحث بالرقم في الكاش (احتياطي لو كان الرقم موجوداً في الملف)
+                        if (lastSeenPrincipal == null && excelCardNumber != null && !excelCardNumber.isBlank()) {
+                            lastSeenPrincipal = importedPrincipalsCache.get(excelCardNumber);
                         }
-                        pass2Processed++;
+                        // 3) بحث بالاسم في الكاش
+                        if (lastSeenPrincipal == null && fullName != null && !fullName.isBlank()) {
+                            lastSeenPrincipal = existingPrincipalsByName.get(fullName.trim().toLowerCase());
+                        }
+                        // 4) بحث مباشر في DB (احتياطي أخير)
+                        if (lastSeenPrincipal == null && fullName != null && !fullName.isBlank()) {
+                            String employerName = getCellValue(row, columnIndices.get("employer"));
+                            Employer employer = findEmployerFuzzy(employerName, employerLookup);
+                            if (employer != null) {
+                                lastSeenPrincipal = memberRepository.findActivePrincipalByFullNameLowerAndEmployerId(
+                                        fullName.trim().toLowerCase(), employer.getId()).orElse(null);
+                                if (lastSeenPrincipal != null) {
+                                    existingPrincipalsByName.put(fullName.trim().toLowerCase(), lastSeenPrincipal);
+                                    importedPrincipalsCache.put(lastSeenPrincipal.getCardNumber(), lastSeenPrincipal);
+                                    principalRowToMember.put(rowNum, lastSeenPrincipal);
+                                }
+                            }
+                        }
+                        log.debug("[MemberImport] PASS-2: صف رئيسي {} → lastSeenPrincipal = {}",
+                                rowNum, lastSeenPrincipal != null ? lastSeenPrincipal.getFullName() + "/" + lastSeenPrincipal.getCardNumber() : "null");
                         continue;
                     }
 
-                    inFileKeys.add(inFileKey);
-                    // Keep cache fresh for within-session duplicates
-                    existingDepKeys.add(parentId + "::" + fullNameLower);
+                    try {
+                        Member member = parseAndCreateMember(row, rowNum, columnIndices,
+                                employerLookup, importedPrincipalsCache, lastSeenPrincipal, selectedEmployer, errors);
 
-                    if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
-                        // Use in-memory ordinal counter (seeded from DB once) instead of
-                        // generateForDependent which re-queries DB and sees stale batch counts
-                        Long pid = member.getParent().getId();
-                        Member.Relationship rel = member.getRelationship();
-                        String ordinalKey = pid + "::" + rel.name();
-                        int currentOrdinal = ordinalCounters.computeIfAbsent(ordinalKey,
-                                k -> (int) memberRepository.countByParentIdAndRelationship(pid, rel));
-                        currentOrdinal++;
-                        ordinalCounters.put(ordinalKey, currentOrdinal);
-                        member.setCardNumber(member.getParent().getCardNumber()
-                                + rel.getCardCode() + currentOrdinal);
-                    }
-                    if (usedCardNumbers.contains(member.getCardNumber())) {
-                        // Real collision (card already exists in DB or was assigned this session)
-                        // — bump ordinal until we find a free slot instead of dropping the record
-                        Long pid = member.getParent().getId();
-                        Member.Relationship rel = member.getRelationship();
-                        String ordinalKey = pid + "::" + rel.name();
-                        int ordinal = ordinalCounters.getOrDefault(ordinalKey, 0);
-                        String candidate;
-                        do {
-                            ordinal++;
-                            candidate = member.getParent().getCardNumber()
-                                    + rel.getCardCode() + ordinal;
-                        } while (usedCardNumbers.contains(candidate) && ordinal < 999);
-                        ordinalCounters.put(ordinalKey, ordinal);
-                        member.setCardNumber(candidate);
-                    }
-                    if (usedCardNumbers.contains(member.getCardNumber())) {
-                        // Truly exhausted — skip with a clear reason
-                        log.warn("[MemberImport] PASS-2 تعذّر توليد رقم بطاقة فريد للصف {} ({})",
-                                rowNum, member.getFullName());
-                        summary.setSkipped(summary.getSkipped() + 1);
-                        summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
+                        if (member == null) {
+                            summary.setRejected(summary.getRejected() + 1);
+                            pass2Processed++;
+                            continue;
+                        }
+
+                        String fullNameLower = member.getFullName().trim().toLowerCase();
+                        Long rowEmployerId = member.getEmployer().getId();
+                        Long parentId = member.getParent() != null ? member.getParent().getId() : null;
+                        String inFileKey = "D::" + parentId + "::" + fullNameLower;
+
+                        if (inFileKeys.contains(inFileKey)) {
+                            summary.setSkipped(summary.getSkipped() + 1);
+                            summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
+                            pass2Processed++;
+                            continue;
+                        }
+
+                        // DB duplicate check — uses Object[] to avoid JPQL CONCAT type mismatch
+                        Set<String> existingDepKeys = existingDependentKeysCache.computeIfAbsent(rowEmployerId,
+                                this::buildDependentKeySet);
+                        if (existingDepKeys.contains(parentId + "::" + fullNameLower)) {
+                            inFileKeys.add(inFileKey);
+                            
+                            // Load the existing dependent from the DB under this parent and with this name
+                            List<Member> parentDeps = memberRepository.findByParentId(parentId);
+                            Member existingDependent = parentDeps.stream()
+                                    .filter(d -> d.getFullName().trim().toLowerCase().equals(fullNameLower))
+                                    .findFirst()
+                                    .orElse(null);
+                            
+                            if (existingDependent != null) {
+                                String oldCardNumber = existingDependent.getCardNumber();
+                                String targetCardNumber = member.getCardNumber();
+                                
+                                // If not specified in Excel, generate a clean hyphenless card number based on current parent's card
+                                if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                                    targetCardNumber = cardNumberGeneratorService.generateForDependent(existingDependent.getParent(), existingDependent.getRelationship());
+                                }
+                                
+                                if (targetCardNumber != null && !targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
+                                    log.info("[MemberImport] Updating dependent '{}' card number from '{}' to '{}'", 
+                                            existingDependent.getFullName(), oldCardNumber, targetCardNumber);
+                                    existingDependent.setCardNumber(targetCardNumber);
+                                }
+                                
+                                // Update other fields if available in Excel
+                                if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
+                                    existingDependent.setNationalNumber(member.getNationalNumber());
+                                }
+                                if (member.getBirthDate() != null) {
+                                    existingDependent.setBirthDate(member.getBirthDate());
+                                }
+                                if (member.getGender() != null) {
+                                    existingDependent.setGender(member.getGender());
+                                }
+                                if (member.getPhone() != null && !member.getPhone().isBlank()) {
+                                    existingDependent.setPhone(member.getPhone());
+                                }
+                                if (member.getMaritalStatus() != null) {
+                                    existingDependent.setMaritalStatus(member.getMaritalStatus());
+                                }
+                                
+                                memberRepository.save(existingDependent);
+                                usedCardNumbers.add(existingDependent.getCardNumber());
+                                summary.setUpdated(summary.getUpdated() + 1);
+                            }
+                            pass2Processed++;
+                            continue;
+                        }
+
+                        inFileKeys.add(inFileKey);
+                        // Keep cache fresh for within-session duplicates
+                        existingDepKeys.add(parentId + "::" + fullNameLower);
+
+                        if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
+                            // Use in-memory ordinal counter (seeded from DB once) instead of
+                            // generateForDependent which re-queries DB and sees stale batch counts
+                            Long pid = member.getParent().getId();
+                            Member.Relationship rel = member.getRelationship();
+                            String ordinalKey = pid + "::" + rel.name();
+                            int currentOrdinal = ordinalCounters.computeIfAbsent(ordinalKey,
+                                    k -> (int) memberRepository.countByParentIdAndRelationship(pid, rel));
+                            currentOrdinal++;
+                            ordinalCounters.put(ordinalKey, currentOrdinal);
+                            member.setCardNumber(member.getParent().getCardNumber()
+                                    + rel.getCardCode() + currentOrdinal);
+                        }
+                        if (usedCardNumbers.contains(member.getCardNumber())) {
+                            // Real collision (card already exists in DB or was assigned this session)
+                            // — bump ordinal until we find a free slot instead of dropping the record
+                            Long pid = member.getParent().getId();
+                            Member.Relationship rel = member.getRelationship();
+                            String ordinalKey = pid + "::" + rel.name();
+                            int ordinal = ordinalCounters.getOrDefault(ordinalKey, 0);
+                            String candidate;
+                            do {
+                                ordinal++;
+                                candidate = member.getParent().getCardNumber()
+                                        + rel.getCardCode() + ordinal;
+                            } while (usedCardNumbers.contains(candidate) && ordinal < 999);
+                            ordinalCounters.put(ordinalKey, ordinal);
+                            member.setCardNumber(candidate);
+                        }
+                        if (usedCardNumbers.contains(member.getCardNumber())) {
+                            // Truly exhausted — skip with a clear reason
+                            log.warn("[MemberImport] PASS-2 تعذّر توليد رقم بطاقة فريد للصف {} ({})",
+                                    rowNum, member.getFullName());
+                            summary.setSkipped(summary.getSkipped() + 1);
+                            summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
+                            pass2Processed++;
+                            continue;
+                        }
+                        usedCardNumbers.add(member.getCardNumber());
+
+                        // Use JPA proxy for parent FK — avoids detached entity merge issues
+                        if (member.getParent() != null && member.getParent().getId() != null) {
+                            member.setParent(memberRepository.getReferenceById(member.getParent().getId()));
+                        }
+
+                        dependentBatch.add(member);
                         pass2Processed++;
-                        continue;
-                    }
-                    usedCardNumbers.add(member.getCardNumber());
 
-                    // Use JPA proxy for parent FK — avoids detached entity merge issues
-                    if (member.getParent() != null && member.getParent().getId() != null) {
-                        member.setParent(memberRepository.getReferenceById(member.getParent().getId()));
-                    }
-
-                    dependentBatch.add(member);
-                    pass2Processed++;
-
-                    if (dependentBatch.size() >= BATCH_SIZE) {
-                        memberRepository.saveAll(dependentBatch);
-                        summary.setCreated(summary.getCreated() + dependentBatch.size());
-                        summary.setDependentsCreated(summary.getDependentsCreated() + dependentBatch.size());
+                        if (dependentBatch.size() >= BATCH_SIZE) {
+                            memberRepository.saveAll(dependentBatch);
+                            summary.setCreated(summary.getCreated() + dependentBatch.size());
+                            summary.setDependentsCreated(summary.getDependentsCreated() + dependentBatch.size());
+                            dependentBatch.clear();
+                            log.info("[MemberImport] PASS-2 تقدم — {}/{} تابع (أُنشئ {} حتى الآن)",
+                                    pass2Processed, pass2Total, summary.getDependentsCreated());
+                        }
+                    } catch (Exception e) {
+                        log.error("[MemberImport] PASS-2 خطأ صف {}: {}", rowNum, e.getMessage());
+                        errors.add(ImportError.builder()
+                                .rowNumber(rowNum - 1)
+                                .errorType(ErrorType.PROCESSING_ERROR)
+                                .messageAr("خطأ في معالجة الصف (تابع): " + e.getMessage())
+                                .messageEn("Error processing dependent row: " + e.getMessage())
+                                .build());
+                        summary.setFailed(summary.getFailed() + 1);
                         dependentBatch.clear();
-                        log.info("[MemberImport] PASS-2 تقدم — {}/{} تابع (أُنشئ {} حتى الآن)",
-                                pass2Processed, pass2Total, summary.getDependentsCreated());
+                        pass2Processed++;
                     }
-                } catch (Exception e) {
-                    log.error("[MemberImport] PASS-2 خطأ صف {}: {}", rowNum, e.getMessage());
-                    errors.add(ImportError.builder()
-                            .rowNumber(rowNum - 1)
-                            .errorType(ErrorType.PROCESSING_ERROR)
-                            .messageAr("خطأ في معالجة الصف (تابع): " + e.getMessage())
-                            .messageEn("Error processing dependent row: " + e.getMessage())
-                            .build());
-                    summary.setFailed(summary.getFailed() + 1);
-                    dependentBatch.clear();
-                    pass2Processed++;
                 }
-            }
 
-            // Flush remaining dependents
-            if (!dependentBatch.isEmpty()) {
-                memberRepository.saveAll(dependentBatch);
-                summary.setCreated(summary.getCreated() + dependentBatch.size());
-                summary.setDependentsCreated(summary.getDependentsCreated() + dependentBatch.size());
-                log.info("[MemberImport] PASS-2 دفعة نهائية — {} تابع", dependentBatch.size());
-                dependentBatch.clear();
-            }
+                // Flush remaining dependents
+                if (!dependentBatch.isEmpty()) {
+                    memberRepository.saveAll(dependentBatch);
+                    summary.setCreated(summary.getCreated() + dependentBatch.size());
+                    summary.setDependentsCreated(summary.getDependentsCreated() + dependentBatch.size());
+                    log.info("[MemberImport] PASS-2 دفعة نهائية — {} تابع", dependentBatch.size());
+                    dependentBatch.clear();
+                }
 
-            log.info("[MemberImport] PASS-2 اكتمل — أُنشئ {} تابع، تُخطّي {} تابع",
-                    summary.getDependentsCreated(), summary.getDependentsSkipped());
+                log.info("[MemberImport] PASS-2 اكتمل — أُنشئ {} تابع، تُخطّي {} تابع",
+                        summary.getDependentsCreated(), summary.getDependentsSkipped());
+            }
 
             String messageAr = String.format(
                     "رئيسيون: أُنشئ %d، تُخطّي %d | تابعون: أُنشئ %d، تُخطّي %d | فشل %d",
@@ -658,19 +732,82 @@ public class MemberExcelTemplateService {
         return keys;
     }
 
+    private Integer findColumnIndexSmart(Row headerRow, String... synonyms) {
+        if (headerRow == null || synonyms == null || synonyms.length == 0) {
+            return null;
+        }
+
+        List<String> normalizedSyns = Arrays.stream(synonyms)
+                .map(this::normalizeText)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+
+        // Pass 1: Exact normalized match
+        for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+            Cell cell = headerRow.getCell(i);
+            if (cell == null) continue;
+            String headerVal = parserService.getCellValueAsString(cell);
+            if (headerVal == null) continue;
+
+            String cleanHeader = normalizeText(headerVal.replace("*", ""));
+            if (normalizedSyns.contains(cleanHeader)) {
+                return i;
+            }
+        }
+
+        // Pass 2: Substring normalized match
+        for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+            Cell cell = headerRow.getCell(i);
+            if (cell == null) continue;
+            String headerVal = parserService.getCellValueAsString(cell);
+            if (headerVal == null) continue;
+
+            String cleanHeader = normalizeText(headerVal.replace("*", ""));
+            for (String syn : normalizedSyns) {
+                if (syn.length() >= 4 && (cleanHeader.contains(syn) || syn.contains(cleanHeader))) {
+                    return i;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private Map<String, Integer> findColumnIndices(Row headerRow) {
         Map<String, Integer> indices = new HashMap<>();
 
-        indices.put("full_name", parserService.findColumnIndex(headerRow,
-                "full_name", "الاسم الكامل", "full name", "اسم الموظف"));
-        indices.put("employer", parserService.findColumnIndex(headerRow,
-                "employer", "جهة العمل", "emp name", "company"));
-        indices.put("principal_card_number", parserService.findColumnIndex(headerRow,
-                "principal_card_number", "رقم بطاقة الرئيسي", "principal card", "parent card"));
-        indices.put("relationship", parserService.findColumnIndex(headerRow,
-                "relationship", "القرابة", "rel type", "صلة القرابة"));
-        indices.put("card_number", parserService.findColumnIndex(headerRow,
-                "card_number", "رقم البطاقة", "member card", "معرّف البطاقة"));
+        // تسجيل جميع ترويسات الملف للمساعدة في التشخيص
+        if (headerRow != null) {
+            StringBuilder headerDump = new StringBuilder("[MemberImport] Excel Headers Found: ");
+            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                Cell cell = headerRow.getCell(i);
+                if (cell != null) {
+                    String v = parserService.getCellValueAsString(cell);
+                    if (v != null && !v.isBlank()) {
+                        headerDump.append("[").append(i).append(":'").append(v.trim()).append("'] ");
+                    }
+                }
+            }
+            log.info("{}", headerDump);
+        }
+
+        indices.put("full_name", findColumnIndexSmart(headerRow,
+                "full_name", "الاسم الكامل", "full name", "اسم الموظف", "الاسم", "اسم المستفيد", "المستفيد", "الاسم بالعربية", "اسم المريض", "اسم المؤمن عليه"));
+        indices.put("employer", findColumnIndexSmart(headerRow,
+                "employer", "جهة العمل", "emp name", "company", "الشركة", "الشركه", "اسم الشركة", "المؤسسة", "صاحب العمل", "مكان العمل", "اسم جهة العمل"));
+        indices.put("principal_card_number", findColumnIndexSmart(headerRow,
+                "principal_card_number", "رقم بطاقة الرئيسي", "principal card", "parent card", "رقم بطاقة العائل",
+                "رقم بطاقة الكفيل", "رقم تأمين الرئيسي", "رقم التأمين الرئيسي", "رقم بطاقة الموظف", "رقم الموظف",
+                "رقم المشترك", "رقم التأمين", "رقم الاشتراك", "رقم العضوية"));
+        indices.put("relationship", findColumnIndexSmart(headerRow,
+                "relationship", "القرابة", "rel type", "صلة القرابة", "الصلة", "الصلة بالمشترك", "درجة القرابة", "الصله", "نوع العلاقة", "الصلة بالمؤمن"));
+        indices.put("card_number", findColumnIndexSmart(headerRow,
+                "card_number", "رقم البطاقة", "member card", "معرّف البطاقة", "رقم الكارت",
+                "رقم بطاقة التابع", "رقم بطاقة العضو", "رقم بطاقة المستفيد",
+                "رقم بطاقه", "رقم البطاقه", "رقم الكارته", "رقم التامين",
+                "card no", "card number", "insurance card", "رقم وثيقة التأمين", "رقم الوثيقة"));
+        indices.put("birth_date", findColumnIndexSmart(headerRow,
+                "birth_date", "المواليد", "تاريخ الميلاد", "تاريخ الولادة", "birth date", "date of birth", "dob", "birthdate"));
 
         log.info("[MemberImport] Final Column Indices Detection: {}", indices);
         return indices;
@@ -803,30 +940,12 @@ public class MemberExcelTemplateService {
         return null;
     }
 
-    /**
-     * Quick check whether a row represents a dependent (without full parsing).
-     * Same logic as parseAndCreateMember's type identification.
-     */
     private boolean isDependentRow(Row row, Map<String, Integer> columnIndices) {
-        String employerName = getCellValue(row, columnIndices.get("employer"));
-        String principalCard = normalizeCardNumber(getCellValue(row, columnIndices.get("principal_card_number")));
-        String relationship = normalizeText(getCellValue(row, columnIndices.get("relationship")));
-
-        boolean hasPrincipalCard = principalCard != null && !principalCard.isBlank();
-        boolean hasRelationship = relationship != null && !relationship.isBlank();
-
-        // A row is dependent ONLY if it explicitly references a principal card
-        // or declares a relationship. Missing employer does NOT make it a
-        // dependent — it's a principal with a validation error.
-        boolean dependent = hasPrincipalCard || hasRelationship;
-
-        // "موظف" / "SELF" / "PRINCIPAL" means it's actually a principal
-        if (hasRelationship && (relationship.equalsIgnoreCase("موظف") ||
-                relationship.equalsIgnoreCase("self") ||
-                relationship.equalsIgnoreCase("principal"))) {
-            dependent = false;
+        String excelCardNumber = normalizeCardNumber(getCellValue(row, columnIndices.get("card_number")));
+        if (excelCardNumber == null || excelCardNumber.isBlank()) {
+            return false;
         }
-        return dependent;
+        return !cardNumberGeneratorService.isPrincipalCardNumber(excelCardNumber);
     }
 
     private Member parseAndCreateMember(
@@ -835,34 +954,14 @@ public class MemberExcelTemplateService {
             Map<String, Integer> columnIndices,
             Map<String, Employer> employerLookup,
             Map<String, Member> sessionPrincipals,
+            Member lastSeenPrincipal,
+            Employer selectedEmployer,
             List<ImportError> errors) {
         // Extract values
         String fullName = normalizeMemberName(getCellValue(row, columnIndices.get("full_name")));
         String employerName = getCellValue(row, columnIndices.get("employer"));
-        String principalCardNumber = normalizeCardNumber(getCellValue(row, columnIndices.get("principal_card_number")));
-        String relationshipValue = normalizeText(getCellValue(row, columnIndices.get("relationship")));
+        
         String excelCardNumber = normalizeCardNumber(getCellValue(row, columnIndices.get("card_number")));
-
-        boolean hasPrincipalCard = principalCardNumber != null && !principalCardNumber.isBlank();
-        boolean hasRelationship = relationshipValue != null && !relationshipValue.isBlank();
-        boolean hasEmployerName = employerName != null && !employerName.isBlank();
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // MEMBER TYPE IDENTIFICATION
-        // ═══════════════════════════════════════════════════════════════════════════
-        // A row is dependent ONLY if it explicitly references a principal card
-        // or declares a relationship. Missing employer is a validation error
-        // on a principal row — it must NOT change the classification.
-
-        boolean dependentRow = hasPrincipalCard || hasRelationship;
-
-        // Special Case: If it says "موظف" or "self" in relationship, it's actually a
-        // principal
-        if (hasRelationship && (relationshipValue.equalsIgnoreCase("موظف") ||
-                relationshipValue.equalsIgnoreCase("SELF") ||
-                relationshipValue.equalsIgnoreCase("PRINCIPAL"))) {
-            dependentRow = false;
-        }
 
         // Validate mandatory fields
         boolean hasErrors = false;
@@ -873,79 +972,72 @@ public class MemberExcelTemplateService {
             hasErrors = true;
         }
 
-        Member.Relationship relationship = null; // Moved this declaration here to be in scope for dependentRow logic
-
-        if (dependentRow) {
-            if (!hasPrincipalCard) {
-                errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "principal_card_number",
-                        "رقم بطاقة الرئيسي مطلوب لإضافة تابع", "Principal card number is required for dependent rows",
-                        principalCardNumber, fullName));
-                hasErrors = true;
-            }
-            if (!hasRelationship) {
-                errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "relationship",
-                        "حقل القرابة مطلوب لإضافة تابع", "Relationship is required for dependent rows",
-                        relationshipValue, fullName));
-                hasErrors = true;
-            }
-        } else {
-            if (employerName == null || employerName.trim().isEmpty()) {
-                errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "employer",
-                        "جهة العمل مطلوبة للعضو الرئيسي", "Employer is required for principal rows", employerName,
-                        fullName));
-                hasErrors = true;
-            }
+        Employer employer = selectedEmployer;
+        if (employer == null) {
+            employer = findEmployerFuzzy(employerName, employerLookup);
         }
 
-        // Removed validation for birth_date (Optional in V112)
-        // Removed validation for gender (Optional in V112)
+        if (employer == null) {
+            errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "employer",
+                    "جهة العمل مطلوبة ويجب تحديدها من شاشة الاستيراد", 
+                    "Employer is required and must be selected in the import screen", 
+                    employerName, fullName));
+            hasErrors = true;
+        }
 
-        Employer employer = null;
-        Member principal = null;
+        LocalDate birthDate = null;
+        Integer birthDateIdx = columnIndices.get("birth_date");
+        if (birthDateIdx != null) {
+            birthDate = getCellValueAsDate(row, birthDateIdx);
+        }
 
-        if (dependentRow) {
-            if (hasPrincipalCard) {
-                // Try session cache first
-                principal = sessionPrincipals.get(principalCardNumber);
+        boolean isDependent = !cardNumberGeneratorService.isPrincipalCardNumber(excelCardNumber);
 
-                // Then try DB
-                if (principal == null) {
-                    principal = memberRepository.findByCardNumber(principalCardNumber)
-                            .orElse(null);
-                }
+        Member.Relationship relationship = null;
+        Member parent = null;
 
-                if (principal == null || !principal.isPrincipal() || !Boolean.TRUE.equals(principal.getActive())) {
-                    errors.add(createError(rowNum, ErrorType.LOOKUP_FAILED, "principal_card_number",
-                            "لم يتم العثور على عضو رئيسي صالح برقم البطاقة: " + principalCardNumber,
-                            "Valid principal not found by card number: " + principalCardNumber,
-                            principalCardNumber, fullName));
-                    hasErrors = true;
-                }
-            }
-
-            if (hasRelationship) {
-                relationship = parseRelationship(relationshipValue);
-                if (relationship == null) {
-                    errors.add(createError(rowNum, ErrorType.INVALID_FORMAT, "relationship",
-                            "قيمة القرابة غير صحيحة: " + relationshipValue,
-                            "Invalid relationship value: " + relationshipValue,
-                            relationshipValue, fullName));
-                    hasErrors = true;
+        if (isDependent) {
+            String cleanCard = excelCardNumber.trim().toUpperCase(Locale.ROOT).replace("-", "");
+            for (Member.Relationship rel : Member.Relationship.values()) {
+                if (cleanCard.matches(".*" + rel.getCardCode() + "[0-9]*$")) {
+                    relationship = rel;
+                    break;
                 }
             }
 
-            if (principal != null) {
-                employer = principal.getEmployer();
+            String baseCardNumber = cardNumberGeneratorService.extractBaseCardNumber(excelCardNumber);
+            if (baseCardNumber != null) {
+                // 1) كاش الدفعة (الرقم المُولَّد في DB)
+                parent = sessionPrincipals.get(baseCardNumber);
+                // 2) DB بالرقم المستخرج من بطاقة التابع
+                if (parent == null) {
+                    parent = memberRepository.findByCardNumber(baseCardNumber).orElse(null);
+                }
+                // 3) DB مع تجاهل الـ hyphens (للأرقام القديمة)
+                if (parent == null) {
+                    parent = memberRepository.findByCardNumberIgnoreHyphens(baseCardNumber).orElse(null);
+                }
             }
-        } else {
-            // Principal row
-            employer = findEmployerFuzzy(employerName, employerLookup);
 
-            if (employer == null && employerName != null && !employerName.trim().isEmpty()) {
-                errors.add(createError(rowNum, ErrorType.LOOKUP_FAILED, "employer",
-                        "جهة العمل غير موجودة: " + employerName + ". تأكد من تطابق الاسم مع قائمة جهات العمل.",
-                        "Employer not found: " + employerName + ". Please check the Employers lookup sheet.",
-                        employerName, fullName));
+            // 4) احتياطي أخير: استخدام lastSeenPrincipal (الرئيسي السابق بالترتيب في الملف)
+            if (parent == null && lastSeenPrincipal != null) {
+                log.warn("[MemberImport] لم يُعثر على الرئيسي برقم '{}' للتابع '{}' — سيُستخدم lastSeenPrincipal: '{}/{}'",
+                        baseCardNumber, fullName, lastSeenPrincipal.getFullName(), lastSeenPrincipal.getCardNumber());
+                parent = lastSeenPrincipal;
+            }
+
+            if (parent == null) {
+                errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "card_number",
+                        "لم يتم العثور على العضو الرئيسي للتابع (رقم البطاقة الأساسي غير موجود أو لم يسبقه سجل رئيسي)",
+                        "Principal member not found for dependent (invalid base card and no preceding principal row)",
+                        excelCardNumber, fullName));
+                hasErrors = true;
+            }
+            if (relationship == null) {
+                errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "card_number",
+                        "تعذر استخراج صلة القرابة من رقم البطاقة",
+                        "Could not extract relationship from card number",
+                        excelCardNumber, fullName));
                 hasErrors = true;
             }
         }
@@ -954,24 +1046,17 @@ public class MemberExcelTemplateService {
             return null;
         }
 
-        Member member;
-
-        if (dependentRow) {
-            member = Member.builder()
-                    .fullName(fullName.trim())
-                    .employer(employer)
-                    .parent(principal)
-                    .relationship(relationship)
-                    .cardNumber(excelCardNumber)
-                    .status(MemberStatus.ACTIVE)
-                    .build();
-        } else {
-            member = Member.builder()
-                    .fullName(fullName.trim())
-                    .employer(employer)
-                    .cardNumber(excelCardNumber)
-                    .status(MemberStatus.ACTIVE)
-                    .build();
+        Member member = Member.builder()
+                .fullName(fullName.trim())
+                .employer(employer)
+                .cardNumber(excelCardNumber)
+                .birthDate(birthDate)
+                .status(MemberStatus.ACTIVE)
+                .build();
+        
+        if (isDependent) {
+            member.setRelationship(relationship);
+            member.setParent(parent);
         }
 
         return member;
@@ -989,17 +1074,32 @@ public class MemberExcelTemplateService {
             // Try Arabic aliases
         }
 
-        return switch (normalizeText(value)) {
-            case "زوجه" -> Member.Relationship.WIFE;
-            case "زوج" -> Member.Relationship.HUSBAND;
-            case "ابن" -> Member.Relationship.SON;
-            case "ابنه", "بنت" -> Member.Relationship.DAUGHTER;
-            case "اب" -> Member.Relationship.FATHER;
-            case "ام" -> Member.Relationship.MOTHER;
-            case "اخ" -> Member.Relationship.BROTHER;
-            case "اخت" -> Member.Relationship.SISTER;
-            default -> null;
-        };
+        String normText = normalizeText(value);
+        if (normText.contains("زوجه") || normText.contains("زوجة")) {
+            return Member.Relationship.WIFE;
+        }
+        if (normText.equals("زوج")) {
+            return Member.Relationship.HUSBAND;
+        }
+        if (normText.contains("ابن") && !normText.contains("ابنه")) {
+            return Member.Relationship.SON;
+        }
+        if (normText.contains("ابنه") || normText.contains("بنت")) {
+            return Member.Relationship.DAUGHTER;
+        }
+        if (normText.equals("اب")) {
+            return Member.Relationship.FATHER;
+        }
+        if (normText.equals("ام")) {
+            return Member.Relationship.MOTHER;
+        }
+        if (normText.equals("اخ")) {
+            return Member.Relationship.BROTHER;
+        }
+        if (normText.equals("اخت")) {
+            return Member.Relationship.SISTER;
+        }
+        return null;
     }
 
     private String relationshipAr(Member.Relationship relationship) {
@@ -1029,6 +1129,18 @@ public class MemberExcelTemplateService {
         return parserService.getCellValueAsString(row.getCell(columnIndex));
     }
 
+    private LocalDate getCellValueAsDate(Row row, Integer columnIndex) {
+        if (columnIndex == null) {
+            return null;
+        }
+        return parserService.getCellValueAsDate(row.getCell(columnIndex));
+    }
+
+    private String extractPrincipalCardNumber(String cardNo) {
+        if (cardNo == null || cardNo.isBlank()) return null;
+        return cardNumberGeneratorService.extractBaseCardNumber(cardNo);
+    }
+
     private ImportError createError(int rowNum, ErrorType type, String columnName,
             String messageAr, String messageEn, String value, String rowIdentifier) {
         return ImportError.builder()
@@ -1051,4 +1163,41 @@ public class MemberExcelTemplateService {
                 .messageEn("Import failed: " + message)
                 .build();
     }
+    /**
+     * يولّد رقم بطاقة فريد للعضو الأساسي مع مراعاة الأرقام المولّدة مسبقاً في نفس الدفعة.
+     * يتحقق أولاً من usedCardNumbers (الذاكرة) ثم من DB لضمان عدم التكرار.
+     */
+    private String generateUniqueCardNumberWithCache(Member member, Set<String> usedCardNumbers) {
+        if (member.getEmployer() == null || member.getEmployer().getCode() == null) {
+            throw new IllegalStateException("Employer with code must be set before generating a card number");
+        }
+
+        String employerCode = member.getEmployer().getCode().trim().toUpperCase(java.util.Locale.ROOT);
+        boolean hasEmployeeNumber = member.getEmployeeNumber() != null
+                && !member.getEmployeeNumber().trim().isEmpty();
+
+        if (hasEmployeeNumber) {
+            String cardNumber = employerCode + member.getEmployeeNumber().trim();
+            if (usedCardNumbers.contains(cardNumber) || memberRepository.existsByCardNumber(cardNumber)) {
+                // الموظف موجود مسبقاً — نعيد نفس الرقم ليُعالَج كتحديث
+                return cardNumber;
+            }
+            return cardNumber;
+        }
+
+        // مسار عشوائي: تكرار حتى إيجاد رقم فريد في الذاكرة وDB معاً
+        final int MAX_ATTEMPTS = 100;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            String randomNum = String.format("%08d",
+                    java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 100_000_000));
+            String cardNumber = employerCode + randomNum;
+            if (!usedCardNumbers.contains(cardNumber) && !memberRepository.existsByCardNumber(cardNumber)) {
+                return cardNumber;
+            }
+        }
+        throw new IllegalStateException(
+                "Unable to generate a unique card number for '" + member.getFullName() +
+                        "' after " + MAX_ATTEMPTS + " attempts.");
+    }
 }
+

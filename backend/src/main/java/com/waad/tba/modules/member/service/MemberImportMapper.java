@@ -37,26 +37,22 @@ public class MemberImportMapper {
             int score = 0;
             for (int cellIndex = 0; cellIndex < row.getLastCellNum(); cellIndex++) {
                 String raw = parser.getCellStringValue(row.getCell(cellIndex));
-                String normalized = parser.cleanColumnName(raw).toLowerCase();
-                if (normalized.isBlank()) {
+                if (raw == null || raw.isBlank()) {
                     continue;
                 }
 
-                if (containsAny(normalized, MemberImportFieldConfig.MANDATORY_COLUMNS.get(0))) {
-                    score += 10;
-                }
-                if (containsAny(normalized, MemberImportFieldConfig.MANDATORY_COLUMNS.get(1))) {
+                if (containsAny(raw, MemberImportFieldConfig.MANDATORY_COLUMNS.get(0))) {
                     score += 10;
                 }
 
                 for (String[] variants : MemberImportFieldConfig.MANDATORY_COLUMNS) {
-                    if (containsAny(normalized, variants)) {
+                    if (containsAny(raw, variants)) {
                         score += 2;
                     }
                 }
 
                 for (String[] variants : MemberImportFieldConfig.OPTIONAL_FIELD_MAPPINGS.values()) {
-                    if (containsAny(normalized, variants)) {
+                    if (containsAny(raw, variants)) {
                         score += 1;
                     }
                 }
@@ -81,10 +77,10 @@ public class MemberImportMapper {
 
         for (int i = 0; i < MemberImportFieldConfig.MANDATORY_COLUMNS.size(); i++) {
             String[] variants = MemberImportFieldConfig.MANDATORY_COLUMNS.get(i);
-            String fieldName = i == 0 ? "fullName" : "employer";
+            String fieldName = "fullName";
 
             for (String variant : variants) {
-                if (colName.equalsIgnoreCase(variant) || colName.toLowerCase().contains(variant.toLowerCase())) {
+                if (isSmartMatch(colName, variant)) {
                     fieldToColumnIndex.put(fieldName, index);
                     columnMappings.put(colName, fieldName);
                     return;
@@ -94,7 +90,7 @@ public class MemberImportMapper {
 
         for (Map.Entry<String, String[]> entry : MemberImportFieldConfig.OPTIONAL_FIELD_MAPPINGS.entrySet()) {
             for (String variant : entry.getValue()) {
-                if (colName.equalsIgnoreCase(variant) || colName.toLowerCase().contains(variant.toLowerCase())) {
+                if (isSmartMatch(colName, variant)) {
                     fieldToColumnIndex.put(entry.getKey(), index);
                     columnMappings.put(colName, entry.getKey());
                     return;
@@ -104,7 +100,7 @@ public class MemberImportMapper {
 
         for (Map.Entry<String, String[]> entry : MemberImportFieldConfig.ATTRIBUTE_MAPPINGS.entrySet()) {
             for (String variant : entry.getValue()) {
-                if (colName.equalsIgnoreCase(variant) || colName.toLowerCase().contains(variant.toLowerCase())) {
+                if (isSmartMatch(colName, variant)) {
                     fieldToColumnIndex.put("attr:" + entry.getKey(), index);
                     columnMappings.put(colName, "attribute:" + entry.getKey());
                     return;
@@ -127,26 +123,55 @@ public class MemberImportMapper {
                     .rowNumber(0).field("header").severity("ERROR")
                     .message("Missing mandatory column: full_name / name (الاسم الكامل)").build());
         }
-        if (!fieldToColumnIndex.containsKey("employer")) {
-            errors.add(ImportValidationErrorDto.builder()
-                    .rowNumber(0).field("header").severity("ERROR")
-                    .message("Missing mandatory column: employer / company (جهة العمل)").build());
-        }
     }
 
-    private boolean containsAny(String haystack, String[] variants) {
+    private boolean containsAny(String raw, String[] variants) {
         for (String variant : variants) {
-            if (variant != null && !variant.isBlank() && haystack.contains(variant.toLowerCase())) {
+            if (isSmartMatch(raw, variant)) {
                 return true;
             }
         }
         return false;
     }
 
+    public boolean isSmartMatch(String header, String variant) {
+        if (header == null || variant == null) return false;
+
+        String cleanHeader = cleanString(header);
+        String cleanVariant = cleanString(variant);
+
+        if (cleanHeader.isEmpty() || cleanVariant.isEmpty()) return false;
+
+        // Exact match of cleaned strings
+        if (cleanHeader.equals(cleanVariant)) return true;
+
+        // Substring match:
+        // Only allow substring matching if variant is longer (like "fullname", "employeeid") to prevent false positives for short keys
+        if (cleanVariant.length() >= 4) {
+            return cleanHeader.contains(cleanVariant) || cleanVariant.contains(cleanHeader);
+        }
+
+        return false;
+    }
+
+    private String cleanString(String input) {
+        if (input == null) return "";
+        String s = input.toLowerCase();
+        // Remove non-alphanumeric and non-Arabic characters
+        s = s.replaceAll("[^a-z0-9\\u0621-\\u064A]", "");
+        // Normalize Arabic characters to handle common variants
+        s = s.replace('أ', 'ا')
+             .replace('إ', 'ا')
+             .replace('آ', 'ا')
+             .replace('ة', 'ه')
+             .replace('ى', 'ي');
+        return s;
+    }
+
     public Integer findColumnIndexByName(String columnName, Map<Integer, String> columnIndexToName) {
         String lowerName = columnName.toLowerCase();
         for (Map.Entry<Integer, String> entry : columnIndexToName.entrySet()) {
-            if (entry.getValue().equals(lowerName)) {
+            if (entry.getValue().equals(lowerName) || isSmartMatch(entry.getValue(), columnName)) {
                 return entry.getKey();
             }
         }

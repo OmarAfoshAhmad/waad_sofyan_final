@@ -32,6 +32,9 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        Optional<Member> findByCardNumber(String cardNumber);
 
+       @Query("SELECT m FROM Member m WHERE REPLACE(m.cardNumber, '-', '') = :cardNumber")
+       Optional<Member> findByCardNumberIgnoreHyphens(@Param("cardNumber") String cardNumber);
+
        /**
         * Find member by barcode (used for QR scanning and eligibility check).
         * Uses EntityGraph to eagerly fetch employer organization and benefit policy
@@ -527,4 +530,12 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         * @return List of all dependents for the given principals
         */
        List<Member> findByParentIdIn(List<Long> parentIds);
+
+       @Query("SELECT m FROM Member m WHERE m.employer.id = :employerOrgId AND m.active = true AND m.parent IS NULL")
+       List<Member> findActivePrincipalsByEmployerId(@Param("employerOrgId") Long employerOrgId);
+
+       @org.springframework.data.jpa.repository.Modifying
+       @org.springframework.transaction.annotation.Transactional
+       @Query("DELETE FROM Member m WHERE m.id IN :ids")
+       void deleteMembersByIds(@Param("ids") java.util.Collection<Long> ids);
 }

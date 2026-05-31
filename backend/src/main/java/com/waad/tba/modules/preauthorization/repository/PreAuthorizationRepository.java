@@ -323,4 +323,7 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      "GROUP BY pa.providerId " +
                      "ORDER BY COUNT(pa) DESC")
        List<Object[]> getActiveProviderStats();
+
+       @Query("SELECT DISTINCT p.memberId FROM PreAuthorization p WHERE p.memberId IN :memberIds AND p.active = true")
+       List<Long> findMemberIdsWithPreAuths(@Param("memberIds") java.util.Collection<Long> memberIds);
 }
