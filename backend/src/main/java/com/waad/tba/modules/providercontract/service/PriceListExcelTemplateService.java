@@ -173,6 +173,9 @@ public class PriceListExcelTemplateService {
             // Add instructions sheet
             createInstructionsSheet(workbook, contract);
 
+            // Add categories lookup sheet
+            createCategoriesLookupSheet(workbook);
+
             // Write to byte array
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             workbook.write(outputStream);
@@ -227,8 +230,74 @@ public class PriceListExcelTemplateService {
                 .setCellValue("5. يربط النظام الخدمة تلقائياً بالقاموس الموحد بالأولوية التالية: (الكود ثم الاسم)");
         sheet.createRow(rowNum++).createCell(0).setCellValue(
                 "6. إذا لم يتم الربط التلقائي، تظهر الخدمة في 'مركز الربط' متبوعة بالتصنيف الذي أدخلته هنا");
+        sheet.createRow(rowNum++).createCell(0).setCellValue(
+                "7. يرجى الرجوع لورقة 'التصنيفات المتاحة' لمعرفة الرموز والمسميات الصحيحة للتصنيفات الطبية.");
 
         sheet.setColumnWidth(0, 80 * 256);
+    }
+
+    private void createCategoriesLookupSheet(XSSFWorkbook workbook) {
+        List<MedicalCategory> categories = medicalCategoryRepository.findByActiveTrue();
+        
+        XSSFSheet sheet = workbook.createSheet("التصنيفات المتاحة");
+        sheet.setRightToLeft(true);
+
+        CellStyle headerStyle = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        headerStyle.setFont(font);
+        headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        headerStyle.setBorderBottom(BorderStyle.THIN);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+        Row headerRow = sheet.createRow(0);
+        String[] headers = {"رمز التصنيف", "اسم التصنيف (عربي)", "اسم التصنيف (إنجليزي)", "رمز التصنيف الأب"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+
+        // Map categories by ID for quick parent lookup
+        Map<Long, MedicalCategory> catMap = new HashMap<>();
+        for (MedicalCategory cat : categories) {
+            catMap.put(cat.getId(), cat);
+        }
+
+        int rowNum = 1;
+        for (MedicalCategory cat : categories) {
+            Row row = sheet.createRow(rowNum++);
+            
+            // Column 0: Code
+            row.createCell(0).setCellValue(cat.getCode() != null ? cat.getCode() : "");
+            
+            // Column 1: Arabic Name
+            row.createCell(1).setCellValue(cat.getNameAr() != null ? cat.getNameAr() : (cat.getName() != null ? cat.getName() : ""));
+            
+            // Column 2: English Name
+            row.createCell(2).setCellValue(cat.getNameEn() != null ? cat.getNameEn() : "");
+            
+            // Column 3: Parent Code
+            String parentCode = "";
+            if (cat.getParentId() != null) {
+                MedicalCategory parent = catMap.get(cat.getParentId());
+                if (parent != null) {
+                    parentCode = parent.getCode();
+                } else {
+                    parentCode = medicalCategoryRepository.findById(cat.getParentId())
+                            .map(MedicalCategory::getCode)
+                            .orElse("");
+                }
+            }
+            row.createCell(3).setCellValue(parentCode);
+        }
+
+        // Adjust column widths
+        sheet.setColumnWidth(0, 25 * 256);
+        sheet.setColumnWidth(1, 35 * 256);
+        sheet.setColumnWidth(2, 35 * 256);
+        sheet.setColumnWidth(3, 25 * 256);
     }
 
     private CellStyle createHeaderStyle(XSSFWorkbook workbook) {

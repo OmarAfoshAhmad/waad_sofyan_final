@@ -98,7 +98,7 @@ const UnifiedMemberView = () => {
 
   // Pagination
   const [pg, setPg] = useState(0);
-  const [rpp, setRpp] = useState(3);
+  const [rpp, setRpp] = useState(6);
 
   // Dialog States
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -684,7 +684,7 @@ const UnifiedMemberView = () => {
                         </Table>
                       </TableContainer>
                       <TablePagination
-                        rowsPerPageOptions={[3, 6, 9]}
+                        rowsPerPageOptions={[6, 12, 24]}
                         component="div"
                         count={dependents.length}
                         rowsPerPage={rpp}
