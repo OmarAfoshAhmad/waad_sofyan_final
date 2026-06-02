@@ -137,9 +137,16 @@ export const searchMembers = async (criteria = {}) => {
  * @param {string} query - Search query
  * @returns {Promise<Array>} List of results
  */
-export const unifiedSearch = async (query) => {
+export const unifiedSearch = async (query, employerId = null) => {
+  // Guard: don't hit the server with empty queries
+  if (!query || !query.trim()) return [];
+
   try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/unified-search`, { params: { query } });
+    const params = { query };
+    if (employerId) {
+      params.employerId = employerId;
+    }
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/unified-search`, { params });
     let results = response.data?.data || [];
 
     // Fallback: If results are empty and query is not empty, try a broader search.
@@ -154,6 +161,10 @@ export const unifiedSearch = async (query) => {
       } else {
         // Otherwise search by full name (partial)
         criteria.fullName = trimmedQuery;
+      }
+
+      if (employerId) {
+        criteria.organizationId = employerId;
       }
 
       // Call searchMembers (GET /unified-members/search) which uses LIKE %...%

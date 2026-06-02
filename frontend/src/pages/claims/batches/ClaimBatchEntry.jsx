@@ -179,13 +179,25 @@ export default function ClaimBatchEntry() {
     const closeActionConfirm = () => setActionConfirm(prev => ({ ...prev, open: false }));
     const triggerConfirm = (title, message, onConfirm) => setActionConfirm({ open: true, title, message, onConfirm });
 
+    const currentUserRole = (() => {
+        try {
+            const rolesStr = localStorage.getItem('userRoles');
+            if (rolesStr) {
+                const roles = JSON.parse(rolesStr);
+                return Array.isArray(roles) ? roles[0] : '';
+            }
+        } catch { /* ignore */ }
+        return '';
+    })();
+    const isReviewer = currentUserRole === 'MEDICAL_REVIEWER';
+
     // Column Visibility State (Clutter Reduction)
     const [visibleColumns, setVisibleColumns] = useState({
         coverage: true,
         benefitLimit: true,
         remainingLimit: true,
         refused: true,
-        companyShare: true,
+        companyShare: !isReviewer,
         patientShare: true
     });
     const [anchorElCols, setAnchorElCols] = useState(null);
@@ -456,7 +468,7 @@ export default function ClaimBatchEntry() {
         refetch: retryMemberSearch
     } = useQuery({
         queryKey: ['member-search', normalizedMemberSearchValue, employerId],
-        queryFn: () => runWithRetry(() => unifiedMembersService.unifiedSearch(normalizedMemberSearchValue), { maxRetries: 1 }),
+        queryFn: () => runWithRetry(() => unifiedMembersService.unifiedSearch(normalizedMemberSearchValue, employerId), { maxRetries: 1 }),
         enabled: true, // No character restriction
         staleTime: 10000
     });
@@ -1629,12 +1641,14 @@ export default function ClaimBatchEntry() {
                                         </ListItemIcon>
                                         <ListItemText primary="المرفوض" />
                                     </MenuItem>
-                                    <MenuItem onClick={() => handleToggleColumn('companyShare')}>
-                                        <ListItemIcon>
-                                            <Checkbox checked={visibleColumns.companyShare} size="small" />
-                                        </ListItemIcon>
-                                        <ListItemText primary="حصة الشركة" />
-                                    </MenuItem>
+                                    {!isReviewer && (
+                                        <MenuItem onClick={() => handleToggleColumn('companyShare')}>
+                                            <ListItemIcon>
+                                                <Checkbox checked={visibleColumns.companyShare} size="small" />
+                                            </ListItemIcon>
+                                            <ListItemText primary="حصة الشركة" />
+                                        </MenuItem>
+                                    )}
                                     <MenuItem onClick={() => handleToggleColumn('patientShare')}>
                                         <ListItemIcon>
                                             <Checkbox checked={visibleColumns.patientShare} size="small" />

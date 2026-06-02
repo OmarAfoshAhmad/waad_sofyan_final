@@ -95,7 +95,7 @@ class UnifiedSearchControllerDeprecated {
         }
 
         // Execute unified search
-        List<MemberSearchDto> results = unifiedSearchService.search(query.trim());
+        List<MemberSearchDto> results = unifiedSearchService.search(query.trim(), null);
 
         // Build response
         String message = buildResponseMessage(results, query);

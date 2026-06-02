@@ -213,7 +213,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        /**
         * Search members by employer organization ID (non-paginated)
         */
-       @Query("SELECT m FROM Member m WHERE m.employer.id = :employerOrgId AND (" +
+       @Query("SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE m.employer.id = :employerOrgId AND (" +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
                      "LOWER(m.civilId) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
                      "LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :query, '%')))")

@@ -193,6 +193,17 @@ public class BenefitPolicyRule {
      */
     public String getLabel() {
         if (medicalCategory != null) {
+            String arabic = medicalCategory.getNameAr();
+            String english = medicalCategory.getNameEn();
+            if (arabic != null && !arabic.isBlank() && english != null && !english.isBlank()) {
+                return arabic + " / " + english;
+            }
+            if (arabic != null && !arabic.isBlank()) {
+                return arabic;
+            }
+            if (english != null && !english.isBlank()) {
+                return english;
+            }
             return medicalCategory.getName();
         }
         return "Rule #" + id;

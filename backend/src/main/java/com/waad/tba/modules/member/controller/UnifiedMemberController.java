@@ -1354,9 +1354,10 @@ public class UnifiedMemberController {
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
         @Operation(summary = "Unified member search (Auto-detect type)", description = "Search members by card number, name (fuzzy), or barcode/QR.")
         public ResponseEntity<ApiResponse<List<MemberSearchDto>>> unifiedSearch(
-                        @RequestParam(name = "query") String query) {
-                log.info("Unified search request: query={}", query);
-                List<MemberSearchDto> results = unifiedSearchService.search(query);
+                        @RequestParam(name = "query") String query,
+                        @RequestParam(name = "employerId", required = false) Long employerId) {
+                log.info("Unified search request: query={}, employerId={}", query, employerId);
+                List<MemberSearchDto> results = unifiedSearchService.search(query, employerId);
                 return ResponseEntity.ok(ApiResponse.success("Search completed", results));
         }
 

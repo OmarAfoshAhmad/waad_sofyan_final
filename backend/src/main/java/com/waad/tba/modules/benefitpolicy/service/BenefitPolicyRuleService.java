@@ -32,6 +32,12 @@ import java.util.stream.Collectors;
 @Transactional
 public class BenefitPolicyRuleService {
 
+    private static final List<String> STANDARD_CATEGORY_CODES = List.of(
+            "CAT-IP-GEN", "CAT-IP-NURSE", "CAT-IP-PHYSIO", "CAT-IP-WORK",
+            "CAT-IP-PSYCH", "CAT-IP-MATER", "CAT-IP-COMPL", "CAT-OP-GEN",
+            "CAT-OP-RAD", "CAT-OP-MRI", "CAT-OP-DRUG", "CAT-OP-EQUIP",
+            "CAT-OP-PHYSIO", "CAT-OP-DENT-R", "CAT-OP-DENT-C", "CAT-OP-GLASS");
+
     private final BenefitPolicyRuleRepository ruleRepository;
     private final BenefitPolicyRepository policyRepository;
     private final MedicalCategoryRepository categoryRepository;
@@ -532,46 +538,80 @@ public class BenefitPolicyRuleService {
     public List<BenefitPolicyRuleResponseDto> initializeStandardRules(Long policyId) {
         log.info("Initializing standard 16 rules for policy {}", policyId);
 
-        List<String> standardCodes = List.of(
-                "CAT-IP-GEN", "CAT-IP-NURSE", "CAT-IP-PHYSIO", "CAT-IP-WORK",
-                "CAT-IP-PSYCH", "CAT-IP-MATER", "CAT-IP-COMPL", "CAT-OP-GEN",
-                "CAT-OP-RAD", "CAT-OP-MRI", "CAT-OP-DRUG", "CAT-OP-EQUIP",
-                "CAT-OP-PHYSIO", "CAT-OP-DENT-R", "CAT-OP-DENT-C", "CAT-OP-GLASS");
+        BenefitPolicy policy = policyRepository.findById(policyId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicy", "id", policyId));
 
         List<BenefitPolicyRuleResponseDto> results = new java.util.ArrayList<>();
 
-        for (String code : standardCodes) {
+        for (String code : STANDARD_CATEGORY_CODES) {
             Optional<MedicalCategory> categoryOpt = categoryRepository.findByCode(code);
-            if (categoryOpt.isPresent()) {
-                MedicalCategory category = categoryOpt.get();
-
-                // Skip if rule already exists
-                if (ruleRepository.existsCategoryRule(policyId, category.getId(), null)) {
-                    log.warn("Rule for category {} already exists, skipping initialization", code);
-                    continue;
-                }
-
-                BenefitPolicyRuleCreateDto dto = BenefitPolicyRuleCreateDto.builder()
-                        .medicalCategoryId(category.getId())
-                        .coveragePercent(
-                                category.getCoveragePercent() != null ? category.getCoveragePercent().intValue() : 100) // Use
-                                                                                                                        // the
-                                                                                                                        // default
-                                                                                                                        // from
-                                                                                                                        // category
-                        .active(true)
-                        .requiresPreApproval(false)
-                        .waitingPeriodDays(0)
-                        .notes("تم الإنشاء تلقائياً — القواعد القياسية")
-                        .build();
-
-                try {
-                    results.add(create(policyId, dto));
-                } catch (Exception e) {
-                    log.error("Failed to initialize rule for category {}: {}", code, e.getMessage());
-                }
-            } else {
+            if (categoryOpt.isEmpty()) {
                 log.warn("Standard category code {} not found in database", code);
+                continue;
+            }
+
+            MedicalCategory category = categoryOpt.get();
+            Optional<BenefitPolicyRule> existingRuleOpt = ruleRepository
+                    .findByBenefitPolicyIdAndMedicalCategoryId(policyId, category.getId());
+
+            if (existingRuleOpt.isPresent()) {
+                BenefitPolicyRule existingRule = existingRuleOpt.get();
+                boolean requiresUpdate = false;
+
+                if (existingRule.isDeleted()) {
+                    existingRule.setDeleted(false);
+                    requiresUpdate = true;
+                }
+                if (!existingRule.isActive()) {
+                    existingRule.setActive(true);
+                    requiresUpdate = true;
+                }
+                Integer expectedCoverage = category.getCoveragePercent() != null
+                        ? category.getCoveragePercent().intValue()
+                        : policy.getDefaultCoveragePercent();
+                if (existingRule.getCoveragePercent() == null
+                        || !existingRule.getCoveragePercent().equals(expectedCoverage)) {
+                    existingRule.setCoveragePercent(expectedCoverage);
+                    requiresUpdate = true;
+                }
+                if (existingRule.isRequiresPreApproval()) {
+                    existingRule.setRequiresPreApproval(false);
+                    requiresUpdate = true;
+                }
+                if (existingRule.getWaitingPeriodDays() == null || existingRule.getWaitingPeriodDays() != 0) {
+                    existingRule.setWaitingPeriodDays(0);
+                    requiresUpdate = true;
+                }
+                if (existingRule.getNotes() == null || !existingRule.getNotes().contains("تم الإنشاء تلقائياً")) {
+                    existingRule.setNotes("تم الإنشاء تلقائياً — القواعد القياسية");
+                    requiresUpdate = true;
+                }
+
+                if (requiresUpdate) {
+                    BenefitPolicyRule saved = ruleRepository.save(existingRule);
+                    log.info("Updated existing standard rule {} for category {}", saved.getId(), code);
+                    results.add(BenefitPolicyRuleResponseDto.fromEntity(saved));
+                } else {
+                    results.add(BenefitPolicyRuleResponseDto.fromEntity(existingRule));
+                }
+                continue;
+            }
+
+            BenefitPolicyRuleCreateDto dto = BenefitPolicyRuleCreateDto.builder()
+                    .medicalCategoryId(category.getId())
+                    .coveragePercent(
+                            category.getCoveragePercent() != null ? category.getCoveragePercent().intValue()
+                                    : policy.getDefaultCoveragePercent())
+                    .active(true)
+                    .requiresPreApproval(false)
+                    .waitingPeriodDays(0)
+                    .notes("تم الإنشاء تلقائياً — القواعد القياسية")
+                    .build();
+
+            try {
+                results.add(create(policyId, dto));
+            } catch (Exception e) {
+                log.error("Failed to initialize rule for category {}: {}", code, e.getMessage());
             }
         }
 

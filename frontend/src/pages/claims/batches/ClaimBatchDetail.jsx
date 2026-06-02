@@ -317,20 +317,7 @@ export default function ClaimBatchDetail() {
     const getApprovedAfterDiscount = (claim) => {
         const gross = Number(claim?.requestedAmount) || 0;
         const copay = Number(claim?.patientCoPay) || 0;
-        const providerShare = Math.max(0, gross - copay);
-        
-        const isBefore = claim?.discountBeforeRejection !== false; // Default true
-        const percent = getDiscountPercent(claim);
-        const refused = Number(getDisplayRefused(claim)) || 0;
-
-        if (isBefore) {
-            // الحالة قبل: يخصم التخفيض من حصة المرفق ليعطينا المعتمد
-            const discountAmount = providerShare * percent / 100;
-            return Math.max(0, providerShare - discountAmount);
-        } else {
-            // الحالة بعد: لا يتم خصم التخفيض للحصول على المعتمد (الخصم يتم بعد المرفوض)
-            return providerShare;
-        }
+        return Math.max(0, gross - copay);
     };
 
     const getDueAfterRefused = (claim) => {
@@ -338,20 +325,7 @@ export default function ClaimBatchDetail() {
         const copay = Number(claim?.patientCoPay) || 0;
         const providerShare = Math.max(0, gross - copay);
         const refused = Number(getDisplayRefused(claim)) || 0;
-        const isBefore = claim?.discountBeforeRejection !== false;
-        const percent = getDiscountPercent(claim);
-
-        if (isBefore) {
-            // في حال قبل يتم خصم نسبة التخفيض من نسبة المرفق ثم يطرح المرفوض
-            const discountAmount = providerShare * percent / 100;
-            const approved = Math.max(0, providerShare - discountAmount);
-            return Math.max(0, approved - refused);
-        } else {
-            // أما في الحالة بعد يتم خصم المرفوض اولا ثم نسبة التخفيض من المتبقي من حصة المرفق
-            const afterRefused = Math.max(0, providerShare - refused);
-            const discountAmount = afterRefused * percent / 100;
-            return Math.max(0, afterRefused - discountAmount);
-        }
+        return Math.max(0, providerShare - refused);
     };
 
     const sortedClaims = useMemo(() => {
@@ -456,10 +430,10 @@ export default function ClaimBatchDetail() {
                 serviceDate: c.serviceDate || '-',
                 status: c.status || 'APPROVED',
                 amount: c.requestedAmount || 0,
-                covered: c.approvedAmount || 0,
-                refused: c.refusedAmount || 0,
+                covered: getApprovedAfterDiscount(c),
+                refused: getDisplayRefused(c),
                 copay: c.patientCoPay || 0,
-                paid: c.netProviderAmount || 0
+                paid: getDueAfterRefused(c)
             });
         });
 
@@ -617,9 +591,14 @@ export default function ClaimBatchDetail() {
                 );
             case 'ref':
                 return (
-                    <Typography variant="body2" fontWeight={400} color="primary.main" dir="ltr">
-                        {batchCode}/{String(index + 1).padStart(4, '0')}
-                    </Typography>
+                    <Stack direction="row" spacing={0.3} alignItems="baseline" dir="ltr" justifyContent="center">
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                            {batchCode}/
+                        </Typography>
+                        <Typography variant="body2" fontWeight={700} color="primary.main" sx={{ fontSize: '0.95rem' }}>
+                            {String(index + 1).padStart(4, '0')}
+                        </Typography>
+                    </Stack>
                 );
             case 'employer':
                 return (

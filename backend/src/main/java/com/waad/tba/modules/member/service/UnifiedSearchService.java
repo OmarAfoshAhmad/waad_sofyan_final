@@ -49,14 +49,14 @@ public class UnifiedSearchService {
      * @param query Search query (card number, name, or barcode)
      * @return List of matching members (single for exact match, multiple for fuzzy)
      */
-    public List<MemberSearchDto> search(String query) {
+    public List<MemberSearchDto> search(String query, Long employerId) {
         if (query == null || query.trim().isEmpty()) {
             log.warn("Empty search query received");
             return List.of();
         }
 
         String trimmedQuery = query.trim();
-        log.info("Unified search initiated for query: {}", trimmedQuery);
+        log.info("Unified search initiated for query: {}, employerId: {}", trimmedQuery, employerId);
 
         // Detect search type
         SearchType searchType = detectSearchType(trimmedQuery);
@@ -65,13 +65,13 @@ public class UnifiedSearchService {
         // Execute appropriate search
         switch (searchType) {
             case BARCODE:
-                return searchByBarcode(trimmedQuery);
+                return searchByBarcode(trimmedQuery, employerId);
 
             case CARD_NUMBER:
-                return searchByCardNumber(trimmedQuery);
+                return searchByCardNumber(trimmedQuery, employerId);
 
             case NAME_FUZZY:
-                return searchByName(trimmedQuery);
+                return searchByName(trimmedQuery, employerId);
 
             default:
                 log.error("Unknown search type: {}", searchType);
@@ -83,8 +83,8 @@ public class UnifiedSearchService {
      * Search by barcode (UUID) - exact match
      * Performance: <50ms (indexed unique constraint)
      */
-    private List<MemberSearchDto> searchByBarcode(String barcode) {
-        log.info("Executing barcode search for: {}", barcode);
+    private List<MemberSearchDto> searchByBarcode(String barcode, Long employerId) {
+        log.info("Executing barcode search for: {}, employerId: {}", barcode, employerId);
 
         Member member = memberRepository.findByBarcode(barcode)
                 .orElse(null);
@@ -93,19 +93,28 @@ public class UnifiedSearchService {
             log.warn("No member found with barcode: {}", barcode);
             return List.of();
         }
+        
+        if (employerId != null && member.getEmployer() != null && !member.getEmployer().getId().equals(employerId)) {
+            log.warn("Member found but employer does not match: {}", barcode);
+            return List.of();
+        }
+        
         MemberSearchDto dto = MemberSearchDto.fromMember(member, "BARCODE", null);
 
         log.info("Found member by barcode: {} (ID: {})", member.getFullName(), member.getId());
         return List.of(dto);
     }
 
-    private List<MemberSearchDto> searchByCardNumber(String cardNumber) {
-        log.debug("Executing card number search for: {}", cardNumber);
+    private List<MemberSearchDto> searchByCardNumber(String cardNumber, Long employerId) {
+        log.debug("Executing card number search for: {}, employerId: {}", cardNumber, employerId);
 
         // 1. Try exact match first (Priority 1)
-        Optional<Member> exactMatch = memberRepository.findByCardNumber(cardNumber);
+        Optional<Member> exactMatch = memberRepository.findByCardNumberWithDetails(cardNumber);
         if (exactMatch.isPresent()) {
-            return List.of(MemberSearchDto.fromMember(exactMatch.get(), "CARD_NUMBER", 1.0));
+            Member m = exactMatch.get();
+            if (employerId == null || (m.getEmployer() != null && m.getEmployer().getId().equals(employerId))) {
+                return List.of(MemberSearchDto.fromMember(m, "CARD_NUMBER", 1.0));
+            }
         }
 
         // 2. Try ID exact match (Priority 2)
@@ -114,7 +123,10 @@ public class UnifiedSearchService {
                 Long id = Long.parseLong(cardNumber);
                 Optional<Member> idMatch = memberRepository.findById(id);
                 if (idMatch.isPresent()) {
-                    return List.of(MemberSearchDto.fromMember(idMatch.get(), "DIRECT_ID", 1.0));
+                    Member m = idMatch.get();
+                    if (employerId == null || (m.getEmployer() != null && m.getEmployer().getId().equals(employerId))) {
+                        return List.of(MemberSearchDto.fromMember(m, "DIRECT_ID", 1.0));
+                    }
                 }
             } catch (NumberFormatException e) {
                 // Ignore
@@ -123,18 +135,23 @@ public class UnifiedSearchService {
 
         // 3. Fallback to partial search (Priority 3)
         // This allows searching for '2025' to find 'JFZ2025...'
-        return searchByName(cardNumber);
+        return searchByName(cardNumber, employerId);
     }
 
     /**
      * Search by name - stable pattern match with eager loading
      */
-    private List<MemberSearchDto> searchByName(String name) {
-        log.info("Executing stable name search for: {}", name);
+    private List<MemberSearchDto> searchByName(String name, Long employerId) {
+        log.info("Executing stable name search for: {}, employerId: {}", name, employerId);
 
         // Use the robust search method with JOIN FETCH to prevent 500 errors (LazyInitialization)
         // This method also searches by civilId and cardNumber as fallback
-        List<Member> members = memberRepository.search(name);
+        List<Member> members;
+        if (employerId != null) {
+            members = memberRepository.searchByEmployerId(name, employerId);
+        } else {
+            members = memberRepository.search(name);
+        }
 
         if (members.isEmpty()) {
             log.warn("No members found for query: {}", name);
