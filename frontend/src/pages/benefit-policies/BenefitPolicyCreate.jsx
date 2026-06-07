@@ -92,8 +92,8 @@ const BenefitPolicyCreate = () => {
     employerOrgId: '',
     startDate: dayjs(),
     endDate: dayjs().add(1, 'year'),
-    annualLimit: '10000',
-    defaultCoveragePercent: '80',
+    annualLimit: '50000',
+    defaultCoveragePercent: '100',
     notes: '',
     status: 'DRAFT'
   };

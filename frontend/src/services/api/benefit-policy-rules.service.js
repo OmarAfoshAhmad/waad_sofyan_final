@@ -322,6 +322,24 @@ export const deactivateAllPolicyRules = async (policyId) => {
   return unwrap(response);
 };
 
+/**
+ * Get available benefit policy templates
+ * Endpoint: GET /api/benefit-policies/{policyId}/rules/templates
+ */
+export const getAvailableTemplates = async (policyId) => {
+  const response = await axiosClient.get(`/benefit-policies/${policyId}/rules/templates`);
+  return unwrap(response);
+};
+
+/**
+ * Apply a benefit policy template
+ * Endpoint: POST /api/benefit-policies/{policyId}/rules/apply-template/{templateId}
+ */
+export const applyPolicyTemplate = async (policyId, templateId) => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/apply-template/${templateId}`);
+  return unwrap(response);
+};
+
 // Default export
 export default {
   // Read
@@ -342,6 +360,8 @@ export default {
   createPolicyRule,
   createPolicyRulesBulk,
   initializeStandardRules,
+  getAvailableTemplates,
+  applyPolicyTemplate,
   // Update
 
   updatePolicyRule,

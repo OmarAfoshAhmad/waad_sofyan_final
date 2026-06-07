@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -633,22 +634,17 @@ public class BenefitPolicyRuleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
 
         // Update fields if provided
-        // coveragePercent: always update (null means "inherit from policy default")
+        // coveragePercent, amountLimit, timesLimit, notes: always update (allow null values to clear them)
         rule.setCoveragePercent(dto.getCoveragePercent());
-        if (dto.getAmountLimit() != null) {
-            rule.setAmountLimit(dto.getAmountLimit());
-        }
-        if (dto.getTimesLimit() != null) {
-            rule.setTimesLimit(dto.getTimesLimit());
-        }
+        rule.setAmountLimit(dto.getAmountLimit());
+        rule.setTimesLimit(dto.getTimesLimit());
+        rule.setNotes(dto.getNotes());
+
         if (dto.getWaitingPeriodDays() != null) {
             rule.setWaitingPeriodDays(dto.getWaitingPeriodDays());
         }
         if (dto.getRequiresPreApproval() != null) {
             rule.setRequiresPreApproval(dto.getRequiresPreApproval());
-        }
-        if (dto.getNotes() != null) {
-            rule.setNotes(dto.getNotes());
         }
         if (dto.getActive() != null) {
             rule.setActive(dto.getActive());
@@ -807,5 +803,93 @@ public class BenefitPolicyRuleService {
                 collectAllChildCategoryIds(child.getId(), result);
             }
         }
+    }
+
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getAvailableTemplates() {
+        String sql = "SELECT id, name, description, is_default FROM benefit_policy_templates WHERE active = true";
+        List<?> rows = em.createNativeQuery(sql).getResultList();
+        return rows.stream()
+                .map(row -> {
+                    Object[] array = (Object[]) row;
+                    Map<String, Object> map = new java.util.HashMap<>();
+                    map.put("id", ((Number) array[0]).longValue());
+                    map.put("name", (String) array[1]);
+                    map.put("description", (String) array[2]);
+                    map.put("isDefault", (Boolean) array[3]);
+                    return map;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Apply a benefit template's rules to a policy
+     */
+    public void applyTemplate(Long policyId, Long templateId) {
+        log.info("Applying template {} to policy {}", templateId, policyId);
+        
+        // 1. Fetch the template
+        String templateSql = "SELECT id, name FROM benefit_policy_templates WHERE id = :templateId AND active = true";
+        List<?> templates = em.createNativeQuery(templateSql)
+                .setParameter("templateId", templateId)
+                .getResultList();
+        if (templates.isEmpty()) {
+            throw new ResourceNotFoundException("BenefitPolicyTemplate", "id", templateId);
+        }
+
+        BenefitPolicy policy = policyRepository.findById(policyId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicy", "id", policyId));
+
+        // 2. Fetch the rules for the template
+        String rulesSql = "SELECT medical_category_id, coverage_percent, times_limit, amount_limit, requires_pre_approval FROM benefit_policy_template_rules WHERE template_id = :templateId AND active = true";
+        List<?> templateRules = em.createNativeQuery(rulesSql)
+                .setParameter("templateId", templateId)
+                .getResultList();
+
+        log.info("Found {} rules for template {}", templateRules.size(), templateId);
+
+        for (Object row : templateRules) {
+            Object[] array = (Object[]) row;
+            Long medicalCategoryId = ((Number) array[0]).longValue();
+            Integer coveragePercent = policy.getDefaultCoveragePercent();
+            Integer timesLimit = array[2] != null ? ((Number) array[2]).intValue() : null;
+            java.math.BigDecimal amountLimit = array[3] != null ? (java.math.BigDecimal) array[3] : null;
+            Boolean requiresPreApproval = array[4] != null ? (Boolean) array[4] : false;
+
+            // Check if rule already exists for this policy and category
+            Optional<BenefitPolicyRule> existingRuleOpt = ruleRepository
+                    .findByBenefitPolicyIdAndMedicalCategoryId(policyId, medicalCategoryId);
+
+            if (existingRuleOpt.isPresent()) {
+                BenefitPolicyRule rule = existingRuleOpt.get();
+                rule.setCoveragePercent(coveragePercent);
+                rule.setAmountLimit(amountLimit);
+                rule.setTimesLimit(timesLimit);
+                rule.setRequiresPreApproval(requiresPreApproval);
+                rule.setDeleted(false);
+                rule.setActive(true);
+                ruleRepository.save(rule);
+            } else {
+                MedicalCategory category = categoryRepository.findById(medicalCategoryId)
+                        .orElse(null);
+                if (category == null) {
+                    continue;
+                }
+                BenefitPolicyRule rule = BenefitPolicyRule.builder()
+                        .benefitPolicy(policy)
+                        .medicalCategory(category)
+                        .coveragePercent(coveragePercent)
+                        .amountLimit(amountLimit)
+                        .timesLimit(timesLimit)
+                        .requiresPreApproval(requiresPreApproval)
+                        .waitingPeriodDays(0)
+                        .active(true)
+                        .deleted(false)
+                        .build();
+                ruleRepository.save(rule);
+            }
+        }
+        log.info("Template {} successfully applied to policy {}", templateId, policyId);
     }
 }

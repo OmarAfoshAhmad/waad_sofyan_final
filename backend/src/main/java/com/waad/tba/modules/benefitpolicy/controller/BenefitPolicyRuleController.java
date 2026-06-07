@@ -318,6 +318,26 @@ public class BenefitPolicyRuleController {
         return ResponseEntity.ok(ApiResponse.success("Deactivated " + count + " rules", count));
     }
 
+    @GetMapping("/rules/templates")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Get list of available benefit templates")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTemplates(
+            @PathVariable("policyId") Long policyId) {
+        List<Map<String, Object>> templates = ruleService.getAvailableTemplates();
+        return ResponseEntity.ok(ApiResponse.success("Templates retrieved successfully", templates));
+    }
+
+    @PostMapping("/rules/apply-template/{templateId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Apply a benefit template's rules to the policy")
+    public ResponseEntity<ApiResponse<Void>> applyTemplate(
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("templateId") Long templateId) {
+        log.info("Request to apply template {} to policy {}", templateId, policyId);
+        ruleService.applyTemplate(policyId, templateId);
+        return ResponseEntity.ok(ApiResponse.success("Template applied successfully", null));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // STATISTICS ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════════

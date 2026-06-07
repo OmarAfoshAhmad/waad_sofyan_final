@@ -26,7 +26,11 @@ import {
   TableRow,
   TextField,
   Tooltip,
-  Typography
+  Typography,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,7 +43,8 @@ import {
   Search as SearchIcon,
   Clear as ClearIcon,
   Save as SaveIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  AutoAwesome as AutoAwesomeIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -55,7 +60,9 @@ import {
   togglePolicyRuleActive,
   restorePolicyRule,
   deletePolicyRule,
-  hardDeletePolicyRule
+  hardDeletePolicyRule,
+  getAvailableTemplates,
+  applyPolicyTemplate
 } from 'services/api/benefit-policy-rules.service';
 import { getMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
@@ -736,13 +743,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [formModal, setFormModal] = useState({ open: false, data: null, isEdit: false });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, rule: null });
   const [ruleSearch, setRuleSearch] = useState('');
+  const [filterType, setFilterType] = useState('ALL');
   const [showDeleted, setShowDeleted] = useState(false);
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
   // Pagination state
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
   // Sort state
   const [sortBy, setSortBy] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
@@ -862,6 +870,47 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // ═══════════════════════════════════════════════════════════════════════════
   // HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
+
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
+
+  const handleOpenTemplateDialog = async () => {
+    setTemplateDialogOpen(true);
+    setLoadingTemplates(true);
+    try {
+      const data = await getAvailableTemplates(policyId);
+      setTemplates(data || []);
+      const defaultTpl = data?.find(t => t.isDefault) || data?.[0];
+      if (defaultTpl) {
+        setSelectedTemplateId(defaultTpl.id);
+      }
+    } catch (err) {
+      enqueueSnackbar('فشل تحميل قوالب التغطية', { variant: 'error' });
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleApplyTemplate = async () => {
+    if (!selectedTemplateId) {
+      enqueueSnackbar('الرجاء اختيار قالب أولاً', { variant: 'warning' });
+      return;
+    }
+    setApplyingTemplate(true);
+    try {
+      await applyPolicyTemplate(policyId, selectedTemplateId);
+      enqueueSnackbar('تم تطبيق قالب التغطية بنجاح وتحديث قيم السقوف والمرات', { variant: 'success' });
+      setTemplateDialogOpen(false);
+      refetchRules();
+    } catch (err) {
+      enqueueSnackbar(err?.response?.data?.message || 'فشل تطبيق قالب التغطية', { variant: 'error' });
+    } finally {
+      setApplyingTemplate(false);
+    }
+  };
 
   const handleAddRule = useCallback(() => {
     setFormModal({ open: true, data: null, isEdit: false });
@@ -1134,9 +1183,38 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     });
   }, [rules, categoryMap]);
 
+  const filterStats = useMemo(() => {
+    const activeRules = normalizedRules.filter(r => !r.isDeleted);
+    let amountLimitCount = 0;
+    let timesLimitCount = 0;
+    let preApprovalCount = 0;
+    activeRules.forEach(rule => {
+      if (rule.amountLimit != null && rule.amountLimit > 0) amountLimitCount++;
+      if (rule.timesLimit != null && rule.timesLimit > 0) timesLimitCount++;
+      if (rule.requiresPreApproval === true) preApprovalCount++;
+    });
+    return {
+      all: activeRules.length,
+      amountLimit: amountLimitCount,
+      timesLimit: timesLimitCount,
+      preApproval: preApprovalCount
+    };
+  }, [normalizedRules]);
+
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
-    const statusFiltered = normalizedRules.filter((rule) => (showDeleted ? rule.isDeleted : !rule.isDeleted));
+    let statusFiltered = normalizedRules.filter((rule) => (showDeleted ? rule.isDeleted : !rule.isDeleted));
+
+    if (!showDeleted && filterType !== 'ALL') {
+      if (filterType === 'AMOUNT_LIMIT') {
+        statusFiltered = statusFiltered.filter(r => r.amountLimit != null && r.amountLimit > 0);
+      } else if (filterType === 'TIMES_LIMIT') {
+        statusFiltered = statusFiltered.filter(r => r.timesLimit != null && r.timesLimit > 0);
+      } else if (filterType === 'PRE_APPROVAL') {
+        statusFiltered = statusFiltered.filter(r => r.requiresPreApproval === true);
+      }
+    }
+
     const filtered = !query ? statusFiltered : statusFiltered.filter((rule) => rule.searchable.includes(query));
 
     // Default ordering: keep visual order stable unless user explicitly sorts.
@@ -1177,7 +1255,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const cmp = String(aVal).localeCompare(String(bVal), 'ar');
       return sortDirection === 'asc' ? cmp : -cmp;
     });
-  }, [normalizedRules, ruleSearch, sortBy, sortDirection, showDeleted]);
+  }, [normalizedRules, ruleSearch, sortBy, sortDirection, showDeleted, filterType]);
 
   const pagedRules = useMemo(
     () => filteredRules.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -1415,13 +1493,34 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       ═══════════════════════════════════════════════════════════════════ */}
       <MainCard
         key={showDeleted ? 'rules-mode-deleted' : 'rules-mode-active'}
-        sx={{ mt: -2 }}
+        sx={{ mt: -4 }}
         title={
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <ServiceIcon sx={{ color: 'primary.main', fontSize: '1.25rem' }} />
-            <Typography variant="h5" fontWeight={600}>
-              قواعد التغطية التفصيلية
-            </Typography>
+          <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <ServiceIcon sx={{ color: 'primary.main', fontSize: '1.25rem' }} />
+              <Typography variant="h5" fontWeight={600} sx={{ mr: 2 }}>
+                قواعد التغطية التفصيلية
+              </Typography>
+            </Stack>
+            {!showDeleted && (
+              <Stack direction="row" spacing={1} alignItems="center">
+                {[
+                  { id: 'ALL', label: 'الكل', count: filterStats.all, color: 'primary' },
+                  { id: 'AMOUNT_LIMIT', label: 'سقف مالي', count: filterStats.amountLimit, color: 'warning' },
+                  { id: 'TIMES_LIMIT', label: 'سقف مرات', count: filterStats.timesLimit, color: 'info' },
+                  { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval, color: 'error' }
+                ].map((item) => (
+                  <Chip
+                    key={item.id}
+                    label={`${item.label} (${item.count})`}
+                    color={item.color}
+                    variant={filterType === item.id ? 'filled' : 'outlined'}
+                    onClick={() => { setFilterType(item.id); setPage(0); }}
+                    sx={{ fontWeight: 600, cursor: 'pointer', height: '2rem' }}
+                  />
+                ))}
+              </Stack>
+            )}
           </Stack>
         }
         secondary={
@@ -1435,6 +1534,16 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 sx={{ height: '2.25rem' }}
               >
                 إضافة قالب
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                color="secondary"
+                startIcon={<AutoAwesomeIcon />}
+                onClick={handleOpenTemplateDialog}
+                sx={{ height: '2.25rem' }}
+              >
+                تطبيق قالب قياسي
               </Button>
               <Button
                 size="small"
@@ -1518,6 +1627,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           totalCount={filteredRules.length}
           page={page}
           rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[5, 10, 15, 20, 25, 50, 100]}
           onPageChange={(newPage) => setPage(newPage)}
           onRowsPerPageChange={(newSize) => { setRowsPerPage(newSize); setPage(0); }}
           renderCell={renderRuleCell}
@@ -1527,7 +1637,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={handleSort}
-          tableContainerSx={{ maxHeight: 'calc(100vh - 380px)', minHeight: '300px' }}
+          tableContainerSx={{ maxHeight: 'calc(100vh - 450px)', minHeight: '300px' }}
         />
       </MainCard>
 
@@ -1569,6 +1679,60 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         updateMutation={updateMutation}
         isLoading={isLoading}
       />
+
+      {/* Apply Template Dialog */}
+      <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <AutoAwesomeIcon color="primary" />
+            <Typography variant="h5">تطبيق قالب التغطية القياسي</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <DialogContentText sx={{ mb: 2 }}>
+            يتم تطبيق قيم الحدود والنسب من القالب على جميع التصنيفات في الوثيقة الحالية، مما يسهل توحيد السقوف الافتراضية (مثل قيم أركاديا). سيتم تحديث القواعد الموجودة وإضافة القواعد غير الموجودة.
+          </DialogContentText>
+          
+          {loadingTemplates ? (
+            <Box display="flex" justifyContent="center" p={3}>
+              <CircularProgress size={30} />
+            </Box>
+          ) : (
+            <FormControl fullWidth size="medium">
+              <InputLabel id="template-select-label">القالب</InputLabel>
+              <Select
+                labelId="template-select-label"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                label="القالب"
+              >
+                {templates.map((tpl) => (
+                  <MenuItem key={tpl.id} value={tpl.id}>
+                    {tpl.name} {tpl.isDefault ? '(افتراضي)' : ''}
+                  </MenuItem>
+                ))}
+                {templates.length === 0 && (
+                  <MenuItem disabled value="">لا توجد قوالب متاحة</MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
+          <Button onClick={() => setTemplateDialogOpen(false)} disabled={applyingTemplate} color="inherit">
+            إلغاء
+          </Button>
+          <Button
+            onClick={handleApplyTemplate}
+            variant="contained"
+            color="primary"
+            disabled={applyingTemplate || !selectedTemplateId}
+            startIcon={applyingTemplate ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+          >
+            {applyingTemplate ? 'جاري التطبيق...' : 'تطبيق القالب'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
