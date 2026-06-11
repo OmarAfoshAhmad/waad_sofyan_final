@@ -61,11 +61,13 @@ import {
   restorePolicyRule,
   deletePolicyRule,
   hardDeletePolicyRule,
-  getAvailableTemplates,
-  applyPolicyTemplate
+  applyPolicyTemplate,
+  copyPolicyRules,
+  getAvailableTemplates
 } from 'services/api/benefit-policy-rules.service';
 import { getMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
+import { getBenefitPoliciesSelector } from 'services/api/benefit-policies.service';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RULE FORM COMPONENT
@@ -873,7 +875,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templates, setTemplates] = useState([]);
+  const [policies, setPolicies] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [sourceType, setSourceType] = useState('TEMPLATE');
+  const [applyMode, setApplyMode] = useState('UPDATE');
+  const [confirmText, setConfirmText] = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
 
@@ -881,14 +887,26 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setTemplateDialogOpen(true);
     setLoadingTemplates(true);
     try {
-      const data = await getAvailableTemplates(policyId);
-      setTemplates(data || []);
-      const defaultTpl = data?.find(t => t.isDefault) || data?.[0];
+      const [tplData, polData] = await Promise.all([
+        getAvailableTemplates(policyId),
+        getBenefitPoliciesSelector()
+      ]);
+      setTemplates(tplData || []);
+      const filteredPols = (polData || []).filter(p => String(p.id) !== String(policyId));
+      setPolicies(filteredPols);
+      
+      const defaultTpl = tplData?.find(t => t.isDefault) || tplData?.[0];
       if (defaultTpl) {
         setSelectedTemplateId(defaultTpl.id);
+        setSourceType('TEMPLATE');
+      } else if (filteredPols.length > 0) {
+        setSelectedTemplateId(filteredPols[0].id);
+        setSourceType('POLICY');
       }
+      setApplyMode('UPDATE');
+      setConfirmText('');
     } catch (err) {
-      enqueueSnackbar('فشل تحميل قوالب التغطية', { variant: 'error' });
+      enqueueSnackbar('فشل تحميل القوائم', { variant: 'error' });
     } finally {
       setLoadingTemplates(false);
     }
@@ -896,17 +914,21 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const handleApplyTemplate = async () => {
     if (!selectedTemplateId) {
-      enqueueSnackbar('الرجاء اختيار قالب أولاً', { variant: 'warning' });
+      enqueueSnackbar('الرجاء الاختيار أولاً', { variant: 'warning' });
       return;
     }
     setApplyingTemplate(true);
     try {
-      await applyPolicyTemplate(policyId, selectedTemplateId);
-      enqueueSnackbar('تم تطبيق قالب التغطية بنجاح وتحديث قيم السقوف والمرات', { variant: 'success' });
+      if (sourceType === 'TEMPLATE') {
+        await applyPolicyTemplate(policyId, selectedTemplateId, applyMode);
+      } else {
+        await copyPolicyRules(policyId, selectedTemplateId, applyMode);
+      }
+      enqueueSnackbar('تم التطبيق بنجاح وتحديث قيم السقوف والمرات', { variant: 'success' });
       setTemplateDialogOpen(false);
       refetchRules();
     } catch (err) {
-      enqueueSnackbar(err?.response?.data?.message || 'فشل تطبيق قالب التغطية', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'فشل الاستيراد والتطبيق', { variant: 'error' });
     } finally {
       setApplyingTemplate(false);
     }
@@ -1128,8 +1150,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     return rules.map((rule) => {
       const isCategory = rule.ruleType === 'CATEGORY';
       const code = isCategory ? rule.medicalCategoryCode || '-' : rule.medicalServiceCode || '-';
-      const rawNameAr = rule.label || (isCategory ? rule.medicalCategoryName : rule.medicalServiceName) || '-';
-      const nameAr = rawNameAr.replace(/^Category:\s*/i, '');
+      const nameAr = (isCategory ? rule.medicalCategoryName : rule.medicalServiceName) || '-';
       const nameEn = isCategory ? rule.medicalCategoryNameEn || '-' : rule.medicalServiceNameEn || '-';
 
       let typeLabel = 'خدمة طبية';
@@ -1685,12 +1706,12 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         <DialogTitle>
           <Stack direction="row" alignItems="center" spacing={1}>
             <AutoAwesomeIcon color="primary" />
-            <Typography variant="h5">تطبيق قالب التغطية القياسي</Typography>
+            <Typography variant="h5">تطبيق قواعد التغطية</Typography>
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
-          <DialogContentText sx={{ mb: 2 }}>
-            يتم تطبيق قيم الحدود والنسب من القالب على جميع التصنيفات في الوثيقة الحالية، مما يسهل توحيد السقوف الافتراضية (مثل قيم أركاديا). سيتم تحديث القواعد الموجودة وإضافة القواعد غير الموجودة.
+          <DialogContentText sx={{ mb: 3 }}>
+            يمكنك تطبيق القواعد من قوالب قياسية أو نسخ القواعد من وثائق شركات أخرى.
           </DialogContentText>
           
           {loadingTemplates ? (
@@ -1698,24 +1719,97 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               <CircularProgress size={30} />
             </Box>
           ) : (
-            <FormControl fullWidth size="medium">
-              <InputLabel id="template-select-label">القالب</InputLabel>
-              <Select
-                labelId="template-select-label"
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                label="القالب"
-              >
-                {templates.map((tpl) => (
-                  <MenuItem key={tpl.id} value={tpl.id}>
-                    {tpl.name} {tpl.isDefault ? '(افتراضي)' : ''}
-                  </MenuItem>
-                ))}
-                {templates.length === 0 && (
-                  <MenuItem disabled value="">لا توجد قوالب متاحة</MenuItem>
-                )}
-              </Select>
-            </FormControl>
+            <Stack spacing={3}>
+              <FormControl component="fieldset">
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>المصدر</Typography>
+                <Stack direction="row" spacing={2}>
+                  <Chip 
+                    label="قالب قياسي" 
+                    color="primary" 
+                    variant={sourceType === 'TEMPLATE' ? 'filled' : 'outlined'}
+                    onClick={() => {
+                      setSourceType('TEMPLATE');
+                      setSelectedTemplateId(templates[0]?.id || '');
+                    }}
+                    sx={{ cursor: 'pointer', flex: 1, height: '36px', fontSize: '1rem' }}
+                  />
+                  <Chip 
+                    label="وثيقة شركة أخرى" 
+                    color="primary" 
+                    variant={sourceType === 'POLICY' ? 'filled' : 'outlined'}
+                    onClick={() => {
+                      setSourceType('POLICY');
+                      setSelectedTemplateId(policies[0]?.id || '');
+                    }}
+                    sx={{ cursor: 'pointer', flex: 1, height: '36px', fontSize: '1rem' }}
+                  />
+                </Stack>
+              </FormControl>
+
+              <FormControl fullWidth size="medium">
+                <InputLabel id="template-select-label">{sourceType === 'TEMPLATE' ? 'اختر القالب' : 'اختر الوثيقة'}</InputLabel>
+                <Select
+                  labelId="template-select-label"
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  label={sourceType === 'TEMPLATE' ? 'اختر القالب' : 'اختر الوثيقة'}
+                >
+                  {sourceType === 'TEMPLATE' && templates.map((tpl) => (
+                    <MenuItem key={tpl.id} value={tpl.id}>
+                      {tpl.name} {tpl.isDefault ? '(افتراضي)' : ''}
+                    </MenuItem>
+                  ))}
+                  {sourceType === 'POLICY' && policies.map((pol) => (
+                    <MenuItem key={pol.id} value={pol.id}>
+                      {pol.label}
+                    </MenuItem>
+                  ))}
+                  {(sourceType === 'TEMPLATE' ? templates : policies).length === 0 && (
+                    <MenuItem disabled value="">لا توجد بيانات متاحة</MenuItem>
+                  )}
+                </Select>
+              </FormControl>
+
+              <FormControl component="fieldset">
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>طريقة التطبيق</Typography>
+                <Stack direction="row" spacing={2}>
+                  <Chip 
+                    label="تحديث (إضافة وتعديل المتشابه)" 
+                    color="success" 
+                    variant={applyMode === 'UPDATE' ? 'filled' : 'outlined'}
+                    onClick={() => {
+                      setApplyMode('UPDATE');
+                      setConfirmText('');
+                    }}
+                    sx={{ cursor: 'pointer', flex: 1, height: '36px' }}
+                  />
+                  <Chip 
+                    label="استبدال شامل لكافة القواعد" 
+                    color="error" 
+                    variant={applyMode === 'REPLACE' ? 'filled' : 'outlined'}
+                    onClick={() => setApplyMode('REPLACE')}
+                    sx={{ cursor: 'pointer', flex: 1, height: '36px' }}
+                  />
+                </Stack>
+              </FormControl>
+
+              {rules.length > 0 && applyMode === 'REPLACE' && (
+                <Alert severity="error">
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    هذا الخيار سيقوم بمسح كافة القواعد الموجودة مسبقاً. لتأكيد الاستبدال، يرجى كتابة عبارة <strong>"استبدال القواعد"</strong>:
+                  </Typography>
+                  <TextField 
+                    fullWidth 
+                    size="small" 
+                    placeholder="استبدال القواعد" 
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    color="error"
+                    sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
+                  />
+                </Alert>
+              )}
+            </Stack>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
@@ -1726,10 +1820,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             onClick={handleApplyTemplate}
             variant="contained"
             color="primary"
-            disabled={applyingTemplate || !selectedTemplateId}
+            disabled={applyingTemplate || !selectedTemplateId || (rules.length > 0 && applyMode === 'REPLACE' && confirmText !== 'استبدال القواعد')}
             startIcon={applyingTemplate ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
           >
-            {applyingTemplate ? 'جاري التطبيق...' : 'تطبيق القالب'}
+            {applyingTemplate ? 'جاري التطبيق...' : 'تطبيق'}
           </Button>
         </DialogActions>
       </Dialog>

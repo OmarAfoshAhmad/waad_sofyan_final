@@ -335,8 +335,17 @@ export const getAvailableTemplates = async (policyId) => {
  * Apply a benefit policy template
  * Endpoint: POST /api/benefit-policies/{policyId}/rules/apply-template/{templateId}
  */
-export const applyPolicyTemplate = async (policyId, templateId) => {
-  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/apply-template/${templateId}`);
+export const applyPolicyTemplate = async (policyId, templateId, mode = 'UPDATE') => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/apply-template/${templateId}?mode=${mode}`);
+  return unwrap(response);
+};
+
+/**
+ * Copy rules from an existing policy
+ * Endpoint: POST /api/benefit-policies/{policyId}/rules/copy-from-policy/{sourcePolicyId}
+ */
+export const copyPolicyRules = async (policyId, sourcePolicyId, mode = 'UPDATE') => {
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/copy-from-policy/${sourcePolicyId}?mode=${mode}`);
   return unwrap(response);
 };
 
@@ -362,6 +371,7 @@ export default {
   initializeStandardRules,
   getAvailableTemplates,
   applyPolicyTemplate,
+  copyPolicyRules,
   // Update
 
   updatePolicyRule,

@@ -332,10 +332,23 @@ public class BenefitPolicyRuleController {
     @Operation(summary = "Apply a benefit template's rules to the policy")
     public ResponseEntity<ApiResponse<Void>> applyTemplate(
             @PathVariable("policyId") Long policyId,
-            @PathVariable("templateId") Long templateId) {
-        log.info("Request to apply template {} to policy {}", templateId, policyId);
-        ruleService.applyTemplate(policyId, templateId);
+            @PathVariable("templateId") Long templateId,
+            @RequestParam(value = "mode", defaultValue = "UPDATE") String mode) {
+        log.info("Request to apply template {} to policy {} with mode {}", templateId, policyId, mode);
+        ruleService.applyTemplate(policyId, templateId, mode);
         return ResponseEntity.ok(ApiResponse.success("Template applied successfully", null));
+    }
+
+    @PostMapping("/rules/copy-from-policy/{sourcePolicyId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Copy rules from another policy")
+    public ResponseEntity<ApiResponse<Void>> copyFromPolicy(
+            @PathVariable("policyId") Long policyId,
+            @PathVariable("sourcePolicyId") Long sourcePolicyId,
+            @RequestParam(value = "mode", defaultValue = "UPDATE") String mode) {
+        log.info("Request to copy rules from policy {} to policy {} with mode {}", sourcePolicyId, policyId, mode);
+        ruleService.copyRulesFromPolicy(policyId, sourcePolicyId, mode);
+        return ResponseEntity.ok(ApiResponse.success("Rules copied successfully", null));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

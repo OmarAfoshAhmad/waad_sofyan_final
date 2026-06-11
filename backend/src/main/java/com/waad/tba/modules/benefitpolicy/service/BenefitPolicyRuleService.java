@@ -826,8 +826,12 @@ public class BenefitPolicyRuleService {
     /**
      * Apply a benefit template's rules to a policy
      */
-    public void applyTemplate(Long policyId, Long templateId) {
-        log.info("Applying template {} to policy {}", templateId, policyId);
+    public void applyTemplate(Long policyId, Long templateId, String mode) {
+        log.info("Applying template {} to policy {} with mode {}", templateId, policyId, mode);
+        
+        if ("REPLACE".equalsIgnoreCase(mode)) {
+            deactivateAllForPolicy(policyId);
+        }
         
         // 1. Fetch the template
         String templateSql = "SELECT id, name FROM benefit_policy_templates WHERE id = :templateId AND active = true";
@@ -891,5 +895,64 @@ public class BenefitPolicyRuleService {
             }
         }
         log.info("Template {} successfully applied to policy {}", templateId, policyId);
+    }
+
+    /**
+     * Copy all rules from an existing policy to a target policy
+     */
+    public void copyRulesFromPolicy(Long targetPolicyId, Long sourcePolicyId, String mode) {
+        log.info("Copying rules from policy {} to policy {} with mode {}", sourcePolicyId, targetPolicyId, mode);
+
+        if ("REPLACE".equalsIgnoreCase(mode)) {
+            deactivateAllForPolicy(targetPolicyId);
+        }
+
+        BenefitPolicy targetPolicy = policyRepository.findById(targetPolicyId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicy", "id", targetPolicyId));
+
+        List<BenefitPolicyRule> sourceRules = ruleRepository.findByBenefitPolicyIdAndDeletedFalseAndActiveTrue(sourcePolicyId);
+
+        log.info("Found {} active rules from source policy {}", sourceRules.size(), sourcePolicyId);
+
+        for (BenefitPolicyRule sourceRule : sourceRules) {
+            Long medicalCategoryId = sourceRule.getMedicalCategory().getId();
+            Integer coveragePercent = sourceRule.getCoveragePercent();
+            Integer timesLimit = sourceRule.getTimesLimit();
+            java.math.BigDecimal amountLimit = sourceRule.getAmountLimit();
+            Boolean requiresPreApproval = sourceRule.isRequiresPreApproval();
+
+            // Check if rule already exists for this policy and category
+            Optional<BenefitPolicyRule> existingRuleOpt = ruleRepository
+                    .findByBenefitPolicyIdAndMedicalCategoryId(targetPolicyId, medicalCategoryId);
+
+            if (existingRuleOpt.isPresent()) {
+                BenefitPolicyRule rule = existingRuleOpt.get();
+                rule.setCoveragePercent(coveragePercent);
+                rule.setAmountLimit(amountLimit);
+                rule.setTimesLimit(timesLimit);
+                rule.setRequiresPreApproval(requiresPreApproval != null ? requiresPreApproval : false);
+                rule.setDeleted(false);
+                rule.setActive(true);
+                ruleRepository.save(rule);
+            } else {
+                MedicalCategory category = categoryRepository.findById(medicalCategoryId).orElse(null);
+                if (category == null) {
+                    continue;
+                }
+                BenefitPolicyRule newRule = BenefitPolicyRule.builder()
+                        .benefitPolicy(targetPolicy)
+                        .medicalCategory(category)
+                        .coveragePercent(coveragePercent)
+                        .amountLimit(amountLimit)
+                        .timesLimit(timesLimit)
+                        .requiresPreApproval(requiresPreApproval != null ? requiresPreApproval : false)
+                        .waitingPeriodDays(0)
+                        .active(true)
+                        .deleted(false)
+                        .build();
+                ruleRepository.save(newRule);
+            }
+        }
+        log.info("Successfully copied rules from policy {} to policy {}", sourcePolicyId, targetPolicyId);
     }
 }
