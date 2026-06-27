@@ -67,6 +67,15 @@ const availableReports = [
     icon: TrendingUp,
     color: '#d32f2f',
     path: '/reports/rejections'
+  },
+  {
+    id: 'financial-consolidation',
+    title: 'الخلاصة المالية المجمعة',
+    titleEn: 'Financial Consolidation',
+    description: 'تقرير ديناميكي لمستحقات الشركة ونسب التخفيض التعاقدية للجهات',
+    icon: Business,
+    color: '#1565c0',
+    path: '/reports/financial-consolidation'
   }
 ];
 

@@ -90,12 +90,12 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, titleExt
       )} */}
 
       {/* Title and Actions Row */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1, minHeight: '2.5rem' }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ mb: 1, minHeight: '2.5rem' }}>
         {/* Title Section */}
         <Stack direction="row" alignItems="center" spacing={1.5}>
           {renderIcon()}
           <Box>
-            <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
+            <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.5} flexWrap="wrap">
               {typeof title === 'string' ? (
                 <Typography variant="h4" component="h1" sx={{ fontWeight: 600, fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
                   {title}
@@ -103,8 +103,10 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, titleExt
               ) : (
                 title
               )}
-              {titleExtras}
-              {statusChip && <Chip label={statusChip.label} color={statusChip.color || 'primary'} size="small" sx={{ height: '1.5rem' }} />}
+              <Stack direction="row" spacing={1} alignItems="center">
+                {titleExtras}
+                {statusChip && <Chip label={statusChip.label} color={statusChip.color || 'primary'} size="small" sx={{ height: '1.5rem' }} />}
+              </Stack>
             </Stack>
             {subtitle && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
@@ -116,7 +118,7 @@ const ModernPageHeader = ({ title, subtitle, breadcrumbs = [], actions, titleExt
 
         {/* Actions Section */}
         {actions && (
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: { xs: '100%', md: 'auto' }, overflowX: 'auto', pb: { xs: 1, md: 0 } }}>
             {actions}
           </Stack>
         )}

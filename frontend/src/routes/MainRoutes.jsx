@@ -158,6 +158,7 @@ const BenefitPolicyReport = Loadable(lazy(() => import('pages/reports/benefit-po
 const BeneficiariesReports = Loadable(lazy(() => import('pages/reports/BeneficiariesReports')));
 const FinancialReports = Loadable(lazy(() => import('pages/reports/FinancialReports')));
 const ProviderSettlementReport = Loadable(lazy(() => import('pages/reports/ProviderSettlementReport')));
+const FinancialConsolidationMatrix = Loadable(lazy(() => import('pages/reports/FinancialConsolidationMatrix')));
 
 
 // ==============================|| LAZY LOADING - ERROR PAGES ||============================== //
@@ -884,6 +885,22 @@ const MainRoutes = {
       children: [
         {
           path: '',
+          element: (
+            <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
+              <ReportsPage />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'financial-consolidation',
+          element: (
+            <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
+              <FinancialConsolidationMatrix />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'provider-settlement-summary',
           element: (
             <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
               <ProviderSettlementReport />

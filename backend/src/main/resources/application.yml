@@ -91,12 +91,13 @@ server:
       enabled: true
       force: true
     session:
+      timeout: 3650d
       cookie:
         name: JSESSIONID
         http-only: true
 
 jwt:
-  expiration: 86400000
+  expiration: 315360000000
   # SECURITY: Secret MUST be provided via JWT_SECRET environment variable.
   # No hardcoded fallback allowed. App will fail to start if not set.
   # In local dev, use application-dev.yml override or set the env var.

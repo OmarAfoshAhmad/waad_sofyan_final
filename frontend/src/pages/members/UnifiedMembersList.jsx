@@ -327,6 +327,13 @@ const UnifiedMembersList = () => {
       align: 'center',
       sortable: true
     },
+    {
+      id: 'birthDate',
+      label: 'المواليد',
+      minWidth: '6.25rem',
+      align: 'center',
+      sortable: true
+    },
     { id: 'type', label: 'النوع', minWidth: '6.25rem', sortable: true, align: 'center' },
     { id: 'status', label: 'الحالة', minWidth: '6.25rem', sortable: true, align: 'center' },
     {
@@ -379,6 +386,9 @@ const UnifiedMembersList = () => {
             </Stack>
           </Box>
         );
+
+      case 'birthDate':
+        return <Typography variant="body2">{member.birthDate || '-'}</Typography>;
 
       case 'type': {
         if (member.type === MEMBER_TYPES.PRINCIPAL) {
@@ -498,7 +508,7 @@ const UnifiedMembersList = () => {
   // RENDER
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
       {/* Page Header */}
       <ModernPageHeader
         title="قائمة المستفيدين"
@@ -572,7 +582,7 @@ const UnifiedMembersList = () => {
       <MainCard sx={{ mb: 1, flexShrink: 0 }}>
         {/* FILTERS AND SEARCH ROW */}
         <Box>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }} sx={{ width: '100%' }}>
             {/* Refresh */}
             <Tooltip title="تحديث">
               <IconButton onClick={fetchMembers} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>

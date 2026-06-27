@@ -260,6 +260,14 @@ public class Claim {
     private BigDecimal appliedDiscountPercent;
 
     /**
+     * القيمة المستحقة للشركة (قيمة الخصم التعاقدي).
+     * تُحسب آلياً بناءً على appliedDiscountPercent ولا يدخلها المستخدم.
+     */
+    @Column(name = "company_discount_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal companyDiscountAmount = BigDecimal.ZERO;
+
+    /**
      * لقطة لإعداد توقيت الخصم من العقد عند اعتماد المطالبة.
      * true = خصم نسبة التخفيض قبل خصم المرفوض, false = بعده.
      */
@@ -514,6 +522,7 @@ public class Claim {
         if (status == ClaimStatus.REJECTED) {
             this.approvedAmount = BigDecimal.ZERO;
             this.netProviderAmount = BigDecimal.ZERO;
+            this.companyDiscountAmount = BigDecimal.ZERO;
             
             // In a rejected claim, the entire balance that ISN'T the patient's expected co-pay is refused.
             // But for simplicity in reporting, we often set Refused = Requested - PatientCoPay.
@@ -555,12 +564,14 @@ public class Claim {
             if (beforeRejection) {
                 BigDecimal discount = scale2(providerShare.multiply(discountRate)
                         .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
+                this.companyDiscountAmount = discount;
                 BigDecimal afterDiscount = scale2(providerShare.subtract(discount));
                 expectedPayable = scale2(afterDiscount.subtract(rejected));
             } else {
                 BigDecimal afterRejection = scale2(providerShare.subtract(rejected));
                 BigDecimal discount = scale2(afterRejection.multiply(discountRate)
                         .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
+                this.companyDiscountAmount = discount;
                 expectedPayable = scale2(afterRejection.subtract(discount));
             }
 

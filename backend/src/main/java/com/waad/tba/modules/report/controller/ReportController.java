@@ -1,6 +1,7 @@
 package com.waad.tba.modules.report.controller;
 
 import com.waad.tba.modules.report.dto.ClaimReportDto;
+
 import com.waad.tba.modules.report.service.PdfExportService;
 import com.waad.tba.modules.report.service.ReportDataService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class ReportController {
 
     private final ReportDataService reportDataService;
     private final PdfExportService pdfExportService;
+
     private final TemplateEngine templateEngine;
 
     /** معاينة HTML في iframe */

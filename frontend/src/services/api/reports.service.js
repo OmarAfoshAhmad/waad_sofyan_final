@@ -62,6 +62,28 @@ export const reportsService = {
     }
   },
 
+  // ======================= FINANCIAL CONSOLIDATION =======================
+
+  /**
+   * Get dynamic multi-entity financial consolidation report (Excel Replacement)
+   * @param {Object} params - {year}
+   * @returns {Promise<Array>} Array of FinancialConsolidationDto
+   */
+  getFinancialConsolidation: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.year) queryParams.append('year', params.year);
+
+      const url = queryParams.toString() 
+        ? `${BASE_URL}/financial-consolidation?${queryParams.toString()}` 
+        : `${BASE_URL}/financial-consolidation`;
+      const response = await axiosClient.get(url);
+      return unwrap(response);
+    } catch (error) {
+      throw handleReportErrors(error);
+    }
+  },
+
   // ======================= ADJUDICATION REPORTS =======================
 
   /**

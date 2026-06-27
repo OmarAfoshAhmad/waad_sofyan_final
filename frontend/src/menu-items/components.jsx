@@ -494,6 +494,21 @@ const menuItem = [
               size: 'small'
             }
           },
+          {
+            id: 'financial-consolidation',
+            title: 'الخلاصة المالية المجمعة',
+            titleEn: 'Financial Consolidation',
+            type: 'item',
+            url: '/reports/financial-consolidation',
+            icon: AssessmentIcon,
+            resource: 'report_provider_settlement',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'secondary',
+              size: 'small'
+            }
+          }
 
         ]
       }

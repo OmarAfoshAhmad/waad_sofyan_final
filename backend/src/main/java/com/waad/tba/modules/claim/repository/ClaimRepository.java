@@ -735,6 +735,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "WHERE c.member.id = :memberId " +
                         "AND YEAR(COALESCE(c.serviceDate, c.createdAt)) = :year " +
                         "AND c.status IN :statuses " +
+                        "AND c.active = true " +
                         "AND c.id <> :excludeClaimId")
         java.math.BigDecimal sumDeductibleForYear(
                         @Param("memberId") Long memberId,
@@ -749,6 +750,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "WHERE c.member.id = :memberId " +
                         "AND YEAR(COALESCE(c.serviceDate, c.createdAt)) = :year " +
                         "AND c.status IN :statuses " +
+                        "AND c.active = true " +
                         "AND c.id <> :excludeClaimId")
         java.math.BigDecimal sumPatientCopayForYear(
                         @Param("memberId") Long memberId,
@@ -760,6 +762,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "JOIN c.member m LEFT JOIN m.parent p " +
                         "WHERE (m.id = :principalId OR p.id = :principalId) " +
                         "AND YEAR(c.serviceDate) = :year " +
+                        "AND c.active = true " +
                         "AND c.status IN :statuses")
         java.math.BigDecimal sumApprovedAmountByFamilyAndYear(
                         @Param("principalId") Long principalId,
