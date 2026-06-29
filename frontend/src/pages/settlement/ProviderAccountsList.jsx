@@ -614,8 +614,8 @@ export default function ProviderAccountsList() {
             >
               <MenuItem value="">الكل</MenuItem>
               {employerOptions.map((e) => (
-                <MenuItem key={e.id} value={e.id}>
-                  {e.name || `وثيقة #${e.id}`}
+                <MenuItem key={e.id || e.value} value={e.id || e.value}>
+                  {e.name || e.nameAr || e.label || e.employerName || `وثيقة #${e.id || e.value}`}
                 </MenuItem>
               ))}
             </TextField>

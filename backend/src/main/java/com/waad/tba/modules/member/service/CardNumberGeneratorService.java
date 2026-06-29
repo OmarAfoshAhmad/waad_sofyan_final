@@ -10,6 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * ==================== CARD NUMBER GENERATION ====================
@@ -166,6 +169,58 @@ public class CardNumberGeneratorService {
         log.info("Generated card number for DEPENDENT ({}) of principal {}: {}",
                 relationship, principal.getId(), cardNumber);
         return cardNumber;
+    }
+
+    /**
+     * Resequence card numbers for all dependents of a principal based on their birth dates.
+     * This ensures S1 is the oldest son, S2 is the second oldest, etc.
+     */
+    @Transactional
+    public void resequenceDependents(Member principal) {
+        if (principal == null || principal.isDependent()) return;
+
+        List<Member> dependents = memberRepository.findByParentId(principal.getId());
+        if (dependents == null || dependents.isEmpty()) return;
+
+        // Group by relationship
+        Map<Member.Relationship, List<Member>> grouped = dependents.stream()
+                .filter(m -> m.getRelationship() != null)
+                .collect(Collectors.groupingBy(Member::getRelationship));
+
+        // Step 1: Assign TEMP suffixes to avoid Unique Constraint violations during the swap
+        // We must do this for ALL dependents FIRST because a member might have changed relationships
+        // and is holding onto a card number that another relationship needs now.
+        for (Map.Entry<Member.Relationship, List<Member>> entry : grouped.entrySet()) {
+            Member.Relationship rel = entry.getKey();
+            List<Member> relMembers = entry.getValue();
+            
+            // Sort by birthdate ascending. Nulls at the end.
+            relMembers.sort((m1, m2) -> {
+                if (m1.getBirthDate() == null && m2.getBirthDate() == null) return m1.getId().compareTo(m2.getId());
+                if (m1.getBirthDate() == null) return 1;
+                if (m2.getBirthDate() == null) return -1;
+                return m1.getBirthDate().compareTo(m2.getBirthDate());
+            });
+
+            for (int i = 0; i < relMembers.size(); i++) {
+                Member m = relMembers.get(i);
+                m.setCardNumber(principal.getCardNumber() + rel.getCardCode() + (i + 1) + "_TEMP");
+            }
+        }
+        memberRepository.saveAllAndFlush(dependents);
+
+        // Step 2: Assign actual sorted sequence
+        for (Map.Entry<Member.Relationship, List<Member>> entry : grouped.entrySet()) {
+            Member.Relationship rel = entry.getKey();
+            List<Member> relMembers = entry.getValue();
+            
+            for (int i = 0; i < relMembers.size(); i++) {
+                Member m = relMembers.get(i);
+                m.setCardNumber(principal.getCardNumber() + rel.getCardCode() + (i + 1));
+            }
+        }
+        memberRepository.saveAllAndFlush(dependents);
+        log.info("Resequenced {} dependents for principal {}", dependents.size(), principal.getId());
     }
 
     // ----------------------------------------------------------------

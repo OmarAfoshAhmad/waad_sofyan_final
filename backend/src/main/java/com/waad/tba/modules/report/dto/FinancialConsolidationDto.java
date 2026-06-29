@@ -12,31 +12,53 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FinancialConsolidationDto {
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MonthlyFinancials {
+        @Builder.Default
+        private BigDecimal requestedAmount = BigDecimal.ZERO;
+        @Builder.Default
+        private BigDecimal approvedAmount = BigDecimal.ZERO;
+        @Builder.Default
+        private BigDecimal rejectedAmount = BigDecimal.ZERO;
+        @Builder.Default
+        private BigDecimal paidAmount = BigDecimal.ZERO;
+        @Builder.Default
+        private BigDecimal remainingAmount = BigDecimal.ZERO;
+        @Builder.Default
+        private BigDecimal companyDiscountAmount = BigDecimal.ZERO;
+    }
+
     private String employerName;
+    
     @Builder.Default
-    private BigDecimal month1 = BigDecimal.ZERO;
+    private MonthlyFinancials month1 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month2 = BigDecimal.ZERO;
+    private MonthlyFinancials month2 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month3 = BigDecimal.ZERO;
+    private MonthlyFinancials month3 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month4 = BigDecimal.ZERO;
+    private MonthlyFinancials month4 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month5 = BigDecimal.ZERO;
+    private MonthlyFinancials month5 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month6 = BigDecimal.ZERO;
+    private MonthlyFinancials month6 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month7 = BigDecimal.ZERO;
+    private MonthlyFinancials month7 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month8 = BigDecimal.ZERO;
+    private MonthlyFinancials month8 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month9 = BigDecimal.ZERO;
+    private MonthlyFinancials month9 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month10 = BigDecimal.ZERO;
+    private MonthlyFinancials month10 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month11 = BigDecimal.ZERO;
+    private MonthlyFinancials month11 = new MonthlyFinancials();
     @Builder.Default
-    private BigDecimal month12 = BigDecimal.ZERO;
+    private MonthlyFinancials month12 = new MonthlyFinancials();
+    
     @Builder.Default
-    private BigDecimal totalAmount = BigDecimal.ZERO;
+    private MonthlyFinancials totalAmount = new MonthlyFinancials();
 }

@@ -14,6 +14,8 @@ export * as medicalServicesService from './medical-services.service';
 export * as medicalCategoriesService from './medical-categories.service';
 export * as medicalPackagesService from './medical-packages.service';
 export * as benefitPackagesService from './benefit-packages.service';
+export { default as companySettingsService } from './companySettings.service';
+export { default as paymentsService } from './payments.service';
 export { default as providersService } from './providers.service';
 export { default as reportsService } from './reports.service';
 export { default as medicalReviewersService } from './medical-reviewers.service';

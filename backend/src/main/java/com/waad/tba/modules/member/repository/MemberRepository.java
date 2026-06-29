@@ -61,6 +61,9 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        List<Member> findByStatus(Member.MemberStatus status);
 
+       @Query("SELECT m FROM Member m WHERE m.status = :status AND m.active = true")
+       List<com.waad.tba.modules.member.dto.MemberLightProjection> findAllActiveMembersLight(@Param("status") Member.MemberStatus status);
+
        boolean existsByCivilId(String civilId);
 
        boolean existsByCardNumber(String cardNumber);
@@ -538,4 +541,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @org.springframework.transaction.annotation.Transactional
        @Query("DELETE FROM Member m WHERE m.id IN :ids")
        void deleteMembersByIds(@Param("ids") java.util.Collection<Long> ids);
+
+       @Query("SELECT m FROM Member m WHERE m.relationship IS NOT NULL AND (m.kinshipVerified = false OR m.kinshipVerified IS NULL)")
+       List<Member> findPotentialMismatches();
 }

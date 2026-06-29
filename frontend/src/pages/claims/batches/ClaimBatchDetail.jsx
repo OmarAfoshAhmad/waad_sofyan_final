@@ -1023,7 +1023,7 @@ export default function ClaimBatchDetail() {
                         )}
 
                         {/* Totals Footer */}
-                        {claims.length > 0 && (
+                        {claims.length > 0 && !showDeleted && (
                             <MainCard sx={{ p: '10px 16px !important', flexShrink: 0, bgcolor: 'grey.50', borderTop: '2px solid', borderColor: 'divider' }}>
                                 <Stack direction="row" spacing={2} justifyContent="flex-start" alignItems="center" flexWrap="wrap">
                                     <Typography variant="caption" color="text.secondary" fontWeight={400} sx={{ mr: 'auto' }}>

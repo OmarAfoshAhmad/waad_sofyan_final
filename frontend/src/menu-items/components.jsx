@@ -495,6 +495,21 @@ const menuItem = [
             }
           },
           {
+            id: 'payments-management',
+            title: 'إدارة الدفعات والتسديدات',
+            titleEn: 'Payments Management',
+            type: 'item',
+            url: '/settlement/payments',
+            icon: AccountBalanceWalletIcon,
+            resource: 'provider_accounts',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'success',
+              size: 'small'
+            }
+          },
+          {
             id: 'financial-consolidation',
             title: 'الخلاصة المالية المجمعة',
             titleEn: 'Financial Consolidation',
@@ -506,6 +521,21 @@ const menuItem = [
             chip: {
               label: 'جديد',
               color: 'secondary',
+              size: 'small'
+            }
+          },
+          {
+            id: 'accountant-profit',
+            title: 'تقرير أرباح الخصومات',
+            titleEn: 'Accountant Profit Report',
+            type: 'item',
+            url: '/reports/accountant-profit',
+            icon: AssessmentIcon,
+            resource: 'report_provider_settlement',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'success',
               size: 'small'
             }
           }
@@ -596,6 +626,21 @@ const menuItem = [
         }
       },
       {
+        id: 'kinship-mismatch',
+        title: 'تصحيح بيانات المستفيدين',
+        titleEn: 'Beneficiary Kinship Mismatch',
+        type: 'item',
+        url: '/settings/kinship-mismatch',
+        icon: PeopleAltIcon,
+        resource: 'system_settings',
+        action: 'view',
+        chip: {
+          label: 'جديد',
+          color: 'primary',
+          size: 'small'
+        }
+      },
+      {
         id: 'facility-price-preparation',
         title: 'تجهيز قوائم أسعار المرافق',
         titleEn: 'Facility Price List Preparation',
@@ -620,8 +665,23 @@ const menuItem = [
         resource: 'users',
         action: 'view',
         chip: {
-          label: '📜',
-          color: 'info',
+          label: 'جديد',
+          color: 'warning',
+          size: 'small'
+        }
+      },
+      {
+        id: 'member-duplicates',
+        title: 'دمج السجلات المكررة',
+        titleEn: 'Member Duplicates Resolver',
+        type: 'item',
+        url: '/settings/member-duplicates',
+        icon: PeopleAltIcon,
+        resource: 'system_settings',
+        action: 'view',
+        chip: {
+          label: 'هام',
+          color: 'error',
           size: 'small'
         }
       }

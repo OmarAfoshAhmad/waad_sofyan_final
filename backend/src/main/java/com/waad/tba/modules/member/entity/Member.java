@@ -281,6 +281,9 @@ public class Member {
     @Column(name = "updated_by")
     private String updatedBy;
 
+    @Column(name = "kinship_verified")
+    private Boolean kinshipVerified = false;
+
     @CreatedDate
     @Column(updatable = false, name = "created_at")
     private LocalDateTime createdAt;
@@ -314,8 +317,8 @@ public class Member {
         DAUGHTER("D"), // ابنة
         FATHER("F"), // أب
         MOTHER("M"), // أم
-        BROTHER("B"), // أخ
-        SISTER("SR"); // أخت
+        BROTHER("Bro"), // أخ (For legacy data compatibility)
+        SISTER("Sis"); // أخت (For legacy data compatibility)
 
         private final String cardCode;
 

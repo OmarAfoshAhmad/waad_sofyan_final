@@ -54,6 +54,7 @@ import com.waad.tba.modules.preauthorization.service.PreAuthorizationService;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.settlement.event.ClaimAmountAdjustedEvent;
 import com.waad.tba.modules.settlement.event.ClaimApprovedEvent;
 import com.waad.tba.modules.settlement.event.ClaimReversalEvent;
 import com.waad.tba.security.AuthorizationService;
@@ -469,10 +470,9 @@ public class ClaimService {
         // ══════════════════════════════════════════════════════════════════════════
         // FINANCIAL CLOSURE: FINANCIAL SNAPSHOT IMMUTABILITY GUARD
         // ══════════════════════════════════════════════════════════════════════════
-        // After approval, financial fields are FROZEN and CANNOT be changed
-        if (isFinanciallyLocked(claim)) {
-            validateNoFinancialChanges(claim, dto);
-        }
+        // After approval, financial fields are tracked. If changed, an adjustment event is fired.
+        BigDecimal oldApprovedAmount = claim.getApprovedAmount();
+        boolean wasFinanciallyLocked = isFinanciallyLocked(claim);
 
         // Phase 6: Check if status change is requested
         if (dto.getStatus() != null && dto.getStatus() != claim.getStatus()) {
@@ -528,6 +528,21 @@ public class ClaimService {
 
         Claim updatedClaim = claimRepository.save(claim);
         log.info("✅ Claim {} updated, status: {}", id, updatedClaim.getStatus());
+
+        // Check for financial delta if the claim was and still is financially locked
+        if (wasFinanciallyLocked && isFinanciallyLocked(updatedClaim) && 
+            oldApprovedAmount != null && updatedClaim.getApprovedAmount() != null) {
+            
+            if (oldApprovedAmount.compareTo(updatedClaim.getApprovedAmount()) != 0) {
+                log.info("💰 Claim {} approved amount changed from {} to {} — firing adjustment event", 
+                         id, oldApprovedAmount, updatedClaim.getApprovedAmount());
+                
+                eventPublisher.publishEvent(new ClaimAmountAdjustedEvent(
+                        this, updatedClaim.getId(), updatedClaim.getProviderId(),
+                        oldApprovedAmount, updatedClaim.getApprovedAmount(),
+                        currentUser != null ? currentUser.getId() : null));
+            }
+        }
 
         return claimMapper.toViewDto(updatedClaim);
     }
@@ -1323,18 +1338,10 @@ public class ClaimService {
 
     /**
      * Validate that no financial fields are being changed for a locked claim.
-     * Throws BusinessRuleException if any financial field modification is
-     * attempted.
+     * REMOVED: System now allows updates and fires ClaimAmountAdjustedEvent instead.
      */
     private void validateNoFinancialChanges(Claim claim, ClaimUpdateDto dto) {
-        if (dto.getApprovedAmount() != null
-                && claim.getApprovedAmount() != null
-                && dto.getApprovedAmount().compareTo(claim.getApprovedAmount()) != 0) {
-            throw new BusinessRuleException(
-                    "FINANCIAL_IMMUTABILITY: Cannot modify approvedAmount after claim is " + claim.getStatus());
-        }
-        // Note: requestedAmount is calculated from ClaimLines and not editable via DTO
-        // netProviderAmount and patientCoPay are calculated and not in UpdateDto
+        // Validation removed to support post-approval delta sync.
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════

@@ -35,4 +35,8 @@ public interface PreAuthEmailRequestRepository extends JpaRepository<PreAuthEmai
     @org.springframework.transaction.annotation.Transactional
     @org.springframework.data.jpa.repository.Query("UPDATE PreAuthEmailRequest r SET r.memberId = null WHERE r.memberId IN :memberIds")
     void nullifyMemberIds(@org.springframework.data.repository.query.Param("memberIds") java.util.Collection<Long> memberIds);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("UPDATE PreAuthEmailRequest r SET r.memberId = :newMemberId WHERE r.memberId = :oldMemberId")
+    void updateMemberId(@org.springframework.data.repository.query.Param("oldMemberId") Long oldMemberId, @org.springframework.data.repository.query.Param("newMemberId") Long newMemberId);
 }

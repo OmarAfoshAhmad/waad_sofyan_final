@@ -183,14 +183,14 @@ const ProviderSettlementReport = () => {
   }, [providers, selectedProviderId]);
 
   // Fetch report data
-  const fetchReport = useCallback(async () => {
+  const fetchReport = useCallback(async (isBackground = false) => {
     if (!selectedProviderId) {
-      setError('يرجى اختيار مقدم الخدمة');
+      if (!isBackground) setError('يرجى اختيار مقدم الخدمة');
       return;
     }
 
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       setError(null);
 
       const params = {
@@ -213,9 +213,9 @@ const ProviderSettlementReport = () => {
       setExpandedClaims(expanded);
     } catch (err) {
       console.error('Error fetching provider settlement report:', err);
-      setError(err.userMessage || err.message || 'فشل في تحميل التقرير');
+      if (!isBackground) setError(err.userMessage || err.message || 'فشل في تحميل التقرير');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   }, [selectedProviderId, appliedDateFrom, appliedDateTo, selectedStatuses, claimNumberFilter, preAuthNumberFilter]);
 
@@ -223,16 +223,25 @@ const ProviderSettlementReport = () => {
   useEffect(() => {
     if (!selectedProviderId) return;
     const timer = setTimeout(() => {
-      fetchReport();
+      fetchReport(false);
     }, 300);
-    return () => clearTimeout(timer);
-  }, [fetchReport]);
+    
+    // Auto-refresh polling every 30 seconds
+    const intervalId = setInterval(() => {
+      fetchReport(true);
+    }, 30000);
+    
+    return () => {
+      clearTimeout(timer);
+      clearInterval(intervalId);
+    };
+  }, [fetchReport, selectedProviderId]);
 
   // Auto-refresh when page becomes visible (user returns from another tab/page)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchReport();
+        fetchReport(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);

@@ -54,7 +54,7 @@ public class ProviderReportsService {
                 providerId, fromDate, toDate);
         
         StringBuilder jpql = new StringBuilder(
-            "SELECT c FROM Claim c WHERE (c.providerId = :providerId OR c.visit.providerId = :providerId)");
+            "SELECT c FROM Claim c WHERE c.active = true AND (c.providerId = :providerId OR c.visit.providerId = :providerId)");
         
         if (fromDate != null) {
             jpql.append(" AND c.createdAt >= :fromDate");

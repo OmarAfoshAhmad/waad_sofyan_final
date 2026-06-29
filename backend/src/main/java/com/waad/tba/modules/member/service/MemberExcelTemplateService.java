@@ -98,8 +98,8 @@ public class MemberExcelTemplateService {
                         .required(false)
                         .example("ابن")
                         .description("Relationship for dependents (optional for principal)")
-                        .descriptionAr("صلة القرابة (رئيسي، ابن، ابنة، زوجة، زوج، أب، أم، أخ، أخت)")
-                        .allowedValues(List.of("رئيسي", "ابن", "ابنة", "زوجة", "زوج", "أب", "أم", "أخ", "أخت", "PRINCIPAL", "SON", "DAUGHTER", "WIFE", "HUSBAND", "FATHER", "MOTHER", "BROTHER", "SISTER"))
+                        .descriptionAr("صلة القرابة (رئيسي، ابن، ابنة، زوجة، زوج، أب، أم)")
+                        .allowedValues(List.of("رئيسي", "ابن", "ابنة", "زوجة", "زوج", "أب", "أم", "PRINCIPAL", "SON", "DAUGHTER", "WIFE", "HUSBAND", "FATHER", "MOTHER"))
                         .width(20)
                         .build(),
 
@@ -368,7 +368,7 @@ public class MemberExcelTemplateService {
                 List<Member> activePrincipals = memberRepository.findActivePrincipalsByEmployerId(selectedEmployer.getId());
                 for (Member p : activePrincipals) {
                     if (p.getFullName() != null) {
-                        existingPrincipalsByName.put(p.getFullName().trim().toLowerCase(), p);
+                        existingPrincipalsByName.put(normalizeText(p.getFullName()), p);
                     }
                 }
                 log.info("[MemberImport] Pre-loaded {} active principal members from DB", existingPrincipalsByName.size());
@@ -405,7 +405,7 @@ public class MemberExcelTemplateService {
                         continue;
                     }
 
-                    String fullNameLower = member.getFullName().trim().toLowerCase();
+                    String fullNameLower = normalizeText(member.getFullName());
                     Long rowEmployerId = member.getEmployer().getId();
                     String inFileKey = "P::" + rowEmployerId + "::" + fullNameLower;
 
@@ -584,7 +584,7 @@ public class MemberExcelTemplateService {
                     Member s = saved.get(i);
                     usedCardNumbers.add(s.getCardNumber());
                     importedPrincipalsCache.put(s.getCardNumber(), s);
-                    existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                    existingPrincipalsByName.put(normalizeText(s.getFullName()), s);
                     if (i < principalBatchRowNums.size()) {
                         principalRowToMember.put(principalBatchRowNums.get(i), s);
                     }
@@ -659,7 +659,7 @@ public class MemberExcelTemplateService {
                             continue;
                         }
 
-                        String fullNameLower = member.getFullName().trim().toLowerCase();
+                        String fullNameLower = normalizeText(member.getFullName());
                         Long rowEmployerId = member.getEmployer().getId();
                         Long parentId = member.getParent() != null ? member.getParent().getId() : null;
                         String inFileKey = "D::" + parentId + "::" + fullNameLower;
@@ -680,7 +680,7 @@ public class MemberExcelTemplateService {
                             // Load the existing dependent from the DB under this parent and with this name
                             List<Member> parentDeps = memberRepository.findByParentId(parentId);
                             Member existingDependent = parentDeps.stream()
-                                    .filter(d -> d.getFullName().trim().toLowerCase().equals(fullNameLower))
+                                    .filter(d -> normalizeText(d.getFullName()).equals(fullNameLower))
                                     .findFirst()
                                     .orElse(null);
                             
@@ -853,7 +853,7 @@ public class MemberExcelTemplateService {
                 continue;
             Long parentId = ((Number) row[0]).longValue();
             String name = (String) row[1];
-            keys.add(parentId + "::" + name);
+            keys.add(parentId + "::" + normalizeText(name));
         }
         return keys;
     }
@@ -1205,6 +1205,10 @@ public class MemberExcelTemplateService {
             return Member.Relationship.WIFE;
         }
         if (normText.equals("زوج")) {
+            Member.Gender inferred = GenderInferenceUtil.inferGender(value);
+            if (inferred == Member.Gender.FEMALE) {
+                return Member.Relationship.WIFE;
+            }
             return Member.Relationship.HUSBAND;
         }
         if (normText.contains("ابن") && !normText.contains("ابنه")) {
@@ -1218,12 +1222,6 @@ public class MemberExcelTemplateService {
         }
         if (normText.equals("ام")) {
             return Member.Relationship.MOTHER;
-        }
-        if (normText.equals("اخ")) {
-            return Member.Relationship.BROTHER;
-        }
-        if (normText.equals("اخت")) {
-            return Member.Relationship.SISTER;
         }
         return null;
     }

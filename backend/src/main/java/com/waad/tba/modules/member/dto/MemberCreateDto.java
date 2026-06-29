@@ -141,7 +141,7 @@ public class MemberCreateDto {
      * Relationship Type - REQUIRED when parentId is provided.
      * NULL when creating a principal member.
      * 
-     * Valid values: WIFE, HUSBAND, SON, DAUGHTER, FATHER, MOTHER, BROTHER, SISTER
+     * Valid values: WIFE, HUSBAND, SON, DAUGHTER, FATHER, MOTHER
      */
     @Schema(description = "Relationship type - required for dependents", example = "SON")
     private Member.Relationship relationship;

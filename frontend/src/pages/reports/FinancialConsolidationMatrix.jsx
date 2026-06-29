@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 
 // material-ui
 import {
@@ -18,7 +18,10 @@ import {
   TextField,
   MenuItem,
   Stack,
-  Button
+  Button,
+  FormGroup,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 
 // third-party
@@ -39,22 +42,32 @@ export default function FinancialConsolidationMatrix() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [showCompanyShare, setShowCompanyShare] = useState(true);
+  const [showProviderShare, setShowProviderShare] = useState(true);
 
-  const fetchReport = async () => {
+  const fetchReport = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       setError(null);
       const result = await reportsService.getFinancialConsolidation({ year: selectedYear });
       setData(result || []);
     } catch (err) {
-      setError(err.message || 'حدث خطأ أثناء جلب التقرير');
+      if (!isBackground) setError(err.message || 'حدث خطأ أثناء جلب التقرير');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchReport();
+    fetchReport(false);
+    
+    // Auto-refresh polling every 30 seconds
+    const intervalId = setInterval(() => {
+      fetchReport(true);
+    }, 30000);
+    
+    return () => clearInterval(intervalId);
   }, [selectedYear]);
 
   const handleExportExcel = () => {
@@ -65,22 +78,54 @@ export default function FinancialConsolidationMatrix() {
       row.employerName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const excelData = filteredData.map(row => ({
-      'الشركة': row.employerName,
-      'شهر 1': row.month1,
-      'شهر 2': row.month2,
-      'شهر 3': row.month3,
-      'شهر 4': row.month4,
-      'شهر 5': row.month5,
-      'شهر 6': row.month6,
-      'شهر 7': row.month7,
-      'شهر 8': row.month8,
-      'شهر 9': row.month9,
-      'شهر 10': row.month10,
-      'شهر 11': row.month11,
-      'شهر 12': row.month12,
-      'الإجمالي الكلي': row.totalAmount
-    }));
+    const excelData = [];
+    filteredData.forEach(row => {
+      let isFirstRow = true;
+
+      // 1. حصة الشركة (Company Share)
+      if (showCompanyShare) {
+        excelData.push({
+          'الشركة': isFirstRow ? row.employerName : '',
+          'النوع': 'حصة الشركة',
+          'شهر 1': row.month1?.companyDiscountAmount || 0,
+          'شهر 2': row.month2?.companyDiscountAmount || 0,
+          'شهر 3': row.month3?.companyDiscountAmount || 0,
+          'شهر 4': row.month4?.companyDiscountAmount || 0,
+          'شهر 5': row.month5?.companyDiscountAmount || 0,
+          'شهر 6': row.month6?.companyDiscountAmount || 0,
+          'شهر 7': row.month7?.companyDiscountAmount || 0,
+          'شهر 8': row.month8?.companyDiscountAmount || 0,
+          'شهر 9': row.month9?.companyDiscountAmount || 0,
+          'شهر 10': row.month10?.companyDiscountAmount || 0,
+          'شهر 11': row.month11?.companyDiscountAmount || 0,
+          'شهر 12': row.month12?.companyDiscountAmount || 0,
+          'الإجمالي الكلي': row.totalAmount?.companyDiscountAmount || 0
+        });
+        isFirstRow = false;
+      }
+
+      // 2. حصة المرفق (Provider Share)
+      if (showProviderShare) {
+        excelData.push({
+          'الشركة': isFirstRow ? row.employerName : '',
+          'النوع': 'حصة المرفق',
+          'شهر 1': row.month1?.remainingAmount || 0,
+          'شهر 2': row.month2?.remainingAmount || 0,
+          'شهر 3': row.month3?.remainingAmount || 0,
+          'شهر 4': row.month4?.remainingAmount || 0,
+          'شهر 5': row.month5?.remainingAmount || 0,
+          'شهر 6': row.month6?.remainingAmount || 0,
+          'شهر 7': row.month7?.remainingAmount || 0,
+          'شهر 8': row.month8?.remainingAmount || 0,
+          'شهر 9': row.month9?.remainingAmount || 0,
+          'شهر 10': row.month10?.remainingAmount || 0,
+          'شهر 11': row.month11?.remainingAmount || 0,
+          'شهر 12': row.month12?.remainingAmount || 0,
+          'الإجمالي الكلي': row.totalAmount?.remainingAmount || 0
+        });
+        isFirstRow = false;
+      }
+    });
 
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
@@ -94,7 +139,7 @@ export default function FinancialConsolidationMatrix() {
     <>
       <ModernPageHeader
         title="الخلاصة المالية المجمعة"
-        subtitle="تقرير شامل يوضح القيمة المستحقة للشركة (نسب التخفيض التعاقدية) لكل جهة"
+        subtitle="تقرير مالي شامل يوضح القيم المالية والتسويات للشركات بشكل تفصيلي"
         icon={Business}
       />
 
@@ -119,8 +164,19 @@ export default function FinancialConsolidationMatrix() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               size="small"
-              sx={{ minWidth: 250, flexGrow: 1 }}
+              sx={{ minWidth: 200 }}
             />
+
+            <FormGroup row sx={{ ml: 2, flexGrow: 1 }}>
+              <FormControlLabel 
+                control={<Checkbox checked={showCompanyShare} onChange={(e) => setShowCompanyShare(e.target.checked)} color="success" />} 
+                label="عرض حصة الشركة" 
+              />
+              <FormControlLabel 
+                control={<Checkbox checked={showProviderShare} onChange={(e) => setShowProviderShare(e.target.checked)} color="warning" />} 
+                label="عرض حصة المرفق" 
+              />
+            </FormGroup>
 
             <Button 
               variant="contained" 
@@ -135,16 +191,17 @@ export default function FinancialConsolidationMatrix() {
 
           {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-          {loading ? (
+          {loading && data.length === 0 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
               <CircularProgress />
             </Box>
           ) : (
             <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-              <Table size="small" sx={{ minWidth: 1000 }}>
+              <Table size="small" sx={{ minWidth: 1000, '& .MuiTableCell-root': { borderBottom: '1px solid #eee' } }}>
                 <TableHead sx={{ bgcolor: 'grey.50' }}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 'bold' }}>الشركة</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>النوع</TableCell>
                     {[...Array(12)].map((_, i) => (
                       <TableCell key={i} align="right" sx={{ fontWeight: 'bold' }}>شهر {i + 1}</TableCell>
                     ))}
@@ -154,39 +211,48 @@ export default function FinancialConsolidationMatrix() {
                 <TableBody>
                   {data.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={14} align="center" sx={{ py: 3 }}>
+                      <TableCell colSpan={15} align="center" sx={{ py: 3 }}>
                         <Typography color="textSecondary">لا توجد بيانات لهذه السنة</Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
                     data.filter(row => row.employerName?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={14} align="center" sx={{ py: 3 }}>
+                        <TableCell colSpan={15} align="center" sx={{ py: 3 }}>
                           <Typography color="textSecondary">لا توجد نتائج تطابق البحث</Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
                       data.filter(row => row.employerName?.toLowerCase().includes(searchQuery.toLowerCase())).map((row, index) => (
-                        <TableRow key={index} hover>
-                        <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
-                          {row.employerName}
-                        </TableCell>
-                        <TableCell align="right">{row.month1?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month2?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month3?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month4?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month5?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month6?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month7?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month8?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month9?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month10?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month11?.toLocaleString()}</TableCell>
-                        <TableCell align="right">{row.month12?.toLocaleString()}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                          {row.totalAmount?.toLocaleString()}
-                        </TableCell>
-                        </TableRow>
+                        <Fragment key={index}>
+                          {showCompanyShare && (
+                            <TableRow hover sx={{ bgcolor: index % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                              <TableCell component="th" scope="row" sx={{ fontWeight: 'bold', verticalAlign: 'middle', borderRight: '1px solid #eee' }} rowSpan={showCompanyShare && showProviderShare ? 2 : 1}>
+                                {row.employerName}
+                              </TableCell>
+                              <TableCell sx={{ color: 'success.main', fontWeight: 500 }}>حصة الشركة</TableCell>
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
+                                <TableCell key={`tpa-${m}`} align="right" sx={{ color: 'success.main', fontWeight: 500 }}>{row[`month${m}`]?.companyDiscountAmount?.toLocaleString()}</TableCell>
+                              ))}
+                              <TableCell align="right" sx={{ color: 'success.main', fontWeight: 'bold' }}>{row.totalAmount?.companyDiscountAmount?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          
+                          {showProviderShare && (
+                            <TableRow hover sx={{ bgcolor: index % 2 === 0 && !showCompanyShare ? '#ffffff' : (index % 2 !== 0 && !showCompanyShare ? '#fafafa' : 'transparent') }}>
+                              {!showCompanyShare && (
+                                <TableCell component="th" scope="row" sx={{ fontWeight: 'bold', verticalAlign: 'middle', borderRight: '1px solid #eee' }}>
+                                  {row.employerName}
+                                </TableCell>
+                              )}
+                              <TableCell sx={{ color: 'warning.main', fontWeight: 500 }}>حصة المرفق</TableCell>
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
+                                <TableCell key={m} align="right" sx={{ color: 'warning.main', fontWeight: 500 }}>{row[`month${m}`]?.remainingAmount?.toLocaleString()}</TableCell>
+                              ))}
+                              <TableCell align="right" sx={{ fontWeight: 'bold', color: 'warning.main' }}>{row.totalAmount?.remainingAmount?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
                       ))
                     )
                   )}

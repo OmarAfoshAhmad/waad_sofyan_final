@@ -84,6 +84,31 @@ export const reportsService = {
     }
   },
 
+  // ======================= ACCOUNTANT PROFIT REPORT =======================
+
+  /**
+   * Get accountant profit report (Company Discount Profits)
+   * @param {Object} params - {employerId, year, month, providerId}
+   * @returns {Promise<Array>} Array of CompanyProfitReportRowDto
+   */
+  getCompanyProfitReport: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.employerId) queryParams.append('employerId', params.employerId);
+      if (params.year) queryParams.append('year', params.year);
+      if (params.month) queryParams.append('month', params.month);
+      if (params.providerId) queryParams.append('providerId', params.providerId);
+
+      const url = queryParams.toString() 
+        ? `${BASE_URL}/company-profit?${queryParams.toString()}` 
+        : `${BASE_URL}/company-profit`;
+      const response = await axiosClient.get(url);
+      return unwrap(response);
+    } catch (error) {
+      throw handleReportErrors(error);
+    }
+  },
+
   // ======================= ADJUDICATION REPORTS =======================
 
   /**

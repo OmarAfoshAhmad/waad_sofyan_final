@@ -1343,4 +1343,28 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         @Query("SELECT DISTINCT c.member.id FROM Claim c WHERE c.member.id IN :memberIds")
         List<Long> findMemberIdsWithClaims(@Param("memberIds") java.util.Collection<Long> memberIds);
 
+        @Query("SELECT new com.waad.tba.modules.report.dto.CompanyProfitReportRowDto(" +
+               "c.member.employer.name, " +
+               "c.providerName, " +
+               "MONTH(c.createdAt), " +
+               "SUM(COALESCE(c.requestedAmount, 0.0) - COALESCE(c.patientCoPay, 0.0)), " +
+               "MAX(c.appliedDiscountPercent), " +
+               "SUM(CASE WHEN COALESCE(c.companyDiscountAmount, 0.0) > 0 THEN c.companyDiscountAmount " +
+               "ELSE ((COALESCE(c.requestedAmount, 0.0) - COALESCE(c.patientCoPay, 0.0) - COALESCE(c.refusedAmount, 0.0)) * COALESCE(c.appliedDiscountPercent, 0.0) / 100.0) END)) " +
+               "FROM Claim c " +
+               "WHERE (:employerId IS NULL OR c.member.employer.id = :employerId) " +
+               "AND YEAR(c.createdAt) = :year " +
+               "AND (:month IS NULL OR MONTH(c.createdAt) = :month) " +
+               "AND (:providerId IS NULL OR c.providerId = :providerId) " +
+               "AND c.active = true " +
+               "AND c.status IN :statuses " +
+               "GROUP BY c.member.employer.name, c.providerName, MONTH(c.createdAt) " +
+               "ORDER BY c.member.employer.name ASC, MONTH(c.createdAt) ASC, c.providerName ASC")
+        List<com.waad.tba.modules.report.dto.CompanyProfitReportRowDto> getCompanyProfitReport(
+               @Param("employerId") Long employerId,
+               @Param("year") Integer year,
+               @Param("month") Integer month,
+               @Param("providerId") Long providerId,
+               @Param("statuses") java.util.Collection<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+
 }

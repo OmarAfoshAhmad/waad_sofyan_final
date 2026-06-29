@@ -509,8 +509,6 @@ public class MemberExcelImportService {
                 case "D" -> Relationship.DAUGHTER;
                 case "M" -> Relationship.MOTHER;
                 case "F" -> Relationship.FATHER;
-                case "B" -> Relationship.BROTHER;
-                case "Z", "SR" -> Relationship.SISTER;
                 default -> null;
             };
             return new CardInfo(rel, parentCard);

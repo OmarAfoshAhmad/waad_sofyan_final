@@ -185,7 +185,14 @@ const FinancialReports = () => {
 
   // Fetch data based on active tab
   useEffect(() => {
-    fetchData();
+    fetchData(false);
+    
+    // Auto-refresh polling every 30 seconds
+    const intervalId = setInterval(() => {
+      fetchData(true);
+    }, 30000);
+    
+    return () => clearInterval(intervalId);
   }, [activeTab, effectiveEmployerId, selectedProviderId, page, rowsPerPage, dateFrom, dateTo, status]);
 
   // Reset pagination when filters change
@@ -197,16 +204,16 @@ const FinancialReports = () => {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchData();
+        fetchData(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  });
+  }, [activeTab, effectiveEmployerId, selectedProviderId, page, rowsPerPage, dateFrom, dateTo, status]);
 
-  const fetchData = async () => {
+  const fetchData = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       setError(null);
 
       if (activeTab === 0) {
@@ -224,9 +231,9 @@ const FinancialReports = () => {
       }
     } catch (err) {
       console.error('Failed to fetch financial data:', err);
-      setError('فشل تحميل البيانات المالية. يرجى المحاولة مرة أخرى.');
+      if (!isBackground) setError('فشل تحميل البيانات المالية. يرجى المحاولة مرة أخرى.');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 

@@ -61,6 +61,10 @@ echo.
 echo [INFO] Starting Spring Boot Application (dev profile) on port %PORT%...
 echo ====================================================
 set DB_PASSWORD=12345
-call mvn clean compile spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=%PORT%
+set SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tba_waad_system
+set SPRING_DATASOURCE_USERNAME=postgres
+set JWT_SECRET=waad_dev_secret_not_for_production_only_local_dev_9dda11e5
+set MAVEN_OPTS=-Xmx1024m -Xms512m
+call mvn compile spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=%PORT%
 
 endlocal

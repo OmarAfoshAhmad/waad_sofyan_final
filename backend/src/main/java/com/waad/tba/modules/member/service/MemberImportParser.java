@@ -168,12 +168,6 @@ public class MemberImportParser {
         if (val.contains("أم") || val.contains("ام") || val.contains("والدة") || val.contains("والده")) {
             return Relationship.MOTHER;
         }
-        if (val.contains("أخ") || val.contains("اخ") || val.contains("شقيق")) {
-            return Relationship.BROTHER;
-        }
-        if (val.contains("أخت") || val.contains("اخت") || val.contains("شقيقة") || val.contains("شقيقه")) {
-            return Relationship.SISTER;
-        }
         return null;
     }
 

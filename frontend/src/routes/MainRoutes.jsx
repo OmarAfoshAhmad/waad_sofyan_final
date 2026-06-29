@@ -139,6 +139,8 @@ const Settings = Loadable(lazy(() => import('pages/settings')));
 const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSettingsPage')));
 const FacilityPricePreparationPage = Loadable(lazy(() => import('pages/settings/FacilityPricePreparationPage')));
 const AIKeySettingsPage = Loadable(lazy(() => import('pages/settings/AIKeySettingsPage')));
+const KinshipMismatchChecker = Loadable(lazy(() => import('pages/settings/KinshipMismatchChecker')));
+const MemberDuplicatesResolver = Loadable(lazy(() => import('pages/settings/MemberDuplicatesResolver')));
 
 // ==============================|| LAZY LOADING - PROFILE ||============================== //
 
@@ -159,6 +161,7 @@ const BeneficiariesReports = Loadable(lazy(() => import('pages/reports/Beneficia
 const FinancialReports = Loadable(lazy(() => import('pages/reports/FinancialReports')));
 const ProviderSettlementReport = Loadable(lazy(() => import('pages/reports/ProviderSettlementReport')));
 const FinancialConsolidationMatrix = Loadable(lazy(() => import('pages/reports/FinancialConsolidationMatrix')));
+const AccountantProfitReport = Loadable(lazy(() => import('pages/reports/AccountantProfitReport')));
 
 
 // ==============================|| LAZY LOADING - ERROR PAGES ||============================== //
@@ -174,6 +177,7 @@ const Error500 = Loadable(lazy(() => import('pages/errors/ServerError500')));
 const ProviderAccountsList = Loadable(lazy(() => import('pages/settlement/ProviderAccountsList')));
 const ProviderPaymentsList = Loadable(lazy(() => import('pages/settlement/ProviderPaymentsList')));
 const ProviderAccountView = Loadable(lazy(() => import('pages/settlement/ProviderAccountView')));
+const PaymentsManagement = Loadable(lazy(() => import('pages/settlement/PaymentsManagement')));
 
 
 // ==============================|| MAIN ROUTING ||============================== //
@@ -368,6 +372,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard resource="provider_accounts" action="view" isRouteGuard>
               <ProviderAccountView />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'payments',
+          element: (
+            <PermissionGuard resource="provider_accounts" action="view" isRouteGuard>
+              <PaymentsManagement />
             </PermissionGuard>
           )
         },
@@ -860,6 +872,22 @@ const MainRoutes = {
               <AIKeySettingsPage />
             </PermissionGuard>
           )
+        },
+        {
+          path: 'kinship-mismatch',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <KinshipMismatchChecker />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'member-duplicates',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <MemberDuplicatesResolver />
+            </PermissionGuard>
+          )
         }
       ]
     },
@@ -896,6 +924,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
               <FinancialConsolidationMatrix />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'accountant-profit',
+          element: (
+            <PermissionGuard resource="report_provider_settlement" action="view" isRouteGuard>
+              <AccountantProfitReport />
             </PermissionGuard>
           )
         },
