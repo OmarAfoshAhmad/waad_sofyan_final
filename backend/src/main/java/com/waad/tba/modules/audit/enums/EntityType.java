@@ -9,5 +9,6 @@ public enum EntityType {
     PREAUTHORIZATION,
     SETTLEMENT,
     MEMBER,
-    SYSTEM_SETTING
+    SYSTEM_SETTING,
+    SIMULATION_RUN
 }

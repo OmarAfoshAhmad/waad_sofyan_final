@@ -19,11 +19,13 @@ import systemSettingsService from 'services/api/systemSettings.service';
 const DB_KEYS = {
   apiKey: 'AI_CLASSIFIER_API_KEY',
   model: 'AI_CLASSIFIER_MODEL',
-  endpoint: 'AI_CLASSIFIER_ENDPOINT'
+  endpoint: 'AI_CLASSIFIER_ENDPOINT',
+  biobertEndpoint: 'BIOBERT_API_URL'
 };
 
 const DEFAULT_MODEL = 'qwen/qwen2.5-14b-instruct:free';
 const DEFAULT_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_BIOBERT_ENDPOINT = 'http://localhost:8000/predict';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fetchWithRetry = async (url, options, maxRetries = 2) => {
@@ -45,6 +47,7 @@ const AIKeySettingsPage = ({ embedded = false }) => {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [endpoint, setEndpoint] = useState(DEFAULT_ENDPOINT);
+  const [biobertEndpoint, setBiobertEndpoint] = useState(DEFAULT_BIOBERT_ENDPOINT);
   const [loading, setLoading] = useState(true);
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -60,6 +63,7 @@ const AIKeySettingsPage = ({ embedded = false }) => {
         setApiKey((map.get(DB_KEYS.apiKey) || '').trim());
         setModel((map.get(DB_KEYS.model) || DEFAULT_MODEL).trim());
         setEndpoint((map.get(DB_KEYS.endpoint) || DEFAULT_ENDPOINT).trim());
+        setBiobertEndpoint((map.get(DB_KEYS.biobertEndpoint) || DEFAULT_BIOBERT_ENDPOINT).trim());
       } catch (error) {
         setTestStatus({ ok: false, message: `فشل تحميل الإعدادات من قاعدة البيانات: ${error.message || 'unknown error'}` });
       } finally {
@@ -81,7 +85,8 @@ const AIKeySettingsPage = ({ embedded = false }) => {
         await Promise.all([
           systemSettingsService.updateSetting(DB_KEYS.apiKey, apiKey.trim()),
           systemSettingsService.updateSetting(DB_KEYS.model, model.trim() || DEFAULT_MODEL),
-          systemSettingsService.updateSetting(DB_KEYS.endpoint, endpoint.trim() || DEFAULT_ENDPOINT)
+          systemSettingsService.updateSetting(DB_KEYS.endpoint, endpoint.trim() || DEFAULT_ENDPOINT),
+          systemSettingsService.updateSetting(DB_KEYS.biobertEndpoint, biobertEndpoint.trim() || DEFAULT_BIOBERT_ENDPOINT)
         ]);
         setSaved(true);
       } catch (error) {
@@ -98,11 +103,13 @@ const AIKeySettingsPage = ({ embedded = false }) => {
         await Promise.all([
           systemSettingsService.updateSetting(DB_KEYS.apiKey, ''),
           systemSettingsService.updateSetting(DB_KEYS.model, DEFAULT_MODEL),
-          systemSettingsService.updateSetting(DB_KEYS.endpoint, DEFAULT_ENDPOINT)
+          systemSettingsService.updateSetting(DB_KEYS.endpoint, DEFAULT_ENDPOINT),
+          systemSettingsService.updateSetting(DB_KEYS.biobertEndpoint, DEFAULT_BIOBERT_ENDPOINT)
         ]);
         setApiKey('');
         setModel(DEFAULT_MODEL);
         setEndpoint(DEFAULT_ENDPOINT);
+        setBiobertEndpoint(DEFAULT_BIOBERT_ENDPOINT);
         setSaved(false);
         setTestStatus({ ok: null, message: '' });
       } catch (error) {
@@ -245,6 +252,18 @@ const AIKeySettingsPage = ({ embedded = false }) => {
                 setSaved(false);
               }}
               placeholder="https://openrouter.ai/api/v1/chat/completions"
+            />
+
+            <Typography variant="subtitle2" sx={{ mt: 2 }}>إعدادات نموذج المحرك الطبي المستضاف محلياً (BioBERT/ClinicalBERT)</Typography>
+            <TextField
+              label="BioBERT / ClinicalBERT API Endpoint"
+              fullWidth
+              value={biobertEndpoint}
+              onChange={(e) => {
+                setBiobertEndpoint(e.target.value);
+                setSaved(false);
+              }}
+              placeholder="http://localhost:8000/predict"
             />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>

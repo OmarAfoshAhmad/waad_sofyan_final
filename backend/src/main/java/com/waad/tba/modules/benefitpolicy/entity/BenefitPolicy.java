@@ -15,7 +15,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Medical benefits policy — one ACTIVE per employer at any given date. */
 @Entity
@@ -128,6 +130,12 @@ public class BenefitPolicy {
     @OneToMany(mappedBy = "benefitPolicy", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @Builder.Default
     private List<BenefitPolicyRule> rules = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "benefit_policy_excluded_categories", joinColumns = @JoinColumn(name = "benefit_policy_id"))
+    @Column(name = "category_code")
+    @Builder.Default
+    private Set<String> excludedCategoryCodes = new HashSet<>();
 
     public boolean isEffective() {
         if (status != BenefitPolicyStatus.ACTIVE) {

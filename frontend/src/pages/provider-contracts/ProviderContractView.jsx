@@ -96,9 +96,11 @@ import {
   deleteAllPricingItems,
   CONTRACT_STATUS,
   CONTRACT_STATUS_CONFIG,
-  PRICING_MODEL_CONFIG
+  PRICING_MODEL_CONFIG,
+  importPriceListPreview
 } from 'services/api/provider-contracts.service';
 import { getAllMedicalCategories, getMedicalServicesByCategory } from 'services/api/medical-categories.service';
+import PricingImportReviewDialog from './components/PricingImportReviewDialog';
 
 // Snackbar
 import { useSnackbar } from 'notistack';
@@ -274,6 +276,8 @@ const ProviderContractView = () => {
   const [editPricingDialogOpen, setEditPricingDialogOpen] = useState(false);
   const [deletePricingDialogOpen, setDeletePricingDialogOpen] = useState(false);
   const [excelImportDialogOpen, setExcelImportDialogOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
   const [selectedPricingFile, setSelectedPricingFile] = useState(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [uploadingPricingFile, setUploadingPricingFile] = useState(false);
@@ -378,56 +382,24 @@ const ProviderContractView = () => {
     async (file) => {
       try {
         setUploadingPricingFile(true);
-        const result = await uploadContractPricingExcel(id, file);
-        const created = Number(result?.summary?.created || 0);
-        const updated = Number(result?.summary?.updated || 0);
-        const failed = Number(result?.summary?.failed || 0);
-        const successCount = created + updated;
-
-        if (successCount > 0) {
-          enqueueSnackbar(result?.messageAr || result?.message || `تم استيراد ${successCount} بند تسعير بنجاح`, {
-            variant: 'success'
-          });
-
-          if (failed > 0) {
-            enqueueSnackbar(`تحذير: فشل استيراد ${failed} بند`, { variant: 'warning' });
-          }
-
-          // Refresh pricing items
-          queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+        // Phase 1: Call preview import
+        const response = await importPriceListPreview(id, file);
+        if (response?.data) {
+          setPreviewData(response.data);
           setExcelImportDialogOpen(false);
           setSelectedPricingFile(null);
-          return;
+          setReviewDialogOpen(true);
+        } else {
+          enqueueSnackbar('لم يتم العثور على بيانات في الملف.', { variant: 'warning' });
         }
-
-        // No successful rows imported: show explicit feedback instead of silent fail.
-        if (failed > 0) {
-          const firstError = Array.isArray(result?.errors) && result.errors.length > 0 ? result.errors[0] : null;
-          const firstErrorMessage = firstError
-            ? `أول خطأ (صف ${firstError.rowNumber || '-'}): ${firstError.messageAr || firstError.messageEn || 'خطأ غير معروف'}`
-            : null;
-
-          enqueueSnackbar(result?.messageAr || result?.message || 'لم يتم استيراد أي بند. تحقق من تنسيق الملف.', {
-            variant: 'error'
-          });
-
-          if (firstErrorMessage) {
-            enqueueSnackbar(firstErrorMessage, { variant: 'warning' });
-          }
-          return;
-        }
-
-        enqueueSnackbar(result?.messageAr || result?.message || 'لم يتم إجراء أي تغيير على الأسعار.', {
-          variant: 'warning'
-        });
       } catch (error) {
         const apiMessage = error?.response?.data?.message || error?.response?.data?.messageAr;
-        enqueueSnackbar(apiMessage || error?.message || 'فشل رفع الملف', { variant: 'error' });
+        enqueueSnackbar(apiMessage || error?.message || 'فشل رفع أو تحليل الملف', { variant: 'error' });
       } finally {
         setUploadingPricingFile(false);
       }
     },
-    [id, queryClient, enqueueSnackbar]
+    [id, enqueueSnackbar]
   );
 
   const handleImportPriceList = useCallback(() => {
@@ -1545,6 +1517,7 @@ const ProviderContractView = () => {
             onClick={() => deletePricingMutation.mutate()}
             color="error"
             variant="contained"
+
             disabled={deletePricingMutation.isLoading}
           >
             {deletePricingMutation.isLoading ? <CircularProgress size={20} /> : 'حذف'}
@@ -1665,10 +1638,19 @@ const ProviderContractView = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <PricingImportReviewDialog
+        open={reviewDialogOpen}
+        onClose={() => setReviewDialogOpen(false)}
+        contractId={id}
+        previewData={previewData}
+        onSuccess={() => {
+          setReviewDialogOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+        }}
+      />
     </>
   );
 };
 
 export default ProviderContractView;
-
-

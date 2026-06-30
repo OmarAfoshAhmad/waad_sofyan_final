@@ -241,6 +241,7 @@ public class BenefitPolicyService {
                 .status(status)
                 .notes(dto.getNotes())
                 .active(true)
+                .excludedCategoryCodes(dto.getExcludedCategoryCodes() != null ? dto.getExcludedCategoryCodes() : new java.util.HashSet<>())
                 .build();
 
         policy = benefitPolicyRepository.save(policy);
@@ -288,6 +289,10 @@ public class BenefitPolicyService {
         if (dto.getNotes() != null) {
             policy.setNotes(dto.getNotes());
         }
+        if (dto.getExcludedCategoryCodes() != null) {
+            policy.setExcludedCategoryCodes(dto.getExcludedCategoryCodes());
+        }
+
 
         // Handle date changes with validation
         LocalDate newStartDate = dto.getStartDate() != null ? dto.getStartDate() : policy.getStartDate();

@@ -428,6 +428,22 @@ export const deleteAllPricingItems = async (contractId) => {
   return unwrap(response);
 };
 
+// ============================================================================
+// EXCEL IMPORT NEW (PREVIEW & CONFIRM)
+// ============================================================================
+
+export const importPriceListPreview = async (contractId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return axiosClient.post(`${BASE_URL}/${contractId}/pricing/import/preview`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
+
+export const confirmPriceListImport = async (contractId, data) => {
+  return axiosClient.post(`${BASE_URL}/${contractId}/pricing/import/confirm`, data);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // EXCEL IMPORT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -579,6 +595,66 @@ export const getAllContractedServices = async (providerId) => {
   }
 };
 
+/**
+ * Run Coverage Simulation for a specific contract against a policy
+ * @param {Number} contractId - The contract ID
+ * @param {Number} policyId - The benefit policy ID
+ * @param {String} encounterType - 'ALL', 'INPATIENT', 'OUTPATIENT'
+ * @returns {Promise<Object>} The simulation result object
+ */
+export const runCoverageSimulation = async (contractId, policyId, encounterType = 'ALL') => {
+  try {
+    const params = {
+      contractId,
+      policyId,
+      encounterType
+    };
+    
+    const response = await axiosClient.get('/api/simulation/coverage', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error running coverage simulation:', error);
+    throw error;
+  }
+};
+
+/**
+ * Run coverage simulation for a raw list of items
+ * @param {Number} policyId - ID of the benefit policy to simulate against
+ * @param {String} encounterType - Filter by encounter type (ALL, INPATIENT, OUTPATIENT)
+ * @param {Array} items - List of items with serviceName, serviceCode, contractPrice, mainCategory, subCategory
+ * @returns {Promise<Object>} The simulation results
+ */
+export const runRawCoverageSimulation = async (policyId, encounterType = 'ALL', items = []) => {
+  try {
+    const params = {
+      policyId,
+      encounterType
+    };
+    
+    const response = await axiosClient.post('/api/simulation/coverage/raw', items, { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error running raw coverage simulation:', error);
+    throw error;
+  }
+};
+
+/**
+ * Export Coverage Simulation Report to Excel
+ * @param {Number} contractId 
+ * @param {Number} policyId 
+ * @param {String} encounterType 
+ */
+export const downloadSimulationReport = async (contractId, policyId, encounterType = 'ALL') => {
+  const response = await axiosClient.get(`/api/simulation/coverage/export`, {
+    params: { contractId, policyId, encounterType },
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+
 const providerContractsService = {
   getProviderContracts,
   getDeletedProviderContracts,
@@ -611,7 +687,12 @@ const providerContractsService = {
   getMyActiveContract,
   getMyContractServices,
   addMyContractPricing,
-  getAllContractedServices
+  getAllContractedServices,
+  importPriceListPreview,
+  confirmPriceListImport,
+  runCoverageSimulation,
+  runRawCoverageSimulation,
+  downloadSimulationReport
 };
 
 export default providerContractsService;

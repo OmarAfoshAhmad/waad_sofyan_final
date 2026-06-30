@@ -15,6 +15,7 @@ import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
+import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
 import lombok.Builder;
@@ -882,28 +883,103 @@ public class BenefitPolicyCoverageService {
             Long memberId,
             LocalDate serviceDate,
             Long claimIdToExclude) {
+        return resolveCoverage(policyId, serviceId, serviceCategoryId, overrideCategoryId, memberId, serviceDate, claimIdToExclude, null, null, null, false);
+    }
+
+    public ResolvedCoverage resolveCoverage(
+            Long policyId,
+            Long serviceId,
+            Long serviceCategoryId,
+            Long overrideCategoryId,
+            Long memberId,
+            LocalDate serviceDate,
+            Long claimIdToExclude,
+            CategoryContext requestedEncounterContext,
+            Double classificationConfidence,
+            BigDecimal requestedAmount,
+            boolean dryRun) {
 
         log.debug(
-                "🔍 Resolving coverage: policyId={}, serviceId={}, serviceCat={}, overrideCat={}, memberId={}, date={}",
-                policyId, serviceId, serviceCategoryId, overrideCategoryId, memberId, serviceDate);
+                "🔍 Resolving coverage: policyId={}, serviceId={}, serviceCat={}, overrideCat={}, memberId={}, date={}, dryRun={}",
+                policyId, serviceId, serviceCategoryId, overrideCategoryId, memberId, serviceDate, dryRun);
 
-        // Resolve parent category for hierarchical rule lookup
+        MedicalCategory actualCategory = null;
         Long parentCategoryId = null;
-        if (serviceCategoryId != null) {
-            parentCategoryId = categoryRepository.findById(serviceCategoryId)
-                    .map(MedicalCategory::getParentId)
-                    .orElse(null);
-        } else if (overrideCategoryId != null) {
-            parentCategoryId = categoryRepository.findById(overrideCategoryId)
-                    .map(MedicalCategory::getParentId)
-                    .orElse(null);
+        String categoryCodeToCheck = null;
+        CategoryContext categoryContext = null;
+        
+        if (overrideCategoryId != null) {
+            Optional<MedicalCategory> catOpt = categoryRepository.findById(overrideCategoryId);
+            if (catOpt.isPresent()) {
+                actualCategory = catOpt.get();
+            }
+        } else if (serviceCategoryId != null) {
+            Optional<MedicalCategory> catOpt = categoryRepository.findById(serviceCategoryId);
+            if (catOpt.isPresent()) {
+                actualCategory = catOpt.get();
+            }
         }
 
-        // Use the smart repository method that already implements priorities:
-        // 1. Service
-        // 2. Service Category
-        // 3. Override Category
-        // 4. Parent Category
+        if (actualCategory != null) {
+            parentCategoryId = actualCategory.getParentId();
+            categoryCodeToCheck = actualCategory.getCode();
+            categoryContext = actualCategory.getContext();
+        }
+
+        // 1. INVALID_CATEGORY
+        if (actualCategory == null || !actualCategory.isActive()) {
+            return ResolvedCoverage.builder()
+                    .covered(false)
+                    .coveragePercent(0)
+                    .source(CoverageSource.INVALID_CATEGORY)
+                    .build();
+        }
+
+        // 2. PRICE_ZERO
+        if (requestedAmount != null && requestedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResolvedCoverage.builder()
+                    .covered(false)
+                    .coveragePercent(0)
+                    .source(CoverageSource.PRICE_ZERO)
+                    .build();
+        }
+
+        // 3. LOW_CONFIDENCE
+        if (classificationConfidence != null && classificationConfidence < 0.6) {
+            return ResolvedCoverage.builder()
+                    .covered(false)
+                    .coveragePercent(0)
+                    .source(CoverageSource.LOW_CONFIDENCE)
+                    .build();
+        }
+
+        // 4. CONTEXT_MISMATCH
+        if (requestedEncounterContext != null && categoryContext != null && categoryContext != CategoryContext.ANY) {
+            if (requestedEncounterContext != categoryContext) {
+                return ResolvedCoverage.builder()
+                        .covered(false)
+                        .coveragePercent(0)
+                        .source(CoverageSource.CONTEXT_MISMATCH)
+                        .build();
+            }
+        }
+
+        BenefitPolicy policy = policyRepository.findById(policyId).orElse(null);
+
+        // 5. EXCLUDED_CATEGORY
+        if (policy != null && policy.getExcludedCategoryCodes() != null && categoryCodeToCheck != null) {
+            if (policy.getExcludedCategoryCodes().contains(categoryCodeToCheck)) {
+                log.debug("⚠️ Category {} is explicitly excluded in the policy", categoryCodeToCheck);
+                return ResolvedCoverage.builder()
+                        .covered(false)
+                        .coveragePercent(0)
+                        .source(CoverageSource.EXCLUDED_CATEGORY)
+                        .build();
+            }
+        }
+
+        // 6. EXACT_CATEGORY_RULE
+        // 7. PARENT_CATEGORY_RULE
         Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
                 policyId, serviceId, serviceCategoryId, overrideCategoryId, parentCategoryId);
 
@@ -911,39 +987,52 @@ public class BenefitPolicyCoverageService {
             BenefitPolicyRule rule = ruleOpt.get();
             log.debug("✅ Found matching rule: ruleId={}, level=CATEGORY", rule.getId());
 
-            // Determine the category ID that actually matched (for usage tracking)
             Long matchingCategoryId = rule.getMedicalCategory() != null ? rule.getMedicalCategory().getId()
                     : serviceCategoryId;
 
+            CoverageSource source = CoverageSource.CATEGORY_RULE;
+            if (rule.getMedicalCategory() != null) {
+                 if (rule.getMedicalCategory().getId().equals(actualCategory.getId())) {
+                     source = CoverageSource.EXACT_CATEGORY_RULE;
+                 } else if (rule.getMedicalCategory().getId().equals(actualCategory.getParentId())) {
+                     source = CoverageSource.PARENT_CATEGORY_RULE;
+                 }
+            }
+
             ResolvedCoverage res = ResolvedCoverage.fromRule(rule,
-                    CoverageSource.CATEGORY_RULE,
+                    source,
                     matchingCategoryId);
 
-            // Add consumption data if member and date provided
-            if (memberId != null && serviceDate != null && rule.getAmountLimit() != null) {
-                res.setUsedAmount(
-                        calculateCategoryUsedAmount(memberId, matchingCategoryId, serviceDate, claimIdToExclude));
-                res.setRemainingAmount(rule.getAmountLimit().subtract(res.getUsedAmount()).max(BigDecimal.ZERO));
+            if (rule.getAmountLimit() != null) {
+                if (!dryRun && memberId != null && serviceDate != null) {
+                    res.setUsedAmount(
+                            calculateCategoryUsedAmount(memberId, matchingCategoryId, serviceDate, claimIdToExclude));
+                    res.setRemainingAmount(rule.getAmountLimit().subtract(res.getUsedAmount()).max(BigDecimal.ZERO));
+                } else if (dryRun) {
+                    res.setUsedAmount(BigDecimal.ZERO);
+                    res.setRemainingAmount(rule.getAmountLimit());
+                }
             }
             return res;
         }
 
-        // Step 2: Return POLICY_DEFAULT
-        BenefitPolicy policy = policyRepository.findById(policyId).orElse(null);
-        if (policy != null) {
+        // 8. POLICY_DEFAULT
+        if (policy != null && policy.getDefaultCoveragePercent() != null) {
             log.debug("⚠️ No specific rule found, using POLICY_DEFAULT");
             return ResolvedCoverage.builder()
                     .covered(true)
-                    .coveragePercent(policy.getDefaultCoveragePercent() != null
-                            ? policy.getDefaultCoveragePercent()
-                            : 60) // Default fallback
+                    .coveragePercent(policy.getDefaultCoveragePercent())
                     .requiresPreApproval(false)
                     .source(CoverageSource.POLICY_DEFAULT)
                     .build();
         }
 
-        log.warn("❌ No coverage found for policyId={}, serviceId={}", policyId, serviceId);
-        return null;
+        // 9. NO_BENEFIT_RULE
+        return ResolvedCoverage.builder()
+                .covered(false)
+                .coveragePercent(0)
+                .source(CoverageSource.NO_BENEFIT_RULE)
+                .build();
     }
 
     /**
@@ -1177,7 +1266,21 @@ public class BenefitPolicyCoverageService {
     public enum CoverageSource {
         SERVICE_RULE, // Specific rule for this service
         CATEGORY_RULE, // Rule for the service's category
-        POLICY_DEFAULT // Policy-level default coverage
+        POLICY_DEFAULT, // Policy-level default coverage
+        EXCLUDED_CATEGORY, // Category is explicitly excluded
+        
+        // Simulation specific additions
+        EXACT_CATEGORY_RULE,
+        PARENT_CATEGORY_RULE,
+        NO_BENEFIT_RULE,
+        INVALID_CATEGORY,
+        CONTEXT_MISMATCH,
+        LOW_CONFIDENCE,
+        PRICE_ZERO,
+        CONFLICTING_RULES,
+        PRE_APPROVAL_REQUIRED,
+        LIMIT_APPLIED,
+        PARTIAL_COVERAGE
     }
 
     /**

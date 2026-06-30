@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Set;
 
 /**
  * DTO for updating an existing Benefit Policy.
@@ -55,4 +56,6 @@ public class BenefitPolicyUpdateDto {
      * Update status directly (use activate/deactivate endpoints for status changes)
      */
     private String status;
+
+    private Set<String> excludedCategoryCodes;
 }

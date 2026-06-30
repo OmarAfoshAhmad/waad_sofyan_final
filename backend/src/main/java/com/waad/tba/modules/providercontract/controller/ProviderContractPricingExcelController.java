@@ -2,7 +2,11 @@ package com.waad.tba.modules.providercontract.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.excel.dto.ExcelImportResult;
+import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto;
+import com.waad.tba.modules.providercontract.dto.PricingImportConfirmRequest;
+import com.waad.tba.modules.providercontract.dto.PricingImportPreviewDto;
 import com.waad.tba.modules.providercontract.service.PriceListExcelTemplateService;
+import com.waad.tba.modules.providercontract.service.ProviderContractPricingExcelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -48,6 +52,7 @@ import java.io.IOException;
 public class ProviderContractPricingExcelController {
 
     private final PriceListExcelTemplateService templateService;
+    private final ProviderContractPricingExcelService importService;
 
     /**
      * Download contract-specific Excel template for pricing import
@@ -87,7 +92,59 @@ public class ProviderContractPricingExcelController {
     }
 
     /**
-     * Import pricing items from system-generated template
+     * Phase 1: Preview Import (Three-Layer Classification)
+     * 
+     * POST /api/provider-contracts/{contractId}/pricing/import/preview
+     */
+    @PostMapping(
+        value = "/{contractId}/pricing/import/preview",
+        consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(
+        summary = "Preview Price List Import",
+        description = "Analyzes Excel file and returns proposed classification for review."
+    )
+    public ResponseEntity<ApiResponse<PricingImportPreviewDto>> importPriceListPreview(
+            @Parameter(description = "Provider contract ID", required = true)
+            @PathVariable("contractId") Long contractId,
+            
+            @Parameter(description = "Excel template file", required = true)
+            @RequestParam("file") MultipartFile file
+    ) {
+        log.info("[PriceListImport] Preview request for contract: {}", contractId);
+        
+        PricingImportPreviewDto result = importService.importForPreview(contractId, file);
+        
+        return ResponseEntity.ok(ApiResponse.success("تم استخراج قائمة الأسعار، يرجى المراجعة", result));
+    }
+
+    /**
+     * Phase 2: Confirm Import
+     * 
+     * POST /api/provider-contracts/{contractId}/pricing/import/confirm
+     */
+    @PostMapping("/{contractId}/pricing/import/confirm")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(
+        summary = "Confirm Price List Import",
+        description = "Applies user modifications and confirms the import."
+    )
+    public ResponseEntity<ApiResponse<ExcelImportResultDto>> confirmPriceListImport(
+            @Parameter(description = "Provider contract ID", required = true)
+            @PathVariable("contractId") Long contractId,
+            
+            @RequestBody PricingImportConfirmRequest request
+    ) {
+        log.info("[PriceListImport] Confirm request for contract: {}", contractId);
+        
+        ExcelImportResultDto result = importService.confirmImport(contractId, request);
+        
+        return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
+    }
+
+    /**
+     * Legacy Import pricing items from system-generated template
      * 
      * POST /api/provider-contracts/{contractId}/pricing/import
      */
@@ -97,27 +154,22 @@ public class ProviderContractPricingExcelController {
     )
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(
-        summary = "Import Price List from Template",
-        description = "Imports pricing items from a system-generated Excel template. " +
-                     "Supports upsert mode (create or update by contract + service). " +
+        summary = "Import Price List from Template (Legacy)",
+        description = "Imports pricing items from a system-generated Excel template directly. " +
                      "Auto-calculates discount percentage."
     )
-    public ResponseEntity<ApiResponse<ExcelImportResult>> importPriceList(
+    public ResponseEntity<ApiResponse<ExcelImportResultDto>> importPriceList(
             @Parameter(description = "Provider contract ID", required = true)
             @PathVariable("contractId") Long contractId,
             
             @Parameter(description = "Excel template file", required = true)
             @RequestParam("file") MultipartFile file
     ) {
-        log.info("[PriceListImport] Import request for contract: {}", contractId, file.getOriginalFilename());
+        log.info("[PriceListImport] Legacy Import request for contract: {}", contractId);
         
-        ExcelImportResult result = templateService.importFromExcel(contractId, file);
+        ExcelImportResultDto result = importService.importFromExcel(contractId, file);
         
-        log.info("[PriceListImport] Import completed: {}/{} successful", 
-                result.getSummary().getCreated() + result.getSummary().getUpdated(),
-                result.getSummary().getTotalRows());
-        
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
     }
 }
 

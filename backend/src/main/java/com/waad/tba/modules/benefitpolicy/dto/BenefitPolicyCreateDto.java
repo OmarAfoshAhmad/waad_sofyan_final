@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Set;
 
 /**
  * DTO for creating a new Benefit Policy.
@@ -63,4 +64,9 @@ public class BenefitPolicyCreateDto {
      * Initial status (defaults to DRAFT if not specified)
      */
     private String status;
+
+    /**
+     * Categories explicitly excluded from this policy.
+     */
+    private Set<String> excludedCategoryCodes;
 }

@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 /**
  * DTO for Benefit Policy responses.
@@ -54,6 +55,9 @@ public class BenefitPolicyResponseDto {
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    
+    // Excluded Categories
+    private Set<String> excludedCategoryCodes;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // FACTORY METHOD
@@ -92,6 +96,7 @@ public class BenefitPolicyResponseDto {
                 .active(entity.isActive())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
+                .excludedCategoryCodes(entity.getExcludedCategoryCodes())
                 .build();
     }
 

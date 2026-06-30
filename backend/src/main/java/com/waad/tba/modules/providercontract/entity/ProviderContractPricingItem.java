@@ -1,6 +1,9 @@
 package com.waad.tba.modules.providercontract.entity;
 
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.providercontract.enums.ClassificationStatus;
+import com.waad.tba.modules.providercontract.enums.ConfidenceLevel;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -124,6 +127,48 @@ public class ProviderContractPricingItem {
     @Size(max = 100)
     @Column(name = "updated_by", length = 100)
     private String updatedBy;
+
+    // --- Classification & Review Fields ---
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "encounter_type", length = 20)
+    private EncounterType encounterType;
+
+    @Column(name = "requires_review", nullable = false)
+    @Builder.Default
+    private Boolean requiresReview = false;
+
+    @Size(max = 500)
+    @Column(name = "review_reason", length = 500)
+    private String reviewReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "classification_status", length = 20)
+    @Builder.Default
+    private ClassificationStatus classificationStatus = ClassificationStatus.AUTO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "confidence_level", length = 10)
+    @Builder.Default
+    private ConfidenceLevel confidenceLevel = ConfidenceLevel.LOW;
+
+    @Size(max = 50)
+    @Column(name = "classification_source", length = 50)
+    private String classificationSource;
+
+    @Column(name = "approved_by")
+    private Long approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    @Size(max = 255)
+    @Column(name = "imported_main_category", length = 255)
+    private String importedMainCategory;
+
+    @Size(max = 255)
+    @Column(name = "imported_sub_category", length = 255)
+    private String importedSubCategory;
 
     @PrePersist
     @PreUpdate

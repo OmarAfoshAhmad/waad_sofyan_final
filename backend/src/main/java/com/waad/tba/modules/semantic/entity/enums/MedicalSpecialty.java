@@ -1,0 +1,25 @@
+package com.waad.tba.modules.semantic.entity.enums;
+
+public enum MedicalSpecialty {
+    GENERAL_SURGERY,
+    DERMATOLOGY,
+    ORTHOPEDICS,
+    CARDIOLOGY,
+    CARDIAC_SURGERY,
+    OPHTHALMOLOGY,
+    ENT,
+    UROLOGY,
+    NEUROSURGERY,
+    OB_GYN,
+    DENTISTRY,
+    RADIOLOGY,
+    PHYSIOTHERAPY,
+    PSYCHIATRY,
+    ONCOLOGY,
+    NEPHROLOGY,
+    GASTROENTEROLOGY,
+    PEDIATRIC_SURGERY,
+    PLASTIC_SURGERY,
+    ANESTHESIA,
+    UNKNOWN
+}

@@ -69,6 +69,10 @@ public class SystemSettingsService {
     public static final String DEFAULT_AI_CLASSIFIER_MODEL = "qwen/qwen2.5-14b-instruct:free";
     public static final String DEFAULT_AI_CLASSIFIER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
+    // ── BioBERT AI Classifier (Internal Microservice) ─────────────────────────
+    public static final String BIOBERT_API_URL = "BIOBERT_API_URL";
+    public static final String DEFAULT_BIOBERT_API_URL = "http://localhost:8000/predict";
+
     /**
      * Initialize default settings on application startup.
      */
@@ -238,6 +242,21 @@ public class SystemSettingsService {
                     .active(true)
                     .build());
             log.info("✅ Created default setting: {} = {}", AI_CLASSIFIER_ENDPOINT, DEFAULT_AI_CLASSIFIER_ENDPOINT);
+        }
+
+        // BioBERT: endpoint
+        if (settingRepository.findBySettingKey(BIOBERT_API_URL).isEmpty()) {
+            settingRepository.save(SystemSetting.builder()
+                    .settingKey(BIOBERT_API_URL)
+                    .settingValue(DEFAULT_BIOBERT_API_URL)
+                    .valueType(SystemSetting.SettingValueType.STRING)
+                    .description("BioBERT/ClinicalBERT Python Microservice Endpoint")
+                    .category("AI")
+                    .isEditable(true)
+                    .defaultValue(DEFAULT_BIOBERT_API_URL)
+                    .active(true)
+                    .build());
+            log.info("✅ Created default setting: {} = {}", BIOBERT_API_URL, DEFAULT_BIOBERT_API_URL);
         }
     }
 
@@ -454,6 +473,14 @@ public class SystemSettingsService {
 
     public int getPasswordResetOtpLength() {
         return getSettingAsInt(PASSWORD_RESET_OTP_LENGTH_KEY, 6);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AI / BioBERT getters
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    public String getBiobertApiUrl() {
+        return getSetting(BIOBERT_API_URL, DEFAULT_BIOBERT_API_URL);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
