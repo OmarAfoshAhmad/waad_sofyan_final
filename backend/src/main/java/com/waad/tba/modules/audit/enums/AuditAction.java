@@ -11,6 +11,5 @@ public enum AuditAction {
     REJECTED,
     CREATED,
     UPDATED,
-    CLAIM_VOIDED,
-    SIMULATION_EXECUTED
+    CLAIM_VOIDED
 }

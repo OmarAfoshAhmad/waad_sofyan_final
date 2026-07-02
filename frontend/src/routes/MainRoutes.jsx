@@ -142,7 +142,6 @@ const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSett
 const FacilityPricePreparationPage = Loadable(lazy(() => import('pages/settings/FacilityPricePreparationPage')));
 const AIKeySettingsPage = Loadable(lazy(() => import('pages/settings/AIKeySettingsPage')));
 const KinshipMismatchChecker = Loadable(lazy(() => import('pages/settings/KinshipMismatchChecker')));
-const CoverageSimulationPage = Loadable(lazy(() => import('pages/settings/CoverageSimulationPage')));
 const MemberDuplicatesResolver = Loadable(lazy(() => import('pages/settings/MemberDuplicatesResolver')));
 
 // ==============================|| LAZY LOADING - PROFILE ||============================== //
@@ -889,14 +888,6 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <AIKeySettingsPage />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'coverage-simulation',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <CoverageSimulationPage />
             </PermissionGuard>
           )
         },

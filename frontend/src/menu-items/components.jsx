@@ -675,21 +675,6 @@ const menuItem = [
           color: 'error',
           size: 'small'
         }
-      },
-      {
-        id: 'coverage-simulation',
-        title: 'محاكاة التغطية التأمينية',
-        titleEn: 'Coverage Simulation',
-        type: 'item',
-        url: '/settings/coverage-simulation',
-        icon: SettingsIcon,
-        resource: 'system_settings',
-        action: 'view',
-        chip: {
-          label: 'جديد',
-          color: 'secondary',
-          size: 'small'
-        }
       }
     ]
   }
