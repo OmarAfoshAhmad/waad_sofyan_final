@@ -30,6 +30,12 @@ public class PreAuthorizationAttachment {
     private Long preAuthorizationId;
 
     /**
+     * Optional reference to a specific line item
+     */
+    @Column(name = "line_id")
+    private Long lineId;
+
+    /**
      * Original file name as uploaded
      */
     @Column(name = "original_file_name", nullable = false, length = 255)
@@ -38,7 +44,7 @@ public class PreAuthorizationAttachment {
     /**
      * Stored file name (unique identifier)
      */
-    @Column(name = "stored_file_name", nullable = false, length = 255)
+    @Column(name = "stored_file_name", length = 255)
     private String storedFileName;
 
     /**

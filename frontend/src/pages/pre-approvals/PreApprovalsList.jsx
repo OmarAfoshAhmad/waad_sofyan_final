@@ -176,6 +176,13 @@ const PreApprovalsList = () => {
     [navigate]
   );
 
+  const handleNavigateReview = useCallback(
+    (id) => {
+      navigate(`/pre-approvals/review/${id}`);
+    },
+    [navigate]
+  );
+
   // ========================================
   // PAGINATION HANDLERS
   // ========================================
@@ -314,14 +321,30 @@ const PreApprovalsList = () => {
           const mappedStatus = PREAPPROVAL_STATUS_MAP[status] || status || 'PENDING';
           return <CardStatusBadge status={mappedStatus} size="small" language="ar" />;
 
-        case 'actions':
+        case 'actions': {
+          const isPending = ['PENDING', 'UNDER_REVIEW', 'APPROVAL_IN_PROGRESS'].includes(preApproval?.status);
           return (
-            <Tooltip title="عرض">
-              <IconButton size="small" color="primary" onClick={() => handleNavigateView(preApproval?.id)}>
-                <VisibilityIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <Stack direction="row" spacing={0.5} justifyContent="center">
+              {isPending && (
+                <Tooltip title="مراجعة واتخاذ قرار">
+                  <IconButton 
+                    size="small" 
+                    color="success" 
+                    onClick={() => handleNavigateReview(preApproval?.id)}
+                    sx={{ bgcolor: 'success.lighter', '&:hover': { bgcolor: 'success.light' } }}
+                  >
+                    <AssignmentTurnedInIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title="عرض">
+                <IconButton size="small" color="primary" onClick={() => handleNavigateView(preApproval?.id)}>
+                  <VisibilityIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
           );
+        }
 
         default:
           return null;

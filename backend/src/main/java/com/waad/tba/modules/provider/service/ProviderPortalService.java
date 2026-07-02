@@ -78,25 +78,30 @@ public class ProviderPortalService {
         log.info("🏥 Processing provider eligibility check: barcode={}, provider={}", 
                  request.getBarcode(), providerUsername);
         
-        // Validate request - barcode must be provided
         if (!request.isValid()) {
             log.warn("⚠️ Invalid eligibility request: barcode is empty");
-            throw new IllegalArgumentException(
-                "يجب إدخال الباركود أو رقم البطاقة / Barcode or card number is required"
+            throw new IllegalStateException(
+                "يجب إدخال بيانات البحث (الاسم، أو رقم البطاقة، أو الباركود)"
             );
         }
         
-        // Step 1: Lookup member using barcode or card number
-        String lookupKey = request.getLookupKey();
-        log.debug("🔍 Looking up member with barcode/cardNumber: {}", lookupKey);
+        // Step 1: Lookup member using barcode or card number or memberId
+        String lookupKey = request.getBarcode(); // Note: field is barcode, but contains the lookup key
+        log.debug("🔍 Looking up member with barcode/cardNumber: {} or memberId: {}", lookupKey, request.getMemberId());
         
-        Member member = findMember(lookupKey);
+        Member member = null;
+        if (request.getMemberId() != null) {
+            member = memberRepository.findById(request.getMemberId()).orElse(null);
+        }
+        
+        if (member == null) {
+            member = findMember(lookupKey);
+        }
         
         if (member == null) {
             log.warn("⚠️ Member not found for lookup key: {}", lookupKey);
-            throw new IllegalArgumentException(
-                "العضو غير موجود للباركود/رقم البطاقة: " + lookupKey + 
-                " / Member not found for barcode/card number: " + lookupKey
+            throw new IllegalStateException(
+                "لم يتم العثور على أي مستفيد مطابق لبيانات البحث المدخلة: " + lookupKey
             );
         }
         
@@ -116,7 +121,7 @@ public class ProviderPortalService {
     }
     
     /**
-     * Find member by barcode or card number.
+     * Find member by barcode, card number, or name.
      * Uses eager fetching to ensure employer organization and benefit policy are loaded.
      */
     private Member findMember(String lookupKey) {
@@ -126,6 +131,21 @@ public class ProviderPortalService {
         if (member == null) {
             // Try card number (with eager loading)
             member = memberRepository.findByCardNumberWithDetails(lookupKey).orElse(null);
+        }
+
+        if (member == null) {
+            // Try general search by name, civil ID, or card number
+            java.util.List<Member> results = memberRepository.search(lookupKey);
+            if (results != null && !results.isEmpty()) {
+                if (results.size() == 1) {
+                    member = results.get(0);
+                } else {
+                    // More than one member found, force them to use a specific identifier
+                    throw new IllegalStateException(
+                        "يوجد أكثر من مستفيد مطابق لهذا البحث. يرجى استخدام رقم البطاقة أو الباركود لتحديد المستفيد بدقة."
+                    );
+                }
+            }
         }
         
         if (member != null) {

@@ -12,6 +12,7 @@ import {
   IconButton,
   CircularProgress,
   InputAdornment,
+  Autocomplete,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -83,7 +84,12 @@ export default function ProviderEligibilityCheck() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedVisitType, setSelectedVisitType] = useState('');
   const [registeringVisit, setRegisteringVisit] = useState(false);
+  const [visitError, setVisitError] = useState(null);
   const [checkHistory, setCheckHistory] = useState([]);
+  
+  // Autocomplete
+  const [searchOptions, setSearchOptions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   // Scanner
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -129,18 +135,18 @@ export default function ProviderEligibilityCheck() {
   // ELIGIBILITY CHECK API
   // ========================================
 
-  const checkEligibility = useCallback(async (barcodeOrCardNumber) => {
+  const checkEligibility = useCallback(async (barcodeOrCardNumber, memberId = null) => {
     // Validate input
     const trimmedValue = barcodeOrCardNumber?.trim();
 
     if (!trimmedValue) {
-      setError('يرجى إدخال رقم البطاقة أو الباركود أو رقم العضو');
+      setError('يرجى إدخال اسم المستفيد أو رقم البطاقة أو الباركود');
       return;
     }
 
     // Only reject single "0", allow other numbers (including leading zeros like "000001")
     if (trimmedValue === '0') {
-      setError('يرجى إدخال رقم صحيح (رقم البطاقة أو الباركود أو رقم العضو)');
+      setError('يرجى إدخال بيانات صحيحة (الاسم، رقم البطاقة، أو الباركود)');
       return;
     }
 
@@ -152,7 +158,9 @@ export default function ProviderEligibilityCheck() {
 
     try {
       // Send as barcode (API accepts card number, barcode, or member ID in this field)
-      const response = await providerApi.checkEligibility({ barcode: trimmedValue });
+      const payload = { barcode: trimmedValue };
+      if (memberId) payload.memberId = memberId;
+      const response = await providerApi.checkEligibility(payload);
 
       // API returns the DTO directly (ProviderEligibilityResponse)
       if (response && (response.eligible !== undefined || response.statusCode)) {
@@ -211,21 +219,40 @@ export default function ProviderEligibilityCheck() {
   useEffect(() => {
     const trimmed = searchValue?.trim();
 
-    if (!trimmed || trimmed.length < 6) {
+    if (!trimmed || trimmed.length < 3) {
+      setSearchOptions([]);
       return;
     }
 
-    if (loading || trimmed === lastAutoSubmittedRef.current) {
-      return;
-    }
+    // Identify if the input looks like a complete barcode (WAD-...) or card number (long numeric)
+    // If it looks complete, don't trigger autocomplete dropdown, but do trigger eligibility if it's long enough
+    const isCompleteBarcode = trimmed.startsWith('WAD-') && trimmed.length > 10;
+    const isScannerInput = trimmed.length > 12 && !isNaN(trimmed); // likely scanned card number
 
     if (autoCheckTimerRef.current) {
       clearTimeout(autoCheckTimerRef.current);
     }
 
-    autoCheckTimerRef.current = setTimeout(() => {
-      lastAutoSubmittedRef.current = trimmed;
-      checkEligibility(trimmed);
+    autoCheckTimerRef.current = setTimeout(async () => {
+      // If it's a direct barcode or scanner input, auto-submit instead of showing suggestions
+      if (isCompleteBarcode || isScannerInput) {
+        if (!loading && trimmed !== lastAutoSubmittedRef.current) {
+           lastAutoSubmittedRef.current = trimmed;
+           checkEligibility(trimmed);
+           setSearchOptions([]);
+        }
+      } else {
+        // Fetch autocomplete suggestions
+        setSearchLoading(true);
+        try {
+          const results = await providerApi.searchMembers(trimmed);
+          setSearchOptions(results || []);
+        } catch (err) {
+          console.error('Failed to fetch autocomplete options', err);
+        } finally {
+          setSearchLoading(false);
+        }
+      }
     }, 450);
 
     return () => {
@@ -346,8 +373,9 @@ export default function ProviderEligibilityCheck() {
   // ========================================
 
   const handleRegisterVisit = async () => {
+    setVisitError(null);
     if (!selectedVisitType) {
-      setError('يجب اختيار نوع الزيارة');
+      setVisitError('يجب اختيار نوع الزيارة');
       return;
     }
 
@@ -367,11 +395,11 @@ export default function ProviderEligibilityCheck() {
           }
         });
       } else {
-        setError(visitResponse.message || 'فشل في تسجيل الزيارة');
+        setVisitError(visitResponse.message || 'فشل في تسجيل الزيارة');
       }
     } catch (err) {
       console.error('Failed to register visit:', err);
-      setError(err.message || 'فشل في تسجيل الزيارة');
+      setVisitError(err.message || 'فشل في تسجيل الزيارة');
     } finally {
       setRegisteringVisit(false);
     }
@@ -549,51 +577,94 @@ export default function ProviderEligibilityCheck() {
                 }}
               >
                 <Stack spacing={2}>
-                  <Typography variant="subtitle1" fontWeight={700} textAlign="center">
-                    أدخل رقم الهوية أو امسح الباركود للتحقق
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: isDark ? 'grey.300' : 'grey.700' }}>
+                    أدخل الاسم، رقم البطاقة، أو امسح الباركود للتحقق
                   </Typography>
-
                   <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="stretch">
                     <Box sx={{ flex: 1 }}>
-                      <TextField
-                        fullWidth
-                        size="medium"
-                        label="رقم البطاقة / الباركود / رقم العضو"
-                        placeholder="ابدأ الكتابة أو المسح... يبدأ الفحص تلقائياً"
-                        value={searchValue}
-                        onChange={handleInputChange}
-                        disabled={loading}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <QrCodeScannerIcon color="primary" />
-                            </InputAdornment>
-                          ),
-                          endAdornment: (
-                            <InputAdornment position="end">{loading ? <CircularProgress size={20} /> : <CreditCardIcon color="action" />}</InputAdornment>
-                          )
+                      <Autocomplete
+                        freeSolo
+                        options={searchOptions}
+                        getOptionLabel={(option) => {
+                          if (typeof option === 'string') return option;
+                          return `${option.fullName} - ${option.cardNumber || option.barcode}`;
                         }}
-                        sx={{
-                          direction: 'ltr',
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: '0.375rem',
-                            bgcolor: 'common.white',
-                            minHeight: '3.5rem',
-                            transition: 'all 0.2s ease',
-                            '& fieldset': {
-                              borderColor: 'divider'
-                            },
-                            '&:hover': {
-                              boxShadow: (theme) => `0 0 0 3px ${theme.palette.success.light}33`
-                            },
-                            '&:hover fieldset': {
-                              borderColor: 'success.main'
-                            },
-                            '&.Mui-focused': {
-                              boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.light}33`
-                            }
+                        filterOptions={(x) => x} // Disable local filtering, rely on server
+                        loading={searchLoading}
+                        inputValue={searchValue}
+                        onInputChange={(e, newInputValue) => {
+                          setSearchValue(newInputValue);
+                          if (error) setError(null);
+                        }}
+                        onChange={(e, newValue) => {
+                          if (!newValue) return;
+                          // User selected an option from the list
+                          if (typeof newValue === 'object') {
+                            setSearchValue(newValue.barcode || newValue.cardNumber);
+                            checkEligibility(newValue.barcode || newValue.cardNumber);
+                          } else {
+                            checkEligibility(newValue);
                           }
                         }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            inputRef={scannerInputRef}
+                            fullWidth
+                            autoFocus
+                            placeholder="الاسم / رقم البطاقة / الباركود"
+                            disabled={loading}
+                            InputProps={{
+                              ...params.InputProps,
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <QrCodeScannerIcon color="primary" />
+                                </InputAdornment>
+                              ),
+                              endAdornment: (
+                                <InputAdornment position="end">{loading ? <CircularProgress size={20} /> : <CreditCardIcon color="action" />}</InputAdornment>
+                              )
+                            }}
+                            sx={{
+                              direction: 'ltr',
+                              '& .MuiOutlinedInput-root': {
+                                borderRadius: '0.375rem',
+                                bgcolor: 'common.white',
+                                minHeight: '3.5rem',
+                                transition: 'all 0.2s ease',
+                                '& fieldset': {
+                                  borderColor: 'divider'
+                                },
+                                '&:hover': {
+                                  boxShadow: (theme) => `0 0 0 3px ${theme.palette.success.light}33`
+                                },
+                                '&:hover fieldset': {
+                                  borderColor: 'success.main'
+                                },
+                                '&.Mui-focused': {
+                                  boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.light}33`
+                                }
+                              }
+                            }}
+                          />
+                        )}
+                        renderOption={(props, option) => (
+                          <li {...props} key={option.id}>
+                            <Grid container alignItems="center">
+                              <Grid item sx={{ display: 'flex', width: 44 }}>
+                                <PersonIcon sx={{ color: 'text.secondary' }} />
+                              </Grid>
+                              <Grid item sx={{ width: 'calc(100% - 44px)', wordWrap: 'break-word' }}>
+                                <Typography variant="body1" color="text.primary">
+                                  {option.fullName}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  رقم البطاقة: {option.cardNumber || '-'} | الهوية: {option.civilId || '-'}
+                                </Typography>
+                              </Grid>
+                            </Grid>
+                          </li>
+                        )}
                       />
                     </Box>
 
@@ -961,6 +1032,12 @@ export default function ProviderEligibilityCheck() {
                             </Typography>
                           )}
                         </FormControl>
+
+                        {visitError && (
+                          <Alert severity="error" onClose={() => setVisitError(null)} sx={{ mb: 1 }}>
+                            {visitError}
+                          </Alert>
+                        )}
 
                         <Button
                           variant="contained"

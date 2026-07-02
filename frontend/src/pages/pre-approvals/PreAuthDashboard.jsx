@@ -1,7 +1,8 @@
-import { Box, Grid, Typography, Button, Stack, Alert, Card, CardContent, IconButton, Tooltip } from '@mui/material';
-import { Refresh, Dashboard as DashboardIcon, TrendingUp, CheckCircle, Cancel, AttachMoney } from '@mui/icons-material';
+import { Box, Grid, Typography, Button, Stack, Alert, Card, CardContent, IconButton, Tooltip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Divider } from '@mui/material';
+import { Refresh, Dashboard as DashboardIcon, TrendingUp, CheckCircle, Cancel, AttachMoney, Visibility as VisibilityIcon, AssignmentTurnedIn as AssignmentTurnedInIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ModernPageHeader } from 'components/tba';
+import MainCard from 'components/MainCard';
 
 import { usePreAuthDashboard, usePreAuthStats, useHighPriorityQueue, useExpiringSoon } from 'hooks/usePreAuthDashboard';
 
@@ -30,6 +31,12 @@ import { formatCurrency } from 'utils/currency-formatter';
  */
 const PreAuthDashboard = () => {
   const navigate = useNavigate();
+
+  // Mock data for new requests
+  const newRequests = [
+    { id: 'REQ-99120', provider: 'مستشفى الحكمة', member: 'عمر المختار', date: '2026-06-30', status: 'PENDING', hasVariance: true },
+    { id: 'REQ-99121', provider: 'عيادة النور', member: 'سالم علي', date: '2026-06-30', status: 'INFO_REQUESTED', hasVariance: false }
+  ];
 
   // Dashboard settings
   const trendDays = 30;
@@ -105,109 +112,42 @@ const PreAuthDashboard = () => {
   }
 
   return (
-    <Box>
-      {/* Header */}
-      <ModernPageHeader
-        title="لوحة تحليلات الموافقات المسبقة"
-        subtitle="تحليل شامل لطلبات الموافقات المسبقة والإحصائيات"
-        icon={DashboardIcon}
-        breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'الموافقات المسبقة', path: '/pre-approvals' }, { label: 'لوحة التحكم' }]}
-        actions={
-          <Tooltip title="تحديث البيانات">
-            <IconButton onClick={handleRefreshAll} color="primary">
-              <Refresh />
-            </IconButton>
-          </Tooltip>
-        }
-      />
+    <Box sx={{ p: 3 }}>
+      {/* 🌟 ACTIONABLE HERO SECTION 🌟 */}
+      <Box sx={{ mb: 4, p: 4, bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}>
+        <Box>
+          <Typography variant="h3" fontWeight="bold" mb={1}>مرحباً بك في لوحة المراجع الطبي</Typography>
+          <Typography variant="h6" sx={{ opacity: 0.9, mb: 2 }}>
+            يوجد طلبات بانتظار المراجعة والاعتماد. يُرجى التوجه إلى صندوق الوارد لإنجازها.
+          </Typography>
+          <Button 
+            variant="contained" 
+            color="secondary" 
+            size="large"
+            startIcon={<AssignmentTurnedInIcon />}
+            onClick={() => navigate('/pre-approvals')}
+            sx={{ fontWeight: 'bold', px: 4, py: 1.5, fontSize: '1.1rem', borderRadius: 2, boxShadow: '0 4px 8px rgba(0,0,0,0.2)' }}
+          >
+            الذهاب إلى صندوق الموافقات (Inbox)
+          </Button>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 3, bgcolor: 'rgba(255,255,255,0.1)', p: 3, borderRadius: 2 }}>
+          <Box textAlign="center">
+            <Typography variant="h3" fontWeight="bold">{(dashboard?.statusDistribution?.pending || 0) + (dashboard?.statusDistribution?.underReview || 0)}</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>قيد الانتظار</Typography>
+          </Box>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.2)' }} />
+          <Box textAlign="center">
+            <Typography variant="h3" fontWeight="bold">{queue?.length || 0}</Typography>
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>طلبات عاجلة</Typography>
+          </Box>
+        </Box>
+      </Box>
 
-      {/* Main Content */}
-      <Grid container spacing={2}>
-        {/* Row 1: Stats Cards */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatsCard
-            title="إجمالي الطلبات"
-            value={stats?.totalRequests || 0}
-            change={stats?.requestsChangePercent}
-            icon={TrendingUp}
-            color="primary"
-          />
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatsCard
-            title="المعتمدة"
-            value={stats?.totalApproved || 0}
-            change={stats?.approvedChangePercent}
-            icon={CheckCircle}
-            color="success"
-          />
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatsCard title="المرفوضة" value={stats?.totalRejected || 0} change={stats?.rejectedChangePercent} icon={Cancel} color="error" />
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatsCard title="نسبة الموافقة" value={calculateApprovalRate()} icon={CheckCircle} color="info" suffix="%" />
-        </Grid>
-
-        {/* Row 2: Amount Stats */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined">
-            <CardContent sx={{ py: '1.0rem' }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    إجمالي المبالغ المطلوبة
-                  </Typography>
-                  <Typography variant="h6" fontWeight="bold">
-                    {formatCurrency(stats?.totalRequestedAmount || 0)}
-                  </Typography>
-                </Box>
-                <AttachMoney color="primary" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined">
-            <CardContent sx={{ py: '1.0rem' }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    إجمالي المبالغ المعتمدة
-                  </Typography>
-                  <Typography variant="h6" fontWeight="bold" color="success.main">
-                    {formatCurrency(stats?.totalApprovedAmount || 0)}
-                  </Typography>
-                </Box>
-                <AttachMoney color="success" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined">
-            <CardContent sx={{ py: '1.0rem' }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    متوسط المبلغ المطلوب
-                  </Typography>
-                  <Typography variant="h6" fontWeight="bold" color="info.main">
-                    {formatCurrency(stats?.averageRequestedAmount || 0)}
-                  </Typography>
-                </Box>
-                <AttachMoney color="info" sx={{ fontSize: '2.0rem', opacity: 0.7 }} />
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Row 3: Charts */}
+      <Typography variant="h5" mb={3} fontWeight="bold" color="text.primary">نظرة عامة على البيانات</Typography>
+      <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <StatusDistributionChart data={dashboard?.statusDistribution || []} loading={dashboardLoading} />
+          <StatusDistributionChart data={dashboard?.statusDistribution || {}} loading={dashboardLoading} />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
           <ExpiringSoonAlerts data={expiringSoon} loading={expiringSoonLoading} withinDays={7} />

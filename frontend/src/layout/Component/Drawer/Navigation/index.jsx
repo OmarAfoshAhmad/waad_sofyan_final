@@ -20,7 +20,7 @@ export default function Navigation({ searchValue }) {
   const { flags } = useSystemConfig();
 
   const filteredMenuItems = useMemo(() => {
-    let providerScopedMenu = filterMenuItemsByRole(menuItem, role);
+    let providerScopedMenu = filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED);
 
     // Hide provider_portal menu group when PROVIDER_PORTAL_ENABLED flag is off
     // SUPER_ADMIN always sees everything (they can still access the API)

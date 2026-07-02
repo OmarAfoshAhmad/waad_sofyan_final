@@ -96,7 +96,8 @@ StatsCard.propTypes = {
 
 export const StatusDistributionChart = ({ data, loading }) => {
   const theme = useTheme();
-  if (loading || !data || data.length === 0) {
+  const hasData = Array.isArray(data) ? data.length > 0 : (data && Object.keys(data).length > 0 && Object.values(data).some(v => v > 0));
+  if (loading || !hasData) {
     return (
       <Card>
         <CardHeader title="توزيع الحالات" />
@@ -123,7 +124,7 @@ export const StatusDistributionChart = ({ data, loading }) => {
   // Status labels in Arabic
   const statusLabels = {
     PENDING: 'قيد الانتظار',
-    REQUESTED: 'مطلوبة',
+    UNDER_REVIEW: 'قيد المراجعة',
     APPROVED: 'معتمدة',
     REJECTED: 'مرفوضة',
     CANCELLED: 'ملغاة',
@@ -131,12 +132,27 @@ export const StatusDistributionChart = ({ data, loading }) => {
     USED: 'مستخدمة'
   };
 
-  const chartData = data.map((item, index) => ({
+  // Convert object to array if backend returned StatusDistribution object
+  const normalizedData = Array.isArray(data) ? data : [
+    { status: 'PENDING', count: data?.pending || 0 },
+    { status: 'UNDER_REVIEW', count: data?.underReview || 0 },
+    { status: 'APPROVED', count: data?.approved || 0 },
+    { status: 'REJECTED', count: data?.rejected || 0 },
+    { status: 'CANCELLED', count: data?.cancelled || 0 },
+    { status: 'EXPIRED', count: data?.expired || 0 }
+  ].filter(item => item.count > 0);
+
+  const chartData = normalizedData.map((item, index) => ({
     id: index,
     value: item.count || 0,
     label: statusLabels[item.status] || item.status,
     color: statusColors[item.status] || '#757575'
   }));
+
+  // If no data, provide a fallback to avoid empty chart error
+  if (chartData.length === 0) {
+    chartData.push({ id: 0, value: 1, label: 'لا توجد بيانات', color: '#e0e0e0' });
+  }
 
   return (
     <Card>
@@ -398,7 +414,7 @@ export const TrendsChart = ({ data, loading, days = 30 }) => {
             ]}
             xAxis={[{ scaleType: 'point', data: xLabels }]}
             height={300}
-            margin={{ left: '3.125rem', right: '1.25rem', top: '10.0rem', bottom: '15.0rem' }}
+            margin={{ left: 50, right: 20, top: 40, bottom: 30 }}
             slotProps={{
               legend: {
                 direction: 'row',

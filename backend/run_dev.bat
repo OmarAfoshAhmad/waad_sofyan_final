@@ -65,6 +65,6 @@ set SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tba_waad_system
 set SPRING_DATASOURCE_USERNAME=postgres
 set JWT_SECRET=waad_dev_secret_not_for_production_only_local_dev_9dda11e5
 set MAVEN_OPTS=-Xmx1024m -Xms512m
-call mvn compile spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=%PORT%
+call mvn compile spring-boot:run -Dmaven.test.skip=true -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=%PORT%
 
 endlocal

@@ -73,6 +73,12 @@ public class PreAuthorization {
     @Column(name = "email_request_id")
     private Long emailRequestId;
 
+    @Column(name = "contract_id")
+    private Long contractId;
+
+    @Column(name = "policy_id")
+    private Long policyId;
+
     // ==================== VISIT-CENTRIC ARCHITECTURE ====================
 
     /**
@@ -149,13 +155,13 @@ public class PreAuthorization {
      * ARCHITECTURAL LAW: This is AUTO-RESOLVED from Provider Contract
      * User CANNOT manually enter or override this value
      */
-    @Column(name = "contract_price", nullable = false, precision = 10, scale = 2)
+    @Column(name = "contract_price", precision = 10, scale = 2)
     private BigDecimal contractPrice;
 
     /**
      * Whether service requires pre-authorization (snapshot from MedicalService)
      */
-    @Column(name = "requires_pa", nullable = false)
+    @Column(name = "requires_pa")
     @Builder.Default
     private Boolean requiresPA = true;
 
@@ -232,13 +238,35 @@ public class PreAuthorization {
     @Builder.Default
     private String currency = "LYD";
 
+    // ==================== PORTAL AGGREGATE TOTALS ====================
+
+    @Column(name = "requested_total_amount", precision = 15, scale = 2)
+    private BigDecimal requestedTotalAmount;
+
+    @Column(name = "contract_total_amount", precision = 15, scale = 2)
+    private BigDecimal contractTotalAmount;
+
+    @Column(name = "manual_total_amount", precision = 15, scale = 2)
+    private BigDecimal manualTotalAmount;
+
+    @Column(name = "approved_total_amount", precision = 15, scale = 2)
+    private BigDecimal approvedTotalAmount;
+
+    @Column(name = "patient_share", precision = 15, scale = 2)
+    private BigDecimal patientShare;
+
+    @Column(name = "company_share", precision = 15, scale = 2)
+    private BigDecimal companyShare;
+
+    // ==================== STATUS AND LIFECYCLE ====================
+
     /**
      * PreAuthorization status
      */
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 25)
     @Builder.Default
-    private PreAuthStatus status = PreAuthStatus.PENDING;
+    private PreAuthStatus status = PreAuthStatus.DRAFT;
 
     /**
      * Priority level
@@ -248,13 +276,25 @@ public class PreAuthorization {
     @Builder.Default
     private Priority priority = Priority.NORMAL;
 
-    // ==================== DIAGNOSIS (SYSTEM-SELECTED) ====================
+    // ==================== CLINICAL DATA (PORTAL) ====================
+
+    @Column(name = "chief_complaint", length = 2000)
+    private String chiefComplaint;
+
+    @Column(name = "treatment_plan", length = 2000)
+    private String treatmentPlan;
+
+    @Column(name = "clinical_notes", length = 2000)
+    private String clinicalNotes;
+
+    @Column(name = "diagnosis_text", length = 1000)
+    private String diagnosisText;
 
     /**
      * Diagnosis ICD-10 code (for future structured diagnosis)
      * Create Diagnosis entity and link as FK when ICD table is available
      */
-    @Column(name = "diagnosis_code", nullable = false, length = 20)
+    @Column(name = "diagnosis_code", length = 20)
     @Builder.Default
     private String diagnosisCode = "Z00.0";
 
@@ -276,6 +316,12 @@ public class PreAuthorization {
      */
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
+
+    @Column(name = "rejection_reason_code", length = 50)
+    private String rejectionReasonCode;
+
+    @Column(name = "decision_notes", length = 1000)
+    private String decisionNotes;
 
     /**
      * Soft delete flag
@@ -310,11 +356,27 @@ public class PreAuthorization {
     @Column(name = "updated_by", length = 100)
     private String updatedBy;
 
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "decision_at")
+    private LocalDateTime decisionAt;
+
+    @Column(name = "decision_by", length = 100)
+    private String decisionBy;
+
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
     @Column(name = "approved_by", length = 100)
     private String approvedBy;
+
+    @OneToMany(mappedBy = "preAuthorization", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private java.util.List<PreAuthorizationLine> lines = new java.util.ArrayList<>();
 
     /**
      * PreAuthorization Status Enum
@@ -326,15 +388,21 @@ public class PreAuthorization {
      * EXPIRED CANCELLED
      */
     public enum PreAuthStatus {
+        DRAFT("مسودة"),
+        SUBMITTED("مُقدم"),
         PENDING("معلق"), // Awaiting review
         UNDER_REVIEW("قيد المراجعة"), // Currently being reviewed
+        INFO_REQUESTED("بانتظار معلومات"), // Requested Info
+        RESUBMITTED("أُعيد تقديمه"), // Resubmitted
         APPROVAL_IN_PROGRESS("جاري معالجة الموافقة"), // Async approval processing
         APPROVED("موافق عليه"), // Approved and valid
+        PARTIALLY_APPROVED("موافقة جزئية"), // Partial Approval
         ACKNOWLEDGED("تم الاطلاع"), // Provider acknowledged the approval
         REJECTED("مرفوض"), // Rejected
         NEEDS_CORRECTION("يحتاج تصحيح"), // Provider must fix data and resubmit
         EXPIRED("منتهي"), // Expired without use
         CANCELLED("ملغي"), // Cancelled by member/provider
+        CONSUMED("مستهلك"), // Consumed in claim
         USED("مستخدم"); // Already used in a claim
 
         private final String arabicLabel;

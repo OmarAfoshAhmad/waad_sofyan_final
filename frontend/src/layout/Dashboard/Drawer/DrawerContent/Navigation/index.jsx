@@ -13,6 +13,7 @@ import NavGroup from './NavGroup';
 import useConfig from 'hooks/useConfig';
 import menuItem, { filterMenuItemsByRole } from 'menu-items/components';
 import useAuth from 'hooks/useAuth';
+import useSystemConfig from 'hooks/useSystemConfig';
 
 import { HORIZONTAL_MAX_ITEM, MenuOrientation } from 'config';
 import { useGetMenuMaster } from 'api/menu';
@@ -32,9 +33,11 @@ export default function Navigation() {
   const [selectedItems, setSelectedItems] = useState('');
   const [selectedLevel, setSelectedLevel] = useState(0);
 
+  const { flags } = useSystemConfig();
+
   const menuItems = useMemo(() => {
-    return { items: filterMenuItemsByRole(menuItem, role) };
-  }, [role]);
+    return { items: filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED) };
+  }, [role, flags.PROVIDER_PORTAL_ENABLED]);
 
   const isHorizontal = state.menuOrientation === MenuOrientation.HORIZONTAL && !downLG;
 

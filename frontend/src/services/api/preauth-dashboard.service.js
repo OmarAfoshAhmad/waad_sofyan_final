@@ -11,7 +11,7 @@ const preAuthDashboardService = {
     const response = await axiosClient.get('/pre-authorizations/dashboard', {
       params: { trendDays, topProviders }
     });
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -19,7 +19,7 @@ const preAuthDashboardService = {
    */
   getStats: async () => {
     const response = await axiosClient.get('/pre-authorizations/dashboard/stats');
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -27,7 +27,7 @@ const preAuthDashboardService = {
    */
   getStatusDistribution: async () => {
     const response = await axiosClient.get('/pre-authorizations/dashboard/status-distribution');
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -37,7 +37,7 @@ const preAuthDashboardService = {
     const response = await axiosClient.get('/pre-authorizations/dashboard/high-priority', {
       params: { limit }
     });
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -47,7 +47,7 @@ const preAuthDashboardService = {
     const response = await axiosClient.get('/pre-authorizations/dashboard/expiring-soon', {
       params: { withinDays, limit }
     });
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -57,7 +57,7 @@ const preAuthDashboardService = {
     const response = await axiosClient.get('/pre-authorizations/dashboard/trends', {
       params: { days }
     });
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -67,7 +67,7 @@ const preAuthDashboardService = {
     const response = await axiosClient.get('/pre-authorizations/dashboard/top-providers', {
       params: { limit }
     });
-    return response.data;
+    return response.data?.data || response.data;
   },
 
   /**
@@ -77,7 +77,7 @@ const preAuthDashboardService = {
     const response = await axiosClient.get('/pre-authorizations/dashboard/recent-activity', {
       params: { limit }
     });
-    return response.data;
+    return response.data?.data || response.data;
   }
 };
 

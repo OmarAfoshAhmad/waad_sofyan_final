@@ -274,26 +274,54 @@ export const preApprovalsService = {
 
   /**
    * Get pre-approvals inbox by status (PHASE 5)
-   * @param {string} status - Status filter ('approved', 'acknowledged', 'pending')
+   * @param {string} status - Status filter ('approved', 'acknowledged', 'pending', 'info_requested')
    * @param {number} page - Page number (1-indexed)
    * @param {number} size - Page size
    * @returns {Promise<Object>} Paginated pre-approvals {items, total, page, size}
    */
-  getInbox: async (status, page = 1, size = 10) => {
+  getInbox: async (status, page = 1, size = 100) => {
     try {
       if (!status) throw new Error('حالة الموافقة مطلوبة');
 
       const queryParams = new URLSearchParams();
-      queryParams.append('page', page);
+      queryParams.append('page', Math.max(0, page - 1)); // Backend is 0-indexed
       queryParams.append('size', size);
-      queryParams.append('status', status.toUpperCase());
 
-      const response = await axiosClient.get(`${BASE_URL}/inbox/pending?${queryParams.toString()}`);
+      // Use the correct /status/{status} endpoint
+      const response = await axiosClient.get(`${BASE_URL}/status/${status.toUpperCase()}?${queryParams.toString()}`);
       return normalizePaginatedResponse(response);
     } catch (error) {
       throw handlePreApprovalErrors(error);
     }
   },
+
+  /**
+   * Get all inbox statuses in parallel (Promise.all)
+   * Returns { approved, acknowledged, pending, infoRequested }
+   */
+  getAllInboxStatuses: async () => {
+    const [approved, acknowledged, pending, infoRequested] = await Promise.all([
+      axiosClient.get(`${BASE_URL}/status/APPROVED?page=0&size=100`).catch(() => null),
+      axiosClient.get(`${BASE_URL}/status/ACKNOWLEDGED?page=0&size=100`).catch(() => null),
+      axiosClient.get(`${BASE_URL}/status/PENDING?page=0&size=100`).catch(() => null),
+      axiosClient.get(`${BASE_URL}/status/NEEDS_CORRECTION?page=0&size=100`).catch(() => null),
+    ]);
+    const extract = (res) => {
+      if (!res) return [];
+      const data = res.data?.data;
+      if (Array.isArray(data)) return data;
+      if (data?.content && Array.isArray(data.content)) return data.content;
+      if (data?.items && Array.isArray(data.items)) return data.items;
+      return [];
+    };
+    return {
+      approved: extract(approved),
+      acknowledged: extract(acknowledged),
+      pending: extract(pending),
+      infoRequested: extract(infoRequested),
+    };
+  },
+
 
   /**
    * Get pending pre-approvals for inbox (with pagination)

@@ -25,6 +25,12 @@ VALUES
         false, 'SYSTEM', NOW(), NOW()
     ),
     (
+        'DIRECT_PREAUTH_SUBMISSION_ENABLED',
+        'التقديم المباشر للموافقات المسبقة',
+        'السماح بطلب موافقات مسبقة مباشرة من بوابة المزود. يتطلب تفعيل PROVIDER_PORTAL_ENABLED أيضاً.',
+        false, 'SYSTEM', NOW(), NOW()
+    ),
+    (
         'BATCH_CLAIMS_ENABLED',
         'نظام الدفعات الشهرية',
         'تفعيل إدخال المطالبات عبر الدفعات الشهرية. هذا هو المسار الأساسي الحالي لإدخال المطالبات.',

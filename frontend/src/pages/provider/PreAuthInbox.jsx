@@ -22,6 +22,8 @@ import { CheckCircle, Visibility } from '@mui/icons-material';
 import preApprovalsService from 'services/api/pre-approvals.service';
 import MainCard from 'components/MainCard';
 import { useSnackbar } from 'notistack';
+import { useNavigate } from 'react-router-dom';
+import useSystemConfig from 'hooks/useSystemConfig';
 
 /**
  * Provider Pre-Authorization Inbox
@@ -37,10 +39,14 @@ import { useSnackbar } from 'notistack';
  */
 const ProviderPreAuthInbox = () => {
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
+  const { flags } = useSystemConfig();
 
   const [loading, setLoading] = useState(true);
   const [approvedItems, setApprovedItems] = useState([]);
   const [acknowledgedItems, setAcknowledgedItems] = useState([]);
+  const [pendingItems, setPendingItems] = useState([]);
+  const [infoRequestedItems, setInfoRequestedItems] = useState([]);
   const [processingIds, setProcessingIds] = useState(new Set());
   const [currentTab, setCurrentTab] = useState(0);
 
@@ -51,21 +57,21 @@ const ProviderPreAuthInbox = () => {
   const loadPreAuthorizations = async () => {
     setLoading(true);
     try {
-      // Fetch APPROVED pre-authorizations
-      const approvedResponse = await preApprovalsService.getInbox('approved', 1, 100);
-      setApprovedItems(approvedResponse.data?.content || []);
+      // ✅ Single parallel call: جلب جميع الحالات في آنٍ واحد بدل 4 طلبات متتالية
+      const { approved, acknowledged, pending, infoRequested } = await preApprovalsService.getAllInboxStatuses();
 
-      // Fetch ACKNOWLEDGED pre-authorizations
-      const acknowledgedResponse = await preApprovalsService.getInbox('acknowledged', 1, 100);
-      setAcknowledgedItems(acknowledgedResponse.data?.content || []);
-
-      setLoading(false);
+      setApprovedItems(approved);
+      setAcknowledgedItems(acknowledged);
+      setPendingItems(pending);
+      setInfoRequestedItems(infoRequested);
     } catch (error) {
       console.error('Failed to load pre-authorizations:', error);
       enqueueSnackbar('فشل تحميل الموافقات المسبقة', { variant: 'error' });
+    } finally {
       setLoading(false);
     }
   };
+
 
   const handleAcknowledge = async (preAuthId) => {
     setProcessingIds((prev) => new Set(prev).add(preAuthId));
@@ -109,6 +115,13 @@ const ProviderPreAuthInbox = () => {
         return 'success';
       case 'ACKNOWLEDGED':
         return 'info';
+      case 'PENDING':
+      case 'UNDER_REVIEW':
+        return 'warning';
+      case 'INFO_REQUESTED':
+        return 'secondary';
+      case 'REJECTED':
+        return 'error';
       default:
         return 'default';
     }
@@ -120,6 +133,14 @@ const ProviderPreAuthInbox = () => {
         return 'موافق عليه';
       case 'ACKNOWLEDGED':
         return 'تم الاطلاع';
+      case 'PENDING':
+        return 'معلق';
+      case 'UNDER_REVIEW':
+        return 'قيد المراجعة';
+      case 'INFO_REQUESTED':
+        return 'بانتظار معلومات';
+      case 'REJECTED':
+        return 'مرفوض';
       default:
         return status;
     }
@@ -213,7 +234,21 @@ const ProviderPreAuthInbox = () => {
   }
 
   return (
-    <MainCard title="صندوق الموافقات المسبقة">
+    <MainCard 
+      title="صندوق الموافقات المسبقة"
+      secondary={
+        flags.DIRECT_PREAUTH_SUBMISSION_ENABLED && (
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={() => navigate('/visits')}
+            startIcon={<span>➕</span>}
+          >
+            طلب موافقة جديد (عن طريق الزيارات)
+          </Button>
+        )
+      }
+    >
       <Box>
         <Alert severity="info" sx={{ mb: '1.5rem' }}>
           <Typography variant="body2">
@@ -226,6 +261,22 @@ const ProviderPreAuthInbox = () => {
           onChange={(e, newValue) => setCurrentTab(newValue)}
           sx={{ mb: '1.0rem', borderBottom: 1, borderColor: 'divider' }}
         >
+          <Tab
+            label={
+              <Box display="flex" alignItems="center" gap={1}>
+                <span>قيد الانتظار</span>
+                <Chip label={pendingItems.length} size="small" color="warning" />
+              </Box>
+            }
+          />
+          <Tab
+            label={
+              <Box display="flex" alignItems="center" gap={1}>
+                <span>مطلوب معلومات</span>
+                <Chip label={infoRequestedItems.length} size="small" color="secondary" />
+              </Box>
+            }
+          />
           <Tab
             label={
               <Box display="flex" alignItems="center" gap={1}>
@@ -244,9 +295,10 @@ const ProviderPreAuthInbox = () => {
           />
         </Tabs>
 
-        {currentTab === 0 && <Box>{renderTable(approvedItems, true)}</Box>}
-
-        {currentTab === 1 && <Box>{renderTable(acknowledgedItems, false)}</Box>}
+        {currentTab === 0 && <Box>{renderTable(pendingItems, false)}</Box>}
+        {currentTab === 1 && <Box>{renderTable(infoRequestedItems, false)}</Box>}
+        {currentTab === 2 && <Box>{renderTable(approvedItems, true)}</Box>}
+        {currentTab === 3 && <Box>{renderTable(acknowledgedItems, false)}</Box>}
       </Box>
     </MainCard>
   );

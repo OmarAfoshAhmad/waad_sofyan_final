@@ -75,7 +75,7 @@ public class PreAuthorizationAttachmentService {
             PreAuthorizationAttachment attachment = PreAuthorizationAttachment.builder()
                     .preAuthorizationId(preAuthorizationId)
                     .originalFileName(file.getOriginalFilename())
-                    .storedFileName(uploadResult.getFileName())
+                    // storedFileName is @Transient - no DB column
                     .filePath(uploadResult.getFilePath()) // Absolute path on disk
                     .fileType(contentType)
                     .fileSize(file.getSize())

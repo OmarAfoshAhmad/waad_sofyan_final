@@ -42,20 +42,11 @@ import { ROLE_RESOURCE_ACCESS } from 'config/roleAccessMap';
  *
  * @param {Array} items - Menu items to filter
  * @param {string} role - User's canonical role (e.g. 'SUPER_ADMIN')
+ * @param {boolean} providerPortalEnabled - Whether the provider portal is enabled
  * @returns {Array} Filtered menu items visible to specified role
  */
-export const filterMenuItemsByRole = (items, role) => {
+export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false) => {
   const allowedResources = ROLE_RESOURCE_ACCESS[role] || [];
-  const providerPortalEnabled = (() => {
-    try {
-      const cached = sessionStorage.getItem('__sys_config__');
-      if (!cached) return false;
-      const parsed = JSON.parse(cached);
-      return Boolean(parsed?.data?.flags?.PROVIDER_PORTAL_ENABLED);
-    } catch {
-      return false;
-    }
-  })();
 
   const isAllowed = (resource) => {
     if (!resource) return true; // group headers without resource → always visible
@@ -70,7 +61,7 @@ export const filterMenuItemsByRole = (items, role) => {
     .map((item) => ({
       ...item,
       children: item.children
-        ? filterMenuItemsByRole(item.children, role)
+        ? filterMenuItemsByRole(item.children, role, providerPortalEnabled)
         : undefined
     }))
     .filter((item) => {

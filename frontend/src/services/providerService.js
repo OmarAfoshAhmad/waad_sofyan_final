@@ -136,14 +136,35 @@ export const providerApi = {
   },
 
   /**
-   * Quick eligibility check by barcode (GET)
+   * Quick eligibility check by barcode or card number
    *
-   * @param {string} barcode - Member barcode
+   * @param {string} barcode - Member barcode or card number
+   * @param {number} [memberId] - Optional explicit member ID for exact matching
    * @returns {Promise<Object>} Eligibility response
    */
-  checkEligibilityByBarcode: async (barcode) => {
-    const response = await api.get(`${PROVIDER_BASE_URL}/eligibility/${barcode}`);
-    return response.data;
+  checkEligibilityByBarcode: async (barcode, memberId = null) => {
+    const payload = { barcode: barcode };
+    if (memberId) {
+      payload.memberId = memberId;
+    }
+    const response = await api.post(`/provider/eligibility-check`, payload);
+    return response.data?.data;
+  },
+
+  /**
+   * Search members for autocomplete
+   *
+   * @param {string} query - Search query (name, card, civil ID)
+   * @returns {Promise<Array>} List of matching members
+   */
+  searchMembers: async (query) => {
+    try {
+      const response = await api.get(`/unified-members/unified-search`, { params: { query } });
+      return response.data?.data || [];
+    } catch (error) {
+      console.error('Member search failed:', error);
+      return [];
+    }
   },
 
   /**

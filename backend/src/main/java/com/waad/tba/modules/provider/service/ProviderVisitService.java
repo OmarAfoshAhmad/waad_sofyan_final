@@ -110,6 +110,13 @@ public class ProviderVisitService {
 
         if (providerId != null) {
             provider = providerRepository.findById(providerId).orElse(null);
+        } else if (currentUser != null && "superadmin".equals(providerUsername)) {
+            // FOR TESTING: allow superadmin to register visits using the first provider
+            provider = providerRepository.findAll().stream().findFirst().orElse(null);
+            if (provider != null) {
+                providerId = provider.getId();
+                log.info("🛠️ [DEV MODE] Auto-assigned provider '{}' for superadmin testing", provider.getName());
+            }
         }
         
         // Block if no provider context found (Critical for Architecture)

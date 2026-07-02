@@ -171,6 +171,8 @@ const SystemSettingsPage = () => {
 
   const [rawSettings, setRawSettings] = useState([]);
   const [providerPortalEnabled, setProviderPortalEnabled] = useState(false);
+  const [claimSubmissionEnabled, setClaimSubmissionEnabled] = useState(false);
+  const [preAuthSubmissionEnabled, setPreAuthSubmissionEnabled] = useState(false);
 
   const [formData, setFormData] = useState({
     companyId: 1,
@@ -301,6 +303,12 @@ const SystemSettingsPage = () => {
 
       const portalFlag = (flags || []).find((f) => f.flagKey === PROVIDER_PORTAL_FLAG_KEY);
       setProviderPortalEnabled(Boolean(portalFlag?.enabled));
+
+      const claimFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_CLAIM_SUBMISSION_ENABLED');
+      setClaimSubmissionEnabled(Boolean(claimFlag?.enabled));
+
+      const preAuthFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_PREAUTH_SUBMISSION_ENABLED');
+      setPreAuthSubmissionEnabled(Boolean(preAuthFlag?.enabled));
     } catch (e) {
       setError('فشل تحميل نافذة الإعدادات');
     } finally {
@@ -440,6 +448,40 @@ const SystemSettingsPage = () => {
       setSuccess(next ? 'تم إظهار بوابة مقدم الخدمة' : 'تم إخفاء بوابة مقدم الخدمة');
     } catch (e) {
       setError(e?.response?.data?.message || 'فشل تحديث حالة بوابة مقدم الخدمة');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleClaimSubmission = async (event) => {
+    const next = event.target.checked;
+    try {
+      setIsSaving(true);
+      setError(null);
+      await featureFlagsService.toggleFlag('DIRECT_CLAIM_SUBMISSION_ENABLED', next);
+      setClaimSubmissionEnabled(next);
+      applyFlags({ DIRECT_CLAIM_SUBMISSION_ENABLED: next });
+      refreshSystemConfig();
+      setSuccess(next ? 'تم تفعيل إضافة المطالبات' : 'تم تعطيل إضافة المطالبات');
+    } catch (e) {
+      setError(e?.response?.data?.message || 'فشل تحديث حالة إضافة المطالبات');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTogglePreAuthSubmission = async (event) => {
+    const next = event.target.checked;
+    try {
+      setIsSaving(true);
+      setError(null);
+      await featureFlagsService.toggleFlag('DIRECT_PREAUTH_SUBMISSION_ENABLED', next);
+      setPreAuthSubmissionEnabled(next);
+      applyFlags({ DIRECT_PREAUTH_SUBMISSION_ENABLED: next });
+      refreshSystemConfig();
+      setSuccess(next ? 'تم تفعيل إضافة الموافقات المسبقة' : 'تم تعطيل إضافة الموافقات المسبقة');
+    } catch (e) {
+      setError(e?.response?.data?.message || 'فشل تحديث حالة إضافة الموافقات المسبقة');
     } finally {
       setIsSaving(false);
     }
@@ -810,25 +852,55 @@ const SystemSettingsPage = () => {
           <TabPanel value={tabValue} index={5}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
-                <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', maxWidth: '47.5rem' }}>
-                  <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
-                      عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
-                    </Typography>
-
-                    <Stack direction="row" alignItems="center" spacing={2}>
-                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isSaving} color="success" />
-                      <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'success.main' : 'text.primary'}>
-                        {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
+                <Stack spacing={3} sx={{ maxWidth: '47.5rem' }}>
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
+                    <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                        عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
                       </Typography>
-                      {isSaving && <CircularProgress size={18} />}
-                    </Stack>
 
-                    <Button variant="outlined" sx={{ mt: '1.0rem' }} startIcon={<PreviewIcon />} onClick={() => window.open('/provider/eligibility-check', '_blank')}>
-                      استعراض بوابة مقدم الخدمة
-                    </Button>
-                  </FieldGroup>
-                </Paper>
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isSaving} color="success" />
+                        <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'success.main' : 'text.primary'}>
+                          {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
+                        </Typography>
+                        {isSaving && <CircularProgress size={18} />}
+                      </Stack>
+                    </FieldGroup>
+                  </Paper>
+
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
+                    <FieldGroup title="تفعيل إضافة المطالبات المباشرة" icon={ReportIcon} color="primary.main">
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                        عند التفعيل، سيتمكن مزودو الخدمة من تقديم مطالبات جديدة مباشرة عبر البوابة.
+                      </Typography>
+
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Switch checked={claimSubmissionEnabled} onChange={handleToggleClaimSubmission} disabled={isSaving} color="primary" />
+                        <Typography variant="subtitle1" fontWeight={700} color={claimSubmissionEnabled ? 'primary.main' : 'text.primary'}>
+                          {claimSubmissionEnabled ? 'مفعل' : 'معطل'}
+                        </Typography>
+                        {isSaving && <CircularProgress size={18} />}
+                      </Stack>
+                    </FieldGroup>
+                  </Paper>
+
+                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
+                    <FieldGroup title="تفعيل إضافة الموافقات المسبقة المباشرة" icon={SecurityIcon} color="primary.main">
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                        عند التفعيل، سيتمكن مزودو الخدمة من طلب موافقات مسبقة جديدة مباشرة عبر البوابة.
+                      </Typography>
+
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Switch checked={preAuthSubmissionEnabled} onChange={handleTogglePreAuthSubmission} disabled={isSaving} color="primary" />
+                        <Typography variant="subtitle1" fontWeight={700} color={preAuthSubmissionEnabled ? 'primary.main' : 'text.primary'}>
+                          {preAuthSubmissionEnabled ? 'مفعل' : 'معطل'}
+                        </Typography>
+                        {isSaving && <CircularProgress size={18} />}
+                      </Stack>
+                    </FieldGroup>
+                  </Paper>
+                </Stack>
               </Box>
             </Box>
           </TabPanel>

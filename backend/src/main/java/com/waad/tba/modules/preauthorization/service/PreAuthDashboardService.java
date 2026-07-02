@@ -10,6 +10,9 @@ import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,19 +67,41 @@ public class PreAuthDashboardService {
 
                 // Single aggregate query — no full-table load
                 Object[] summary = preAuthRepository.getActiveSummary();
-                long totalCount    = summary[0] != null ? ((Number) summary[0]).longValue() : 0;
-                BigDecimal totalRequested = (BigDecimal) summary[1];
-                BigDecimal totalApproved  = (BigDecimal) summary[2];
+                long totalCount    = 0;
+                BigDecimal totalRequested = BigDecimal.ZERO;
+                BigDecimal totalApproved  = BigDecimal.ZERO;
+                
+                if (summary != null) {
+                        if (summary.length > 0 && summary[0] instanceof Object[]) {
+                                summary = (Object[]) summary[0]; // Sometimes Hibernate wraps single row in another array
+                        }
+                        if (summary.length > 0 && summary[0] != null) totalCount = ((Number) summary[0]).longValue();
+                        if (summary.length > 1 && summary[1] != null) totalRequested = new BigDecimal(summary[1].toString());
+                        if (summary.length > 2 && summary[2] != null) totalApproved = new BigDecimal(summary[2].toString());
+                }
 
                 // Per-status counts from existing GROUP BY query
                 List<Object[]> statusRows = preAuthRepository.countByStatus();
                 long pendingCount = 0, approvedCount = 0, rejectedCount = 0;
-                for (Object[] row : statusRows) {
-                        PreAuthStatus s = (PreAuthStatus) row[0];
-                        long cnt = (Long) row[1];
-                        if (s == PreAuthStatus.PENDING)  pendingCount  = cnt;
-                        if (s == PreAuthStatus.APPROVED) approvedCount = cnt;
-                        if (s == PreAuthStatus.REJECTED) rejectedCount = cnt;
+                for (Object item : statusRows) {
+                        if (item == null) continue;
+                        Object[] row;
+                        if (item instanceof Object[]) {
+                                row = (Object[]) item;
+                        } else {
+                                row = new Object[]{item, 0L};
+                        }
+                        
+                        Object statusObj = row.length > 0 ? row[0] : null;
+                        if (statusObj instanceof Object[]) {
+                                statusObj = ((Object[]) statusObj)[0];
+                        }
+                        PreAuthStatus s = parseStatus(statusObj);
+                        
+                        long cnt = row.length > 1 && row[1] != null ? ((Number) row[1]).longValue() : 0L;
+                        if (s == PreAuthStatus.PENDING || s == PreAuthStatus.UNDER_REVIEW || s == PreAuthStatus.SUBMITTED)  pendingCount += cnt;
+                        if (s == PreAuthStatus.APPROVED || s == PreAuthStatus.PARTIALLY_APPROVED) approvedCount += cnt;
+                        if (s == PreAuthStatus.REJECTED) rejectedCount += cnt;
                 }
 
                 BigDecimal avgApproved = approvedCount > 0
@@ -114,21 +139,40 @@ public class PreAuthDashboardService {
                 List<Object[]> results = preAuthRepository.sumAmountsByStatus();
                 Map<PreAuthStatus, StatusData> statusMap = new HashMap<>();
 
-                for (Object[] row : results) {
-                        PreAuthStatus status = (PreAuthStatus) row[0];
-                        BigDecimal amount = (BigDecimal) row[1];
-                        Long count = (Long) row[2];
+                for (Object item : results) {
+                        if (item == null) continue;
+                        Object[] row;
+                        if (item instanceof Object[]) {
+                                row = (Object[]) item;
+                        } else {
+                                row = new Object[]{item, BigDecimal.ZERO, 0L};
+                        }
 
-                        statusMap.put(status, new StatusData(count, amount != null ? amount : BigDecimal.ZERO));
+                        Object statusObj = row.length > 0 ? row[0] : null;
+                        if (statusObj instanceof Object[]) {
+                                statusObj = ((Object[]) statusObj)[0];
+                        }
+                        PreAuthStatus status = parseStatus(statusObj);
+                        
+                        BigDecimal amount = row.length > 1 && row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+                        Long count = row.length > 2 && row[2] != null ? ((Number) row[2]).longValue() : 0L;
+
+                        if (status != null) {
+                                statusMap.put(status, new StatusData(count, amount));
+                        }
                 }
 
+                long pendingCnt = statusMap.getOrDefault(PreAuthStatus.PENDING, new StatusData()).count + statusMap.getOrDefault(PreAuthStatus.SUBMITTED, new StatusData()).count;
+                long reviewCnt = statusMap.getOrDefault(PreAuthStatus.UNDER_REVIEW, new StatusData()).count + statusMap.getOrDefault(PreAuthStatus.INFO_REQUESTED, new StatusData()).count;
+                long approvedCnt = statusMap.getOrDefault(PreAuthStatus.APPROVED, new StatusData()).count + statusMap.getOrDefault(PreAuthStatus.PARTIALLY_APPROVED, new StatusData()).count;
+
                 return StatusDistribution.builder()
-                                .pending(statusMap.getOrDefault(PreAuthStatus.PENDING, new StatusData()).count)
-                                .approved(statusMap.getOrDefault(PreAuthStatus.APPROVED, new StatusData()).count)
+                                .pending(pendingCnt)
+                                .approved(approvedCnt)
                                 .rejected(statusMap.getOrDefault(PreAuthStatus.REJECTED, new StatusData()).count)
                                 .cancelled(statusMap.getOrDefault(PreAuthStatus.CANCELLED, new StatusData()).count)
                                 .expired(statusMap.getOrDefault(PreAuthStatus.EXPIRED, new StatusData()).count)
-                                .underReview(0L) // UNDER_REVIEW status not in current enum
+                                .underReview(reviewCnt)
                                 .pendingAmount(statusMap.getOrDefault(PreAuthStatus.PENDING, new StatusData()).amount)
                                 .approvedAmount(statusMap.getOrDefault(PreAuthStatus.APPROVED, new StatusData()).amount)
                                 .rejectedAmount(statusMap.getOrDefault(PreAuthStatus.REJECTED, new StatusData()).amount)
@@ -328,17 +372,25 @@ public class PreAuthDashboardService {
         /**
          * Helper class for status aggregation
          */
-        private static class StatusData {
-                long count = 0;
-                BigDecimal amount = BigDecimal.ZERO;
+        @Data
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class StatusData {
+                private Long count = 0L;
+                private BigDecimal amount = BigDecimal.ZERO;
+        }
 
-                StatusData() {
+        private PreAuthStatus parseStatus(Object obj) {
+                if (obj == null) return null;
+                if (obj instanceof PreAuthStatus) return (PreAuthStatus) obj;
+                if (obj instanceof String) {
+                        try { return PreAuthStatus.valueOf((String) obj); } catch(Exception e){}
                 }
-
-                StatusData(long count, BigDecimal amount) {
-                        this.count = count;
-                        this.amount = amount;
+                if (obj instanceof Number) {
+                        int ord = ((Number) obj).intValue();
+                        if (ord >= 0 && ord < PreAuthStatus.values().length) return PreAuthStatus.values()[ord];
                 }
+                return null;
         }
 
         /**

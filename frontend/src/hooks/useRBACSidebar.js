@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import menuItem, { filterMenuItemsByRole } from 'menu-items/components';
 import useAuth from 'hooks/useAuth';
+import useSystemConfig from 'hooks/useSystemConfig';
 
 /**
  * useRBACSidebar Hook
@@ -12,10 +13,12 @@ const useRBACSidebar = () => {
 
   const role = user?.role || (Array.isArray(user?.roles) && user.roles[0]) || 'DATA_ENTRY';
 
+  const { flags } = useSystemConfig();
+
   const sidebarGroups = useMemo(() => {
     if (!user) return [];
-    return filterMenuItemsByRole(menuItem, role);
-  }, [user, role]);
+    return filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED);
+  }, [user, role, flags.PROVIDER_PORTAL_ENABLED]);
 
   const sidebarItems = useMemo(() => {
     const items = [];

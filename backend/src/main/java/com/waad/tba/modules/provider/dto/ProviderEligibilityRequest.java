@@ -46,6 +46,9 @@ public class ProviderEligibilityRequest {
     @Size(max = 50, message = "الباركود يجب ألا يتجاوز 50 حرفاً / Barcode must not exceed 50 characters")
     private String barcode;
     
+    @Schema(description = "Member ID for exact matching when selected from autocomplete list")
+    private Long memberId;
+    
     /**
      * Service Date - Date of planned service (optional).
      * Defaults to today if not provided.

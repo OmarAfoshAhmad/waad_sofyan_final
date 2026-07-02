@@ -102,9 +102,12 @@ const validate = (form) => {
     errors.userType = 'نوع المستخدم مطلوب';
   }
 
-  // Requirement: employerId is required for EMPLOYER_ADMIN
   if (form.userType === SystemRole.EMPLOYER_ADMIN && !form.employerId) {
     errors.employerId = 'يجب اختيار جهة العمل لمدير جهة العمل';
+  }
+
+  if (form.userType === SystemRole.PROVIDER_STAFF && !form.providerId) {
+    errors.providerId = 'يجب اختيار مقدم الخدمة لموظف مقدم الخدمة';
   }
 
   return errors;
@@ -126,10 +129,12 @@ const UserCreate = () => {
     email: '',
     phone: '',
     userType: '',
-    employerId: ''
+    employerId: '',
+    providerId: ''
   });
 
   const [employers, setEmployers] = useState([]);
+  const [providers, setProviders] = useState([]);
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -141,15 +146,20 @@ const UserCreate = () => {
   // INITIAL DATA
   // ========================================
   useState(() => {
-    const fetchEmployers = async () => {
+    const fetchSelectors = async () => {
       try {
-        const data = await employersService.getEmployerSelectors();
-        setEmployers(data || []);
+        const [empData, provData] = await Promise.all([
+          employersService.getEmployerSelectors().catch(() => []),
+          // use axiosClient directly if providersService doesn't expose getSelectors
+          import('utils/axios').then(m => m.default.get('/providers/selector')).then(res => res.data?.data?.items || res.data?.items || res.data?.data || res.data).catch(() => [])
+        ]);
+        setEmployers(empData || []);
+        setProviders(provData || []);
       } catch (err) {
-        console.error('Failed to fetch employers:', err);
+        console.error('Failed to fetch selectors:', err);
       }
     };
-    fetchEmployers();
+    fetchSelectors();
   }, []);
 
   const handleChange = (field) => (event) => {
@@ -182,7 +192,8 @@ const UserCreate = () => {
         email: form.email.trim(),
         phone: form.phone?.trim() || null,
         userType: form.userType,
-        employerId: form.userType === SystemRole.EMPLOYER_ADMIN ? form.employerId : null
+        employerId: form.userType === SystemRole.EMPLOYER_ADMIN ? form.employerId : null,
+        providerId: form.userType === SystemRole.PROVIDER_STAFF ? form.providerId : null
       };
 
       await usersService.createUser(payload);
@@ -416,6 +427,28 @@ const UserCreate = () => {
                   {employers.map((emp) => (
                     <MenuItem key={emp.id} value={emp.id}>
                       {emp.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            )}
+
+            {/* Provider Selection – Conditional for PROVIDER_STAFF */}
+            {form.userType === SystemRole.PROVIDER_STAFF && (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="مقدم الخدمة (Provider)"
+                  value={form.providerId}
+                  onChange={handleChange('providerId')}
+                  error={!!errors.providerId}
+                  helperText={errors.providerId || 'اختر مقدم الخدمة المرتبط بهذا المستخدم'}
+                  required
+                >
+                  {providers.map((prov) => (
+                    <MenuItem key={prov.id} value={prov.id}>
+                      {prov.nameAr || prov.nameEn || prov.name}
                     </MenuItem>
                   ))}
                 </TextField>

@@ -23,7 +23,7 @@ import visitsService from 'services/api/visits.service';
 
 // Insurance UX Components - Phase B3
 import { NetworkBadge, CardStatusBadge } from 'components/insurance';
-import { projectSettings } from 'config';
+import useSystemConfig from 'hooks/useSystemConfig';
 
 // ============ VISIT CONFIGURATION ============
 // Visit Type Labels (Arabic) - Synced with Backend VisitType Enum
@@ -181,6 +181,8 @@ const VisitsList = () => {
     sortDir: order
   });
 
+  const { flags } = useSystemConfig();
+
   const handleSearch = useCallback(() => {
     setParams((prev) => ({ ...prev, search: searchInput, page: 1 }));
   }, [searchInput, setParams]);
@@ -228,7 +230,7 @@ const VisitsList = () => {
   };
 
   const handleCreatePreAuth = (visitId) => {
-    navigate(`/visits/${visitId}/create-preauth`);
+    navigate(`/provider/pre-auth/new/${visitId}`);
   };
 
   const breadcrumbs = [{ title: 'الزيارات' }];
@@ -411,7 +413,7 @@ const VisitsList = () => {
       case 'actions':
         return (
           <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-            {projectSettings.features.directClaimSubmissionEnabled && (
+            {flags.DIRECT_CLAIM_SUBMISSION_ENABLED && (
               <Button
                 size="small"
                 variant="contained"
@@ -430,7 +432,7 @@ const VisitsList = () => {
                 مطالبة
               </Button>
             )}
-            {projectSettings.features.directClaimSubmissionEnabled && (
+            {flags.DIRECT_PREAUTH_SUBMISSION_ENABLED && (
               <Button
                 size="small"
                 variant="contained"

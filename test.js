@@ -1,0 +1,1 @@
+import { ROLE_RESOURCE_ACCESS } from './frontend/src/config/roleAccessMap.js'; import menuItem, { filterMenuItemsByRole } from './frontend/src/menu-items/components.jsx'; console.log(filterMenuItemsByRole(menuItem, 'SUPER_ADMIN', true).map(i =

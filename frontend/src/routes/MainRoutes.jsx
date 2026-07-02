@@ -73,6 +73,7 @@ const VisitView = Loadable(lazy(() => import('pages/visits/VisitView')));
 
 const ProviderEligibilityCheck = Loadable(lazy(() => import('pages/provider/ProviderEligibilityCheck')));
 const ProviderClaimsSubmission = Loadable(lazy(() => import('pages/provider/ProviderClaimsSubmission')));
+const ProviderPreAuthRequestForm = Loadable(lazy(() => import('pages/provider/ProviderPreAuthRequestForm')));
 const ProviderPreApprovalSubmission = Loadable(lazy(() => import('pages/provider/ProviderPreApprovalSubmission')));
 const ProviderVisitLog = Loadable(lazy(() => import('pages/provider/ProviderVisitLog')));
 const ProviderDocuments = Loadable(lazy(() => import('pages/provider/ProviderDocuments')));
@@ -89,6 +90,7 @@ const PreApprovalsList = Loadable(lazy(() => import('pages/pre-approvals/PreAppr
 const PreApprovalView = Loadable(lazy(() => import('pages/pre-approvals/PreApprovalView')));
 const PreAuthAuditPage = Loadable(lazy(() => import('pages/pre-approvals/PreAuthAuditPage')));
 const PreAuthDashboard = Loadable(lazy(() => import('pages/pre-approvals/PreAuthDashboard')));
+const PreAuthReviewPage = Loadable(lazy(() => import('pages/pre-approvals/PreAuthReviewPage')));
 const EmailPreAuthInbox = Loadable(lazy(() => import('pages/pre-approvals/EmailPreAuthInbox')));
 
 // ==============================|| LAZY LOADING - APPROVALS DASHBOARD ||============================== //
@@ -541,6 +543,14 @@ const MainRoutes = {
             </PermissionGuard>
           )
         },
+        {
+          path: 'review/:id',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <PreAuthReviewPage />
+            </PermissionGuard>
+          )
+        },
         // NOTE: 'edit/:id' route removed - Pre-approvals edited ONLY from Provider Portal
         {
           path: ':id',
@@ -721,6 +731,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <ProviderPreAuthInbox />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'pre-auth/new/:visitId',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <ProviderPreAuthRequestForm />
             </PermissionGuard>
           )
         },

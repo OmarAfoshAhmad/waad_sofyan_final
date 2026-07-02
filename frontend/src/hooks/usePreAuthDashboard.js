@@ -15,7 +15,7 @@ export const usePreAuthDashboard = (trendDays = 30, topProviders = 10, autoRefre
       setLoading(true);
       setError(null);
       const response = await preAuthDashboardService.getDashboard(trendDays, topProviders);
-      setDashboard(response.data || response);
+      setDashboard(response || null);
     } catch (err) {
       setError(err.response?.data?.message || 'فشل تحميل لوحة التحكم');
       console.error('Error fetching dashboard:', err);
@@ -55,7 +55,7 @@ export const usePreAuthStats = () => {
       setLoading(true);
       setError(null);
       const response = await preAuthDashboardService.getStats();
-      setStats(response.data || response);
+      setStats(response || {});
     } catch (err) {
       setError(err.response?.data?.message || 'فشل تحميل الإحصائيات');
       console.error('Error fetching stats:', err);
@@ -84,7 +84,7 @@ export const useHighPriorityQueue = (limit = 10) => {
       setLoading(true);
       setError(null);
       const response = await preAuthDashboardService.getHighPriorityQueue(limit);
-      setQueue(response.data || []);
+      setQueue(response || []);
     } catch (err) {
       setError(err.response?.data?.message || 'فشل تحميل قائمة الأولويات');
       console.error('Error fetching queue:', err);
@@ -113,7 +113,7 @@ export const useExpiringSoon = (withinDays = 7, limit = 10) => {
       setLoading(true);
       setError(null);
       const response = await preAuthDashboardService.getExpiringSoon(withinDays, limit);
-      setItems(response.data || []);
+      setItems(response || []);
     } catch (err) {
       setError(err.response?.data?.message || 'فشل تحميل التنبيهات');
       console.error('Error fetching expiring items:', err);

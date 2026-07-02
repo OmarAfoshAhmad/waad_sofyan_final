@@ -90,7 +90,13 @@ public class FeatureFlagService {
         log.info("Toggling feature flag: {} to {}", flagKey, enabled);
 
         FeatureFlag flag = featureFlagRepository.findByFlagKey(flagKey)
-                .orElseThrow(() -> new ResourceNotFoundException("Feature flag not found: " + flagKey));
+                .orElseGet(() -> FeatureFlag.builder()
+                        .flagKey(flagKey)
+                        .flagName(flagKey)
+                        .description("Auto-generated feature flag")
+                        .enabled(false)
+                        .createdBy(updatedBy)
+                        .build());
 
         flag.setEnabled(enabled);
         flag.setUpdatedBy(updatedBy);

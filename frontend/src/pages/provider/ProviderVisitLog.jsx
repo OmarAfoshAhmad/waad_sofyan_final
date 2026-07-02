@@ -43,10 +43,10 @@ import EventIcon from '@mui/icons-material/Event';
 // Services
 import { providerApi } from 'services/providerService';
 
-// Components
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { UnifiedMedicalTable } from 'components/common';
+import useSystemConfig from 'hooks/useSystemConfig';
 
 // ========================= LABELS (Arabic) =========================
 const LABELS = {
@@ -64,7 +64,7 @@ const LABELS = {
   actions: 'إجراءات الزيارة',
   createClaim: 'إنشاء مطالبة',
   reopenDraftClaim: 'فتح المسودة',
-  createPreAuth: 'إنشاء موافقة مسبقة',
+  createPreAuth: 'إنشاء موافقة',
   viewDetails: 'عرض التفاصيل',
   viewDocuments: 'عرض المستندات',
   refresh: 'تحديث',
@@ -184,6 +184,10 @@ const VISIT_TYPE_LABELS = {
 // ========================= MAIN COMPONENT =========================
 const ProviderVisitLog = () => {
   const navigate = useNavigate();
+  const { flags } = useSystemConfig();
+
+  const claimSubmissionEnabled = flags?.DIRECT_CLAIM_SUBMISSION_ENABLED !== false;
+  const preAuthSubmissionEnabled = flags?.DIRECT_PREAUTH_SUBMISSION_ENABLED !== false;
 
   // Data state
   const [visits, setVisits] = useState([]);
@@ -350,16 +354,15 @@ const ProviderVisitLog = () => {
   // TABLE COLUMNS DEFINITION
   // ═══════════════════════════════════════════════════════════════════════════
   const columns = [
-    { id: 'visitId', label: LABELS.visitId, minWidth: '5.0rem', icon: <BadgeIcon fontSize="small" />, sortable: true },
-    { id: 'memberName', label: LABELS.memberName, minWidth: '10.0rem', icon: <PersonIcon fontSize="small" /> },
-    { id: 'memberCivilId', label: LABELS.civilId, minWidth: '6.875rem', icon: <CreditCardIcon fontSize="small" /> },
-    { id: 'memberCardNumber', label: LABELS.cardNumber, minWidth: '6.25rem', icon: <CreditCardIcon fontSize="small" /> },
-    { id: 'visitDate', label: LABELS.visitDate, minWidth: '6.25rem', icon: <EventIcon fontSize="small" />, sortable: true },
-    { id: 'visitType', label: LABELS.visitType, minWidth: '6.25rem', sortable: true },
-    { id: 'status', label: LABELS.status, minWidth: '5.625rem', sortable: true },
-    { id: 'claimStatus', label: LABELS.claimStatus, minWidth: '6.875rem' },
-    { id: 'preAuthStatus', label: LABELS.preAuthStatus, minWidth: '6.875rem' },
-    { id: 'actions', label: LABELS.actions, minWidth: '8.75rem' }
+    { id: 'visitId', label: LABELS.visitId, minWidth: '5.0rem', sortable: true, align: 'center' },
+    { id: 'memberName', label: LABELS.memberName, minWidth: '10.0rem', align: 'center' },
+    { id: 'memberCardNumber', label: LABELS.cardNumber, minWidth: '6.25rem', align: 'center' },
+    { id: 'visitDate', label: LABELS.visitDate, minWidth: '6.25rem', sortable: true, align: 'center' },
+    { id: 'visitType', label: LABELS.visitType, minWidth: '6.25rem', sortable: true, align: 'center' },
+    { id: 'status', label: LABELS.status, minWidth: '5.625rem', sortable: true, align: 'center' },
+    { id: 'claimStatus', label: LABELS.claimStatus, minWidth: '6.875rem', align: 'center' },
+    { id: 'preAuthStatus', label: LABELS.preAuthStatus, minWidth: '6.875rem', align: 'center' },
+    { id: 'actions', label: LABELS.actions, minWidth: '8.75rem', align: 'center' }
   ];
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -390,13 +393,6 @@ const ProviderVisitLog = () => {
               </Typography>
             )}
           </Box>
-        );
-
-      case 'memberCivilId':
-        return (
-          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-            {visit.memberCivilId || '-'}
-          </Typography>
         );
 
       case 'memberCardNumber':
@@ -431,7 +427,7 @@ const ProviderVisitLog = () => {
       case 'claimStatus':
         if (visit.claimCount > 0 || visit.latestClaimStatus) {
           return (
-            <Stack spacing={0.5}>
+            <Stack spacing={0.5} alignItems="center">
               <Chip
                 label={CLAIM_STATUS_LABELS[visit.latestClaimStatus] || visit.latestClaimStatusLabel || LABELS.noClaim}
                 size="small"
@@ -455,7 +451,7 @@ const ProviderVisitLog = () => {
       case 'preAuthStatus':
         if (visit.preAuthCount > 0 || visit.latestPreAuthStatus) {
           return (
-            <Stack spacing={0.5}>
+            <Stack spacing={0.5} alignItems="center">
               <Chip
                 label={PREAUTH_STATUS_LABELS[visit.latestPreAuthStatus] || visit.latestPreAuthStatusLabel || LABELS.noPreAuth}
                 size="small"
@@ -479,28 +475,33 @@ const ProviderVisitLog = () => {
       case 'actions':
         return (
           <Box>
-            <Stack direction="row" spacing={0.5}>
+            <Stack direction="row" spacing={0.5} justifyContent="center">
               {/* Create Claim */}
-              {visit.canCreateClaim !== false && (
-                <Tooltip title={['DRAFT', 'NEEDS_CORRECTION'].includes(visit.latestClaimStatus) ? LABELS.reopenDraftClaim : LABELS.createClaim}>
-                  <IconButton
-                    size="medium"
-                    color={['DRAFT', 'NEEDS_CORRECTION'].includes(visit.latestClaimStatus) ? 'warning' : 'success'}
-                    onClick={() => handleCreateClaim(visit)}
-                    sx={{ p: 0.8 }}
-                  >
-                    <ReceiptIcon fontSize="medium" />
-                  </IconButton>
-                </Tooltip>
+              {visit.canCreateClaim !== false && claimSubmissionEnabled && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  color={['DRAFT', 'NEEDS_CORRECTION'].includes(visit.latestClaimStatus) ? 'warning' : 'success'}
+                  onClick={() => handleCreateClaim(visit)}
+                  startIcon={<ReceiptIcon fontSize="small" />}
+                  sx={{ whiteSpace: 'nowrap', py: 0.5, px: 1, minWidth: 0, textTransform: 'none' }}
+                >
+                  {['DRAFT', 'NEEDS_CORRECTION'].includes(visit.latestClaimStatus) ? LABELS.reopenDraftClaim : LABELS.createClaim}
+                </Button>
               )}
 
               {/* Create Pre-Auth */}
-              {visit.canCreatePreAuth !== false && (
-                <Tooltip title={LABELS.createPreAuth}>
-                  <IconButton size="medium" color="info" onClick={() => handleCreatePreAuth(visit)} sx={{ p: 0.8 }}>
-                    <CheckCircleOutlineIcon fontSize="medium" />
-                  </IconButton>
-                </Tooltip>
+              {visit.canCreatePreAuth !== false && preAuthSubmissionEnabled && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  color="info"
+                  onClick={() => handleCreatePreAuth(visit)}
+                  startIcon={<CheckCircleOutlineIcon fontSize="small" />}
+                  sx={{ whiteSpace: 'nowrap', py: 0.5, px: 1, minWidth: 0, textTransform: 'none' }}
+                >
+                  {LABELS.createPreAuth}
+                </Button>
               )}
 
             </Stack>
@@ -556,16 +557,6 @@ const ProviderVisitLog = () => {
                 المستندات
               </Button>
             </Tooltip>
-            <Tooltip title={showFilters ? LABELS.hideFilters : LABELS.showFilters}>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => setShowFilters(!showFilters)}
-                startIcon={showFilters ? <FilterAltOffIcon /> : <FilterAltIcon />}
-              >
-                {showFilters ? LABELS.hideFilters : LABELS.showFilters}
-              </Button>
-            </Tooltip>
             <Tooltip title={LABELS.refresh}>
               <span>
                 <IconButton onClick={fetchVisits} color="primary" disabled={loading}>
@@ -585,151 +576,171 @@ const ProviderVisitLog = () => {
           </Alert>
         )}
 
-        {/* Quick Search Bar */}
-        <Box sx={{ mb: '1.0rem' }}>
-          <TextField
-            fullWidth
-            placeholder={LABELS.searchByName}
-            value={searchQuery}
-            onChange={handleSearchChange}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: searchQuery && (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setPage(0);
-                    }}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              )
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                bgcolor: 'background.paper'
-              }
-            }}
-          />
-        </Box>
+        {/* Filters and Search on a single row */}
+        <Paper variant="outlined" sx={{ p: '1.0rem', mb: '1.0rem', bgcolor: '#fafafa' }}>
+          <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems="center">
+            {/* Quick Search Bar */}
+            <Box sx={{ flex: 1.5, width: '100%' }}>
+              <TextField
+                fullWidth
+                placeholder={LABELS.searchByName}
+                value={searchQuery}
+                onChange={handleSearchChange}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchQuery && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setPage(0);
+                        }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'background.paper',
+                    minHeight: '2.875rem'
+                  }
+                }}
+              />
+            </Box>
 
-        {/* Advanced Filters */}
-        <Collapse in={showFilters}>
-          <Paper variant="outlined" sx={{ p: '1.0rem', mb: '1.0rem', bgcolor: '#fafafa' }}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid xs={12} sm={6} md={3}>
-                <DatePicker
-                  label={LABELS.dateFrom}
-                  value={dateFrom}
-                  onChange={setDateFrom}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      size: 'medium',
-                      sx: {
-                        '& .MuiOutlinedInput-root': {
-                          minHeight: '2.875rem'
-                        }
-                      },
-                      InputProps: {
-                        startAdornment: <EventIcon sx={{ mr: 1, color: 'action.active' }} />
+            {/* Date From */}
+            <Box sx={{ flex: 1, width: '100%' }}>
+              <DatePicker
+                label={LABELS.dateFrom}
+                value={dateFrom}
+                onChange={setDateFrom}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    size: 'medium',
+                    sx: {
+                      '& .MuiOutlinedInput-root': {
+                        minHeight: '2.875rem',
+                        bgcolor: 'background.paper'
                       }
+                    },
+                    InputProps: {
+                      startAdornment: <EventIcon sx={{ mr: 1, color: 'action.active' }} />
                     }
-                  }}
-                />
-              </Grid>
-              <Grid xs={12} sm={6} md={3}>
-                <DatePicker
-                  label={LABELS.dateTo}
-                  value={dateTo}
-                  onChange={setDateTo}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      size: 'medium',
-                      sx: {
-                        '& .MuiOutlinedInput-root': {
-                          minHeight: '2.875rem'
-                        }
-                      },
-                      InputProps: {
-                        startAdornment: <EventIcon sx={{ mr: 1, color: 'action.active' }} />
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Date To */}
+            <Box sx={{ flex: 1, width: '100%' }}>
+              <DatePicker
+                label={LABELS.dateTo}
+                value={dateTo}
+                onChange={setDateTo}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    size: 'medium',
+                    sx: {
+                      '& .MuiOutlinedInput-root': {
+                        minHeight: '2.875rem',
+                        bgcolor: 'background.paper'
                       }
+                    },
+                    InputProps: {
+                      startAdornment: <EventIcon sx={{ mr: 1, color: 'action.active' }} />
                     }
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Status Filter */}
+            <Box sx={{ flex: 1, width: '100%' }}>
+              <FormControl
+                fullWidth
+                size="medium"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    minHeight: '2.875rem',
+                    bgcolor: 'background.paper'
+                  }
+                }}
+              >
+                <InputLabel>{LABELS.status}</InputLabel>
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPage(0);
                   }}
-                />
-              </Grid>
-              <Grid xs={12} sm={6} md={2}>
-                <FormControl
-                  fullWidth
-                  size="medium"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      minHeight: '2.875rem'
-                    }
-                  }}
+                  label={LABELS.status}
                 >
-                  <InputLabel>{LABELS.status}</InputLabel>
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value);
-                      setPage(0);
-                    }}
-                    label={LABELS.status}
-                  >
-                    <MenuItem value="">{LABELS.allStatuses}</MenuItem>
-                    {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                      <MenuItem key={key} value={key}>
-                        {label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={2}>
-                <FormControl
-                  fullWidth
-                  size="medium"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      minHeight: '2.875rem'
-                    }
+                  <MenuItem value="">{LABELS.allStatuses}</MenuItem>
+                  {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                    <MenuItem key={key} value={key}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+
+            {/* Visit Type Filter */}
+            <Box sx={{ flex: 1, width: '100%' }}>
+              <FormControl
+                fullWidth
+                size="medium"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    minHeight: '2.875rem',
+                    bgcolor: 'background.paper'
+                  }
+                }}
+              >
+                <InputLabel>{LABELS.visitType}</InputLabel>
+                <Select
+                  value={visitTypeFilter}
+                  onChange={(e) => {
+                    setVisitTypeFilter(e.target.value);
+                    setPage(0);
                   }}
+                  label={LABELS.visitType}
                 >
-                  <InputLabel>{LABELS.visitType}</InputLabel>
-                  <Select
-                    value={visitTypeFilter}
-                    onChange={(e) => {
-                      setVisitTypeFilter(e.target.value);
-                      setPage(0);
-                    }}
-                    label={LABELS.visitType}
-                  >
-                    <MenuItem value="">{LABELS.allTypes}</MenuItem>
-                    {Object.entries(VISIT_TYPE_LABELS).map(([key, label]) => (
-                      <MenuItem key={key} value={key}>
-                        {label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid xs={12} sm={6} md={2}>
-                <Button fullWidth variant="outlined" color="secondary" size="large" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />}>
-                  إعادة ضبط
-                </Button>
-              </Grid>
-            </Grid>
-          </Paper>
-        </Collapse>
+                  <MenuItem value="">{LABELS.allTypes}</MenuItem>
+                  {Object.entries(VISIT_TYPE_LABELS).map(([key, label]) => (
+                    <MenuItem key={key} value={key}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+
+            {/* Reset Filters */}
+            <Box sx={{ flex: 0.5, width: { xs: '100%', lg: 'auto' } }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                color="secondary"
+                size="large"
+                onClick={handleResetFilters}
+                startIcon={<FilterAltOffIcon />}
+                sx={{ minHeight: '2.875rem', whiteSpace: 'nowrap', bgcolor: 'background.paper' }}
+              >
+                إعادة ضبط
+              </Button>
+            </Box>
+          </Stack>
+        </Paper>
 
         {/* Stats Summary */}
         <Box sx={{ mb: '1.0rem' }}>
