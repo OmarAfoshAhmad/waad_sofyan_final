@@ -18,6 +18,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.util.Iterator;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -524,6 +534,143 @@ public class BenefitPolicyRuleService {
     /**
      * Bulk create rules for a policy
      */
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXCEL IMPORT & EXPORT
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    public byte[] generateImportTemplate() {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("Benefit Rules");
+            
+            // Header
+            Row headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellValue("اسم الخدمة الموحد (لا تقم بتعديله)");
+            headerRow.createCell(1).setCellValue("نسبة التغطية (مثال: 100, 75, 0)");
+            headerRow.createCell(2).setCellValue("السقوف للمرات");
+            headerRow.createCell(3).setCellValue("المبالغ");
+
+            // Data
+            List<MedicalCategory> categories = categoryRepository.findByActiveTrue();
+            int rowIdx = 1;
+            for (MedicalCategory category : categories) {
+                Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(category.getName());
+                // Columns 1, 2, 3 left blank for the user to fill
+            }
+
+            sheet.setColumnWidth(0, 15000);
+            sheet.setColumnWidth(1, 8000);
+            sheet.setColumnWidth(2, 6000);
+            sheet.setColumnWidth(3, 6000);
+
+            workbook.write(out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            log.error("Failed to generate Excel template", e);
+            throw new BusinessRuleException("فشل في توليد قالب الإكسل");
+        }
+    }
+
+    public void importRulesFromExcel(Long policyId, MultipartFile file) {
+        validatePolicyExists(policyId);
+        if (file.isEmpty()) {
+            throw new BusinessRuleException("الملف المرفوع فارغ");
+        }
+
+        try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            Iterator<Row> rows = sheet.iterator();
+            
+            int rowNumber = 0;
+            while (rows.hasNext()) {
+                Row currentRow = rows.next();
+                
+                // Skip header
+                if (rowNumber == 0) {
+                    rowNumber++;
+                    continue;
+                }
+                
+                Cell serviceNameCell = currentRow.getCell(0);
+                if (serviceNameCell == null || serviceNameCell.getStringCellValue().trim().isEmpty()) {
+                    continue; // Skip empty rows
+                }
+                String serviceName = serviceNameCell.getStringCellValue().trim();
+                
+                // Read coverage percent
+                Integer coveragePercent = null;
+                Cell coverageCell = currentRow.getCell(1);
+                if (coverageCell != null) {
+                    if (coverageCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+                        coveragePercent = (int) coverageCell.getNumericCellValue();
+                    } else if (coverageCell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
+                        String covStr = coverageCell.getStringCellValue().replaceAll("[^\\d]", "");
+                        if (!covStr.isEmpty()) {
+                            coveragePercent = Integer.parseInt(covStr);
+                        }
+                    }
+                }
+
+                // Read times limit
+                Integer timesLimit = null;
+                Cell timesCell = currentRow.getCell(2);
+                if (timesCell != null) {
+                    if (timesCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+                        timesLimit = (int) timesCell.getNumericCellValue();
+                    } else if (timesCell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
+                        String timesStr = timesCell.getStringCellValue().replaceAll("[^\\d]", "");
+                        if (!timesStr.isEmpty()) {
+                            timesLimit = Integer.parseInt(timesStr);
+                        }
+                    }
+                }
+
+                // Read amount limit
+                BigDecimal amountLimit = null;
+                Cell amountCell = currentRow.getCell(3);
+                if (amountCell != null) {
+                    if (amountCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+                        amountLimit = BigDecimal.valueOf(amountCell.getNumericCellValue());
+                    } else if (amountCell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
+                        String amountStr = amountCell.getStringCellValue().replaceAll("[^\\d.]", "");
+                        if (!amountStr.isEmpty()) {
+                            try {
+                                amountLimit = new BigDecimal(amountStr);
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+
+                // Find Category by Name
+                Optional<MedicalCategory> categoryOpt = categoryRepository.findFirstByName(serviceName);
+                if (categoryOpt.isEmpty()) {
+                    log.warn("Skipping unknown service name in Excel import: {}", serviceName);
+                    continue; // Skip if not found
+                }
+                
+                Long categoryId = categoryOpt.get().getId();
+
+                // Build DTO and Create/Update Rule
+                BenefitPolicyRuleCreateDto dto = BenefitPolicyRuleCreateDto.builder()
+                        .medicalCategoryId(categoryId)
+                        .coveragePercent(coveragePercent)
+                        .timesLimit(timesLimit)
+                        .amountLimit(amountLimit)
+                        .active(true)
+                        .requiresPreApproval(false)
+                        .waitingPeriodDays(0)
+                        .notes("مستورد من إكسل")
+                        .build();
+                
+                create(policyId, dto);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse Excel file", e);
+            throw new BusinessRuleException("حدث خطأ أثناء قراءة ملف الإكسل. يرجى التأكد من أن الملف هو قالب سليم.");
+        }
+    }
+
     public List<BenefitPolicyRuleResponseDto> createBulk(Long policyId, List<BenefitPolicyRuleCreateDto> dtos) {
         log.info("Bulk creating {} rules for policy {}", dtos.size(), policyId);
 

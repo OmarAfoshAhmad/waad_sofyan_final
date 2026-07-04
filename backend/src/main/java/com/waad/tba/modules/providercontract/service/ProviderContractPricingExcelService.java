@@ -190,13 +190,36 @@ public class ProviderContractPricingExcelService {
 
                 String targetCatCode = (subCatCode != null && !subCatCode.isBlank()) ? subCatCode : mainCatCode;
 
-                // Step 1: Direct CAT code match
-                if (targetCatCode != null && targetCatCode.trim().matches("CAT\\d{3}|SUB-INPAT-.*|CAT-IP.*|CAT-OP.*")) {
-                    assignedCategory = categoryRepository.findByCode(targetCatCode.trim()).orElse(null);
+                // Step 1: Direct Match (by Code or Name)
+                if (targetCatCode != null && !targetCatCode.trim().isBlank()) {
+                    String trimTarget = targetCatCode.trim();
+                    
+                    String codeCandidate = trimTarget;
+                    if (codeCandidate.contains(" - ")) {
+                        codeCandidate = codeCandidate.substring(0, codeCandidate.indexOf(" - ")).trim();
+                    } else if (codeCandidate.contains("- ")) {
+                        codeCandidate = codeCandidate.substring(0, codeCandidate.indexOf("- ")).trim();
+                    }
+                    
+                    assignedCategory = categoryRepository.findByCode(codeCandidate).orElse(null);
+                    
+                    if (assignedCategory == null) {
+                        assignedCategory = categoryRepository.findByCode(trimTarget).orElse(null);
+                    }
+                    if (assignedCategory == null) {
+                        assignedCategory = categoryRepository.findFirstByNameAr(trimTarget).orElse(null);
+                    }
+                    if (assignedCategory == null) {
+                        assignedCategory = categoryRepository.findFirstByNameEn(trimTarget).orElse(null);
+                    }
+                    if (assignedCategory == null) {
+                        assignedCategory = categoryRepository.findFirstByName(trimTarget).orElse(null);
+                    }
+
                     if (assignedCategory != null) {
                         confidence = ConfidenceLevel.HIGH;
-                        classificationSource = "CAT_CODE";
-                        encounterType = EncounterType.ANY; // Or infer from code if needed
+                        classificationSource = "EXACT_MATCH";
+                        encounterType = EncounterType.ANY;
                     }
                 }
 

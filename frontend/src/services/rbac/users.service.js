@@ -46,6 +46,41 @@ export const usersService = {
   },
 
   /**
+   * Update user
+   * PUT /api/admin/users/{id}
+   */
+  updateUserPermissions: (id, permissions) => {
+    return axiosServices.put(`${BASE_URL}/${id}/permissions`, permissions);
+  },
+
+  /**
+   * Download Excel template for importing provider users
+   * GET /api/admin/users/import/providers/template
+   */
+  downloadProviderUsersTemplate: async () => {
+    const response = await axiosServices.get(`${BASE_URL}/import/providers/template`, {
+      responseType: 'blob'
+    });
+    return response;
+  },
+
+  /**
+   * Import provider users from Excel file
+   * POST /api/admin/users/import/providers
+   */
+  importProviderUsers: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await axiosServices.post(`${BASE_URL}/import/providers`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response?.data?.data || response?.data;
+  },
+
+  /**
    * Delete user
    * DELETE /api/admin/users/{id}
    */

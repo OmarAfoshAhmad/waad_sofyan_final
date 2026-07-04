@@ -224,6 +224,8 @@ public class CreateClaimRequest {
          */
         private String rejectionReason;
 
+        private java.math.BigDecimal refusedAmount;
+
         @Size(max = 50, message = "Service code must not exceed 50 characters")
         private String serviceCode;
 

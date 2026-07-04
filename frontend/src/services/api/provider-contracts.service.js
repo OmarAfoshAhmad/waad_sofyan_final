@@ -435,13 +435,18 @@ export const deleteAllPricingItems = async (contractId) => {
 export const importPriceListPreview = async (contractId, file) => {
   const formData = new FormData();
   formData.append('file', file);
-  return axiosClient.post(`${BASE_URL}/${contractId}/pricing/import/preview`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+  const response = await axiosClient.post(`${BASE_URL}/${contractId}/pricing/import/preview`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000
   });
+  return unwrap(response);
 };
 
 export const confirmPriceListImport = async (contractId, data) => {
-  return axiosClient.post(`${BASE_URL}/${contractId}/pricing/import/confirm`, data);
+  const response = await axiosClient.post(`${BASE_URL}/${contractId}/pricing/import/confirm`, data, {
+    timeout: 300000
+  });
+  return unwrap(response);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

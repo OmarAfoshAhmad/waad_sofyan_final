@@ -78,6 +78,7 @@ public class ClaimApiMapper {
                                 .serviceCategoryName(lineRequest.getServiceCategoryName())
                                 .quantity(lineRequest.getQuantity())
                                 .unitPrice(lineRequest.getUnitPrice())
+                                .manualRefusedAmount(lineRequest.getRefusedAmount())
                                 .rejected(lineRequest.getRejected())
                                 .rejectionReason(lineRequest.getRejectionReason())
                                 .build();
@@ -129,8 +130,7 @@ public class ClaimApiMapper {
                                                                 .unitPrice(line.getUnitPrice() != null
                                                                                 ? line.getUnitPrice()
                                                                                 : line.getGrossAmount())
-                                                                // refusedAmount from client is never trusted; backend
-                                                                // recomputes it
+                                                                .manualRefusedAmount(line.getRefusedAmount())
                                                                 .rejected(line.getRejected())
                                                                 .rejectionReason(line.getRejectionReason())
                                                                 .build())

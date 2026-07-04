@@ -384,8 +384,8 @@ const ProviderContractView = () => {
         setUploadingPricingFile(true);
         // Phase 1: Call preview import
         const response = await importPriceListPreview(id, file);
-        if (response?.data) {
-          setPreviewData(response.data);
+        if (response && response.items) {
+          setPreviewData(response);
           setExcelImportDialogOpen(false);
           setSelectedPricingFile(null);
           setReviewDialogOpen(true);

@@ -869,8 +869,12 @@ public class ProviderPortalController {
         Long providerId = providerContextGuard.getProviderFilter();
         
         if (providerId == null) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("No provider bound to current user"));
+            return ResponseEntity.ok(ApiResponse.success(
+                "No provider bound to current user",
+                MyContractResponseDto.builder()
+                    .hasActiveContract(false)
+                    .build()
+            ));
         }
         
         log.info("[PROVIDER-PORTAL] GET /api/provider/my-contract, providerId={}", providerId);
@@ -951,8 +955,10 @@ public class ProviderPortalController {
         Long providerId = providerContextGuard.getProviderFilter();
         
         if (providerId == null) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("No provider bound to current user"));
+            return ResponseEntity.ok(ApiResponse.success(
+                "No provider bound to current user",
+                org.springframework.data.domain.Page.empty()
+            ));
         }
         
         log.info("[PROVIDER-PORTAL] GET /api/provider/my-contract/services, providerId={}, page={}, size={}", 
@@ -1074,8 +1080,10 @@ public class ProviderPortalController {
         Long providerId = providerContextGuard.getProviderFilter();
         
         if (providerId == null) {
-            return ResponseEntity.badRequest()
-                .body(ApiResponse.error("No provider bound to current user"));
+            return ResponseEntity.ok(ApiResponse.success(
+                "No provider bound to current user",
+                java.util.Collections.emptyList()
+            ));
         }
         
         log.info("[PROVIDER-PORTAL] GET /api/provider/my-contract/services/requiring-preauth, providerId={}, memberId={}", 

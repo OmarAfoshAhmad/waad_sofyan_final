@@ -349,6 +349,45 @@ export const copyPolicyRules = async (policyId, sourcePolicyId, mode = 'UPDATE')
   return unwrap(response);
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// EXCEL IMPORT / EXPORT
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Download Excel import template pre-filled with all unified categories
+ * and existing rules for this policy.
+ *
+ * Endpoint: GET /api/benefit-policies/{policyId}/rules/import/template
+ * @param {number} policyId - Policy ID
+ * @returns {Promise<Blob>} Excel file blob
+ */
+export const downloadPolicyRulesTemplate = async (policyId) => {
+  const response = await axiosClient.get(`/benefit-policies/${policyId}/rules/import/template`, {
+    responseType: 'blob',
+    timeout: 60000
+  });
+  return response.data;
+};
+
+/**
+ * Import coverage rules from a filled Excel template (upsert).
+ * Creates new rules and updates existing ones by category code.
+ *
+ * Endpoint: POST /api/benefit-policies/{policyId}/rules/import
+ * @param {number} policyId - Policy ID
+ * @param {File} file - Filled Excel .xlsx file
+ * @returns {Promise<ExcelImportResult>} Import result with summary and errors
+ */
+export const importPolicyRulesFromExcel = async (policyId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/import`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  });
+  return unwrap(response);
+};
+
 // Default export
 export default {
   // Read
@@ -381,5 +420,8 @@ export default {
   deletePolicyRule,
   hardDeletePolicyRule,
   deleteAllPolicyRules,
-  deactivateAllPolicyRules
+  deactivateAllPolicyRules,
+  // Excel import/export
+  downloadPolicyRulesTemplate,
+  importPolicyRulesFromExcel
 };

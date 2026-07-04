@@ -74,25 +74,40 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "WHERE p.contract.id = :contractId " +
                      "AND p.active = true " +
                      "AND p.serviceCode = :serviceCode")
-       Optional<ProviderContractPricingItem> findActiveUnmappedByContractAndServiceCode(
+       List<ProviderContractPricingItem> findListActiveUnmappedByContractAndServiceCode(
                      @Param("contractId") Long contractId,
                      @Param("serviceCode") String serviceCode);
+
+       default Optional<ProviderContractPricingItem> findActiveUnmappedByContractAndServiceCode(
+                     Long contractId, String serviceCode) {
+           return findListActiveUnmappedByContractAndServiceCode(contractId, serviceCode).stream().findFirst();
+       }
 
        /** Find active pricing item by service code (any mapping status). */
        @Query("SELECT p FROM ProviderContractPricingItem p " +
                      "WHERE p.contract.id = :contractId AND p.active = true AND p.serviceCode = :serviceCode")
-       Optional<ProviderContractPricingItem> findByContractIdAndServiceCodeActiveTrue(
+       List<ProviderContractPricingItem> findListByContractIdAndServiceCodeActiveTrue(
                      @Param("contractId") Long contractId,
                      @Param("serviceCode") String serviceCode);
+
+       default Optional<ProviderContractPricingItem> findByContractIdAndServiceCodeActiveTrue(
+                     Long contractId, String serviceCode) {
+           return findListByContractIdAndServiceCodeActiveTrue(contractId, serviceCode).stream().findFirst();
+       }
 
        /**
         * Find active pricing item by service name (any mapping status). Uses native
         * SQL with explicit CAST to avoid bytea type inference.
         */
        @Query(value = "SELECT * FROM provider_contract_pricing_items WHERE contract_id = :contractId AND active = true AND lower(service_name::text) = lower(cast(:serviceName as text))", nativeQuery = true)
-       Optional<ProviderContractPricingItem> findByContractIdAndServiceNameActiveTrue(
+       List<ProviderContractPricingItem> findListByContractIdAndServiceNameActiveTrue(
                      @Param("contractId") Long contractId,
                      @Param("serviceName") String serviceName);
+
+       default Optional<ProviderContractPricingItem> findByContractIdAndServiceNameActiveTrue(
+                     Long contractId, String serviceName) {
+           return findListByContractIdAndServiceNameActiveTrue(contractId, serviceName).stream().findFirst();
+       }
 
        /**
         * Check if pricing exists for a service code in a contract (replaces

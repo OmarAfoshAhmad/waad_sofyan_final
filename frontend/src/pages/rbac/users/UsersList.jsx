@@ -52,6 +52,7 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 import usersService from 'services/rbac/users.service';
 import { openSnackbar } from 'api/snackbar';
 import { getRoleDisplayName } from 'constants/rbac';
+import ProviderUsersImportModal from './ProviderUsersImportModal';
 
 /**
  * Get initials from name
@@ -103,6 +104,9 @@ const UsersList = () => {
   // Toggle Status Dialog
   const [toggleDialog, setToggleDialog] = useState({ open: false, user: null });
   const [toggling, setToggling] = useState(false);
+
+  // Import Dialog
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Fetch users
   const [searchParams] = useSearchParams();
@@ -235,6 +239,9 @@ const UsersList = () => {
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefresh}>
               تحديث
+            </Button>
+            <Button variant="outlined" color="secondary" onClick={() => setImportModalOpen(true)}>
+              استيراد مستخدمي المرافق
             </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/admin/users/create')}>
               إضافة مستخدم
@@ -447,6 +454,16 @@ const UsersList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Import Modal */}
+      <ProviderUsersImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSuccess={() => {
+          setImportModalOpen(false);
+          fetchUsers();
+        }}
+      />
     </Box>
   );
 };

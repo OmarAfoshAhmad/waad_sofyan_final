@@ -49,6 +49,7 @@ import lombok.RequiredArgsConstructor;
 public class UserController {
 
         private final UserService userService;
+        private final com.waad.tba.modules.rbac.service.ProviderUserExcelImportService providerUserExcelImportService;
 
         @GetMapping
         @Operation(summary = "List all users", description = "Returns all users.")

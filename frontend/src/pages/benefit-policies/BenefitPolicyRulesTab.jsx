@@ -44,7 +44,9 @@ import {
   Clear as ClearIcon,
   Save as SaveIcon,
   Refresh as RefreshIcon,
-  AutoAwesome as AutoAwesomeIcon
+  AutoAwesome as AutoAwesomeIcon,
+  FileDownload as FileDownloadIcon,
+  FileUpload as FileUploadIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -63,7 +65,9 @@ import {
   hardDeletePolicyRule,
   applyPolicyTemplate,
   copyPolicyRules,
-  getAvailableTemplates
+  getAvailableTemplates,
+  downloadPolicyRulesTemplate,
+  importPolicyRulesFromExcel
 } from 'services/api/benefit-policy-rules.service';
 import { getMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
@@ -883,6 +887,57 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
 
+  // ── Excel Import/Export state ──────────────────────────────────────────────
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const importFileInputRef = useRef(null);
+
+  const handleDownloadTemplate = useCallback(async () => {
+    setDownloadingTemplate(true);
+    try {
+      const blob = await downloadPolicyRulesTemplate(policyId);
+      const url = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `قواعد_التغطية_وثيقة_${policyId}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      enqueueSnackbar('تم تحميل قالب الاستيراد بنجاح', { variant: 'success' });
+    } catch (err) {
+      enqueueSnackbar(err?.response?.data?.message || 'فشل تحميل القالب', { variant: 'error' });
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  }, [policyId, enqueueSnackbar]);
+
+  const handleImportExcel = useCallback(async () => {
+    if (!importFile) {
+      enqueueSnackbar('يرجى اختيار ملف Excel أولاً', { variant: 'warning' });
+      return;
+    }
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importPolicyRulesFromExcel(policyId, importFile);
+      setImportResult(result);
+      if (result?.success) {
+        enqueueSnackbar(result.messageAr || 'تم الاستيراد بنجاح', { variant: 'success' });
+        await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
+      } else {
+        enqueueSnackbar(result?.messageAr || 'اكتمل الاستيراد مع أخطاء', { variant: 'warning' });
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'فشل الاستيراد';
+      enqueueSnackbar(msg, { variant: 'error' });
+      setImportResult({ success: false, messageAr: msg, summary: { totalRows: 0, created: 0, updated: 0, rejected: 0 }, errors: [] });
+    } finally {
+      setImporting(false);
+    }
+  }, [importFile, policyId, enqueueSnackbar, queryClient]);
+
   const handleOpenTemplateDialog = async () => {
     setTemplateDialogOpen(true);
     setLoadingTemplates(true);
@@ -1575,6 +1630,35 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               >
                 {showDeleted ? `عرض النشطة (${activeRulesCount})` : `عرض المحذوفات (${deletedRulesCount})`}
               </Button>
+              <Tooltip title="تحميل قالب Excel مع التصنيفات الموحّدة">
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="success"
+                    startIcon={downloadingTemplate ? <CircularProgress size={14} color="inherit" /> : <FileDownloadIcon />}
+                    onClick={handleDownloadTemplate}
+                    disabled={downloadingTemplate}
+                    sx={{ height: '2.25rem' }}
+                  >
+                    قالب Excel
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="استيراد قواعد التغطية من Excel">
+                <span>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="info"
+                    startIcon={<FileUploadIcon />}
+                    onClick={() => { setImportFile(null); setImportResult(null); setImportDialogOpen(true); }}
+                    sx={{ height: '2.25rem' }}
+                  >
+                    استيراد Excel
+                  </Button>
+                </span>
+              </Tooltip>
               <Button
                 variant="contained"
                 size="small"
@@ -1700,6 +1784,91 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         updateMutation={updateMutation}
         isLoading={isLoading}
       />
+
+      {/* ═══════════════════════════════════════════════════════════════════
+           Excel Import Dialog
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={importDialogOpen} onClose={() => { if (!importing) { setImportDialogOpen(false); setImportFile(null); setImportResult(null); } }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <FileUploadIcon color="info" />
+            <Typography variant="h5">استيراد قواعد التغطية من Excel</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2.5}>
+            <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>تعليمات الاستيراد:</Typography>
+              <ol style={{ margin: 0, paddingRight: '1.2rem' }}>
+                <li>حمّل قالب Excel أولاً بالضغط على «قالب Excel»</li>
+                <li>عبّئ نسب التغطية والسقوف في الأعمدة القابلة للتعديل</li>
+                <li>ارفع الملف هنا — القواعد الجديدة تُضاف والموجودة تُحدَّث تلقائياً</li>
+              </ol>
+            </Alert>
+
+            {/* File selector */}
+            <Box
+              sx={{ border: '2px dashed', borderColor: importFile ? 'success.main' : 'divider', borderRadius: 2, p: 2.5, textAlign: 'center', cursor: 'pointer', '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' } }}
+              onClick={() => importFileInputRef.current?.click()}
+            >
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".xlsx"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImportFile(f); setImportResult(null); } }}
+              />
+              <FileUploadIcon sx={{ fontSize: '2.5rem', color: importFile ? 'success.main' : 'text.secondary', mb: 1 }} />
+              {importFile ? (
+                <Typography variant="body2" color="success.main" fontWeight={600}>{importFile.name}</Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">اضغط لاختيار ملف Excel (.xlsx)</Typography>
+              )}
+            </Box>
+
+            {/* Import result summary */}
+            {importResult && (
+              <Alert severity={importResult.success ? 'success' : importResult.summary?.rejected > 0 ? 'warning' : 'error'}>
+                <Typography variant="body2" fontWeight={600}>{importResult.messageAr}</Typography>
+                {importResult.summary && (
+                  <Stack direction="row" spacing={2} sx={{ mt: 0.75 }} flexWrap="wrap">
+                    {importResult.summary.totalRows > 0 && <Chip size="small" label={`الإجمالي: ${importResult.summary.totalRows}`} />}
+                    {importResult.summary.created > 0 && <Chip size="small" color="success" label={`جديد: ${importResult.summary.created}`} />}
+                    {importResult.summary.updated > 0 && <Chip size="small" color="info" label={`محدَّث: ${importResult.summary.updated}`} />}
+                    {importResult.summary.rejected > 0 && <Chip size="small" color="error" label={`مرفوض: ${importResult.summary.rejected}`} />}
+                  </Stack>
+                )}
+              </Alert>
+            )}
+
+            {/* Error list */}
+            {importResult?.errors?.length > 0 && (
+              <Box sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid', borderColor: 'error.light', borderRadius: 1, p: 1 }}>
+                <Typography variant="caption" color="error" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>تفاصيل الأخطاء:</Typography>
+                {importResult.errors.map((err, idx) => (
+                  <Typography key={idx} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    • سطر {err.rowNumber}: [{err.fieldName}] {err.errorMessage}{err.fieldValue ? ` (القيمة: ${err.fieldValue})` : ''}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => { setImportDialogOpen(false); setImportFile(null); setImportResult(null); }} disabled={importing} color="inherit">
+            إغلاق
+          </Button>
+          <Button
+            onClick={handleImportExcel}
+            variant="contained"
+            color="primary"
+            disabled={!importFile || importing}
+            startIcon={importing ? <CircularProgress size={16} color="inherit" /> : <FileUploadIcon />}
+          >
+            {importing ? 'جاري الاستيراد...' : 'استيراد'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Apply Template Dialog */}
       <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="sm" fullWidth>
