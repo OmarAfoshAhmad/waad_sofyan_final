@@ -82,7 +82,7 @@ export default function ProviderEligibilityCheck() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [selectedVisitType, setSelectedVisitType] = useState('');
+  const [selectedVisitType, setSelectedVisitType] = useState('OUTPATIENT');
   const [registeringVisit, setRegisteringVisit] = useState(false);
   const [visitError, setVisitError] = useState(null);
   const [checkHistory, setCheckHistory] = useState([]);
@@ -154,7 +154,7 @@ export default function ProviderEligibilityCheck() {
     setError(null);
     setResult(null);
     setSelectedMember(null);
-    setSelectedVisitType('');
+    setSelectedVisitType('OUTPATIENT');
 
     try {
       // Send as barcode (API accepts card number, barcode, or member ID in this field)
@@ -212,7 +212,7 @@ export default function ProviderEligibilityCheck() {
     setResult(null);
     setError(null);
     setSelectedMember(null);
-    setSelectedVisitType('');
+    setSelectedVisitType('OUTPATIENT');
     lastAutoSubmittedRef.current = '';
   };
 
@@ -413,28 +413,33 @@ export default function ProviderEligibilityCheck() {
   // ========================================
 
   return (
-    <Box sx={{ bgcolor: '#F5F7FA', minHeight: 'calc(100vh - 80px)', p: { xs: 1, md: 2 }, borderRadius: '0.25rem' }}>
+    <Box sx={{ bgcolor: '#F5F7FA', height: { xs: 'auto', lg: 'calc(100vh - 80px)' }, display: 'flex', flexDirection: 'column', p: { xs: 1, md: 2 }, borderRadius: '0.25rem' }}>
       <ModernPageHeader title="فحص الأهلية" subtitle="التحقق من أهلية المؤمن عليه وتسجيل الزيارة" icon={LocalHospitalIcon} />
 
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+
+      {/* MAIN CONTENT AREA */}
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: '1.5rem', mt: 1, flex: 1, overflow: 'hidden' }}>
+        {/* Side Panel: Scanner & Search Area */}
         <Paper
-          elevation={0}
+          elevation={2}
           sx={{
-            width: '100%',
-            maxWidth: '62.5rem',
-            p: { xs: 2, md: 3 },
-            borderRadius: '0.1875rem',
-            bgcolor: 'common.white',
-            border: '1px solid',
-            borderColor: 'divider',
-            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.06)'
+            width: { xs: '100%', lg: '22rem' },
+            flexShrink: 0,
+            bgcolor: 'background.paper',
+            borderRadius: '0.25rem',
+            overflowY: 'auto',
+            height: '100%',
+            p: 2
           }}
         >
-          <Stack spacing={2}>
-            <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: isDark ? 'grey.300' : 'grey.700' }}>
-              أدخل الاسم، رقم البطاقة، أو امسح الباركود للتحقق
-            </Typography>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="stretch">
+          <Stack spacing={1.5}>
+            <Box sx={{ textAlign: 'center', mb: 1 }}>
+              <Typography variant="body2" fontWeight="bold" sx={{ color: isDark ? 'grey.300' : 'grey.700', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                أدخل الاسم، رقم البطاقة، أو امسح الباركود
+              </Typography>
+            </Box>
+            
+            <Stack direction="column" spacing={2} alignItems="stretch">
               <Box sx={{ flex: 1 }}>
                 <Autocomplete
                   freeSolo
@@ -443,7 +448,7 @@ export default function ProviderEligibilityCheck() {
                     if (typeof option === 'string') return option;
                     return `${option.fullName} - ${option.cardNumber || option.barcode}`;
                   }}
-                  filterOptions={(x) => x} // Disable local filtering, rely on server
+                  filterOptions={(x) => x}
                   loading={searchLoading}
                   inputValue={searchValue}
                   onInputChange={(e, newInputValue) => {
@@ -452,7 +457,6 @@ export default function ProviderEligibilityCheck() {
                   }}
                   onChange={(e, newValue) => {
                     if (!newValue) return;
-                    // User selected an option from the list
                     if (typeof newValue === 'object') {
                       setSearchValue(newValue.barcode || newValue.cardNumber);
                       checkEligibility(newValue.barcode || newValue.cardNumber);
@@ -466,7 +470,7 @@ export default function ProviderEligibilityCheck() {
                       inputRef={scannerInputRef}
                       fullWidth
                       autoFocus
-                      placeholder="الاسم / رقم البطاقة / الباركود"
+                      placeholder="بحث..."
                       disabled={loading}
                       InputProps={{
                         ...params.InputProps,
@@ -484,19 +488,9 @@ export default function ProviderEligibilityCheck() {
                           borderRadius: '0.375rem',
                           bgcolor: 'common.white',
                           minHeight: '3.5rem',
-                          transition: 'all 0.2s ease',
-                          '& fieldset': {
-                            borderColor: 'divider'
-                          },
-                          '&:hover': {
-                            boxShadow: (theme) => `0 0 0 3px ${theme.palette.success.light}33`
-                          },
-                          '&:hover fieldset': {
-                            borderColor: 'success.main'
-                          },
-                          '&.Mui-focused': {
-                            boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.light}33`
-                          }
+                          '& fieldset': { borderColor: 'divider' },
+                          '&:hover fieldset': { borderColor: 'success.main' },
+                          '&.Mui-focused fieldset': { borderColor: 'primary.main' }
                         }
                       }}
                     />
@@ -512,7 +506,7 @@ export default function ProviderEligibilityCheck() {
                             {option.fullName}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            رقم البطاقة: {option.cardNumber || '-'} | الهوية: {option.civilId || '-'}
+                            رقم البطاقة: {option.cardNumber || '-'}
                           </Typography>
                         </Grid>
                       </Grid>
@@ -527,7 +521,8 @@ export default function ProviderEligibilityCheck() {
                 startIcon={<QrCodeScannerIcon />}
                 onClick={handleOpenScannerDialog}
                 disabled={loading}
-                sx={{ minWidth: { md: 150 }, borderRadius: '0.375rem', whiteSpace: 'nowrap' }}
+                sx={{ borderRadius: '0.375rem', py: 1 }}
+                fullWidth
               >
                 مسح الكاميرا
               </Button>
@@ -538,15 +533,14 @@ export default function ProviderEligibilityCheck() {
                 onClick={handleSubmit}
                 disabled={loading || !searchValue.trim()}
                 startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircleIcon />}
-                sx={{ minWidth: { md: 120 }, borderRadius: '0.375rem', fontWeight: 700 }}
+                sx={{ borderRadius: '0.375rem', fontWeight: 700, py: 1 }}
+                fullWidth
               >
                 فحص
               </Button>
             </Stack>
 
-            <Typography variant="caption" color="text.secondary" textAlign="center">
-              يتم الفحص تلقائياً عند إدخال 6 أحرف أو أكثر
-            </Typography>
+
 
             <Box sx={{ height: 0, overflow: 'hidden', opacity: 0 }}>
               <TextField id="scanner-input-provider" ref={scannerInputRef} fullWidth size="small" />
@@ -557,87 +551,72 @@ export default function ProviderEligibilityCheck() {
                 {error}
               </Alert>
             )}
+
+            {/* Beneficiary Info in Side Panel */}
+            {result && (
+              <Box sx={{ pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+
+
+                {/* Avatar */}
+                {selectedMember && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
+                    <MemberAvatar
+                      member={{ id: selectedMember.memberId, fullName: selectedMember.fullName, photoUrl: selectedMember.profileImage }}
+                      size={95}
+                      refreshTrigger={`${selectedMember.memberId || ''}-${selectedMember.profileImage || ''}`}
+                      sx={{
+                        border: 3, borderColor: selectedMember.eligible ? 'success.main' : 'error.main',
+                        bgcolor: 'grey.300', fontSize: '1.75rem', fontWeight: 600
+                      }}
+                    />
+                    <Typography variant="subtitle1" sx={{ mt: 0.5, textAlign: 'center', fontWeight: 'bold' }}>
+                      {selectedMember.fullName.split(' ')[0]} {selectedMember.fullName.split(' ').slice(1,3).join(' ') || ''}
+                    </Typography>
+                    <Chip label={selectedMember.eligible ? 'مؤهل' : 'غير مؤهل'} color={selectedMember.eligible ? 'success' : 'error'} size="small" sx={{ mt: 0.25 }} />
+                  </Box>
+                )}
+
+                {/* Balance Cards */}
+                <Grid container spacing={1}>
+                  <Grid item xs={3}>
+                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'primary.lighter', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>الحد السنوي</Typography>
+                      <Typography sx={{ fontSize: '0.75rem', color: 'primary.dark', fontWeight: 'bold' }}>
+                        {formatCurrency(result.principalAnnualLimit)}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'warning.lighter', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>المستخدم</Typography>
+                      <Typography sx={{ fontSize: '0.75rem', color: 'warning.dark', fontWeight: 'bold' }}>
+                        {formatCurrency(result.principalUsedAmount)}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'success.lighter', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>المتبقي</Typography>
+                      <Typography sx={{ fontSize: '0.75rem', color: 'success.dark', fontWeight: 'bold' }}>
+                        {formatCurrency(result.principalRemainingLimit)}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={3}>
+                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'grey.100', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>نسبة الاستخدام</Typography>
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{(result.principalUsagePercentage || 0).toFixed(0)}%</Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
           </Stack>
         </Paper>
-      </Box>
-
-      {/* MAIN CONTENT AREA */}
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: '1.5rem', mt: 1 }}>
-        {/* Profile Panel (Desktop Only) */}
-        {selectedMember && (
-          <Paper
-            elevation={2}
-            sx={{
-              width: '18.75rem',
-              flexShrink: 0,
-              bgcolor: 'background.paper',
-              borderRadius: '0.25rem',
-              overflow: 'hidden',
-              height: 'fit-content',
-              position: 'sticky',
-              top: '1.5rem',
-              display: { xs: 'none', lg: 'block' }
-            }}
-          >
-            <Box sx={{ bgcolor: 'primary.main', color: 'white', p: '1.0rem', textAlign: 'center' }}>
-              <Typography variant="h6" fontWeight={600}>ملف المنتفع</Typography>
-            </Box>
-            <Box sx={{ p: '1.5rem' }}>
-              <Stack spacing={2} alignItems="center">
-                <MemberAvatar
-                  member={{ id: selectedMember.memberId, fullName: selectedMember.fullName, photoUrl: selectedMember.profileImage }}
-                  size={120}
-                  refreshTrigger={`${selectedMember.memberId || ''}-${selectedMember.profileImage || ''}`}
-                  sx={{
-                    border: 4, borderColor: selectedMember.eligible ? 'success.main' : 'error.main',
-                    bgcolor: 'grey.300', fontSize: '3.0rem', fontWeight: 600
-                  }}
-                />
-                <Box sx={{ textAlign: 'center', width: '100%' }}>
-                  <Typography variant="h6" fontWeight={700} gutterBottom>{selectedMember.fullName}</Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>{selectedMember.cardNumber || '-'}</Typography>
-                </Box>
-                <Divider sx={{ width: '100%' }} />
-                <Stack spacing={1.5} sx={{ width: '100%', textAlign: 'right' }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block">تاريخ الميلاد</Typography>
-                    <Typography variant="body2" fontWeight={500}>{selectedMember.birthDate || '-'}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block">الجنس</Typography>
-                    <Typography variant="body2" fontWeight={500}>
-                      {selectedMember.gender === 'MALE' ? 'ذكر' : selectedMember.gender === 'FEMALE' ? 'أنثى' : '-'}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block">العمر</Typography>
-                    <Typography variant="body2" fontWeight={500}>{selectedMember.age || '-'} سنة</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block">حالة الأهلية</Typography>
-                    <Chip label={selectedMember.eligible ? 'مؤهل للخدمة' : 'غير مؤهل'} color={selectedMember.eligible ? 'success' : 'error'} size="small" sx={{ mt: 0.5 }} />
-                  </Box>
-                  <Divider />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>الحد السنوي المتبقي</Typography>
-                    <Typography variant="h5" color="success.main" fontWeight={600}>{formatCurrency(selectedMember.remainingLimit)}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>نسبة الاستخدام</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <LinearProgress variant="determinate" value={selectedMember.usagePercentage || 0} color={getUsageColor(selectedMember.usagePercentage || 0)} sx={{ height: '0.375rem', borderRadius: 1, flex: 1 }} />
-                      <Typography variant="body2" fontWeight={500}>{(selectedMember.usagePercentage || 0).toFixed(0)}%</Typography>
-                    </Box>
-                  </Box>
-                </Stack>
-              </Stack>
-            </Box>
-          </Paper>
-        )}
 
         {/* Results & History Area */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack spacing={2}>
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Stack spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
             {!result && (
               <Grid container spacing={2}>
                 <Grid item xs={12} md={4}>
@@ -695,54 +674,53 @@ export default function ProviderEligibilityCheck() {
             {/* Results Section */}
             {result ? (
               <MainCard
+                sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
                 title={
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="h5">نتيجة الفحص</Typography>
-                    <IconButton onClick={handleReset} size="small" title="إعادة ضبط">
-                      <RefreshIcon />
-                    </IconButton>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                      <Typography variant="h5" fontWeight="bold">نتيجة الفحص</Typography>
+                      
+                      <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        px: 2,
+                        py: 0.75,
+                        borderRadius: '0.5rem',
+                        bgcolor: result.eligible ? 'success.lighter' : 'error.lighter',
+                        border: '1px solid',
+                        borderColor: result.eligible ? 'success.main' : 'error.main',
+                      }}>
+                        {result.eligible ? <CheckCircleIcon sx={{ color: 'success.main' }} /> : <CancelIcon sx={{ color: 'error.main' }} />}
+                        <Box>
+                           <Typography variant="subtitle2" color={result.eligible ? 'success.dark' : 'error.dark'} fontWeight="bold">
+                              {result.message} {result.familyMembers && `(عدد الأفراد: ${result.totalFamilyMembers || result.familyMembers.length})`}
+                           </Typography>
+                           {result.eligible && (result.policyNumber || result.planName) && (
+                              <Typography variant="caption" color={result.eligible ? 'success.dark' : 'error.dark'} sx={{ display: 'block', mt: 0.5 }}>
+                                {result.policyNumber && `رقم البوليصة: ${result.policyNumber}`}
+                                {result.planName && ` | الخطة: ${result.planName}`}
+                              </Typography>
+                           )}
+                        </Box>
+                      </Box>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                       {result.barcode && (
+                         <Typography variant="caption" color="text.secondary" sx={{ mr: 2, bgcolor: 'grey.100', px: 1, py: 0.5, borderRadius: 1 }}>
+                           الباركود: #{result.barcode}
+                         </Typography>
+                       )}
+                      <IconButton onClick={handleReset} size="small" title="إعادة ضبط" sx={{ bgcolor: 'grey.100' }}>
+                        <RefreshIcon />
+                      </IconButton>
+                    </Box>
                   </Box>
                 }
-                contentSX={{ p: '1.0rem' }}
+                contentSX={{ p: '1.0rem', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
               >
-                <Stack spacing={2}>
-                  {/* Eligibility Status */}
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: '0.75rem',
-                      bgcolor: result.eligible ? 'success.lighter' : 'error.lighter',
-                      border: 1,
-                      borderColor: result.eligible ? 'success.main' : 'error.main',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '1.0rem'
-                    }}
-                  >
-                    {result.eligible ? (
-                      <CheckCircleIcon sx={{ fontSize: '1.75rem', color: 'success.main' }} />
-                    ) : (
-                      <CancelIcon sx={{ fontSize: '1.75rem', color: 'error.main' }} />
-                    )}
-                    <Box flex={1}>
-                      <Typography variant="h6" color={result.eligible ? 'success.dark' : 'error.dark'}>
-                        {result.message}
-                      </Typography>
-                      {result.eligible && (
-                        <Typography variant="body2" color="text.secondary">
-                          {result.policyNumber && `رقم البوليصة: ${result.policyNumber}`}
-                          {result.planName && ` | الخطة: ${result.planName}`}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Box>
-                      {result.barcode && (
-                        <Typography variant="caption" display="block" color="text.secondary">
-                          #{result.barcode}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Paper>
+                <Stack spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
 
                   {/* Warnings */}
                   {result.warnings && result.warnings.length > 0 && (
@@ -755,77 +733,13 @@ export default function ProviderEligibilityCheck() {
                     </Box>
                   )}
 
-                  {/* Principal Member Info */}
-                  {result.principalMember && (
-                    <Paper elevation={0} sx={{ p: '1.0rem', bgcolor: 'grey.50' }}>
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <PersonIcon color="primary" />
-                        <Box>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            {result.principalMember.fullName}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            العضو الرئيسي - {result.employerName || 'جهة العمل غير محددة'}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                    </Paper>
-                  )}
 
-                  {/* Coverage Info */}
-                  <Grid container spacing={2}>
-                    <Grid item xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'primary.lighter' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          الحد السنوي
-                        </Typography>
-                        <Typography variant="h6" color="primary.dark">
-                          {formatCurrency(result.principalAnnualLimit)}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'warning.lighter' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          المستخدم
-                        </Typography>
-                        <Typography variant="h6" color="warning.dark">
-                          {formatCurrency(result.principalUsedAmount)}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'success.lighter' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          المتبقي
-                        </Typography>
-                        <Typography variant="h6" color="success.dark">
-                          {formatCurrency(result.principalRemainingLimit)}
-                        </Typography>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={6} md={3}>
-                      <Paper elevation={0} sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'grey.100' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          نسبة الاستخدام
-                        </Typography>
-                        <Typography variant="h6">{(result.principalUsagePercentage || 0).toFixed(1)}%</Typography>
-                      </Paper>
-                    </Grid>
-                  </Grid>
 
                   {/* Family Members Table */}
                   {result.familyMembers && result.familyMembers.length > 0 && (
-                    <Box>
-                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: '1.0rem' }}>
-                        <FamilyRestroomIcon color="primary" />
-                        <Typography variant="h6">أفراد العائلة ({result.totalFamilyMembers || result.familyMembers.length})</Typography>
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: '1.0rem' }}>
-                        يرجى اختيار المنتفع من القائمة أدناه للمتابعة
-                      </Typography>
+                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-                      <TableContainer component={Paper} variant="outlined">
+                      <TableContainer component={Paper} variant="outlined" sx={{ flex: 1, overflowY: 'auto' }}>
                         <Table size="small">
                           <TableHead>
                             <TableRow sx={{ bgcolor: tableHeaderBg }}>
@@ -984,19 +898,7 @@ export default function ProviderEligibilityCheck() {
                     </Paper>
                   )}
 
-                  {/* Covered Services */}
-                  {result.coveredServices && result.coveredServices.length > 0 && (
-                    <Box>
-                      <Typography variant="subtitle2" gutterBottom>
-                        الخدمات المغطاة:
-                      </Typography>
-                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                        {result.coveredServices.map((service, index) => (
-                          <Chip key={index} label={service} size="small" color="primary" variant="outlined" />
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
+
                 </Stack>
               </MainCard>
             ) : (

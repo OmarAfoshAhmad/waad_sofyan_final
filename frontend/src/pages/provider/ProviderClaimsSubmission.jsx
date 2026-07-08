@@ -636,7 +636,16 @@ export default function ProviderClaimsSubmission() {
 
       const serviceCategoryId = normalizeId(service.categoryId || service.serviceCategoryId || service.medicalCategoryId);
       const selectedCategoryId = normalizeId(category.id);
-      const byId = serviceCategoryId !== null && selectedCategoryId !== null && serviceCategoryId === selectedCategoryId;
+      
+      let byId = serviceCategoryId !== null && selectedCategoryId !== null && serviceCategoryId === selectedCategoryId;
+      
+      // Check parent relationships if we have medicalCategories in scope
+      if (!byId && serviceCategoryId !== null && selectedCategoryId !== null && medicalCategories) {
+        const servCat = medicalCategories.find((c) => normalizeId(c.id) === serviceCategoryId);
+        if (servCat && normalizeId(servCat.parentId) === selectedCategoryId) {
+          byId = true;
+        }
+      }
 
       const serviceCategoryCode = normalizeText(service.categoryCode || service.category);
       const selectedCategoryCode = normalizeText(category.code);
@@ -648,7 +657,7 @@ export default function ProviderClaimsSubmission() {
 
       return byId || byCode || byName;
     },
-    [normalizeId, normalizeText]
+    [normalizeId, normalizeText, medicalCategories]
   );
 
   // ═══════════════════════════════════════════════════════════════════════════

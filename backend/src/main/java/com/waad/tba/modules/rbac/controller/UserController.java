@@ -1,6 +1,13 @@
 package com.waad.tba.modules.rbac.controller;
 
+import java.io.IOException;
 import java.util.List;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.waad.tba.common.excel.dto.ExcelImportResult;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -191,6 +198,36 @@ public class UserController {
                         @Parameter(name = "providerId", description = "Provider ID", required = true) @PathVariable("providerId") Long providerId) {
                 List<UserResponseDto> users = userService.findByProviderId(providerId);
                 return ResponseEntity.ok(ApiResponse.success(users));
+        }
+
+        @GetMapping("/import/providers/template")
+        @Operation(summary = "Download provider users import template", description = "Downloads an Excel template for importing provider users.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Template generated successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
+        })
+        public ResponseEntity<byte[]> downloadProviderUsersTemplate() throws IOException {
+                byte[] excelData = providerUserExcelImportService.generateTemplate();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                headers.setContentDispositionFormData("attachment", "Provider_Users_Import_Template.xlsx");
+                headers.setContentLength(excelData.length);
+                return ResponseEntity.ok().headers(headers).body(excelData);
+        }
+
+        @PostMapping(value = "/import/providers", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @Operation(summary = "Import provider users from Excel", description = "Imports provider users from an Excel file.")
+        @ApiResponses({
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Import completed successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request payload", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
+        })
+        public ResponseEntity<ApiResponse<ExcelImportResult>> importProviderUsers(
+                        @Parameter(name = "file", description = "Excel file containing provider users", required = true) @RequestParam("file") MultipartFile file) {
+                ExcelImportResult result = providerUserExcelImportService.importUsers(file);
+                return ResponseEntity.ok(ApiResponse.success("تم استيراد المستخدمين بنجاح", result));
         }
 }
 

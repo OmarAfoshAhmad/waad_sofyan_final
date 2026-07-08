@@ -355,7 +355,16 @@ const ProviderPreApprovalSubmission = () => {
 
       const serviceCategoryId = normalizeId(service.categoryId || service.serviceCategoryId || service.medicalCategoryId);
       const selectedCategoryId = normalizeId(category.id);
-      const byId = serviceCategoryId !== null && selectedCategoryId !== null && serviceCategoryId === selectedCategoryId;
+      
+      let byId = serviceCategoryId !== null && selectedCategoryId !== null && serviceCategoryId === selectedCategoryId;
+      
+      // Allow matching if the service's category is a child of the selected category
+      if (!byId && serviceCategoryId !== null && selectedCategoryId !== null && categories) {
+        const servCat = categories.find((c) => normalizeId(c.id) === serviceCategoryId);
+        if (servCat && normalizeId(servCat.parentId) === selectedCategoryId) {
+          byId = true;
+        }
+      }
 
       const serviceCategoryCode = normalizeText(service.categoryCode || service.category);
       const selectedCategoryCode = normalizeText(category.code);
@@ -367,7 +376,7 @@ const ProviderPreApprovalSubmission = () => {
 
       return byId || byCode || byName;
     },
-    [normalizeId, normalizeText]
+    [normalizeId, normalizeText, categories]
   );
 
   // ══════════════════════════════════════════════════════════════════════════════
