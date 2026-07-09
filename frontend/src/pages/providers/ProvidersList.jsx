@@ -69,6 +69,7 @@ import { NetworkBadge } from 'components/insurance';
 
 // Services
 import { providersService } from 'services/api';
+import { openSnackbar } from 'api/snackbar';
 
 // ============================================================================
 // CONSTANTS
@@ -217,7 +218,6 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
 export default function ProvidersList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { openSnackbar } = useSnackbar();
 
   // Local state
   const [showDeleted, setShowDeleted] = useState(false);
@@ -242,6 +242,104 @@ export default function ProvidersList() {
   });
 
   const { page, pageSize: rowsPerPage, sorting } = tableState;
+
+  const handleNavigateAdd = useCallback(() => {
+    navigate('/providers/add');
+  }, [navigate]);
+
+  const handleNavigateEdit = useCallback(
+    (id) => {
+      navigate(`/providers/edit/${id}`);
+    },
+    [navigate]
+  );
+
+  const handleNavigateView = useCallback(
+    (id) => {
+      navigate(`/providers/${id}`);
+    },
+    [navigate]
+  );
+
+  const handleDelete = useCallback(
+    async (id, name) => {
+      setConfirmState({
+        open: true,
+        title: 'تأكيد حذف مقدم الخدمة',
+        message: `هل أنت متأكد من حذف مقدم الخدمة "${name}"؟`,
+        confirmText: 'حذف',
+        cancelText: 'إلغاء',
+        confirmColor: 'warning',
+        onConfirm: async () => {
+          try {
+            await providersService.remove(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            openSnackbar({
+              message: 'تم حذف مقدم الخدمة بنجاح',
+              variant: 'success'
+            });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Providers] Delete failed:', err);
+            openSnackbar({
+              message: err?.response?.data?.message || 'فشل حذف مقدم الخدمة. يرجى المحاولة لاحقاً',
+              variant: 'error'
+            });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
+    },
+    [queryClient]
+  );
+
+  const handleRestore = useCallback(
+    async (id, name) => {
+      setConfirmState({
+        open: true,
+        title: 'تأكيد الاستعادة',
+        message: `هل تريد استعادة مقدم الخدمة "${name}" من سجل المحذوفات؟`,
+        confirmText: 'استعادة',
+        cancelText: 'إلغاء',
+        confirmColor: 'info',
+        onConfirm: async () => {
+          try {
+            await providersService.restore(id);
+            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
+              if (!oldData) return oldData;
+              const list = oldData.content || oldData.items;
+              if (!Array.isArray(list)) return oldData;
+              const nextList = list.filter((item) => item?.id !== id);
+              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
+              return {
+                ...oldData,
+                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
+              };
+            });
+            openSnackbar({ message: 'تمت استعادة مقدم الخدمة بنجاح', variant: 'success' });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[Providers] Restore failed:', err);
+            openSnackbar({ message: err?.response?.data?.message || 'فشلت استعادة مقدم الخدمة', variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
+    },
+    [queryClient]
+  );
 
   const handleHardDelete = useCallback(
     async (id, name) => {
