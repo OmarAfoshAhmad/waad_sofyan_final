@@ -179,6 +179,52 @@ export const providersService = {
     }
   },
 
+  // ========================================
+  // BULK OPERATIONS
+  // ========================================
+
+  /**
+   * Bulk deactivate (soft delete) providers
+   * @param {Array<number>} ids - Array of provider IDs
+   */
+  bulkDeactivate: async (ids) => {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) throw new Error('يرجى تحديد مرفق واحد على الأقل');
+      const response = await axiosClient.post(`${BASE_URL}/bulk-deactivate`, ids);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
+   * Bulk hard delete providers
+   * @param {Array<number>} ids - Array of provider IDs
+   */
+  bulkHardDelete: async (ids) => {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) throw new Error('يرجى تحديد مرفق واحد على الأقل');
+      const response = await axiosClient.post(`${BASE_URL}/bulk-hard-delete`, ids);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
+   * Bulk restore providers
+   * @param {Array<number>} ids - Array of provider IDs
+   */
+  bulkRestore: async (ids) => {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) throw new Error('يرجى تحديد مرفق واحد على الأقل');
+      const response = await axiosClient.post(`${BASE_URL}/bulk-restore`, ids);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
   /**
    * Search providers
    * @param {string} query - Search query

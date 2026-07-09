@@ -43,6 +43,7 @@ public class ProviderService {
     private final ProviderMapper providerMapper;
     private final EmployerRepository employerRepository;
     private final ProviderContractRepository providerContractRepository;
+    private final com.waad.tba.modules.providercontract.repository.ProviderContractRepository newProviderContractRepository;
     private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
 
     /**
@@ -106,25 +107,34 @@ public class ProviderService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ProviderViewDto> listProviders(int page, int size, String search, Boolean active) {
+    public Page<ProviderViewDto> listProviders(int page, int size, String search, Boolean active, String providerTypeStr) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Provider> providers;
+        Provider.ProviderType providerType = null;
+        
+        if (providerTypeStr != null && !providerTypeStr.isEmpty()) {
+            try {
+                providerType = Provider.ProviderType.valueOf(providerTypeStr);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid providerType: {}", providerTypeStr);
+            }
+        }
 
         if (search != null && !search.isEmpty()) {
             if (active == null) {
-                providers = providerRepository.searchPagedAll(search, pageable);
+                providers = providerType != null ? providerRepository.searchPagedAllWithType(search, providerType, pageable) : providerRepository.searchPagedAll(search, pageable);
             } else if (Boolean.TRUE.equals(active)) {
-                providers = providerRepository.searchPaged(search, pageable);
+                providers = providerType != null ? providerRepository.searchPagedWithType(search, providerType, pageable) : providerRepository.searchPaged(search, pageable);
             } else {
-                providers = providerRepository.searchPagedInactive(search, pageable);
+                providers = providerType != null ? providerRepository.searchPagedInactiveWithType(search, providerType, pageable) : providerRepository.searchPagedInactive(search, pageable);
             }
         } else {
             if (active == null) {
-                providers = providerRepository.findAll(pageable);
+                providers = providerType != null ? providerRepository.findByProviderType(providerType, pageable) : providerRepository.findAll(pageable);
             } else if (Boolean.TRUE.equals(active)) {
-                providers = providerRepository.findByActiveTrue(pageable);
+                providers = providerType != null ? providerRepository.findByActiveTrueAndProviderType(providerType, pageable) : providerRepository.findByActiveTrue(pageable);
             } else {
-                providers = providerRepository.findByActiveFalse(pageable);
+                providers = providerType != null ? providerRepository.findByActiveFalseAndProviderType(providerType, pageable) : providerRepository.findByActiveFalse(pageable);
             }
         }
 
@@ -198,6 +208,99 @@ public class ProviderService {
             throw new BusinessRuleException("تعذر الحذف النهائي لوجود بيانات مرتبطة بمقدم الخدمة.");
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BULK OPERATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Bulk deactivate (soft delete) providers and their empty contracts.
+     */
+    @Transactional
+    public void bulkDeactivateProviders(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+
+        for (Long id : ids) {
+            Provider provider = providerRepository.findById(id)
+                    .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+
+            // Delete contracts if they have no pricing items
+            List<com.waad.tba.modules.providercontract.entity.ProviderContract> contracts = 
+                newProviderContractRepository.findByProviderIdAndActiveTrue(id);
+            
+            for (com.waad.tba.modules.providercontract.entity.ProviderContract contract : contracts) {
+                if (contract.getActivePricingItemsCount() > 0) {
+                    throw new BusinessRuleException("المقدم [" + provider.getName() + "] يمتلك عقداً يحوي خدمات مسعرة ولا يمكن حذفه.");
+                }
+                // Soft delete contract
+                contract.setActive(false);
+                newProviderContractRepository.save(contract);
+            }
+
+            provider.setActive(false);
+            providerRepository.save(provider);
+            log.info("Provider {} bulk deactivated", id);
+        }
+    }
+
+    /**
+     * Bulk hard delete providers and their empty contracts.
+     */
+    @Transactional
+    public void bulkHardDeleteProviders(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+
+        for (Long id : ids) {
+            Provider provider = providerRepository.findById(id)
+                    .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+
+            if (Boolean.TRUE.equals(provider.getActive())) {
+                throw new BusinessRuleException("لا يمكن الحذف النهائي للمرفق [" + provider.getName() + "] قبل النقل إلى سجل المحذوفات.");
+            }
+
+            // Get all contracts (active and inactive) for this provider to hard delete them
+            List<com.waad.tba.modules.providercontract.entity.ProviderContract> contracts = 
+                newProviderContractRepository.findByProviderId(id);
+            
+            for (com.waad.tba.modules.providercontract.entity.ProviderContract contract : contracts) {
+                if (contract.getActivePricingItemsCount() > 0) {
+                    throw new BusinessRuleException("المقدم [" + provider.getName() + "] يمتلك عقداً يحوي خدمات مسعرة ولا يمكن حذفه نهائياً.");
+                }
+                // Hard delete empty contract
+                newProviderContractRepository.delete(contract);
+            }
+            
+            newProviderContractRepository.flush();
+            providerAllowedEmployerRepository.deleteByProviderId(id);
+            providerAllowedEmployerRepository.flush();
+
+            try {
+                providerRepository.delete(provider);
+                providerRepository.flush();
+                log.info("Provider {} bulk hard-deleted", id);
+            } catch (DataIntegrityViolationException ex) {
+                throw new BusinessRuleException("تعذر الحذف النهائي للمرفق [" + provider.getName() + "] لوجود بيانات مرتبطة به.");
+            }
+        }
+    }
+
+    /**
+     * Bulk restore soft-deleted providers.
+     */
+    @Transactional
+    public void bulkRestoreProviders(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+
+        for (Long id : ids) {
+            Provider provider = providerRepository.findById(id)
+                    .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+
+            provider.setActive(true);
+            providerRepository.save(provider);
+            log.info("Provider {} bulk restored", id);
+        }
+    }
+
 
     @Transactional(readOnly = true)
     public List<ProviderViewDto> getAllActiveProviders() {

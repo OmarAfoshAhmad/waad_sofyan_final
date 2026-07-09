@@ -57,6 +57,11 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
        List<ProviderContract> findByProviderIdAndActiveTrue(Long providerId);
 
        /**
+        * Find all contracts for a provider (including inactive)
+        */
+       List<ProviderContract> findByProviderId(Long providerId);
+
+       /**
         * Find all contracts for a provider (paginated)
         */
        Page<ProviderContract> findByProviderIdAndActiveTrue(Long providerId, Pageable pageable);

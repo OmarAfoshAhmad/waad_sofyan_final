@@ -135,8 +135,9 @@ public class ProviderController {
             @RequestParam(name = "page", defaultValue = "1") int page,
             @RequestParam(name = "size", defaultValue = "10") int size,
             @RequestParam(name = "search", required = false) String search,
-            @RequestParam(name = "active", required = false) Boolean active) {
-        Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search, active);
+            @RequestParam(name = "active", required = false) Boolean active,
+            @RequestParam(name = "providerType", required = false) String providerType) {
+        Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search, active, providerType);
 
         PaginationResponse<ProviderViewDto> response = PaginationResponse.<ProviderViewDto>builder()
                 .items(providers.getContent())
@@ -174,6 +175,31 @@ public class ProviderController {
     public ResponseEntity<ApiResponse<Void>> hardDeleteProvider(@PathVariable("id") Long id) {
         providerService.hardDeleteProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider permanently deleted", null));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BULK OPERATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @PostMapping("/bulk-deactivate")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> bulkDeactivateProviders(@RequestBody List<Long> ids) {
+        providerService.bulkDeactivateProviders(ids);
+        return ResponseEntity.ok(ApiResponse.success("Providers and empty contracts deactivated successfully", null));
+    }
+
+    @PostMapping("/bulk-hard-delete")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> bulkHardDeleteProviders(@RequestBody List<Long> ids) {
+        providerService.bulkHardDeleteProviders(ids);
+        return ResponseEntity.ok(ApiResponse.success("Providers and empty contracts permanently deleted", null));
+    }
+
+    @PostMapping("/bulk-restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> bulkRestoreProviders(@RequestBody List<Long> ids) {
+        providerService.bulkRestoreProviders(ids);
+        return ResponseEntity.ok(ApiResponse.success("Providers restored successfully", null));
     }
 
     @GetMapping("/active")

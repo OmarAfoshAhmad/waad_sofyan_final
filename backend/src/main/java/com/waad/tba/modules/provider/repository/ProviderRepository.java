@@ -58,6 +58,39 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
        @Query("SELECT p FROM Provider p WHERE p.active = true")
        Page<Provider> findAllActivePaged(Pageable pageable);
 
+       // ═══════════════════════════════════════════════════════════════════════════
+       // FILTER BY TYPE
+       // ═══════════════════════════════════════════════════════════════════════════
+
+       @Query("SELECT p FROM Provider p " +
+                     "WHERE p.active = true " +
+                     "AND p.providerType = :providerType " +
+                     "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.licenseNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+       Page<Provider> searchPagedWithType(@Param("keyword") String keyword, @Param("providerType") com.waad.tba.modules.provider.entity.Provider.ProviderType providerType, Pageable pageable);
+
+       @Query("SELECT p FROM Provider p " +
+                     "WHERE p.providerType = :providerType " +
+                     "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.licenseNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+       Page<Provider> searchPagedAllWithType(@Param("keyword") String keyword, @Param("providerType") com.waad.tba.modules.provider.entity.Provider.ProviderType providerType, Pageable pageable);
+
+       @Query("SELECT p FROM Provider p " +
+                     "WHERE p.active = false " +
+                     "AND p.providerType = :providerType " +
+                     "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.licenseNumber) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+                     "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+       Page<Provider> searchPagedInactiveWithType(@Param("keyword") String keyword, @Param("providerType") com.waad.tba.modules.provider.entity.Provider.ProviderType providerType, Pageable pageable);
+
+       Page<Provider> findByActiveTrueAndProviderType(com.waad.tba.modules.provider.entity.Provider.ProviderType providerType, Pageable pageable);
+
+       Page<Provider> findByActiveFalseAndProviderType(com.waad.tba.modules.provider.entity.Provider.ProviderType providerType, Pageable pageable);
+
+       Page<Provider> findByProviderType(com.waad.tba.modules.provider.entity.Provider.ProviderType providerType, Pageable pageable);
+
        @Query("SELECT COUNT(p) FROM Provider p WHERE p.active = true")
        long countActive();
 

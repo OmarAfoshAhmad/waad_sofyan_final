@@ -28,7 +28,12 @@ import {
   TextField,
   InputAdornment,
   Avatar,
-  ListItemAvatar // Added DialogActions, TextField, InputAdornment, Avatar, ListItemAvatar
+  ListItemAvatar,
+  Grid,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 
 // MUI Icons
@@ -55,7 +60,6 @@ import PermissionGuard from 'components/PermissionGuard';
 import { UnifiedMedicalTable } from 'components/common';
 import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 import ExcelImportDialog from 'components/ExcelImport/ExcelImportDialog';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 // Hooks
 import useTableState from 'hooks/useTableState';
@@ -66,9 +70,6 @@ import { NetworkBadge } from 'components/insurance';
 // Services
 import { providersService } from 'services/api';
 
-// Snackbar
-import { openSnackbar } from 'api/snackbar';
-
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -76,6 +77,16 @@ import { openSnackbar } from 'api/snackbar';
 const QUERY_KEY = 'providers';
 const MODULE_NAME = 'providers';
 const DEFAULT_SORT = { field: 'id', direction: 'desc' };
+
+const PROVIDER_TYPES = [
+  { value: 'HOSPITAL', label: 'مستشفى' },
+  { value: 'CLINIC', label: 'عيادة تخصصية' },
+  { value: 'POLYCLINIC', label: 'مجمع عيادات' },
+  { value: 'LABORATORY', label: 'مختبر طبي' },
+  { value: 'PHARMACY', label: 'صيدلية' },
+  { value: 'RADIOLOGY', label: 'مركز أشعة' },
+  { value: 'PHYSIOTHERAPY', label: 'علاج طبيعي' }
+];
 
 // Provider Type Labels (Arabic)
 const PROVIDER_TYPE_LABELS_AR = {
@@ -117,29 +128,14 @@ const getNetworkTier = (provider) => {
   return null;
 };
 
-/**
- * Get provider status
- */
-const getProviderStatus = (provider) => {
-  if (provider?.status) return provider.status;
-  if (provider?.active === true) return 'ACTIVE';
-  if (provider?.active === false) return 'INACTIVE';
-  return 'ACTIVE';
-};
-
 // ============================================================================
 // SUB-COMPONENTS
 // ============================================================================
 
-/**
- * Employers Cell Component
- * Fetches and displays the list of allowed employers for a specific provider
- */
 const ProviderEmployersCell = ({ providerId, providerName }) => {
   const [showDialog, setShowDialog] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
 
-  // Always fetch allowed employers to show count in button
   const {
     data: allowedEmployers,
     isLoading,
@@ -151,99 +147,45 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
     retry: 1
   });
 
-  // Extract employer names
-  // API returns List<AllowedEmployerDto>
   const employerNames = useMemo(() => {
     if (!allowedEmployers) return [];
-
-    // Check if Global Network is enabled
     const globalNet = allowedEmployers.find((e) => e.isGlobal);
     if (globalNet) return ['الشبكة العامة (جميع الشركات)'];
-
-    // Otherwise return list of active employers
     return allowedEmployers.filter((e) => e.isActive).map((e) => e.name || e.nameEn || 'مجهول');
   }, [allowedEmployers]);
 
-  // Filter for search
   const filteredNames = dialogSearchTerm
     ? employerNames.filter((name) => name.toLowerCase().includes(dialogSearchTerm.toLowerCase()))
     : employerNames;
 
   const count = employerNames.length;
-  // Handle Global Network special case for count display
   const isGlobal = employerNames.length === 1 && employerNames[0].includes('الشبكة العامة');
 
-  // Show loading spinner while fetching
-  if (isLoading) {
-    return <CircularProgress size={20} color="secondary" />;
-  }
+  if (isLoading) return <CircularProgress size={20} color="secondary" />;
+  if (error) return <Typography variant="caption" color="error">خطأ</Typography>;
+  if (count === 0) return <Typography variant="caption" color="text.secondary">-</Typography>;
 
-  // Show error state
-  if (error) {
-    return (
-      <Tooltip title={error.message || 'فشل تحميل البيانات'}>
-        <Typography variant="caption" color="error">
-          خطأ
-        </Typography>
-      </Tooltip>
-    );
-  }
-
-  // If no contracts, show empty state
-  if (count === 0) {
-    return (
-      <Typography variant="caption" color="text.secondary">
-        -
-      </Typography>
-    );
-  }
-
-  // Show button with count
   return (
     <>
-      <Tooltip title="اضغط لعرض جهات العمل المتعاقدة">
-        <Button
-          size="small"
-          variant="text"
-          color={isGlobal ? 'success' : 'primary'}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowDialog(true);
-          }}
-          startIcon={
-            isGlobal ? <VerifiedUserIcon sx={{ fontSize: '1rem !important' }} /> : <BusinessIcon sx={{ fontSize: '1rem !important' }} />
-          }
-          sx={{ fontWeight: 'bold' }}
-        >
-          {isGlobal ? 'شبكة عامة' : `${count} ${count > 10 ? 'جهة' : count === 1 ? 'جهة واحدة' : count === 2 ? 'جهتان' : 'جهات'}`}
-        </Button>
-      </Tooltip>
-
-      {/* Dialog to show full list */}
-      <Dialog
-        open={showDialog}
-        onClose={() => {
-          setShowDialog(false);
-          setDialogSearchTerm('');
-        }}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: '0.25rem' } }}
+      <Button
+        size="small"
+        variant="text"
+        color={isGlobal ? 'success' : 'primary'}
+        onClick={(e) => { e.stopPropagation(); setShowDialog(true); }}
+        startIcon={isGlobal ? <VerifiedUserIcon sx={{ fontSize: '1rem !important' }} /> : <BusinessIcon sx={{ fontSize: '1rem !important' }} />}
+        sx={{ fontWeight: 'bold' }}
       >
-        <DialogTitle sx={{ m: 0, p: '1.0rem', pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h6" fontWeight="bold">
-              جهات العمل المتعاقدة
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {providerName}
-            </Typography>
-          </Box>
-          <IconButton onClick={() => setShowDialog(false)} size="small">
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
+        {isGlobal ? 'شبكة عامة' : `${count} جهة`}
+      </Button>
 
+      <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h6">جهات العمل المتعاقدة</Typography>
+            <Typography variant="caption">{providerName}</Typography>
+          </Box>
+          <IconButton onClick={() => setShowDialog(false)} size="small"><CloseIcon /></IconButton>
+        </DialogTitle>
         <Box sx={{ px: '1.0rem', pb: '1.0rem' }}>
           <TextField
             fullWidth
@@ -251,49 +193,18 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
             placeholder="بحث عن جهة عمل..."
             value={dialogSearchTerm}
             onChange={(e) => setDialogSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" color="action" />
-                </InputAdornment>
-              )
-            }}
-            sx={{ bgcolor: 'background.paper' }}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
           />
         </Box>
-
-        <Divider />
-
         <DialogContent sx={{ p: 0, maxHeight: '25.0rem', overflowY: 'auto' }}>
-          <List dense sx={{ py: 0 }}>
-            {filteredNames.length > 0 ? (
-              filteredNames.map((name, index) => (
-                <ListItem key={index} divider={index < filteredNames.length - 1} sx={{ py: '0.75rem', px: '1.0rem' }}>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: 'primary.light', color: 'primary.main', width: '2.0rem', height: '2.0rem' }}>
-                      <BusinessIcon fontSize="small" />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText primary={name} primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }} />
-                </ListItem>
-              ))
-            ) : (
-              <Box sx={{ p: '2.0rem', textAlign: 'center' }}>
-                <Typography color="text.secondary" variant="body2">
-                  {dialogSearchTerm ? 'لا توجد نتائج مطابقة' : 'لا توجد جهات متعاقدة'}
-                </Typography>
-              </Box>
-            )}
+          <List dense>
+            {filteredNames.map((name, index) => (
+              <ListItem key={index} divider>
+                <ListItemText primary={name} />
+              </ListItem>
+            ))}
           </List>
         </DialogContent>
-
-        <Divider />
-
-        <DialogActions sx={{ p: '0.75rem', justifyContent: 'center' }}>
-          <Button onClick={() => setShowDialog(false)} color="inherit">
-            إغلاق
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );
@@ -306,8 +217,15 @@ const ProviderEmployersCell = ({ providerId, providerName }) => {
 export default function ProvidersList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { openSnackbar } = useSnackbar();
+
+  // Local state
   const [showDeleted, setShowDeleted] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('');
+  
   const [confirmState, setConfirmState] = useState({
     open: false,
     title: '',
@@ -318,121 +236,12 @@ export default function ProvidersList() {
     onConfirm: null
   });
 
-  // ========================================
-  // TABLE STATE
-  // ========================================
-
   const tableState = useTableState({
     initialPageSize: 10,
     defaultSort: DEFAULT_SORT
   });
 
   const { page, pageSize: rowsPerPage, sorting } = tableState;
-
-  const sortColumn = sorting?.[0]?.id;
-  const sortDirection = sorting?.[0]?.desc ? 'desc' : 'asc';
-
-  // ========================================
-  // NAVIGATION HANDLERS
-  // ========================================
-
-  const handleNavigateAdd = useCallback(() => {
-    navigate('/providers/add');
-  }, [navigate]);
-
-  const handleNavigateEdit = useCallback(
-    (id) => {
-      navigate(`/providers/edit/${id}`);
-    },
-    [navigate]
-  );
-
-  const handleNavigateView = useCallback(
-    (id) => {
-      navigate(`/providers/${id}`);
-    },
-    [navigate]
-  );
-
-  const handleDelete = useCallback(
-    async (id, name) => {
-      setConfirmState({
-        open: true,
-        title: 'تأكيد حذف مقدم الخدمة',
-        message: `هل أنت متأكد من حذف مقدم الخدمة "${name}"؟`,
-        confirmText: 'حذف',
-        cancelText: 'إلغاء',
-        confirmColor: 'warning',
-        onConfirm: async () => {
-          try {
-            await providersService.remove(id);
-            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
-              if (!oldData) return oldData;
-              const list = oldData.content || oldData.items;
-              if (!Array.isArray(list)) return oldData;
-              const nextList = list.filter((item) => item?.id !== id);
-              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
-              return {
-                ...oldData,
-                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
-              };
-            });
-            openSnackbar({
-              message: 'تم حذف مقدم الخدمة بنجاح',
-              variant: 'success'
-            });
-            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-          } catch (err) {
-            console.error('[Providers] Delete failed:', err);
-            openSnackbar({
-              message: err?.response?.data?.message || 'فشل حذف مقدم الخدمة. يرجى المحاولة لاحقاً',
-              variant: 'error'
-            });
-          } finally {
-            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
-          }
-        }
-      });
-    },
-    [queryClient]
-  );
-
-  const handleRestore = useCallback(
-    async (id, name) => {
-      setConfirmState({
-        open: true,
-        title: 'تأكيد الاستعادة',
-        message: `هل تريد استعادة مقدم الخدمة "${name}" من سجل المحذوفات؟`,
-        confirmText: 'استعادة',
-        cancelText: 'إلغاء',
-        confirmColor: 'info',
-        onConfirm: async () => {
-          try {
-            await providersService.restore(id);
-            queryClient.setQueriesData({ queryKey: [QUERY_KEY] }, (oldData) => {
-              if (!oldData) return oldData;
-              const list = oldData.content || oldData.items;
-              if (!Array.isArray(list)) return oldData;
-              const nextList = list.filter((item) => item?.id !== id);
-              const nextTotal = Math.max((oldData.totalElements ?? oldData.total ?? nextList.length) - 1, 0);
-              return {
-                ...oldData,
-                ...(oldData.content ? { content: nextList, totalElements: nextTotal } : { items: nextList, total: nextTotal })
-              };
-            });
-            openSnackbar({ message: 'تمت استعادة مقدم الخدمة بنجاح', variant: 'success' });
-            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-          } catch (err) {
-            console.error('[Providers] Restore failed:', err);
-            openSnackbar({ message: err?.response?.data?.message || 'فشلت استعادة مقدم الخدمة', variant: 'error' });
-          } finally {
-            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
-          }
-        }
-      });
-    },
-    [queryClient]
-  );
 
   const handleHardDelete = useCallback(
     async (id, name) => {
@@ -750,7 +559,7 @@ export default function ProvidersList() {
   // ========================================
 
   const { data, isLoading } = useQuery({
-    queryKey: [QUERY_KEY, showDeleted, page, rowsPerPage, sortColumn, sortDirection],
+    queryKey: [QUERY_KEY, showDeleted, page, rowsPerPage, sortColumn, sortDirection, tableState.columnFilters],
     queryFn: async () => {
       console.log('[ProvidersList] Fetching providers - page:', page + 1, 'size:', rowsPerPage);
 
@@ -758,7 +567,9 @@ export default function ProvidersList() {
         page: page + 1, // Backend uses 1-based pages
         size: rowsPerPage,
         sort: sortColumn ? `${sortColumn},${sortDirection}` : 'id,desc',
-        active: showDeleted ? false : true
+        active: showDeleted ? false : true,
+        search: tableState.columnFilters.q || undefined,
+        providerType: tableState.columnFilters.providerType || undefined
       };
 
       const result = await providersService.getAll(params);
@@ -767,6 +578,11 @@ export default function ProvidersList() {
     staleTime: 30 * 1000,
     refetchOnMount: true
   });
+
+  // Reset function when switching tabs
+  useMemo(() => {
+    setSelectedIds([]);
+  }, [showDeleted]);
 
   // Extract data
   const providers = useMemo(() => {
@@ -810,6 +626,119 @@ export default function ProvidersList() {
         />
       </PermissionGuard>
 
+      {/* ====== FILTERS & BULK ACTIONS ====== */}
+      <Box sx={{ p: 2, mb: 2 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="البحث باسم المرفق أو المدينة أو رقم الترخيص..."
+              value={tableState.columnFilters.q || ''}
+              onChange={(e) => tableState.setFilter('q', e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                )
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="provider-type-label">نوع المرفق</InputLabel>
+              <Select
+                labelId="provider-type-label"
+                value={tableState.columnFilters.providerType || ''}
+                label="نوع المرفق"
+                onChange={(e) => tableState.setFilter('providerType', e.target.value)}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                {PROVIDER_TYPES.map((type) => (
+                  <MenuItem key={type.value} value={type.value}>
+                    {type.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<RefreshIcon />}
+              onClick={() => {
+                tableState.setFilter('q', '');
+                tableState.setFilter('providerType', '');
+              }}
+              fullWidth
+            >
+              إعادة ضبط
+            </Button>
+          </Grid>
+
+          {selectedIds.length > 0 && (
+            <Grid item xs={12}>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ bgcolor: 'rgba(0, 0, 0, 0.04)', p: 1, borderRadius: 1 }}>
+                <Typography variant="body2" fontWeight="bold">
+                  تم تحديد {selectedIds.length} مرفق
+                </Typography>
+                
+                {showDeleted ? (
+                  <>
+                    <PermissionGuard resource="providers" action="delete">
+                      <Button
+                        size="small"
+                        color="success"
+                        variant="contained"
+                        startIcon={<RefreshIcon />}
+                        onClick={() => providersService.bulkRestore(selectedIds).then(() => {
+                          openSnackbar({ message: 'تم استعادة المرافق المحددة', variant: 'success' });
+                          setSelectedIds([]);
+                          queryClient.invalidateQueries([QUERY_KEY]);
+                        }).catch(e => openSnackbar({ message: e.message || 'خطأ', variant: 'error' }))}
+                      >
+                        استعادة المحدد
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="contained"
+                        startIcon={<DeleteForeverIcon />}
+                        onClick={() => providersService.bulkHardDelete(selectedIds).then(() => {
+                          openSnackbar({ message: 'تم الحذف النهائي بنجاح', variant: 'success' });
+                          setSelectedIds([]);
+                          queryClient.invalidateQueries([QUERY_KEY]);
+                        }).catch(e => openSnackbar({ message: e.message || 'خطأ', variant: 'error' }))}
+                      >
+                        حذف نهائي للمحدد
+                      </Button>
+                    </PermissionGuard>
+                  </>
+                ) : (
+                  <PermissionGuard resource="providers" action="delete">
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="contained"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => providersService.bulkDeactivate(selectedIds).then(() => {
+                        openSnackbar({ message: 'تم حذف المرافق المحددة وعقودها الفارغة بنجاح', variant: 'success' });
+                        setSelectedIds([]);
+                        queryClient.invalidateQueries([QUERY_KEY]);
+                      }).catch(e => openSnackbar({ message: e.message || 'يوجد مرفق يحتوي على عقد مسعر يمنع الحذف', variant: 'error' }))}
+                    >
+                      حذف المحدد (مع عقوده)
+                    </Button>
+                  </PermissionGuard>
+                )}
+              </Stack>
+            </Grid>
+          )}
+        </Grid>
+      </Box>
+
       {/* ====== DATA TABLE ====== */}
       <MainCard content={false} sx={{ height: 'calc(100vh - 250px)', display: 'flex', flexDirection: 'column' }}>
         <UnifiedMedicalTable
@@ -827,6 +756,10 @@ export default function ProvidersList() {
           onSort={(col, dir) => tableState.setSorting([{ id: col, desc: dir === 'desc' }])}
           emptyIcon={LocalHospitalIcon}
           emptyMessage="لا يوجد مقدمو خدمات صحية مسجلين حالياً"
+          selectable={true}
+          selectedRows={selectedIds}
+          onSelectAllClick={handleSelectAllClick}
+          onSelectRow={handleSelectRow}
         />
       </MainCard>
 

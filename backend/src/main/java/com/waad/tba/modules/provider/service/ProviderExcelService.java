@@ -7,6 +7,12 @@ import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto.ImportSumma
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.providercontract.dto.ProviderContractCreateDto;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.service.ProviderContractService;
+import com.waad.tba.modules.rbac.dto.UserCreateDto;
+import com.waad.tba.modules.rbac.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -33,6 +39,8 @@ import java.util.Map;
 public class ProviderExcelService {
 
     private final ProviderRepository providerRepository;
+    private final ProviderContractService contractService;
+    private final UserService userService;
 
     /** Maximum allowed Excel file size: 10 MB */
     private static final long MAX_EXCEL_FILE_SIZE = 10L * 1024 * 1024;
@@ -179,9 +187,43 @@ public class ProviderExcelService {
                     .active(active != null ? active : true)
                     .build();
 
-            providerRepository.save(newProvider);
+            Provider savedProvider = providerRepository.save(newProvider);
             summary.setInserted(summary.getInserted() + 1);
             log.debug("[ProviderExcel] Inserted provider: {}", licenseNumber);
+
+            // 1. Create a DRAFT contract for the new provider
+            try {
+                ProviderContractCreateDto contractDto = ProviderContractCreateDto.builder()
+                        .providerId(savedProvider.getId())
+                        .status(ContractStatus.DRAFT)
+                        .pricingModel(PricingModel.DISCOUNT)
+                        .startDate(java.time.LocalDate.now())
+                        .build();
+                contractService.create(contractDto);
+                log.debug("[ProviderExcel] Created draft contract for provider: {}", savedProvider.getId());
+            } catch (Exception e) {
+                log.error("[ProviderExcel] Failed to create contract for provider: {}", savedProvider.getId(), e);
+            }
+
+            // 2. Create a User for the new provider
+            try {
+                // Generate username: english letters only from name + @tpa, fallback to licenseNumber@tpa
+                String englishName = name.trim().replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+                String username = (englishName.isEmpty() ? licenseNumber.trim().toLowerCase() : englishName) + "@tpa";
+                
+                UserCreateDto userDto = UserCreateDto.builder()
+                        .username(username)
+                        .password("P@123456")
+                        .fullName(name.trim())
+                        .email(email != null && !email.trim().isEmpty() ? email.trim() : username + ".local")
+                        .userType("PROVIDER_STAFF")
+                        .providerId(savedProvider.getId())
+                        .build();
+                userService.create(userDto);
+                log.debug("[ProviderExcel] Created user {} for provider: {}", username, savedProvider.getId());
+            } catch (Exception e) {
+                log.error("[ProviderExcel] Failed to create user for provider: {}", savedProvider.getId(), e);
+            }
         }
     }
 
