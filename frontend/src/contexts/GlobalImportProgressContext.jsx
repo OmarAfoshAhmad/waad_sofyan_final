@@ -321,5 +321,3 @@ const ChipLabel = ({ label, count, color }) => (
 );
 
 export default ImportProgressContext;
-
-

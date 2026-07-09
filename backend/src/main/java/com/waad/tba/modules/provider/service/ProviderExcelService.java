@@ -128,7 +128,7 @@ public class ProviderExcelService {
             throw new BusinessRuleException("الاسم (name) مطلوب");
         }
         if (licenseNumber == null || licenseNumber.trim().isEmpty()) {
-            throw new BusinessRuleException("رقم الترخيص (licenseNumber) مطلوب");
+            licenseNumber = "TEMP-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
         if (providerTypeStr == null || providerTypeStr.trim().isEmpty()) {
             throw new BusinessRuleException("نوع مقدم الخدمة (providerType) مطلوب");
@@ -195,10 +195,12 @@ public class ProviderExcelService {
             // Try Arabic/alternative names
             return switch (normalized) {
                 case "مستشفى", "مستشفي", "مستشفيات" -> ProviderType.HOSPITAL;
+                case "أسنان", "اسنان", "عيادة أسنان", "عيادة اسنان", "طب أسنان" -> ProviderType.CLINIC_DEN;
                 case "عيادة", "عيادات" -> ProviderType.CLINIC;
                 case "مختبر", "مختبرات", "LABORATORY" -> ProviderType.LAB;
                 case "صيدلية", "صيدليات" -> ProviderType.PHARMACY;
                 case "أشعة", "اشعة", "مركز أشعة" -> ProviderType.RADIOLOGY;
+                case "علاج طبيعي" -> ProviderType.PHYSIOTHERAPY;
                 default -> null;
             };
         }
@@ -211,19 +213,19 @@ public class ProviderExcelService {
             String columnName = cell.getStringCellValue().trim().toLowerCase();
 
             if (columnName.equals("name") || columnName.equals("الاسم") || columnName.equals("اسم")
-                    || columnName.equals("namearabic") || columnName.equals("name_arabic")) {
+                    || columnName.equals("namearabic") || columnName.equals("name_arabic") || columnName.equals("اسم مقدم الخدمة")) {
                 columnMap.put("name", cell.getColumnIndex());
             } else if (columnName.equals("licensenumber") || columnName.equals("license_number")
                     || columnName.equals("license") || columnName.equals("رقم الترخيص")) {
                 columnMap.put("licenseNumber", cell.getColumnIndex());
             } else if (columnName.equals("providertype") || columnName.equals("provider_type")
-                    || columnName.equals("type") || columnName.equals("النوع")) {
+                    || columnName.equals("type") || columnName.equals("النوع") || columnName.equals("نوع المقدم")) {
                 columnMap.put("providerType", cell.getColumnIndex());
             } else if (columnName.equals("city") || columnName.equals("المدينة")) {
                 columnMap.put("city", cell.getColumnIndex());
-            } else if (columnName.equals("phone") || columnName.equals("هاتف") || columnName.equals("الهاتف")) {
+            } else if (columnName.equals("phone") || columnName.equals("هاتف") || columnName.equals("الهاتف") || columnName.equals("رقم الهاتف")) {
                 columnMap.put("phone", cell.getColumnIndex());
-            } else if (columnName.equals("email") || columnName.equals("بريد") || columnName.equals("بريد الكتروني")) {
+            } else if (columnName.equals("email") || columnName.equals("بريد") || columnName.equals("بريد الكتروني") || columnName.equals("البريد الإلكتروني") || columnName.equals("البريد الالكتروني")) {
                 columnMap.put("email", cell.getColumnIndex());
             } else if (columnName.equals("active") || columnName.equals("نشط") || columnName.equals("الحالة")) {
                 columnMap.put("active", cell.getColumnIndex());
@@ -238,9 +240,6 @@ public class ProviderExcelService {
 
         if (!columnMap.containsKey("name")) {
             missing.add("name (الاسم)");
-        }
-        if (!columnMap.containsKey("licenseNumber")) {
-            missing.add("licenseNumber (رقم الترخيص)");
         }
         if (!columnMap.containsKey("providerType")) {
             missing.add("providerType (النوع)");

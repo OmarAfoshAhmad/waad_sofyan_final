@@ -88,6 +88,3 @@ ModernQuickActions.propTypes = {
 };
 
 export default ModernQuickActions;
-
-
-

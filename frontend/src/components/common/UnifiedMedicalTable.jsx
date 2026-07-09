@@ -46,7 +46,8 @@ import {
   alpha,
   useTheme,
   Collapse,
-  IconButton
+  IconButton,
+  Checkbox
 } from '@mui/material';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -112,9 +113,9 @@ const UnifiedMedicalTable = ({
 
   // Data - accept both 'rows' and 'data' as aliases
   rows: rowsProp = [],
-  data: dataProp,           // alias for rows
+  data: dataProp, // alias for rows
   loading = false,
-  isLoading,                // alias for loading
+  isLoading, // alias for loading
   totalCount: totalCountProp = 0,
   totalItems: totalItemsProp, // alias for totalCount
 
@@ -139,10 +140,16 @@ const UnifiedMedicalTable = ({
   renderExpandedRow,
   isRowExpandable,
 
+  // Selection
+  selectable = false,
+  selectedRows = [],
+  onSelectAllClick,
+  onSelectRow,
+
   // Empty State - accept both individual props and emptyStateConfig object
   emptyMessage = 'لا توجد بيانات',
   emptyIcon: EmptyIcon = LocalHospitalIcon,
-  emptyStateConfig,  // { icon, title, description } - alias for emptyMessage/emptyIcon
+  emptyStateConfig, // { icon, title, description } - alias for emptyMessage/emptyIcon
 
   // Loading State
   loadingMessage = 'جارِر التحميل...',
@@ -161,31 +168,31 @@ const UnifiedMedicalTable = ({
   tableContainerSx = {},
 
   // Extended props accepted but handled internally (not forwarded to DOM)
-  // eslint-disable-next-line no-unused-vars
+
   dataFetchFn,
-  // eslint-disable-next-line no-unused-vars
+
   queryKey,
-  // eslint-disable-next-line no-unused-vars
+
   enableExport,
-  // eslint-disable-next-line no-unused-vars
+
   onExportExcel,
-  // eslint-disable-next-line no-unused-vars
+
   defaultSort,
-  // eslint-disable-next-line no-unused-vars
+
   enableAdvancedFilters,
-  // eslint-disable-next-line no-unused-vars
+
   filtersConfig,
-  // eslint-disable-next-line no-unused-vars
+
   onFilterChange,
-  // eslint-disable-next-line no-unused-vars
+
   enableSearch,
-  // eslint-disable-next-line no-unused-vars
+
   searchPlaceholder,
-  // eslint-disable-next-line no-unused-vars
+
   onSearchChange,
-  // eslint-disable-next-line no-unused-vars
+
   onRefresh,
-  // eslint-disable-next-line no-unused-vars
+
   enablePagination,
 
   ...otherProps
@@ -208,10 +215,10 @@ const UnifiedMedicalTable = ({
   }));
 
   // Theme colors — use CSS variables injected by AppearanceInjector for light mode
-  const headerBg   = isDark ? MEDICAL_TABLE_THEME.header.dark.background : 'var(--tba-th-bg, #E0F2F1)';
-  const headerText = isDark ? MEDICAL_TABLE_THEME.header.dark.text        : 'var(--tba-th-text, #004D50)';
-  const headerBorder = isDark ? theme.palette.divider                     : 'var(--tba-th-text, #00838F)';
-  const rowEven = isDark ? MEDICAL_TABLE_THEME.row.dark.odd  : 'var(--tba-row-even, rgba(224,242,241,0.45))';
+  const headerBg = isDark ? MEDICAL_TABLE_THEME.header.dark.background : 'var(--tba-th-bg, #E0F2F1)';
+  const headerText = isDark ? MEDICAL_TABLE_THEME.header.dark.text : 'var(--tba-th-text, #004D50)';
+  const headerBorder = isDark ? theme.palette.divider : 'var(--tba-th-text, #00838F)';
+  const rowEven = isDark ? MEDICAL_TABLE_THEME.row.dark.odd : 'var(--tba-row-even, rgba(224,242,241,0.45))';
   const rowHover = isDark ? MEDICAL_TABLE_THEME.row.dark.hover : 'var(--tba-selection, rgba(0,131,143,0.08))';
 
   // Pagination handlers
@@ -274,6 +281,16 @@ const UnifiedMedicalTable = ({
           {/* Header - Soft Medical Green */}
           <TableHead>
             <TableRow>
+              {selectable && (
+                <TableCell padding="checkbox" sx={{ bgcolor: headerBg, borderBottom: `2px solid ${headerBorder}` }}>
+                  <Checkbox
+                    color="primary"
+                    indeterminate={selectedRows.length > 0 && selectedRows.length < rows.length}
+                    checked={rows.length > 0 && selectedRows.length === rows.length}
+                    onChange={onSelectAllClick}
+                  />
+                </TableCell>
+              )}
               {renderExpandedRow && (
                 <TableCell
                   padding="checkbox"
@@ -385,8 +402,26 @@ const UnifiedMedicalTable = ({
                         ...(getRowSx ? getRowSx(row, rowIndex) : {})
                       }}
                     >
+                      {selectable && (
+                        <TableCell
+                          padding="checkbox"
+                          sx={{
+                            py: '0.75rem',
+                            borderBottom: renderExpandedRow ? 'none' : `1px solid ${alpha(theme.palette.divider, 0.8)}`
+                          }}
+                        >
+                          <Checkbox
+                            color="primary"
+                            checked={selectedRows.indexOf(rowKey) !== -1}
+                            onChange={(event) => onSelectRow(event, rowKey)}
+                          />
+                        </TableCell>
+                      )}
                       {renderExpandedRow && (
-                        <TableCell padding="checkbox" sx={{ py: '0.75rem', borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}` }}>
+                        <TableCell
+                          padding="checkbox"
+                          sx={{ py: '0.75rem', borderBottom: `1px solid ${alpha(theme.palette.divider, 0.8)}` }}
+                        >
                           {expandable && (
                             <IconButton size="small" onClick={() => toggleRowExpansion(rowKey)}>
                               {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
@@ -412,7 +447,11 @@ const UnifiedMedicalTable = ({
                       ))}
                     </TableRow>
                     {renderExpandedRow && expandable && (
-                      <TableRow sx={{ '& td': { padding: 0, borderBottom: isExpanded ? `1px solid ${alpha(theme.palette.divider, 0.8)}` : 'none' } }}>
+                      <TableRow
+                        sx={{
+                          '& td': { padding: 0, borderBottom: isExpanded ? `1px solid ${alpha(theme.palette.divider, 0.8)}` : 'none' }
+                        }}
+                      >
                         <TableCell colSpan={colSpan}>
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                             <Box sx={{ p: '1.0rem', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
@@ -510,5 +549,3 @@ UnifiedMedicalTable.propTypes = {
 };
 
 export default UnifiedMedicalTable;
-
-

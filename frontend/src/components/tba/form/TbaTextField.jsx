@@ -133,5 +133,3 @@ TbaTextField.propTypes = {
 };
 
 export default TbaTextField;
-
-

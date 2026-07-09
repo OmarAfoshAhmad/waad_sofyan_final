@@ -27,13 +27,7 @@ import { useSnackbar } from 'notistack';
 import { confirmPriceListImport } from 'services/api/provider-contracts.service';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-export default function PricingImportReviewDialog({
-  open,
-  onClose,
-  contractId,
-  previewData,
-  onSuccess
-}) {
+export default function PricingImportReviewDialog({ open, onClose, contractId, previewData, onSuccess }) {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
 
@@ -43,10 +37,10 @@ export default function PricingImportReviewDialog({
 
   // Separate items by confidence
   const items = previewData?.items || [];
-  
-  const highConfItems = useMemo(() => items.filter(i => i.confidenceLevel === 'HIGH' && !i.isPriceZero), [items]);
-  const manualItems = useMemo(() => items.filter(i => i.requiresReview || i.confidenceLevel !== 'HIGH'), [items]);
-  const zeroPriceItems = useMemo(() => items.filter(i => i.isPriceZero), [items]);
+
+  const highConfItems = useMemo(() => items.filter((i) => i.confidenceLevel === 'HIGH' && !i.isPriceZero), [items]);
+  const manualItems = useMemo(() => items.filter((i) => i.requiresReview || i.confidenceLevel !== 'HIGH'), [items]);
+  const zeroPriceItems = useMemo(() => items.filter((i) => i.isPriceZero), [items]);
 
   const confirmMutation = useMutation({
     mutationFn: (data) => confirmPriceListImport(contractId, data),
@@ -71,7 +65,7 @@ export default function PricingImportReviewDialog({
   };
 
   const handleModChange = (rowId, field, value) => {
-    setModifications(prev => ({
+    setModifications((prev) => ({
       ...prev,
       [rowId]: {
         ...prev[rowId],
@@ -94,7 +88,7 @@ export default function PricingImportReviewDialog({
           <Chip label={`سعر صفر: ${previewData.zeroPriceCount}`} color="error" />
         </Box>
       </DialogTitle>
-      
+
       <DialogContent dividers sx={{ p: 0, display: 'flex', flexDirection: 'column', height: '60vh' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
           <Tabs value={tabIndex} onChange={(e, v) => setTabIndex(v)}>
@@ -103,11 +97,13 @@ export default function PricingImportReviewDialog({
             <Tab label={`سعر صفر (${zeroPriceItems.length})`} />
           </Tabs>
         </Box>
-        
+
         <Box sx={{ p: 2, overflowY: 'auto', flex: 1 }}>
           {tabIndex === 0 && (
             <>
-              <Alert severity="success" sx={{ mb: 2 }}>هذه الخدمات مطابقة بنسبة عالية للقواعد وسيتم ترحيلها تلقائياً بالبيانات المعروضة.</Alert>
+              <Alert severity="success" sx={{ mb: 2 }}>
+                هذه الخدمات مطابقة بنسبة عالية للقواعد وسيتم ترحيلها تلقائياً بالبيانات المعروضة.
+              </Alert>
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
                   <TableHead>
@@ -134,10 +130,12 @@ export default function PricingImportReviewDialog({
               </TableContainer>
             </>
           )}
-          
+
           {tabIndex === 1 && (
             <>
-              <Alert severity="warning" sx={{ mb: 2 }}>يرجى مراجعة وتأكيد أو تعديل التصنيفات التالية.</Alert>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                يرجى مراجعة وتأكيد أو تعديل التصنيفات التالية.
+              </Alert>
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
                   <TableHead>
@@ -155,20 +153,34 @@ export default function PricingImportReviewDialog({
                         <TableRow key={row.rowId}>
                           <TableCell>
                             <Typography variant="body2">{row.serviceName}</Typography>
-                            <Typography variant="caption" color="textSecondary">{row.importedSubCategory || row.importedMainCategory}</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {row.importedSubCategory || row.importedMainCategory}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="caption" color="error">{row.reviewReason || 'مستوى ثقة منخفض'}</Typography>
+                            <Typography variant="caption" color="error">
+                              {row.reviewReason || 'مستوى ثقة منخفض'}
+                            </Typography>
                           </TableCell>
                           <TableCell>
                             {/* In a real scenario, this would be an autocomplete for MedicalCategory. 
                                 For simplicity, we show the proposed code, or allow overriding if we loaded categories. */}
-                            <Chip size="small" label={row.proposedCategoryCode || 'غير مصنف'} color={row.proposedCategoryCode ? "primary" : "default"} />
+                            <Chip
+                              size="small"
+                              label={row.proposedCategoryCode || 'غير مصنف'}
+                              color={row.proposedCategoryCode ? 'primary' : 'default'}
+                            />
                             {/* We can add a button here to select a different category later */}
                           </TableCell>
                           <TableCell>
                             <FormControlLabel
-                              control={<Checkbox size="small" checked={!!mod.saveAsRule} onChange={(e) => handleModChange(row.rowId, 'saveAsRule', e.target.checked)} />}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={!!mod.saveAsRule}
+                                  onChange={(e) => handleModChange(row.rowId, 'saveAsRule', e.target.checked)}
+                                />
+                              }
                               label={<Typography variant="caption">حفظ كقاعدة</Typography>}
                             />
                           </TableCell>
@@ -183,7 +195,9 @@ export default function PricingImportReviewDialog({
 
           {tabIndex === 2 && (
             <>
-              <Alert severity="error" sx={{ mb: 2 }}>يوجد {zeroPriceItems.length} خدمة بسعر صفر. هل تريد تخطيها وعدم استيرادها؟</Alert>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                يوجد {zeroPriceItems.length} خدمة بسعر صفر. هل تريد تخطيها وعدم استيرادها؟
+              </Alert>
               <FormControlLabel
                 control={<Checkbox checked={skipZeroPrice} onChange={(e) => setSkipZeroPrice(e.target.checked)} />}
                 label="تخطي جميع الخدمات التي سعرها صفر"
@@ -210,15 +224,12 @@ export default function PricingImportReviewDialog({
           )}
         </Box>
       </DialogContent>
-      
+
       <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose} disabled={confirmMutation.isLoading}>إلغاء</Button>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          onClick={handleConfirm}
-          disabled={confirmMutation.isLoading}
-        >
+        <Button onClick={onClose} disabled={confirmMutation.isLoading}>
+          إلغاء
+        </Button>
+        <Button variant="contained" color="primary" onClick={handleConfirm} disabled={confirmMutation.isLoading}>
           اعتماد الترحيل
         </Button>
       </DialogActions>

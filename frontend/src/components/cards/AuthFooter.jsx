@@ -23,10 +23,7 @@ export default function AuthFooter() {
             spacing={3}
             sx={{ textAlign: { xs: 'center', md: 'left' } }}
           >
-            <Typography
-              variant="caption"
-              sx={{ opacity: 0.8, fontWeight: 500, color: 'text.secondary' }}
-            >
+            <Typography variant="caption" sx={{ opacity: 0.8, fontWeight: 500, color: 'text.secondary' }}>
               © 2026 نظام WaadCare لإدارة النفقات الطبية. جميع الحقوق محفوظة.
             </Typography>
           </Stack>

@@ -96,7 +96,7 @@ const ProviderSettlementReport = () => {
   const [reportData, setReportData] = useState(null);
 
   const tableState = useTableState({
-    initialPageSize: 10,
+    initialPageSize: 10
   });
 
   // Expanded claims (for collapsible rows)
@@ -123,10 +123,7 @@ const ProviderSettlementReport = () => {
     { value: 'REJECTED', label: 'مرفوضة' }
   ];
 
-  const statusLabelByValue = useMemo(
-    () => STATUS_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {}),
-    []
-  );
+  const statusLabelByValue = useMemo(() => STATUS_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {}), []);
 
   const getStatusLabel = useCallback((statusValue) => statusLabelByValue[statusValue] || statusValue, [statusLabelByValue]);
 
@@ -183,41 +180,44 @@ const ProviderSettlementReport = () => {
   }, [providers, selectedProviderId]);
 
   // Fetch report data
-  const fetchReport = useCallback(async (isBackground = false) => {
-    if (!selectedProviderId) {
-      if (!isBackground) setError('يرجى اختيار مقدم الخدمة');
-      return;
-    }
+  const fetchReport = useCallback(
+    async (isBackground = false) => {
+      if (!selectedProviderId) {
+        if (!isBackground) setError('يرجى اختيار مقدم الخدمة');
+        return;
+      }
 
-    try {
-      if (!isBackground) setLoading(true);
-      setError(null);
+      try {
+        if (!isBackground) setLoading(true);
+        setError(null);
 
-      const params = {
-        providerId: selectedProviderId,
-        fromDate: appliedDateFrom || undefined,
-        toDate: appliedDateTo || undefined,
-        statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-        claimNumber: claimNumberFilter || undefined,
-        preAuthNumber: preAuthNumberFilter || undefined
-      };
+        const params = {
+          providerId: selectedProviderId,
+          fromDate: appliedDateFrom || undefined,
+          toDate: appliedDateTo || undefined,
+          statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+          claimNumber: claimNumberFilter || undefined,
+          preAuthNumber: preAuthNumberFilter || undefined
+        };
 
-      const data = await reportsService.getProviderSettlementReport(params);
-      setReportData(data);
+        const data = await reportsService.getProviderSettlementReport(params);
+        setReportData(data);
 
-      // Expand all claims by default
-      const expanded = {};
-      (data?.claims || []).forEach((claim) => {
-        expanded[claim.claimId] = true;
-      });
-      setExpandedClaims(expanded);
-    } catch (err) {
-      console.error('Error fetching provider settlement report:', err);
-      if (!isBackground) setError(err.userMessage || err.message || 'فشل في تحميل التقرير');
-    } finally {
-      if (!isBackground) setLoading(false);
-    }
-  }, [selectedProviderId, appliedDateFrom, appliedDateTo, selectedStatuses, claimNumberFilter, preAuthNumberFilter]);
+        // Expand all claims by default
+        const expanded = {};
+        (data?.claims || []).forEach((claim) => {
+          expanded[claim.claimId] = true;
+        });
+        setExpandedClaims(expanded);
+      } catch (err) {
+        console.error('Error fetching provider settlement report:', err);
+        if (!isBackground) setError(err.userMessage || err.message || 'فشل في تحميل التقرير');
+      } finally {
+        if (!isBackground) setLoading(false);
+      }
+    },
+    [selectedProviderId, appliedDateFrom, appliedDateTo, selectedStatuses, claimNumberFilter, preAuthNumberFilter]
+  );
 
   // Auto-fetch when any applied filter changes (debounced for text inputs)
   useEffect(() => {
@@ -225,12 +225,12 @@ const ProviderSettlementReport = () => {
     const timer = setTimeout(() => {
       fetchReport(false);
     }, 300);
-    
+
     // Auto-refresh polling every 30 seconds
     const intervalId = setInterval(() => {
       fetchReport(true);
     }, 30000);
-    
+
     return () => {
       clearTimeout(timer);
       clearInterval(intervalId);
@@ -467,7 +467,7 @@ const ProviderSettlementReport = () => {
             rejectionReason: line.rejectionReason || claim.rejectionReason,
             claimRef: claim.claimNumber,
             patientName: claim.patientNameArabic || claim.patientName,
-            insuranceNumber: claim.insuranceNumber,
+            insuranceNumber: claim.insuranceNumber
           });
         });
       } else {
@@ -481,7 +481,7 @@ const ProviderSettlementReport = () => {
           grossAmount: claim.grossAmount,
           approvedAmount: claim.netAmount,
           rejectedAmount: claim.rejectedAmount,
-          rejectionReason: claim.rejectionReason,
+          rejectionReason: claim.rejectionReason
         });
       }
     });
@@ -510,21 +510,82 @@ const ProviderSettlementReport = () => {
   const renderCell = (row, column, rowIndex) => {
     const index = tableState.page * tableState.pageSize + rowIndex;
     switch (column.id) {
-      case 'index': return <Typography variant="body2" color="text.secondary">{index + 1}</Typography>;
-      case 'claimNum': return <Typography variant="body2" fontWeight={600} color="primary" dir="ltr">{row.claimRef}</Typography>;
-      case 'patient': return <Box><Typography variant="body2" fontWeight={600} noWrap>{row.patientName}</Typography><Typography variant="caption" color="text.secondary" noWrap>{row.insuranceNumber}</Typography></Box>;
-      case 'service': return <Typography variant="body2" noWrap>{row.serviceNameArabic || row.serviceName || 'إجمالي المطالبة'}</Typography>;
-      case 'date': return <Typography variant="body2" dir="ltr">{formatDate(row.serviceDate)}</Typography>;
-      case 'gross': return <Typography variant="body2" fontWeight={400}>{formatLYD(row.grossAmount)}</Typography>;
-      case 'net': return <Typography variant="body2" color="success.main" fontWeight={400}>{formatLYD(row.approvedAmount)}</Typography>;
+      case 'index':
+        return (
+          <Typography variant="body2" color="text.secondary">
+            {index + 1}
+          </Typography>
+        );
+      case 'claimNum':
+        return (
+          <Typography variant="body2" fontWeight={600} color="primary" dir="ltr">
+            {row.claimRef}
+          </Typography>
+        );
+      case 'patient':
+        return (
+          <Box>
+            <Typography variant="body2" fontWeight={600} noWrap>
+              {row.patientName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {row.insuranceNumber}
+            </Typography>
+          </Box>
+        );
+      case 'service':
+        return (
+          <Typography variant="body2" noWrap>
+            {row.serviceNameArabic || row.serviceName || 'إجمالي المطالبة'}
+          </Typography>
+        );
+      case 'date':
+        return (
+          <Typography variant="body2" dir="ltr">
+            {formatDate(row.serviceDate)}
+          </Typography>
+        );
+      case 'gross':
+        return (
+          <Typography variant="body2" fontWeight={400}>
+            {formatLYD(row.grossAmount)}
+          </Typography>
+        );
+      case 'net':
+        return (
+          <Typography variant="body2" color="success.main" fontWeight={400}>
+            {formatLYD(row.approvedAmount)}
+          </Typography>
+        );
       case 'rejected':
-        return <Typography variant="body2" color={row.rejectedAmount > 0 ? "error.main" : "text.secondary"} fontWeight={400}>{formatLYD(row.rejectedAmount)}</Typography>;
+        return (
+          <Typography variant="body2" color={row.rejectedAmount > 0 ? 'error.main' : 'text.secondary'} fontWeight={400}>
+            {formatLYD(row.rejectedAmount)}
+          </Typography>
+        );
       case 'reason':
-        return <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: '12.5rem', whiteSpace: 'normal', lineHeight: 1.2 }}>{row.rejectionReason || '-'}</Typography>;
+        return (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', maxWidth: '12.5rem', whiteSpace: 'normal', lineHeight: 1.2 }}
+          >
+            {row.rejectionReason || '-'}
+          </Typography>
+        );
       case 'status':
-        const isRejected = (row.rejectedAmount > 0) || row.lineStatus === 'REJECTED';
-        return <Chip label={row.lineStatusArabic || (isRejected ? 'مرفوض' : 'معتمد')} size="small" variant="outlined" color={isRejected ? 'error' : 'success'} sx={{ height: '1.5rem', fontSize: '0.7rem' }} />;
-      default: return null;
+        const isRejected = row.rejectedAmount > 0 || row.lineStatus === 'REJECTED';
+        return (
+          <Chip
+            label={row.lineStatusArabic || (isRejected ? 'مرفوض' : 'معتمد')}
+            size="small"
+            variant="outlined"
+            color={isRejected ? 'error' : 'success'}
+            sx={{ height: '1.5rem', fontSize: '0.7rem' }}
+          />
+        );
+      default:
+        return null;
     }
   };
 
@@ -655,7 +716,15 @@ const ProviderSettlementReport = () => {
             {/* Search Actions */}
             <Grid size={{ xs: 12, md: 3 }}>
               <Stack direction="row" spacing={1}>
-                <Button variant="contained" startIcon={<FilterIcon />} onClick={() => { setAppliedDateFrom(dateFrom); setAppliedDateTo(dateTo); }} disabled={loading || !selectedProviderId}>
+                <Button
+                  variant="contained"
+                  startIcon={<FilterIcon />}
+                  onClick={() => {
+                    setAppliedDateFrom(dateFrom);
+                    setAppliedDateTo(dateTo);
+                  }}
+                  disabled={loading || !selectedProviderId}
+                >
                   بحث بالتاريخ
                 </Button>
                 <Button variant="outlined" startIcon={<ClearAllIcon />} onClick={handleResetFilters}>
@@ -696,13 +765,19 @@ const ProviderSettlementReport = () => {
             <Grid container spacing={2} sx={{ mb: '1.5rem' }} className="no-print">
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card sx={{ bgcolor: 'info.lighter', textAlign: 'center', p: '1.0rem' }}>
-                  <Typography variant="caption" color="info.main" fontWeight="bold">إجمالي المطالب (له)</Typography>
-                  <Typography variant="h5" fontWeight="bold">{formatLYD(reportData.totalRequestedAmount)}</Typography>
+                  <Typography variant="caption" color="info.main" fontWeight="bold">
+                    إجمالي المطالب (له)
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {formatLYD(reportData.totalRequestedAmount)}
+                  </Typography>
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card sx={{ bgcolor: 'error.lighter', textAlign: 'center', p: '1.0rem' }}>
-                  <Typography variant="caption" color="error.main" fontWeight="bold">استقطاعات ورفض (عليه)</Typography>
+                  <Typography variant="caption" color="error.main" fontWeight="bold">
+                    استقطاعات ورفض (عليه)
+                  </Typography>
                   <Typography variant="h5" fontWeight="bold">
                     {formatLYD((reportData.totalRejectedAmount || 0) + (reportData.totalPatientShare || 0))}
                   </Typography>
@@ -710,18 +785,25 @@ const ProviderSettlementReport = () => {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card sx={{ bgcolor: 'warning.lighter', textAlign: 'center', p: '1.0rem' }}>
-                  <Typography variant="caption" color="warning.main" fontWeight="bold">نسبة الخصم</Typography>
+                  <Typography variant="caption" color="warning.main" fontWeight="bold">
+                    نسبة الخصم
+                  </Typography>
                   <Typography variant="h5" fontWeight="bold">
                     {reportData.totalRequestedAmount > 0
                       ? ((reportData.totalRejectedAmount / reportData.totalRequestedAmount) * 100).toFixed(2)
-                      : 0}%
+                      : 0}
+                    %
                   </Typography>
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card sx={{ bgcolor: 'primary.main', textAlign: 'center', p: '1.0rem', color: 'white' }}>
-                  <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 'bold' }}>صافي المستحق للمرفق</Typography>
-                  <Typography variant="h5" fontWeight="bold">{formatLYD(reportData.netProviderAmount)}</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9, fontWeight: 'bold' }}>
+                    صافي المستحق للمرفق
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {formatLYD(reportData.netProviderAmount)}
+                  </Typography>
                 </Card>
               </Grid>
             </Grid>
@@ -736,7 +818,10 @@ const ProviderSettlementReport = () => {
                 page={tableState.page}
                 rowsPerPage={tableState.pageSize}
                 onPageChange={(newPage) => tableState.setPage(newPage)}
-                onRowsPerPageChange={(newSize) => { tableState.setPageSize(newSize); tableState.setPage(0); }}
+                onRowsPerPageChange={(newSize) => {
+                  tableState.setPageSize(newSize);
+                  tableState.setPage(0);
+                }}
                 renderCell={renderCell}
                 getRowKey={(row) => row.lineId || Math.random()}
                 emptyMessage="لا يوجد تفاصيل مطالبات"
@@ -776,26 +861,53 @@ const ProviderSettlementReport = () => {
               <Box className="report-header-box">
                 <Stack direction="row" justifyContent="center" sx={{ mb: '1.0rem' }}>
                   {/* Professional Logo Placeholder */}
-                  <Box sx={{ width: '5.0rem', height: '3.125rem', border: '3px solid #000', borderRadius: '40%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Typography variant="caption" fontWeight="bold" sx={{ color: '#000', fontSize: '0.75rem' }}>WAAD TPA</Typography>
+                  <Box
+                    sx={{
+                      width: '5.0rem',
+                      height: '3.125rem',
+                      border: '3px solid #000',
+                      borderRadius: '40%',
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Typography variant="caption" fontWeight="bold" sx={{ color: '#000', fontSize: '0.75rem' }}>
+                      WAAD TPA
+                    </Typography>
                   </Box>
                 </Stack>
                 <Typography className="report-title-main">شركة وعد لإدارة النفقات الطبية</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>تقرير التسوية المالية الموحد (كشف حساب)</Typography>
-                <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>{reportData.providerName}</Typography>
-                <Typography variant="body2">الفترة: من {formatDate(reportData.fromDate)} إلى {formatDate(reportData.toDate)}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  تقرير التسوية المالية الموحد (كشف حساب)
+                </Typography>
+                <Typography variant="body1" fontWeight="bold" sx={{ mt: 1 }}>
+                  {reportData.providerName}
+                </Typography>
+                <Typography variant="body2">
+                  الفترة: من {formatDate(reportData.fromDate)} إلى {formatDate(reportData.toDate)}
+                </Typography>
               </Box>
 
               {reportData.claims?.map((claim, idx) => (
                 <Box key={claim.claimId} sx={{ mb: '2.0rem', pageBreakInside: 'avoid' }}>
                   <div className="patient-info-block">
                     <div className="pi-row">
-                      <div className="pi-col" style={{ flex: 0.4 }}><strong>No.:</strong> {idx + 1}</div>
-                      <div className="pi-col"><strong>Originator No.:</strong> {claim.claimNumber}</div>
+                      <div className="pi-col" style={{ flex: 0.4 }}>
+                        <strong>No.:</strong> {idx + 1}
+                      </div>
+                      <div className="pi-col">
+                        <strong>Originator No.:</strong> {claim.claimNumber}
+                      </div>
                     </div>
                     <div className="pi-row">
-                      <div className="pi-col"><strong>Insurance No:</strong> {claim.insuranceNumber || '-'}</div>
-                      <div className="pi-col"><strong>Patient Name:</strong> {claim.patientNameArabic || claim.patientName}</div>
+                      <div className="pi-col">
+                        <strong>Insurance No:</strong> {claim.insuranceNumber || '-'}
+                      </div>
+                      <div className="pi-col">
+                        <strong>Patient Name:</strong> {claim.patientNameArabic || claim.patientName}
+                      </div>
                     </div>
                   </div>
 
@@ -819,14 +931,20 @@ const ProviderSettlementReport = () => {
                           <td>{formatLYD(line.approvedAmount)}</td>
                           <td>{formatLYD(line.rejectedAmount)}</td>
                           <td style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                            {line.rejectionReason?.trim() ? line.rejectionReason :
-                              (claim.rejectionReason?.trim() ? claim.rejectionReason :
-                                (line.rejectedAmount > 0 ? "تجاوز السقف/السعر" : "مختبر"))}
+                            {line.rejectionReason?.trim()
+                              ? line.rejectionReason
+                              : claim.rejectionReason?.trim()
+                                ? claim.rejectionReason
+                                : line.rejectedAmount > 0
+                                  ? 'تجاوز السقف/السعر'
+                                  : 'مختبر'}
                           </td>
                         </tr>
                       ))}
                       <tr className="subtotal-row">
-                        <td colSpan={2} style={{ textAlign: 'left' }}>SUBTOTAL (الإجمالي الفرعي)</td>
+                        <td colSpan={2} style={{ textAlign: 'left' }}>
+                          SUBTOTAL (الإجمالي الفرعي)
+                        </td>
                         <td>{formatLYD(claim.grossAmount)}</td>
                         <td>{formatLYD(claim.netAmount)}</td>
                         <td>{formatLYD(claim.rejectedAmount)}</td>
@@ -841,7 +959,9 @@ const ProviderSettlementReport = () => {
                 <div className="footer-col">GRAND TOTAL (الإجمالي الكلي)</div>
                 <div className="footer-col">GROSS: {formatLYD(reportData.totalRequestedAmount)}</div>
                 <div className="footer-col">NET: {formatLYD(reportData.totalApprovedAmount)}</div>
-                <div className="footer-col" style={{ color: 'red' }}>REJECTED: {formatLYD(reportData.totalRejectedAmount)}</div>
+                <div className="footer-col" style={{ color: 'red' }}>
+                  REJECTED: {formatLYD(reportData.totalRejectedAmount)}
+                </div>
               </div>
 
               <Box sx={{ mt: '1.5rem', pt: '1.0rem', borderTop: '1px dashed #000', textAlign: 'center', fontSize: '0.75rem' }}>
@@ -851,7 +971,9 @@ const ProviderSettlementReport = () => {
             </Box>
           </>
         ) : (
-          <Alert severity="info" className="no-print">يرجى اختيار مقدم الخدمة والنقر على "بحث وتحديث" لعرض التقرير الموحد</Alert>
+          <Alert severity="info" className="no-print">
+            يرجى اختيار مقدم الخدمة والنقر على "بحث وتحديث" لعرض التقرير الموحد
+          </Alert>
         )}
       </Box>
     </MainCard>
@@ -859,5 +981,3 @@ const ProviderSettlementReport = () => {
 };
 
 export default ProviderSettlementReport;
-
-

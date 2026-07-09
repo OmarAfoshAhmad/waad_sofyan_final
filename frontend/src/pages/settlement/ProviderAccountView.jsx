@@ -430,10 +430,7 @@ const ProviderAccountView = () => {
   });
 
   // Fetch transactions
-  const {
-    data: transactionsData,
-    isLoading: isLoadingTransactions
-  } = useQuery({
+  const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
     queryKey: ['provider-account', providerId, 'transactions', paginationModel.page, paginationModel.pageSize],
     queryFn: () =>
       providerAccountsService.getTransactions(providerId, {
@@ -497,8 +494,14 @@ const ProviderAccountView = () => {
   const totalTransactions = transactionsData?.total || transactionsData?.totalElements || allTransactions.length;
   const recentTotals = useMemo(() => calculateTransactionTotals(recentTransactions), [recentTransactions]);
   const allTotals = useMemo(() => calculateTransactionTotals(allTransactions), [allTransactions]);
-  const recentRowsWithTotals = useMemo(() => appendTotalsRow(recentTransactions, recentTotals, 'recent'), [recentTransactions, recentTotals]);
-  const allRowsWithTotals = useMemo(() => appendTotalsRow(allTransactions, allTotals, `all-${paginationModel.page}`), [allTransactions, allTotals, paginationModel.page]);
+  const recentRowsWithTotals = useMemo(
+    () => appendTotalsRow(recentTransactions, recentTotals, 'recent'),
+    [recentTransactions, recentTotals]
+  );
+  const allRowsWithTotals = useMemo(
+    () => appendTotalsRow(allTransactions, allTotals, `all-${paginationModel.page}`),
+    [allTransactions, allTotals, paginationModel.page]
+  );
 
   // ========================================
   // HANDLERS
@@ -564,7 +567,7 @@ const ProviderAccountView = () => {
     // Amount can not be greater than outstanding balance
     const currentBalance = Number(accountData?.runningBalance) || 0;
     const amountVal = Number(paymentForm.amount);
-    
+
     if (amountVal > currentBalance) {
       openSnackbar({ message: 'المبلغ المدخل يجب ألا يتجاوز رصيد مقدم الخدمة', variant: 'error' });
       return;
@@ -839,7 +842,11 @@ const ProviderAccountView = () => {
         );
 
       case 'description':
-        return <Typography variant="body2" sx={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.5 }}>{String(transaction.description || '-')}</Typography>;
+        return (
+          <Typography variant="body2" sx={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.5 }}>
+            {String(transaction.description || '-')}
+          </Typography>
+        );
 
       default:
         return String(transaction[column.id] || '-');
@@ -864,10 +871,10 @@ const ProviderAccountView = () => {
   const pageActions = (
     <Stack direction="row" spacing={1}>
       <Tooltip title="دفع دفعة مالية">
-        <Button 
-          variant="contained" 
-          color="success" 
-          startIcon={<PaymentIcon />} 
+        <Button
+          variant="contained"
+          color="success"
+          startIcon={<PaymentIcon />}
           onClick={() => setIsPaymentModalOpen(true)}
           disabled={!accountData || Number(accountData.runningBalance) <= 0}
         >
@@ -944,26 +951,26 @@ const ProviderAccountView = () => {
         {/* Persistent balance mismatch warning (server-detected) */}
         {accountData && accountData.balanceVerified === false && (
           <Alert severity="error" icon={<ErrorIcon />} sx={{ mb: '1.0rem' }}>
-            ⚠️ <strong>تحذير:</strong> الرصيد المحسوب لا يتطابق مع مجموع حركات الحساب. يرجى التحقق من الحركات المالية أو التواصل مع الدعم الفني.
+            ⚠️ <strong>تحذير:</strong> الرصيد المحسوب لا يتطابق مع مجموع حركات الحساب. يرجى التحقق من الحركات المالية أو التواصل مع الدعم
+            الفني.
           </Alert>
         )}
 
         {/* Verification Result */}
-        {verificationResult && (
+        {verificationResult &&
           (() => {
             const isValid = verificationResult.balanceVerified ?? verificationResult.isValid;
             return (
-          <Alert
-            severity={isValid ? 'success' : 'warning'}
-            icon={isValid ? <CheckCircleIcon /> : <ErrorIcon />}
-            sx={{ mb: '1.0rem' }}
-            onClose={() => setVerificationResult(null)}
-          >
-            {isValid ? 'الرصيد متطابق مع مجموع الحركات' : 'يوجد عدم تطابق في الرصيد، يرجى مراجعة الحركات المالية.'}
-          </Alert>
+              <Alert
+                severity={isValid ? 'success' : 'warning'}
+                icon={isValid ? <CheckCircleIcon /> : <ErrorIcon />}
+                sx={{ mb: '1.0rem' }}
+                onClose={() => setVerificationResult(null)}
+              >
+                {isValid ? 'الرصيد متطابق مع مجموع الحركات' : 'يوجد عدم تطابق في الرصيد، يرجى مراجعة الحركات المالية.'}
+              </Alert>
             );
-          })()
-        )}
+          })()}
 
         {/* Account Summary */}
         <AccountSummaryCard account={accountData} isLoading={isLoadingAccount} />
@@ -1024,45 +1031,45 @@ const ProviderAccountView = () => {
               <Typography variant="body2" color="text.secondary">
                 الرصيد المستحق: <strong>{formatCurrency(accountData?.runningBalance)}</strong>
               </Typography>
-              <TextField 
-                label="المبلغ" 
-                type="number" 
-                fullWidth 
-                required 
+              <TextField
+                label="المبلغ"
+                type="number"
+                fullWidth
+                required
                 value={paymentForm.amount}
                 onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                 error={Number(paymentForm.amount) > Number(accountData?.runningBalance)}
                 helperText={Number(paymentForm.amount) > Number(accountData?.runningBalance) ? 'المبلغ أكبر من الرصيد المستحق' : ''}
               />
-              <TextField 
-                label="المرجع (إيصال، حوالة...)" 
-                fullWidth 
-                required 
+              <TextField
+                label="المرجع (إيصال، حوالة...)"
+                fullWidth
+                required
                 value={paymentForm.paymentReference}
                 onChange={(e) => setPaymentForm({ ...paymentForm, paymentReference: e.target.value })}
               />
-              <TextField 
-                label="ملاحظات" 
-                fullWidth 
-                multiline 
-                rows={3} 
+              <TextField
+                label="ملاحظات"
+                fullWidth
+                multiline
+                rows={3}
                 value={paymentForm.notes}
                 onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
               />
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setIsPaymentModalOpen(false)} color="inherit" disabled={isSubmittingPayment}>إلغاء</Button>
+            <Button onClick={() => setIsPaymentModalOpen(false)} color="inherit" disabled={isSubmittingPayment}>
+              إلغاء
+            </Button>
             <Button onClick={handlePaymentSubmit} variant="contained" color="primary" disabled={isSubmittingPayment}>
               {isSubmittingPayment ? 'جاري التسجيل...' : 'تسجيل الدفعة'}
             </Button>
           </DialogActions>
         </Dialog>
-
       </Box>
     </PermissionGuard>
   );
 };
 
 export default ProviderAccountView;
-

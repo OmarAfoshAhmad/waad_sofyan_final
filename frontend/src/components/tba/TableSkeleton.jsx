@@ -27,5 +27,3 @@ TableSkeleton.propTypes = {
 };
 
 export default TableSkeleton;
-
-

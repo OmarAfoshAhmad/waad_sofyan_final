@@ -1,7 +1,19 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Box, Button, CircularProgress, FormControlLabel, Grid, InputAdornment, Stack, Switch, TextField, Divider, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  FormControlLabel,
+  Grid,
+  InputAdornment,
+  Stack,
+  Switch,
+  TextField,
+  Divider,
+  Typography
+} from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Business as BusinessIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 
@@ -31,7 +43,7 @@ const LABELS = {
   invalidEmail: 'البريد الإلكتروني غير صحيح',
   fixErrors: 'الرجاء تصحيح الأخطاء',
   createdSuccess: 'تم إنشاء جهة العمل بنجاح',
-  saveError: 'فشل في حفظ جهة العمل',
+  saveError: 'فشل في حفظ جهة العمل'
 };
 
 const emptyEmployer = { code: '', name: '', email: '', phone: '', address: '', active: true };
@@ -92,9 +104,7 @@ const EmployerCreate = () => {
       const available = await checkEmployerField(field, value, null);
       setChecking((prev) => ({ ...prev, [field]: false }));
       if (!available) {
-        const msg = field === 'code'
-          ? 'هذا الرمز مستخدم مسبقاً، اختر رمزاً آخر'
-          : 'اسم جهة العمل هذا مستخدم مسبقاً، اختر اسماً آخر';
+        const msg = field === 'code' ? 'هذا الرمز مستخدم مسبقاً، اختر رمزاً آخر' : 'اسم جهة العمل هذا مستخدم مسبقاً، اختر اسماً آخر';
         setErrors((prev) => ({ ...prev, [field]: msg }));
       }
     }, 400);
@@ -115,10 +125,12 @@ const EmployerCreate = () => {
       code: validateField('code', employer.code),
       name: validateField('name', employer.name),
       email: validateField('email', employer.email),
-      phone: validateField('phone', employer.phone),
+      phone: validateField('phone', employer.phone)
     };
     // Remove null entries
-    Object.keys(newErrors).forEach((k) => { if (!newErrors[k]) delete newErrors[k]; });
+    Object.keys(newErrors).forEach((k) => {
+      if (!newErrors[k]) delete newErrors[k];
+    });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -189,7 +201,17 @@ const EmployerCreate = () => {
                   setErrors((prev) => ({ ...prev, code: err || null }));
                   if (!err && v.trim().length >= 2) scheduleUniquenessCheck('code', v);
                 }}
-                InputProps={checking.code ? { endAdornment: <InputAdornment position="end"><CircularProgress size={16} /></InputAdornment> } : undefined}
+                InputProps={
+                  checking.code
+                    ? {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <CircularProgress size={16} />
+                          </InputAdornment>
+                        )
+                      }
+                    : undefined
+                }
               />
             </Grid>
 
@@ -205,7 +227,17 @@ const EmployerCreate = () => {
                 FormHelperTextProps={{ sx: { whiteSpace: 'normal', wordBreak: 'break-word', minHeight: '1.25rem' } }}
                 placeholder={LABELS.namePlaceholder}
                 autoFocus
-                InputProps={checking.name ? { endAdornment: <InputAdornment position="end"><CircularProgress size={16} /></InputAdornment> } : undefined}
+                InputProps={
+                  checking.name
+                    ? {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <CircularProgress size={16} />
+                          </InputAdornment>
+                        )
+                      }
+                    : undefined
+                }
               />
             </Grid>
           </Grid>
@@ -287,4 +319,3 @@ const EmployerCreate = () => {
 };
 
 export default EmployerCreate;
-

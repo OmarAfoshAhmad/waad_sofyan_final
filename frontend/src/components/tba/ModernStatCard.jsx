@@ -103,5 +103,3 @@ ModernStatCard.propTypes = {
 };
 
 export default ModernStatCard;
-
-

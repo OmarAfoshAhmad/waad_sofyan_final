@@ -117,13 +117,7 @@ const SERVICE_DECISION = {
 const REVIEW_ACTION_ALLOWED_STATUSES = new Set(['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'NEEDS_CORRECTION']);
 const FINALIZED_STATUSES = new Set(['APPROVED', 'REJECTED', 'BATCHED', 'SETTLED']);
 
-const REJECTION_REASONS = [
-  'خدمة غير مغطاة',
-  'نقص مستندات',
-  'عدم مطابقة التشخيص',
-  'تجاوز حدود المنفعة',
-  'تكرار الخدمة'
-];
+const REJECTION_REASONS = ['خدمة غير مغطاة', 'نقص مستندات', 'عدم مطابقة التشخيص', 'تجاوز حدود المنفعة', 'تكرار الخدمة'];
 
 const normalizeText = (value) =>
   `${value || ''}`
@@ -243,24 +237,27 @@ const ClaimViewMedicalReview = () => {
     };
   }, []);
 
-  const fetchAttachments = useCallback(async (fallbackAttachments = []) => {
-    try {
-      const response = await getClaimAttachments(id);
-      const rawAttachments = Array.isArray(response) ? response : response?.data || response?.items || [];
-      const transformed = await Promise.all(rawAttachments.map((attachment) => mapAttachment(attachment)));
-      setAttachments(transformed);
-      return;
-    } catch (error) {
-      console.error('Error fetching attachments from endpoint, using fallback:', error);
-    }
+  const fetchAttachments = useCallback(
+    async (fallbackAttachments = []) => {
+      try {
+        const response = await getClaimAttachments(id);
+        const rawAttachments = Array.isArray(response) ? response : response?.data || response?.items || [];
+        const transformed = await Promise.all(rawAttachments.map((attachment) => mapAttachment(attachment)));
+        setAttachments(transformed);
+        return;
+      } catch (error) {
+        console.error('Error fetching attachments from endpoint, using fallback:', error);
+      }
 
-    if (Array.isArray(fallbackAttachments) && fallbackAttachments.length > 0) {
-      const transformed = await Promise.all(fallbackAttachments.map((attachment) => mapAttachment(attachment)));
-      setAttachments(transformed);
-    } else {
-      setAttachments([]);
-    }
-  }, [id, mapAttachment]);
+      if (Array.isArray(fallbackAttachments) && fallbackAttachments.length > 0) {
+        const transformed = await Promise.all(fallbackAttachments.map((attachment) => mapAttachment(attachment)));
+        setAttachments(transformed);
+      } else {
+        setAttachments([]);
+      }
+    },
+    [id, mapAttachment]
+  );
 
   const normalizedClaim = useMemo(() => {
     if (!claim) return null;
@@ -268,36 +265,31 @@ const ClaimViewMedicalReview = () => {
     const claimServices = claim.lines || claim.services || claim.claimServices || claim.items || claim.lineItems || [];
     const services = Array.isArray(claimServices)
       ? claimServices.map((service, index) => ({
-        id: service.id,
-        serviceKey: service.id ? `id-${service.id}` : `${service.medicalServiceCode || service.serviceCode || 'service'}-${index}`,
-        serviceName:
-          service.medicalServiceName ||
-          service.serviceName ||
-          service.name ||
-          service.description ||
-          service.procedureName ||
-          '-',
-        serviceCode: service.medicalServiceCode || service.serviceCode || service.code || service.procedureCode || '-',
-        quantity: service.quantity || 1,
-        unitPrice: service.unitPrice ?? service.price ?? service.netPrice ?? 0,
-        totalAmount: service.totalPrice ?? service.totalAmount ?? service.claimedAmount ?? 0,
-        medicalServiceId: service.medicalServiceId,
-        pricingItemId: service.pricingItemId,
-        benefitLimit: service.benefitLimit,
-        usedAmount: service.usedAmount,
-        remainingAmount: service.remainingAmount
-      }))
+          id: service.id,
+          serviceKey: service.id ? `id-${service.id}` : `${service.medicalServiceCode || service.serviceCode || 'service'}-${index}`,
+          serviceName:
+            service.medicalServiceName || service.serviceName || service.name || service.description || service.procedureName || '-',
+          serviceCode: service.medicalServiceCode || service.serviceCode || service.code || service.procedureCode || '-',
+          quantity: service.quantity || 1,
+          unitPrice: service.unitPrice ?? service.price ?? service.netPrice ?? 0,
+          totalAmount: service.totalPrice ?? service.totalAmount ?? service.claimedAmount ?? 0,
+          medicalServiceId: service.medicalServiceId,
+          pricingItemId: service.pricingItemId,
+          benefitLimit: service.benefitLimit,
+          usedAmount: service.usedAmount,
+          remainingAmount: service.remainingAmount
+        }))
       : claim.serviceName
         ? [
-          {
-            serviceKey: `single-${claim.serviceCode || 'service'}`,
-            serviceName: claim.serviceName,
-            serviceCode: claim.serviceCode,
-            quantity: claim.quantity || 1,
-            unitPrice: claim.unitPrice || claim.requestedAmount || claim.claimedAmount || 0,
-            totalAmount: claim.totalAmount || claim.requestedAmount || claim.claimedAmount || 0
-          }
-        ]
+            {
+              serviceKey: `single-${claim.serviceCode || 'service'}`,
+              serviceName: claim.serviceName,
+              serviceCode: claim.serviceCode,
+              quantity: claim.quantity || 1,
+              unitPrice: claim.unitPrice || claim.requestedAmount || claim.claimedAmount || 0,
+              totalAmount: claim.totalAmount || claim.requestedAmount || claim.claimedAmount || 0
+            }
+          ]
         : [];
 
     return {
@@ -514,19 +506,22 @@ const ClaimViewMedicalReview = () => {
     return Object.values(serviceDecisions).some((entry) => entry?.decision === SERVICE_DECISION.REJECT);
   }, [serviceDecisions]);
 
-  const resolveLinkedAttachmentId = useCallback((service) => {
-    if (!attachments.length || !service) return null;
+  const resolveLinkedAttachmentId = useCallback(
+    (service) => {
+      if (!attachments.length || !service) return null;
 
-    const serviceCode = normalizeText(service.serviceCode);
-    const serviceName = normalizeText(service.serviceName);
+      const serviceCode = normalizeText(service.serviceCode);
+      const serviceName = normalizeText(service.serviceName);
 
-    const matched = attachments.find((attachment) => {
-      const candidate = normalizeText(`${attachment.fileName || ''} ${attachment.name || ''}`);
-      return (serviceCode && candidate.includes(serviceCode)) || (serviceName && candidate.includes(serviceName));
-    });
+      const matched = attachments.find((attachment) => {
+        const candidate = normalizeText(`${attachment.fileName || ''} ${attachment.name || ''}`);
+        return (serviceCode && candidate.includes(serviceCode)) || (serviceName && candidate.includes(serviceName));
+      });
 
-    return matched?.id || null;
-  }, [attachments]);
+      return matched?.id || null;
+    },
+    [attachments]
+  );
 
   const handleServiceDecision = useCallback((serviceKey, decision) => {
     setServiceDecisions((previous) => ({
@@ -589,14 +584,7 @@ const ClaimViewMedicalReview = () => {
         setSubmitting(false);
       }
     },
-    [
-      id,
-      selectedServicesCount,
-      selectedApprovedAmount,
-      draftStorageKey,
-      navigate,
-      enqueueSnackbar
-    ]
+    [id, selectedServicesCount, selectedApprovedAmount, draftStorageKey, navigate, enqueueSnackbar]
   );
 
   const handleReject = useCallback(
@@ -656,8 +644,9 @@ const ClaimViewMedicalReview = () => {
         setSubmitting(false);
       }
     },
-    [id, ensureClaimUnderReview, draftStorageKey, navigate, enqueueSnackbar]
-    [id, reviewLock, ensureClaimUnderReview, draftStorageKey, navigate, enqueueSnackbar]
+    [id, ensureClaimUnderReview, draftStorageKey, navigate, enqueueSnackbar][
+      (id, reviewLock, ensureClaimUnderReview, draftStorageKey, navigate, enqueueSnackbar)
+    ]
   );
 
   const handleSendChatMessage = useCallback(() => {
@@ -766,7 +755,12 @@ const ClaimViewMedicalReview = () => {
           }}
         >
           <CardContent sx={{ py: '0.75rem', '&:last-child': { pb: '0.75rem' } }}>
-            <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              justifyContent="space-between"
+              spacing={1}
+              alignItems={{ xs: 'flex-start', md: 'center' }}
+            >
               <Box>
                 <Typography variant="subtitle1" fontWeight={700}>
                   {normalizedClaim.memberName || 'عضو غير معروف'}
@@ -882,7 +876,11 @@ const ClaimViewMedicalReview = () => {
           {normalizedClaim.services && normalizedClaim.services.length > 0 ? (
             <Stack spacing={1.25}>
               <Alert severity={selectedServicesCount > 0 ? 'success' : 'warning'} sx={{ py: 0.75 }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                >
                   <Typography variant="body2" fontWeight={600}>
                     الخدمات المحددة للموافقة: {selectedServicesCount} من {normalizedClaim.services.length}
                   </Typography>
@@ -900,8 +898,12 @@ const ClaimViewMedicalReview = () => {
                       <TableCell sx={{ fontWeight: 700 }}>سقف المنفعة</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>الرصيد المتبقي</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>الحالة السريعة</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>الكمية × السعر</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>الإجمالي</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        الكمية × السعر
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        الإجمالي
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -920,7 +922,13 @@ const ClaimViewMedicalReview = () => {
                                 {service.serviceName}
                               </Typography>
                               {!service.medicalServiceId && service.pricingItemId && (
-                                <Chip label="عقد مباشر" size="small" color="info" variant="outlined" sx={{ height: '1.125rem', fontSize: '0.75rem', fontWeight: 700 }} />
+                                <Chip
+                                  label="عقد مباشر"
+                                  size="small"
+                                  color="info"
+                                  variant="outlined"
+                                  sx={{ height: '1.125rem', fontSize: '0.75rem', fontWeight: 700 }}
+                                />
                               )}
                             </Box>
                             <Typography variant="caption" color="text.secondary">
@@ -929,12 +937,18 @@ const ClaimViewMedicalReview = () => {
                           </Box>
                         </TableCell>
                         <TableCell sx={{ py: 1 }}>
-                          <Typography variant="body2" fontWeight={600} color={service.benefitLimit > 0 ? "primary.main" : "text.secondary"}>
+                          <Typography variant="body2" fontWeight={600} color={service.benefitLimit > 0 ? 'primary.main' : 'text.secondary'}>
                             {service.benefitLimit > 0 ? formatCurrency(service.benefitLimit) : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ py: 1 }}>
-                          <Typography variant="body2" fontWeight={700} color={service.remainingAmount > 0 ? "success.main" : (service.benefitLimit > 0 ? "error.main" : "text.secondary")}>
+                          <Typography
+                            variant="body2"
+                            fontWeight={700}
+                            color={
+                              service.remainingAmount > 0 ? 'success.main' : service.benefitLimit > 0 ? 'error.main' : 'text.secondary'
+                            }
+                          >
                             {service.benefitLimit > 0 ? formatCurrency(service.remainingAmount ?? 0) : '-'}
                           </Typography>
                           {service.benefitLimit > 0 && (
@@ -944,7 +958,12 @@ const ClaimViewMedicalReview = () => {
                           )}
                         </TableCell>
                         <TableCell sx={{ py: 1 }} onClick={(event) => event.stopPropagation()}>
-                          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.REJECT ? 0.75 : 0 }}>
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            alignItems="center"
+                            sx={{ mb: serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.REJECT ? 0.75 : 0 }}
+                          >
                             <IconButton
                               size="small"
                               color={serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.APPROVE ? 'success' : 'default'}
@@ -1049,8 +1068,12 @@ const ClaimViewMedicalReview = () => {
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="caption" color="text.secondary">الخدمات المحددة للموافقة</Typography>
-              <Typography variant="caption" color="text.secondary">{selectedServicesCount} خدمة</Typography>
+              <Typography variant="caption" color="text.secondary">
+                الخدمات المحددة للموافقة
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedServicesCount} خدمة
+              </Typography>
             </Box>
             {normalizedClaim.copayAmount > 0 && (
               <>
@@ -1153,7 +1176,11 @@ const ClaimViewMedicalReview = () => {
         title={`مطالبة رقم ${normalizedClaim.claimNumber}`}
         subtitle="مراجعة طبية"
         icon={ClaimIcon}
-        breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'المطالبات', href: '/claims' }, { label: `#${normalizedClaim.claimNumber}` }]}
+        breadcrumbs={[
+          { label: 'الرئيسية', href: '/' },
+          { label: 'المطالبات', href: '/claims' },
+          { label: `#${normalizedClaim.claimNumber}` }
+        ]}
       />
 
       {/* 3-Panel Medical Review Layout */}
@@ -1191,7 +1218,12 @@ const ClaimViewMedicalReview = () => {
         }}
       >
         <Box sx={{ maxWidth: '87.5rem', mx: 'auto', px: '1.0rem', py: '0.625rem' }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between" spacing={1.5}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            alignItems={{ xs: 'stretch', md: 'center' }}
+            justifyContent="space-between"
+            spacing={1.5}
+          >
             <Typography variant="body2" fontWeight={700}>
               إجمالي المبلغ الموافق عليه: {formatCurrency(selectedApprovedAmount || 0)}
             </Typography>
@@ -1243,7 +1275,3 @@ const ClaimViewMedicalReview = () => {
 };
 
 export default ClaimViewMedicalReview;
-
-
-
-

@@ -74,8 +74,8 @@ export const reportsService = {
       const queryParams = new URLSearchParams();
       if (params.year) queryParams.append('year', params.year);
 
-      const url = queryParams.toString() 
-        ? `${BASE_URL}/financial-consolidation?${queryParams.toString()}` 
+      const url = queryParams.toString()
+        ? `${BASE_URL}/financial-consolidation?${queryParams.toString()}`
         : `${BASE_URL}/financial-consolidation`;
       const response = await axiosClient.get(url);
       return unwrap(response);
@@ -99,9 +99,7 @@ export const reportsService = {
       if (params.month) queryParams.append('month', params.month);
       if (params.providerId) queryParams.append('providerId', params.providerId);
 
-      const url = queryParams.toString() 
-        ? `${BASE_URL}/company-profit?${queryParams.toString()}` 
-        : `${BASE_URL}/company-profit`;
+      const url = queryParams.toString() ? `${BASE_URL}/company-profit?${queryParams.toString()}` : `${BASE_URL}/company-profit`;
       const response = await axiosClient.get(url);
       return unwrap(response);
     } catch (error) {
@@ -143,7 +141,7 @@ export const reportsService = {
    *
    * @param {Object} params - {
    *   providerId: number (required for admin, ignored for provider users),
-  *   employerOrgId: number (optional),
+   *   employerOrgId: number (optional),
    *   fromDate: string (YYYY-MM-DD),
    *   toDate: string (YYYY-MM-DD),
    *   statuses: string[] (APPROVED, SETTLED),

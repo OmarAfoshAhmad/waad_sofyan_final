@@ -144,7 +144,12 @@ const BreakdownTable = ({ title, icon: Icon, data, nameKey, loading }) => {
                 <TableCell align="center">
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box sx={{ flexGrow: 1 }}>
-                      <LinearProgress variant="determinate" value={row.percentage} color="error" sx={{ height: '0.375rem', borderRadius: '0.1875rem' }} />
+                      <LinearProgress
+                        variant="determinate"
+                        value={row.percentage}
+                        color="error"
+                        sx={{ height: '0.375rem', borderRadius: '0.1875rem' }}
+                      />
                     </Box>
                     <Typography variant="caption" sx={{ minWidth: '2.5rem' }}>
                       {row.percentage.toFixed(1)}%
@@ -331,6 +336,3 @@ RejectionsAnalysis.propTypes = {
 };
 
 export default RejectionsAnalysis;
-
-
-

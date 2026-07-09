@@ -108,5 +108,3 @@ MultiFileUpload.propTypes = {
   sx: PropTypes.any,
   onUpload: PropTypes.any
 };
-
-

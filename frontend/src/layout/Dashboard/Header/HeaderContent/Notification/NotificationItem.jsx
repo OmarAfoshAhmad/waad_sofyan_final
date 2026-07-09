@@ -105,5 +105,3 @@ export default function NotificationItem({ notification }) {
 }
 
 NotificationItem.propTypes = { notification: PropTypes.any };
-
-

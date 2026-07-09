@@ -74,7 +74,8 @@ const humanizeKey = (key) => {
 const inferColumnType = (key, sampleRows) => {
   const keyLower = String(key).toLowerCase();
   if (keyLower.includes('date') || keyLower.endsWith('at')) return 'date';
-  if (keyLower.includes('amount') || keyLower.includes('balance') || keyLower.includes('total') || keyLower.includes('price')) return 'currency';
+  if (keyLower.includes('amount') || keyLower.includes('balance') || keyLower.includes('total') || keyLower.includes('price'))
+    return 'currency';
 
   const firstDefined = sampleRows.map((row) => row?.[key]).find((value) => value !== null && value !== undefined && value !== '');
   if (isNumericValue(firstDefined)) return 'number';
@@ -91,7 +92,9 @@ const getColumnWidth = (header, key, rows) => {
 };
 
 const toArgb = (hexColor, fallback = 'FF0D9488') => {
-  const normalized = String(hexColor || '').trim().replace('#', '');
+  const normalized = String(hexColor || '')
+    .trim()
+    .replace('#', '');
   if (!normalized) return fallback;
   if (normalized.length === 6) return `FF${normalized.toUpperCase()}`;
   if (normalized.length === 8) return normalized.toUpperCase();

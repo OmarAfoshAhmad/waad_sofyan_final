@@ -139,5 +139,3 @@ export default function ReaderCard() {
     </Grid>
   );
 }
-
-

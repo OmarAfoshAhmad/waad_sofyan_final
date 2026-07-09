@@ -1,9 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Button, IconButton, Dialog, DialogTitle, DialogContent,
-  DialogActions, MenuItem, TextField, CircularProgress, Alert, Chip, Checkbox,
-  InputAdornment, Grid
+  Box,
+  Typography,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Button,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  TextField,
+  CircularProgress,
+  Alert,
+  Chip,
+  Checkbox,
+  InputAdornment,
+  Grid
 } from '@mui/material';
 import { Check as CheckIcon, Edit as EditIcon, AutoAwesome as AutoAwesomeIcon, Search as SearchIcon } from '@mui/icons-material';
 import axios from 'utils/axios';
@@ -27,7 +46,7 @@ const KinshipMismatchChecker = () => {
   const [mismatches, setMismatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRelation, setFilterRelation] = useState('ALL');
@@ -63,7 +82,7 @@ const KinshipMismatchChecker = () => {
 
   const handleSelectAll = (event) => {
     if (event.target.checked) {
-      setSelectedRows(filteredMismatches.map(m => m.id));
+      setSelectedRows(filteredMismatches.map((m) => m.id));
     } else {
       setSelectedRows([]);
     }
@@ -71,7 +90,7 @@ const KinshipMismatchChecker = () => {
 
   const handleSelectRow = (id) => {
     if (selectedRows.includes(id)) {
-      setSelectedRows(selectedRows.filter(rowId => rowId !== id));
+      setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
     } else {
       setSelectedRows([...selectedRows, id]);
     }
@@ -97,8 +116,8 @@ const KinshipMismatchChecker = () => {
           newRelationship: newRelation,
           newGender: newGender
         });
-        setMismatches(mismatches.filter(m => m.id !== selectedMember.id));
-        setSelectedRows(selectedRows.filter(id => id !== selectedMember.id));
+        setMismatches(mismatches.filter((m) => m.id !== selectedMember.id));
+        setSelectedRows(selectedRows.filter((id) => id !== selectedMember.id));
       } else {
         // Bulk Fix
         await axios.post('/system-settings/kinship-mismatches/bulk-fix', {
@@ -106,7 +125,7 @@ const KinshipMismatchChecker = () => {
           newRelationship: newRelation,
           newGender: newGender
         });
-        setMismatches(mismatches.filter(m => !selectedRows.includes(m.id)));
+        setMismatches(mismatches.filter((m) => !selectedRows.includes(m.id)));
         setSelectedRows([]);
       }
       handleCloseDialog();
@@ -121,8 +140,8 @@ const KinshipMismatchChecker = () => {
     if (!window.confirm('هل أنت متأكد من إبقاء البيانات وتجاهل الخطأ؟')) return;
     try {
       await axios.post(`/system-settings/kinship-mismatches/${id}/ignore`);
-      setMismatches(mismatches.filter(m => m.id !== id));
-      setSelectedRows(selectedRows.filter(rowId => rowId !== id));
+      setMismatches(mismatches.filter((m) => m.id !== id));
+      setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
     } catch (err) {
       alert('حدث خطأ أثناء تجاهل العضو');
     }
@@ -133,7 +152,7 @@ const KinshipMismatchChecker = () => {
     if (!window.confirm(`هل أنت متأكد من تجاهل الأخطاء لـ ${selectedRows.length} سجل(سجلات)؟`)) return;
     try {
       await axios.post('/system-settings/kinship-mismatches/bulk-ignore', selectedRows);
-      setMismatches(mismatches.filter(m => !selectedRows.includes(m.id)));
+      setMismatches(mismatches.filter((m) => !selectedRows.includes(m.id)));
       setSelectedRows([]);
     } catch (err) {
       alert('حدث خطأ أثناء التجاهل الجماعي');
@@ -147,18 +166,23 @@ const KinshipMismatchChecker = () => {
   };
 
   const translateRelation = (rel) => {
-    const found = RELATIONSHIP_OPTIONS.find(o => o.value === rel);
+    const found = RELATIONSHIP_OPTIONS.find((o) => o.value === rel);
     return found ? found.label : rel;
   };
 
-  const filteredMismatches = mismatches.filter(m => {
+  const filteredMismatches = mismatches.filter((m) => {
     const matchName = m.fullName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchRel = filterRelation === 'ALL' || m.currentRelationship === filterRelation;
     const matchGender = filterGender === 'ALL' || m.currentGender === filterGender || m.inferredGender === filterGender;
     return matchName && matchRel && matchGender;
   });
 
-  if (loading) return <Box p={3} display="flex" justifyContent="center"><CircularProgress /></Box>;
+  if (loading)
+    return (
+      <Box p={3} display="flex" justifyContent="center">
+        <CircularProgress />
+      </Box>
+    );
 
   return (
     <Box p={3}>
@@ -167,7 +191,11 @@ const KinshipMismatchChecker = () => {
         مراجعة أخطاء صلة القرابة والجنس
       </Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
@@ -179,7 +207,11 @@ const KinshipMismatchChecker = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               InputProps={{
-                startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                )
               }}
             />
           </Grid>
@@ -193,8 +225,10 @@ const KinshipMismatchChecker = () => {
               onChange={(e) => setFilterRelation(e.target.value)}
             >
               <MenuItem value="ALL">الكل</MenuItem>
-              {RELATIONSHIP_OPTIONS.map(opt => (
-                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+              {RELATIONSHIP_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
               ))}
             </TextField>
           </Grid>
@@ -221,7 +255,7 @@ const KinshipMismatchChecker = () => {
               color="primary"
               startIcon={<AutoAwesomeIcon />}
               onClick={() => {
-                setSelectedRows(filteredMismatches.map(m => m.id));
+                setSelectedRows(filteredMismatches.map((m) => m.id));
                 handleOpenFix(null);
               }}
             >
@@ -232,10 +266,18 @@ const KinshipMismatchChecker = () => {
       </Paper>
 
       {selectedRows.length > 0 && (
-        <Paper sx={{ p: 2, mb: 2, bgcolor: 'primary.light', color: 'primary.contrastText', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="subtitle1">
-            تم تحديد {selectedRows.length} صفوف
-          </Typography>
+        <Paper
+          sx={{
+            p: 2,
+            mb: 2,
+            bgcolor: 'primary.light',
+            color: 'primary.contrastText',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <Typography variant="subtitle1">تم تحديد {selectedRows.length} صفوف</Typography>
           <Box>
             <Button
               variant="contained"
@@ -246,12 +288,7 @@ const KinshipMismatchChecker = () => {
             >
               إصلاح شامل
             </Button>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<CheckIcon />}
-              onClick={handleBulkIgnore}
-            >
+            <Button variant="contained" color="success" startIcon={<CheckIcon />} onClick={handleBulkIgnore}>
               تجاهل الأخطاء
             </Button>
           </Box>
@@ -261,11 +298,15 @@ const KinshipMismatchChecker = () => {
       <Paper>
         {mismatches.length === 0 ? (
           <Box p={4} textAlign="center">
-            <Typography variant="h6" color="textSecondary">لا توجد أخطاء حالياً! بيانات النظام نظيفة المتطابقة.</Typography>
+            <Typography variant="h6" color="textSecondary">
+              لا توجد أخطاء حالياً! بيانات النظام نظيفة المتطابقة.
+            </Typography>
           </Box>
         ) : filteredMismatches.length === 0 ? (
           <Box p={4} textAlign="center">
-            <Typography variant="h6" color="textSecondary">لا توجد نتائج مطابقة للبحث.</Typography>
+            <Typography variant="h6" color="textSecondary">
+              لا توجد نتائج مطابقة للبحث.
+            </Typography>
           </Box>
         ) : (
           <TableContainer>
@@ -291,10 +332,7 @@ const KinshipMismatchChecker = () => {
                 {filteredMismatches.map((row) => (
                   <TableRow key={row.id} hover selected={selectedRows.includes(row.id)}>
                     <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={selectedRows.includes(row.id)}
-                        onChange={() => handleSelectRow(row.id)}
-                      />
+                      <Checkbox checked={selectedRows.includes(row.id)} onChange={() => handleSelectRow(row.id)} />
                     </TableCell>
                     <TableCell>{row.fullName}</TableCell>
                     <TableCell>
@@ -302,15 +340,17 @@ const KinshipMismatchChecker = () => {
                     </TableCell>
                     <TableCell>{translateGender(row.currentGender)}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={translateGender(row.inferredGender)} 
-                        color={row.inferredGender === 'MALE' ? 'info' : (row.inferredGender === 'FEMALE' ? 'secondary' : 'default')} 
-                        size="small" 
-                        variant="outlined" 
+                      <Chip
+                        label={translateGender(row.inferredGender)}
+                        color={row.inferredGender === 'MALE' ? 'info' : row.inferredGender === 'FEMALE' ? 'secondary' : 'default'}
+                        size="small"
+                        variant="outlined"
                       />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" color="error.main">{row.reason}</Typography>
+                      <Typography variant="body2" color="error.main">
+                        {row.reason}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Button
@@ -347,42 +387,32 @@ const KinshipMismatchChecker = () => {
         <DialogContent dividers>
           <Box display="flex" flexDirection="column" gap={3} pt={1}>
             {selectedMember ? (
-              <Typography variant="subtitle2">
-                الاسم: {selectedMember.fullName}
-              </Typography>
+              <Typography variant="subtitle2">الاسم: {selectedMember.fullName}</Typography>
             ) : (
-              <Alert severity="info">
-                سيتم تطبيق هذه القيم الجديدة على جميع الصفوف المحددة وعددهم ({selectedRows.length}).
-              </Alert>
+              <Alert severity="info">سيتم تطبيق هذه القيم الجديدة على جميع الصفوف المحددة وعددهم ({selectedRows.length}).</Alert>
             )}
-            
-            <TextField
-              select
-              fullWidth
-              label="تحديث صلة القرابة"
-              value={newRelation}
-              onChange={(e) => setNewRelation(e.target.value)}
-            >
+
+            <TextField select fullWidth label="تحديث صلة القرابة" value={newRelation} onChange={(e) => setNewRelation(e.target.value)}>
               {RELATIONSHIP_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
               ))}
             </TextField>
 
-            <TextField
-              select
-              fullWidth
-              label="تحديث الجنس"
-              value={newGender}
-              onChange={(e) => setNewGender(e.target.value)}
-            >
+            <TextField select fullWidth label="تحديث الجنس" value={newGender} onChange={(e) => setNewGender(e.target.value)}>
               {GENDER_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
               ))}
             </TextField>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog} color="inherit">إلغاء</Button>
+          <Button onClick={handleCloseDialog} color="inherit">
+            إلغاء
+          </Button>
           <Button onClick={handleFixSubmit} variant="contained" disabled={saving}>
             {saving ? 'جاري الحفظ...' : 'حفظ التعديلات'}
           </Button>

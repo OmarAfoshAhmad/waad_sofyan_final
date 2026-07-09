@@ -171,9 +171,7 @@ export const providerAccountsService = {
   recalculateBalance: async (providerId) => {
     try {
       if (!providerId) throw new Error('معرف مقدم الخدمة مطلوب');
-      const response = await axiosClient.post(
-        `${PROVIDER_ACCOUNTS_URL}/by-provider/${providerId}/recalculate-balance`
-      );
+      const response = await axiosClient.post(`${PROVIDER_ACCOUNTS_URL}/by-provider/${providerId}/recalculate-balance`);
       return unwrap(response);
     } catch (error) {
       throw handleSettlementErrors(error);
@@ -384,10 +382,8 @@ export const settlementBatchesService = {
     } catch (error) {
       throw handleSettlementErrors(error);
     }
-  },
-
-
-}
+  }
+};
 
 export const providerPaymentsService = {
   getConfirmedBatches: async (params = {}) => {

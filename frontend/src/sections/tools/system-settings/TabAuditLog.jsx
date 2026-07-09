@@ -54,7 +54,11 @@ export default function TabAuditLog() {
   const [moduleFilter, setModuleFilter] = useState('all');
   const [userFilter, setUserFilter] = useState('');
 
-  const { data: rawData, isLoading, isError } = useQuery({
+  const {
+    data: rawData,
+    isLoading,
+    isError
+  } = useQuery({
     queryKey: ['admin-audit-log'],
     queryFn: async () => {
       const response = await axiosClient.get('/admin/audit', { params: { size: 200 } });
@@ -189,157 +193,157 @@ export default function TabAuditLog() {
           )}
           {!isLoading && !isError && (
             <>
-          {/* Filters */}
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ p: '1.5rem', pb: 0 }}>
-            <TextField
-              fullWidth
-              select
-              label="Filter by Module"
-              value={moduleFilter}
-              onChange={(e) => setModuleFilter(e.target.value)}
-              size="small"
-            >
-              <MenuItem value="all">All Modules</MenuItem>
-              {modules.map((module) => (
-                <MenuItem key={module} value={module}>
-                  {module}
-                </MenuItem>
-              ))}
-            </TextField>
+              {/* Filters */}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ p: '1.5rem', pb: 0 }}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Filter by Module"
+                  value={moduleFilter}
+                  onChange={(e) => setModuleFilter(e.target.value)}
+                  size="small"
+                >
+                  <MenuItem value="all">All Modules</MenuItem>
+                  {modules.map((module) => (
+                    <MenuItem key={module} value={module}>
+                      {module}
+                    </MenuItem>
+                  ))}
+                </TextField>
 
-            <TextField
-              fullWidth
-              label="Search by User"
-              value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
-              placeholder="Search user email..."
-              size="small"
-            />
+                <TextField
+                  fullWidth
+                  label="Search by User"
+                  value={userFilter}
+                  onChange={(e) => setUserFilter(e.target.value)}
+                  placeholder="Search user email..."
+                  size="small"
+                />
 
-            <TextField
-              fullWidth
-              label="Global Search"
-              value={globalFilter ?? ''}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              placeholder="Search all fields..."
-              size="small"
-            />
-          </Stack>
+                <TextField
+                  fullWidth
+                  label="Global Search"
+                  value={globalFilter ?? ''}
+                  onChange={(e) => setGlobalFilter(e.target.value)}
+                  placeholder="Search all fields..."
+                  size="small"
+                />
+              </Stack>
 
-          {/* Table */}
-          <ScrollX>
-            <Stack>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <th
-                          key={header.id}
-                          onClick={header.column.getToggleSortingHandler()}
+              {/* Table */}
+              <ScrollX>
+                <Stack>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <tr key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => (
+                            <th
+                              key={header.id}
+                              onClick={header.column.getToggleSortingHandler()}
+                              style={{
+                                padding: '12px 16px',
+                                textAlign: 'left',
+                                borderBottom: '2px solid #f0f0f0',
+                                cursor: header.column.getCanSort() ? 'pointer' : 'default',
+                                userSelect: 'none',
+                                fontWeight: 600
+                              }}
+                            >
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                                {header.column.getIsSorted() ? (
+                                  header.column.getIsSorted() === 'desc' ? (
+                                    <CaretDownOutlined />
+                                  ) : (
+                                    <CaretUpOutlined />
+                                  )
+                                ) : null}
+                              </Stack>
+                            </th>
+                          ))}
+                        </tr>
+                      ))}
+                    </thead>
+                    <tbody>
+                      {table.getRowModel().rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={columns.length} style={{ padding: '2.5rem', textAlign: 'center', color: '#999' }}>
+                            No audit log entries found
+                          </td>
+                        </tr>
+                      ) : (
+                        table.getRowModel().rows.map((row) => (
+                          <tr key={row.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} style={{ padding: '12px 16px' }}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Pagination */}
+                  <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center" sx={{ p: '1.0rem' }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <span>
+                        Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                      </span>
+                      <span style={{ color: '#999' }}>
+                        ({filteredData.length} {filteredData.length === 1 ? 'entry' : 'entries'})
+                      </span>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        select
+                        size="small"
+                        value={table.getState().pagination.pageSize}
+                        onChange={(e) => table.setPageSize(Number(e.target.value))}
+                        sx={{ width: '7.5rem' }}
+                      >
+                        {[10, 25, 50, 100].map((size) => (
+                          <MenuItem key={size} value={size}>
+                            Show {size}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+
+                      <Stack direction="row" spacing={0.5}>
+                        <button
+                          onClick={() => table.previousPage()}
+                          disabled={!table.getCanPreviousPage()}
                           style={{
-                            padding: '12px 16px',
-                            textAlign: 'left',
-                            borderBottom: '2px solid #f0f0f0',
-                            cursor: header.column.getCanSort() ? 'pointer' : 'default',
-                            userSelect: 'none',
-                            fontWeight: 600
+                            padding: '8px 12px',
+                            border: '1px solid #ddd',
+                            background: '#fff',
+                            cursor: table.getCanPreviousPage() ? 'pointer' : 'not-allowed',
+                            borderRadius: '0.375rem'
                           }}
                         >
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
-                            {header.column.getIsSorted() ? (
-                              header.column.getIsSorted() === 'desc' ? (
-                                <CaretDownOutlined />
-                              ) : (
-                                <CaretUpOutlined />
-                              )
-                            ) : null}
-                          </Stack>
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={columns.length} style={{ padding: '2.5rem', textAlign: 'center', color: '#999' }}>
-                        No audit log entries found
-                      </td>
-                    </tr>
-                  ) : (
-                    table.getRowModel().rows.map((row) => (
-                      <tr key={row.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} style={{ padding: '12px 16px' }}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-
-              {/* Pagination */}
-              <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center" sx={{ p: '1.0rem' }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <span>
-                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                  </span>
-                  <span style={{ color: '#999' }}>
-                    ({filteredData.length} {filteredData.length === 1 ? 'entry' : 'entries'})
-                  </span>
-                </Stack>
-
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    select
-                    size="small"
-                    value={table.getState().pagination.pageSize}
-                    onChange={(e) => table.setPageSize(Number(e.target.value))}
-                    sx={{ width: '7.5rem' }}
-                  >
-                    {[10, 25, 50, 100].map((size) => (
-                      <MenuItem key={size} value={size}>
-                        Show {size}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-
-                  <Stack direction="row" spacing={0.5}>
-                    <button
-                      onClick={() => table.previousPage()}
-                      disabled={!table.getCanPreviousPage()}
-                      style={{
-                        padding: '8px 12px',
-                        border: '1px solid #ddd',
-                        background: '#fff',
-                        cursor: table.getCanPreviousPage() ? 'pointer' : 'not-allowed',
-                        borderRadius: '0.375rem'
-                      }}
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => table.nextPage()}
-                      disabled={!table.getCanNextPage()}
-                      style={{
-                        padding: '8px 12px',
-                        border: '1px solid #ddd',
-                        background: '#fff',
-                        cursor: table.getCanNextPage() ? 'pointer' : 'not-allowed',
-                        borderRadius: '0.375rem'
-                      }}
-                    >
-                      Next
-                    </button>
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => table.nextPage()}
+                          disabled={!table.getCanNextPage()}
+                          style={{
+                            padding: '8px 12px',
+                            border: '1px solid #ddd',
+                            background: '#fff',
+                            cursor: table.getCanNextPage() ? 'pointer' : 'not-allowed',
+                            borderRadius: '0.375rem'
+                          }}
+                        >
+                          Next
+                        </button>
+                      </Stack>
+                    </Stack>
                   </Stack>
                 </Stack>
-              </Stack>
-            </Stack>
-          </ScrollX>
+              </ScrollX>
             </>
           )}
         </MainCard>
@@ -347,5 +351,3 @@ export default function TabAuditLog() {
     </Grid>
   );
 }
-
-

@@ -59,4 +59,3 @@ export default function UserCountCard({ primary, secondary, iconPrimary, color }
 IconWrapper.propTypes = { children: PropTypes.node };
 
 UserCountCard.propTypes = { primary: PropTypes.string, secondary: PropTypes.string, iconPrimary: PropTypes.any, color: PropTypes.string };
-

@@ -30,14 +30,14 @@ const DEFAULT_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const AI_CONCURRENCY_LIMIT = 6;
 
 const MAIN_CAT_MAP = {
-  'إيواء': 'إيواء',
+  إيواء: 'إيواء',
   'عيادات خارجية': 'عيادات خارجية',
-  'اشعة': 'عيادات خارجية',
+  اشعة: 'عيادات خارجية',
   'اشعة ': 'عيادات خارجية',
   'تحاليل طبية': 'عيادات خارجية',
   'علاج طبيعي': 'عيادات خارجية',
   'علاج طبيعي ': 'عيادات خارجية',
-  'عمليات': 'إيواء',
+  عمليات: 'إيواء',
   'عمليات ': 'إيواء',
   'اسنان تجميلي': 'عيادات خارجية',
   'اسنان وقائي': 'عيادات خارجية',
@@ -45,7 +45,7 @@ const MAIN_CAT_MAP = {
 };
 
 const SUB_CAT_MAP = {
-  'اشعة': 'أشعة تحاليل رسوم أطباء',
+  اشعة: 'أشعة تحاليل رسوم أطباء',
   'اشعة ': 'أشعة تحاليل رسوم أطباء',
   'خدمات الأسنان': 'أسنان روتيني',
   'خدمات العلاج الطبيعي': 'علاج طبيعي',
@@ -65,10 +65,10 @@ const SUB_CAT_MAP = {
   'خدمات جراحة التجميل': 'عام',
   'خدمات جراحة الصدر': 'عام',
   'خدمات جلسات الغسيل': 'عام',
-  'كشف': 'عام',
-  'مراجعة': 'عام',
-  'معامل': 'أشعة تحاليل رسوم أطباء',
-  'التخصص': ''
+  كشف: 'عام',
+  مراجعة: 'عام',
+  معامل: 'أشعة تحاليل رسوم أطباء',
+  التخصص: ''
 };
 
 const SYSTEM_MAIN = new Set(['إيواء', 'عيادات خارجية']);
@@ -180,7 +180,7 @@ const fetchWithRetry = async (url, options, maxRetries = 2) => {
     }
 
     const retryAfter = Number(response.headers.get('retry-after'));
-    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * (2 ** attempt);
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt;
     await sleep(waitMs);
   }
   return response;
@@ -219,7 +219,10 @@ const detectColumns = (rows) => {
       if (serviceCol === -1 && (val.includes('service_name') || val.includes('اسم الخدمة') || val.includes('الخدمه') || val === 'الخدمة')) {
         serviceCol = idx;
       }
-      if (priceCol === -1 && (val.includes('contract_price') || val.includes('unit_price') || val.includes('price') || val.includes('السعر'))) {
+      if (
+        priceCol === -1 &&
+        (val.includes('contract_price') || val.includes('unit_price') || val.includes('price') || val.includes('السعر'))
+      ) {
         priceCol = idx;
       }
       if (subCol === -1 && (val.includes('sub_category') || val.includes('التصنيف الفرعي') || val.includes('التخصص'))) {
@@ -586,55 +589,60 @@ const FacilityPricePreparationPage = () => {
       setProgress({ current: 0, total: candidates.length });
       let completed = 0;
 
-      await runWithConcurrency(candidates, AI_CONCURRENCY_LIMIT, async (candidate, idx) => {
-        if (cancelRequestedRef.current) {
-          return;
+      await runWithConcurrency(
+        candidates,
+        AI_CONCURRENCY_LIMIT,
+        async (candidate, idx) => {
+          if (cancelRequestedRef.current) {
+            return;
+          }
+
+          const controller = new AbortController();
+          activeControllersRef.current.add(controller);
+          const codeMatch = candidate.service.match(CODE_PATTERN);
+          const serviceCode = codeMatch ? codeMatch[0] : '';
+
+          const result = await classifyWithAI({
+            serviceName: candidate.service,
+            rawMain: candidate.mainRaw,
+            rawSub: candidate.subRaw,
+            aiConfig,
+            cache,
+            abortSignal: controller.signal
+          });
+          activeControllersRef.current.delete(controller);
+
+          if (result?.cancelled || cancelRequestedRef.current) {
+            return;
+          }
+
+          const { mappedMain, mappedSub, method, confidence, reason } = result;
+
+          if (!failureReason && aiConfig.enabled && method === 'fallback' && reason && reason !== 'ai_disabled_missing_api_key') {
+            failureReason = reason;
+          }
+
+          prepared[idx] = {
+            service_name: candidate.service,
+            service_code: serviceCode,
+            contract_price: candidate.price,
+            main_category: mappedMain,
+            sub_category: mappedSub,
+            notes: '',
+            _method: method,
+            _confidence: confidence
+          };
+
+          completed += 1;
+          if (completed % 5 === 0 || completed === candidates.length) {
+            setProgress({ current: completed, total: candidates.length });
+            setRowsPrepared(prepared.filter(Boolean));
+          }
+        },
+        {
+          shouldStop: () => cancelRequestedRef.current
         }
-
-        const controller = new AbortController();
-        activeControllersRef.current.add(controller);
-        const codeMatch = candidate.service.match(CODE_PATTERN);
-        const serviceCode = codeMatch ? codeMatch[0] : '';
-
-        const result = await classifyWithAI({
-          serviceName: candidate.service,
-          rawMain: candidate.mainRaw,
-          rawSub: candidate.subRaw,
-          aiConfig,
-          cache,
-          abortSignal: controller.signal
-        });
-        activeControllersRef.current.delete(controller);
-
-        if (result?.cancelled || cancelRequestedRef.current) {
-          return;
-        }
-
-        const { mappedMain, mappedSub, method, confidence, reason } = result;
-
-        if (!failureReason && aiConfig.enabled && method === 'fallback' && reason && reason !== 'ai_disabled_missing_api_key') {
-          failureReason = reason;
-        }
-
-        prepared[idx] = {
-          service_name: candidate.service,
-          service_code: serviceCode,
-          contract_price: candidate.price,
-          main_category: mappedMain,
-          sub_category: mappedSub,
-          notes: '',
-          _method: method,
-          _confidence: confidence
-        };
-
-        completed += 1;
-        if (completed % 5 === 0 || completed === candidates.length) {
-          setProgress({ current: completed, total: candidates.length });
-          setRowsPrepared(prepared.filter(Boolean));
-        }
-      }, {
-        shouldStop: () => cancelRequestedRef.current
-      });
+      );
 
       const finalized = prepared.filter(Boolean);
 
@@ -680,7 +688,14 @@ const FacilityPricePreparationPage = () => {
     if (!rowsPrepared.length) return;
 
     const wsRows = [
-      ['service_name / اسم الخدمة ★', 'service_code / الكود', 'contract_price / سعر العقد', 'main_category / التصنيف الرئيسي', 'sub_category / البند (التصنيف الفرعي)', 'notes / ملاحظات'],
+      [
+        'service_name / اسم الخدمة ★',
+        'service_code / الكود',
+        'contract_price / سعر العقد',
+        'main_category / التصنيف الرئيسي',
+        'sub_category / البند (التصنيف الفرعي)',
+        'notes / ملاحظات'
+      ],
       ['فحص شامل', 'MC-001', 100, 'عيادات خارجية', 'عام', 'مثال - احذف هذا الصف']
     ];
 
@@ -710,8 +725,8 @@ const FacilityPricePreparationPage = () => {
         <CardContent>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              ارفع ملف الأسعار الأصلي (مثل ملف دار الشفاء)، وسيتم توليد ملف جاهز للاستيراد بالأعمدة المطلوبة فقط:
-              اسم الخدمة، كود الخدمة، سعر العقد، التصنيف الرئيسي، التصنيف الفرعي، الملاحظات.
+              ارفع ملف الأسعار الأصلي (مثل ملف دار الشفاء)، وسيتم توليد ملف جاهز للاستيراد بالأعمدة المطلوبة فقط: اسم الخدمة، كود الخدمة،
+              سعر العقد، التصنيف الرئيسي، التصنيف الفرعي، الملاحظات.
             </Typography>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
@@ -757,8 +772,8 @@ const FacilityPricePreparationPage = () => {
 
             {extractionReport && (
               <Alert severity="info">
-                تقرير الاستخراج: مباشر {extractionReport.directExtracted} | fallback ذكي {extractionReport.inferredExtracted} |
-                مقبول {extractionReport.acceptedTotal} | مرفوض {extractionReport.rejectedTotal}
+                تقرير الاستخراج: مباشر {extractionReport.directExtracted} | fallback ذكي {extractionReport.inferredExtracted} | مقبول{' '}
+                {extractionReport.acceptedTotal} | مرفوض {extractionReport.rejectedTotal}
                 {` | أسباب الرفض: ترويسة/فارغ ${extractionReport.rejectedReasons.empty_or_header}, سعر غير صالح ${extractionReport.rejectedReasons.invalid_price}, خدمة غير صالحة ${extractionReport.rejectedReasons.invalid_service_name}, بدون زوج خدمة/سعر ${extractionReport.rejectedReasons.no_pair_detected}`}
               </Alert>
             )}
@@ -792,7 +807,9 @@ const FacilityPricePreparationPage = () => {
                   </Grid>
                   <Grid size={{ xs: 12, md: 4 }}>
                     <Typography variant="subtitle2">استخدام AI</Typography>
-                    <Typography variant="h6">{stats.aiRows} / {stats.total}</Typography>
+                    <Typography variant="h6">
+                      {stats.aiRows} / {stats.total}
+                    </Typography>
                   </Grid>
                 </Grid>
 

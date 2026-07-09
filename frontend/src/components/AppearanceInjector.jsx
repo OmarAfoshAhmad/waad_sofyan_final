@@ -33,14 +33,14 @@ export function AppearanceInjector() {
     const root = document.documentElement;
     const s = settings || {};
 
-    const thBg    = s.tableHeaderBg  || DEFAULTS.tableHeaderBg;
-    const thText  = s.tableHeaderText || DEFAULTS.tableHeaderText;
-    const rowEven = s.tableRowEven   || DEFAULTS.tableRowEven;
-    const sel     = s.selectionColor || DEFAULTS.selectionColor;
-    const primary = s.primaryColor   || DEFAULTS.primaryColor;
+    const thBg = s.tableHeaderBg || DEFAULTS.tableHeaderBg;
+    const thText = s.tableHeaderText || DEFAULTS.tableHeaderText;
+    const rowEven = s.tableRowEven || DEFAULTS.tableRowEven;
+    const sel = s.selectionColor || DEFAULTS.selectionColor;
+    const primary = s.primaryColor || DEFAULTS.primaryColor;
 
     // إعداد متغيرات CSS كـ inline style على <html> (أعلى أولوية من أي selector)
-    root.style.setProperty('--tba-th-bg',   thBg);
+    root.style.setProperty('--tba-th-bg', thBg);
     root.style.setProperty('--tba-th-text', thText);
     root.style.setProperty('--tba-row-even', rowEven);
     root.style.setProperty('--tba-selection', sel);

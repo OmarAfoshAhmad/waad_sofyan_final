@@ -131,7 +131,10 @@ const DonutChart = ({ data, centerLabel, centerValue, size = 140 }) => {
             cumulativePercent += percent;
             const [endX, endY] = getCoordinatesForPercent(cumulativePercent);
             const largeArcFlag = percent > 0.5 ? 1 : 0;
-            const pathData = [`M ${center + startX * radius} ${center + startY * radius}`, `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${center + endX * radius} ${center + endY * radius}`].join(' ');
+            const pathData = [
+              `M ${center + startX * radius} ${center + startY * radius}`,
+              `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${center + endX * radius} ${center + endY * radius}`
+            ].join(' ');
 
             return (
               <path
@@ -156,21 +159,25 @@ const DonutChart = ({ data, centerLabel, centerValue, size = 140 }) => {
 
       <Stack spacing={0.5} sx={{ width: '100%' }}>
         {data.map((segment, i) => (
-          <Stack key={i} direction="row" alignItems="center" justifyContent="space-between" sx={{
-            px: 1,
-            py: 0.25,
-            borderRadius: 1,
-            bgcolor: alpha(segment.color, 0.04)
-          }}>
+          <Stack
+            key={i}
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{
+              px: 1,
+              py: 0.25,
+              borderRadius: 1,
+              bgcolor: alpha(segment.color, 0.04)
+            }}
+          >
             <Stack direction="row" alignItems="center" spacing={1}>
               <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: segment.color }} />
               <Typography sx={{ fontSize: '0.7rem' }} color="text.secondary">
                 {segment.label}
               </Typography>
             </Stack>
-            <Typography sx={{ fontSize: '0.7rem', fontWeight: 700 }}>
-              {segment.value}
-            </Typography>
+            <Typography sx={{ fontSize: '0.7rem', fontWeight: 700 }}>{segment.value}</Typography>
           </Stack>
         ))}
       </Stack>
@@ -189,7 +196,9 @@ const HorizontalBarChart = ({ data }) => {
     <Stack spacing={2}>
       {data.length === 0 ? (
         <Box sx={{ py: '2.0rem', textAlign: 'center' }}>
-          <Typography variant="caption" color="text.disabled">لا يوجد بيانات</Typography>
+          <Typography variant="caption" color="text.disabled">
+            لا يوجد بيانات
+          </Typography>
         </Box>
       ) : (
         data.map((item, i) => (
@@ -374,20 +383,20 @@ export default function Dashboard() {
 
   const getCurrentUserRoles = useCallback(() => {
     try {
-       let localUser = {};
-       try {
-         const stored = localStorage.getItem('user');
-         if (stored && stored !== 'undefined' && stored !== 'null') {
-           localUser = JSON.parse(stored);
-         }
-       } catch (e) {
-         console.warn('Failed to parse local user:', e);
-       }
-       
-       const currentUser = user || localUser;
-       const roles = [];
+      let localUser = {};
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored && stored !== 'undefined' && stored !== 'null') {
+          localUser = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.warn('Failed to parse local user:', e);
+      }
 
-       if (currentUser && Array.isArray(currentUser.roles)) {
+      const currentUser = user || localUser;
+      const roles = [];
+
+      if (currentUser && Array.isArray(currentUser.roles)) {
         roles.push(...currentUser.roles.map((role) => (typeof role === 'string' ? role : role?.name)).filter(Boolean));
       }
 
@@ -425,7 +434,11 @@ export default function Dashboard() {
 
   // ─── Data Fetching ──────────────────────────────────────────────────────────
 
-  const { summary, loading: summaryLoading, refresh: refreshSummary } = useDashboardStats({
+  const {
+    summary,
+    loading: summaryLoading,
+    refresh: refreshSummary
+  } = useDashboardStats({
     enabled: !isMedicalReviewer && !isProviderRole,
     silentOnForbidden: true
   });
@@ -496,18 +509,18 @@ export default function Dashboard() {
 
   // ─── User display name ─────────────────────────────────────────────────────
 
-   const displayName = useMemo(() => {
-     let localUser = {};
-     try {
-       const stored = localStorage.getItem('user');
-       if (stored && stored !== 'undefined' && stored !== 'null') {
-         localUser = JSON.parse(stored);
-       }
-     } catch (e) {}
-     
-     const currentUser = user || localUser;
-     return currentUser?.fullName || currentUser?.username || 'المشرف';
-   }, [user]);
+  const displayName = useMemo(() => {
+    let localUser = {};
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored && stored !== 'undefined' && stored !== 'null') {
+        localUser = JSON.parse(stored);
+      }
+    } catch (e) {}
+
+    const currentUser = user || localUser;
+    return currentUser?.fullName || currentUser?.username || 'المشرف';
+  }, [user]);
 
   const maxNetworkValue = Math.max(activeMembers, activeProviders, summary?.activeContracts || 0, 1);
 
@@ -516,35 +529,42 @@ export default function Dashboard() {
   // ═════════════════════════════════════════════════════════════════════════════
 
   return (
-    <Box sx={{
-      width: '100%',
-      minHeight: 'calc(100vh - 110px)',
-      display: 'flex',
-      flexDirection: 'column',
-      p: { xs: 1.5, sm: '1.0rem' }
-    }}>
+    <Box
+      sx={{
+        width: '100%',
+        minHeight: 'calc(100vh - 110px)',
+        display: 'flex',
+        flexDirection: 'column',
+        p: { xs: 1.5, sm: '1.0rem' }
+      }}
+    >
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', mb: '1.5rem' }}>
         {/* Welcome Bar - Adheres to Global Theme Color */}
-        <Card sx={{
-          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-          borderRadius: '0.1875rem',
-          color: '#fff',
-          border: 'none',
-          boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.35)}`
-        }}>
+        <Card
+          sx={{
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+            borderRadius: '0.1875rem',
+            color: '#fff',
+            border: 'none',
+            boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.35)}`
+          }}
+        >
           <CardContent sx={{ py: '0.75rem', px: '1.25rem', '&:last-child': { pb: '0.75rem' } }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
               <Stack>
-                <Typography variant="h6" fontWeight={800} sx={{ letterSpacing: -0.5 }}>👋 مرحباً بك، {displayName}</Typography>
+                <Typography variant="h6" fontWeight={800} sx={{ letterSpacing: -0.5 }}>
+                  👋 مرحباً بك، {displayName}
+                </Typography>
                 <Typography sx={{ fontSize: '0.8rem', opacity: 0.9 }}>نظام إدارة العمليات الصحية - لوحة التحكم الموحدة</Typography>
               </Stack>
               <Stack direction="row" spacing={2} alignItems="center">
-                <EmployerFilterSelector 
-                  size="small" 
-                  inverseColors={true}
-                />
-                
-                <IconButton size="small" onClick={handleRefreshAll} sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}>
+                <EmployerFilterSelector size="small" inverseColors={true} />
+
+                <IconButton
+                  size="small"
+                  onClick={handleRefreshAll}
+                  sx={{ color: '#fff', bgcolor: 'rgba(255,255,255,0.2)', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}
+                >
                   <RefreshIcon sx={{ fontSize: '1.375rem' }} />
                 </IconButton>
               </Stack>
@@ -555,16 +575,46 @@ export default function Dashboard() {
         {/* Row 1: KPIs */}
         <Grid container spacing={2.5}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard title="المستفيدين" value={activeMembers} subtitle={`إجمالي: ${totalMembers}`} icon={PeopleIcon} gradient="linear-gradient(135deg, #059669 0%, #10b981 100%)" loading={summaryLoading} />
+            <GradientKPICard
+              title="المستفيدين"
+              value={activeMembers}
+              subtitle={`إجمالي: ${totalMembers}`}
+              icon={PeopleIcon}
+              gradient="linear-gradient(135deg, #059669 0%, #10b981 100%)"
+              loading={summaryLoading}
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard title="مقدمي الخدمات" value={activeProviders} subtitle={`إجمالي: ${totalProviders}`} icon={LocalHospitalIcon} gradient="linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)" loading={summaryLoading} />
+            <GradientKPICard
+              title="مقدمي الخدمات"
+              value={activeProviders}
+              subtitle={`إجمالي: ${totalProviders}`}
+              icon={LocalHospitalIcon}
+              gradient="linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)"
+              loading={summaryLoading}
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard title="إجمالي المطالبات" value={totalClaims} subtitle={formatLYD(totalMedicalCost)} icon={ReceiptLongIcon} gradient="linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)" loading={summaryLoading} />
+            <GradientKPICard
+              title="إجمالي المطالبات"
+              value={totalClaims}
+              subtitle={formatLYD(totalMedicalCost)}
+              icon={ReceiptLongIcon}
+              gradient="linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)"
+              loading={summaryLoading}
+            />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-            <GradientKPICard title="قيد المراجعة" value={openClaims} subtitle={openClaims > 0 ? 'بحاجة لتدخل' : 'مكتمل'} icon={PendingIcon} gradient={openClaims > 0 ? 'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)' : 'linear-gradient(135deg, #475569 0%, #64748b 100%)'} loading={summaryLoading} />
+            <GradientKPICard
+              title="قيد المراجعة"
+              value={openClaims}
+              subtitle={openClaims > 0 ? 'بحاجة لتدخل' : 'مكتمل'}
+              icon={PendingIcon}
+              gradient={
+                openClaims > 0 ? 'linear-gradient(135deg, #e11d48 0%, #fb7185 100%)' : 'linear-gradient(135deg, #475569 0%, #64748b 100%)'
+              }
+              loading={summaryLoading}
+            />
           </Grid>
         </Grid>
 
@@ -573,7 +623,9 @@ export default function Dashboard() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               <CardContent sx={{ p: '1.25rem' }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>توزيع الحالات</Typography>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>
+                  توزيع الحالات
+                </Typography>
                 <Divider sx={{ mb: '1.25rem' }} />
                 <DonutChart data={donutData} centerValue={totalClaims} centerLabel="إجمالي" size={140} />
               </CardContent>
@@ -582,7 +634,9 @@ export default function Dashboard() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               <CardContent sx={{ p: '1.25rem' }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>أعلى مقدمي الخدمات</Typography>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>
+                  أعلى مقدمي الخدمات
+                </Typography>
                 <Divider sx={{ mb: '1.25rem' }} />
                 <HorizontalBarChart data={topProviders} />
               </CardContent>
@@ -591,13 +645,33 @@ export default function Dashboard() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               <CardContent sx={{ p: '1.25rem' }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>إحصائيات الشبكة</Typography>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>
+                  إحصائيات الشبكة
+                </Typography>
                 <Divider sx={{ mb: '1.25rem' }} />
                 <Stack spacing={2.5}>
-                  <NetworkStatRow label="المقدمين" value={activeProviders} maxValue={maxNetworkValue} icon={LocalHospitalIcon} color="primary" />
-                  <NetworkStatRow label="العقود" value={summary?.activeContracts || 0} maxValue={maxNetworkValue} icon={BusinessIcon} color="info" />
+                  <NetworkStatRow
+                    label="المقدمين"
+                    value={activeProviders}
+                    maxValue={maxNetworkValue}
+                    icon={LocalHospitalIcon}
+                    color="primary"
+                  />
+                  <NetworkStatRow
+                    label="العقود"
+                    value={summary?.activeContracts || 0}
+                    maxValue={maxNetworkValue}
+                    icon={BusinessIcon}
+                    color="info"
+                  />
                   <NetworkStatRow label="المستفيدين" value={activeMembers} maxValue={maxNetworkValue} icon={PeopleIcon} color="#0d9488" />
-                  <NetworkStatRow label="المطالبات" value={totalClaims} maxValue={Math.max(totalClaims, maxNetworkValue)} icon={ReceiptLongIcon} color="#7c3aed" />
+                  <NetworkStatRow
+                    label="المطالبات"
+                    value={totalClaims}
+                    maxValue={Math.max(totalClaims, maxNetworkValue)}
+                    icon={ReceiptLongIcon}
+                    color="#7c3aed"
+                  />
                 </Stack>
               </CardContent>
             </Card>
@@ -605,7 +679,9 @@ export default function Dashboard() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{ height: '22.5rem', borderRadius: '0.1875rem', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
               <CardContent sx={{ p: '1.25rem' }}>
-                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>آخر الأنشطة</Typography>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: '1.0rem' }}>
+                  آخر الأنشطة
+                </Typography>
                 <Divider sx={{ mb: '1.25rem' }} />
                 <ActivityTimeline claims={claimsData?.content || []} loading={claimsLoading} />
               </CardContent>
@@ -615,18 +691,20 @@ export default function Dashboard() {
       </Box>
 
       {/* System status Footer - Pushed to bottom */}
-      <Box sx={{
-        p: '0.625rem',
-        borderRadius: '0.25rem',
-        bgcolor: alpha('#10b981', 0.05),
-        border: '1px solid',
-        borderColor: alpha('#10b981', 0.12),
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        mt: 'auto',
-        mx: 0
-      }}>
+      <Box
+        sx={{
+          p: '0.625rem',
+          borderRadius: '0.25rem',
+          bgcolor: alpha('#10b981', 0.05),
+          border: '1px solid',
+          borderColor: alpha('#10b981', 0.12),
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          mt: 'auto',
+          mx: 0
+        }}
+      >
         <Stack direction="row" alignItems="center" spacing={2}>
           <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: '#10b981', animation: 'pulse 2s infinite' }} />
           <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: '#065f46', opacity: 0.9 }}>
@@ -644,7 +722,3 @@ export default function Dashboard() {
     </Box>
   );
 }
-
-
-
-

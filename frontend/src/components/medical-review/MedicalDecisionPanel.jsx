@@ -443,5 +443,3 @@ MedicalDecisionPanel.propTypes = {
 };
 
 export default memo(MedicalDecisionPanel);
-
-

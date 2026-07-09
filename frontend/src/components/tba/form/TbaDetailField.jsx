@@ -138,6 +138,3 @@ TbaDetailField.propTypes = {
 };
 
 export default TbaDetailField;
-
-
-

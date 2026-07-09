@@ -279,4 +279,3 @@ const MedicalServicePicker = ({
 };
 
 export default MedicalServicePicker;
-

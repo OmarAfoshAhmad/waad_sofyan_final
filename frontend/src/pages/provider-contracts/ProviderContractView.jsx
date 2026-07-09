@@ -68,13 +68,13 @@ import {
   Cancel as TerminateIcon,
   Refresh as RefreshIcon,
   Delete as DeleteIcon,
-  Add as AddIcon
-  , Clear as ClearIcon
-  , CloudUpload as CloudUploadIcon
-  , Download as DownloadIcon
-  , InsertDriveFile as FileIcon
-  , ExpandMore as ExpandMoreIcon
-  , ExpandLess as ExpandLessIcon
+  Add as AddIcon,
+  Clear as ClearIcon,
+  CloudUpload as CloudUploadIcon,
+  Download as DownloadIcon,
+  InsertDriveFile as FileIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 
 // Project Components
@@ -139,8 +139,10 @@ const formatCurrency = (value) => {
 };
 
 const getServiceCode = (item) => item?.medicalService?.code || item?.serviceCode || item?.service?.code || '-';
-const getServiceNameAr = (item) => item?.medicalService?.nameAr || item?.serviceNameAr || item?.serviceName || item?.medicalService?.name || item?.service?.name || '-';
-const getServiceNameEn = (item) => item?.medicalService?.nameEn || item?.serviceNameEn || item?.medicalService?.name || item?.service?.name || '-';
+const getServiceNameAr = (item) =>
+  item?.medicalService?.nameAr || item?.serviceNameAr || item?.serviceName || item?.medicalService?.name || item?.service?.name || '-';
+const getServiceNameEn = (item) =>
+  item?.medicalService?.nameEn || item?.serviceNameEn || item?.medicalService?.name || item?.service?.name || '-';
 const getServiceDisplay = (item) => ({
   code: getServiceCode(item),
   nameAr: getServiceNameAr(item),
@@ -163,10 +165,11 @@ const getCategoryHierarchy = (item, categoriesList = []) => {
 
   // Fallback: If no ID but we have a name, try to find it in the list
   if (!catId && item?.categoryName && Array.isArray(categoriesList)) {
-    const matched = categoriesList.find(c =>
-      c.nameAr === item.categoryName ||
-      c.name === item.categoryName ||
-      (item.categoryName.includes('(') && item.categoryName.split('(')[0].trim() === (c.nameAr || c.name))
+    const matched = categoriesList.find(
+      (c) =>
+        c.nameAr === item.categoryName ||
+        c.name === item.categoryName ||
+        (item.categoryName.includes('(') && item.categoryName.split('(')[0].trim() === (c.nameAr || c.name))
     );
     if (matched) {
       catId = matched.id;
@@ -333,7 +336,7 @@ const ProviderContractView = () => {
     queryKey: ['medicalCategories'],
     queryFn: async () => {
       const data = await getAllMedicalCategories();
-      return Array.isArray(data) ? data : (data?.data || []);
+      return Array.isArray(data) ? data : data?.data || [];
     },
     staleTime: 60 * 60 * 1000 // 1 hour
   });
@@ -821,7 +824,6 @@ const ProviderContractView = () => {
             {(contract.status === CONTRACT_STATUS.DRAFT ||
               contract.status === CONTRACT_STATUS.SUSPENDED ||
               contract.status === CONTRACT_STATUS.TERMINATED) && (
-
               <Button
                 variant="contained"
                 color="success"
@@ -831,11 +833,9 @@ const ProviderContractView = () => {
               >
                 {contract.status === CONTRACT_STATUS.TERMINATED ? 'إعادة تفعيل' : 'تفعيل العقد'}
               </Button>
-
             )}
 
             {contract.status === CONTRACT_STATUS.ACTIVE && (
-
               <Button
                 variant="outlined"
                 color="warning"
@@ -845,11 +845,9 @@ const ProviderContractView = () => {
               >
                 إيقاف
               </Button>
-
             )}
 
             {(contract.status === CONTRACT_STATUS.ACTIVE || contract.status === CONTRACT_STATUS.SUSPENDED) && (
-
               <Button
                 variant="outlined"
                 color="error"
@@ -859,9 +857,7 @@ const ProviderContractView = () => {
               >
                 إلغاء
               </Button>
-
             )}
-
 
             <Button
               variant="outlined"
@@ -872,7 +868,6 @@ const ProviderContractView = () => {
             >
               تعديل
             </Button>
-
           </Stack>
         }
       />
@@ -964,13 +959,7 @@ const ProviderContractView = () => {
                   setSelectedCategoryId(newValue?.id || null);
                   setPricingPage(0);
                 }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder="فلترة حسب التصنيف"
-                    size="small"
-                  />
-                )}
+                renderInput={(params) => <TextField {...params} placeholder="فلترة حسب التصنيف" size="small" />}
               />
 
               <Chip size="small" variant="outlined" color="primary" label={`${totalPricingItems} بند`} sx={{ width: 'fit-content' }} />
@@ -1018,8 +1007,6 @@ const ProviderContractView = () => {
                 </Tooltip>
               )}
             </Stack>
-
-
           </Stack>
 
           {/* Pricing Table */}
@@ -1031,8 +1018,12 @@ const ProviderContractView = () => {
                   <TableCell sx={{ minWidth: '15.625rem' }}>اسم الخدمة</TableCell>
                   <TableCell sx={{ minWidth: '11.25rem' }}>التصنيف الرئيسي</TableCell>
                   <TableCell sx={{ minWidth: '11.25rem' }}>البند (التصنيف الفرعي)</TableCell>
-                  <TableCell align="right" sx={{ width: '7.5rem' }}>سعر العقد</TableCell>
-                  <TableCell align="center" sx={{ width: '6.25rem' }}>الإجراءات</TableCell>
+                  <TableCell align="right" sx={{ width: '7.5rem' }}>
+                    سعر العقد
+                  </TableCell>
+                  <TableCell align="center" sx={{ width: '6.25rem' }}>
+                    الإجراءات
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1052,24 +1043,30 @@ const ProviderContractView = () => {
                   </TableRow>
                 ) : (
                   pricingItems.map((item, index) => (
-                    <TableRow key={item.id || index} hover sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:nth-of-type(even)': { bgcolor: 'grey.25' } }}>
+                    <TableRow
+                      key={item.id || index}
+                      hover
+                      sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:nth-of-type(even)': { bgcolor: 'grey.25' } }}
+                    >
                       <TableCell>
                         {(() => {
                           const service = getServiceDisplay(item);
                           return (
-                            <Box sx={{
-                              bgcolor: 'primary.lighter',
-                              color: 'primary.main',
-                              px: 0.75,
-                              py: 0.25,
-                              borderRadius: 1,
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              border: '1px solid',
-                              borderColor: 'primary.light',
-                              fontFamily: 'monospace',
-                              width: 'fit-content'
-                            }}>
+                            <Box
+                              sx={{
+                                bgcolor: 'primary.lighter',
+                                color: 'primary.main',
+                                px: 0.75,
+                                py: 0.25,
+                                borderRadius: 1,
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                border: '1px solid',
+                                borderColor: 'primary.light',
+                                fontFamily: 'monospace',
+                                width: 'fit-content'
+                              }}
+                            >
                               {service.code}
                             </Box>
                           );
@@ -1086,7 +1083,12 @@ const ProviderContractView = () => {
                           return (
                             <Stack spacing={0.25}>
                               {hierarchy.mainCode !== '-' && (
-                                <Chip label={hierarchy.mainCode} size="small" variant="outlined" sx={{ width: 'fit-content', opacity: 0.7 }} />
+                                <Chip
+                                  label={hierarchy.mainCode}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ width: 'fit-content', opacity: 0.7 }}
+                                />
                               )}
                               <Typography variant="body2" fontWeight={500}>
                                 {hierarchy.main}
@@ -1101,7 +1103,12 @@ const ProviderContractView = () => {
                           return (
                             <Stack spacing={0.25}>
                               {hierarchy.subCode !== '-' && (
-                                <Chip label={hierarchy.subCode} size="small" variant="outlined" sx={{ width: 'fit-content', opacity: 0.7 }} />
+                                <Chip
+                                  label={hierarchy.subCode}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ width: 'fit-content', opacity: 0.7 }}
+                                />
                               )}
                               <Typography variant="body2" color="text.secondary">
                                 {hierarchy.sub}
@@ -1118,20 +1125,17 @@ const ProviderContractView = () => {
 
                       <TableCell align="center">
                         <Stack direction="row" spacing={1} justifyContent="center">
-
                           <Tooltip title="تعديل السعر">
                             <IconButton size="small" color="primary" onClick={() => handleOpenEditPricing(item)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
 
-
                           <Tooltip title="حذف">
                             <IconButton size="small" color="error" onClick={() => handleOpenDeletePricing(item)}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -1275,32 +1279,38 @@ const ProviderContractView = () => {
       </Dialog>
 
       {/* Add Pricing Item Dialog */}
-      <Dialog open={addPricingDialogOpen} onClose={() => { setAddPricingDialogOpen(false); setServiceInputValue(''); }} maxWidth="sm" fullWidth>
+      <Dialog
+        open={addPricingDialogOpen}
+        onClose={() => {
+          setAddPricingDialogOpen(false);
+          setServiceInputValue('');
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>إضافة خدمة طبية للتسعير</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: '1.5rem' }}>
-            اختر التصنيف أولاً ثم الخدمة من القاموس وأدخل السعر المتفق عليه.
-          </DialogContentText>
+          <DialogContentText sx={{ mb: '1.5rem' }}>اختر التصنيف أولاً ثم الخدمة من القاموس وأدخل السعر المتفق عليه.</DialogContentText>
           <Stack spacing={3}>
-              <Autocomplete
-                fullWidth
-                sx={{ width: '100%' }}
-                options={mainCategoriesList}
-                getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
-                value={pricingForm.mainCategoryId}
-                onChange={(e, newValue) => {
-                  setPricingForm({
-                    ...pricingForm,
-                    mainCategoryId: newValue,
-                    medicalCategoryId: null,
-                    medicalServiceId: null
-                  });
-                }}
-                renderInput={(params) => <TextField {...params} label="التصنيف الرئيسي *" required fullWidth />}
-              />
+            <Autocomplete
+              fullWidth
+              sx={{ width: '100%' }}
+              options={mainCategoriesList}
+              getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
+              value={pricingForm.mainCategoryId}
+              onChange={(e, newValue) => {
+                setPricingForm({
+                  ...pricingForm,
+                  mainCategoryId: newValue,
+                  medicalCategoryId: null,
+                  medicalServiceId: null
+                });
+              }}
+              renderInput={(params) => <TextField {...params} label="التصنيف الرئيسي *" required fullWidth />}
+            />
 
             {/* Subcategory - shown when main category is chosen and subcategories exist */}
-            {(pricingForm.mainCategoryId && subCategoriesList.length > 0) && (
+            {pricingForm.mainCategoryId && subCategoriesList.length > 0 && (
               <Autocomplete
                 fullWidth
                 options={subCategoriesList}
@@ -1317,14 +1327,13 @@ const ProviderContractView = () => {
               />
             )}
 
-            {(pricingForm.mainCategoryId) && (
+            {pricingForm.mainCategoryId && (
               <Autocomplete
                 fullWidth
                 freeSolo
                 options={availableServices}
                 getOptionLabel={(option) =>
-                  typeof option === 'string' ? option :
-                  `[${option.code || ''}] ${option.nameAr || option.name || ''}`
+                  typeof option === 'string' ? option : `[${option.code || ''}] ${option.nameAr || option.name || ''}`
                 }
                 ListboxProps={{ style: { maxHeight: '20.0rem', minHeight: '7.5rem' } }}
                 loading={servicesLoading}
@@ -1333,7 +1342,7 @@ const ProviderContractView = () => {
                 onInputChange={(e, newVal, reason) => {
                   setServiceInputValue(newVal);
                   if (reason === 'clear') {
-                    setPricingForm(prev => ({ ...prev, medicalServiceId: null }));
+                    setPricingForm((prev) => ({ ...prev, medicalServiceId: null }));
                   }
                 }}
                 renderOption={(props, option) => (
@@ -1341,7 +1350,8 @@ const ProviderContractView = () => {
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontWeight: 600 }}>{option.nameAr || option.name || ''}</span>
                       <span style={{ fontSize: '0.75rem', color: '#888' }}>
-                        {option.code}{option.nameEn ? ` • ${option.nameEn}` : ''}
+                        {option.code}
+                        {option.nameEn ? ` • ${option.nameEn}` : ''}
                       </span>
                     </div>
                   </li>
@@ -1349,10 +1359,10 @@ const ProviderContractView = () => {
                 onChange={(e, newValue) => {
                   if (typeof newValue === 'string') {
                     // free text typed
-                    setPricingForm(prev => ({ ...prev, medicalServiceId: null }));
+                    setPricingForm((prev) => ({ ...prev, medicalServiceId: null }));
                     setServiceInputValue(newValue);
                   } else {
-                    setPricingForm(prev => ({
+                    setPricingForm((prev) => ({
                       ...prev,
                       medicalServiceId: newValue,
                       basePrice: newValue?.basePrice ?? '',
@@ -1365,10 +1375,11 @@ const ProviderContractView = () => {
                   }
                 }}
                 noOptionsText={
-                  servicesLoading ? 'جاري التحميل...' :
-                  <span style={{ color: '#666', fontSize: '0.85rem' }}>
-                    لا توجد خدمات مسجلة — اكتب اسم الخدمة مباشرة لإضافتها
-                  </span>
+                  servicesLoading ? (
+                    'جاري التحميل...'
+                  ) : (
+                    <span style={{ color: '#666', fontSize: '0.85rem' }}>لا توجد خدمات مسجلة — اكتب اسم الخدمة مباشرة لإضافتها</span>
+                  )
                 }
                 renderInput={(params) => (
                   <TextField
@@ -1382,7 +1393,6 @@ const ProviderContractView = () => {
                 )}
               />
             )}
-
 
             <TextField
               label="سعر الخدمة (المتفق عليه) *"
@@ -1405,12 +1415,19 @@ const ProviderContractView = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setAddPricingDialogOpen(false); setServiceInputValue(''); }}>إلغاء</Button>
+          <Button
+            onClick={() => {
+              setAddPricingDialogOpen(false);
+              setServiceInputValue('');
+            }}
+          >
+            إلغاء
+          </Button>
           <Button
             onClick={handleAddPricingSubmit}
             variant="contained"
             disabled={
-            !pricingForm.mainCategoryId ||
+              !pricingForm.mainCategoryId ||
               !(pricingForm.medicalServiceId || serviceInputValue?.trim()) ||
               !pricingForm.contractPrice ||
               addPricingMutation.isLoading
@@ -1452,7 +1469,7 @@ const ProviderContractView = () => {
             </Grid>
 
             {/* Sub category (if applicable) */}
-            {(pricingForm.mainCategoryId && subCategoriesList.length > 0) && (
+            {pricingForm.mainCategoryId && subCategoriesList.length > 0 && (
               <Autocomplete
                 fullWidth
                 options={subCategoriesList}
@@ -1467,7 +1484,6 @@ const ProviderContractView = () => {
                 renderInput={(params) => <TextField {...params} label="التصنيف الفرعي (اختياري)" fullWidth placeholder="اختر للتصفية" />}
               />
             )}
-
 
             <TextField
               label="سعر الخدمة الجديد *"
@@ -1517,7 +1533,6 @@ const ProviderContractView = () => {
             onClick={() => deletePricingMutation.mutate()}
             color="error"
             variant="contained"
-
             disabled={deletePricingMutation.isLoading}
           >
             {deletePricingMutation.isLoading ? <CircularProgress size={20} /> : 'حذف'}
@@ -1532,13 +1547,17 @@ const ProviderContractView = () => {
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            سيؤدي هذا الإجراء إلى <strong>مسح جميع</strong> بنود التسعير الحالية (<strong>{totalPricingItems} بند</strong>) من هذا العقد نهائياً.
-            <br /><br />
+            سيؤدي هذا الإجراء إلى <strong>مسح جميع</strong> بنود التسعير الحالية (<strong>{totalPricingItems} بند</strong>) من هذا العقد
+            نهائياً.
+            <br />
+            <br />
             ⚠️ هذا الإجراء لا يمكن التراجع عنه. هل أنت متأكد؟
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setClearAllDialogOpen(false)} disabled={deleteAllPricingMutation.isLoading}>إلغاء</Button>
+          <Button onClick={() => setClearAllDialogOpen(false)} disabled={deleteAllPricingMutation.isLoading}>
+            إلغاء
+          </Button>
           <Button
             onClick={() => deleteAllPricingMutation.mutate()}
             color="error"

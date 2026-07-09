@@ -265,29 +265,39 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 
           {result && ( // Show import summary and errors if result is available
             <Box>
-              <Typography variant="h6" gutterBottom>ملخص الاستيراد</Typography>
+              <Typography variant="h6" gutterBottom>
+                ملخص الاستيراد
+              </Typography>
               <Grid container spacing={2} sx={{ mb: '1.5rem' }}>
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'primary.lighter' }}>
-                    <Typography variant="h4" color="primary.main">{result.summary?.totalRows || 0}</Typography>
+                    <Typography variant="h4" color="primary.main">
+                      {result.summary?.totalRows || 0}
+                    </Typography>
                     <Typography variant="caption">إجمالي الصفوف</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'success.lighter' }}>
-                    <Typography variant="h4" color="success.main">{result.summary?.created || 0}</Typography>
+                    <Typography variant="h4" color="success.main">
+                      {result.summary?.created || 0}
+                    </Typography>
                     <Typography variant="caption">تم استيرادها</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'warning.lighter' }}>
-                    <Typography variant="h4" color="warning.main">{result.summary?.skipped || 0}</Typography>
+                    <Typography variant="h4" color="warning.main">
+                      {result.summary?.skipped || 0}
+                    </Typography>
                     <Typography variant="caption">تكرار/تخطي</Typography>
                   </Paper>
                 </Grid>
                 <Grid size={3}>
                   <Paper variant="outlined" sx={{ p: '1.0rem', textAlign: 'center', bgcolor: 'error.lighter' }}>
-                    <Typography variant="h4" color="error.main">{(result.summary?.rejected || 0) + (result.summary?.failed || 0)}</Typography>
+                    <Typography variant="h4" color="error.main">
+                      {(result.summary?.rejected || 0) + (result.summary?.failed || 0)}
+                    </Typography>
                     <Typography variant="caption">فشل</Typography>
                   </Paper>
                 </Grid>
@@ -329,14 +339,14 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
             <Box sx={{ width: '100%', py: '1.0rem' }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                 <Typography variant="body1">{LABELS.uploading}</Typography>
-                <Typography variant="body2" color="primary" fontWeight="bold">{progress}%</Typography>
+                <Typography variant="body2" color="primary" fontWeight="bold">
+                  {progress}%
+                </Typography>
               </Stack>
-              <LinearProgress
-                variant="determinate"
-                value={progress}
-                sx={{ height: '0.625rem', borderRadius: '0.3125rem', mb: 1 }}
-              />
-              <Typography variant="caption" color="textSecondary">قد تستغرق معالجة الملفات الكبيرة عدة دقائق...</Typography>
+              <LinearProgress variant="determinate" value={progress} sx={{ height: '0.625rem', borderRadius: '0.3125rem', mb: 1 }} />
+              <Typography variant="caption" color="textSecondary">
+                قد تستغرق معالجة الملفات الكبيرة عدة دقائق...
+              </Typography>
             </Box>
           )}
         </Stack>
@@ -363,5 +373,3 @@ const MembersBulkUploadDialog = ({ open, onClose, onSuccess }) => {
 };
 
 export default MembersBulkUploadDialog;
-
-

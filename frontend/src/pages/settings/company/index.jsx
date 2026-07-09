@@ -384,7 +384,9 @@ const CompanySettingsPage = () => {
       <Card sx={{ mt: '1.5rem' }}>
         <CardContent>
           <Box sx={{ mb: '1.0rem' }}>
-            <Typography variant="h6" gutterBottom>شعار الشركة</Typography>
+            <Typography variant="h6" gutterBottom>
+              شعار الشركة
+            </Typography>
             <Divider />
           </Box>
 
@@ -405,11 +407,7 @@ const CompanySettingsPage = () => {
                 bgcolor: '#fafafa'
               }}
             />
-            <Chip
-              label={hasCustomLogo ? 'شعار مخصص' : 'الشعار الافتراضي'}
-              color={hasCustomLogo ? 'primary' : 'default'}
-              size="small"
-            />
+            <Chip label={hasCustomLogo ? 'شعار مخصص' : 'الشعار الافتراضي'} color={hasCustomLogo ? 'primary' : 'default'} size="small" />
           </Box>
 
           {/* Buttons */}
@@ -421,20 +419,11 @@ const CompanySettingsPage = () => {
               style={{ display: 'none' }}
               onChange={handleLogoFileChange}
             />
-            <Button
-              variant="contained"
-              startIcon={<CloudUploadIcon />}
-              onClick={() => fileInputRef.current?.click()}
-            >
+            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => fileInputRef.current?.click()}>
               رفع شعار مخصص
             </Button>
             {hasCustomLogo && (
-              <Button
-                variant="outlined"
-                color="warning"
-                startIcon={<ResetIcon />}
-                onClick={handleResetDefaultLogo}
-              >
+              <Button variant="outlined" color="warning" startIcon={<ResetIcon />} onClick={handleResetDefaultLogo}>
                 استعادة الشعار الافتراضي
               </Button>
             )}
@@ -450,5 +439,3 @@ const CompanySettingsPage = () => {
 };
 
 export default CompanySettingsPage;
-
-

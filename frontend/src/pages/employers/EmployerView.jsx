@@ -195,11 +195,10 @@ const EmployerView = () => {
             <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/employers')}>
               {LABELS.back}
             </Button>
-            
-              <Button variant="contained" startIcon={<EditIcon />} onClick={() => navigate(`/employers/edit/${id}`)}>
-                {LABELS.edit}
-              </Button>
-              
+
+            <Button variant="contained" startIcon={<EditIcon />} onClick={() => navigate(`/employers/edit/${id}`)}>
+              {LABELS.edit}
+            </Button>
           </Stack>
         }
       />
@@ -294,11 +293,11 @@ const EmployerView = () => {
         <Divider sx={{ my: '1.5rem' }} />
         <Stack direction="row" spacing={2} justifyContent="flex-end">
           {/* Bulk Refresh Benefit Policies Button */}
-          
-            <Button variant="outlined" color="secondary" startIcon={<RefreshIcon />} onClick={() => setRefreshDialogOpen(true)}>
-              {LABELS.refreshPolicies}
-            </Button>
-            
+
+          <Button variant="outlined" color="secondary" startIcon={<RefreshIcon />} onClick={() => setRefreshDialogOpen(true)}>
+            {LABELS.refreshPolicies}
+          </Button>
+
           <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/employers')}>
             {LABELS.back}
           </Button>
@@ -337,6 +336,3 @@ const EmployerView = () => {
 };
 
 export default EmployerView;
-
-
-

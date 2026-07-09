@@ -66,11 +66,11 @@ const KEYS = {
   waitingPeriodDaysDefault: 'WAITING_PERIOD_DAYS_DEFAULT',
   eligibilityGracePeriodDays: 'ELIGIBILITY_GRACE_PERIOD_DAYS',
   // إعدادات المظهر
-  tableHeaderBg:   'TABLE_HEADER_BG',
+  tableHeaderBg: 'TABLE_HEADER_BG',
   tableHeaderText: 'TABLE_HEADER_TEXT',
-  tableRowEven:    'TABLE_ROW_EVEN',
-  selectionColor:  'SELECTION_COLOR',
-  primaryColor:    'PRIMARY_COLOR'
+  tableRowEven: 'TABLE_ROW_EVEN',
+  selectionColor: 'SELECTION_COLOR',
+  primaryColor: 'PRIMARY_COLOR'
 };
 
 const PROVIDER_PORTAL_FLAG_KEY = 'PROVIDER_PORTAL_ENABLED';
@@ -110,9 +110,7 @@ const toHexColor = (color) => {
   if (!color) return '#000000';
   const s = String(color).trim();
   // إذا كان بالفعل hex
-  if (/^#[0-9a-fA-F]{3,6}$/.test(s)) return s.length === 4
-    ? '#' + s[1]+s[1]+s[2]+s[2]+s[3]+s[3]
-    : s;
+  if (/^#[0-9a-fA-F]{3,6}$/.test(s)) return s.length === 4 ? '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3] : s;
   // استخراج من rgba/rgb
   const m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
   if (m) {
@@ -157,15 +155,19 @@ const SystemSettingsPage = () => {
   const { updateSettings: updateVisualSettings, settings: visualSettings } = useCompanySettings();
 
   // ✅ ألوان مُحسَّنة مُخزَّنة بـ useMemo بدلاً من الحساب inline
-  const alphaColors = useMemo(() => ({
-    logoBoxBg:    alpha('#000', 0.02),              // خلفية صندوق الشعار - رمادي خفيف محايد
-    primaryFaint: alpha(theme.palette.primary.main, 0.02),
-    infoFaint:    alpha(theme.palette.info.main, 0.05),
-  }), [theme.palette.primary.main, theme.palette.info.main]);
+  const alphaColors = useMemo(
+    () => ({
+      logoBoxBg: alpha('#000', 0.02), // خلفية صندوق الشعار - رمادي خفيف محايد
+      primaryFaint: alpha(theme.palette.primary.main, 0.02),
+      infoFaint: alpha(theme.palette.info.main, 0.05)
+    }),
+    [theme.palette.primary.main, theme.palette.info.main]
+  );
 
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -173,6 +175,7 @@ const SystemSettingsPage = () => {
   const [providerPortalEnabled, setProviderPortalEnabled] = useState(false);
   const [claimSubmissionEnabled, setClaimSubmissionEnabled] = useState(false);
   const [preAuthSubmissionEnabled, setPreAuthSubmissionEnabled] = useState(false);
+  const [preApprovalItemsOnly, setPreApprovalItemsOnly] = useState(true);
 
   const [formData, setFormData] = useState({
     companyId: 1,
@@ -191,11 +194,11 @@ const SystemSettingsPage = () => {
     fontFamily: 'Tajawal',
     fontSizeBase: 14,
     // إعدادات المظهر — القيم الافتراضية (تُستبدل من backend في loadData)
-    tableHeaderBg:   ensureHash((visualSettings || {}).tableHeaderBg,   '#E0F2F1'),
+    tableHeaderBg: ensureHash((visualSettings || {}).tableHeaderBg, '#E0F2F1'),
     tableHeaderText: ensureHash((visualSettings || {}).tableHeaderText, '#004D50'),
-    tableRowEven:    (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
-    selectionColor:  (visualSettings || {}).selectionColor  || 'rgba(0,131,143,0.08)',
-    primaryColor:    ensureHash((visualSettings || {}).primaryColor,    '#00838F'),
+    tableRowEven: (visualSettings || {}).tableRowEven || 'rgba(224,242,241,0.45)',
+    selectionColor: (visualSettings || {}).selectionColor || 'rgba(0,131,143,0.08)',
+    primaryColor: ensureHash((visualSettings || {}).primaryColor, '#00838F'),
     claimSlaDays: 10,
     preApprovalSlaDays: 3,
     claimBackdatedMonths: 3,
@@ -284,11 +287,11 @@ const SystemSettingsPage = () => {
         waitingPeriodDaysDefault: toInt(byKey.get(KEYS.waitingPeriodDaysDefault), 0),
         eligibilityGracePeriodDays: toInt(byKey.get(KEYS.eligibilityGracePeriodDays), 0),
         // إعدادات المظهر — من backend أولاً، ثم localStorage كاحتياطي
-        tableHeaderBg:   ensureHash(byKey.get(KEYS.tableHeaderBg)   || (visualSettings || {}).tableHeaderBg,   '#E0F2F1'),
+        tableHeaderBg: ensureHash(byKey.get(KEYS.tableHeaderBg) || (visualSettings || {}).tableHeaderBg, '#E0F2F1'),
         tableHeaderText: ensureHash(byKey.get(KEYS.tableHeaderText) || (visualSettings || {}).tableHeaderText, '#004D50'),
-        tableRowEven:    byKey.get(KEYS.tableRowEven)    || (visualSettings || {}).tableRowEven    || 'rgba(224,242,241,0.45)',
-        selectionColor:  byKey.get(KEYS.selectionColor)  || (visualSettings || {}).selectionColor  || 'rgba(0,131,143,0.08)',
-        primaryColor:    ensureHash(byKey.get(KEYS.primaryColor)    || (visualSettings || {}).primaryColor,    '#00838F'),
+        tableRowEven: byKey.get(KEYS.tableRowEven) || (visualSettings || {}).tableRowEven || 'rgba(224,242,241,0.45)',
+        selectionColor: byKey.get(KEYS.selectionColor) || (visualSettings || {}).selectionColor || 'rgba(0,131,143,0.08)',
+        primaryColor: ensureHash(byKey.get(KEYS.primaryColor) || (visualSettings || {}).primaryColor, '#00838F'),
         // Report Settings Fields
         pdfSettingsId: reportSettingsResponse?.id,
         claimReportTitle: reportSettingsResponse?.claimReportTitle || 'نظام وعد الطبي',
@@ -301,14 +304,15 @@ const SystemSettingsPage = () => {
         claimReportSigLeftBottom: reportSettingsResponse?.claimReportSigLeftBottom || ''
       });
 
-      const portalFlag = (flags || []).find((f) => f.flagKey === PROVIDER_PORTAL_FLAG_KEY);
-      setProviderPortalEnabled(Boolean(portalFlag?.enabled));
+      const providerPortalFlag = (flags || []).find((f) => f.flagKey === PROVIDER_PORTAL_FLAG_KEY);
+      const claimSubmissionFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_CLAIM_SUBMISSION_ENABLED');
+      const preAuthSubmissionFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_PREAUTH_SUBMISSION_ENABLED');
+      const preApprovalItemsFlag = (flags || []).find((f) => f.flagKey === 'PROVIDER_PRE_APPROVAL_ITEMS_ONLY');
 
-      const claimFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_CLAIM_SUBMISSION_ENABLED');
-      setClaimSubmissionEnabled(Boolean(claimFlag?.enabled));
-
-      const preAuthFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_PREAUTH_SUBMISSION_ENABLED');
-      setPreAuthSubmissionEnabled(Boolean(preAuthFlag?.enabled));
+      setProviderPortalEnabled(providerPortalFlag ? providerPortalFlag.enabled : false);
+      setClaimSubmissionEnabled(claimSubmissionFlag ? claimSubmissionFlag.enabled : false);
+      setPreAuthSubmissionEnabled(preAuthSubmissionFlag ? preAuthSubmissionFlag.enabled : false);
+      setPreApprovalItemsOnly(preApprovalItemsFlag ? preApprovalItemsFlag.enabled : true);
     } catch (e) {
       setError('فشل تحميل نافذة الإعدادات');
     } finally {
@@ -321,16 +325,22 @@ const SystemSettingsPage = () => {
   }, [loadData]);
 
   // ✅ مُحفوظة بـ useCallback لمنع إنشاء دوال جديدة عند كل render
-  const updateField = useCallback((field) => (event) => {
-    setFormData((prev) => ({ ...prev, [field]: event.target.value }));
-  }, []);
+  const updateField = useCallback(
+    (field) => (event) => {
+      setFormData((prev) => ({ ...prev, [field]: event.target.value }));
+    },
+    []
+  );
 
   // ✅ مُحفوظة بـ useCallback لتجنب إعادة الإنشاء عند كل render
   // يدعم الإنشاء التلقائي إذا لم يكن المفتاح موجوداً في backend (upsert)
-  const saveSettingIfExists = useCallback(async (key, value) => {
-    if (!hasKey(key) && !Object.values(KEYS).includes(key)) return;
-    await systemSettingsService.updateSetting(key, value ? String(value) : '');
-  }, [hasKey]);
+  const saveSettingIfExists = useCallback(
+    async (key, value) => {
+      if (!hasKey(key) && !Object.values(KEYS).includes(key)) return;
+      await systemSettingsService.updateSetting(key, value ? String(value) : '');
+    },
+    [hasKey]
+  );
 
   const handleSaveAll = async (manualData = null, manualEmail = null) => {
     const dataToSave = manualData || formData;
@@ -369,29 +379,25 @@ const SystemSettingsPage = () => {
         saveSettingIfExists(KEYS.waitingPeriodDaysDefault, dataToSave.waitingPeriodDaysDefault),
         saveSettingIfExists(KEYS.eligibilityGracePeriodDays, dataToSave.eligibilityGracePeriodDays),
         // حفظ إعدادات المظهر في backend
-        saveSettingIfExists(KEYS.tableHeaderBg,   dataToSave.tableHeaderBg),
+        saveSettingIfExists(KEYS.tableHeaderBg, dataToSave.tableHeaderBg),
         saveSettingIfExists(KEYS.tableHeaderText, dataToSave.tableHeaderText),
-        saveSettingIfExists(KEYS.tableRowEven,    dataToSave.tableRowEven),
-        saveSettingIfExists(KEYS.selectionColor,  dataToSave.selectionColor),
-        saveSettingIfExists(KEYS.primaryColor,    dataToSave.primaryColor),
-        // حفظ إعدادات المظهر في backend
-        saveSettingIfExists(KEYS.tableHeaderBg,   dataToSave.tableHeaderBg),
-        saveSettingIfExists(KEYS.tableHeaderText, dataToSave.tableHeaderText),
-        saveSettingIfExists(KEYS.tableRowEven,    dataToSave.tableRowEven),
-        saveSettingIfExists(KEYS.selectionColor,  dataToSave.selectionColor),
-        saveSettingIfExists(KEYS.primaryColor,    dataToSave.primaryColor),
+        saveSettingIfExists(KEYS.tableRowEven, dataToSave.tableRowEven),
+        saveSettingIfExists(KEYS.selectionColor, dataToSave.selectionColor),
+        saveSettingIfExists(KEYS.primaryColor, dataToSave.primaryColor),
         // Save Report Settings
-        ...(dataToSave.pdfSettingsId 
-          ? [reportSettingsService.updateSettings(dataToSave.pdfSettingsId, {
-              claimReportTitle: dataToSave.claimReportTitle,
-              claimReportPrimaryColor: dataToSave.claimReportPrimaryColor,
-              claimReportIntro: dataToSave.claimReportIntro,
-              claimReportFooterNote: dataToSave.claimReportFooterNote,
-              claimReportSigRightTop: dataToSave.claimReportSigRightTop,
-              claimReportSigRightBottom: dataToSave.claimReportSigRightBottom,
-              claimReportSigLeftTop: dataToSave.claimReportSigLeftTop,
-              claimReportSigLeftBottom: dataToSave.claimReportSigLeftBottom
-            })]
+        ...(dataToSave.pdfSettingsId
+          ? [
+              reportSettingsService.updateSettings(dataToSave.pdfSettingsId, {
+                claimReportTitle: dataToSave.claimReportTitle,
+                claimReportPrimaryColor: dataToSave.claimReportPrimaryColor,
+                claimReportIntro: dataToSave.claimReportIntro,
+                claimReportFooterNote: dataToSave.claimReportFooterNote,
+                claimReportSigRightTop: dataToSave.claimReportSigRightTop,
+                claimReportSigRightBottom: dataToSave.claimReportSigRightBottom,
+                claimReportSigLeftTop: dataToSave.claimReportSigLeftTop,
+                claimReportSigLeftBottom: dataToSave.claimReportSigLeftBottom
+              })
+            ]
           : []),
         axios.post('/admin/settings/email', emailToSave)
       ]);
@@ -401,8 +407,8 @@ const SystemSettingsPage = () => {
 
       // ✅ تحديث فوري بدون انتظار API — ينعكس فوراً على كل المكونات
       applyUiConfig({
-        logoUrl:      dataToSave.logoUrl || '',
-        fontFamily:   dataToSave.fontFamily,
+        logoUrl: dataToSave.logoUrl || '',
+        fontFamily: dataToSave.fontFamily,
         fontSizeBase: dataToSave.fontSizeBase,
         systemNameAr: dataToSave.companyName,
         systemNameEn: dataToSave.companyName
@@ -413,14 +419,14 @@ const SystemSettingsPage = () => {
         companyName: dataToSave.companyName,
         companyNameEn: dataToSave.companyName,
         businessType: dataToSave.businessType,
-        logoUrl: dataToSave.logoUrl?.startsWith('data:') ? null : (dataToSave.logoUrl || null),
+        logoUrl: dataToSave.logoUrl?.startsWith('data:') ? null : dataToSave.logoUrl || null,
         logoBase64: dataToSave.logoUrl?.startsWith('data:') ? dataToSave.logoUrl : null,
         // حفظ إعدادات المظهر في localStorage
-        tableHeaderBg:   dataToSave.tableHeaderBg,
+        tableHeaderBg: dataToSave.tableHeaderBg,
         tableHeaderText: dataToSave.tableHeaderText,
-        tableRowEven:    dataToSave.tableRowEven,
-        selectionColor:  dataToSave.selectionColor,
-        primaryColor:    dataToSave.primaryColor
+        tableRowEven: dataToSave.tableRowEven,
+        selectionColor: dataToSave.selectionColor,
+        primaryColor: dataToSave.primaryColor
       });
 
       refreshSystemConfig();
@@ -434,11 +440,10 @@ const SystemSettingsPage = () => {
     }
   };
 
-
   const handleToggleProviderPortal = async (event) => {
     const next = event.target.checked;
     try {
-      setIsSaving(true);
+      setIsToggling(true);
       setError(null);
       await featureFlagsService.toggleFlag(PROVIDER_PORTAL_FLAG_KEY, next);
       setProviderPortalEnabled(next);
@@ -447,16 +452,16 @@ const SystemSettingsPage = () => {
       refreshSystemConfig();
       setSuccess(next ? 'تم إظهار بوابة مقدم الخدمة' : 'تم إخفاء بوابة مقدم الخدمة');
     } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث حالة بوابة مقدم الخدمة');
+      setError(e?.response?.data?.message || 'فشل تحديث بوابة مقدم الخدمة');
     } finally {
-      setIsSaving(false);
+      setIsToggling(false);
     }
   };
 
   const handleToggleClaimSubmission = async (event) => {
     const next = event.target.checked;
     try {
-      setIsSaving(true);
+      setIsToggling(true);
       setError(null);
       await featureFlagsService.toggleFlag('DIRECT_CLAIM_SUBMISSION_ENABLED', next);
       setClaimSubmissionEnabled(next);
@@ -464,16 +469,16 @@ const SystemSettingsPage = () => {
       refreshSystemConfig();
       setSuccess(next ? 'تم تفعيل إضافة المطالبات' : 'تم تعطيل إضافة المطالبات');
     } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث حالة إضافة المطالبات');
+      setError(e?.response?.data?.message || 'فشل تحديث خيار المطالبات');
     } finally {
-      setIsSaving(false);
+      setIsToggling(false);
     }
   };
 
   const handleTogglePreAuthSubmission = async (event) => {
     const next = event.target.checked;
     try {
-      setIsSaving(true);
+      setIsToggling(true);
       setError(null);
       await featureFlagsService.toggleFlag('DIRECT_PREAUTH_SUBMISSION_ENABLED', next);
       setPreAuthSubmissionEnabled(next);
@@ -481,9 +486,25 @@ const SystemSettingsPage = () => {
       refreshSystemConfig();
       setSuccess(next ? 'تم تفعيل إضافة الموافقات المسبقة' : 'تم تعطيل إضافة الموافقات المسبقة');
     } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث حالة إضافة الموافقات المسبقة');
+      setError(e?.response?.data?.message || 'فشل تحديث خيار الموافقات المسبقة');
     } finally {
-      setIsSaving(false);
+      setIsToggling(false);
+    }
+  };
+
+  const handleTogglePreApprovalItemsOnly = async (event) => {
+    const next = event.target.checked;
+    setIsToggling(true);
+    try {
+      await featureFlagsService.toggleFlag('PROVIDER_PRE_APPROVAL_ITEMS_ONLY', next);
+      setPreApprovalItemsOnly(next);
+      applyFlags({ PROVIDER_PRE_APPROVAL_ITEMS_ONLY: next });
+      refreshSystemConfig();
+      setSuccess(next ? 'تم تفعيل فلترة الأصناف التي تتطلب موافقة مسبقة فقط' : 'تم تفعيل إظهار جميع الأصناف في طلب الموافقة المسبقة');
+    } catch (e) {
+      setError(e?.response?.data?.message || 'فشل تحديث حالة عرض الأصناف');
+    } finally {
+      setIsToggling(false);
     }
   };
 
@@ -504,18 +525,18 @@ const SystemSettingsPage = () => {
           icon={<SettingsIcon sx={{ fontSize: '1.8rem', color: 'primary.main' }} />}
           noIconBox
           actions={
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Button 
-              variant="contained" 
-              color="primary"
-              onClick={() => handleSaveAll()} 
-              startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-              disabled={isSaving}
-              sx={{ fontWeight: 700 }}
-            >
-              حفظ وتطبيق التغييرات
-            </Button>
-          </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handleSaveAll()}
+                startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                disabled={isSaving}
+                sx={{ fontWeight: 700 }}
+              >
+                حفظ وتطبيق التغييرات
+              </Button>
+            </Stack>
           }
           sx={{ mb: 1 }}
         />
@@ -590,102 +611,118 @@ const SystemSettingsPage = () => {
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 8 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">اسم الشركة (الاسم المؤثر فى النظام)</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                اسم الشركة (الاسم المؤثر فى النظام)
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="أدخل اسم الشركة..."
-                                value={formData.companyName} 
-                                onChange={updateField('companyName')} 
-                                required 
+                                value={formData.companyName}
+                                onChange={updateField('companyName')}
+                                required
                               />
                             </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 4 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">كود الشركة</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                كود الشركة
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="كود فريد للشركة..."
-                                value={formData.companyCode} 
-                                onChange={updateField('companyCode')} 
-                                required 
+                                value={formData.companyCode}
+                                onChange={updateField('companyCode')}
+                                required
                               />
                             </Stack>
                           </Grid>
-                          
+
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">نوع النشاط</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                نوع النشاط
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="مثلاً: شركة طبية، مستشفى..."
-                                value={formData.businessType} 
-                                onChange={updateField('businessType')} 
+                                value={formData.businessType}
+                                onChange={updateField('businessType')}
                               />
                             </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">الهاتف</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                الهاتف
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="رقم الهاتف الأساسي..."
-                                value={formData.phone} 
-                                onChange={updateField('phone')} 
+                                value={formData.phone}
+                                onChange={updateField('phone')}
                               />
                             </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">البريد الإلكتروني</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                البريد الإلكتروني
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="example@waad.ly"
-                                value={formData.email} 
-                                onChange={updateField('email')} 
+                                value={formData.email}
+                                onChange={updateField('email')}
                               />
                             </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">الموقع</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                الموقع
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="www.example.com"
-                                value={formData.website} 
-                                onChange={updateField('website')} 
+                                value={formData.website}
+                                onChange={updateField('website')}
                               />
                             </Stack>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">الرقم الضريبي</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                الرقم الضريبي
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
                                 placeholder="الرقم الضريبي الرسمي..."
-                                value={formData.taxNumber} 
-                                onChange={updateField('taxNumber')} 
+                                value={formData.taxNumber}
+                                onChange={updateField('taxNumber')}
                               />
                             </Stack>
                           </Grid>
                           <Grid size={12}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">العنوان</Typography>
-                              <TextField 
-                                fullWidth 
-                                size="small" 
-                                multiline 
-                                rows={2} 
+                              <Typography variant="subtitle2" color="text.secondary">
+                                العنوان
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                multiline
+                                rows={2}
                                 placeholder="شارع، مدينة، دولة..."
-                                value={formData.address} 
-                                onChange={updateField('address')} 
+                                value={formData.address}
+                                onChange={updateField('address')}
                               />
                             </Stack>
                           </Grid>
@@ -705,12 +742,19 @@ const SystemSettingsPage = () => {
                   <FieldGroup title="قواعد التحقق من الاستحقاق" icon={SecurityIcon}>
                     <Stack spacing={1.5}>
                       <FormControlLabel
-                        control={<Switch checked={formData.eligibilityStrictMode} onChange={(e) => setFormData((p) => ({ ...p, eligibilityStrictMode: e.target.checked }))} />}
+                        control={
+                          <Switch
+                            checked={formData.eligibilityStrictMode}
+                            onChange={(e) => setFormData((p) => ({ ...p, eligibilityStrictMode: e.target.checked }))}
+                          />
+                        }
                         label="تفعيل وضع الاستحقاق الصارم"
                       />
 
                       <Stack spacing={0.5}>
-                        <Typography variant="subtitle2" color="text.secondary">فترة الانتظار الافتراضية (يوم)</Typography>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          فترة الانتظار الافتراضية (يوم)
+                        </Typography>
                         <TextField
                           type="number"
                           fullWidth
@@ -722,7 +766,9 @@ const SystemSettingsPage = () => {
                       </Stack>
 
                       <Stack spacing={0.5}>
-                        <Typography variant="subtitle2" color="text.secondary">فترة السماح للاستحقاق (يوم)</Typography>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          فترة السماح للاستحقاق (يوم)
+                        </Typography>
                         <TextField
                           type="number"
                           fullWidth
@@ -756,10 +802,24 @@ const SystemSettingsPage = () => {
                       <FieldGroup title="الإعدادات التشغيلية" icon={SpeedIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" type="number" label="SLA المطالبات (يوم)" value={formData.claimSlaDays} onChange={(e) => setFormData((p) => ({ ...p, claimSlaDays: Number(e.target.value) }))} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label="SLA المطالبات (يوم)"
+                              value={formData.claimSlaDays}
+                              onChange={(e) => setFormData((p) => ({ ...p, claimSlaDays: Number(e.target.value) }))}
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
-                            <TextField fullWidth size="small" type="number" label="SLA الموافقات (يوم)" value={formData.preApprovalSlaDays} onChange={(e) => setFormData((p) => ({ ...p, preApprovalSlaDays: Number(e.target.value) }))} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label="SLA الموافقات (يوم)"
+                              value={formData.preApprovalSlaDays}
+                              onChange={(e) => setFormData((p) => ({ ...p, preApprovalSlaDays: Number(e.target.value) }))}
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
@@ -774,13 +834,32 @@ const SystemSettingsPage = () => {
                             />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 8 }}>
-                            <TextField fullWidth size="small" label="تنسيق رقم المستفيد" value={formData.beneficiaryNumberFormat} onChange={updateField('beneficiaryNumberFormat')} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="تنسيق رقم المستفيد"
+                              value={formData.beneficiaryNumberFormat}
+                              onChange={updateField('beneficiaryNumberFormat')}
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: '1.0rem' }}>
-                            <TextField fullWidth size="small" label="البادئة" value={formData.beneficiaryNumberPrefix} onChange={updateField('beneficiaryNumberPrefix')} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="البادئة"
+                              value={formData.beneficiaryNumberPrefix}
+                              onChange={updateField('beneficiaryNumberPrefix')}
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: '1.0rem' }}>
-                            <TextField fullWidth size="small" type="number" label="عدد الأرقام" value={formData.beneficiaryNumberDigits} onChange={(e) => setFormData((p) => ({ ...p, beneficiaryNumberDigits: Number(e.target.value) }))} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label="عدد الأرقام"
+                              value={formData.beneficiaryNumberDigits}
+                              onChange={(e) => setFormData((p) => ({ ...p, beneficiaryNumberDigits: Number(e.target.value) }))}
+                            />
                           </Grid>
                         </Grid>
                       </FieldGroup>
@@ -800,35 +879,100 @@ const SystemSettingsPage = () => {
                       <FieldGroup title="تخصيص تقرير المطالبات" icon={ReportIcon}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 12, sm: 8 }}>
-                            <TextField fullWidth size="small" label="عنوان التقرير" value={formData.claimReportTitle} onChange={updateField('claimReportTitle')} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="عنوان التقرير"
+                              value={formData.claimReportTitle}
+                              onChange={updateField('claimReportTitle')}
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 4 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <TextField fullWidth size="small" label="اللون الرئيسي" value={formData.claimReportPrimaryColor} onChange={updateField('claimReportPrimaryColor')} />
-                              <Box sx={{ width: '2.25rem', height: '2.25rem', bgcolor: formData.claimReportPrimaryColor, border: '1px solid #ddd', borderRadius: 1, flexShrink: 0 }} />
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="اللون الرئيسي"
+                                value={formData.claimReportPrimaryColor}
+                                onChange={updateField('claimReportPrimaryColor')}
+                              />
+                              <Box
+                                sx={{
+                                  width: '2.25rem',
+                                  height: '2.25rem',
+                                  bgcolor: formData.claimReportPrimaryColor,
+                                  border: '1px solid #ddd',
+                                  borderRadius: 1,
+                                  flexShrink: 0
+                                }}
+                              />
                             </Box>
                           </Grid>
                           <Grid size={12}>
-                            <TextField fullWidth size="small" multiline rows={3} label="نص المقدمة (استخدم {batchCode} لرقم الدفعة)" value={formData.claimReportIntro} onChange={updateField('claimReportIntro')} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              multiline
+                              rows={3}
+                              label="نص المقدمة (استخدم {batchCode} لرقم الدفعة)"
+                              value={formData.claimReportIntro}
+                              onChange={updateField('claimReportIntro')}
+                            />
                           </Grid>
                           <Grid size={12}>
-                            <TextField fullWidth size="small" multiline rows={2} label="ملاحظة التذييل" value={formData.claimReportFooterNote} onChange={updateField('claimReportFooterNote')} />
+                            <TextField
+                              fullWidth
+                              size="small"
+                              multiline
+                              rows={2}
+                              label="ملاحظة التذييل"
+                              value={formData.claimReportFooterNote}
+                              onChange={updateField('claimReportFooterNote')}
+                            />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alphaColors.primaryFaint }}>
-                              <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>التوقيع الأيمن</Typography>
+                              <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>
+                                التوقيع الأيمن
+                              </Typography>
                               <Stack spacing={1}>
-                                <TextField fullWidth size="small" label="السطر العلوي" value={formData.claimReportSigRightTop} onChange={updateField('claimReportSigRightTop')} />
-                                <TextField fullWidth size="small" label="السطر السفلي" value={formData.claimReportSigRightBottom} onChange={updateField('claimReportSigRightBottom')} />
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="السطر العلوي"
+                                  value={formData.claimReportSigRightTop}
+                                  onChange={updateField('claimReportSigRightTop')}
+                                />
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="السطر السفلي"
+                                  value={formData.claimReportSigRightBottom}
+                                  onChange={updateField('claimReportSigRightBottom')}
+                                />
                               </Stack>
                             </Paper>
                           </Grid>
                           <Grid size={{ xs: 12, sm: 6 }}>
                             <Paper variant="outlined" sx={{ p: '0.75rem', bgcolor: alphaColors.primaryFaint }}>
-                              <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>التوقيع الأيسر</Typography>
+                              <Typography variant="caption" fontWeight={700} sx={{ mb: 1, display: 'block' }}>
+                                التوقيع الأيسر
+                              </Typography>
                               <Stack spacing={1}>
-                                <TextField fullWidth size="small" label="السطر العلوي" value={formData.claimReportSigLeftTop} onChange={updateField('claimReportSigLeftTop')} />
-                                <TextField fullWidth size="small" label="السطر السفلي" value={formData.claimReportSigLeftBottom} onChange={updateField('claimReportSigLeftBottom')} />
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="السطر العلوي"
+                                  value={formData.claimReportSigLeftTop}
+                                  onChange={updateField('claimReportSigLeftTop')}
+                                />
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="السطر السفلي"
+                                  value={formData.claimReportSigLeftBottom}
+                                  onChange={updateField('claimReportSigLeftBottom')}
+                                />
                               </Stack>
                             </Paper>
                           </Grid>
@@ -837,12 +981,18 @@ const SystemSettingsPage = () => {
                     </Paper>
                   </Grid>
                   <Grid size={{ xs: 12, md: 4 }}>
-                     <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: alphaColors.infoFaint, height: '100%' }}>
-                        <Typography variant="subtitle2" fontWeight={700} gutterBottom>تلميحات التقرير</Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>• يمكنك استخدام الرمز <b>{'{batchCode}'}</b> في حقل المقدمة ليتم استبداله برقم الدفعة الحقيقي.</Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>• اللون الرئيسي يتحكم في لون العناوين والخطوط الفاصلة وصافي القيمة.</Typography>
-                        <Typography variant="body2">• التوقيعات تظهر في الصفحة الأولى من التقرير.</Typography>
-                     </Paper>
+                    <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: alphaColors.infoFaint, height: '100%' }}>
+                      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                        تلميحات التقرير
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        • يمكنك استخدام الرمز <b>{'{batchCode}'}</b> في حقل المقدمة ليتم استبداله برقم الدفعة الحقيقي.
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        • اللون الرئيسي يتحكم في لون العناوين والخطوط الفاصلة وصافي القيمة.
+                      </Typography>
+                      <Typography variant="body2">• التوقيعات تظهر في الصفحة الأولى من التقرير.</Typography>
+                    </Paper>
                   </Grid>
                 </Grid>
               </Box>
@@ -850,58 +1000,87 @@ const SystemSettingsPage = () => {
           </TabPanel>
 
           <TabPanel value={tabValue} index={5}>
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
-                <Stack spacing={3} sx={{ maxWidth: '47.5rem' }}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
-                    <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
-                        عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
+            <Box sx={{ p: '1.0rem' }}>
+              <Stack spacing={1.5} sx={{ maxWidth: '47.5rem' }}>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                  <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                      عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
+                    </Typography>
+
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isToggling} color="success" />
+                      <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'success.main' : 'text.primary'}>
+                        {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
                       </Typography>
+                      {isToggling && <CircularProgress size={18} />}
+                    </Stack>
+                  </FieldGroup>
+                </Paper>
 
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isSaving} color="success" />
-                        <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'success.main' : 'text.primary'}>
-                          {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
-                        </Typography>
-                        {isSaving && <CircularProgress size={18} />}
-                      </Stack>
-                    </FieldGroup>
-                  </Paper>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                  <FieldGroup title="تفعيل إضافة المطالبات المباشرة" icon={ReportIcon} color="primary.main">
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                      عند التفعيل، سيتمكن مزودو الخدمة من تقديم مطالبات جديدة مباشرة عبر البوابة.
+                    </Typography>
 
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
-                    <FieldGroup title="تفعيل إضافة المطالبات المباشرة" icon={ReportIcon} color="primary.main">
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
-                        عند التفعيل، سيتمكن مزودو الخدمة من تقديم مطالبات جديدة مباشرة عبر البوابة.
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Switch
+                        checked={claimSubmissionEnabled}
+                        onChange={handleToggleClaimSubmission}
+                        disabled={isToggling}
+                        color="primary"
+                      />
+                      <Typography variant="subtitle1" fontWeight={700} color={claimSubmissionEnabled ? 'primary.main' : 'text.primary'}>
+                        {claimSubmissionEnabled ? 'مفعل' : 'معطل'}
                       </Typography>
+                      {isToggling && <CircularProgress size={18} />}
+                    </Stack>
+                  </FieldGroup>
+                </Paper>
 
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Switch checked={claimSubmissionEnabled} onChange={handleToggleClaimSubmission} disabled={isSaving} color="primary" />
-                        <Typography variant="subtitle1" fontWeight={700} color={claimSubmissionEnabled ? 'primary.main' : 'text.primary'}>
-                          {claimSubmissionEnabled ? 'مفعل' : 'معطل'}
-                        </Typography>
-                        {isSaving && <CircularProgress size={18} />}
-                      </Stack>
-                    </FieldGroup>
-                  </Paper>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                  <FieldGroup title="تفعيل إضافة الموافقات المسبقة المباشرة" icon={SecurityIcon} color="primary.main">
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                      عند التفعيل، سيتمكن مزودو الخدمة من طلب موافقات مسبقة جديدة مباشرة عبر البوابة.
+                    </Typography>
 
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
-                    <FieldGroup title="تفعيل إضافة الموافقات المسبقة المباشرة" icon={SecurityIcon} color="primary.main">
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
-                        عند التفعيل، سيتمكن مزودو الخدمة من طلب موافقات مسبقة جديدة مباشرة عبر البوابة.
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Switch
+                        checked={preAuthSubmissionEnabled}
+                        onChange={handleTogglePreAuthSubmission}
+                        disabled={isToggling}
+                        color="primary"
+                      />
+                      <Typography variant="subtitle1" fontWeight={700} color={preAuthSubmissionEnabled ? 'primary.main' : 'text.primary'}>
+                        {preAuthSubmissionEnabled ? 'مفعل' : 'معطل'}
                       </Typography>
+                      {isToggling && <CircularProgress size={18} />}
+                    </Stack>
+                  </FieldGroup>
+                </Paper>
 
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Switch checked={preAuthSubmissionEnabled} onChange={handleTogglePreAuthSubmission} disabled={isSaving} color="primary" />
-                        <Typography variant="subtitle1" fontWeight={700} color={preAuthSubmissionEnabled ? 'primary.main' : 'text.primary'}>
-                          {preAuthSubmissionEnabled ? 'مفعل' : 'معطل'}
-                        </Typography>
-                        {isSaving && <CircularProgress size={18} />}
-                      </Stack>
-                    </FieldGroup>
-                  </Paper>
-                </Stack>
-              </Box>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                  <FieldGroup title="أصناف بموافقة مسبقة" icon={SecurityIcon} color="primary.main">
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                      عند التفعيل، سيتم فلترة الخدمات لتشمل فقط الأصناف التي تتطلب موافقة مسبقة. وعند التعطيل سيتم عرض جميع الأصناف.
+                    </Typography>
+
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Switch
+                        checked={preApprovalItemsOnly}
+                        onChange={handleTogglePreApprovalItemsOnly}
+                        disabled={isToggling}
+                        color="primary"
+                      />
+                      <Typography variant="subtitle1" fontWeight={700} color={preApprovalItemsOnly ? 'primary.main' : 'text.primary'}>
+                        {preApprovalItemsOnly ? 'مفعل (أصناف بموافقة مسبقة فقط)' : 'معطل (عرض جميع الأصناف)'}
+                      </Typography>
+                      {isToggling && <CircularProgress size={18} />}
+                    </Stack>
+                  </FieldGroup>
+                </Paper>
+              </Stack>
             </Box>
           </TabPanel>
 
@@ -918,11 +1097,9 @@ const SystemSettingsPage = () => {
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
-
                   {/* عمود الشعار والخط */}
                   <Grid size={{ xs: 12, md: 4 }}>
                     <Stack spacing={2}>
-
                       {/* الشعار */}
                       <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
                         <FieldGroup title="شعار المؤسسة" icon={BusinessIcon} color="primary.main">
@@ -945,11 +1122,20 @@ const SystemSettingsPage = () => {
                                 src={formData.logoUrl || waadLogoFallback}
                                 alt="Logo"
                                 style={{ maxWidth: '80%', maxHeight: '80%' }}
-                                onError={(e) => { e.currentTarget.src = waadLogoFallback; }}
+                                onError={(e) => {
+                                  e.currentTarget.src = waadLogoFallback;
+                                }}
                               />
                             </Box>
                             <Box sx={{ flex: 1 }}>
-                              <Button variant="outlined" component="label" size="small" startIcon={<CloudUploadIcon />} fullWidth sx={{ mb: 1 }}>
+                              <Button
+                                variant="outlined"
+                                component="label"
+                                size="small"
+                                startIcon={<CloudUploadIcon />}
+                                fullWidth
+                                sx={{ mb: 1 }}
+                              >
                                 تغيير الشعار
                                 <input
                                   type="file"
@@ -965,8 +1151,16 @@ const SystemSettingsPage = () => {
                                 />
                               </Button>
                               <Stack spacing={0.5}>
-                                <Typography variant="subtitle2" color="text.secondary">رابط الشعار</Typography>
-                                <TextField fullWidth size="small" placeholder="https://..." value={formData.logoUrl} onChange={updateField('logoUrl')} />
+                                <Typography variant="subtitle2" color="text.secondary">
+                                  رابط الشعار
+                                </Typography>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  placeholder="https://..."
+                                  value={formData.logoUrl}
+                                  onChange={updateField('logoUrl')}
+                                />
                               </Stack>
                             </Box>
                           </Box>
@@ -978,7 +1172,9 @@ const SystemSettingsPage = () => {
                         <FieldGroup title="الخط" icon={SettingsIcon} color="primary.main">
                           <Stack spacing={1.5}>
                             <Stack spacing={0.5}>
-                              <Typography variant="subtitle2" color="text.secondary">نوع الخط</Typography>
+                              <Typography variant="subtitle2" color="text.secondary">
+                                نوع الخط
+                              </Typography>
                               <TextField select fullWidth size="small" value={formData.fontFamily} onChange={updateField('fontFamily')}>
                                 <MenuItem value="Tajawal">Tajawal</MenuItem>
                                 <MenuItem value="Cairo">Cairo</MenuItem>
@@ -1003,26 +1199,23 @@ const SystemSettingsPage = () => {
                           </Stack>
                         </FieldGroup>
                       </Paper>
-
                     </Stack>
                   </Grid>
 
                   {/* عمود ألوان الجداول والواجهة */}
                   <Grid size={{ xs: 12, md: 8 }}>
                     <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
-
                       {/* منتقيات الألوان - عمودياً */}
                       <Grid size={{ xs: 12, md: 5 }}>
                         <Paper variant="outlined" sx={{ p: '0.5rem 0.75rem', borderRadius: '0.25rem' }}>
                           <FieldGroup title="ألوان الجداول" icon={PaletteIcon} color="primary.main">
                             <Stack spacing={0.75}>
-
                               {[
                                 { label: 'خلفية الترويسة', key: 'tableHeaderBg' },
-                                { label: 'نص الترويسة',    key: 'tableHeaderText' },
-                                { label: 'اللون الرئيسي',  key: 'primaryColor' },
-                                { label: 'لون التحديد',    key: 'selectionColor' },
-                                { label: 'صفوف بديلة',     key: 'tableRowEven' },
+                                { label: 'نص الترويسة', key: 'tableHeaderText' },
+                                { label: 'اللون الرئيسي', key: 'primaryColor' },
+                                { label: 'لون التحديد', key: 'selectionColor' },
+                                { label: 'صفوف بديلة', key: 'tableRowEven' }
                               ].map(({ label, key }) => {
                                 const val = formData[key] || '';
                                 const hex = toHexColor(val);
@@ -1030,22 +1223,40 @@ const SystemSettingsPage = () => {
                                   <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                                     {/* مربع ملوّن يعرض اللون الفعلي (بالشفافية) - يفتح المنتقي عند الضغط */}
                                     <Box sx={{ position: 'relative', width: '1.75rem', height: '1.75rem', flexShrink: 0 }}>
-                                      <Box sx={{
-                                        width: '100%', height: '100%',
-                                        bgcolor: val || '#000',
-                                        borderRadius: '4px',
-                                        border: '1px solid rgba(0,0,0,0.2)',
-                                        cursor: 'pointer',
-                                      }} />
+                                      <Box
+                                        sx={{
+                                          width: '100%',
+                                          height: '100%',
+                                          bgcolor: val || '#000',
+                                          borderRadius: '4px',
+                                          border: '1px solid rgba(0,0,0,0.2)',
+                                          cursor: 'pointer'
+                                        }}
+                                      />
                                       <Box
                                         component="input"
                                         type="color"
                                         value={hex}
                                         onChange={(e) => setFormData((p) => ({ ...p, [key]: e.target.value }))}
-                                        sx={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%', p: 0, border: 'none' }}
+                                        sx={{
+                                          position: 'absolute',
+                                          inset: 0,
+                                          opacity: 0,
+                                          cursor: 'pointer',
+                                          width: '100%',
+                                          height: '100%',
+                                          p: 0,
+                                          border: 'none'
+                                        }}
                                       />
                                     </Box>
-                                    <Typography variant="caption" color="text.secondary" sx={{ width: '85px', flexShrink: 0, lineHeight: 1.2 }}>{label}</Typography>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{ width: '85px', flexShrink: 0, lineHeight: 1.2 }}
+                                    >
+                                      {label}
+                                    </Typography>
                                     <TextField
                                       size="small"
                                       value={val}
@@ -1056,7 +1267,6 @@ const SystemSettingsPage = () => {
                                   </Box>
                                 );
                               })}
-
                             </Stack>
                           </FieldGroup>
                         </Paper>
@@ -1073,14 +1283,17 @@ const SystemSettingsPage = () => {
                                   bgcolor: formData.tableHeaderBg,
                                   color: formData.tableHeaderText,
                                   borderBottom: `2px solid ${formData.tableHeaderText}`,
-                                  px: 2, py: 1,
+                                  px: 2,
+                                  py: 1,
                                   display: 'grid',
                                   gridTemplateColumns: '1fr 1fr 1fr',
                                   gap: 2
                                 }}
                               >
                                 {['اسم المنتج', 'الرمز', 'الحالة'].map((h) => (
-                                  <Typography key={h} variant="caption" fontWeight={700}>{h}</Typography>
+                                  <Typography key={h} variant="caption" fontWeight={700}>
+                                    {h}
+                                  </Typography>
                                 ))}
                               </Box>
                               {/* صفوف المعاينة */}
@@ -1093,22 +1306,33 @@ const SystemSettingsPage = () => {
                                   key={i}
                                   sx={{
                                     bgcolor: i % 2 === 1 ? formData.tableRowEven : 'transparent',
-                                    px: 2, py: '0.5rem',
+                                    px: 2,
+                                    py: '0.5rem',
                                     display: 'grid',
                                     gridTemplateColumns: '1fr 1fr 1fr',
                                     gap: 2,
                                     fontSize: '0.8rem'
                                   }}
                                 >
-                                  {row.map((cell, j) => <span key={j}>{cell}</span>)}
+                                  {row.map((cell, j) => (
+                                    <span key={j}>{cell}</span>
+                                  ))}
                                 </Box>
                               ))}
                             </Box>
                             <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <Button variant="contained" size="small" sx={{ bgcolor: formData.primaryColor, '&:hover': { bgcolor: formData.primaryColor, opacity: 0.85 } }}>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                sx={{ bgcolor: formData.primaryColor, '&:hover': { bgcolor: formData.primaryColor, opacity: 0.85 } }}
+                              >
                                 زر رئيسي
                               </Button>
-                              <Button variant="outlined" size="small" sx={{ borderColor: formData.primaryColor, color: formData.primaryColor }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                sx={{ borderColor: formData.primaryColor, color: formData.primaryColor }}
+                              >
                                 زر ثانوي
                               </Button>
                               <Typography variant="caption" sx={{ color: formData.primaryColor, fontWeight: 700 }}>
@@ -1118,10 +1342,8 @@ const SystemSettingsPage = () => {
                           </FieldGroup>
                         </Paper>
                       </Grid>
-
                     </Grid>
                   </Grid>
-
                 </Grid>
               </Box>
             </Box>
@@ -1135,16 +1357,10 @@ const SystemSettingsPage = () => {
               </Box>
             </Box>
           </TabPanel>
-
         </Box>
       </Card>
-      
-
     </Box>
   );
 };
 
 export default SystemSettingsPage;
-
-
-

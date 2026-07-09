@@ -44,7 +44,7 @@ public class PricingItemClassificationEngine {
 
         // Fallback based on mainCategory
         if ("إيواء".equals(mainCategory) || "inpatient".equalsIgnoreCase(mainCategory)) {
-            MedicalCategory fallbackCategory = categoryRepository.findByCode("SUB-INPAT-GENERAL").orElse(null);
+            MedicalCategory fallbackCategory = categoryRepository.findByCode("CAT-IP").orElse(null);
             return ClassificationResult.inpatientGeneral(fallbackCategory, "MAIN_CATEGORY_FALLBACK");
         }
 

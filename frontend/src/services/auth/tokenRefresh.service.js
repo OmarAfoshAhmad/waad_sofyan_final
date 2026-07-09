@@ -48,7 +48,6 @@ export const refreshToken = async () => {
 
     return { token, user };
   } catch (error) {
-
     if (error.response?.status === 401) {
       // Token expired or invalid - redirect to login
       localStorage.removeItem('token');

@@ -330,7 +330,7 @@ const MedicalCategoryCreate = () => {
       newErrors.name = 'اسم التصنيف مطلوب';
     }
 
-    if (categoryType === CATEGORY_TYPE.SUB && !form.parentId && !(form.multiParentIds?.length)) {
+    if (categoryType === CATEGORY_TYPE.SUB && !form.parentId && !form.multiParentIds?.length) {
       newErrors.parentId = 'يجب اختيار التصنيف الأب للتصنيف الفرعي';
     }
 
@@ -349,15 +349,13 @@ const MedicalCategoryCreate = () => {
 
       try {
         const selectedParentId =
-          categoryType === CATEGORY_TYPE.SUB
-            ? (form.parentId || (form.multiParentIds?.length ? form.multiParentIds[0] : null))
-            : null;
+          categoryType === CATEGORY_TYPE.SUB ? form.parentId || (form.multiParentIds?.length ? form.multiParentIds[0] : null) : null;
 
         const payload = {
           code: autoCode,
           name: form.name?.trim(),
           parentId: selectedParentId,
-          multiParentIds: categoryType === CATEGORY_TYPE.SUB ? (form.multiParentIds || []) : [],
+          multiParentIds: categoryType === CATEGORY_TYPE.SUB ? form.multiParentIds || [] : [],
           context: form.context || 'ANY',
           active: form.active
         };
@@ -585,7 +583,14 @@ const MedicalCategoryCreate = () => {
                 <Button variant="outlined" onClick={handleBack} disabled={submitting} startIcon={<ArrowBackIcon />}>
                   إلغاء
                 </Button>
-                <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={submitting} sx={{ minWidth: '8.75rem' }}>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  size="large"
+                  startIcon={<SaveIcon />}
+                  disabled={submitting}
+                  sx={{ minWidth: '8.75rem' }}
+                >
                   {submitting ? 'جارِ الحفظ...' : 'حفظ التصنيف'}
                 </Button>
               </Stack>
@@ -598,5 +603,3 @@ const MedicalCategoryCreate = () => {
 };
 
 export default MedicalCategoryCreate;
-
-

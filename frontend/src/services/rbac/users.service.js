@@ -71,7 +71,7 @@ export const usersService = {
   importProviderUsers: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const response = await axiosServices.post(`${BASE_URL}/import/providers`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'

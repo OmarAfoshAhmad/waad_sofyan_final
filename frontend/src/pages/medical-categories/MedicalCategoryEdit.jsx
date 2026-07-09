@@ -524,7 +524,12 @@ const MedicalCategoryEdit = () => {
                           <Stack direction="row" spacing={1} alignItems="center">
                             <SubdirectoryArrowLeftIcon sx={{ fontSize: '1.0rem', color: 'text.secondary' }} />
                             <span>{subCat.name}</span>
-                            <Chip label={subCat.code} size="small" variant="outlined" sx={{ ml: 1, height: '1.125rem', fontSize: '0.75rem' }} />
+                            <Chip
+                              label={subCat.code}
+                              size="small"
+                              variant="outlined"
+                              sx={{ ml: 1, height: '1.125rem', fontSize: '0.75rem' }}
+                            />
                           </Stack>
                         </MenuItem>
                       ))
@@ -645,7 +650,14 @@ const MedicalCategoryEdit = () => {
                   إلغاء
                 </Button>
 
-                <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={submitting} sx={{ minWidth: '10.0rem' }}>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  size="large"
+                  startIcon={<SaveIcon />}
+                  disabled={submitting}
+                  sx={{ minWidth: '10.0rem' }}
+                >
                   {submitting ? 'جارِ الحفظ...' : 'حفظ التغييرات'}
                 </Button>
               </Stack>
@@ -658,6 +670,3 @@ const MedicalCategoryEdit = () => {
 };
 
 export default MedicalCategoryEdit;
-
-
-

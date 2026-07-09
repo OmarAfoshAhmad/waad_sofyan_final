@@ -461,9 +461,7 @@ const PreApprovalView = () => {
                       </Typography>
                       <Divider sx={{ mb: '1.5rem' }} />
 
-                       <Alert severity="info">
-                        هذه الموافقة المسبقة إدارية وطبية فقط ولا تترتب عليها التزامات مالية في هذه المرحلة.
-                      </Alert>
+                      <Alert severity="info">هذه الموافقة المسبقة إدارية وطبية فقط ولا تترتب عليها التزامات مالية في هذه المرحلة.</Alert>
 
                       {/* Reviewer Comment */}
                       {preApproval?.reviewerComment && (
@@ -602,6 +600,3 @@ const PreApprovalView = () => {
 };
 
 export default PreApprovalView;
-
-
-

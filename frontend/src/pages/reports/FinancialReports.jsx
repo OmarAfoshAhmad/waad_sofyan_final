@@ -186,12 +186,12 @@ const FinancialReports = () => {
   // Fetch data based on active tab
   useEffect(() => {
     fetchData(false);
-    
+
     // Auto-refresh polling every 30 seconds
     const intervalId = setInterval(() => {
       fetchData(true);
     }, 30000);
-    
+
     return () => clearInterval(intervalId);
   }, [activeTab, effectiveEmployerId, selectedProviderId, page, rowsPerPage, dateFrom, dateTo, status]);
 
@@ -950,7 +950,10 @@ const FinancialReports = () => {
                 </Typography>
                 {selectedProviderId && (
                   <Typography variant="body2" color="text.secondary">
-                    مقدم الخدمة: {providers.find((p) => String(p.id) === String(selectedProviderId))?.name || providers.find((p) => String(p.id) === String(selectedProviderId))?.label || selectedProviderId}
+                    مقدم الخدمة:{' '}
+                    {providers.find((p) => String(p.id) === String(selectedProviderId))?.name ||
+                      providers.find((p) => String(p.id) === String(selectedProviderId))?.label ||
+                      selectedProviderId}
                   </Typography>
                 )}
                 <Typography variant="body2" color="text.secondary">
@@ -1049,4 +1052,3 @@ const FinancialReports = () => {
 };
 
 export default FinancialReports;
-

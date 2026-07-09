@@ -324,7 +324,16 @@ const DataImportWizard = ({
             </Grid>
 
             {baseApiUrl.includes('unified-members') && (
-              <Box sx={{ mb: '1.5rem', p: '1.0rem', border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+              <Box
+                sx={{
+                  mb: '1.5rem',
+                  p: '1.0rem',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: 'background.paper'
+                }}
+              >
                 <FormControlLabel
                   control={
                     <Checkbox

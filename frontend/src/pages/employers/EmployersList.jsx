@@ -97,7 +97,7 @@ const EmployersList = () => {
             const apiMsg = err?.response?.data?.message;
             enqueueSnackbar(apiMsg || err.message || 'فشل حذف جهة العمل', { variant: 'error' });
           } finally {
-            setConfirmDialog(prev => ({ ...prev, open: false }));
+            setConfirmDialog((prev) => ({ ...prev, open: false }));
           }
         }
       });
@@ -121,7 +121,7 @@ const EmployersList = () => {
             console.error('[Employers] Restore failed:', err);
             enqueueSnackbar('فشل استعادة جهة العمل', { variant: 'error' });
           } finally {
-            setConfirmDialog(prev => ({ ...prev, open: false }));
+            setConfirmDialog((prev) => ({ ...prev, open: false }));
           }
         }
       });
@@ -146,7 +146,7 @@ const EmployersList = () => {
             const apiMsg = err?.response?.data?.message || err?.message;
             enqueueSnackbar(apiMsg || 'فشل الحذف النهائي', { variant: 'error' });
           } finally {
-            setConfirmDialog(prev => ({ ...prev, open: false }));
+            setConfirmDialog((prev) => ({ ...prev, open: false }));
           }
         }
       });
@@ -251,11 +251,23 @@ const EmployersList = () => {
           </Stack>
         );
       case 'email':
-        return <Typography variant="body2" color="text.secondary">{row.email || '-'}</Typography>;
+        return (
+          <Typography variant="body2" color="text.secondary">
+            {row.email || '-'}
+          </Typography>
+        );
       case 'phone':
-        return <Typography variant="body2" color="text.secondary" dir="ltr" sx={{ textAlign: 'right' }}>{row.phone || '-'}</Typography>;
+        return (
+          <Typography variant="body2" color="text.secondary" dir="ltr" sx={{ textAlign: 'right' }}>
+            {row.phone || '-'}
+          </Typography>
+        );
       case 'address':
-        return <Typography variant="body2" color="text.secondary">{row.address || '-'}</Typography>;
+        return (
+          <Typography variant="body2" color="text.secondary">
+            {row.address || '-'}
+          </Typography>
+        );
       case 'membersCount':
         return (
           <Chip
@@ -266,13 +278,7 @@ const EmployersList = () => {
           />
         );
       case 'active':
-        return (
-          <Chip
-            label={row.active ? 'نشط' : 'غير نشط'}
-            color={row.active ? 'success' : 'error'}
-            size="small"
-          />
-        );
+        return <Chip label={row.active ? 'نشط' : 'غير نشط'} color={row.active ? 'success' : 'error'} size="small" />;
       case 'actions':
         return (
           <Stack direction="row" spacing={0.5} justifyContent="center">
@@ -281,22 +287,14 @@ const EmployersList = () => {
               <>
                 <PermissionGuard resource="employers" action="delete">
                   <Tooltip title="استعادة">
-                    <IconButton
-                      size="small"
-                      color="success"
-                      onClick={() => handleRestore(row.id, row.name || row.code)}
-                    >
+                    <IconButton size="small" color="success" onClick={() => handleRestore(row.id, row.name || row.code)}>
                       <UndoIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </PermissionGuard>
                 <PermissionGuard resource="employers" action="delete">
                   <Tooltip title="حذف نهائي">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handlePermanentDelete(row.id, row.name || row.code)}
-                    >
+                    <IconButton size="small" color="error" onClick={() => handlePermanentDelete(row.id, row.name || row.code)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -314,11 +312,7 @@ const EmployersList = () => {
                 </PermissionGuard>
                 <PermissionGuard resource="employers" action="delete">
                   <Tooltip title="حذف">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleArchive(row.id, row.name || row.code)}
-                    >
+                    <IconButton size="small" color="error" onClick={() => handleArchive(row.id, row.name || row.code)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -382,7 +376,11 @@ const EmployersList = () => {
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
               {/* Refresh */}
               <Tooltip title="تحديث">
-                <IconButton onClick={() => refetch()} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
+                <IconButton
+                  onClick={() => refetch()}
+                  color="primary"
+                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+                >
                   <RefreshIcon />
                 </IconButton>
               </Tooltip>
@@ -414,10 +412,13 @@ const EmployersList = () => {
                   ),
                   endAdornment: searchTerm && (
                     <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => {
-                        setSearchTerm('');
-                        setPage(0);
-                      }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setPage(0);
+                        }}
+                      >
                         <CloseIcon fontSize="small" />
                       </IconButton>
                     </InputAdornment>
@@ -448,7 +449,13 @@ const EmployersList = () => {
               </TextField>
 
               {/* Reset Button */}
-              <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: '7.5rem', height: '2.5rem' }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={handleResetFilters}
+                startIcon={<FilterAltOffIcon />}
+                sx={{ minWidth: '7.5rem', height: '2.5rem' }}
+              >
                 إعادة ضبط
               </Button>
             </Stack>
@@ -501,11 +508,10 @@ const EmployersList = () => {
         message={confirmDialog.message}
         confirmColor={confirmDialog.confirmColor}
         onConfirm={confirmDialog.onConfirm}
-        onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+        onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
       />
     </Box>
   );
 };
 
 export default EmployersList;
-

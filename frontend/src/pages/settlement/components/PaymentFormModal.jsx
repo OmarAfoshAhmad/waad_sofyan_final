@@ -33,7 +33,13 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isEdit = !!payment;
 
-  const { control, handleSubmit, watch, formState: { errors, isSubmitting }, reset } = useForm({
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+    reset
+  } = useForm({
     defaultValues: {
       amount: '',
       paymentDate: dayjs(),
@@ -94,7 +100,9 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">{isEdit ? 'تعديل الدفعة' : 'إضافة دفعة جديدة'}</Typography>
-        <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
       <form onSubmit={handleSubmit(onSubmit)}>
         <DialogContent dividers>
@@ -140,7 +148,9 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
                 render={({ field }) => (
                   <TextField {...field} select label="طريقة الدفع" fullWidth size="small" error={!!errors.paymentMethod}>
                     {PAYMENT_METHODS.map((method) => (
-                      <MenuItem key={method.value} value={method.value}>{method.label}</MenuItem>
+                      <MenuItem key={method.value} value={method.value}>
+                        {method.label}
+                      </MenuItem>
                     ))}
                   </TextField>
                 )}
@@ -150,18 +160,14 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
               <Controller
                 name="referenceNumber"
                 control={control}
-                render={({ field }) => (
-                  <TextField {...field} label="رقم المرجع / الإيصال" fullWidth size="small" />
-                )}
+                render={({ field }) => <TextField {...field} label="رقم المرجع / الإيصال" fullWidth size="small" />}
               />
             </Grid>
             <Grid item xs={12}>
               <Controller
                 name="notes"
                 control={control}
-                render={({ field }) => (
-                  <TextField {...field} label="ملاحظات" fullWidth multiline rows={2} size="small" />
-                )}
+                render={({ field }) => <TextField {...field} label="ملاحظات" fullWidth multiline rows={2} size="small" />}
               />
             </Grid>
 
@@ -182,11 +188,13 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
 
             {(isEdit || watchOverride) && (
               <Grid item xs={12}>
-                <Alert severity="warning" sx={{ mb: 1 }}>السبب إلزامي في حالة التعديل أو التجاوز</Alert>
+                <Alert severity="warning" sx={{ mb: 1 }}>
+                  السبب إلزامي في حالة التعديل أو التجاوز
+                </Alert>
                 <Controller
                   name="reason"
                   control={control}
-                  rules={{ required: (isEdit || watchOverride) ? 'السبب إلزامي' : false }}
+                  rules={{ required: isEdit || watchOverride ? 'السبب إلزامي' : false }}
                   render={({ field }) => (
                     <TextField
                       {...field}
@@ -203,7 +211,9 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} color="inherit">إلغاء</Button>
+          <Button onClick={onClose} color="inherit">
+            إلغاء
+          </Button>
           <Button type="submit" variant="contained" disabled={isSubmitting}>
             {isSubmitting ? 'جاري الحفظ...' : 'حفظ'}
           </Button>

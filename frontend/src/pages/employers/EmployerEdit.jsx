@@ -1,7 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Box, Button, CircularProgress, FormControlLabel, Grid, InputAdornment, Stack, Switch, TextField, Divider, Alert, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  FormControlLabel,
+  Grid,
+  InputAdornment,
+  Stack,
+  Switch,
+  TextField,
+  Divider,
+  Alert,
+  Typography
+} from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Save as SaveIcon, Edit as EditIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 
@@ -33,7 +46,7 @@ const LABELS = {
   fixErrors: 'الرجاء تصحيح الأخطاء',
   updatedSuccess: 'تم تحديث جهة العمل بنجاح',
   saveError: 'فشل في تحديث جهة العمل',
-  notFound: 'لم يتم العثور على جهة العمل',
+  notFound: 'لم يتم العثور على جهة العمل'
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -94,9 +107,7 @@ const EmployerEdit = () => {
       const available = await checkEmployerField(field, value, Number(id));
       setChecking((prev) => ({ ...prev, [field]: false }));
       if (!available) {
-        const msg = field === 'code'
-          ? 'هذا الرمز مستخدم مسبقاً، اختر رمزاً آخر'
-          : 'اسم جهة العمل هذا مستخدم مسبقاً، اختر اسماً آخر';
+        const msg = field === 'code' ? 'هذا الرمز مستخدم مسبقاً، اختر رمزاً آخر' : 'اسم جهة العمل هذا مستخدم مسبقاً، اختر اسماً آخر';
         setErrors((prev) => ({ ...prev, [field]: msg }));
       }
     }, 400);
@@ -108,7 +119,7 @@ const EmployerEdit = () => {
         ...employerData,
         email: employerData.email || '',
         phone: employerData.phone || '',
-        address: employerData.address || '',
+        address: employerData.address || ''
       });
     }
   }, [employerData]);
@@ -129,9 +140,11 @@ const EmployerEdit = () => {
       code: validateField('code', employer.code),
       name: validateField('name', employer.name),
       email: validateField('email', employer.email),
-      phone: validateField('phone', employer.phone),
+      phone: validateField('phone', employer.phone)
     };
-    Object.keys(newErrors).forEach((k) => { if (!newErrors[k]) delete newErrors[k]; });
+    Object.keys(newErrors).forEach((k) => {
+      if (!newErrors[k]) delete newErrors[k];
+    });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -229,7 +242,17 @@ const EmployerEdit = () => {
                   setErrors((prev) => ({ ...prev, code: err || null }));
                   if (!err && v.trim().length >= 2) scheduleUniquenessCheck('code', v);
                 }}
-                InputProps={checking.code ? { endAdornment: <InputAdornment position="end"><CircularProgress size={16} /></InputAdornment> } : undefined}
+                InputProps={
+                  checking.code
+                    ? {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <CircularProgress size={16} />
+                          </InputAdornment>
+                        )
+                      }
+                    : undefined
+                }
                 error={!!errors.code}
                 helperText={errors.code || ' '}
                 FormHelperTextProps={{ sx: { whiteSpace: 'normal', wordBreak: 'break-word', minHeight: '1.25rem' } }}
@@ -249,7 +272,17 @@ const EmployerEdit = () => {
                 FormHelperTextProps={{ sx: { whiteSpace: 'normal', wordBreak: 'break-word', minHeight: '1.25rem' } }}
                 placeholder={LABELS.namePlaceholder}
                 autoFocus
-                InputProps={checking.name ? { endAdornment: <InputAdornment position="end"><CircularProgress size={16} /></InputAdornment> } : undefined}
+                InputProps={
+                  checking.name
+                    ? {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <CircularProgress size={16} />
+                          </InputAdornment>
+                        )
+                      }
+                    : undefined
+                }
               />
             </Grid>
           </Grid>
@@ -331,4 +364,3 @@ const EmployerEdit = () => {
 };
 
 export default EmployerEdit;
-

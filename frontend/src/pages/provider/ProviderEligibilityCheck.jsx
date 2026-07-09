@@ -68,6 +68,40 @@ const VISIT_TYPE_OPTIONS = [
   { value: 'HOME_CARE', label: 'علاج طبيعي' }
 ];
 
+const translateRelationship = (rel) => {
+  if (!rel) return 'الموظف';
+  const mapping = {
+    SELF: 'الموظف',
+    SON: 'ابن',
+    DAUGHTER: 'ابنة',
+    HUSBAND: 'زوج',
+    WIFE: 'زوجة',
+    FATHER: 'أب',
+    MOTHER: 'أم',
+    BROTHER: 'أخ',
+    SISTER: 'أخت',
+    PRINCIPAL: 'الموظف'
+  };
+  return mapping[rel.toUpperCase()] || rel;
+};
+
+const getRelationshipColor = (rel) => {
+  if (!rel) return 'primary';
+  const mapping = {
+    SELF: 'primary',
+    SON: 'info',
+    DAUGHTER: 'info',
+    HUSBAND: 'secondary',
+    WIFE: 'secondary',
+    FATHER: 'warning',
+    MOTHER: 'warning',
+    BROTHER: 'success',
+    SISTER: 'success',
+    PRINCIPAL: 'primary'
+  };
+  return mapping[rel.toUpperCase()] || 'default';
+};
+
 export default function ProviderEligibilityCheck() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -86,7 +120,7 @@ export default function ProviderEligibilityCheck() {
   const [registeringVisit, setRegisteringVisit] = useState(false);
   const [visitError, setVisitError] = useState(null);
   const [checkHistory, setCheckHistory] = useState([]);
-  
+
   // Autocomplete
   const [searchOptions, setSearchOptions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -166,17 +200,19 @@ export default function ProviderEligibilityCheck() {
       if (response && (response.eligible !== undefined || response.statusCode)) {
         setResult(response);
         const firstMember = response.familyMembers?.[0] || response.principalMember;
-        setCheckHistory((prev) => [
-          {
-            id: `${Date.now()}-${trimmedValue}`,
-            input: trimmedValue,
-            eligible: !!response.eligible,
-            memberName: firstMember?.fullName || 'غير محدد',
-            checkedAt: new Date().toISOString(),
-            dateKey: new Date().toLocaleDateString('en-CA')
-          },
-          ...prev
-        ].slice(0, 50));
+        setCheckHistory((prev) =>
+          [
+            {
+              id: `${Date.now()}-${trimmedValue}`,
+              input: trimmedValue,
+              eligible: !!response.eligible,
+              memberName: firstMember?.fullName || 'غير محدد',
+              checkedAt: new Date().toISOString(),
+              dateKey: new Date().toLocaleDateString('en-CA')
+            },
+            ...prev
+          ].slice(0, 50)
+        );
         // Auto-select first eligible member
         if (response.familyMembers && response.familyMembers.length > 0) {
           const firstEligible = response.familyMembers.find((m) => m.eligible);
@@ -237,9 +273,9 @@ export default function ProviderEligibilityCheck() {
       // If it's a direct barcode or scanner input, auto-submit instead of showing suggestions
       if (isCompleteBarcode || isScannerInput) {
         if (!loading && trimmed !== lastAutoSubmittedRef.current) {
-           lastAutoSubmittedRef.current = trimmed;
-           checkEligibility(trimmed);
-           setSearchOptions([]);
+          lastAutoSubmittedRef.current = trimmed;
+          checkEligibility(trimmed);
+          setSearchOptions([]);
         }
       } else {
         // Fetch autocomplete suggestions
@@ -350,8 +386,8 @@ export default function ProviderEligibilityCheck() {
           checkEligibility(scannedValue);
           buffer = '';
           return;
-        } 
-        
+        }
+
         if (e.key.length === 1) {
           buffer += e.key;
         }
@@ -413,9 +449,41 @@ export default function ProviderEligibilityCheck() {
   // ========================================
 
   return (
-    <Box sx={{ bgcolor: '#F5F7FA', height: { xs: 'auto', lg: 'calc(100vh - 80px)' }, display: 'flex', flexDirection: 'column', p: { xs: 1, md: 2 }, borderRadius: '0.25rem' }}>
-      <ModernPageHeader title="فحص الأهلية" subtitle="التحقق من أهلية المؤمن عليه وتسجيل الزيارة" icon={LocalHospitalIcon} />
-
+    <Box
+      sx={{
+        bgcolor: '#F5F7FA',
+        height: { xs: 'auto', lg: 'calc(100vh - 80px)' },
+        display: 'flex',
+        flexDirection: 'column',
+        p: { xs: 1, md: 2 },
+        borderRadius: '0.25rem'
+      }}
+    >
+      <ModernPageHeader
+        title="فحص الأهلية"
+        subtitle="التحقق من أهلية المؤمن عليه وتسجيل الزيارة"
+        icon={LocalHospitalIcon}
+        actions={
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+            {['المنطقة الحرة جليانة', 'الشركة الليبية للموانئ'].map((company, index) => (
+              <Chip
+                key={index}
+                label={company}
+                size="small"
+                sx={{
+                  fontWeight: 'bold',
+                  minWidth: '140px',
+                  justifyContent: 'center',
+                  bgcolor: 'primary.main',
+                  color: 'common.white',
+                  borderRadius: '4px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                }}
+              />
+            ))}
+          </Stack>
+        }
+      />
 
       {/* MAIN CONTENT AREA */}
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, gap: '1.5rem', mt: 1, flex: 1, overflow: 'hidden' }}>
@@ -434,11 +502,15 @@ export default function ProviderEligibilityCheck() {
         >
           <Stack spacing={1.5}>
             <Box sx={{ textAlign: 'center', mb: 1 }}>
-              <Typography variant="body2" fontWeight="bold" sx={{ color: isDark ? 'grey.300' : 'grey.700', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+              <Typography
+                variant="body2"
+                fontWeight="bold"
+                sx={{ color: isDark ? 'grey.300' : 'grey.700', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+              >
                 أدخل الاسم، رقم البطاقة، أو امسح الباركود
               </Typography>
             </Box>
-            
+
             <Stack direction="column" spacing={2} alignItems="stretch">
               <Box sx={{ flex: 1 }}>
                 <Autocomplete
@@ -480,7 +552,9 @@ export default function ProviderEligibilityCheck() {
                           </InputAdornment>
                         ),
                         endAdornment: (
-                          <InputAdornment position="end">{loading ? <CircularProgress size={20} /> : <CreditCardIcon color="action" />}</InputAdornment>
+                          <InputAdornment position="end">
+                            {loading ? <CircularProgress size={20} /> : <CreditCardIcon color="action" />}
+                          </InputAdornment>
                         )
                       }}
                       sx={{
@@ -540,8 +614,6 @@ export default function ProviderEligibilityCheck() {
               </Button>
             </Stack>
 
-
-
             <Box sx={{ height: 0, overflow: 'hidden', opacity: 0 }}>
               <TextField id="scanner-input-provider" ref={scannerInputRef} fullWidth size="small" />
             </Box>
@@ -555,8 +627,6 @@ export default function ProviderEligibilityCheck() {
             {/* Beneficiary Info in Side Panel */}
             {result && (
               <Box sx={{ pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
-
-
                 {/* Avatar */}
                 {selectedMember && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
@@ -565,21 +635,43 @@ export default function ProviderEligibilityCheck() {
                       size={95}
                       refreshTrigger={`${selectedMember.memberId || ''}-${selectedMember.profileImage || ''}`}
                       sx={{
-                        border: 3, borderColor: selectedMember.eligible ? 'success.main' : 'error.main',
-                        bgcolor: 'grey.300', fontSize: '1.75rem', fontWeight: 600
+                        border: 3,
+                        borderColor: selectedMember.eligible ? 'success.main' : 'error.main',
+                        bgcolor: 'grey.300',
+                        fontSize: '1.75rem',
+                        fontWeight: 600
                       }}
                     />
                     <Typography variant="subtitle1" sx={{ mt: 0.5, textAlign: 'center', fontWeight: 'bold' }}>
-                      {selectedMember.fullName.split(' ')[0]} {selectedMember.fullName.split(' ').slice(1,3).join(' ') || ''}
+                      {selectedMember.fullName.split(' ')[0]} {selectedMember.fullName.split(' ').slice(1, 3).join(' ') || ''}
                     </Typography>
-                    <Chip label={selectedMember.eligible ? 'مؤهل' : 'غير مؤهل'} color={selectedMember.eligible ? 'success' : 'error'} size="small" sx={{ mt: 0.25 }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+                      {selectedMember.cardNumber || '-'}
+                    </Typography>
+                    <Chip
+                      label={selectedMember.eligible ? 'مؤهل' : 'غير مؤهل'}
+                      color={selectedMember.eligible ? 'success' : 'error'}
+                      size="small"
+                      sx={{ mt: 0.25 }}
+                    />
                   </Box>
                 )}
 
                 {/* Balance Cards */}
                 <Grid container spacing={1}>
                   <Grid item xs={3}>
-                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'primary.lighter', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1,
+                        textAlign: 'center',
+                        bgcolor: 'primary.lighter',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}
+                    >
                       <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>الحد السنوي</Typography>
                       <Typography sx={{ fontSize: '0.75rem', color: 'primary.dark', fontWeight: 'bold' }}>
                         {formatCurrency(result.principalAnnualLimit)}
@@ -587,7 +679,18 @@ export default function ProviderEligibilityCheck() {
                     </Paper>
                   </Grid>
                   <Grid item xs={3}>
-                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'warning.lighter', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1,
+                        textAlign: 'center',
+                        bgcolor: 'warning.lighter',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}
+                    >
                       <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>المستخدم</Typography>
                       <Typography sx={{ fontSize: '0.75rem', color: 'warning.dark', fontWeight: 'bold' }}>
                         {formatCurrency(result.principalUsedAmount)}
@@ -595,7 +698,18 @@ export default function ProviderEligibilityCheck() {
                     </Paper>
                   </Grid>
                   <Grid item xs={3}>
-                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'success.lighter', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1,
+                        textAlign: 'center',
+                        bgcolor: 'success.lighter',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}
+                    >
                       <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>المتبقي</Typography>
                       <Typography sx={{ fontSize: '0.75rem', color: 'success.dark', fontWeight: 'bold' }}>
                         {formatCurrency(result.principalRemainingLimit)}
@@ -603,9 +717,22 @@ export default function ProviderEligibilityCheck() {
                     </Paper>
                   </Grid>
                   <Grid item xs={3}>
-                    <Paper elevation={0} sx={{ p: 1, textAlign: 'center', bgcolor: 'grey.100', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 1,
+                        textAlign: 'center',
+                        bgcolor: 'grey.100',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}
+                    >
                       <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>نسبة الاستخدام</Typography>
-                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{(result.principalUsagePercentage || 0).toFixed(0)}%</Typography>
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 'bold' }}>
+                        {(result.principalUsagePercentage || 0).toFixed(0)}%
+                      </Typography>
                     </Paper>
                   </Grid>
                 </Grid>
@@ -624,8 +751,12 @@ export default function ProviderEligibilityCheck() {
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <HistoryIcon color="primary" />
                       <Box>
-                        <Typography variant="subtitle2" fontWeight={700}>تاريخ فحوصات اليوم</Typography>
-                        <Typography variant="body2" color="text.secondary">{todayChecks.length} عملية فحص</Typography>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          تاريخ فحوصات اليوم
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {todayChecks.length} عملية فحص
+                        </Typography>
                       </Box>
                     </Stack>
                   </Paper>
@@ -635,8 +766,12 @@ export default function ProviderEligibilityCheck() {
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TaskAltIcon color="success" />
                       <Box>
-                        <Typography variant="subtitle2" fontWeight={700}>آخر منتفع تم فحصه</Typography>
-                        <Typography variant="body2" color="text.secondary" noWrap>{checkHistory[0]?.memberName || 'لا يوجد بعد'}</Typography>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          آخر منتفع تم فحصه
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {checkHistory[0]?.memberName || 'لا يوجد بعد'}
+                        </Typography>
                       </Box>
                     </Stack>
                   </Paper>
@@ -646,25 +781,49 @@ export default function ProviderEligibilityCheck() {
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TipsAndUpdatesIcon color="warning" />
                       <Box>
-                        <Typography variant="subtitle2" fontWeight={700}>تعليمات سريعة</Typography>
-                        <Typography variant="body2" color="text.secondary">مرّر الباركود أو أدخل رقم البطاقة</Typography>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          تعليمات سريعة
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          مرّر الباركود أو أدخل رقم البطاقة
+                        </Typography>
                       </Box>
                     </Stack>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'success.lighter', border: '1px solid', borderColor: 'success.light' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: '1.0rem',
+                      borderRadius: '0.25rem',
+                      bgcolor: 'success.lighter',
+                      border: '1px solid',
+                      borderColor: 'success.light'
+                    }}
+                  >
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Typography variant="subtitle2" color="success.dark" fontWeight={700}>حالات مقبولة اليوم</Typography>
-                      <Typography variant="h4" color="success.dark" fontWeight={800}>{todayAcceptedCount}</Typography>
+                      <Typography variant="subtitle2" color="success.dark" fontWeight={700}>
+                        حالات مقبولة اليوم
+                      </Typography>
+                      <Typography variant="h4" color="success.dark" fontWeight={800}>
+                        {todayAcceptedCount}
+                      </Typography>
                     </Stack>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}
+                  >
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Typography variant="subtitle2" color="error.dark" fontWeight={700}>حالات مرفوضة اليوم</Typography>
-                      <Typography variant="h4" color="error.dark" fontWeight={800}>{todayRejectedCount}</Typography>
+                      <Typography variant="subtitle2" color="error.dark" fontWeight={700}>
+                        حالات مرفوضة اليوم
+                      </Typography>
+                      <Typography variant="h4" color="error.dark" fontWeight={800}>
+                        {todayRejectedCount}
+                      </Typography>
                     </Stack>
                   </Paper>
                 </Grid>
@@ -678,40 +837,53 @@ export default function ProviderEligibilityCheck() {
                 title={
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                      <Typography variant="h5" fontWeight="bold">نتيجة الفحص</Typography>
-                      
-                      <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        px: 2,
-                        py: 0.75,
-                        borderRadius: '0.5rem',
-                        bgcolor: result.eligible ? 'success.lighter' : 'error.lighter',
-                        border: '1px solid',
-                        borderColor: result.eligible ? 'success.main' : 'error.main',
-                      }}>
+                      <Typography variant="h5" fontWeight="bold">
+                        نتيجة الفحص
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          px: 2,
+                          py: 0.75,
+                          borderRadius: '0.5rem',
+                          bgcolor: result.eligible ? 'success.lighter' : 'error.lighter',
+                          border: '1px solid',
+                          borderColor: result.eligible ? 'success.main' : 'error.main'
+                        }}
+                      >
                         {result.eligible ? <CheckCircleIcon sx={{ color: 'success.main' }} /> : <CancelIcon sx={{ color: 'error.main' }} />}
                         <Box>
-                           <Typography variant="subtitle2" color={result.eligible ? 'success.dark' : 'error.dark'} fontWeight="bold">
-                              {result.message} {result.familyMembers && `(عدد الأفراد: ${result.totalFamilyMembers || result.familyMembers.length})`}
-                           </Typography>
-                           {result.eligible && (result.policyNumber || result.planName) && (
-                              <Typography variant="caption" color={result.eligible ? 'success.dark' : 'error.dark'} sx={{ display: 'block', mt: 0.5 }}>
-                                {result.policyNumber && `رقم البوليصة: ${result.policyNumber}`}
-                                {result.planName && ` | الخطة: ${result.planName}`}
-                              </Typography>
-                           )}
+                          <Typography variant="subtitle2" color={result.eligible ? 'success.dark' : 'error.dark'} fontWeight="bold">
+                            {result.message}{' '}
+                            {result.familyMembers && `(عدد الأفراد: ${result.totalFamilyMembers || result.familyMembers.length})`}
+                          </Typography>
+                          {result.eligible && (result.policyNumber || result.planName) && (
+                            <Typography
+                              variant="caption"
+                              color={result.eligible ? 'success.dark' : 'error.dark'}
+                              sx={{ display: 'block', mt: 0.5 }}
+                            >
+                              {result.policyNumber && `رقم البوليصة: ${result.policyNumber}`}
+                              {result.planName && ` | الخطة: ${result.planName}`}
+                            </Typography>
+                          )}
                         </Box>
                       </Box>
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                       {result.barcode && (
-                         <Typography variant="caption" color="text.secondary" sx={{ mr: 2, bgcolor: 'grey.100', px: 1, py: 0.5, borderRadius: 1 }}>
-                           الباركود: #{result.barcode}
-                         </Typography>
-                       )}
+                      {result.barcode && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ mr: 2, bgcolor: 'grey.100', px: 1, py: 0.5, borderRadius: 1 }}
+                        >
+                          الباركود: #{result.barcode}
+                        </Typography>
+                      )}
                       <IconButton onClick={handleReset} size="small" title="إعادة ضبط" sx={{ bgcolor: 'grey.100' }}>
                         <RefreshIcon />
                       </IconButton>
@@ -721,7 +893,6 @@ export default function ProviderEligibilityCheck() {
                 contentSX={{ p: '1.0rem', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
               >
                 <Stack spacing={2} sx={{ flex: 1, overflow: 'hidden' }}>
-
                   {/* Warnings */}
                   {result.warnings && result.warnings.length > 0 && (
                     <Box sx={{ mt: '1.0rem' }}>
@@ -733,23 +904,32 @@ export default function ProviderEligibilityCheck() {
                     </Box>
                   )}
 
-
-
                   {/* Family Members Table */}
                   {result.familyMembers && result.familyMembers.length > 0 && (
                     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-
                       <TableContainer component={Paper} variant="outlined" sx={{ flex: 1, overflowY: 'auto' }}>
                         <Table size="small">
                           <TableHead>
                             <TableRow sx={{ bgcolor: tableHeaderBg }}>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }}>الاسم</TableCell>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }}>الصلة</TableCell>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }}>العمر</TableCell>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }}>الحالة</TableCell>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }}>المتبقي</TableCell>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }}>النسبة</TableCell>
-                              <TableCell sx={{ color: tableHeaderColor, fontWeight: 600 }} align="center">
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
+                                الاسم
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
+                                رقم البطاقة
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
+                                الصلة
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
+                                الحالة
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
+                                المتبقي
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
+                                النسبة
+                              </TableCell>
+                              <TableCell align="center" sx={{ color: tableHeaderColor, fontWeight: 600 }}>
                                 اختيار
                               </TableCell>
                             </TableRow>
@@ -780,17 +960,30 @@ export default function ProviderEligibilityCheck() {
                                     </Box>
                                   </Stack>
                                 </TableCell>
-                                <TableCell>{member.relationship || 'SELF'}</TableCell>
-                                <TableCell>{member.age || '-'}</TableCell>
-                                <TableCell>
+                                <TableCell align="center">{member.cardNumber || '-'}</TableCell>
+                                <TableCell align="center">
+                                  <Chip
+                                    label={translateRelationship(member.relationship || 'SELF')}
+                                    color={getRelationshipColor(member.relationship || 'SELF')}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{
+                                      minWidth: '70px',
+                                      fontWeight: 'bold',
+                                      bgcolor: (theme) =>
+                                        theme.palette[getRelationshipColor(member.relationship || 'SELF')]?.lighter || 'transparent'
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell align="center">
                                   <Chip
                                     label={member.eligible ? 'مؤهل' : 'غير مؤهل'}
                                     color={member.eligible ? 'success' : 'error'}
                                     size="small"
                                   />
                                 </TableCell>
-                                <TableCell>{formatCurrency(member.remainingLimit)}</TableCell>
-                                <TableCell>
+                                <TableCell align="center">{formatCurrency(member.remainingLimit)}</TableCell>
+                                <TableCell align="center">
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <LinearProgress
                                       variant="determinate"
@@ -897,8 +1090,6 @@ export default function ProviderEligibilityCheck() {
                       </Stack>
                     </Paper>
                   )}
-
-
                 </Stack>
               </MainCard>
             ) : (
@@ -1003,7 +1194,3 @@ export default function ProviderEligibilityCheck() {
     </Box>
   );
 }
-
-
-
-

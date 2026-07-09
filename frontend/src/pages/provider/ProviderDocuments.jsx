@@ -73,7 +73,9 @@ const ReferenceTypeChip = ({ type }) => {
     PRE_AUTH: 'secondary',
     CLAIM: 'warning'
   };
-  return <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: '5.0rem' }} />;
+  return (
+    <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: '5.0rem' }} />
+  );
 };
 
 // ==================== MAIN COMPONENT ====================
@@ -226,7 +228,13 @@ const ProviderDocuments = () => {
       CLAIM: 'warning'
     };
     return (
-      <Chip label={typeConfig.label || type} color={colors[type] || 'default'} size="small" variant="outlined" sx={{ minWidth: '5.0rem' }} />
+      <Chip
+        label={typeConfig.label || type}
+        color={colors[type] || 'default'}
+        size="small"
+        variant="outlined"
+        sx={{ minWidth: '5.0rem' }}
+      />
     );
   };
 
@@ -251,9 +259,7 @@ const ProviderDocuments = () => {
       .replace(/^https?:\/\/[^/]+/i, '')
       .replace(/^\/+/, '/');
 
-    const normalizedPath = cleanPath
-      .replace(/^\/api\/v1\//, '/')
-      .replace(/^\/api\//, '/');
+    const normalizedPath = cleanPath.replace(/^\/api\/v1\//, '/').replace(/^\/api\//, '/');
 
     return `${baseUrl}${normalizedPath}`;
   };
@@ -680,4 +686,3 @@ const ProviderDocuments = () => {
 };
 
 export default ProviderDocuments;
-

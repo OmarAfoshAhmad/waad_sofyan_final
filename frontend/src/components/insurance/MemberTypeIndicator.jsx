@@ -219,5 +219,3 @@ export default MemberTypeIndicator;
 
 // Export relationship config for use in other components
 export { RELATIONSHIP_CONFIG };
-
-

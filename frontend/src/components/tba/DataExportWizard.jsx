@@ -159,14 +159,14 @@ const DataExportWizard = ({ open, onClose, onExport, title = 'تصدير الب�
             </Typography>
             <Box sx={{ px: '1.0rem' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography variant="caption" color="textSecondary">التقدم</Typography>
-                <Typography variant="caption" color="primary" fontWeight="bold">{progress}%</Typography>
+                <Typography variant="caption" color="textSecondary">
+                  التقدم
+                </Typography>
+                <Typography variant="caption" color="primary" fontWeight="bold">
+                  {progress}%
+                </Typography>
               </Box>
-              <LinearProgress
-                variant="determinate"
-                value={progress}
-                sx={{ height: '0.625rem', borderRadius: '0.3125rem' }}
-              />
+              <LinearProgress variant="determinate" value={progress} sx={{ height: '0.625rem', borderRadius: '0.3125rem' }} />
             </Box>
           </Box>
         );

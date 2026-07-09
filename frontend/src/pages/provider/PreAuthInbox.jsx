@@ -72,7 +72,6 @@ const ProviderPreAuthInbox = () => {
     }
   };
 
-
   const handleAcknowledge = async (preAuthId) => {
     setProcessingIds((prev) => new Set(prev).add(preAuthId));
 
@@ -234,16 +233,11 @@ const ProviderPreAuthInbox = () => {
   }
 
   return (
-    <MainCard 
+    <MainCard
       title="صندوق الموافقات المسبقة"
       secondary={
         flags.DIRECT_PREAUTH_SUBMISSION_ENABLED && (
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={() => navigate('/visits')}
-            startIcon={<span>➕</span>}
-          >
+          <Button variant="contained" color="primary" onClick={() => navigate('/visits')} startIcon={<span>➕</span>}>
             طلب موافقة جديد (عن طريق الزيارات)
           </Button>
         )

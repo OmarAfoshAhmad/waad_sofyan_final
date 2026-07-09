@@ -115,4 +115,3 @@ export default function MembersGrowthChart({ height = 365 }) {
 MembersGrowthChart.propTypes = {
   height: PropTypes.number
 };
-

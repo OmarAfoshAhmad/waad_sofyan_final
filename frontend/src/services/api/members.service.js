@@ -162,8 +162,6 @@ export const deleteAllMembersByEmployer = async (employerId) => {
   return unwrap(response);
 };
 
-
-
 /**
  * Get paginated members list
  * Endpoint: GET /api/members
@@ -802,8 +800,6 @@ export const unifiedMemberSearch = async (query) => {
   });
   return response.data; // Return full ApiResponse structure
 };
-
-
 
 // Default export for convenient imports
 const membersService = {

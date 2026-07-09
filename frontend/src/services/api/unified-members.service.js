@@ -170,7 +170,7 @@ export const unifiedSearch = async (query, employerId = null) => {
       // Call searchMembers (GET /unified-members/search) which uses LIKE %...%
       const advancedResponse = await searchMembers({ ...criteria, size: 20 });
       if (advancedResponse?.content?.length > 0) {
-        results = advancedResponse.content.map(m => ({
+        results = advancedResponse.content.map((m) => ({
           id: m.id,
           fullName: m.fullName,
           cardNumber: m.cardNumber,
@@ -256,6 +256,22 @@ export const deleteMember = async (id) => {
     await api.delete(`${UNIFIED_MEMBERS_BASE_URL}/${id}`);
   } catch (error) {
     console.error('Error deleting member:', error);
+    throw error;
+  }
+};
+
+/**
+ * Bulk delete members by IDs
+ *
+ * @param {Array<number>} ids - Array of Member IDs
+ * @returns {Promise<Object>} Response
+ */
+export const bulkDeleteMembers = async (ids) => {
+  try {
+    const response = await api.post(`${UNIFIED_MEMBERS_BASE_URL}/bulk-delete`, ids);
+    return response.data;
+  } catch (error) {
+    console.error('Error bulk deleting members:', error);
     throw error;
   }
 };

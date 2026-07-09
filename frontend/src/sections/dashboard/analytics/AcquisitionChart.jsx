@@ -116,7 +116,10 @@ export default function AcquisitionChart() {
         margin={{ left: '1.25rem', right: -5, top: '15.0rem', bottom: '7.5rem' }}
         sx={{ '& .MuiBarElement-root:hover': { opacity: 0.6 } }}
       />
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-around', width: '0.0625rem', maxWidth: '15.625rem', ml: '1.0rem', mb: '1.0rem' }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-around', width: '0.0625rem', maxWidth: '15.625rem', ml: '1.0rem', mb: '1.0rem' }}
+      >
         {initialSeries.map((series) => (
           <Stack
             key={series.label}

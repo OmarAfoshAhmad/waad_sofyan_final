@@ -288,5 +288,3 @@ BenefitPolicyLifecycleBar.propTypes = {
 };
 
 export default BenefitPolicyLifecycleBar;
-
-

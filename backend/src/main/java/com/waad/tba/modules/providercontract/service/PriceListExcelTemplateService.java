@@ -586,9 +586,15 @@ public class PriceListExcelTemplateService {
             basePrice = readBigDecimal(row.getCell(basePriceIdx), rowNum);
 
         BigDecimal contractPrice = null;
+        BigDecimal maxContractPrice = null;
         Integer contractPriceIdx = columnIndices.get("contract_price");
-        if (contractPriceIdx != null)
-            contractPrice = readBigDecimal(row.getCell(contractPriceIdx), rowNum);
+        if (contractPriceIdx != null) {
+            PriceRange range = parsePriceRange(row.getCell(contractPriceIdx), rowNum);
+            if (range != null) {
+                contractPrice = range.min;
+                maxContractPrice = range.max;
+            }
+        }
 
         if (basePrice == null && contractPrice != null)
             basePrice = contractPrice;
@@ -599,6 +605,8 @@ public class PriceListExcelTemplateService {
             basePrice = BigDecimal.ZERO;
         if (contractPrice == null)
             contractPrice = BigDecimal.ZERO;
+        if (maxContractPrice == null)
+            maxContractPrice = contractPrice;
 
         String rawCategoryName = null;
         Integer categoryIdx = columnIndices.get("main_category");
@@ -648,6 +656,7 @@ public class PriceListExcelTemplateService {
                 .subCategoryName(subCategoryName)
                 .basePrice(basePrice)
                 .contractPrice(contractPrice)
+                .maxContractPrice(maxContractPrice)
                 .notes(notes)
                 .active(true)
                 .build();
@@ -700,6 +709,7 @@ public class PriceListExcelTemplateService {
             item.setSpecialty(draft.getSpecialty());
             item.setBasePrice(draft.getBasePrice());
             item.setContractPrice(draft.getContractPrice());
+            item.setMaxContractPrice(draft.getMaxContractPrice());
             item.setNotes(draft.getNotes());
             pricingRepository.save(item);
             return true;
@@ -725,6 +735,51 @@ public class PriceListExcelTemplateService {
             return null;
         java.util.regex.Matcher m = CODE_IN_NAME_PATTERN.matcher(name);
         return m.find() ? m.group() : null;
+    }
+
+    private static class PriceRange {
+        BigDecimal min;
+        BigDecimal max;
+        PriceRange(BigDecimal min, BigDecimal max) {
+            this.min = min;
+            this.max = max;
+        }
+    }
+
+    private PriceRange parsePriceRange(Cell cell, int rowNum) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return null;
+        }
+        try {
+            if (cell.getCellType() == CellType.NUMERIC) {
+                BigDecimal val = BigDecimal.valueOf(cell.getNumericCellValue());
+                return new PriceRange(val, val);
+            } else {
+                String val = getCellStringValue(cell);
+                if (val != null && !val.trim().isEmpty()) {
+                    val = val.trim().replace(",", "");
+                    if (val.contains("-")) {
+                        String[] parts = val.split("-");
+                        if (parts.length == 2) {
+                            BigDecimal min = new BigDecimal(parts[0].trim());
+                            BigDecimal max = new BigDecimal(parts[1].trim());
+                            // ensure min is smaller or equal
+                            if (min.compareTo(max) > 0) {
+                                BigDecimal temp = min;
+                                min = max;
+                                max = temp;
+                            }
+                            return new PriceRange(min, max);
+                        }
+                    }
+                    BigDecimal single = new BigDecimal(val);
+                    return new PriceRange(single, single);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[PriceListImport] Invalid price range value at row {}: {}", rowNum, e.getMessage());
+        }
+        return null;
     }
 
     private BigDecimal readBigDecimal(Cell cell, int rowNum) {

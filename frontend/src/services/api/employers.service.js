@@ -714,14 +714,11 @@ export const exportEmployers = async (params = {}) => {
     ];
 
     // Right to left layout for Arabic
-    worksheet.views = [
-      { rightToLeft: true }
-    ];
+    worksheet.views = [{ rightToLeft: true }];
 
-    content.forEach(emp => {
-      const matchSearch = !params.searchTerm ||
-        (emp.name && emp.name.includes(params.searchTerm)) ||
-        (emp.code && emp.code.includes(params.searchTerm));
+    content.forEach((emp) => {
+      const matchSearch =
+        !params.searchTerm || (emp.name && emp.name.includes(params.searchTerm)) || (emp.code && emp.code.includes(params.searchTerm));
 
       if (matchSearch) {
         let activeStatus = emp.active ? 'نشط' : 'غير نشط';

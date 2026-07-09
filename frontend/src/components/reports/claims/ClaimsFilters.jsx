@@ -277,4 +277,3 @@ ClaimsFilters.propTypes = {
 };
 
 export default ClaimsFilters;
-

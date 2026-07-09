@@ -119,4 +119,3 @@ SummaryCard.propTypes = {
 };
 
 export default SummaryCard;
-

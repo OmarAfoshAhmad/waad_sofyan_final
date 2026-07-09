@@ -296,5 +296,3 @@ const DocumentsViewer = ({ documents = [], entityId, entityType, onRefresh }) =>
 };
 
 export default DocumentsViewer;
-
-

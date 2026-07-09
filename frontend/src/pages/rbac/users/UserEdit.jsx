@@ -347,7 +347,6 @@ const Step1ResetPassword = ({ userId, form, setForm, errors, setErrors }) => {
   );
 };
 
-
 // ============================================================================
 // STEP 2 COMPONENT - Roles Assignment
 // ============================================================================
@@ -754,9 +753,10 @@ const UserEdit = () => {
         });
 
         // Set current roles (supports both `roles[]` and single `role`/`userType` response shapes)
-        const currentRoleNames = Array.isArray(user.roles) && user.roles.length > 0
-          ? user.roles.map((r) => (typeof r === 'string' ? r : r?.name || r?.role)).filter(Boolean)
-          : [user.role || user.userType].filter(Boolean);
+        const currentRoleNames =
+          Array.isArray(user.roles) && user.roles.length > 0
+            ? user.roles.map((r) => (typeof r === 'string' ? r : r?.name || r?.role)).filter(Boolean)
+            : [user.role || user.userType].filter(Boolean);
 
         const currentRoleIds = roles.filter((r) => currentRoleNames.includes(r.name)).map((r) => r.id);
         setOriginalRoleIds(currentRoleIds);
@@ -767,21 +767,21 @@ const UserEdit = () => {
       setProviderOptions(
         Array.isArray(providersRes)
           ? providersRes
-            .map((provider) => ({
-              id: provider?.id,
-              label: provider?.name || provider?.providerName || provider?.label || provider?.code || `#${provider?.id}`
-            }))
-            .filter((provider) => provider.id != null)
+              .map((provider) => ({
+                id: provider?.id,
+                label: provider?.name || provider?.providerName || provider?.label || provider?.code || `#${provider?.id}`
+              }))
+              .filter((provider) => provider.id != null)
           : []
       );
       setEmployerOptions(
         Array.isArray(employersRes)
           ? employersRes
-            .map((employer) => ({
-              id: employer?.id,
-              label: employer?.label || employer?.name || employer?.companyName || `#${employer?.id}`
-            }))
-            .filter((employer) => employer.id != null)
+              .map((employer) => ({
+                id: employer?.id,
+                label: employer?.label || employer?.name || employer?.companyName || `#${employer?.id}`
+              }))
+              .filter((employer) => employer.id != null)
           : []
       );
     } catch (err) {
@@ -928,11 +928,7 @@ const UserEdit = () => {
         title={`تعديل المستخدم: ${form.username}`}
         subtitle="تعديل بيانات المستخدم وأدواره"
         icon={EditIcon}
-        breadcrumbs={[
-          { label: 'الرئيسية', path: '/' },
-          { label: 'المستخدمين', path: '/admin/users' },
-          { label: 'تعديل' }
-        ]}
+        breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمين', path: '/admin/users' }, { label: 'تعديل' }]}
         actions={
           <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/admin/users')}>
             العودة للقائمة
@@ -960,7 +956,12 @@ const UserEdit = () => {
 
       {/* Step Content */}
       <MainCard>
-        {activeStep === 0 && (<Box><Step1UserInfoEdit form={form} setForm={setForm} errors={errors} setErrors={setErrors} /><Step1ResetPassword userId={id} form={form} setForm={setForm} errors={errors} setErrors={setErrors} /></Box>)}
+        {activeStep === 0 && (
+          <Box>
+            <Step1UserInfoEdit form={form} setForm={setForm} errors={errors} setErrors={setErrors} />
+            <Step1ResetPassword userId={id} form={form} setForm={setForm} errors={errors} setErrors={setErrors} />
+          </Box>
+        )}
 
         {activeStep === 1 && (
           <Step2Roles
@@ -978,7 +979,16 @@ const UserEdit = () => {
         )}
 
         {/* Navigation Buttons */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            mt: '1.5rem',
+            pt: '1.0rem',
+            borderTop: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
           <Button variant="outlined" onClick={handleBack} disabled={activeStep === 0 || saving} startIcon={<ArrowForwardIcon />}>
             السابق
           </Button>
@@ -1004,4 +1014,3 @@ const UserEdit = () => {
 };
 
 export default UserEdit;
-

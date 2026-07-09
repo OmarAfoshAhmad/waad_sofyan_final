@@ -392,10 +392,8 @@ const BenefitPolicyView = () => {
               تعديل
             </Button>
 
-
             {/* Activate Button */}
             {statusConfig.canActivate && (
-
               <Button
                 startIcon={<ActivateIcon />}
                 onClick={handleActivate}
@@ -406,12 +404,10 @@ const BenefitPolicyView = () => {
               >
                 تفعيل
               </Button>
-
             )}
 
             {/* Suspend Button */}
             {statusConfig.canSuspend && (
-
               <Button
                 startIcon={<SuspendIcon />}
                 onClick={handleSuspend}
@@ -422,12 +418,10 @@ const BenefitPolicyView = () => {
               >
                 إيقاف مؤقت
               </Button>
-
             )}
 
             {/* Cancel Button */}
             {statusConfig.canCancel && (
-
               <Button
                 startIcon={<CancelIcon />}
                 onClick={handleCancel}
@@ -438,12 +432,10 @@ const BenefitPolicyView = () => {
               >
                 إلغاء
               </Button>
-
             )}
 
             {/* Delete Button */}
             {statusConfig.canDelete && (
-
               <Button
                 startIcon={<DeleteIcon />}
                 onClick={handleDelete}
@@ -454,7 +446,6 @@ const BenefitPolicyView = () => {
               >
                 حذف
               </Button>
-
             )}
           </Stack>
         }
@@ -551,7 +542,9 @@ const BenefitPolicyView = () => {
       )}
 
       {/* Rules Tab */}
-      {activeTab === 1 && <BenefitPolicyRulesTab policyId={id} policyStatus={policy?.status} policyDefaultCoveragePercent={policy?.defaultCoveragePercent} />}
+      {activeTab === 1 && (
+        <BenefitPolicyRulesTab policyId={id} policyStatus={policy?.status} policyDefaultCoveragePercent={policy?.defaultCoveragePercent} />
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog
@@ -568,4 +561,3 @@ const BenefitPolicyView = () => {
 };
 
 export default BenefitPolicyView;
-

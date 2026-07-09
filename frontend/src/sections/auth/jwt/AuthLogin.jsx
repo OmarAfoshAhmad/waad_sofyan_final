@@ -228,7 +228,7 @@ export default function AuthLogin({ isDemo = false }) {
                       py: '0.75rem',
                       borderRadius: '0.25rem',
                       fontWeight: 600,
-                      fontSize: '1rem',
+                      fontSize: '1rem'
                     }}
                   >
                     {isSubmitting ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}
@@ -244,6 +244,3 @@ export default function AuthLogin({ isDemo = false }) {
 }
 
 AuthLogin.propTypes = { isDemo: PropTypes.bool };
-
-
-

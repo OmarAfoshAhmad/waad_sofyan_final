@@ -186,7 +186,11 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
         {result && (
           <Box sx={{ mb: '1.5rem' }}>
             {/* Summary */}
-            <Alert severity={result.success ? 'success' : 'error'} icon={result.success ? <CheckCircle /> : <Error />} sx={{ mb: '1.0rem' }}>
+            <Alert
+              severity={result.success ? 'success' : 'error'}
+              icon={result.success ? <CheckCircle /> : <Error />}
+              sx={{ mb: '1.0rem' }}
+            >
               <AlertTitle>{result.message || (result.success ? 'تم الاستيراد بنجاح' : 'فشل الاستيراد')}</AlertTitle>
             </Alert>
 

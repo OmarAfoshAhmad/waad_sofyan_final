@@ -25,10 +25,7 @@ export default function ThemeCustomization({ children }) {
   const { state } = useConfig();
   const { settings } = useCompanySettings();
 
-  const themeTypography = useMemo(
-    () => Typography(state.fontFamily, state.fontSize),
-    [state.fontFamily, state.fontSize]
-  );
+  const themeTypography = useMemo(() => Typography(state.fontFamily, state.fontSize), [state.fontFamily, state.fontSize]);
 
   const palette = useMemo(() => {
     const base = buildPalette(state.presetColor);
@@ -96,7 +93,7 @@ export default function ThemeCustomization({ children }) {
       },
       direction: state.themeDirection,
       shape: {
-        borderRadius: 4  // قيمة التدوير الأساسية لكل sx={{ borderRadius: N }}
+        borderRadius: 4 // قيمة التدوير الأساسية لكل sx={{ borderRadius: N }}
       },
       mixins: {
         toolbar: {
@@ -132,15 +129,17 @@ export default function ThemeCustomization({ children }) {
       <ThemeProvider disableTransitionOnChange theme={themes} modeStorageKey="theme-mode" defaultMode={DEFAULT_THEME_MODE}>
         <CssBaseline enableColorScheme />
         {/* Override MUI Alert info severity to follow the theme's primary color instead of hardcoded info (blue) */}
-        <GlobalStyles styles={(theme) => ({
-          '.MuiAlert-standardInfo': {
-            backgroundColor: theme.palette.primary.lighter,
-            color: theme.palette.primary.dark,
-          },
-          '.MuiAlert-standardInfo .MuiAlert-icon': {
-            color: theme.palette.primary.main,
-          },
-        })} />
+        <GlobalStyles
+          styles={(theme) => ({
+            '.MuiAlert-standardInfo': {
+              backgroundColor: theme.palette.primary.lighter,
+              color: theme.palette.primary.dark
+            },
+            '.MuiAlert-standardInfo .MuiAlert-icon': {
+              color: theme.palette.primary.main
+            }
+          })}
+        />
         {children}
       </ThemeProvider>
     </StyledEngineProvider>
@@ -148,5 +147,3 @@ export default function ThemeCustomization({ children }) {
 }
 
 ThemeCustomization.propTypes = { children: PropTypes.node };
-
-

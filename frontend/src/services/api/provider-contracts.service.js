@@ -614,7 +614,7 @@ export const runCoverageSimulation = async (contractId, policyId, encounterType 
       policyId,
       encounterType
     };
-    
+
     const response = await axiosClient.get('/api/simulation/coverage', { params });
     return response.data;
   } catch (error) {
@@ -636,7 +636,7 @@ export const runRawCoverageSimulation = async (policyId, encounterType = 'ALL', 
       policyId,
       encounterType
     };
-    
+
     const response = await axiosClient.post('/api/simulation/coverage/raw', items, { params });
     return response.data;
   } catch (error) {
@@ -647,9 +647,9 @@ export const runRawCoverageSimulation = async (policyId, encounterType = 'ALL', 
 
 /**
  * Export Coverage Simulation Report to Excel
- * @param {Number} contractId 
- * @param {Number} policyId 
- * @param {String} encounterType 
+ * @param {Number} contractId
+ * @param {Number} policyId
+ * @param {String} encounterType
  */
 export const downloadSimulationReport = async (contractId, policyId, encounterType = 'ALL') => {
   const response = await axiosClient.get(`/api/simulation/coverage/export`, {
@@ -658,7 +658,6 @@ export const downloadSimulationReport = async (contractId, policyId, encounterTy
   });
   return response.data;
 };
-
 
 const providerContractsService = {
   getProviderContracts,

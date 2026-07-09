@@ -2,19 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import {
-  Box,
-  Stack,
-  Button,
-  TextField,
-  MenuItem,
-  Typography,
-  Chip,
-  Tooltip,
-  IconButton,
-  CircularProgress,
-  Alert
-} from '@mui/material';
+import { Box, Stack, Button, TextField, MenuItem, Typography, Chip, Tooltip, IconButton, CircularProgress, Alert } from '@mui/material';
 import {
   ReceiptLong as ReceiptIcon,
   TrendingUp as UpIcon,
@@ -90,34 +78,47 @@ export default function PaymentsManagement() {
     staleTime: 5 * 60 * 1000
   });
 
-  const employerOptions = useMemo(() => Array.isArray(employersRaw) ? employersRaw : (employersRaw?.content || []), [employersRaw]);
-  const providerOptions = useMemo(() => Array.isArray(providersRaw) ? providersRaw : (providersRaw?.content || providersRaw?.items || []), [providersRaw]);
+  const employerOptions = useMemo(() => (Array.isArray(employersRaw) ? employersRaw : employersRaw?.content || []), [employersRaw]);
+  const providerOptions = useMemo(
+    () => (Array.isArray(providersRaw) ? providersRaw : providersRaw?.content || providersRaw?.items || []),
+    [providersRaw]
+  );
 
-  const { data: summaries, isLoading, isError, error, refetch } = useQuery({
+  const {
+    data: summaries,
+    isLoading,
+    isError,
+    error,
+    refetch
+  } = useQuery({
     queryKey: ['payments-summaries', appliedFilters],
-    queryFn: () => paymentsService.getMonthlySettlementSummaries({
-      employerId: appliedFilters.employerId || undefined,
-      providerId: appliedFilters.providerId || undefined,
-      year: appliedFilters.year || undefined,
-      month: appliedFilters.month || undefined,
-      status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined
-    }),
+    queryFn: () =>
+      paymentsService.getMonthlySettlementSummaries({
+        employerId: appliedFilters.employerId || undefined,
+        providerId: appliedFilters.providerId || undefined,
+        year: appliedFilters.year || undefined,
+        month: appliedFilters.month || undefined,
+        status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined
+      }),
     staleTime: 0,
     refetchOnWindowFocus: 'always'
   });
 
   const totals = useMemo(() => {
     if (!summaries) return { totalAmount: 0, paidAmount: 0, remainingAmount: 0 };
-    return summaries.reduce((acc, row) => ({
-      totalAmount: acc.totalAmount + Number(row.totalAmount || 0),
-      paidAmount: acc.paidAmount + Number(row.paidAmount || 0),
-      remainingAmount: acc.remainingAmount + Number(row.remainingAmount || 0)
-    }), { totalAmount: 0, paidAmount: 0, remainingAmount: 0 });
+    return summaries.reduce(
+      (acc, row) => ({
+        totalAmount: acc.totalAmount + Number(row.totalAmount || 0),
+        paidAmount: acc.paidAmount + Number(row.paidAmount || 0),
+        remainingAmount: acc.remainingAmount + Number(row.remainingAmount || 0)
+      }),
+      { totalAmount: 0, paidAmount: 0, remainingAmount: 0 }
+    );
   }, [summaries]);
 
   const applyFilterNow = (field, value) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
-    setAppliedFilters(prev => ({ ...prev, [field]: value }));
+    setFilters((prev) => ({ ...prev, [field]: value }));
+    setAppliedFilters((prev) => ({ ...prev, [field]: value }));
     tableState.setPage(0);
   };
 
@@ -137,14 +138,14 @@ export default function PaymentsManagement() {
     if (!summaries || summaries.length === 0) return;
     setIsExporting(true);
     try {
-      const exportData = summaries.map(s => ({
+      const exportData = summaries.map((s) => ({
         'الشركة / جهة العمل': s.employerName,
         'مزود الخدمة': s.providerName,
-        'السنة': s.targetYear,
-        'الشهر': s.targetMonth,
+        السنة: s.targetYear,
+        الشهر: s.targetMonth,
         'إجمالي المطالبات': Number(s.totalAmount) || 0,
-        'المدفوع': Number(s.paidAmount) || 0,
-        'المتبقي': Number(s.remainingAmount) || 0,
+        المدفوع: Number(s.paidAmount) || 0,
+        المتبقي: Number(s.remainingAmount) || 0,
         'تاريخ آخر دفعة': s.lastPaymentDate ? dayjs(s.lastPaymentDate).format('YYYY-MM-DD') : '-',
         'حالة السداد': s.paymentStatusLabel
       }));
@@ -159,80 +160,113 @@ export default function PaymentsManagement() {
     setDetailsOpen(true);
   };
 
-  const columns = useMemo(() => [
-    {
-      accessorKey: 'employerName',
-      header: 'الشركة / جهة العمل',
-      minWidth: '12rem',
-      cell: ({ row }) => <Typography variant="body2" fontWeight="bold">{row.original.employerName}</Typography>
-    },
-    {
-      accessorKey: 'providerName',
-      header: 'مزود الخدمة',
-      minWidth: '12rem',
-      cell: ({ row }) => row.original.providerName
-    },
-    {
-      accessorKey: 'period',
-      header: 'الفترة (شهر/سنة)',
-      minWidth: '8rem',
-      align: 'center',
-      cell: ({ row }) => `${row.original.targetMonth} / ${row.original.targetYear}`
-    },
-    {
-      accessorKey: 'totalAmount',
-      header: 'إجمالي المطالبات',
-      minWidth: '9rem',
-      align: 'center',
-      cell: ({ row }) => formatCurrency(row.original.totalAmount)
-    },
-    {
-      accessorKey: 'paidAmount',
-      header: 'المدفوع',
-      minWidth: '8rem',
-      align: 'center',
-      cell: ({ row }) => <Typography color="success.main" fontWeight="bold">{formatCurrency(row.original.paidAmount)}</Typography>
-    },
-    {
-      accessorKey: 'remainingAmount',
-      header: 'المتبقي',
-      minWidth: '8rem',
-      align: 'center',
-      cell: ({ row }) => <Typography color="error.main" fontWeight="bold">{formatCurrency(row.original.remainingAmount)}</Typography>
-    },
-    {
-      accessorKey: 'paymentStatus',
-      header: 'حالة السداد',
-      minWidth: '8rem',
-      align: 'center',
-      cell: ({ row }) => (
-        <Chip 
-          label={row.original.paymentStatusLabel} 
-          color={STATUS_COLORS[row.original.paymentStatus] || 'default'} 
-          size="small" 
-        />
-      )
-    },
-    {
-      id: 'actions',
-      header: 'التفاصيل الدفعات',
-      minWidth: '8rem',
-      align: 'center',
-      cell: ({ row }) => (
-        <Tooltip title="عرض الدفعات وتعديلها">
-          <Button size="small" variant="outlined" startIcon={<ListAltIcon />} onClick={() => handleViewDetails(row.original)}>
-            الدفعات
-          </Button>
-        </Tooltip>
-      )
-    }
-  ], []);
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: 'employerName',
+        header: 'الشركة / جهة العمل',
+        minWidth: '12rem',
+        cell: ({ row }) => (
+          <Typography variant="body2" fontWeight="bold">
+            {row.original.employerName}
+          </Typography>
+        )
+      },
+      {
+        accessorKey: 'providerName',
+        header: 'مزود الخدمة',
+        minWidth: '12rem',
+        cell: ({ row }) => row.original.providerName
+      },
+      {
+        accessorKey: 'period',
+        header: 'الفترة (شهر/سنة)',
+        minWidth: '8rem',
+        align: 'center',
+        cell: ({ row }) => `${row.original.targetMonth} / ${row.original.targetYear}`
+      },
+      {
+        accessorKey: 'totalAmount',
+        header: 'إجمالي المطالبات',
+        minWidth: '9rem',
+        align: 'center',
+        cell: ({ row }) => formatCurrency(row.original.totalAmount)
+      },
+      {
+        accessorKey: 'paidAmount',
+        header: 'المدفوع',
+        minWidth: '8rem',
+        align: 'center',
+        cell: ({ row }) => (
+          <Typography color="success.main" fontWeight="bold">
+            {formatCurrency(row.original.paidAmount)}
+          </Typography>
+        )
+      },
+      {
+        accessorKey: 'remainingAmount',
+        header: 'المتبقي',
+        minWidth: '8rem',
+        align: 'center',
+        cell: ({ row }) => (
+          <Typography color="error.main" fontWeight="bold">
+            {formatCurrency(row.original.remainingAmount)}
+          </Typography>
+        )
+      },
+      {
+        accessorKey: 'paymentStatus',
+        header: 'حالة السداد',
+        minWidth: '8rem',
+        align: 'center',
+        cell: ({ row }) => (
+          <Chip label={row.original.paymentStatusLabel} color={STATUS_COLORS[row.original.paymentStatus] || 'default'} size="small" />
+        )
+      },
+      {
+        id: 'actions',
+        header: 'التفاصيل الدفعات',
+        minWidth: '8rem',
+        align: 'center',
+        cell: ({ row }) => (
+          <Tooltip title="عرض الدفعات وتعديلها">
+            <Button size="small" variant="outlined" startIcon={<ListAltIcon />} onClick={() => handleViewDetails(row.original)}>
+              الدفعات
+            </Button>
+          </Tooltip>
+        )
+      }
+    ],
+    []
+  );
 
   const renderSummaryCard = (title, value, icon, borderColor) => (
-    <Box sx={{ minWidth: '12rem', height: '3.5rem', px: 2, py: 0.5, border: 1, borderColor, borderRadius: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', bgcolor: 'background.paper' }}>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>{title}</Typography>
+    <Box
+      sx={{
+        minWidth: '12rem',
+        height: '3.5rem',
+        px: 2,
+        py: 0.5,
+        border: 1,
+        borderColor,
+        borderRadius: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        bgcolor: 'background.paper'
+      }}
+    >
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+        {title}
+      </Typography>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
-        {isLoading ? <CircularProgress size={16} /> : <Typography variant="body1" fontWeight="bold">{value}</Typography>}
+        {isLoading ? (
+          <CircularProgress size={16} />
+        ) : (
+          <Typography variant="body1" fontWeight="bold">
+            {value}
+          </Typography>
+        )}
         {icon}
       </Stack>
     </Box>
@@ -245,11 +279,7 @@ export default function PaymentsManagement() {
           title="إدارة الدفعات والتسديدات"
           subtitle="تتبع مبالغ التسويات، المدفوع، والمتبقي لكل شركة ومزود خدمة"
           icon={<PaymentsIcon />}
-          breadcrumbs={[
-            { label: 'الرئيسية', href: '/' },
-            { label: 'التسويات المالية', href: '/settlement' },
-            { label: 'الدفعات' }
-          ]}
+          breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'التسويات المالية', href: '/settlement' }, { label: 'الدفعات' }]}
           actions={
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'nowrap', overflowX: 'auto', pb: 0.5 }}>
               {renderSummaryCard('إجمالي المطالبات', formatCurrency(totals.totalAmount), <UpIcon color="primary" />, 'primary.main')}
@@ -272,7 +302,9 @@ export default function PaymentsManagement() {
             >
               <MenuItem value="">الكل</MenuItem>
               {employerOptions.map((e) => (
-                <MenuItem key={e.id || e.value} value={e.id || e.value}>{e.name || e.nameAr || e.label || `وثيقة #${e.id || e.value}`}</MenuItem>
+                <MenuItem key={e.id || e.value} value={e.id || e.value}>
+                  {e.name || e.nameAr || e.label || `وثيقة #${e.id || e.value}`}
+                </MenuItem>
               ))}
             </TextField>
 
@@ -287,7 +319,9 @@ export default function PaymentsManagement() {
             >
               <MenuItem value="">الكل</MenuItem>
               {providerOptions.map((p) => (
-                <MenuItem key={p.id} value={p.id}>{p.name || `مزود #${p.id}`}</MenuItem>
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name || `مزود #${p.id}`}
+                </MenuItem>
               ))}
             </TextField>
 
@@ -319,19 +353,30 @@ export default function PaymentsManagement() {
               sx={{ minWidth: '10rem' }}
             >
               {STATUS_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
               ))}
             </TextField>
 
-            <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem' }}>بحث</Button>
+            <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem' }}>
+              بحث
+            </Button>
             <Tooltip title="مسح الفلاتر">
-              <IconButton onClick={clearFilters} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}><ClearIcon /></IconButton>
+              <IconButton onClick={clearFilters} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <ClearIcon />
+              </IconButton>
             </Tooltip>
-            
+
             <Box sx={{ flexGrow: 1 }} />
-            
+
             <Tooltip title="تحديث">
-              <IconButton color="primary" onClick={refetch} disabled={isLoading} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <IconButton
+                color="primary"
+                onClick={refetch}
+                disabled={isLoading}
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+              >
                 <RefreshIcon />
               </IconButton>
             </Tooltip>

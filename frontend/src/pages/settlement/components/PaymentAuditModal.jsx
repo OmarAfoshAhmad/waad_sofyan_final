@@ -47,11 +47,15 @@ const PaymentAuditModal = ({ open, onClose, paymentId }) => {
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">سجل التعديلات للدفعة #{paymentId}</Typography>
-        <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
       <DialogContent dividers>
         {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <CircularProgress />
+          </Box>
         ) : (
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
@@ -85,7 +89,9 @@ const PaymentAuditModal = ({ open, onClose, paymentId }) => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">لا يوجد سجل تعديلات لهذه الدفعة</TableCell>
+                    <TableCell colSpan={6} align="center">
+                      لا يوجد سجل تعديلات لهذه الدفعة
+                    </TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -94,7 +100,9 @@ const PaymentAuditModal = ({ open, onClose, paymentId }) => {
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} color="inherit">إغلاق</Button>
+        <Button onClick={onClose} color="inherit">
+          إغلاق
+        </Button>
       </DialogActions>
     </Dialog>
   );

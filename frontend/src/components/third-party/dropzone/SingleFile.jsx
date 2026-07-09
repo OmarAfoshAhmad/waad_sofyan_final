@@ -105,5 +105,3 @@ export default function SingleFileUpload({ error, file, setFieldValue, sx }) {
 }
 
 SingleFileUpload.propTypes = { error: PropTypes.any, file: PropTypes.any, setFieldValue: PropTypes.any, sx: PropTypes.any };
-
-

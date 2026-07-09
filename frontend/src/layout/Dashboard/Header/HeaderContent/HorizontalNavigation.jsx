@@ -261,7 +261,11 @@ export default function HorizontalNavigation() {
               }
               sx={{
                 color: groupActive ? 'primary.main' : 'text.primary',
-                backgroundColor: open ? alpha(theme.palette.primary.main, 0.12) : groupActive ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+                backgroundColor: open
+                  ? alpha(theme.palette.primary.main, 0.12)
+                  : groupActive
+                    ? alpha(theme.palette.primary.main, 0.08)
+                    : 'transparent',
                 px: '0.75rem',
                 py: 0.5,
                 fontWeight: groupActive ? 600 : 500,
@@ -344,5 +348,3 @@ export default function HorizontalNavigation() {
     </Box>
   );
 }
-
-

@@ -20,9 +20,7 @@ export const runWithRetry = async (operation, { maxRetries = 1, shouldRetry } = 
     } catch (error) {
       lastError = error;
 
-      const retryable = shouldRetry
-        ? shouldRetry(error)
-        : (!error?.response || error?.response?.status >= 500);
+      const retryable = shouldRetry ? shouldRetry(error) : !error?.response || error?.response?.status >= 500;
 
       if (attempt >= maxRetries || !retryable) {
         throw error;

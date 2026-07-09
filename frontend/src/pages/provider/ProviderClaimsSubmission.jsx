@@ -259,15 +259,7 @@ const ContractPriceChip = ({ loading, price, hasContract, error }) => {
   if (loading) return <CircularProgress size={16} />;
   if (error) return <Chip label={error} color="error" size="small" />;
   if (!hasContract) return <Chip label={LABELS.noContract} color="warning" size="small" />;
-  return (
-    <Chip
-      icon={<LockIcon fontSize="small" />}
-      label={formatCurrency(price)}
-      color="success"
-      size="small"
-      sx={{ fontWeight: 600 }}
-    />
-  );
+  return <Chip icon={<LockIcon fontSize="small" />} label={formatCurrency(price)} color="success" size="small" sx={{ fontWeight: 600 }} />;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -299,7 +291,13 @@ const BlockedAccessPage = ({ onBack }) => (
         <br />
         يرجى الانتقال إلى سجل الزيارات واختيار زيارة لإنشاء مطالبة منها.
       </Typography>
-      <Button variant="contained" size="large" startIcon={<ArrowBackIcon />} onClick={onBack} sx={{ borderRadius: '0.25rem', px: '2.0rem' }}>
+      <Button
+        variant="contained"
+        size="large"
+        startIcon={<ArrowBackIcon />}
+        onClick={onBack}
+        sx={{ borderRadius: '0.25rem', px: '2.0rem' }}
+      >
         الذهاب إلى سجل الزيارات
       </Button>
     </Card>
@@ -431,12 +429,12 @@ export default function ProviderClaimsSubmission() {
   const [addingCustomService, setAddingCustomService] = useState(false);
 
   const handleOpenCustomServiceDialog = (lineId) => {
-    const line = claimLines.find(l => l.id === lineId);
+    const line = claimLines.find((l) => l.id === lineId);
     let initialMainCategoryId = '';
     let initialSubCategoryId = '';
 
     if (line && line.medicalCategoryId) {
-      const category = medicalCategories.find(c => normalizeId(c.id) === normalizeId(line.medicalCategoryId));
+      const category = medicalCategories.find((c) => normalizeId(c.id) === normalizeId(line.medicalCategoryId));
       if (category) {
         if (category.parentId) {
           initialMainCategoryId = normalizeId(category.parentId);
@@ -465,7 +463,7 @@ export default function ProviderClaimsSubmission() {
   };
 
   const handleCustomServiceDataChange = (field, value) => {
-    setCustomServiceData(prev => {
+    setCustomServiceData((prev) => {
       const next = { ...prev, [field]: value };
       if (field === 'mainCategoryId') {
         next.subCategoryId = '';
@@ -476,7 +474,7 @@ export default function ProviderClaimsSubmission() {
 
   const handleSubmitCustomService = async () => {
     setCustomServiceError(null);
-    
+
     // Validation
     if (!customServiceData.mainCategoryId) {
       setCustomServiceError('يرجير اختيار التصنيف الرئيسي');
@@ -496,7 +494,7 @@ export default function ProviderClaimsSubmission() {
     try {
       // Determine final category id (subCategory if chosen, else mainCategory)
       const finalCategoryId = customServiceData.subCategoryId || customServiceData.mainCategoryId;
-      
+
       // Auto-generate service code if not provided
       const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
 
@@ -512,10 +510,10 @@ export default function ProviderClaimsSubmission() {
 
       const response = await axiosClient.post('/provider/my-contract/pricing', payload);
       const createdItem = response.data?.data || response.data;
-      
+
       // Map the created item to match client-side service DTO structure
       const newServiceId = normalizeId(createdItem.medicalServiceId || createdItem.serviceId || createdItem.id);
-      const matchingCategory = medicalCategories.find(c => normalizeId(c.id) === normalizeId(finalCategoryId)) || null;
+      const matchingCategory = medicalCategories.find((c) => normalizeId(c.id) === normalizeId(finalCategoryId)) || null;
 
       const newServiceObject = {
         id: newServiceId,
@@ -531,7 +529,7 @@ export default function ProviderClaimsSubmission() {
       };
 
       setAvailableServices((prev) => {
-        if (prev.some(s => normalizeId(s.id) === newServiceId)) return prev;
+        if (prev.some((s) => normalizeId(s.id) === newServiceId)) return prev;
         return [...prev, newServiceObject];
       });
 
@@ -542,7 +540,7 @@ export default function ProviderClaimsSubmission() {
             if (line.id !== activeLineIdForCustomService) return line;
 
             const nextCategoryServices = [
-              ...(line.filteredServices || []).filter(s => normalizeId(s.id) !== newServiceId),
+              ...(line.filteredServices || []).filter((s) => normalizeId(s.id) !== newServiceId),
               newServiceObject
             ];
 
@@ -636,9 +634,9 @@ export default function ProviderClaimsSubmission() {
 
       const serviceCategoryId = normalizeId(service.categoryId || service.serviceCategoryId || service.medicalCategoryId);
       const selectedCategoryId = normalizeId(category.id);
-      
+
       let byId = serviceCategoryId !== null && selectedCategoryId !== null && serviceCategoryId === selectedCategoryId;
-      
+
       // Check parent relationships if we have medicalCategories in scope
       if (!byId && serviceCategoryId !== null && selectedCategoryId !== null && medicalCategories) {
         const servCat = medicalCategories.find((c) => normalizeId(c.id) === serviceCategoryId);
@@ -741,24 +739,14 @@ export default function ProviderClaimsSubmission() {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [
-    accessBlocked,
-    localDraftRestored,
-    submitting,
-    success,
-    claimLines,
-    formData,
-    linkedVisitId,
-    linkedMemberId,
-    localDraftStorageKey
-  ]);
+  }, [accessBlocked, localDraftRestored, submitting, success, claimLines, formData, linkedVisitId, linkedMemberId, localDraftStorageKey]);
 
   const initializePage = async () => {
     setLoading(true);
     try {
       // 1. Fetch visit details FIRST to get employerId for batching
       const visitData = await fetchVisitDetails();
-      
+
       // 2. Fetch other resources in parallel
       const results = await Promise.allSettled([
         fetchAvailableServices(),
@@ -805,7 +793,7 @@ export default function ProviderClaimsSubmission() {
     try {
       console.log(`🔍 Checking batch for Provider:${providerId}, Employer:${employerId}, Period:${month}/${year}`);
       let batch = await claimBatchesService.getCurrentBatch(providerId, employerId, year, month);
-      
+
       if (!batch) {
         console.log('🆕 No active batch found. Triggering mandatory creation workflow...');
         batch = await claimBatchesService.openOrGetBatch(providerId, employerId, year, month);
@@ -866,7 +854,13 @@ export default function ProviderClaimsSubmission() {
               : [];
 
         const unitPrice =
-          line.unitPrice ?? line.requestedUnitPrice ?? line.priceAtSubmission ?? line.netAmount ?? line.totalAmount ?? selectedService?.price ?? 0;
+          line.unitPrice ??
+          line.requestedUnitPrice ??
+          line.priceAtSubmission ??
+          line.netAmount ??
+          line.totalAmount ??
+          selectedService?.price ??
+          0;
 
         return {
           id: index + 1,
@@ -976,11 +970,7 @@ export default function ProviderClaimsSubmission() {
         items.map((item) => {
           const serviceId = normalizeId(item.medicalServiceId || item.serviceId || item.id);
           const requiresPreApproval =
-            item.requiresPA ||
-            item.requiresPreAuth ||
-            item.requiresPreApproval ||
-            item.requires_pre_auth ||
-            false;
+            item.requiresPA || item.requiresPreAuth || item.requiresPreApproval || item.requires_pre_auth || false;
           return {
             id: serviceId,
             code: item.serviceCode,
@@ -1082,12 +1072,12 @@ export default function ProviderClaimsSubmission() {
           prev.map((line) =>
             line.id === lineId
               ? {
-                ...line,
-                unitPrice: cachedService.price,
-                hasContract: true,
-                loadingPrice: false,
-                priceError: null
-              }
+                  ...line,
+                  unitPrice: cachedService.price,
+                  hasContract: true,
+                  loadingPrice: false,
+                  priceError: null
+                }
               : line
           )
         );
@@ -1105,11 +1095,11 @@ export default function ProviderClaimsSubmission() {
             prev.map((line) =>
               line.id === lineId
                 ? {
-                  ...line,
-                  unitPrice: priceData.contractPrice,
-                  hasContract: true,
-                  loadingPrice: false
-                }
+                    ...line,
+                    unitPrice: priceData.contractPrice,
+                    hasContract: true,
+                    loadingPrice: false
+                  }
                 : line
             )
           );
@@ -1118,12 +1108,12 @@ export default function ProviderClaimsSubmission() {
             prev.map((line) =>
               line.id === lineId
                 ? {
-                  ...line,
-                  unitPrice: 0,
-                  hasContract: false,
-                  loadingPrice: false,
-                  priceError: LABELS.noContract
-                }
+                    ...line,
+                    unitPrice: 0,
+                    hasContract: false,
+                    loadingPrice: false,
+                    priceError: LABELS.noContract
+                  }
                 : line
             )
           );
@@ -1133,12 +1123,12 @@ export default function ProviderClaimsSubmission() {
           prev.map((line) =>
             line.id === lineId
               ? {
-                ...line,
-                unitPrice: 0,
-                hasContract: false,
-                loadingPrice: false,
-                priceError: LABELS.noContract
-              }
+                  ...line,
+                  unitPrice: 0,
+                  hasContract: false,
+                  loadingPrice: false,
+                  priceError: LABELS.noContract
+                }
               : line
           )
         );
@@ -1186,17 +1176,17 @@ export default function ProviderClaimsSubmission() {
         prev.map((line) =>
           line.id === lineId
             ? {
-              ...line,
-              medicalCategoryId: null,
-              medicalCategoryName: '',
-              medicalServiceId: null,
-              serviceName: '',
-              serviceCode: '',
-              unitPrice: 0,
-              hasContract: false,
-              filteredServices: [],
-              priceError: null
-            }
+                ...line,
+                medicalCategoryId: null,
+                medicalCategoryName: '',
+                medicalServiceId: null,
+                serviceName: '',
+                serviceCode: '',
+                unitPrice: 0,
+                hasContract: false,
+                filteredServices: [],
+                priceError: null
+              }
             : line
         )
       );
@@ -1209,17 +1199,17 @@ export default function ProviderClaimsSubmission() {
       prev.map((line) =>
         line.id === lineId
           ? {
-            ...line,
-            medicalCategoryId: normalizeId(category.id),
-            medicalCategoryName: category.name,
-            medicalServiceId: null,
-            serviceName: '',
-            serviceCode: '',
-            unitPrice: 0,
-            hasContract: false,
-            filteredServices: categoryServices,
-            priceError: null
-          }
+              ...line,
+              medicalCategoryId: normalizeId(category.id),
+              medicalCategoryName: category.name,
+              medicalServiceId: null,
+              serviceName: '',
+              serviceCode: '',
+              unitPrice: 0,
+              hasContract: false,
+              filteredServices: categoryServices,
+              priceError: null
+            }
           : line
       )
     );
@@ -1247,7 +1237,7 @@ export default function ProviderClaimsSubmission() {
       return;
     }
 
-    const isDuplicate = claimLines.some(l => l.id !== lineId && l.medicalServiceId === service.id);
+    const isDuplicate = claimLines.some((l) => l.id !== lineId && l.medicalServiceId === service.id);
     if (isDuplicate) {
       setError('هذه الخدمة مضافة بالفعل في بند آخر');
       return;
@@ -1259,16 +1249,16 @@ export default function ProviderClaimsSubmission() {
       prev.map((line) =>
         line.id === lineId
           ? {
-            ...line,
-            medicalServiceId: service.id,
-            serviceName: service.name,
-            serviceCode: service.code,
-            unitPrice: hasContractPrice ? service.price : 0,
-            hasContract: hasContractPrice,
-            loadingPrice: false,
-            priceError: hasContractPrice ? null : LABELS.noContract,
-            requiresPA: service.requiresPA || false
-          }
+              ...line,
+              medicalServiceId: service.id,
+              serviceName: service.name,
+              serviceCode: service.code,
+              unitPrice: hasContractPrice ? service.price : 0,
+              hasContract: hasContractPrice,
+              loadingPrice: false,
+              priceError: hasContractPrice ? null : LABELS.noContract,
+              requiresPA: service.requiresPA || false
+            }
           : line
       )
     );
@@ -1577,7 +1567,8 @@ export default function ProviderClaimsSubmission() {
       <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem', bgcolor: 'common.white', mb: '1.0rem' }}>
         <Stepper activeStep={workflowActiveStep} alternativeLabel>
           {workflowSteps.map((step, index) => {
-            const completed = (index === 0 && hasVisitAndDiagnosis) || (index === 1 && hasServicesReady) || (index === 2 && hasAttachmentsReady);
+            const completed =
+              (index === 0 && hasVisitAndDiagnosis) || (index === 1 && hasServicesReady) || (index === 2 && hasAttachmentsReady);
             return (
               <Step key={step} completed={completed}>
                 <StepLabel>{step}</StepLabel>
@@ -1602,7 +1593,9 @@ export default function ProviderClaimsSubmission() {
         open={!!success}
         type="claim"
         title={submitMode === 'draft' ? 'تم حفظ المطالبة كمسودة بنجاح' : 'تم تقديم المطالبة بنجاح! 🎉'}
-        subtitle={submitMode === 'draft' ? 'يمكنك إكمال التعديلات ثم التقديم النهائي لاحقاً' : 'تم إرسال المطالبة للمراجعة من قبل فريق التأمين'}
+        subtitle={
+          submitMode === 'draft' ? 'يمكنك إكمال التعديلات ثم التقديم النهائي لاحقاً' : 'تم إرسال المطالبة للمراجعة من قبل فريق التأمين'
+        }
         referenceNumber={success?.referenceNumber || success?.claimId}
         attachmentsCount={success?.attachmentsCount || 0}
         redirectPath="/provider/visits"
@@ -1638,11 +1631,13 @@ export default function ProviderClaimsSubmission() {
                 onChange={(e) => handleCustomServiceDataChange('mainCategoryId', e.target.value)}
                 label="التصنيف الرئيسي *"
               >
-                {medicalCategories.filter(c => !c.parentId).map((cat) => (
-                  <MenuItem key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.code})
-                  </MenuItem>
-                ))}
+                {medicalCategories
+                  .filter((c) => !c.parentId)
+                  .map((cat) => (
+                    <MenuItem key={cat.id} value={cat.id}>
+                      {cat.name} ({cat.code})
+                    </MenuItem>
+                  ))}
               </Select>
             </FormControl>
 
@@ -1655,12 +1650,16 @@ export default function ProviderClaimsSubmission() {
                 onChange={(e) => handleCustomServiceDataChange('subCategoryId', e.target.value)}
                 label="التصنيف الفرعي"
               >
-                <MenuItem value=""><em>بلا تصنيف فرعي (استخدام الرئيسي)</em></MenuItem>
-                {medicalCategories.filter(c => c.parentId && normalizeId(c.parentId) === normalizeId(customServiceData.mainCategoryId)).map((cat) => (
-                  <MenuItem key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.code})
-                  </MenuItem>
-                ))}
+                <MenuItem value="">
+                  <em>بلا تصنيف فرعي (استخدام الرئيسي)</em>
+                </MenuItem>
+                {medicalCategories
+                  .filter((c) => c.parentId && normalizeId(c.parentId) === normalizeId(customServiceData.mainCategoryId))
+                  .map((cat) => (
+                    <MenuItem key={cat.id} value={cat.id}>
+                      {cat.name} ({cat.code})
+                    </MenuItem>
+                  ))}
               </Select>
             </FormControl>
 
@@ -1694,7 +1693,11 @@ export default function ProviderClaimsSubmission() {
               value={customServiceData.contractPrice}
               onChange={(e) => handleCustomServiceDataChange('contractPrice', e.target.value)}
               InputProps={{
-                endAdornment: <Typography variant="body2" color="text.secondary">LYD</Typography>
+                endAdornment: (
+                  <Typography variant="body2" color="text.secondary">
+                    LYD
+                  </Typography>
+                )
               }}
             />
           </Stack>
@@ -1706,7 +1709,9 @@ export default function ProviderClaimsSubmission() {
           <Button
             variant="contained"
             onClick={handleSubmitCustomService}
-            disabled={addingCustomService || !customServiceData.mainCategoryId || !customServiceData.serviceName || !customServiceData.contractPrice}
+            disabled={
+              addingCustomService || !customServiceData.mainCategoryId || !customServiceData.serviceName || !customServiceData.contractPrice
+            }
           >
             {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة وحفظ لقائمة الأسعار'}
           </Button>
@@ -1725,7 +1730,10 @@ export default function ProviderClaimsSubmission() {
                 <Chip label={`رقم الزيارة: #${linkedVisitId || '—'}`} color="info" variant="outlined" />
                 <Chip label={`تاريخ الزيارة: ${linkedVisitDate || visitDetails?.visitDate || '—'}`} variant="outlined" />
                 <Chip label={`نوع الزيارة: ${VISIT_TYPE_LABELS[linkedVisitType] || linkedVisitType || 'غير محدد'}`} color="info" />
-                <Chip label={`مقدم الخدمة: ${linkedProviderName || userProviderName || visitDetails?.providerName || '—'}`} variant="outlined" />
+                <Chip
+                  label={`مقدم الخدمة: ${linkedProviderName || userProviderName || visitDetails?.providerName || '—'}`}
+                  variant="outlined"
+                />
               </Stack>
             </Paper>
 
@@ -1929,10 +1937,9 @@ export default function ProviderClaimsSubmission() {
                               }}
                               value={
                                 line.medicalServiceId
-                                  ?
-                                  (line.filteredServices || []).find((s) => normalizeId(s.id) === normalizeId(line.medicalServiceId)) ||
-                                  availableServices.find((s) => normalizeId(s.id) === normalizeId(line.medicalServiceId)) ||
-                                  null
+                                  ? (line.filteredServices || []).find((s) => normalizeId(s.id) === normalizeId(line.medicalServiceId)) ||
+                                    availableServices.find((s) => normalizeId(s.id) === normalizeId(line.medicalServiceId)) ||
+                                    null
                                   : null
                               }
                               loading={loadingServices}
@@ -2015,7 +2022,13 @@ export default function ProviderClaimsSubmission() {
                           {/* 💡 Diagnosis Association column (New) */}
                           <TableCell align="center">
                             {line.requiresPA ? (
-                              <Tooltip title={formData.preAuthorizationId ? `مرتبطة بالموافقة رقم #${formData.preAuthorizationId}` : 'هذه الخدمة تتطلب اختيار موافقة مسبقة'}>
+                              <Tooltip
+                                title={
+                                  formData.preAuthorizationId
+                                    ? `مرتبطة بالموافقة رقم #${formData.preAuthorizationId}`
+                                    : 'هذه الخدمة تتطلب اختيار موافقة مسبقة'
+                                }
+                              >
                                 <Chip
                                   icon={<ApprovalIcon style={{ fontSize: '0.9rem' }} />}
                                   label="عبر موافقة"
@@ -2026,7 +2039,13 @@ export default function ProviderClaimsSubmission() {
                                 />
                               </Tooltip>
                             ) : (
-                              <Tooltip title={formData.diagnosisCode ? `مرتبطة بالتشخيص: ${formData.diagnosisCode}` : 'سيتم ربطها بالتشخيص المكتوب أعلاه'}>
+                              <Tooltip
+                                title={
+                                  formData.diagnosisCode
+                                    ? `مرتبطة بالتشخيص: ${formData.diagnosisCode}`
+                                    : 'سيتم ربطها بالتشخيص المكتوب أعلاه'
+                                }
+                              >
                                 <Chip
                                   icon={<HealingIcon style={{ fontSize: '0.9rem' }} />}
                                   label="تشخيص مباشر"
@@ -2075,7 +2094,12 @@ export default function ProviderClaimsSubmission() {
                               <IconButton size="small" color="primary" onClick={addClaimLine} disabled={submitting || success}>
                                 <AddIcon fontSize="small" />
                               </IconButton>
-                              <IconButton size="small" color="error" onClick={() => removeClaimLine(line.id)} disabled={submitting || success}>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => removeClaimLine(line.id)}
+                                disabled={submitting || success}
+                              >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
                             </Stack>
@@ -2084,7 +2108,9 @@ export default function ProviderClaimsSubmission() {
                       ))}
 
                       {/* Total Row */}
-                      <TableRow sx={{ bgcolor: isDark ? alpha(MEDICAL_COLORS.primary.main, 0.15) : alpha(MEDICAL_COLORS.primary.main, 0.1) }}>
+                      <TableRow
+                        sx={{ bgcolor: isDark ? alpha(MEDICAL_COLORS.primary.main, 0.15) : alpha(MEDICAL_COLORS.primary.main, 0.1) }}
+                      >
                         <TableCell colSpan={4} align="left">
                           <Typography variant="h6" fontWeight={700}>
                             {LABELS.totalClaimAmount}
@@ -2101,7 +2127,6 @@ export default function ProviderClaimsSubmission() {
                   </Table>
                 </TableContainer>
               )}
-
             </FormSection>
 
             {/* ═══════════════════════ ROW 3: CLINICAL DATA (DIAGNOSIS + PRE-AUTH) ═══════════════════════ */}
@@ -2123,7 +2148,11 @@ export default function ProviderClaimsSubmission() {
                       disabled={submitting || success}
                       required
                       error={attemptedSubmit && !formData.diagnosisCode?.trim()}
-                      helperText={attemptedSubmit && !formData.diagnosisCode?.trim() ? LABELS.diagnosisCodeRequired : 'أدخل رمز التشخيص حسب تصنيف ICD-10'}
+                      helperText={
+                        attemptedSubmit && !formData.diagnosisCode?.trim()
+                          ? LABELS.diagnosisCodeRequired
+                          : 'أدخل رمز التشخيص حسب تصنيف ICD-10'
+                      }
                       placeholder="مثال: J06.9"
                       InputProps={{
                         sx: { fontFamily: 'monospace', fontWeight: 600 }
@@ -2227,7 +2256,8 @@ export default function ProviderClaimsSubmission() {
               <Alert severity="info" sx={{ mb: '1.0rem', borderRadius: '0.25rem' }}>
                 {LABELS.attachmentHint}
                 <br />
-                <strong>الامتدادات المسموحة:</strong> PDF, JPG, JPEG, PNG, GIF, DOC, DOCX — <strong>الحد الأقصى:</strong> {MAX_UPLOAD_SIZE_MB}MB لكل ملف.
+                <strong>الامتدادات المسموحة:</strong> PDF, JPG, JPEG, PNG, GIF, DOC, DOCX — <strong>الحد الأقصى:</strong>{' '}
+                {MAX_UPLOAD_SIZE_MB}MB لكل ملف.
               </Alert>
 
               <Button
@@ -2255,7 +2285,11 @@ export default function ProviderClaimsSubmission() {
                     المرفقات المحفوظة في المسودة ({existingAttachments.length})
                   </Typography>
                   {existingAttachments.map((item) => (
-                    <Paper key={item.id} variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.04) }}>
+                    <Paper
+                      key={item.id}
+                      variant="outlined"
+                      sx={{ p: '0.75rem', borderRadius: '0.25rem', bgcolor: (theme) => alpha(theme.palette.success.main, 0.04) }}
+                    >
                       <Stack direction="row" alignItems="center" spacing={2}>
                         <AttachmentIcon color="success" />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -2266,7 +2300,12 @@ export default function ProviderClaimsSubmission() {
                             {item.attachmentType || item.fileType || 'OTHER'}
                           </Typography>
                         </Box>
-                        <IconButton size="small" color="error" onClick={() => handleDeleteExistingAttachment(item.id)} disabled={submitting || success}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteExistingAttachment(item.id)}
+                          disabled={submitting || success}
+                        >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Stack>
@@ -2382,7 +2421,6 @@ export default function ProviderClaimsSubmission() {
                 </Button>
               </Stack>
             </FormSection>
-
           </Stack>
         </Grid>
 
@@ -2444,8 +2482,16 @@ export default function ProviderClaimsSubmission() {
                 حالة الجاهزية
               </Typography>
               <Stack spacing={0.75}>
-                <Chip size="small" label={hasVisitAndDiagnosis ? '✓ بيانات الزيارة مكتملة' : '• أكمل التشخيص'} color={hasVisitAndDiagnosis ? 'success' : 'default'} />
-                <Chip size="small" label={hasServicesReady ? '✓ الخدمات مكتملة' : '• أضف الخدمات المطلوبة'} color={hasServicesReady ? 'success' : 'default'} />
+                <Chip
+                  size="small"
+                  label={hasVisitAndDiagnosis ? '✓ بيانات الزيارة مكتملة' : '• أكمل التشخيص'}
+                  color={hasVisitAndDiagnosis ? 'success' : 'default'}
+                />
+                <Chip
+                  size="small"
+                  label={hasServicesReady ? '✓ الخدمات مكتملة' : '• أضف الخدمات المطلوبة'}
+                  color={hasServicesReady ? 'success' : 'default'}
+                />
                 <Chip size="small" label="✓ المرفقات اختيارية" color="success" />
               </Stack>
             </Paper>
@@ -2453,17 +2499,14 @@ export default function ProviderClaimsSubmission() {
         </Grid>
       </Grid>
 
-      {/* ═══════════════════════ ROW 6: ACTION BUTTONS (Sticky Footer) ═══════════════════════ */}
+      {/* ═══════════════════════ ROW 6: ACTION BUTTONS (Static Footer) ═══════════════════════ */}
       <Paper
-        elevation={3}
+        variant="outlined"
         sx={{
           p: '1.25rem',
           borderRadius: '0.25rem',
           bgcolor: 'background.paper',
-          position: 'sticky',
-          bottom: '6.0rem',
-          zIndex: 10,
-          border: '1px solid',
+          mt: '1.5rem',
           borderColor: 'divider'
         }}
       >
@@ -2488,8 +2531,8 @@ export default function ProviderClaimsSubmission() {
             {isFormValid && pendingFiles.length + existingAttachments.length > 0 && (
               <Alert severity="info" sx={{ py: 0.5 }}>
                 <Typography variant="body2">
-                  ✅ جاهز للتقديم • {claimLines.length} خدمة • {formatCurrency(totalClaimAmount)} • {pendingFiles.length + existingAttachments.length}{' '}
-                  مرفق
+                  ✅ جاهز للتقديم • {claimLines.length} خدمة • {formatCurrency(totalClaimAmount)} •{' '}
+                  {pendingFiles.length + existingAttachments.length} مرفق
                 </Typography>
               </Alert>
             )}
@@ -2498,7 +2541,13 @@ export default function ProviderClaimsSubmission() {
               size="small"
               color={autosaveStatus === 'error' ? 'error' : autosaveStatus === 'saved' ? 'success' : 'default'}
               icon={
-                autosaveStatus === 'saving' ? <SyncIcon fontSize="small" /> : autosaveStatus === 'saved' ? <CloudDoneIcon fontSize="small" /> : <CloudOffIcon fontSize="small" />
+                autosaveStatus === 'saving' ? (
+                  <SyncIcon fontSize="small" />
+                ) : autosaveStatus === 'saved' ? (
+                  <CloudDoneIcon fontSize="small" />
+                ) : (
+                  <CloudOffIcon fontSize="small" />
+                )
               }
               label={
                 autosaveStatus === 'saving'
@@ -2564,7 +2613,3 @@ export default function ProviderClaimsSubmission() {
     </Box>
   );
 }
-
-
-
-

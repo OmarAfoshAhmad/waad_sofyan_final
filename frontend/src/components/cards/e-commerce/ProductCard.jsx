@@ -80,7 +80,16 @@ export default function ProductCard({ id, color, name, brand, offer, isStock, im
           </Box>
           <Stack
             direction="row"
-            sx={{ alignItems: 'center', justifyContent: 'space-between', width: '0.0625rem', position: 'absolute', top: 0, pt: '0.875rem', pl: '1.0rem', pr: 1 }}
+            sx={{
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '0.0625rem',
+              position: 'absolute',
+              top: 0,
+              pt: '0.875rem',
+              pl: '1.0rem',
+              pr: 1
+            }}
           >
             {!isStock && <Chip variant="light" color="error" size="small" label="Sold out" />}
             {offer && <Chip label={offer} variant="combined" color="success" size="small" />}

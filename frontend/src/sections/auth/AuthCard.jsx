@@ -44,5 +44,3 @@ export default function AuthCard({ children, ...other }) {
 }
 
 AuthCard.propTypes = { children: PropTypes.any, other: PropTypes.any };
-
-

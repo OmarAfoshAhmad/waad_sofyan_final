@@ -213,7 +213,6 @@ const DocumentsLibrary = () => {
 
       setDocuments(allDocs);
       calculateStats(allDocs);
-
     } catch (err) {
       console.error('❌ Error fetching documents:', err);
       setError('فشل في تحميل المستندات');
@@ -903,4 +902,3 @@ const DocumentsLibrary = () => {
 };
 
 export default DocumentsLibrary;
-

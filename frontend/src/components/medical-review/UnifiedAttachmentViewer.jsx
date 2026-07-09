@@ -630,5 +630,3 @@ UnifiedAttachmentViewer.propTypes = {
 };
 
 export default memo(UnifiedAttachmentViewer);
-
-

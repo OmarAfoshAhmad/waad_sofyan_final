@@ -143,18 +143,16 @@ const EmailSettingsPage = () => {
 
   return (
     <Box>
-      <ModernPageHeader 
-        title="إعدادات البريد الإلكتروني" 
-        subtitle="تكوين البريد الخاص باستقبال الموافقات المسبقة والردود الآلية" 
-        icon={MailOutlined} 
+      <ModernPageHeader
+        title="إعدادات البريد الإلكتروني"
+        subtitle="تكوين البريد الخاص باستقبال الموافقات المسبقة والردود الآلية"
+        icon={MailOutlined}
       />
 
       <Grid container spacing={3} sx={{ mt: '1.0rem' }}>
-
         {/* ═══ العمود الأيمن: الإعدادات الأساسية + SMTP ═══ */}
         <Grid item xs={12} md={6}>
           <Stack spacing={3}>
-
             {/* Basic Settings */}
             <Card>
               <CardContent>
@@ -181,12 +179,7 @@ const EmailSettingsPage = () => {
                   />
                   <FormControl fullWidth>
                     <InputLabel>نوع التشفير</InputLabel>
-                    <Select
-                      name="encryptionType"
-                      value={settings.encryptionType}
-                      label="نوع التشفير"
-                      onChange={handleChange}
-                    >
+                    <Select name="encryptionType" value={settings.encryptionType} label="نوع التشفير" onChange={handleChange}>
                       <MenuItem value="TLS">STARTTLS (الأكثر شيوعاً)</MenuItem>
                       <MenuItem value="SSL">SSL/TLS</MenuItem>
                       <MenuItem value="NONE">بدون تشفير</MenuItem>
@@ -225,25 +218,12 @@ const EmailSettingsPage = () => {
                       />
                     </Grid>
                     <Grid item xs={4}>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="المنفذ"
-                        name="smtpPort"
-                        value={settings.smtpPort}
-                        onChange={handleChange}
-                      />
+                      <TextField fullWidth type="number" label="المنفذ" name="smtpPort" value={settings.smtpPort} onChange={handleChange} />
                     </Grid>
                   </Grid>
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="اسم المستخدم"
-                        name="smtpUsername"
-                        value={settings.smtpUsername}
-                        onChange={handleChange}
-                      />
+                      <TextField fullWidth label="اسم المستخدم" name="smtpUsername" value={settings.smtpUsername} onChange={handleChange} />
                     </Grid>
                     <Grid item xs={6}>
                       <TextField
@@ -260,14 +240,12 @@ const EmailSettingsPage = () => {
                 </Stack>
               </CardContent>
             </Card>
-
           </Stack>
         </Grid>
 
         {/* ═══ العمود الأيسر: المزامنة + IMAP ═══ */}
         <Grid item xs={12} md={6}>
           <Stack spacing={3}>
-
             {/* Sync Settings */}
             <Card>
               <CardContent>
@@ -277,14 +255,7 @@ const EmailSettingsPage = () => {
                 <Divider sx={{ mb: '1.0rem' }} />
                 <Stack spacing={3}>
                   <FormControlLabel
-                    control={
-                      <Switch
-                        checked={settings.listenerEnabled}
-                        onChange={handleChange}
-                        name="listenerEnabled"
-                        color="primary"
-                      />
-                    }
+                    control={<Switch checked={settings.listenerEnabled} onChange={handleChange} name="listenerEnabled" color="primary" />}
                     label="تفعيل مستكشف البريد الآلي (Email Listener)"
                   />
                   <TextField
@@ -296,10 +267,8 @@ const EmailSettingsPage = () => {
                     onChange={handleChange}
                     helperText="الوقت المستغرق بين كل عملية فحص للبريد الجديد"
                   />
-                  <Alert severity={settings.listenerEnabled ? "info" : "warning"}>
-                    {settings.listenerEnabled
-                      ? "النظام سيقوم بفحص البريد آلياً وتحويله لطلبات موافقة."
-                      : "الاستقبال الآلي متوقف حالياً."}
+                  <Alert severity={settings.listenerEnabled ? 'info' : 'warning'}>
+                    {settings.listenerEnabled ? 'النظام سيقوم بفحص البريد آلياً وتحويله لطلبات موافقة.' : 'الاستقبال الآلي متوقف حالياً.'}
                   </Alert>
                 </Stack>
               </CardContent>
@@ -334,25 +303,12 @@ const EmailSettingsPage = () => {
                       />
                     </Grid>
                     <Grid item xs={4}>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        label="المنفذ"
-                        name="imapPort"
-                        value={settings.imapPort}
-                        onChange={handleChange}
-                      />
+                      <TextField fullWidth type="number" label="المنفذ" name="imapPort" value={settings.imapPort} onChange={handleChange} />
                     </Grid>
                   </Grid>
                   <Grid container spacing={2}>
                     <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="اسم المستخدم"
-                        name="imapUsername"
-                        value={settings.imapUsername}
-                        onChange={handleChange}
-                      />
+                      <TextField fullWidth label="اسم المستخدم" name="imapUsername" value={settings.imapUsername} onChange={handleChange} />
                     </Grid>
                     <Grid item xs={6}>
                       <TextField
@@ -369,7 +325,6 @@ const EmailSettingsPage = () => {
                 </Stack>
               </CardContent>
             </Card>
-
           </Stack>
         </Grid>
 
@@ -390,5 +345,3 @@ const EmailSettingsPage = () => {
 };
 
 export default EmailSettingsPage;
-
-

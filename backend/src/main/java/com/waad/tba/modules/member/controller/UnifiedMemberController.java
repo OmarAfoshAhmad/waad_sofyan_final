@@ -914,6 +914,29 @@ public class UnifiedMemberController {
                 }
         }
 
+        @PostMapping("/bulk-delete")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "Bulk Delete Members", description = "Deletes a list of members by IDs")
+        public ResponseEntity<ApiResponse<Void>> bulkDeleteMembers(@RequestBody List<Long> ids) {
+                log.info("Bulk deleting {} members", ids.size());
+                int successCount = 0;
+                int failCount = 0;
+                for (Long id : ids) {
+                        try {
+                                unifiedMemberService.deleteMember(id);
+                                successCount++;
+                        } catch (Exception e) {
+                                log.warn("Bulk delete: skipped member id={}: {}", id, e.getMessage());
+                                failCount++;
+                        }
+                }
+                String msg = "تم حذف " + successCount + " مستفيد بنجاح";
+                if (failCount > 0) {
+                        msg += " (فشل حذف " + failCount + " مستفيد لارتباطهم بمعاملات)";
+                }
+                return ResponseEntity.ok(ApiResponse.success(msg, null));
+        }
+
         // ==================== UTILITY OPERATIONS ====================
 
         /**

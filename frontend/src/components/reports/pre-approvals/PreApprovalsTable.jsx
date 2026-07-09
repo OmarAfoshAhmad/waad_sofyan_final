@@ -166,25 +166,25 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
 
   return (
     <UnifiedMedicalTable
-        columns={columns}
-        rows={paginatedRows}
-        loading={loading}
-        totalCount={totalCount}
-        page={page}
-        rowsPerPage={rowsPerPage}
-        onPageChange={onPageChange}
-        onRowsPerPageChange={onRowsPerPageChange}
-        rowsPerPageOptions={[10, 25, 50, 100]}
-        sortBy={sortBy}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        renderCell={renderCell}
-        getRowKey={(row) => row.id}
-        emptyMessage="لا توجد موافقات مسبقة متاحة حاليًا"
-        emptyIcon={DescriptionIcon}
-        loadingMessage="جارِ تحميل الموافقات المسبقة..."
-        size="small"
-      />
+      columns={columns}
+      rows={paginatedRows}
+      loading={loading}
+      totalCount={totalCount}
+      page={page}
+      rowsPerPage={rowsPerPage}
+      onPageChange={onPageChange}
+      onRowsPerPageChange={onRowsPerPageChange}
+      rowsPerPageOptions={[10, 25, 50, 100]}
+      sortBy={sortBy}
+      sortDirection={sortDirection}
+      onSort={handleSort}
+      renderCell={renderCell}
+      getRowKey={(row) => row.id}
+      emptyMessage="لا توجد موافقات مسبقة متاحة حاليًا"
+      emptyIcon={DescriptionIcon}
+      loadingMessage="جارِ تحميل الموافقات المسبقة..."
+      size="small"
+    />
   );
 };
 

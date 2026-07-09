@@ -373,5 +373,3 @@ AuditTimeline.propTypes = {
 };
 
 export default AuditTimeline;
-
-

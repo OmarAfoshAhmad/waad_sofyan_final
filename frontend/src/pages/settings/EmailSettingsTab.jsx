@@ -38,7 +38,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
     try {
       const endpoint = type === 'imap' ? '/admin/settings/email/test-imap' : '/admin/settings/email/test-smtp';
       const response = await axios.post(endpoint, settings);
-      
+
       if (response.data === true) {
         openSnackbar({
           open: true,
@@ -95,12 +95,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
               />
               <FormControl fullWidth size="small">
                 <InputLabel>نوع التشفير</InputLabel>
-                <Select
-                  name="encryptionType"
-                  value={settings.encryptionType || 'TLS'}
-                  label="نوع التشفير"
-                  onChange={handleChange}
-                >
+                <Select name="encryptionType" value={settings.encryptionType || 'TLS'} label="نوع التشفير" onChange={handleChange}>
                   <MenuItem value="TLS">STARTTLS</MenuItem>
                   <MenuItem value="SSL">SSL/TLS</MenuItem>
                   <MenuItem value="NONE">بدون تشفير</MenuItem>
@@ -119,14 +114,7 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
             <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={2}>
               <FormControlLabel
-                control={
-                  <Switch
-                    checked={!!settings.listenerEnabled}
-                    onChange={handleChange}
-                    name="listenerEnabled"
-                    color="primary"
-                  />
-                }
+                control={<Switch checked={!!settings.listenerEnabled} onChange={handleChange} name="listenerEnabled" color="primary" />}
                 label="تفعيل مستكشف البريد الآلي"
               />
               <TextField
@@ -150,17 +138,12 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
               />
               <FormControlLabel
                 control={
-                  <Switch
-                    checked={!!settings.onlyFromProviders}
-                    onChange={handleChange}
-                    name="onlyFromProviders"
-                    color="secondary"
-                  />
+                  <Switch checked={!!settings.onlyFromProviders} onChange={handleChange} name="onlyFromProviders" color="secondary" />
                 }
                 label="استلام من مقدمي الخدمة المسجلين فقط"
               />
-              <Alert severity={settings.listenerEnabled ? "info" : "warning"} sx={{ py: 0 }}>
-                {settings.listenerEnabled ? "الاستقبال مفعل" : "الاستقبال متوقف"}
+              <Alert severity={settings.listenerEnabled ? 'info' : 'warning'} sx={{ py: 0 }}>
+                {settings.listenerEnabled ? 'الاستقبال مفعل' : 'الاستقبال متوقف'}
               </Alert>
             </Stack>
           </Paper>
@@ -170,7 +153,9 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
         <Grid size={{ xs: 12, md: 6 }}>
           <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-              <Typography variant="subtitle1" fontWeight={700}>خادم الإرسال (SMTP)</Typography>
+              <Typography variant="subtitle1" fontWeight={700}>
+                خادم الإرسال (SMTP)
+              </Typography>
               <Button size="small" variant="outlined" onClick={() => handleTestConnection('smtp')} disabled={testing}>
                 فحص الإرسال
               </Button>
@@ -178,9 +163,33 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
             <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={1.5}>
               <TextField fullWidth size="small" label="خادم SMTP" name="smtpHost" value={settings.smtpHost || ''} onChange={handleChange} />
-              <TextField fullWidth size="small" type="number" label="المنفذ" name="smtpPort" value={settings.smtpPort || 587} onChange={handleChange} />
-              <TextField fullWidth size="small" label="اسم المستخدم" name="smtpUsername" value={settings.smtpUsername || ''} onChange={handleChange} />
-              <TextField fullWidth size="small" type="password" label="كلمة المرور" name="smtpPassword" value={settings.smtpPassword || ''} onChange={handleChange} placeholder="أدخل للتغيير" />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="المنفذ"
+                name="smtpPort"
+                value={settings.smtpPort || 587}
+                onChange={handleChange}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label="اسم المستخدم"
+                name="smtpUsername"
+                value={settings.smtpUsername || ''}
+                onChange={handleChange}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                label="كلمة المرور"
+                name="smtpPassword"
+                value={settings.smtpPassword || ''}
+                onChange={handleChange}
+                placeholder="أدخل للتغيير"
+              />
             </Stack>
           </Paper>
         </Grid>
@@ -189,7 +198,9 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
         <Grid size={{ xs: 12, md: 6 }}>
           <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-              <Typography variant="subtitle1" fontWeight={700}>خادم الاستقبال (IMAP)</Typography>
+              <Typography variant="subtitle1" fontWeight={700}>
+                خادم الاستقبال (IMAP)
+              </Typography>
               <Button size="small" variant="outlined" onClick={() => handleTestConnection('imap')} disabled={testing}>
                 فحص الاستقبال
               </Button>
@@ -197,9 +208,33 @@ const EmailSettingsTab = ({ settings, setSettings }) => {
             <Divider sx={{ mb: '1.0rem' }} />
             <Stack spacing={1.5}>
               <TextField fullWidth size="small" label="خادم IMAP" name="imapHost" value={settings.imapHost || ''} onChange={handleChange} />
-              <TextField fullWidth size="small" type="number" label="المنفذ" name="imapPort" value={settings.imapPort || 993} onChange={handleChange} />
-              <TextField fullWidth size="small" label="اسم المستخدم" name="imapUsername" value={settings.imapUsername || ''} onChange={handleChange} />
-              <TextField fullWidth size="small" type="password" label="كلمة المرور" name="imapPassword" value={settings.imapPassword || ''} onChange={handleChange} placeholder="أدخل للتغيير" />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="المنفذ"
+                name="imapPort"
+                value={settings.imapPort || 993}
+                onChange={handleChange}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label="اسم المستخدم"
+                name="imapUsername"
+                value={settings.imapUsername || ''}
+                onChange={handleChange}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="password"
+                label="كلمة المرور"
+                name="imapPassword"
+                value={settings.imapPassword || ''}
+                onChange={handleChange}
+                placeholder="أدخل للتغيير"
+              />
             </Stack>
           </Paper>
         </Grid>

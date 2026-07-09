@@ -41,7 +41,9 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  Tooltip
+  Tooltip,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { formatCurrency } from 'utils/currency-formatter';
@@ -72,6 +74,7 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import SuccessDialog from 'components/SuccessDialog';
 import { useAuth } from 'contexts/AuthContext';
+import useSystemConfig from 'hooks/useSystemConfig';
 import axiosClient from 'utils/axios';
 import { MEDICAL_COLORS } from 'themes/provider-theme';
 
@@ -249,15 +252,7 @@ const ContractPriceChip = ({ loading, price, hasContract, error }) => {
   if (loading) return <CircularProgress size={16} />;
   if (error) return <Chip label={error} color="error" size="small" />;
   if (!hasContract) return <Chip label="لا يوجد عقد" color="warning" size="small" />;
-  return (
-    <Chip
-      icon={<LockIcon fontSize="small" />}
-      label={formatCurrency(price)}
-      color="success"
-      size="small"
-      sx={{ fontWeight: 600 }}
-    />
-  );
+  return <Chip icon={<LockIcon fontSize="small" />} label={formatCurrency(price)} color="success" size="small" sx={{ fontWeight: 600 }} />;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -304,11 +299,19 @@ const ProviderPreApprovalSubmission = () => {
   const [createdPreApprovalId, setCreatedPreApprovalId] = useState(null);
   const [submitMode, setSubmitMode] = useState(null);
 
+  const { flags } = useSystemConfig();
+  const preApprovalItemsOnly = flags?.PROVIDER_PRE_APPROVAL_ITEMS_ONLY ?? true;
+
   // Contract & Services
   const [contract, setContract] = useState(null);
   const [categories, setCategories] = useState([]);
-  const [services, setServices] = useState([]);
+  const [allServices, setAllServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(false);
+
+  const services = useMemo(() => {
+    if (!preApprovalItemsOnly) return allServices;
+    return allServices.filter((s) => s.requiresPreApproval || s.requiresPreAuth || s.requiresPA || s.requires_pre_auth);
+  }, [allServices, preApprovalItemsOnly]);
 
   // Form Data
   const [serviceRows, setServiceRows] = useState([createEmptyServiceRow()]);
@@ -355,9 +358,9 @@ const ProviderPreApprovalSubmission = () => {
 
       const serviceCategoryId = normalizeId(service.categoryId || service.serviceCategoryId || service.medicalCategoryId);
       const selectedCategoryId = normalizeId(category.id);
-      
+
       let byId = serviceCategoryId !== null && selectedCategoryId !== null && serviceCategoryId === selectedCategoryId;
-      
+
       // Allow matching if the service's category is a child of the selected category
       if (!byId && serviceCategoryId !== null && selectedCategoryId !== null && categories) {
         const servCat = categories.find((c) => normalizeId(c.id) === serviceCategoryId);
@@ -437,10 +440,16 @@ const ProviderPreApprovalSubmission = () => {
         setLoadingServices(true);
         console.log('[PRE-AUTH] Loading services...');
 
-        // Get contract services
-        const res = await axiosClient.get('/provider/my-contract/services', {
-          params: { page: 0, size: 500 }
-        });
+        // Get contract services based on feature flag
+        const isPreAuthEndpoint = preApprovalItemsOnly && visitData.memberId;
+        const endpoint = isPreAuthEndpoint ? '/provider/my-contract/services/requiring-preauth' : '/provider/my-contract/services';
+
+        const params = { page: 0, size: 500 };
+        if (isPreAuthEndpoint) {
+          params.memberId = visitData.memberId;
+        }
+
+        const res = await axiosClient.get(endpoint, { params });
 
         let rawServices = [];
         if (res.data?.data?.content) {
@@ -456,11 +465,7 @@ const ProviderPreApprovalSubmission = () => {
         // Normalize service data for consistent access
         const normalizedServices = rawServices.map((item) => {
           const requiresPreApproval =
-            item.requiresPreApproval ||
-            item.requiresPreAuth ||
-            item.requiresPA ||
-            item.requires_pre_auth ||
-            false;
+            item.requiresPreApproval || item.requiresPreAuth || item.requiresPA || item.requires_pre_auth || false;
 
           return {
             // IDs
@@ -494,9 +499,10 @@ const ProviderPreApprovalSubmission = () => {
 
         const paOnlyServices = normalizedServices.filter((s) => s.requiresPreApproval || s.requiresPreAuth);
 
-        setServices(paOnlyServices);
+        // Store all services, the useMemo will filter them based on the toggle
+        setAllServices(normalizedServices);
         console.log('[PRE-AUTH] Services normalized:', {
-          count: paOnlyServices.length,
+          count: normalizedServices.length,
           sample: paOnlyServices.slice(0, 2).map((s) => ({
             id: s.id,
             name: s.name,
@@ -514,19 +520,22 @@ const ProviderPreApprovalSubmission = () => {
     };
 
     loadServices();
-  }, [visitData.fromVisitLog, normalizeId]);
+  }, [visitData.fromVisitLog, visitData.memberId, normalizeId, preApprovalItemsOnly]);
 
   // ══════════════════════════════════════════════════════════════════════════════
   // FILTERED SERVICES BY SELECTED CATEGORY
   // Show ALL services in the category (with Badge for PA requirement)
   // ══════════════════════════════════════════════════════════════════════════════
-  const getFilteredServicesForCategory = useCallback((category) => {
-    if (!category) {
-      return [];
-    }
+  const getFilteredServicesForCategory = useCallback(
+    (category) => {
+      if (!category) {
+        return [];
+      }
 
-    return services.filter((s) => doesServiceMatchCategory(s, category));
-  }, [services, doesServiceMatchCategory]);
+      return services.filter((s) => doesServiceMatchCategory(s, category));
+    },
+    [services, doesServiceMatchCategory]
+  );
 
   // ══════════════════════════════════════════════════════════════════════════════
   // FORM VALIDATION
@@ -543,10 +552,10 @@ const ProviderPreApprovalSubmission = () => {
       prev.map((row) =>
         row.rowId === rowId
           ? {
-            ...row,
-            category: newValue,
-            service: null
-          }
+              ...row,
+              category: newValue,
+              service: null
+            }
           : row
       )
     );
@@ -571,22 +580,25 @@ const ProviderPreApprovalSubmission = () => {
     setServiceRows((prev) => (prev.length === 1 ? prev : prev.filter((row) => row.rowId !== rowId)));
   }, []);
 
-  const handleAttachmentChange = useCallback((event) => {
-    const selectedFiles = Array.from(event.target.files || []);
-    if (!selectedFiles.length) return;
+  const handleAttachmentChange = useCallback(
+    (event) => {
+      const selectedFiles = Array.from(event.target.files || []);
+      if (!selectedFiles.length) return;
 
-    const { validFiles, invalidMessages } = validateSelectedFiles(selectedFiles);
+      const { validFiles, invalidMessages } = validateSelectedFiles(selectedFiles);
 
-    if (invalidMessages.length) {
-      setError(`بعض الملفات مرفوضة:\n${invalidMessages.join('\n')}`);
-    }
+      if (invalidMessages.length) {
+        setError(`بعض الملفات مرفوضة:\n${invalidMessages.join('\n')}`);
+      }
 
-    if (validFiles.length) {
-      setAttachments((prev) => [...prev, ...validFiles]);
-    }
+      if (validFiles.length) {
+        setAttachments((prev) => [...prev, ...validFiles]);
+      }
 
-    event.target.value = '';
-  }, [validateSelectedFiles]);
+      event.target.value = '';
+    },
+    [validateSelectedFiles]
+  );
 
   const handleRemoveAttachment = useCallback((index) => {
     setAttachments((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
@@ -596,79 +608,82 @@ const ProviderPreApprovalSubmission = () => {
     navigate('/provider/visits');
   }, [navigate]);
 
-  const handleCreatePreApproval = useCallback(async (finalSubmit) => {
-    setAttemptedSubmit(true);
+  const handleCreatePreApproval = useCallback(
+    async (finalSubmit) => {
+      setAttemptedSubmit(true);
 
-    if (!visitData.visitId) {
-      setError('معرف الزيارة مطلوب');
-      return;
-    }
-    if (!serviceRows.every((row) => row.service)) {
-      setError('يجب اختيار خدمة طبية لكل صف خدمة');
-      return;
-    }
+      if (!visitData.visitId) {
+        setError('معرف الزيارة مطلوب');
+        return;
+      }
+      if (!serviceRows.every((row) => row.service)) {
+        setError('يجب اختيار خدمة طبية لكل صف خدمة');
+        return;
+      }
 
-    try {
-      setSubmitting(true);
-      setSubmitMode(finalSubmit ? 'final' : 'draft');
-      setError(null);
+      try {
+        setSubmitting(true);
+        setSubmitMode(finalSubmit ? 'final' : 'draft');
+        setError(null);
 
-      const createdIds = [];
+        const createdIds = [];
 
-      for (const row of serviceRows) {
-        const quantity = Number(row.quantity) > 0 ? Number(row.quantity) : 1;
-        const quantityNote = quantity > 1 ? `\nالكمية المطلوبة: ${quantity}` : '';
+        for (const row of serviceRows) {
+          const quantity = Number(row.quantity) > 0 ? Number(row.quantity) : 1;
+          const quantityNote = quantity > 1 ? `\nالكمية المطلوبة: ${quantity}` : '';
 
-        const payload = {
-          visitId: parseInt(visitData.visitId),
-          memberId: visitData.memberId ? parseInt(visitData.memberId) : null,
-          medicalServiceId: row.service.medicalServiceId || row.service.serviceId || row.service.id,
-          serviceCategoryId: row.category?.id || row.service.categoryId || null,
-          diagnosisCode: diagnosisCode || null,
-          diagnosisDescription: diagnosisDescription || null,
-          priority: priority,
-          notes: `${notes || ''}${quantityNote}`.trim() || null,
-          currency: 'LYD'
-        };
+          const payload = {
+            visitId: parseInt(visitData.visitId),
+            memberId: visitData.memberId ? parseInt(visitData.memberId) : null,
+            medicalServiceId: row.service.medicalServiceId || row.service.serviceId || row.service.id,
+            serviceCategoryId: row.category?.id || row.service.categoryId || null,
+            diagnosisCode: diagnosisCode || null,
+            diagnosisDescription: diagnosisDescription || null,
+            priority: priority,
+            notes: `${notes || ''}${quantityNote}`.trim() || null,
+            currency: 'LYD'
+          };
 
-        const response = await axiosClient.post('/pre-authorizations', payload);
-        const preAuthId = response.data?.data?.id;
+          const response = await axiosClient.post('/pre-authorizations', payload);
+          const preAuthId = response.data?.data?.id;
 
-        if (!preAuthId) continue;
-        createdIds.push(preAuthId);
+          if (!preAuthId) continue;
+          createdIds.push(preAuthId);
 
-        if (attachments.length > 0) {
-          for (const file of attachments) {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('attachmentType', 'MEDICAL_REPORT');
+          if (attachments.length > 0) {
+            for (const file of attachments) {
+              const formData = new FormData();
+              formData.append('file', file);
+              formData.append('attachmentType', 'MEDICAL_REPORT');
 
-            await axiosClient.post(`/pre-authorizations/${preAuthId}/attachments`, formData, {
-              headers: { 'Content-Type': 'multipart/form-data' }
-            });
+              await axiosClient.post(`/pre-authorizations/${preAuthId}/attachments`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              });
+            }
+          }
+
+          if (finalSubmit) {
+            await axiosClient.post(`/pre-authorizations/${preAuthId}/submit`);
           }
         }
 
-        if (finalSubmit) {
-          await axiosClient.post(`/pre-authorizations/${preAuthId}/submit`);
+        if (createdIds.length > 0) {
+          setCreatedPreApprovalId(createdIds[0]);
+          setSuccessDialogOpen(true);
+          setAttemptedSubmit(false);
+        } else {
+          setError('فشل في إنشاء الموافقة المسبقة');
         }
+      } catch (err) {
+        console.error('Error creating pre-approval:', err);
+        const errorMessage = err.response?.data?.message || err.message || 'فشل في إنشاء الموافقة المسبقة';
+        setError(errorMessage);
+      } finally {
+        setSubmitting(false);
       }
-
-      if (createdIds.length > 0) {
-        setCreatedPreApprovalId(createdIds[0]);
-        setSuccessDialogOpen(true);
-        setAttemptedSubmit(false);
-      } else {
-        setError('فشل في إنشاء الموافقة المسبقة');
-      }
-    } catch (err) {
-      console.error('Error creating pre-approval:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'فشل في إنشاء الموافقة المسبقة';
-      setError(errorMessage);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [visitData, serviceRows, diagnosisCode, diagnosisDescription, priority, notes, attachments]);
+    },
+    [visitData, serviceRows, diagnosisCode, diagnosisDescription, priority, notes, attachments]
+  );
 
   const handleSuccessClose = useCallback(() => {
     setSuccessDialogOpen(false);
@@ -878,13 +893,7 @@ const ProviderPreApprovalSubmission = () => {
                   طلب موافقة للارتباط الطبي التالي:
                 </Typography>
                 {diagnosisCode && (
-                  <Chip
-                    label={`التشخيص: ${diagnosisCode}`}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    sx={{ fontWeight: 600 }}
-                  />
+                  <Chip label={`التشخيص: ${diagnosisCode}`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
                 )}
                 {diagnosisDescription && (
                   <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', ml: 1 }}>
@@ -1128,7 +1137,6 @@ const ProviderPreApprovalSubmission = () => {
               </TableBody>
             </Table>
           </TableContainer>
-
         </FormSection>
 
         {/* ═══════════════════════ ROW 3: DIAGNOSIS & REQUEST DETAILS ═══════════════════════ */}
@@ -1236,17 +1244,14 @@ const ProviderPreApprovalSubmission = () => {
           </Stack>
         </FormSection>
 
-        {/* ═══════════════════════ ROW 4: ACTION BUTTONS (Sticky Footer) ═══════════════════════ */}
+        {/* ═══════════════════════ ROW 4: ACTION BUTTONS (Static Footer) ═══════════════════════ */}
         <Paper
-          elevation={3}
+          variant="outlined"
           sx={{
             p: '1.25rem',
             borderRadius: '0.25rem',
             bgcolor: 'background.paper',
-            position: 'sticky',
-            bottom: '8.0rem',
-            zIndex: 10,
-            border: '1px solid',
+            mt: '1.5rem',
             borderColor: 'divider'
           }}
         >
@@ -1329,6 +1334,3 @@ const ProviderPreApprovalSubmission = () => {
 };
 
 export default ProviderPreApprovalSubmission;
-
-
-

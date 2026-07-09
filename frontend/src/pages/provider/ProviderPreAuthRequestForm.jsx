@@ -1,9 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Stepper, Step, StepLabel, Button, Typography, TextField, Grid, Card, CardContent,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton,
-  Divider, Alert, List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction,
-  CircularProgress, Chip, Autocomplete
+  Box,
+  Stepper,
+  Step,
+  StepLabel,
+  Button,
+  Typography,
+  TextField,
+  Grid,
+  Card,
+  CardContent,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton,
+  Divider,
+  Alert,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  ListItemSecondaryAction,
+  CircularProgress,
+  Chip,
+  Autocomplete
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -85,7 +109,9 @@ const ProviderPreAuthRequestForm = () => {
       // If such endpoint doesn't exist yet, we will fetch medical services globally for now.
       const fetchCatalog = async () => {
         try {
-          const res = await import('services/api/medical-services.service').then(m => m.medicalServicesService.getPaginated({ size: 1000 }));
+          const res = await import('services/api/medical-services.service').then((m) =>
+            m.medicalServicesService.getPaginated({ size: 1000 })
+          );
           setServicesCatalog(res.items || res.content || res.data || []);
         } catch (err) {
           console.error('Failed to fetch services catalog:', err);
@@ -101,22 +127,25 @@ const ProviderPreAuthRequestForm = () => {
       enqueueSnackbar('يرجى اختيار الخدمة الطبية', { variant: 'warning' });
       return;
     }
-    setLines(prev => [...prev, {
-      id: Date.now(),
-      medicalServiceId: newLine.medicalServiceId,
-      code: newLine.code,
-      name: newLine.name,
-      contractPrice: null,   // يُحدَّد من قِبَل المراجع عند المقارنة بالعقد
-      manualPrice: newLine.price,
-      overrideReason: ''
-    }]);
+    setLines((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        medicalServiceId: newLine.medicalServiceId,
+        code: newLine.code,
+        name: newLine.name,
+        contractPrice: null, // يُحدَّد من قِبَل المراجع عند المقارنة بالعقد
+        manualPrice: newLine.price,
+        overrideReason: ''
+      }
+    ]);
     setNewLine({ medicalServiceId: '', code: '', name: '', price: '' });
   };
 
-  const removeLine = (id) => setLines(prev => prev.filter(l => l.id !== id));
+  const removeLine = (id) => setLines((prev) => prev.filter((l) => l.id !== id));
 
   const updateLine = (id, field, value) => {
-    setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
   };
 
   const calculateStatus = (line) => {
@@ -136,9 +165,18 @@ const ProviderPreAuthRequestForm = () => {
 
   // ─── Submission ────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!member) { enqueueSnackbar('يجب اختيار مستفيد أولاً', { variant: 'error' }); return; }
-    if (!clinical.diagnosis.trim()) { enqueueSnackbar('التشخيص مطلوب', { variant: 'error' }); return; }
-    if (lines.length === 0) { enqueueSnackbar('يجب إضافة خدمة واحدة على الأقل', { variant: 'error' }); return; }
+    if (!member) {
+      enqueueSnackbar('يجب اختيار مستفيد أولاً', { variant: 'error' });
+      return;
+    }
+    if (!clinical.diagnosis.trim()) {
+      enqueueSnackbar('التشخيص مطلوب', { variant: 'error' });
+      return;
+    }
+    if (lines.length === 0) {
+      enqueueSnackbar('يجب إضافة خدمة واحدة على الأقل', { variant: 'error' });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -154,27 +192,28 @@ const ProviderPreAuthRequestForm = () => {
 
       // Submit one pre-auth per service line
       const results = await Promise.allSettled(
-        lines.map(line => preApprovalsService.createFull({
-          visitId,
-          memberId,
-          medicalServiceId: line.medicalServiceId,
-          requestedAmount: parseFloat(line.manualPrice) || line.contractPrice || 0,
-          diagnosis: clinical.diagnosis,
-          treatmentPlan: clinical.treatmentPlan,
-          chiefComplaint: clinical.chiefComplaint,
-          notes: clinical.notes,
-          overrideReason: line.overrideReason || null,
-        }))
+        lines.map((line) =>
+          preApprovalsService.createFull({
+            visitId,
+            memberId,
+            medicalServiceId: line.medicalServiceId,
+            requestedAmount: parseFloat(line.manualPrice) || line.contractPrice || 0,
+            diagnosis: clinical.diagnosis,
+            treatmentPlan: clinical.treatmentPlan,
+            chiefComplaint: clinical.chiefComplaint,
+            notes: clinical.notes,
+            overrideReason: line.overrideReason || null
+          })
+        )
       );
 
-      const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
 
       if (succeeded > 0) {
-        enqueueSnackbar(
-          `تم إرسال ${succeeded} طلب${failed > 0 ? ` (فشل ${failed})` : ''} للمراجع الطبي بنجاح!`,
-          { variant: succeeded === lines.length ? 'success' : 'warning' }
-        );
+        enqueueSnackbar(`تم إرسال ${succeeded} طلب${failed > 0 ? ` (فشل ${failed})` : ''} للمراجع الطبي بنجاح!`, {
+          variant: succeeded === lines.length ? 'success' : 'warning'
+        });
         setTimeout(() => navigate('/provider/pre-auth-inbox'), 1500);
       } else {
         enqueueSnackbar('فشل إرسال جميع الطلبات، يرجى المحاولة مرة أخرى', { variant: 'error' });
@@ -190,10 +229,14 @@ const ProviderPreAuthRequestForm = () => {
   // ─── Step renders ──────────────────────────────────────────────────────────
   const renderStep1 = () => (
     <Box>
-      <Typography variant="h6" mb={2}>بيانات المستفيد والزيارة</Typography>
-      
+      <Typography variant="h6" mb={2}>
+        بيانات المستفيد والزيارة
+      </Typography>
+
       {memberLoading ? (
-        <Box display="flex" justifyContent="center" p={3}><CircularProgress /></Box>
+        <Box display="flex" justifyContent="center" p={3}>
+          <CircularProgress />
+        </Box>
       ) : memberError ? (
         <Alert severity="error">{memberError}</Alert>
       ) : member ? (
@@ -213,19 +256,27 @@ const ProviderPreAuthRequestForm = () => {
             </Box>
             <Grid container spacing={2}>
               <Grid item xs={6} md={3}>
-                <Typography variant="body2" color="textSecondary">الاسم</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  الاسم
+                </Typography>
                 <Typography fontWeight="bold">{member.memberName || member.name || '-'}</Typography>
               </Grid>
               <Grid item xs={6} md={3}>
-                <Typography variant="body2" color="textSecondary">رقم البطاقة</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  رقم البطاقة
+                </Typography>
                 <Typography fontWeight="bold">{member.cardNumber || member.memberCardNumber || '-'}</Typography>
               </Grid>
               <Grid item xs={6} md={3}>
-                <Typography variant="body2" color="textSecondary">جهة العمل</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  جهة العمل
+                </Typography>
                 <Typography fontWeight="bold">{member.employerName || member.employer || '-'}</Typography>
               </Grid>
               <Grid item xs={6} md={3}>
-                <Typography variant="body2" color="textSecondary">انتهاء التغطية</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  انتهاء التغطية
+                </Typography>
                 <Typography fontWeight="bold">{member.coverageEndDate || member.expiryDate || '-'}</Typography>
               </Grid>
             </Grid>
@@ -240,20 +291,47 @@ const ProviderPreAuthRequestForm = () => {
   const renderStep2 = () => (
     <Grid container spacing={3}>
       <Grid item xs={12}>
-        <TextField fullWidth label="الشكوى الرئيسية (Chief Complaint)" multiline rows={2} required
-          value={clinical.chiefComplaint} onChange={(e) => setClinical({ ...clinical, chiefComplaint: e.target.value })} />
+        <TextField
+          fullWidth
+          label="الشكوى الرئيسية (Chief Complaint)"
+          multiline
+          rows={2}
+          required
+          value={clinical.chiefComplaint}
+          onChange={(e) => setClinical({ ...clinical, chiefComplaint: e.target.value })}
+        />
       </Grid>
       <Grid item xs={12}>
-        <TextField fullWidth label="التشخيص (Diagnosis / ICD Code)" multiline rows={2} required
-          value={clinical.diagnosis} onChange={(e) => setClinical({ ...clinical, diagnosis: e.target.value })} />
+        <TextField
+          fullWidth
+          label="التشخيص (Diagnosis / ICD Code)"
+          multiline
+          rows={2}
+          required
+          value={clinical.diagnosis}
+          onChange={(e) => setClinical({ ...clinical, diagnosis: e.target.value })}
+        />
       </Grid>
       <Grid item xs={12}>
-        <TextField fullWidth label="الخطة العلاجية (Treatment Plan)" multiline rows={3} required
-          value={clinical.treatmentPlan} onChange={(e) => setClinical({ ...clinical, treatmentPlan: e.target.value })} />
+        <TextField
+          fullWidth
+          label="الخطة العلاجية (Treatment Plan)"
+          multiline
+          rows={3}
+          required
+          value={clinical.treatmentPlan}
+          onChange={(e) => setClinical({ ...clinical, treatmentPlan: e.target.value })}
+        />
       </Grid>
       <Grid item xs={12}>
-        <TextField fullWidth label="ملاحظات إضافية (اختياري)" multiline rows={2}
-          value={clinical.notes} onChange={(e) => setClinical({ ...clinical, notes: e.target.value })} />
+        <TextField
+          fullWidth
+          label="ملاحظات إضافية (اختياري)"
+          multiline
+          rows={2}
+          value={clinical.notes}
+          onChange={(e) => setClinical({ ...clinical, notes: e.target.value })}
+        />
       </Grid>
     </Grid>
   );
@@ -262,7 +340,9 @@ const ProviderPreAuthRequestForm = () => {
     <Box>
       {/* ── Add new service row ── */}
       <Card sx={{ mb: 3, p: 2, bgcolor: 'grey.50' }}>
-        <Typography variant="subtitle2" mb={2} fontWeight="bold">إضافة خدمة طبية</Typography>
+        <Typography variant="subtitle2" mb={2} fontWeight="bold">
+          إضافة خدمة طبية
+        </Typography>
         <Grid container spacing={2} alignItems="flex-end">
           <Grid item xs={12} sm={8}>
             <Autocomplete
@@ -270,7 +350,7 @@ const ProviderPreAuthRequestForm = () => {
               getOptionLabel={(option) => `${option.serviceCode} - ${option.nameAr || option.nameEn || option.name}`}
               onChange={(e, newValue) => {
                 if (newValue) {
-                  setNewLine(p => ({
+                  setNewLine((p) => ({
                     ...p,
                     medicalServiceId: newValue.id,
                     code: newValue.serviceCode,
@@ -281,24 +361,26 @@ const ProviderPreAuthRequestForm = () => {
                   setNewLine({ medicalServiceId: '', code: '', name: '', price: '' });
                 }
               }}
-              renderInput={(params) => (
-                <TextField {...params} label="اختر الخدمة الطبية من العقد" size="small" />
-              )}
+              renderInput={(params) => <TextField {...params} label="اختر الخدمة الطبية من العقد" size="small" />}
             />
           </Grid>
           <Grid item xs={12} sm={2}>
             <TextField
-              fullWidth size="small" type="number"
+              fullWidth
+              size="small"
+              type="number"
               label="المبلغ المطلوب (د.ل)"
               placeholder="0.00"
               value={newLine.price}
-              onChange={(e) => setNewLine(p => ({ ...p, price: e.target.value }))}
+              onChange={(e) => setNewLine((p) => ({ ...p, price: e.target.value }))}
               inputProps={{ min: 0 }}
             />
           </Grid>
           <Grid item xs={12} sm={2}>
             <Button
-              fullWidth variant="contained" size="medium"
+              fullWidth
+              variant="contained"
+              size="medium"
               startIcon={<AddCircleIcon />}
               onClick={addLine}
               disabled={!newLine.medicalServiceId}
@@ -319,7 +401,9 @@ const ProviderPreAuthRequestForm = () => {
               <TableRow sx={{ bgcolor: 'primary.main' }}>
                 <TableCell sx={{ color: 'white' }}>كود الخدمة</TableCell>
                 <TableCell sx={{ color: 'white' }}>اسم الإجراء</TableCell>
-                <TableCell sx={{ color: 'white' }} align="right">المبلغ المطلوب</TableCell>
+                <TableCell sx={{ color: 'white' }} align="right">
+                  المبلغ المطلوب
+                </TableCell>
                 <TableCell sx={{ color: 'white' }}>ملاحظة</TableCell>
                 <TableCell />
               </TableRow>
@@ -334,7 +418,8 @@ const ProviderPreAuthRequestForm = () => {
                   </TableCell>
                   <TableCell>
                     <TextField
-                      size="small" fullWidth
+                      size="small"
+                      fullWidth
                       value={line.name}
                       onChange={(e) => updateLine(line.id, 'name', e.target.value)}
                       placeholder="اسم الخدمة"
@@ -343,17 +428,25 @@ const ProviderPreAuthRequestForm = () => {
                   </TableCell>
                   <TableCell align="right">
                     <TextField
-                      size="small" type="number"
+                      size="small"
+                      type="number"
                       value={line.manualPrice}
                       onChange={(e) => updateLine(line.id, 'manualPrice', e.target.value)}
                       sx={{ width: 110 }}
                       inputProps={{ min: 0, style: { textAlign: 'right' } }}
-                      InputProps={{ endAdornment: <Typography variant="caption" color="textSecondary">د.ل</Typography> }}
+                      InputProps={{
+                        endAdornment: (
+                          <Typography variant="caption" color="textSecondary">
+                            د.ل
+                          </Typography>
+                        )
+                      }}
                     />
                   </TableCell>
                   <TableCell>
                     <TextField
-                      size="small" fullWidth
+                      size="small"
+                      fullWidth
                       value={line.overrideReason}
                       onChange={(e) => updateLine(line.id, 'overrideReason', e.target.value)}
                       placeholder="مبرر السعر (اختياري)"
@@ -377,29 +470,44 @@ const ProviderPreAuthRequestForm = () => {
         <Box display="flex" justifyContent="flex-end" mb={2}>
           <Chip
             label={`الإجمالي: ${lines.reduce((s, l) => s + (parseFloat(l.manualPrice) || 0), 0).toFixed(2)} د.ل`}
-            color="primary" variant="outlined" sx={{ fontSize: '1rem', px: 2, py: 2.5 }}
+            color="primary"
+            variant="outlined"
+            sx={{ fontSize: '1rem', px: 2, py: 2.5 }}
           />
         </Box>
       )}
 
       {/* ── Attachments ── */}
       <Box>
-        <Typography variant="subtitle2" mb={1} fontWeight="bold">المرفقات الداعمة (اختياري)</Typography>
+        <Typography variant="subtitle2" mb={1} fontWeight="bold">
+          المرفقات الداعمة (اختياري)
+        </Typography>
         <Button variant="outlined" component="label" startIcon={<UploadFileIcon />} size="small">
           إرفاق ملفات
-          <input type="file" hidden multiple onChange={(e) => {
-            if (e.target.files) setAttachments(prev => [...prev, ...Array.from(e.target.files)]);
-          }} />
+          <input
+            type="file"
+            hidden
+            multiple
+            onChange={(e) => {
+              if (e.target.files) setAttachments((prev) => [...prev, ...Array.from(e.target.files)]);
+            }}
+          />
         </Button>
         {attachments.length > 0 && (
           <List dense sx={{ mt: 1, bgcolor: '#f5f5f5', borderRadius: 1 }}>
             {attachments.map((file, i) => (
               <ListItem key={i}>
-                <ListItemIcon><UploadFileIcon color="primary" fontSize="small" /></ListItemIcon>
+                <ListItemIcon>
+                  <UploadFileIcon color="primary" fontSize="small" />
+                </ListItemIcon>
                 <ListItemText primary={file.name} secondary={`${(file.size / 1024).toFixed(1)} KB`} />
                 <ListItemSecondaryAction>
-                  <IconButton edge="end" size="small" color="error"
-                    onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))}>
+                  <IconButton
+                    edge="end"
+                    size="small"
+                    color="error"
+                    onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                  >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -411,20 +519,22 @@ const ProviderPreAuthRequestForm = () => {
     </Box>
   );
 
-
-
   const renderStep4 = () => {
     const totalRequested = lines.reduce((acc, l) => acc + (parseFloat(l.manualPrice) || 0), 0);
 
     return (
       <Box>
-        <Typography variant="h6" mb={2}>مراجعة الطلب قبل الإرسال</Typography>
+        <Typography variant="h6" mb={2}>
+          مراجعة الطلب قبل الإرسال
+        </Typography>
 
         {/* Member summary */}
         {member && (
           <Card sx={{ mb: 2, border: '1px solid', borderColor: 'success.light', bgcolor: '#f5f8fa' }}>
             <CardContent sx={{ py: 1.5 }}>
-              <Typography variant="subtitle2" color="textSecondary" gutterBottom>المستفيد</Typography>
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                المستفيد
+              </Typography>
               <Typography fontWeight="bold">{member.memberName || member.name || '-'}</Typography>
               <Typography variant="body2" color="textSecondary">
                 {member.cardNumber || member.memberCardNumber || ''} | {member.employerName || ''}
@@ -448,7 +558,11 @@ const ProviderPreAuthRequestForm = () => {
               {lines.map((l, i) => (
                 <TableRow key={l.id}>
                   <TableCell sx={{ color: 'textSecondary' }}>{i + 1}</TableCell>
-                  <TableCell><Typography variant="body2" fontFamily="monospace">{l.code}</Typography></TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontFamily="monospace">
+                      {l.code}
+                    </Typography>
+                  </TableCell>
                   <TableCell>{l.name}</TableCell>
                   <TableCell align="right">
                     <Typography fontWeight="bold" color="primary">
@@ -472,15 +586,14 @@ const ProviderPreAuthRequestForm = () => {
         </TableContainer>
 
         <Alert severity="info" sx={{ mb: 1 }}>
-          سيتم إرسال <strong>{lines.length}</strong> طلب{lines.length > 1 ? ' منفصل' : ''} للمراجع الطبي.
-          لن يُخصم من سقف المستفيد حتى تتم الموافقة الصريحة.
+          سيتم إرسال <strong>{lines.length}</strong> طلب{lines.length > 1 ? ' منفصل' : ''} للمراجع الطبي. لن يُخصم من سقف المستفيد حتى تتم
+          الموافقة الصريحة.
         </Alert>
 
         {!member?.visitId && (
           <Alert severity="warning">
             ⚠️ لا توجد زيارة مرتبطة بهذا المستفيد — لن يتم الإرسال. يرجى بدء الطلب من <strong>سجل الزيارات</strong>.
           </Alert>
-
         )}
       </Box>
     );
@@ -488,11 +601,16 @@ const ProviderPreAuthRequestForm = () => {
 
   const getStepContent = (step) => {
     switch (step) {
-      case 0: return renderStep1();
-      case 1: return renderStep2();
-      case 2: return renderStep3();
-      case 3: return renderStep4();
-      default: return null;
+      case 0:
+        return renderStep1();
+      case 1:
+        return renderStep2();
+      case 2:
+        return renderStep3();
+      case 3:
+        return renderStep4();
+      default:
+        return null;
     }
   };
 
@@ -507,22 +625,18 @@ const ProviderPreAuthRequestForm = () => {
     <MainCard title="إنشاء طلب موافقة مسبقة">
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
         {steps.map((label) => (
-          <Step key={label}><StepLabel>{label}</StepLabel></Step>
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
         ))}
       </Stepper>
 
-      <Box sx={{ minHeight: '400px' }}>
-        {getStepContent(activeStep)}
-      </Box>
+      <Box sx={{ minHeight: '400px' }}>{getStepContent(activeStep)}</Box>
 
       <Divider sx={{ my: 3 }} />
 
       <Box display="flex" justifyContent="space-between">
-        <Button
-          disabled={activeStep === 0 || isSubmitting}
-          onClick={() => setActiveStep(prev => prev - 1)}
-          variant="outlined"
-        >
+        <Button disabled={activeStep === 0 || isSubmitting} onClick={() => setActiveStep((prev) => prev - 1)} variant="outlined">
           السابق
         </Button>
 
@@ -537,11 +651,7 @@ const ProviderPreAuthRequestForm = () => {
             {isSubmitting ? 'جاري الإرسال...' : `إرسال ${lines.length} طلب للاعتماد`}
           </Button>
         ) : (
-          <Button
-            variant="contained"
-            onClick={() => setActiveStep(prev => prev + 1)}
-            disabled={!canProceed()}
-          >
+          <Button variant="contained" onClick={() => setActiveStep((prev) => prev + 1)} disabled={!canProceed()}>
             التالي
           </Button>
         )}

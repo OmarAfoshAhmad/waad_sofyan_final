@@ -138,5 +138,3 @@ TextInput.propTypes = {
 };
 
 Filter.propTypes = { column: PropTypes.any };
-
-

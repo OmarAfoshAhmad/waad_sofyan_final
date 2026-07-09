@@ -16,28 +16,12 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Rule as RuleIcon,
-  Save as SaveIcon
-} from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Rule as RuleIcon, Save as SaveIcon } from '@mui/icons-material';
 import coverageRuleEngineService from 'services/api/coverageRuleEngine.service';
 
-const RULE_TYPES = [
-  'TIMES_LIMIT_RULE',
-  'COVERAGE_PERCENT_RULE',
-  'AMOUNT_LIMIT_RULE',
-  'COPAY_RULE',
-  'DEDUCTIBLE_RULE'
-];
+const RULE_TYPES = ['TIMES_LIMIT_RULE', 'COVERAGE_PERCENT_RULE', 'AMOUNT_LIMIT_RULE', 'COPAY_RULE', 'DEDUCTIBLE_RULE'];
 
-const RULE_GROUPS = [
-  'PRE_VALIDATION_RULES',
-  'COVERAGE_CALCULATION_RULES',
-  'LIMIT_ENFORCEMENT_RULES',
-  'POST_PROCESSING_RULES'
-];
+const RULE_GROUPS = ['PRE_VALIDATION_RULES', 'COVERAGE_CALCULATION_RULES', 'LIMIT_ENFORCEMENT_RULES', 'POST_PROCESSING_RULES'];
 
 const EMPTY_RULE = {
   id: null,
@@ -159,9 +143,8 @@ const FinancialRuleEngineTab = () => {
         configuration: parsedConfig || {}
       };
 
-      const saved = row.id == null
-        ? await coverageRuleEngineService.create(payload)
-        : await coverageRuleEngineService.update(row.id, payload);
+      const saved =
+        row.id == null ? await coverageRuleEngineService.create(payload) : await coverageRuleEngineService.update(row.id, payload);
 
       updateRule(index, normalizeRule(saved));
       setSuccess('تم حفظ القاعدة بنجاح');
@@ -196,7 +179,12 @@ const FinancialRuleEngineTab = () => {
         )}
 
         <Paper variant="outlined" sx={{ p: '1.0rem', borderRadius: '0.25rem' }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            spacing={1}
+          >
             <Stack direction="row" alignItems="center" spacing={1}>
               <RuleIcon color="primary" sx={{ fontSize: '1.25rem' }} />
               <Typography variant="subtitle2" fontWeight={700} color="primary.main">
@@ -238,7 +226,9 @@ const FinancialRuleEngineTab = () => {
                     onChange={(e) => updateRule(index, { type: e.target.value })}
                   >
                     {RULE_TYPES.map((type) => (
-                      <MenuItem key={type} value={type}>{type}</MenuItem>
+                      <MenuItem key={type} value={type}>
+                        {type}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
@@ -264,7 +254,9 @@ const FinancialRuleEngineTab = () => {
                     onChange={(e) => updateRule(index, { ruleGroup: e.target.value })}
                   >
                     {RULE_GROUPS.map((group) => (
-                      <MenuItem key={group} value={group}>{group}</MenuItem>
+                      <MenuItem key={group} value={group}>
+                        {group}
+                      </MenuItem>
                     ))}
                   </TextField>
                 </Grid>
@@ -283,18 +275,25 @@ const FinancialRuleEngineTab = () => {
                     fullWidth
                     size="small"
                     label="اعتماد على قواعد"
-                    SelectProps={{ multiple: true, renderValue: (selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {(selected || []).map((value) => <Chip key={value} size="small" label={value} />)}
-                      </Box>
-                    ) }}
+                    SelectProps={{
+                      multiple: true,
+                      renderValue: (selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(selected || []).map((value) => (
+                            <Chip key={value} size="small" label={value} />
+                          ))}
+                        </Box>
+                      )
+                    }}
                     value={rule.dependencyRules || []}
                     onChange={(e) => updateRule(index, { dependencyRules: e.target.value })}
                   >
                     {ruleNameOptions
                       .filter((name) => name !== rule.name)
                       .map((name) => (
-                        <MenuItem key={name} value={name}>{name}</MenuItem>
+                        <MenuItem key={name} value={name}>
+                          {name}
+                        </MenuItem>
                       ))}
                   </TextField>
                 </Grid>

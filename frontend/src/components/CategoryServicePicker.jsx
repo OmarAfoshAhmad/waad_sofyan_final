@@ -294,12 +294,7 @@ const CategoryServicePicker = ({
           </Typography>
         </Box>
         {showPrices && option.basePrice && (
-          <Chip
-            label={formatCurrency(option.basePrice)}
-            size="small"
-            color="success"
-            icon={<LockIcon sx={{ fontSize: '0.75rem' }} />}
-          />
+          <Chip label={formatCurrency(option.basePrice)} size="small" color="success" icon={<LockIcon sx={{ fontSize: '0.75rem' }} />} />
         )}
       </Stack>
     </Box>
@@ -457,7 +452,9 @@ const CategoryServicePicker = ({
                 {!loadingCoverage && coverageInfo?.covered && (
                   <Chip icon={<CheckIcon />} label={`${LABELS.coverage}: ${coverageInfo.coveragePercent}%`} color="success" size="small" />
                 )}
-                {!loadingCoverage && coverageInfo?.requiresPA && <Chip icon={<WarningIcon />} label={LABELS.requiresPA} color="warning" size="small" />}
+                {!loadingCoverage && coverageInfo?.requiresPA && (
+                  <Chip icon={<WarningIcon />} label={LABELS.requiresPA} color="warning" size="small" />
+                )}
               </Stack>
             </Box>
           </>
@@ -488,5 +485,3 @@ CategoryServicePicker.propTypes = {
 };
 
 export default CategoryServicePicker;
-
-

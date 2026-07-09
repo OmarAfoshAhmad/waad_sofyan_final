@@ -312,15 +312,13 @@ const PreApprovalsInbox = () => {
               CANONICAL 2026-01-26: PreAuth workflow starts at PENDING, not SUBMITTED
               PENDING means newly created and awaiting initial review */}
           {params.row.status === 'PENDING' && (
-            
-              <Tooltip title="بدء المراجعة">
-                <span>
-                  <IconButton size="small" color="info" onClick={() => handleStartReview(params.row)} disabled={actionLoading}>
-                    <StartReviewIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              
+            <Tooltip title="بدء المراجعة">
+              <span>
+                <IconButton size="small" color="info" onClick={() => handleStartReview(params.row)} disabled={actionLoading}>
+                  <StartReviewIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
           )}
 
           {/* PENDING/UNDER_REVIEW → Approve/Reject
@@ -440,7 +438,6 @@ const PreApprovalsInbox = () => {
           </Card>
 
           <Divider sx={{ my: '1.0rem' }} />
-
 
           <TextField
             fullWidth

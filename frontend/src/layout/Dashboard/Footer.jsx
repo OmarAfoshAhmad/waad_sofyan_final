@@ -14,5 +14,3 @@ export default function Footer() {
     </Stack>
   );
 }
-
-

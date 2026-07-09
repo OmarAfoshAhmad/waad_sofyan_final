@@ -58,10 +58,12 @@ export const suppressMUIDeprecationWarnings = () => {
     }
 
     // B. Suppress MUI Grid & Prop deprecations
-    if (message.includes('MUI: The Grid') ||
+    if (
+      message.includes('MUI: The Grid') ||
       message.includes('deprecated') ||
       message.includes('isDarkMode') ||
-      message.includes('GridProps')) {
+      message.includes('GridProps')
+    ) {
       return;
     }
 
@@ -74,7 +76,7 @@ export const suppressMUIDeprecationWarnings = () => {
   console.error = (...args) => {
     let message = '';
     try {
-      message = (args[0] && typeof args[0] === 'object' && args[0].message) ? args[0].message : String(args[0] || '');
+      message = args[0] && typeof args[0] === 'object' && args[0].message ? args[0].message : String(args[0] || '');
     } catch (e) {
       message = 'Unknown Error';
     }
@@ -161,4 +163,3 @@ export default {
   convertToV2Size,
   MIGRATION_PATTERNS
 };
-

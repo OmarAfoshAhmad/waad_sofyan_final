@@ -412,6 +412,3 @@ const SmartServicePicker = ({
 };
 
 export default SmartServicePicker;
-
-
-

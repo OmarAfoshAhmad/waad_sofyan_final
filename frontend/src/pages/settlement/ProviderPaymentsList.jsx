@@ -18,7 +18,12 @@ import { CircularProgress } from '@mui/material';
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import GenericDataTable from 'components/GenericDataTable';
-import { AccountBalanceWallet as WalletIcon, Payments as PaymentsIcon, TrendingDown as DownIcon, ReceiptLong as ReceiptIcon } from '@mui/icons-material';
+import {
+  AccountBalanceWallet as WalletIcon,
+  Payments as PaymentsIcon,
+  TrendingDown as DownIcon,
+  ReceiptLong as ReceiptIcon
+} from '@mui/icons-material';
 import useTableState from 'hooks/useTableState';
 
 // Services
@@ -79,7 +84,13 @@ export default function ProviderPaymentsList() {
     dateTo: ''
   });
 
-  const { data: accountsRaw, isLoading, isError, error, refetch } = useQuery({
+  const {
+    data: accountsRaw,
+    isLoading,
+    isError,
+    error,
+    refetch
+  } = useQuery({
     queryKey: ['provider-accounts-list', appliedFilters.status, appliedFilters.hasBalance],
     queryFn: () =>
       providerAccountsService.getAll({
@@ -105,16 +116,13 @@ export default function ProviderPaymentsList() {
       const providerId = String(row.providerId || '');
 
       const typeMatches =
-        appliedFilters.providerType === 'ALL' ||
-        String(row.providerType || '').toUpperCase() === appliedFilters.providerType;
+        appliedFilters.providerType === 'ALL' || String(row.providerType || '').toUpperCase() === appliedFilters.providerType;
 
-      const searchMatches =
-        !search || providerName.includes(search) || providerCode.includes(search) || providerId.includes(search);
+      const searchMatches = !search || providerName.includes(search) || providerCode.includes(search) || providerId.includes(search);
 
       const lastActivity = dayjs(row.updatedAt || row.createdAt || null);
       const dateMatches =
-        !lastActivity.isValid() ||
-        ((!fromDate || !lastActivity.isBefore(fromDate)) && (!toDate || !lastActivity.isAfter(toDate)));
+        !lastActivity.isValid() || ((!fromDate || !lastActivity.isBefore(fromDate)) && (!toDate || !lastActivity.isAfter(toDate)));
 
       return typeMatches && searchMatches && dateMatches;
     });
@@ -232,21 +240,24 @@ export default function ProviderPaymentsList() {
     }
   }, [queryClient, refetch]);
 
-  const handleRepairRow = useCallback(async (row) => {
-    const providerId = row.providerId || row.id;
-    if (!providerId) return;
-    setRepairRowId(providerId);
-    try {
-      const result = await providerAccountsService.recalculateBalance(providerId);
-      openSnackbar({ message: result?.message || 'تم إصلاح الرصيد بنجاح', variant: 'success' });
-      queryClient.invalidateQueries({ queryKey: ['provider-accounts-list'] });
-      refetch();
-    } catch (error) {
-      openSnackbar({ message: error?.message || 'فشل إصلاح الرصيد', variant: 'error' });
-    } finally {
-      setRepairRowId(null);
-    }
-  }, [queryClient, refetch]);
+  const handleRepairRow = useCallback(
+    async (row) => {
+      const providerId = row.providerId || row.id;
+      if (!providerId) return;
+      setRepairRowId(providerId);
+      try {
+        const result = await providerAccountsService.recalculateBalance(providerId);
+        openSnackbar({ message: result?.message || 'تم إصلاح الرصيد بنجاح', variant: 'success' });
+        queryClient.invalidateQueries({ queryKey: ['provider-accounts-list'] });
+        refetch();
+      } catch (error) {
+        openSnackbar({ message: error?.message || 'فشل إصلاح الرصيد', variant: 'error' });
+      } finally {
+        setRepairRowId(null);
+      }
+    },
+    [queryClient, refetch]
+  );
 
   const renderSummaryCard = (title, value, icon, borderColor = 'primary.main') => (
     <Box
@@ -288,18 +299,19 @@ export default function ProviderPaymentsList() {
         id: 'providerName',
         label: 'مقدم الخدمة',
         minWidth: '11.25rem',
-        renderCell: ({ row }) => (
+        renderCell: ({ row }) =>
           row.isTotalsRow ? (
-            <Typography variant="body2" fontWeight={800} color="primary.main">الإجمالي</Typography>
-          ) : (
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: 'primary.main' }} />
-            <Typography variant="body2" fontWeight={600}>
-              {row.providerName || `مقدم خدمة #${row.providerId || row.id}`}
+            <Typography variant="body2" fontWeight={800} color="primary.main">
+              الإجمالي
             </Typography>
-          </Stack>
+          ) : (
+            <Stack direction="row" alignItems="center" spacing={1.5}>
+              <Box sx={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', bgcolor: 'primary.main' }} />
+              <Typography variant="body2" fontWeight={600}>
+                {row.providerName || `مقدم خدمة #${row.providerId || row.id}`}
+              </Typography>
+            </Stack>
           )
-        )
       },
       {
         id: 'providerType',
@@ -342,7 +354,11 @@ export default function ProviderPaymentsList() {
         align: 'center',
         renderCell: ({ row }) => {
           const gap = Number(row.gapAmount || 0);
-          return <Typography color={gap > 0 ? 'error.main' : 'success.main'} fontWeight={700}>{formatCurrency(gap)}</Typography>;
+          return (
+            <Typography color={gap > 0 ? 'error.main' : 'success.main'} fontWeight={700}>
+              {formatCurrency(gap)}
+            </Typography>
+          );
         }
       },
       {
@@ -379,37 +395,40 @@ export default function ProviderPaymentsList() {
         minWidth: '10rem',
         align: 'center',
         sortable: false,
-        renderCell: ({ row }) => (
-          row.isTotalsRow ? '-' : (
-          <Stack direction="row" spacing={0.5} justifyContent="center">
-            <Button
-              size="small"
-              variant="contained"
-              color="primary"
-              startIcon={<AccountBalanceWalletIcon />}
-              onClick={() => handleViewTransactions(row)}
-              sx={{ borderRadius: '0.25rem' }}
-            >
-              الدفعات
-            </Button>
-            <Tooltip title="إصلاح رصيد هذا المزود (حذف القيود اليتيمة)">
-              <span>
-                <IconButton
-                  size="small"
-                  color="warning"
-                  onClick={() => handleRepairRow(row)}
-                  disabled={repairRowId === (row.providerId || row.id)}
-                  sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: '0.25rem' }}
-                >
-                  {repairRowId === (row.providerId || row.id)
-                    ? <CircularProgress size={14} color="warning" />
-                    : <BuildIcon fontSize="small" />}
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Stack>
+        renderCell: ({ row }) =>
+          row.isTotalsRow ? (
+            '-'
+          ) : (
+            <Stack direction="row" spacing={0.5} justifyContent="center">
+              <Button
+                size="small"
+                variant="contained"
+                color="primary"
+                startIcon={<AccountBalanceWalletIcon />}
+                onClick={() => handleViewTransactions(row)}
+                sx={{ borderRadius: '0.25rem' }}
+              >
+                الدفعات
+              </Button>
+              <Tooltip title="إصلاح رصيد هذا المزود (حذف القيود اليتيمة)">
+                <span>
+                  <IconButton
+                    size="small"
+                    color="warning"
+                    onClick={() => handleRepairRow(row)}
+                    disabled={repairRowId === (row.providerId || row.id)}
+                    sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: '0.25rem' }}
+                  >
+                    {repairRowId === (row.providerId || row.id) ? (
+                      <CircularProgress size={14} color="warning" />
+                    ) : (
+                      <BuildIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Stack>
           )
-        )
       }
     ],
     [navigate, handleRepairRow, repairRowId]
@@ -421,11 +440,7 @@ export default function ProviderPaymentsList() {
         title="الدفعات المالية لمقدمي الخدمة"
         subtitle="متابعة الأرصدة وتسجيل الدفعات المالية للمحاسبين"
         icon={<WalletIcon />}
-        breadcrumbs={[
-          { label: 'الرئيسية', href: '/' },
-          { label: 'التسويات المالية', href: '/settlement' },
-          { label: 'الدفعات المالية' }
-        ]}
+        breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'التسويات المالية', href: '/settlement' }, { label: 'الدفعات المالية' }]}
         actions={
           <Box
             sx={{
@@ -439,11 +454,31 @@ export default function ProviderPaymentsList() {
               '&::-webkit-scrollbar': { height: '0.375rem' }
             }}
           >
-            {renderSummaryCard('إجمالي المرافق', String(withComputed.length), <ReceiptIcon fontSize="small" color="primary" />, 'primary.main')}
-            {renderSummaryCard('إجمالي المدفوع', formatCurrency(totals.paid), <PaymentsIcon fontSize="small" color="success" />, 'success.main')}
-            {renderSummaryCard('إجمالي المستحق', formatCurrency(totals.outstanding), <DownIcon fontSize="small" color="error" />, 'error.main')}
+            {renderSummaryCard(
+              'إجمالي المرافق',
+              String(withComputed.length),
+              <ReceiptIcon fontSize="small" color="primary" />,
+              'primary.main'
+            )}
+            {renderSummaryCard(
+              'إجمالي المدفوع',
+              formatCurrency(totals.paid),
+              <PaymentsIcon fontSize="small" color="success" />,
+              'success.main'
+            )}
+            {renderSummaryCard(
+              'إجمالي المستحق',
+              formatCurrency(totals.outstanding),
+              <DownIcon fontSize="small" color="error" />,
+              'error.main'
+            )}
             {renderSummaryCard('فجوة السداد', formatCurrency(totals.gap), <DownIcon fontSize="small" color="warning" />, 'warning.main')}
-            {renderSummaryCard('نسبة السداد', `${totals.coveragePercent.toFixed(1)}%`, <PaymentsIcon fontSize="small" color="info" />, 'info.main')}
+            {renderSummaryCard(
+              'نسبة السداد',
+              `${totals.coveragePercent.toFixed(1)}%`,
+              <PaymentsIcon fontSize="small" color="info" />,
+              'info.main'
+            )}
           </Box>
         }
       />
@@ -528,11 +563,20 @@ export default function ProviderPaymentsList() {
           </Grid>
           <Grid item xs={12} md={2} lg={1.8}>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="contained" startIcon={<SearchIcon />} onClick={handleApplyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem' }}>
+              <Button
+                variant="contained"
+                startIcon={<SearchIcon />}
+                onClick={handleApplyFilters}
+                sx={{ height: '2.5rem', minHeight: '2.5rem' }}
+              >
                 بحث
               </Button>
               <Tooltip title="مسح الفلاتر">
-                <IconButton color="default" onClick={handleClearFilters} sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <IconButton
+                  color="default"
+                  onClick={handleClearFilters}
+                  sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+                >
                   <ClearIcon />
                 </IconButton>
               </Tooltip>
@@ -542,12 +586,23 @@ export default function ProviderPaymentsList() {
           <Grid item xs={12} md={3} lg={1.7}>
             <Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-start' }} sx={{ direction: 'ltr' }}>
               <Tooltip title="تحديث">
-                <IconButton onClick={refetch} color="primary" disabled={isLoading} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
+                <IconButton
+                  onClick={refetch}
+                  color="primary"
+                  disabled={isLoading}
+                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+                >
                   <RefreshIcon />
                 </IconButton>
               </Tooltip>
 
-              <Button variant="outlined" color="primary" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<PrintIcon />}
+                onClick={handlePrint}
+                sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap', px: '0.75rem', borderRadius: 1 }}
+              >
                 طباعة
               </Button>
 
@@ -621,5 +676,3 @@ export default function ProviderPaymentsList() {
     </Box>
   );
 }
-
-

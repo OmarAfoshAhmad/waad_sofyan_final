@@ -209,7 +209,3 @@ UtilizationKPIs.propTypes = {
 };
 
 export default UtilizationKPIs;
-
-
-
-

@@ -41,11 +41,7 @@ import {
   Collapse,
   Container
 } from '@mui/material';
-import {
-  Menu as MenuIcon,
-  ExpandMore as ExpandMoreIcon,
-  Logout as LogoutIcon
-} from '@mui/icons-material';
+import { Menu as MenuIcon, ExpandMore as ExpandMoreIcon, Logout as LogoutIcon } from '@mui/icons-material';
 
 // Project imports
 import useAuth from 'hooks/useAuth';
@@ -103,7 +99,7 @@ const DesktopNavItem = ({ item, onClick }) => {
     <MenuItem onClick={handleClick} selected={isActive} sx={{ borderRadius: 1, mb: 0.5, mx: 1 }}>
       {Icon && (
         <ListItemIcon sx={{ minWidth: '2.0rem' }}>
-          <Icon fontSize="small" color={isActive ? "primary" : "inherit"} />
+          <Icon fontSize="small" color={isActive ? 'primary' : 'inherit'} />
         </ListItemIcon>
       )}
       <ListItemText
@@ -122,11 +118,14 @@ const DesktopNavCollapseItems = ({ collapse, onClick }) => {
   return (
     <Box>
       {collapse.title && (
-        <Typography variant="overline" sx={{ px: '1.0rem', pt: 1, pb: 0.5, color: 'text.secondary', display: 'block', lineHeight: 1, fontWeight: 700 }}>
+        <Typography
+          variant="overline"
+          sx={{ px: '1.0rem', pt: 1, pb: 0.5, color: 'text.secondary', display: 'block', lineHeight: 1, fontWeight: 700 }}
+        >
           {collapse.title}
         </Typography>
       )}
-      {collapse.children?.map(child => (
+      {collapse.children?.map((child) => (
         <DesktopNavItem key={child.id} item={child} onClick={onClick} />
       ))}
     </Box>
@@ -145,7 +144,7 @@ const DesktopNavGroupButton = ({ group }) => {
   const isActive = useMemo(() => {
     const checkActive = (nodes) => {
       if (!nodes) return false;
-      return nodes.some(n => {
+      return nodes.some((n) => {
         if (n.url && (location.pathname === n.url || location.pathname.startsWith(n.url + '/'))) return true;
         if (n.children) return checkActive(n.children);
         return false;
@@ -168,7 +167,7 @@ const DesktopNavGroupButton = ({ group }) => {
     <>
       <Button
         onClick={handleClick}
-        color={isActive ? "primary" : "inherit"}
+        color={isActive ? 'primary' : 'inherit'}
         endIcon={!isDirectLink ? <ExpandMoreIcon sx={{ fontSize: '1.25rem' }} /> : null}
         sx={{
           fontWeight: isActive ? 700 : 500,
@@ -191,15 +190,17 @@ const DesktopNavGroupButton = ({ group }) => {
             sx: { mt: '0.75rem', minWidth: '13.75rem', borderRadius: '0.25rem', p: 1 }
           }}
         >
-          {group.children?.map(child => {
+          {group.children?.map((child) => {
             if (child.type === 'item') {
               return <DesktopNavItem key={child.id} item={child} onClick={handleClose} />;
             }
             if (child.type === 'collapse') {
-              return <Box key={child.id}>
-                <DesktopNavCollapseItems collapse={child} onClick={handleClose} />
-                <Divider sx={{ my: 1 }} />
-              </Box>;
+              return (
+                <Box key={child.id}>
+                  <DesktopNavCollapseItems collapse={child} onClick={handleClose} />
+                  <Divider sx={{ my: 1 }} />
+                </Box>
+              );
             }
             return null;
           })}
@@ -302,7 +303,7 @@ const MobileNavCollapse = ({ item, level = 0, onClose }) => {
       </ListItem>
       <Collapse in={open} timeout="auto" unmountOnExit>
         <List component="div" disablePadding>
-          {item.children?.map(child => (
+          {item.children?.map((child) => (
             <MobileNavItemRenderer key={child.id} item={child} level={level + 1} onClose={onClose} />
           ))}
         </List>
@@ -317,12 +318,14 @@ const MobileNavGroup = ({ item, onClose }) => {
   return (
     <Box component="nav" sx={{ mb: 1 }}>
       {item.title && (
-        <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary', px: '1.0rem', py: 1, mt: 1 }}>
+        <Typography
+          sx={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'text.secondary', px: '1.0rem', py: 1, mt: 1 }}
+        >
           {item.title}
         </Typography>
       )}
       <List disablePadding>
-        {item.children.map(child => (
+        {item.children.map((child) => (
           <MobileNavItemRenderer key={child.id} item={child} level={0} onClose={onClose} />
         ))}
       </List>
@@ -333,11 +336,16 @@ const MobileNavGroup = ({ item, onClose }) => {
 const MobileNavItemRenderer = ({ item, level, onClose }) => {
   if (!item) return null;
   switch (item.type) {
-    case 'group': return <MobileNavGroup item={item} onClose={onClose} />;
-    case 'collapse': return <MobileNavCollapse item={item} level={level} onClose={onClose} />;
-    case 'item': return <MobileNavItem item={item} level={level} onClose={onClose} />;
-    case 'divider': return <Divider sx={{ my: 1, mx: '1.0rem' }} />;
-    default: return null;
+    case 'group':
+      return <MobileNavGroup item={item} onClose={onClose} />;
+    case 'collapse':
+      return <MobileNavCollapse item={item} level={level} onClose={onClose} />;
+    case 'item':
+      return <MobileNavItem item={item} level={level} onClose={onClose} />;
+    case 'divider':
+      return <Divider sx={{ my: 1, mx: '1.0rem' }} />;
+    default:
+      return null;
   }
 };
 
@@ -348,10 +356,10 @@ const MobileNavItemRenderer = ({ item, level, onClose }) => {
 // Context kept for backwards compatibility if any deeply nested component uses it
 const SidebarContext = createContext({
   expanded: true,
-  toggleExpanded: () => { },
-  setExpanded: () => { },
+  toggleExpanded: () => {},
+  setExpanded: () => {},
   openGroups: {},
-  toggleGroup: () => { }
+  toggleGroup: () => {}
 });
 export const useSidebar = () => useContext(SidebarContext);
 
@@ -362,7 +370,7 @@ export default function SidebarLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const toggleMobile = useCallback(() => setMobileOpen(prev => !prev), []);
+  const toggleMobile = useCallback(() => setMobileOpen((prev) => !prev), []);
 
   const { sidebarGroups, loading } = useRBACSidebar();
 
@@ -380,9 +388,10 @@ export default function SidebarLayout() {
   const primaryRole = user.roles?.[0]?.replace('_', ' ') || 'مستخدم';
 
   return (
-    <SidebarContext.Provider value={{ expanded: false, toggleExpanded: () => { }, setExpanded: () => { }, openGroups: {}, toggleGroup: () => { } }}>
+    <SidebarContext.Provider
+      value={{ expanded: false, toggleExpanded: () => {}, setExpanded: () => {}, openGroups: {}, toggleGroup: () => {} }}
+    >
       <Box sx={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-
         {/* Mobile Drawer (Only shown on small screens) */}
         {isMobile && (
           <Drawer
@@ -394,23 +403,38 @@ export default function SidebarLayout() {
             sx={{ '& .MuiDrawer-paper': { width: '17.5rem', boxSizing: 'border-box' } }}
           >
             <Box sx={{ p: '1.0rem', display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-              <Typography variant="h6" fontWeight={700} color="primary">القائمة الرئيسية</Typography>
+              <Typography variant="h6" fontWeight={700} color="primary">
+                القائمة الرئيسية
+              </Typography>
             </Box>
             <SimpleBar style={{ height: 'calc(100vh - 140px)' }}>
               <Box sx={{ py: 1 }}>
-                {!loading && sidebarGroups?.map(group => (
-                  <MobileNavItemRenderer key={group.id} item={group} level={0} onClose={toggleMobile} />
-                ))}
+                {!loading &&
+                  sidebarGroups?.map((group) => <MobileNavItemRenderer key={group.id} item={group} level={0} onClose={toggleMobile} />)}
               </Box>
             </SimpleBar>
-            <Box sx={{ position: 'absolute', bottom: 0, width: '100%', p: '1.0rem', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 0,
+                width: '100%',
+                p: '1.0rem',
+                borderTop: 1,
+                borderColor: 'divider',
+                bgcolor: 'background.paper'
+              }}
+            >
               <Stack direction="row" alignItems="center" spacing={1.5}>
                 <Avatar sx={{ width: '2.25rem', height: '2.25rem', bgcolor: isProvider ? 'success.main' : 'primary.main' }}>
                   {user.fullName?.[0] || user.username?.[0] || 'U'}
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="subtitle2" noWrap fontWeight={600}>{user.fullName || user.username}</Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>{primaryRole}</Typography>
+                  <Typography variant="subtitle2" noWrap fontWeight={600}>
+                    {user.fullName || user.username}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {primaryRole}
+                  </Typography>
                 </Box>
                 <IconButton size="small" onClick={logout} color="error">
                   <LogoutIcon sx={{ fontSize: '1.2rem' }} />
@@ -423,7 +447,18 @@ export default function SidebarLayout() {
         {/* Main Content Area */}
         <MainContent>
           <TopBar>
-            <Box sx={{ width: '100%', maxWidth: '100rem', mx: 'auto', px: { xs: 2, sm: 3 }, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box
+              sx={{
+                width: '100%',
+                maxWidth: '100rem',
+                mx: 'auto',
+                px: { xs: 2, sm: 3 },
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
               {/* Left Section: Logo & Mobile Menu */}
               <Stack direction="row" alignItems="center" spacing={2} sx={{ minWidth: '12.5em' }}>
                 {isMobile && (
@@ -436,19 +471,21 @@ export default function SidebarLayout() {
                   src={getLogoSrc()}
                   alt={displayName}
                   sx={{ height: '2.4rem', width: 'auto', maxWidth: '8rem', objectFit: 'contain' }}
-                  onError={(e) => { e.target.style.display = 'none'; }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
                 />
                 {!isMobile && (
                   <Box>
                     <Typography variant="subtitle1" fontWeight={700} color="primary.main" lineHeight={1.1}>
                       {displayName}
                     </Typography>
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        display: 'block', 
-                        fontSize: '0.75rem', 
-                        color: 'text.secondary', 
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: 'block',
+                        fontSize: '0.75rem',
+                        color: 'text.secondary',
                         mt: -0.2,
                         opacity: 0.85
                       }}
@@ -462,7 +499,7 @@ export default function SidebarLayout() {
               {/* Center Section: Desktop Navigation */}
               {!isMobile && !loading && (
                 <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, justifyContent: 'center', overflowX: 'auto' }}>
-                  {sidebarGroups?.map(group => (
+                  {sidebarGroups?.map((group) => (
                     <DesktopNavGroupButton key={group.id} group={group} />
                   ))}
                 </Stack>
@@ -500,7 +537,18 @@ export default function SidebarLayout() {
           >
             {/* Scrollable Content Container */}
             <Box sx={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ width: '100%', maxWidth: '100rem', mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 1, sm: '0.75rem' }, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <Box
+                sx={{
+                  width: '100%',
+                  maxWidth: '100rem',
+                  mx: 'auto',
+                  px: { xs: 2, sm: 3 },
+                  py: { xs: 1, sm: '0.75rem' },
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
                 <PageErrorBoundary pageName="Dashboard Content">
                   <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <Outlet />
@@ -531,6 +579,3 @@ export default function SidebarLayout() {
     </SidebarContext.Provider>
   );
 }
-
-
-

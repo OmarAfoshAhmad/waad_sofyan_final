@@ -25,5 +25,3 @@ ScrollX.propTypes = {
 };
 
 export default ScrollX;
-
-

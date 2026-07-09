@@ -543,6 +543,3 @@ const VisitsList = () => {
 };
 
 export default VisitsList;
-
-
-

@@ -114,9 +114,7 @@ const RBACDashboard = () => {
   const loadStats = useCallback(async () => {
     try {
       setLoading(true);
-      const [usersRes] = await Promise.all([
-        usersService.getAllUsers()
-      ]);
+      const [usersRes] = await Promise.all([usersService.getAllUsers()]);
 
       const users = usersRes?.data?.data || usersRes?.data || [];
       const roles = Object.values(SystemRole);
@@ -216,4 +214,3 @@ const RBACDashboard = () => {
 };
 
 export default RBACDashboard;
-

@@ -287,4 +287,3 @@ BenefitPolicyTable.propTypes = {
 };
 
 export default BenefitPolicyTable;
-

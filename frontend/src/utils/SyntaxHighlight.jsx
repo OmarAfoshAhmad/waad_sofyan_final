@@ -28,5 +28,3 @@ export default function SyntaxHighlight({ children }) {
 }
 
 SyntaxHighlight.propTypes = { children: PropTypes.string };
-
-

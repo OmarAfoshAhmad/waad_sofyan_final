@@ -178,4 +178,3 @@ IconButton.propTypes = {
   ref: PropTypes.any,
   others: PropTypes.any
 };
-

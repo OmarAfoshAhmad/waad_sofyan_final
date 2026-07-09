@@ -37,7 +37,10 @@ export const providerFormSchema = yup.object({
     .nullable()
     .transform((value) => (value === '' ? null : value)),
 
-  providerType: yup.string().required('نوع المزود مطلوب').oneOf(['HOSPITAL', 'CLINIC', 'LAB', 'PHARMACY', 'OTHER'], 'نوع المزود غير صالح'),
+  providerType: yup
+    .string()
+    .required('نوع المزود مطلوب')
+    .oneOf(['HOSPITAL', 'CLINIC', 'CLINIC_DEN', 'LAB', 'PHARMACY', 'RADIOLOGY', 'PHYSIOTHERAPY', 'OTHER'], 'نوع المزود غير صالح'),
 
   networkStatus: yup
     .string()
@@ -195,7 +198,7 @@ export const sanitizeProviderPayload = (data) => {
  * Helper: Validate provider type
  */
 export const isValidProviderType = (type) => {
-  const validTypes = ['HOSPITAL', 'CLINIC', 'LAB', 'PHARMACY', 'OTHER'];
+  const validTypes = ['HOSPITAL', 'CLINIC', 'CLINIC_DEN', 'LAB', 'PHARMACY', 'RADIOLOGY', 'PHYSIOTHERAPY', 'OTHER'];
   return validTypes.includes(type);
 };
 

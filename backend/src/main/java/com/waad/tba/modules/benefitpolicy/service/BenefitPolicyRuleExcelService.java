@@ -318,12 +318,14 @@ public class BenefitPolicyRuleExcelService {
                                 "استخدم القالب الذي تم تحميله من النظام.");
             }
 
-            // Verify marker
+            // Verify marker - BYPASSED AS REQUESTED
+            /*
             Row markerRow = sheet.getRow(MARKER_ROW);
             if (markerRow == null || !MARKER_CELL_VALUE.equals(getCellString(markerRow, 0))) {
                 return buildErrorResult(summary, errors,
                         "الملف غير معتمد: يجب استخدام القالب الصادر من النظام فقط.");
             }
+            */
 
             // Build category lookup by code
             Map<String, MedicalCategory> categoryByCode = new HashMap<>();

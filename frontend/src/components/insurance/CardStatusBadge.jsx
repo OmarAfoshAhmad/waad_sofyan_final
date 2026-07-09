@@ -184,5 +184,3 @@ export default CardStatusBadge;
 
 // Export config for use in other components
 export { CARD_STATUS_CONFIG };
-
-

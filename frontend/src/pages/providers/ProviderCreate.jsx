@@ -72,16 +72,17 @@ import {
 
 const PROVIDER_TYPES = [
   { value: 'HOSPITAL', label: 'مستشفى', icon: '🏥' },
-  { value: 'CLINIC', label: 'عيادة', icon: '🏥' },
-  { value: 'LAB', label: 'مختبر', icon: '🔬' },
+  { value: 'CLINIC', label: 'عيادة تخصصية', icon: '🏥' },
+  { value: 'CLINIC_DEN', label: 'عياده اسنان', icon: '🦷' },
+  { value: 'LAB', label: 'مختبر تحاليل', icon: '🔬' },
   { value: 'PHARMACY', label: 'صيدلية', icon: '💊' },
-  { value: 'RADIOLOGY', label: 'مركز أشعة', icon: '📷' }
+  { value: 'RADIOLOGY', label: 'مركز أشعة', icon: '📷' },
+  { value: 'PHYSIOTHERAPY', label: 'مركز علاج طبيعي', icon: '💆' }
 ];
 
 const NETWORK_STATUS_OPTIONS = [
   { value: 'IN_NETWORK', label: 'داخل الشبكة', description: 'مقدم خدمة معتمد داخل الشبكة' },
-  { value: 'OUT_OF_NETWORK', label: 'خارج الشبكة', description: 'مقدم خدمة خارج الشبكة' },
-  { value: 'PREFERRED', label: 'مزود مفضل', description: 'مقدم خدمة مفضل بخصومات أعلى' }
+  { value: 'OUT_OF_NETWORK', label: 'خارج الشبكة', description: 'مقدم خدمة خارج الشبكة' }
 ];
 
 const ProviderCreate = () => {
@@ -222,7 +223,6 @@ const ProviderCreate = () => {
 
   useEffect(() => {
     // Account Manager isolation - tab 4 removed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Auto-populate account fullName and username from provider name
@@ -277,7 +277,6 @@ const ProviderCreate = () => {
       enqueueSnackbar('يرجى تصحيح الأخطاء في بيانات الموقع والتواصل', { variant: 'error' });
       return;
     }
-
   };
 
   const renderFooterActions = (currentTab) => (
@@ -479,9 +478,6 @@ const ProviderCreate = () => {
             control={providerControl}
             render={({ field }) => (
               <TextField {...field} fullWidth select label="حالة الشبكة">
-                <MenuItem value="">
-                  <em>غير محدد</em>
-                </MenuItem>
                 {NETWORK_STATUS_OPTIONS.map((option) => (
                   <MenuItem key={option.value} value={option.value}>
                     {option.label}
@@ -651,14 +647,14 @@ const ProviderCreate = () => {
                   <TableRow key={payer.id} hover>
                     <TableCell>{payer.name}</TableCell>
                     <TableCell align="center">
-                      <Typography variant="caption" color="text.secondary">{payer.code}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {payer.code}
+                      </Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Switch
                         checked={payer.enabled}
-                        onChange={() =>
-                          setPayers((prev) => prev.map((p) => (p.id === payer.id ? { ...p, enabled: !p.enabled } : p)))
-                        }
+                        onChange={() => setPayers((prev) => prev.map((p) => (p.id === payer.id ? { ...p, enabled: !p.enabled } : p)))}
                       />
                     </TableCell>
                   </TableRow>
@@ -926,7 +922,6 @@ const ProviderCreate = () => {
             >
               {creating ? 'جاري الحفظ...' : 'حفظ مقدم الخدمة'}
             </Button>
-
           </Stack>
         }
       />
@@ -984,6 +979,3 @@ const ProviderCreate = () => {
 };
 
 export default ProviderCreate;
-
-
-

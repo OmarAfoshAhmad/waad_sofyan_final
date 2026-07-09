@@ -304,12 +304,13 @@ const BenefitPolicyEdit = () => {
 
                 <Box sx={{ flex: 1, overflowY: 'auto', p: '1.0rem' }}>
                   <Grid container spacing={2}>
-
                     {/* ── Section 1: هوية الوثيقة ── */}
                     <Grid size={{ xs: 12 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                         <PolicyIcon fontSize="small" color="action" />
-                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>هوية الوثيقة</Typography>
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                          هوية الوثيقة
+                        </Typography>
                       </Stack>
                       <Divider />
                     </Grid>
@@ -376,7 +377,9 @@ const BenefitPolicyEdit = () => {
                             </MenuItem>
                           ))
                         ) : (
-                          <MenuItem value="" disabled>لا يوجد شركاء متاحين</MenuItem>
+                          <MenuItem value="" disabled>
+                            لا يوجد شركاء متاحين
+                          </MenuItem>
                         )}
                       </TextField>
                     </Grid>
@@ -392,9 +395,15 @@ const BenefitPolicyEdit = () => {
                         onChange={handleChange}
                         onBlur={handleBlur}
                       >
-                        <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>مسودة (Draft)</MenuItem>
-                        <MenuItem value="ACTIVE" sx={{ fontSize: '0.8125rem' }}>نشط (Active)</MenuItem>
-                        <MenuItem value="INACTIVE" sx={{ fontSize: '0.8125rem' }}>غير نشط (Inactive)</MenuItem>
+                        <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>
+                          مسودة (Draft)
+                        </MenuItem>
+                        <MenuItem value="ACTIVE" sx={{ fontSize: '0.8125rem' }}>
+                          نشط (Active)
+                        </MenuItem>
+                        <MenuItem value="INACTIVE" sx={{ fontSize: '0.8125rem' }}>
+                          غير نشط (Inactive)
+                        </MenuItem>
                       </TextField>
                     </Grid>
 
@@ -402,7 +411,9 @@ const BenefitPolicyEdit = () => {
                     <Grid size={{ xs: 12 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                         <CalendarTodayIcon fontSize="small" color="action" />
-                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>مدة السريان</Typography>
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                          مدة السريان
+                        </Typography>
                       </Stack>
                       <Divider />
                     </Grid>
@@ -444,7 +455,9 @@ const BenefitPolicyEdit = () => {
                     <Grid size={{ xs: 12 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                         <AttachMoneyIcon fontSize="small" color="action" />
-                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>الحدود المالية</Typography>
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                          الحدود المالية
+                        </Typography>
                       </Stack>
                       <Divider />
                     </Grid>
@@ -517,7 +530,9 @@ const BenefitPolicyEdit = () => {
                     <Grid size={{ xs: 12 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                         <DescriptionIcon fontSize="small" color="action" />
-                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>ملاحظات</Typography>
+                        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+                          ملاحظات
+                        </Typography>
                       </Stack>
                       <Divider />
                     </Grid>
@@ -536,7 +551,6 @@ const BenefitPolicyEdit = () => {
                         placeholder="أضف وصفاً تفصيلياً أو ملاحظات إضافية..."
                       />
                     </Grid>
-
                   </Grid>
                 </Box>
 

@@ -122,9 +122,11 @@ public class Provider {
     public enum ProviderType {
         HOSPITAL,
         CLINIC,
+        CLINIC_DEN,
         LAB,
         PHARMACY,
-        RADIOLOGY
+        RADIOLOGY,
+        PHYSIOTHERAPY
     }
 
     public enum NetworkTier {

@@ -236,7 +236,7 @@ export const applyZeroNoisePolicy = (options = {}) => {
 
   // ===== Disable console.debug in production =====
   if (isProd) {
-    console.debug = () => { }; // No-op
+    console.debug = () => {}; // No-op
   }
 
   // Return restore function for testing

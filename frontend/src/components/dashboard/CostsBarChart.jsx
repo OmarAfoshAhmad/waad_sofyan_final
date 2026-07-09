@@ -138,4 +138,3 @@ CostsBarChart.propTypes = {
 };
 
 export default CostsBarChart;
-

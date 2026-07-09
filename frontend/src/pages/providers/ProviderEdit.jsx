@@ -82,16 +82,17 @@ import {
 
 const PROVIDER_TYPES = [
   { value: 'HOSPITAL', label: 'مستشفى' },
-  { value: 'CLINIC', label: 'عيادة' },
-  { value: 'LAB', label: 'مختبر' },
+  { value: 'CLINIC', label: 'عيادة تخصصية' },
+  { value: 'CLINIC_DEN', label: 'عياده اسنان' },
+  { value: 'LAB', label: 'مختبر تحاليل' },
   { value: 'PHARMACY', label: 'صيدلية' },
-  { value: 'RADIOLOGY', label: 'مركز أشعة' }
+  { value: 'RADIOLOGY', label: 'مركز أشعة' },
+  { value: 'PHYSIOTHERAPY', label: 'مركز علاج طبيعي' }
 ];
 
 const NETWORK_STATUS_OPTIONS = [
-  { value: 'IN_NETWORK', label: 'داخل الشبكة' },
-  { value: 'OUT_OF_NETWORK', label: 'خارج الشبكة' },
-  { value: 'PREFERRED', label: 'مزود مفضل' }
+  { value: 'IN_NETWORK', label: 'داخل الشبكة', description: 'مقدم خدمة معتمد داخل الشبكة' },
+  { value: 'OUT_OF_NETWORK', label: 'خارج الشبكة', description: 'مقدم خدمة خارج الشبكة' }
 ];
 
 const DOC_TYPE_LABELS = {
@@ -215,7 +216,7 @@ const ProviderEdit = () => {
         licenseNumber: provider.licenseNumber || '',
         taxNumber: provider.taxNumber || '',
         providerType: provider.providerType || '',
-        networkStatus: provider.networkStatus || '',
+        networkStatus: provider.networkStatus || 'IN_NETWORK',
         city: provider.city || '',
         address: provider.address || '',
         phone: provider.phone || '',
@@ -990,11 +991,10 @@ const ProviderEdit = () => {
             <Button startIcon={<ArrowBack />} onClick={() => navigate('/providers')}>
               عودة
             </Button>
-            
-              <Button variant="contained" startIcon={<Save />} onClick={handleProviderSubmit(onSubmit)} disabled={submitting || updating}>
-                {submitting || updating ? 'جاري الحفظ...' : 'حفظ'}
-              </Button>
-              
+
+            <Button variant="contained" startIcon={<Save />} onClick={handleProviderSubmit(onSubmit)} disabled={submitting || updating}>
+              {submitting || updating ? 'جاري الحفظ...' : 'حفظ'}
+            </Button>
           </Stack>
         }
       />

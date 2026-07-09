@@ -376,5 +376,3 @@ MedicalServiceSelector.propTypes = {
 };
 
 export default MedicalServiceSelector;
-
-

@@ -236,5 +236,3 @@ AmountComparisonBar.propTypes = {
 };
 
 export default AmountComparisonBar;
-
-

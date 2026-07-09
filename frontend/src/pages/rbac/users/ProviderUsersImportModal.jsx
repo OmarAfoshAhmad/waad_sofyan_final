@@ -39,7 +39,7 @@ const ProviderUsersImportModal = ({ open, onClose, onSuccess }) => {
     try {
       setDownloading(true);
       const response = await usersService.downloadProviderUsersTemplate();
-      
+
       const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -49,7 +49,7 @@ const ProviderUsersImportModal = ({ open, onClose, onSuccess }) => {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      
+
       openSnackbar({
         open: true,
         message: 'تم تحميل القالب بنجاح',
@@ -84,7 +84,7 @@ const ProviderUsersImportModal = ({ open, onClose, onSuccess }) => {
       setLoading(true);
       const response = await usersService.importProviderUsers(file);
       setResult(response);
-      
+
       if (response.success) {
         openSnackbar({
           open: true,
@@ -131,15 +131,19 @@ const ProviderUsersImportModal = ({ open, onClose, onSuccess }) => {
           </IconButton>
         )}
       </DialogTitle>
-      
+
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
           <Alert severity="info" icon={false}>
-            <Typography variant="subtitle2" gutterBottom fontWeight="bold">تعليمات الاستيراد:</Typography>
+            <Typography variant="subtitle2" gutterBottom fontWeight="bold">
+              تعليمات الاستيراد:
+            </Typography>
             <Typography variant="body2" component="ul" sx={{ pl: 2, m: 0 }}>
               <li>قم بتحميل القالب أولاً لتعبئة البيانات بالصيغة الصحيحة.</li>
               <li>عمود "المرفق الصحي" يحتوي على قائمة منسدلة لتسهيل الاختيار.</li>
-              <li>إذا تركت "كلمة المرور" فارغة، سيتم تعيينها تلقائياً إلى <code>Aa@1234567</code></li>
+              <li>
+                إذا تركت "كلمة المرور" فارغة، سيتم تعيينها تلقائياً إلى <code>Aa@1234567</code>
+              </li>
             </Typography>
           </Alert>
 
@@ -175,13 +179,7 @@ const ProviderUsersImportModal = ({ open, onClose, onSuccess }) => {
               disabled={loading}
             />
             <label htmlFor="raised-button-file">
-              <Button
-                variant="contained"
-                component="span"
-                startIcon={<CloudUploadIcon />}
-                disabled={loading}
-                sx={{ mb: 2 }}
-              >
+              <Button variant="contained" component="span" startIcon={<CloudUploadIcon />} disabled={loading} sx={{ mb: 2 }}>
                 اختر ملف الإكسيل
               </Button>
             </label>
@@ -205,11 +203,15 @@ const ProviderUsersImportModal = ({ open, onClose, onSuccess }) => {
               </Typography>
               <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
                 <Box sx={{ bgcolor: 'success.lighter', p: 1.5, borderRadius: 1, flex: 1, textAlign: 'center' }}>
-                  <Typography variant="h6" color="success.main">{result.summary?.created || 0}</Typography>
+                  <Typography variant="h6" color="success.main">
+                    {result.summary?.created || 0}
+                  </Typography>
                   <Typography variant="body2">تمت الإضافة</Typography>
                 </Box>
                 <Box sx={{ bgcolor: 'error.lighter', p: 1.5, borderRadius: 1, flex: 1, textAlign: 'center' }}>
-                  <Typography variant="h6" color="error.main">{result.summary?.failed || 0}</Typography>
+                  <Typography variant="h6" color="error.main">
+                    {result.summary?.failed || 0}
+                  </Typography>
                   <Typography variant="body2">فشل</Typography>
                 </Box>
                 <Box sx={{ bgcolor: 'grey.100', p: 1.5, borderRadius: 1, flex: 1, textAlign: 'center' }}>

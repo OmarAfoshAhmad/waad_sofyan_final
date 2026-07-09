@@ -144,5 +144,3 @@ export const notificationData = [
     read: true
   }
 ];
-
-

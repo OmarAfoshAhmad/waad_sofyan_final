@@ -145,4 +145,3 @@ VisitsKPIs.defaultProps = {
 };
 
 export default VisitsKPIs;
-

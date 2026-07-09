@@ -28,11 +28,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 
-import {
-  getProviderContractById,
-  updateProviderContract,
-  PRICING_MODEL_CONFIG
-} from 'services/api/provider-contracts.service';
+import { getProviderContractById, updateProviderContract, PRICING_MODEL_CONFIG } from 'services/api/provider-contracts.service';
 
 const PRICING_MODELS = [
   { value: 'DISCOUNT', label: PRICING_MODEL_CONFIG.DISCOUNT.label },
@@ -193,12 +189,7 @@ const ProviderContractEdit = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="مقدم الخدمة"
-                value={contract?.providerName || contract?.provider?.name || '-'}
-                disabled
-              />
+              <TextField fullWidth label="مقدم الخدمة" value={contract?.providerName || contract?.provider?.name || '-'} disabled />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
@@ -270,9 +261,12 @@ const ProviderContractEdit = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <Tooltip title={formData.discountBeforeRejection
-                ? 'قبل: خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض'
-                : 'بعد: خصم المرفوض أولاً ثم تطبيق نسبة التخفيض'}
+              <Tooltip
+                title={
+                  formData.discountBeforeRejection
+                    ? 'قبل: خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض'
+                    : 'بعد: خصم المرفوض أولاً ثم تطبيق نسبة التخفيض'
+                }
               >
                 <FormControlLabel
                   control={
@@ -289,14 +283,7 @@ const ProviderContractEdit = () => {
             </Grid>
 
             <Grid size={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                label="ملاحظات"
-                value={formData.notes}
-                onChange={handleInputChange('notes')}
-              />
+              <TextField fullWidth multiline rows={4} label="ملاحظات" value={formData.notes} onChange={handleInputChange('notes')} />
             </Grid>
 
             <Grid size={12}>

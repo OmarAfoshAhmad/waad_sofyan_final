@@ -1,19 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Stack,
-  Typography,
-  Button,
-  Divider,
-  CircularProgress,
-  Chip
-} from '@mui/material';
-import {
-  Print as PrintIcon,
-  ArrowBack as ArrowBackIcon,
-  ReceiptLong as ReceiptIcon
-} from '@mui/icons-material';
+import { Box, Stack, Typography, Button, Divider, CircularProgress, Chip } from '@mui/material';
+import { Print as PrintIcon, ArrowBack as ArrowBackIcon, ReceiptLong as ReceiptIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 
 const ClaimStatementPreview = () => {
@@ -184,5 +172,3 @@ const ClaimStatementPreview = () => {
 };
 
 export default ClaimStatementPreview;
-
-

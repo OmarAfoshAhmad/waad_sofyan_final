@@ -81,6 +81,10 @@ public class ProviderContractPricingItem {
     @Builder.Default
     private BigDecimal contractPrice = BigDecimal.ZERO;
 
+    @DecimalMin(value = "0.00")
+    @Column(name = "max_contract_price", precision = 15, scale = 2)
+    private BigDecimal maxContractPrice;
+
     // Auto-calculated: (basePrice - contractPrice) / basePrice * 100
     @DecimalMin(value = "0.00")
     @DecimalMax(value = "100.00")

@@ -269,11 +269,10 @@ const BenefitPackageCreate = () => {
                 <Button variant="outlined" startIcon={<CancelIcon />} onClick={handleCancel} disabled={loading}>
                   إلغاء
                 </Button>
-                
-                  <Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={loading}>
-                    {loading ? 'جارٍ الحفظ...' : 'حفظ'}
-                  </Button>
-                  
+
+                <Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={loading}>
+                  {loading ? 'جارٍ الحفظ...' : 'حفظ'}
+                </Button>
               </Stack>
             </Grid>
           </Grid>

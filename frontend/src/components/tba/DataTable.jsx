@@ -255,5 +255,3 @@ DataTable.propTypes = {
   enablePagination: PropTypes.bool,
   pageSize: PropTypes.number
 };
-
-

@@ -328,7 +328,12 @@ const UsersList = () => {
                         <Typography variant="h6" color="text.secondary">
                           لا توجد نتائج
                         </Typography>
-                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => navigate('/admin/users/create')} sx={{ mt: '1.0rem' }}>
+                        <Button
+                          variant="outlined"
+                          startIcon={<AddIcon />}
+                          onClick={() => navigate('/admin/users/create')}
+                          sx={{ mt: '1.0rem' }}
+                        >
                           إضافة مستخدم
                         </Button>
                       </TableCell>

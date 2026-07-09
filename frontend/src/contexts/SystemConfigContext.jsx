@@ -68,7 +68,8 @@ const DEFAULT_FLAGS = {
   PROVIDER_PORTAL_ENABLED: false,
   DIRECT_CLAIM_SUBMISSION_ENABLED: false,
   DIRECT_PREAUTH_SUBMISSION_ENABLED: false,
-  BATCH_CLAIMS_ENABLED: true
+  BATCH_CLAIMS_ENABLED: true,
+  PROVIDER_PRE_APPROVAL_ITEMS_ONLY: true
 };
 
 // ─── context ──────────────────────────────────────────────────────────────
@@ -141,7 +142,9 @@ export function SystemConfigProvider({ children }) {
           parsed.data.flags = next;
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(parsed));
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   }, []);
@@ -160,7 +163,9 @@ export function SystemConfigProvider({ children }) {
           parsed.data.uiConfig = next;
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(parsed));
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   }, []);

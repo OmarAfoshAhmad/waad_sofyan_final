@@ -40,14 +40,16 @@ let _cachePromise = null;
 const getEmployerSelectorsCached = async () => {
   if (_cachedSelectors) return _cachedSelectors;
   if (_cachePromise) return _cachePromise;
-  _cachePromise = getEmployerSelectors().then((data) => {
-    _cachedSelectors = data;
-    _cachePromise = null;
-    return data;
-  }).catch((err) => {
-    _cachePromise = null;
-    throw err;
-  });
+  _cachePromise = getEmployerSelectors()
+    .then((data) => {
+      _cachedSelectors = data;
+      _cachePromise = null;
+      return data;
+    })
+    .catch((err) => {
+      _cachePromise = null;
+      throw err;
+    });
   return _cachePromise;
 };
 
@@ -208,7 +210,7 @@ const EmployerFilterSelector = ({
             '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
             '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
-            '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.8)' },
+            '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.8)' }
           })
         }}
         renderInput={(params) => (

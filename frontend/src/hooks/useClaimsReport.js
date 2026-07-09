@@ -20,12 +20,7 @@ export const CLAIM_STATUS = {
 /**
  * Operational claims report must show finalized outcomes only.
  */
-export const FINAL_CLAIM_STATUSES = [
-  CLAIM_STATUS.APPROVED,
-  CLAIM_STATUS.BATCHED,
-  CLAIM_STATUS.REJECTED,
-  CLAIM_STATUS.SETTLED
-];
+export const FINAL_CLAIM_STATUSES = [CLAIM_STATUS.APPROVED, CLAIM_STATUS.BATCHED, CLAIM_STATUS.REJECTED, CLAIM_STATUS.SETTLED];
 
 /**
  * All claim statuses for filter dropdown

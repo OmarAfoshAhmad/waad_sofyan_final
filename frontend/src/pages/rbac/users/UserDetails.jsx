@@ -7,17 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 // MUI Components
-import {
-  Box,
-  Typography,
-  Avatar,
-  Stack,
-  Chip,
-  Grid,
-  Alert,
-  Paper,
-  Button
-} from '@mui/material';
+import { Box, Typography, Avatar, Stack, Chip, Grid, Alert, Paper, Button } from '@mui/material';
 
 // MUI Icons
 import PersonIcon from '@mui/icons-material/Person';
@@ -68,8 +58,6 @@ const getRoleColor = (roleName) => {
   };
   return roleColors[roleName] || 'default';
 };
-
-
 
 // ============================================================================
 // TAB PANEL COMPONENT
@@ -184,9 +172,7 @@ const UserDetails = () => {
       setLoading(true);
       setError(null);
 
-      const [userRes] = await Promise.all([
-        usersService.getUserById(numericId)
-      ]);
+      const [userRes] = await Promise.all([usersService.getUserById(numericId)]);
 
       setUser(userRes?.data?.data || userRes?.data || null);
       // Use static roles from SystemRole
@@ -231,11 +217,7 @@ const UserDetails = () => {
         <ModernPageHeader
           title="تفاصيل المستخدم"
           icon={PersonIcon}
-          breadcrumbs={[
-            { label: 'الرئيسية', path: '/' },
-            { label: 'المستخدمين', path: '/admin/users' },
-            { label: 'تفاصيل' }
-          ]}
+          breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمين', path: '/admin/users' }, { label: 'تفاصيل' }]}
         />
         <Alert severity="error" sx={{ mt: '1.0rem' }}>
           {error}
@@ -308,15 +290,10 @@ const UserDetails = () => {
 
       {/* ====== ROLES ====== */}
       <MainCard>
-        <RolesDisplay
-          user={user}
-          allRoles={allRoles}
-          userRoleIds={userRoleIds}
-        />
+        <RolesDisplay user={user} allRoles={allRoles} userRoleIds={userRoleIds} />
       </MainCard>
     </Box>
   );
 };
 
 export default UserDetails;
-

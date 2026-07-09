@@ -114,8 +114,6 @@ export const claimsService = {
     }
   },
 
-
-
   /**
    * Get claim by claim number
    * @param {string} claimNumber - Claim number (format: CLM-YYYYMMDD-XXXX)
@@ -546,12 +544,12 @@ export const claimsService = {
   settle: async (id, data) => {
     throw new Error(
       'تم إيقاف التسوية المباشرة للمطالبات. يرجى استخدام دفعات التسوية من: /settlement/batches - ' +
-      'Legacy per-claim settlement is DISABLED. Use Settlement Batches API.'
+        'Legacy per-claim settlement is DISABLED. Use Settlement Batches API.'
     );
   },
 
   /**
-  * Return claim for correction (UNDER_REVIEW → NEEDS_CORRECTION)
+   * Return claim for correction (UNDER_REVIEW → NEEDS_CORRECTION)
    * @param {number} id - Claim ID
    * @param {Object} data - Return data {reason, requiredDocuments}
    * @returns {Promise<Object>} Updated claim

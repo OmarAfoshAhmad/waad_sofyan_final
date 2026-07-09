@@ -291,39 +291,47 @@ const EligibilityCheck = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <Paper elevation={0} variant="outlined" sx={{ p: '0.75rem', bgcolor: 'success.lighter', borderLeft: '4px solid', borderLeftColor: 'success.main' }}>
+                      <Paper
+                        elevation={0}
+                        variant="outlined"
+                        sx={{ p: '0.75rem', bgcolor: 'success.lighter', borderLeft: '4px solid', borderLeftColor: 'success.main' }}
+                      >
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <SavingsIcon color="success" />
                           <Box>
                             <Typography variant="caption" color="text.secondary" display="block">
                               الحد السنوي
                             </Typography>
-                            <Typography variant="h6">
-                              {familyData.principal?.annualLimit?.toLocaleString() || '0'} د.ل
-                            </Typography>
+                            <Typography variant="h6">{familyData.principal?.annualLimit?.toLocaleString() || '0'} د.ل</Typography>
                           </Box>
                         </Stack>
                       </Paper>
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <Paper elevation={0} variant="outlined" sx={{ p: '0.75rem', bgcolor: 'warning.lighter', borderLeft: '4px solid', borderLeftColor: 'warning.main' }}>
+                      <Paper
+                        elevation={0}
+                        variant="outlined"
+                        sx={{ p: '0.75rem', bgcolor: 'warning.lighter', borderLeft: '4px solid', borderLeftColor: 'warning.main' }}
+                      >
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <PaymentsIcon color="warning" />
                           <Box>
                             <Typography variant="caption" color="text.secondary" display="block">
                               المستهلك
                             </Typography>
-                            <Typography variant="h6">
-                              {familyData.principal?.usedAmount?.toLocaleString() || '0'} د.ل
-                            </Typography>
+                            <Typography variant="h6">{familyData.principal?.usedAmount?.toLocaleString() || '0'} د.ل</Typography>
                           </Box>
                         </Stack>
                       </Paper>
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <Paper elevation={0} variant="outlined" sx={{ p: '0.75rem', bgcolor: 'info.lighter', borderLeft: '4px solid', borderLeftColor: 'info.main' }}>
+                      <Paper
+                        elevation={0}
+                        variant="outlined"
+                        sx={{ p: '0.75rem', bgcolor: 'info.lighter', borderLeft: '4px solid', borderLeftColor: 'info.main' }}
+                      >
                         <Stack direction="row" spacing={1.5} alignItems="center">
                           <TrendingUpIcon color="info" />
                           <Box>
@@ -535,5 +543,3 @@ const EligibilityCheck = () => {
 };
 
 export default EligibilityCheck;
-
-

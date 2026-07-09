@@ -61,24 +61,27 @@ function saveCompany(data) {
     const existing = loadCompany();
     const merged = { ...existing, ...data };
     // Save in the format CompanySettingsContext expects
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      companyName: merged.name,
-      companyNameEn: merged.code || 'Waad TPA',
-      businessType: merged.businessType,
-      businessTypeEn: 'Medical Claims Management',
-      logoUrl: merged.logoUrl,
-      logoBase64: null,
-      primaryColor: '#1976d2',
-      secondaryColor: '#42a5f5',
-      headerStyle: 'gradient',
-      phone: merged.phone,
-      email: merged.email,
-      address: merged.address,
-      website: merged.website,
-      taxNumber: merged.taxNumber,
-      footerText: 'جميع الحقوق محفوظة © 2026 - نظام وعد لإدارة النفقات الطبية',
-      footerTextEn: 'All Rights Reserved © 2026'
-    }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        companyName: merged.name,
+        companyNameEn: merged.code || 'Waad TPA',
+        businessType: merged.businessType,
+        businessTypeEn: 'Medical Claims Management',
+        logoUrl: merged.logoUrl,
+        logoBase64: null,
+        primaryColor: '#1976d2',
+        secondaryColor: '#42a5f5',
+        headerStyle: 'gradient',
+        phone: merged.phone,
+        email: merged.email,
+        address: merged.address,
+        website: merged.website,
+        taxNumber: merged.taxNumber,
+        footerText: 'جميع الحقوق محفوظة © 2026 - نظام وعد لإدارة النفقات الطبية',
+        footerTextEn: 'All Rights Reserved © 2026'
+      })
+    );
     return merged;
   } catch (e) {
     console.warn('[CompanyService] Failed to save to localStorage:', e);
@@ -130,7 +133,7 @@ const update = async (id, data) => {
   return updateDefaultCompany({ id, ...data });
 };
 
-const remove = async () => { };
+const remove = async () => {};
 
 const activate = async () => ({
   success: true,

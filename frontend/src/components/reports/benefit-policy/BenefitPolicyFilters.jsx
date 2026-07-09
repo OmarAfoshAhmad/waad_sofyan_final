@@ -189,4 +189,3 @@ BenefitPolicyFilters.propTypes = {
 };
 
 export default BenefitPolicyFilters;
-

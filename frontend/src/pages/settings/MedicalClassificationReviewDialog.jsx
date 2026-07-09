@@ -46,7 +46,7 @@ export default function MedicalClassificationReviewDialog({ open, onClose, item,
   const handleSave = () => {
     onSave({
       ...item,
-      ...formData,
+      ...formData
     });
     onClose();
   };
@@ -55,12 +55,12 @@ export default function MedicalClassificationReviewDialog({ open, onClose, item,
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        مراجعة التصنيف الطبي الدلالي
-      </DialogTitle>
+      <DialogTitle>مراجعة التصنيف الطبي الدلالي</DialogTitle>
       <DialogContent dividers>
         <Box mb={2}>
-          <Typography variant="subtitle2" color="textSecondary">اسم الخدمة الأصلي</Typography>
+          <Typography variant="subtitle2" color="textSecondary">
+            اسم الخدمة الأصلي
+          </Typography>
           <Typography variant="h6">{item.serviceName}</Typography>
         </Box>
         <Divider sx={{ mb: 2 }} />
@@ -71,7 +71,9 @@ export default function MedicalClassificationReviewDialog({ open, onClose, item,
               <WarningAmberIcon sx={{ mr: 1 }} fontSize="small" /> تحذيرات المراجعة
             </Typography>
             {item.warnings.map((w, i) => (
-              <Typography key={i} variant="body2" color="textSecondary">- {w}</Typography>
+              <Typography key={i} variant="body2" color="textSecondary">
+                - {w}
+              </Typography>
             ))}
           </Box>
         )}
@@ -108,14 +110,7 @@ export default function MedicalClassificationReviewDialog({ open, onClose, item,
             </TextField>
           </Grid>
           <Grid item xs={12} sm={4}>
-            <TextField
-              select
-              fullWidth
-              label="نظام الجسم"
-              name="bodySystem"
-              value={formData.bodySystem || ''}
-              onChange={handleChange}
-            >
+            <TextField select fullWidth label="نظام الجسم" name="bodySystem" value={formData.bodySystem || ''} onChange={handleChange}>
               <MenuItem value="SKIN_SOFT_TISSUE">الجلد والأنسجة</MenuItem>
               <MenuItem value="MUSCULOSKELETAL">العظام والعضلات</MenuItem>
               <MenuItem value="GENERAL">عام</MenuItem>
@@ -153,52 +148,42 @@ export default function MedicalClassificationReviewDialog({ open, onClose, item,
             />
           </Grid>
           <Grid item xs={12} sm={6}>
-             <Box display="flex" alignItems="center" height="100%">
-               <FormControlLabel
-                 control={
-                   <Checkbox
-                     checked={formData.requiresReview}
-                     onChange={handleChange}
-                     name="requiresReview"
-                     color="warning"
-                   />
-                 }
-                 label="يتطلب مراجعة بشرية"
-               />
-             </Box>
+            <Box display="flex" alignItems="center" height="100%">
+              <FormControlLabel
+                control={<Checkbox checked={formData.requiresReview} onChange={handleChange} name="requiresReview" color="warning" />}
+                label="يتطلب مراجعة بشرية"
+              />
+            </Box>
           </Grid>
 
           <Grid item xs={12}>
-             <TextField
-               fullWidth
-               label="سبب التصنيف / الشرح"
-               name="reason"
-               value={formData.reason || ''}
-               onChange={handleChange}
-               multiline
-               rows={2}
-             />
+            <TextField
+              fullWidth
+              label="سبب التصنيف / الشرح"
+              name="reason"
+              value={formData.reason || ''}
+              onChange={handleChange}
+              multiline
+              rows={2}
+            />
           </Grid>
 
           <Grid item xs={12}>
             <Divider sx={{ my: 1 }} />
             <FormControlLabel
-              control={
-                <Checkbox
-                  checked={formData.saveAsRule || false}
-                  onChange={handleChange}
-                  name="saveAsRule"
-                  color="primary"
-                />
-              }
+              control={<Checkbox checked={formData.saveAsRule || false} onChange={handleChange} name="saveAsRule" color="primary" />}
               label="حفظ هذا التعديل كقاعدة دلالية مستقبلية (Medical Semantic Rule)"
             />
           </Grid>
         </Grid>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} color="inherit">إلغاء</Button>
-        <Button onClick={handleSave} variant="contained" color="primary">حفظ وتحديث</Button>
+        <Button onClick={onClose} color="inherit">
+          إلغاء
+        </Button>
+        <Button onClick={handleSave} variant="contained" color="primary">
+          حفظ وتحديث
+        </Button>
       </DialogActions>
     </Dialog>
   );

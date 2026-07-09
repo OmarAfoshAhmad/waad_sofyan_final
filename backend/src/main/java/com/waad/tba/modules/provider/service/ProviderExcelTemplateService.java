@@ -85,10 +85,10 @@ public class ProviderExcelTemplateService {
                 .name("city")
                 .nameAr("المدينة")
                 .type(ColumnType.TEXT)
-                .required(true)
+                .required(false)
                 .example("طرابلس")
-                .description("City (mandatory)")
-                .descriptionAr("المدينة (إجباري)")
+                .description("City")
+                .descriptionAr("المدينة")
                 .width(15)
                 .build(),
                 
@@ -145,10 +145,12 @@ public class ProviderExcelTemplateService {
             .headers(Arrays.asList("Type (EN)", "Type (AR)"))
             .data(Arrays.asList(
                 Arrays.asList("HOSPITAL", "مستشفى"),
-                Arrays.asList("CLINIC", "عيادة"),
-                Arrays.asList("LAB", "مختبر"),
+                Arrays.asList("CLINIC", "عياده تخصصية"),
+                Arrays.asList("CLINIC_DEN", "عياده اسنان"),
+                Arrays.asList("LAB", "مختبر تحاليل"),
                 Arrays.asList("PHARMACY", "صيدلية"),
-                Arrays.asList("RADIOLOGY", "أشعة")
+                Arrays.asList("RADIOLOGY", "مركز أشعة"),
+                Arrays.asList("PHYSIOTHERAPY", "مركز علاج طبيعي")
             ))
             .description("Valid provider types")
             .descriptionAr("أنواع مقدمي الخدمة الصالحة")
@@ -195,9 +197,16 @@ public class ProviderExcelTemplateService {
                     Provider provider = parseAndCreateProvider(row, rowNum, columnIndices, errors);
                     
                     if (provider != null) {
+                        boolean isUpdate = provider.getId() != null;
                         providerRepository.save(provider);
-                        summary.setCreated(summary.getCreated() + 1);
-                        log.debug("[ProviderImport] Created provider: {}", provider.getLicenseNumber());
+                        
+                        if (isUpdate) {
+                            summary.setUpdated(summary.getUpdated() + 1);
+                            log.debug("[ProviderImport] Updated provider: {}", provider.getLicenseNumber());
+                        } else {
+                            summary.setCreated(summary.getCreated() + 1);
+                            log.debug("[ProviderImport] Created provider: {}", provider.getLicenseNumber());
+                        }
                     } else {
                         summary.setRejected(summary.getRejected() + 1);
                     }
@@ -214,17 +223,17 @@ public class ProviderExcelTemplateService {
                 }
             }
             
-            String messageAr = String.format("تم إنشاء %d مقدم خدمة، تم تخطي %d، فشل %d",
-                summary.getCreated(), summary.getSkipped(), summary.getRejected() + summary.getFailed());
-            String messageEn = String.format("Created %d providers, skipped %d, failed %d",
-                summary.getCreated(), summary.getSkipped(), summary.getRejected() + summary.getFailed());
+            String messageAr = String.format("تم إنشاء %d وتحديث %d مقدم خدمة، تم تخطي %d، فشل %d",
+                summary.getCreated(), summary.getUpdated(), summary.getSkipped(), summary.getRejected() + summary.getFailed());
+            String messageEn = String.format("Created %d, updated %d providers, skipped %d, failed %d",
+                summary.getCreated(), summary.getUpdated(), summary.getSkipped(), summary.getRejected() + summary.getFailed());
             
             log.info("[ProviderImport] Import completed: {}", messageEn);
             
             return ExcelImportResult.builder()
                 .summary(summary)
                 .errors(errors)
-                .success(summary.getCreated() > 0)
+                .success((summary.getCreated() + summary.getUpdated()) > 0)
                 .messageAr(messageAr)
                 .messageEn(messageEn)
                 .build();
@@ -280,15 +289,7 @@ public class ProviderExcelTemplateService {
                 .build());
         }
         
-        if (columnIndices.get("city") == null) {
-            errors.add(ImportError.builder()
-                .rowNumber(0)
-                .errorType(ErrorType.MISSING_REQUIRED)
-                .columnName("city")
-                .messageAr("عمود المدينة مفقود")
-                .messageEn("City column is missing")
-                .build());
-        }
+
     }
     
     private Provider parseAndCreateProvider(
@@ -315,12 +316,7 @@ public class ProviderExcelTemplateService {
             hasErrors = true;
         }
         
-        if (city == null || city.trim().isEmpty()) {
-            errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "city", 
-                "المدينة مطلوبة", "City is required", city));
-            hasErrors = true;
-        }
-        
+
         ProviderType providerType = null;
         if (providerTypeStr != null && !providerTypeStr.trim().isEmpty()) {
             providerType = parseProviderType(providerTypeStr);
@@ -336,24 +332,39 @@ public class ProviderExcelTemplateService {
             return null;
         }
         
-        // Auto-generate license number
-        String licenseNumber = generateLicenseNumber(providerType);
-        
         // Use provider name (Arabic-only system)
         String nameValue = (providerName != null && !providerName.trim().isEmpty()) 
             ? providerName.trim() 
             : "";
 
-        Provider provider = Provider.builder()
-            .name(nameValue)
-            .licenseNumber(licenseNumber)
-            .providerType(providerType)
-            .city(city != null ? city.trim() : null)
-            .phone(getCellValue(row, columnIndices.get("phone")))
-            .email(getCellValue(row, columnIndices.get("email")))
-            .address(getCellValue(row, columnIndices.get("address")))
-            .active(true)
-            .build();
+        Optional<Provider> existingOpt = providerRepository.findByName(nameValue);
+        Provider provider;
+
+        if (existingOpt.isPresent()) {
+            provider = existingOpt.get();
+            provider.setProviderType(providerType);
+            if (city != null && !city.trim().isEmpty()) {
+                provider.setCity(city.trim());
+            }
+            provider.setPhone(getCellValue(row, columnIndices.get("phone")));
+            provider.setEmail(getCellValue(row, columnIndices.get("email")));
+            provider.setAddress(getCellValue(row, columnIndices.get("address")));
+            provider.setActive(true);
+        } else {
+            // Auto-generate license number
+            String licenseNumber = generateLicenseNumber(providerType);
+            
+            provider = Provider.builder()
+                .name(nameValue)
+                .licenseNumber(licenseNumber)
+                .providerType(providerType)
+                .city(city != null ? city.trim() : null)
+                .phone(getCellValue(row, columnIndices.get("phone")))
+                .email(getCellValue(row, columnIndices.get("email")))
+                .address(getCellValue(row, columnIndices.get("address")))
+                .active(true)
+                .build();
+        }
         
         return provider;
     }
@@ -372,14 +383,18 @@ public class ProviderExcelTemplateService {
         
         if (normalized.equals("HOSPITAL") || normalized.equals("مستشفى")) {
             return ProviderType.HOSPITAL;
-        } else if (normalized.equals("CLINIC") || normalized.equals("عيادة")) {
+        } else if (normalized.equals("CLINIC") || normalized.equals("عياده تخصصية") || normalized.equals("عيادة تخصصية") || normalized.equals("عيادة")) {
             return ProviderType.CLINIC;
-        } else if (normalized.equals("LAB") || normalized.equals("مختبر")) {
+        } else if (normalized.equals("CLINIC_DEN") || normalized.equals("عياده اسنان") || normalized.equals("عيادة أسنان") || normalized.equals("عيادة اسنان")) {
+            return ProviderType.CLINIC_DEN;
+        } else if (normalized.equals("LAB") || normalized.equals("مختبر تحاليل") || normalized.equals("مختبر")) {
             return ProviderType.LAB;
         } else if (normalized.equals("PHARMACY") || normalized.equals("صيدلية")) {
             return ProviderType.PHARMACY;
-        } else if (normalized.equals("RADIOLOGY") || normalized.equals("أشعة")) {
+        } else if (normalized.equals("RADIOLOGY") || normalized.equals("مركز أشعة") || normalized.equals("أشعة")) {
             return ProviderType.RADIOLOGY;
+        } else if (normalized.equals("PHYSIOTHERAPY") || normalized.equals("مركز علاج طبيعي")) {
+            return ProviderType.PHYSIOTHERAPY;
         }
         
         return null;

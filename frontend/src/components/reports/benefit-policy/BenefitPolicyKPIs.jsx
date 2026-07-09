@@ -191,7 +191,3 @@ BenefitPolicyKPIs.propTypes = {
 };
 
 export default BenefitPolicyKPIs;
-
-
-
-

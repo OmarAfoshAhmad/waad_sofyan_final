@@ -29,7 +29,7 @@ const AccountantProfitReport = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [reportData, setReportData] = useState([]);
-  
+
   const [employers, setEmployers] = useState([]);
   const [selectedEmployer, setSelectedEmployer] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -74,8 +74,8 @@ const AccountantProfitReport = () => {
 
   const handleExportExcel = () => {
     if (!reportData || reportData.length === 0) return;
-    
-    const excelData = reportData.map(row => {
+
+    const excelData = reportData.map((row) => {
       const rowData = {};
       if (!selectedEmployer) rowData['اسم الشركة'] = row.employerName;
       rowData['اسم المرفق الصحي'] = row.providerName;
@@ -105,13 +105,7 @@ const AccountantProfitReport = () => {
           <Grid container spacing={2} alignItems="stretch">
             {/* الصف الأول: الفلاتر */}
             <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                select
-                fullWidth
-                label="الشركة"
-                value={selectedEmployer}
-                onChange={(e) => setSelectedEmployer(e.target.value)}
-              >
+              <TextField select fullWidth label="الشركة" value={selectedEmployer} onChange={(e) => setSelectedEmployer(e.target.value)}>
                 <MenuItem value="">كل الشركات</MenuItem>
                 {employers.map((emp) => (
                   <MenuItem key={emp.id} value={emp.id}>
@@ -121,22 +115,10 @@ const AccountantProfitReport = () => {
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                type="number"
-                fullWidth
-                label="السنة"
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-              />
+              <TextField type="number" fullWidth label="السنة" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} />
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                select
-                fullWidth
-                label="الشهر"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-              >
+              <TextField select fullWidth label="الشهر" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
                 <MenuItem value="">كل الأشهر</MenuItem>
                 {[...Array(12)].map((_, i) => (
                   <MenuItem key={i + 1} value={i + 1}>
@@ -188,9 +170,15 @@ const AccountantProfitReport = () => {
               {!selectedEmployer && <TableCell sx={{ fontWeight: 'bold' }}>اسم الشركة</TableCell>}
               <TableCell sx={{ fontWeight: 'bold' }}>اسم المرفق الصحي</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>شهر</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }} align="right">قيمة المطالبة</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }} align="right">نسبة التخفيض</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }} align="right">قيمة المستحقة للشركة</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }} align="right">
+                قيمة المطالبة
+              </TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }} align="right">
+                نسبة التخفيض
+              </TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }} align="right">
+                قيمة المستحقة للشركة
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -203,7 +191,9 @@ const AccountantProfitReport = () => {
             ) : reportData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={!selectedEmployer ? 6 : 5} align="center" sx={{ py: 3 }}>
-                  <Typography variant="body1" color="textSecondary">لا توجد بيانات لعرضها.</Typography>
+                  <Typography variant="body1" color="textSecondary">
+                    لا توجد بيانات لعرضها.
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : (
@@ -222,7 +212,9 @@ const AccountantProfitReport = () => {
                 ))}
                 {/* الإجماليات */}
                 <TableRow sx={{ bgcolor: 'grey.100' }}>
-                  <TableCell colSpan={!selectedEmployer ? 3 : 2} sx={{ fontWeight: 'bold' }}>الإجمالي</TableCell>
+                  <TableCell colSpan={!selectedEmployer ? 3 : 2} sx={{ fontWeight: 'bold' }}>
+                    الإجمالي
+                  </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                     {formatCurrency(totalClaims)}
                   </TableCell>

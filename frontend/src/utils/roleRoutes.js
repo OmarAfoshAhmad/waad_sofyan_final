@@ -45,7 +45,7 @@ export const getDefaultRouteForRole = (role) => {
     PROVIDER_STAFF: '/provider',
     EMPLOYER_ADMIN: '/member-portal/family',
     DATA_ENTRY: '/claims/batches',
-    ACCOUNT_MANAGER: '/claims/batches',
+    ACCOUNT_MANAGER: '/claims/batches'
   };
 
   return roleRoutes[normalizedRole] || '/dashboard';

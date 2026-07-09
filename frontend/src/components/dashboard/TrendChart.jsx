@@ -37,7 +37,15 @@ const TrendChart = ({ data, loading, days = 30 }) => {
             <YAxis />
             <Tooltip formatter={(value) => [value.toLocaleString('en-US'), 'العدد']} contentStyle={{ direction: 'rtl' }} />
             <Legend wrapperStyle={{ direction: 'rtl' }} />
-            <Line type="monotone" dataKey="count" stroke={theme.palette.primary.main} strokeWidth={2} name="عدد الطلبات" dot={{ r: 4 }} activeDot={{ r: 6 }} />
+            <Line
+              type="monotone"
+              dataKey="count"
+              stroke={theme.palette.primary.main}
+              strokeWidth={2}
+              name="عدد الطلبات"
+              dot={{ r: 4 }}
+              activeDot={{ r: 6 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </CardContent>
@@ -46,5 +54,3 @@ const TrendChart = ({ data, loading, days = 30 }) => {
 };
 
 export default TrendChart;
-
-

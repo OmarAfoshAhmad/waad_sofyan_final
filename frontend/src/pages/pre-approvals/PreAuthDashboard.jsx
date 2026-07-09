@@ -1,5 +1,34 @@
-import { Box, Grid, Typography, Button, Stack, Alert, Card, CardContent, IconButton, Tooltip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, Divider } from '@mui/material';
-import { Refresh, Dashboard as DashboardIcon, TrendingUp, CheckCircle, Cancel, AttachMoney, Visibility as VisibilityIcon, AssignmentTurnedIn as AssignmentTurnedInIcon } from '@mui/icons-material';
+import {
+  Box,
+  Grid,
+  Typography,
+  Button,
+  Stack,
+  Alert,
+  Card,
+  CardContent,
+  IconButton,
+  Tooltip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  Divider
+} from '@mui/material';
+import {
+  Refresh,
+  Dashboard as DashboardIcon,
+  TrendingUp,
+  CheckCircle,
+  Cancel,
+  AttachMoney,
+  Visibility as VisibilityIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ModernPageHeader } from 'components/tba';
 import MainCard from 'components/MainCard';
@@ -114,15 +143,31 @@ const PreAuthDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       {/* 🌟 ACTIONABLE HERO SECTION 🌟 */}
-      <Box sx={{ mb: 4, p: 4, bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}>
+      <Box
+        sx={{
+          mb: 4,
+          p: 4,
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
+          borderRadius: 2,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 3,
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
+        }}
+      >
         <Box>
-          <Typography variant="h3" fontWeight="bold" mb={1}>مرحباً بك في لوحة المراجع الطبي</Typography>
+          <Typography variant="h3" fontWeight="bold" mb={1}>
+            مرحباً بك في لوحة المراجع الطبي
+          </Typography>
           <Typography variant="h6" sx={{ opacity: 0.9, mb: 2 }}>
             يوجد طلبات بانتظار المراجعة والاعتماد. يُرجى التوجه إلى صندوق الوارد لإنجازها.
           </Typography>
-          <Button 
-            variant="contained" 
-            color="secondary" 
+          <Button
+            variant="contained"
+            color="secondary"
             size="large"
             startIcon={<AssignmentTurnedInIcon />}
             onClick={() => navigate('/pre-approvals')}
@@ -133,18 +178,28 @@ const PreAuthDashboard = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 3, bgcolor: 'rgba(255,255,255,0.1)', p: 3, borderRadius: 2 }}>
           <Box textAlign="center">
-            <Typography variant="h3" fontWeight="bold">{(dashboard?.statusDistribution?.pending || 0) + (dashboard?.statusDistribution?.underReview || 0)}</Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>قيد الانتظار</Typography>
+            <Typography variant="h3" fontWeight="bold">
+              {(dashboard?.statusDistribution?.pending || 0) + (dashboard?.statusDistribution?.underReview || 0)}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              قيد الانتظار
+            </Typography>
           </Box>
           <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.2)' }} />
           <Box textAlign="center">
-            <Typography variant="h3" fontWeight="bold">{queue?.length || 0}</Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>طلبات عاجلة</Typography>
+            <Typography variant="h3" fontWeight="bold">
+              {queue?.length || 0}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              طلبات عاجلة
+            </Typography>
           </Box>
         </Box>
       </Box>
 
-      <Typography variant="h5" mb={3} fontWeight="bold" color="text.primary">نظرة عامة على البيانات</Typography>
+      <Typography variant="h5" mb={3} fontWeight="bold" color="text.primary">
+        نظرة عامة على البيانات
+      </Typography>
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 6 }}>
           <StatusDistributionChart data={dashboard?.statusDistribution || {}} loading={dashboardLoading} />
@@ -181,4 +236,3 @@ const PreAuthDashboard = () => {
 };
 
 export default PreAuthDashboard;
-

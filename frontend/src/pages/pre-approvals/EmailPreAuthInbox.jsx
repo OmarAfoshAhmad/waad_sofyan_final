@@ -176,12 +176,7 @@ const EmailPreAuthInbox = () => {
 
     try {
       setApproving(true);
-      await emailPreAuthService.approve(
-        selectedRequest.id, 
-        approvalData.memberId, 
-        approvalData.serviceId, 
-        approvalData.notes
-      );
+      await emailPreAuthService.approve(selectedRequest.id, approvalData.memberId, approvalData.serviceId, approvalData.notes);
       handleCloseDetails();
       fetchData();
     } catch (err) {
@@ -229,7 +224,7 @@ const EmailPreAuthInbox = () => {
     if (request.memberId) params.append('memberId', request.memberId);
     if (request.providerId) params.append('providerId', request.providerId);
     params.append('emailRequestId', request.id);
-    
+
     navigate(`${url}?${params.toString()}`);
   };
 
@@ -300,18 +295,18 @@ const EmailPreAuthInbox = () => {
 
       switch (column.id) {
         case 'receivedAt':
-          return (
-            <Typography variant="body2">
-              {new Date(request.receivedAt).toLocaleString('en-US')}
-            </Typography>
-          );
+          return <Typography variant="body2">{new Date(request.receivedAt).toLocaleString('en-US')}</Typography>;
 
         case 'sender':
           return (
             <Box>
-              <Typography variant="body2" fontWeight={600}>{request.senderEmail}</Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {request.senderEmail}
+              </Typography>
               {request.senderName && (
-                <Typography variant="caption" color="text.secondary">{request.senderName}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {request.senderName}
+                </Typography>
               )}
             </Box>
           );
@@ -325,12 +320,12 @@ const EmailPreAuthInbox = () => {
 
         case 'provider':
           return request.providerId ? (
-            <Chip 
-              icon={<CheckCircleIcon size="small" />} 
-              label={request.providerName || 'مقدم معروف'} 
-              color="success" 
-              size="small" 
-              variant="outlined" 
+            <Chip
+              icon={<CheckCircleIcon size="small" />}
+              label={request.providerName || 'مقدم معروف'}
+              color="success"
+              size="small"
+              variant="outlined"
             />
           ) : (
             <Chip label="غير معروف" color="default" size="small" variant="outlined" />
@@ -338,12 +333,12 @@ const EmailPreAuthInbox = () => {
 
         case 'member':
           return request.memberId ? (
-            <Chip 
-              icon={<CheckCircleIcon size="small" />} 
-              label={request.memberFullName || 'عضو معروف'} 
-              color="info" 
-              size="small" 
-              variant="outlined" 
+            <Chip
+              icon={<CheckCircleIcon size="small" />}
+              label={request.memberFullName || 'عضو معروف'}
+              color="info"
+              size="small"
+              variant="outlined"
             />
           ) : (
             <Chip label="غير محدد" color="default" size="small" variant="outlined" />
@@ -354,9 +349,13 @@ const EmailPreAuthInbox = () => {
           return count > 0 ? (
             <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
               <AttachmentIcon fontSize="small" color="primary" />
-              <Typography variant="body2" color="primary.main" fontWeight={600}>{count}</Typography>
+              <Typography variant="body2" color="primary.main" fontWeight={600}>
+                {count}
+              </Typography>
             </Stack>
-          ) : '-';
+          ) : (
+            '-'
+          );
 
         case 'actions':
           return (
@@ -377,12 +376,7 @@ const EmailPreAuthInbox = () => {
                 </IconButton>
               </Tooltip>
               <Tooltip title="إعادة محاولة التعرف">
-                <IconButton 
-                  size="small" 
-                  color="info" 
-                  onClick={() => handleReidentify(request.id)}
-                  disabled={reidentifying}
-                >
+                <IconButton size="small" color="info" onClick={() => handleReidentify(request.id)} disabled={reidentifying}>
                   <AutoFixHighIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -438,25 +432,13 @@ const EmailPreAuthInbox = () => {
       </MainCard>
 
       {/* Details Dialog */}
-      <Dialog 
-        open={detailsOpen} 
-        onClose={handleCloseDetails} 
-        maxWidth="md" 
-        fullWidth
-        scroll="paper"
-      >
+      <Dialog open={detailsOpen} onClose={handleCloseDetails} maxWidth="md" fullWidth scroll="paper">
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <EmailIcon color="primary" />
             <Typography variant="h5">تفاصيل طلب البريد</Typography>
           </Stack>
-          {selectedRequest && (
-            <Chip 
-              label={`معرف: ${selectedRequest.id}`} 
-              size="small" 
-              variant="outlined" 
-            />
-          )}
+          {selectedRequest && <Chip label={`معرف: ${selectedRequest.id}`} size="small" variant="outlined" />}
         </DialogTitle>
         <DialogContent dividers>
           {detailsLoading ? (
@@ -470,17 +452,29 @@ const EmailPreAuthInbox = () => {
                 <Paper variant="outlined" sx={{ p: '1.0rem', bgcolor: 'grey.50' }}>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">من:</Typography>
-                      <Typography variant="body1" fontWeight={600}>{selectedRequest.senderName || 'غير محدد'}</Typography>
-                      <Typography variant="body2" color="primary">{selectedRequest.senderEmail}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        من:
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600}>
+                        {selectedRequest.senderName || 'غير محدد'}
+                      </Typography>
+                      <Typography variant="body2" color="primary">
+                        {selectedRequest.senderEmail}
+                      </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography variant="caption" color="text.secondary">التاريخ:</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        التاريخ:
+                      </Typography>
                       <Typography variant="body1">{new Date(selectedRequest.receivedAt).toLocaleString('en-US')}</Typography>
                     </Grid>
                     <Grid item xs={12}>
-                      <Typography variant="caption" color="text.secondary">الموضوع:</Typography>
-                      <Typography variant="body1" fontWeight={700}>{selectedRequest.subject || '(بدون عنوان)'}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        الموضوع:
+                      </Typography>
+                      <Typography variant="body1" fontWeight={700}>
+                        {selectedRequest.subject || '(بدون عنوان)'}
+                      </Typography>
                     </Grid>
                   </Grid>
                 </Paper>
@@ -489,18 +483,44 @@ const EmailPreAuthInbox = () => {
               {/* Identification Badges */}
               <Grid item xs={12}>
                 <Stack direction="row" spacing={2}>
-                  <Paper variant="outlined" sx={{ p: 1, flex: 1, display: 'flex', alignItems: 'center', borderColor: selectedRequest.providerId ? 'success.light' : 'divider' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1,
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      borderColor: selectedRequest.providerId ? 'success.light' : 'divider'
+                    }}
+                  >
                     <LocalHospitalIcon sx={{ mr: 1, color: selectedRequest.providerId ? 'success.main' : 'grey.400' }} />
                     <Box>
-                      <Typography variant="caption" display="block">مقدم الخدمة:</Typography>
-                      <Typography variant="body2" fontWeight={600}>{selectedRequest.providerName || 'لم يتم التعرف عليه'}</Typography>
+                      <Typography variant="caption" display="block">
+                        مقدم الخدمة:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedRequest.providerName || 'لم يتم التعرف عليه'}
+                      </Typography>
                     </Box>
                   </Paper>
-                  <Paper variant="outlined" sx={{ p: 1, flex: 1, display: 'flex', alignItems: 'center', borderColor: selectedRequest.memberId || approvalData.memberId ? 'info.light' : 'divider' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1,
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      borderColor: selectedRequest.memberId || approvalData.memberId ? 'info.light' : 'divider'
+                    }}
+                  >
                     <PersonIcon sx={{ mr: 1, color: selectedRequest.memberId || approvalData.memberId ? 'info.main' : 'grey.400' }} />
                     <Box>
-                      <Typography variant="caption" display="block">المؤمن عليه:</Typography>
-                      <Typography variant="body2" fontWeight={600}>{selectedRequest.memberFullName || (approvalData.memberId ? 'تم الاختيار' : 'لم يتم التعرف عليه')}</Typography>
+                      <Typography variant="caption" display="block">
+                        المؤمن عليه:
+                      </Typography>
+                      <Typography variant="body2" fontWeight={600}>
+                        {selectedRequest.memberFullName || (approvalData.memberId ? 'تم الاختيار' : 'لم يتم التعرف عليه')}
+                      </Typography>
                     </Box>
                   </Paper>
                 </Stack>
@@ -508,7 +528,9 @@ const EmailPreAuthInbox = () => {
 
               {/* Quick Approval Section */}
               <Grid item xs={12}>
-                <Divider sx={{ my: 1 }}><Chip label="إجراءات المراجعة والموافقة" size="small" /></Divider>
+                <Divider sx={{ my: 1 }}>
+                  <Chip label="إجراءات المراجعة والموافقة" size="small" />
+                </Divider>
                 <Paper variant="outlined" sx={{ p: '1.0rem', mt: 1, bgcolor: '#f0f7ff' }}>
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
@@ -550,13 +572,15 @@ const EmailPreAuthInbox = () => {
 
               {/* Email Content */}
               <Grid item xs={12}>
-                <Typography variant="subtitle2" gutterBottom>نص الرسالة:</Typography>
-                <Paper 
-                  variant="outlined" 
-                  sx={{ 
-                    p: '1.0rem', 
-                    minHeight: '12.5rem', 
-                    maxHeight: '25.0rem', 
+                <Typography variant="subtitle2" gutterBottom>
+                  نص الرسالة:
+                </Typography>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: '1.0rem',
+                    minHeight: '12.5rem',
+                    maxHeight: '25.0rem',
                     overflowY: 'auto',
                     direction: 'rtl',
                     bgcolor: '#fff'
@@ -573,10 +597,12 @@ const EmailPreAuthInbox = () => {
               {/* Attachments */}
               {selectedRequest.attachments && selectedRequest.attachments.length > 0 && (
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2" gutterBottom>المرفقات ({selectedRequest.attachments.length}):</Typography>
+                  <Typography variant="subtitle2" gutterBottom>
+                    المرفقات ({selectedRequest.attachments.length}):
+                  </Typography>
                   <List dense sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     {selectedRequest.attachments.map((att) => (
-                      <ListItem 
+                      <ListItem
                         key={att.id}
                         secondaryAction={
                           <IconButton edge="end" color="primary" onClick={() => handleDownloadAttachment(att)}>
@@ -587,10 +613,7 @@ const EmailPreAuthInbox = () => {
                         <ListItemIcon>
                           <AttachmentIcon />
                         </ListItemIcon>
-                        <ListItemText 
-                          primary={att.fileName} 
-                          secondary={`${(att.fileSize / 1024).toFixed(1)} KB | ${att.fileType}`} 
-                        />
+                        <ListItemText primary={att.fileName} secondary={`${(att.fileSize / 1024).toFixed(1)} KB | ${att.fileType}`} />
                       </ListItem>
                     ))}
                   </List>
@@ -602,29 +625,25 @@ const EmailPreAuthInbox = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ p: '1.0rem' }}>
-          <Button variant="outlined" onClick={handleCloseDetails}>إغلاق</Button>
+          <Button variant="outlined" onClick={handleCloseDetails}>
+            إغلاق
+          </Button>
           {selectedRequest && (
             <Stack direction="row" spacing={1}>
-              <Button 
-                variant="contained" 
-                color="info" 
+              <Button
+                variant="contained"
+                color="info"
                 startIcon={<PlayArrowIcon />}
                 onClick={() => handleConvertToPreAuth(selectedRequest)}
               >
                 تحويل لزيارة
               </Button>
-              <Button 
-                variant="contained" 
-                color="success" 
-                startIcon={<CheckCircleIcon />}
-                onClick={handleApproveEmail}
-                disabled={approving}
-              >
+              <Button variant="contained" color="success" startIcon={<CheckCircleIcon />} onClick={handleApproveEmail} disabled={approving}>
                 {approving ? 'جاري الموافقة...' : 'موافقة مباشرة وإرسال الرد'}
               </Button>
-              <Button 
-                variant="outlined" 
-                color="info" 
+              <Button
+                variant="outlined"
+                color="info"
                 startIcon={<AutoFixHighIcon />}
                 onClick={() => handleReidentify(selectedRequest.id)}
                 disabled={reidentifying}

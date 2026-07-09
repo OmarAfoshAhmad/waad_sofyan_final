@@ -79,6 +79,7 @@ import {
   downloadTemplate,
   exportMembers,
   deleteMember,
+  bulkDeleteMembers,
   restoreMember,
   hardDeleteMember,
   MEMBER_TYPES,
@@ -133,6 +134,9 @@ const UnifiedMembersList = () => {
     onConfirm: null
   });
 
+  // Selection
+  const [selectedMembers, setSelectedMembers] = useState([]);
+
   // Lookups
   const [employers, setEmployers] = useState([]);
 
@@ -160,6 +164,7 @@ const UnifiedMembersList = () => {
 
       setMembers(pageData?.content || []);
       setTotalCount(pageData?.totalElements || 0);
+      setSelectedMembers([]); // Clear selection on page change or fetch
     } catch (error) {
       console.error('Error fetching members:', error);
       enqueueSnackbar('خطأ في جلب المستفيدين', { variant: 'error' });
@@ -242,17 +247,95 @@ const UnifiedMembersList = () => {
     setConfirmDialog((prev) => ({ ...prev, open: false }));
   };
 
-  const handleConfirmAction = async (actionFn, successMessage, errorMessage) => {
+  const handleConfirmAction = async (actionFn, defaultSuccessMessage, defaultErrorMessage) => {
     try {
-      await actionFn();
-      enqueueSnackbar(successMessage, { variant: 'success' });
-      fetchMembers();
-      closeDialog();
+      const result = await actionFn();
+      const message = typeof result === 'string' ? result : (result?.message || defaultSuccessMessage);
+      enqueueSnackbar(message, { variant: 'success' });
     } catch (error) {
-      console.error(errorMessage, error);
-      const apiMessage = error?.response?.data?.message || error?.response?.data?.error;
-      enqueueSnackbar(apiMessage || errorMessage, { variant: 'error' });
+      console.error('Action failed:', error);
+      const apiMessage = error?.response?.data?.message || error?.message;
+      enqueueSnackbar(apiMessage || defaultErrorMessage || 'حدث خطأ غير متوقع', { variant: 'error' });
+    } finally {
+      await fetchMembers();
+      closeDialog();
     }
+  };
+
+  // Selection Handlers
+  const handleSelectAllClick = async (event) => {
+    if (event.target.checked) {
+      if (totalCount > members.length) {
+        enqueueSnackbar('جاري تحديد جميع السجلات المطابقة...', { variant: 'info' });
+        try {
+          const hasSearch = !!searchTerm.trim();
+          const params = {
+            page: 0,
+            size: totalCount > 0 ? totalCount : 100000,
+            sort: sortBy,
+            direction: sortDirection.toUpperCase(),
+            deleted: showDeleted,
+            ...(filters.organizationId && { employerId: filters.organizationId }),
+            ...(filters.type && { type: filters.type }),
+            ...(filters.status && { status: filters.status }),
+            ...(hasSearch && { fullName: searchTerm.trim() })
+          };
+          const response = await searchMembers(params);
+          const pageData = response?.data || response;
+          const allIds = (pageData?.content || []).map((n) => n.id);
+          setSelectedMembers(allIds);
+          enqueueSnackbar(`تم تحديد ${allIds.length} مستفيد بنجاح`, { variant: 'success' });
+        } catch (error) {
+          console.error('Error fetching all members for selection:', error);
+          enqueueSnackbar('حدث خطأ أثناء تحديد جميع السجلات', { variant: 'error' });
+        }
+      } else {
+        const newSelected = members.map((n) => n.id);
+        setSelectedMembers(newSelected);
+      }
+      return;
+    }
+    setSelectedMembers([]);
+  };
+
+  const handleSelectRow = (event, id) => {
+    const selectedIndex = selectedMembers.indexOf(id);
+    let newSelected = [];
+
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selectedMembers, id);
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selectedMembers.slice(1));
+    } else if (selectedIndex === selectedMembers.length - 1) {
+      newSelected = newSelected.concat(selectedMembers.slice(0, -1));
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(selectedMembers.slice(0, selectedIndex), selectedMembers.slice(selectedIndex + 1));
+    }
+    setSelectedMembers(newSelected);
+  };
+
+  const handleBulkDelete = () => {
+    setConfirmDialog({
+      open: true,
+      title: 'حذف المستفيدين المحددين',
+      content: `هل أنت متأكد من حذف ${selectedMembers.length} مستفيد؟ سيتم حذف التابعين أيضاً إذا كان هناك موظف رئيسي محدد.`,
+      severity: 'error',
+      confirmText: 'حذف',
+      cancelText: 'إلغاء',
+      onConfirm: () =>
+        handleConfirmAction(
+          async () => {
+            const res = await bulkDeleteMembers(selectedMembers);
+            setSelectedMembers([]); // clear selection
+            if (res?.message && res.message.includes('فشل حذف')) {
+                throw new Error(res.message);
+            }
+            return res?.message || 'تم إرسال طلب الحذف بنجاح';
+          },
+          'تم إرسال طلب الحذف بنجاح',
+          'فشل طلب الحذف المتعدد'
+        )
+    });
   };
 
   const handleDeleteClick = (member) => {
@@ -353,7 +436,11 @@ const UnifiedMembersList = () => {
   const renderCell = (member, column, rowIndex) => {
     switch (column.id) {
       case 'index':
-        return <Typography variant="body2" color="textSecondary" fontWeight="bold">{(page * rowsPerPage) + rowIndex + 1}</Typography>;
+        return (
+          <Typography variant="body2" color="textSecondary" fontWeight="bold">
+            {page * rowsPerPage + rowIndex + 1}
+          </Typography>
+        );
 
       case 'cardNumber':
         return (
@@ -392,12 +479,27 @@ const UnifiedMembersList = () => {
 
       case 'type': {
         if (member.type === MEMBER_TYPES.PRINCIPAL) {
-          return <Chip label="رئيسي" color="primary" size="small" sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }} />;
+          return (
+            <Chip
+              label="رئيسي"
+              color="primary"
+              size="small"
+              sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }}
+            />
+          );
         }
         const relConfig = RELATIONSHIP_CONFIG[member.relationship];
         const labelAr = relConfig ? relConfig.labelAr : 'تابع';
         const badgeColor = relConfig ? relConfig.color : 'default';
-        return <Chip label={labelAr} color={badgeColor} size="small" variant="outlined" sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }} />;
+        return (
+          <Chip
+            label={labelAr}
+            color={badgeColor}
+            size="small"
+            variant="outlined"
+            sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }}
+          />
+        );
       }
 
       case 'status':
@@ -434,7 +536,7 @@ const UnifiedMembersList = () => {
 
         // PRINCIPAL member dependents badge
         return (
-          <Tooltip title={member.dependentsCount > 0 ? "يملك تابعين (اضغط عرض لمعرفتهم)" : "لا يوجد تابعين"}>
+          <Tooltip title={member.dependentsCount > 0 ? 'يملك تابعين (اضغط عرض لمعرفتهم)' : 'لا يوجد تابعين'}>
             <Chip
               label={member.dependentsCount || 0}
               size="small"
@@ -517,6 +619,21 @@ const UnifiedMembersList = () => {
         breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'المستفيدين' }]}
         actions={
           <Stack direction="row" spacing={1} flexWrap="wrap">
+            {/* Bulk Action Buttons */}
+            {selectedMembers.length > 0 && (
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleBulkDelete}
+                startIcon={<DeleteIcon />}
+                sx={{
+                  minWidth: '9.6875rem'
+                }}
+              >
+                حذف المحدد ({selectedMembers.length})
+              </Button>
+            )}
+
             {/* Excel Buttons Group */}
             <Button
               variant="outlined"
@@ -570,7 +687,6 @@ const UnifiedMembersList = () => {
             {/* Deleted Members Toggle */}
             <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted(!showDeleted)} />
 
-
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/members/add')}>
               إضافة مستفيد
             </Button>
@@ -585,7 +701,11 @@ const UnifiedMembersList = () => {
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }} sx={{ width: '100%' }}>
             {/* Refresh */}
             <Tooltip title="تحديث">
-              <IconButton onClick={fetchMembers} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
+              <IconButton
+                onClick={fetchMembers}
+                color="primary"
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+              >
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -688,7 +808,13 @@ const UnifiedMembersList = () => {
             </TextField>
 
             {/* Reset Button */}
-            <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: '7.5rem', height: '2.5rem' }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={handleResetFilters}
+              startIcon={<FilterAltOffIcon />}
+              sx={{ minWidth: '7.5rem', height: '2.5rem' }}
+            >
               إعادة ضبط
             </Button>
           </Stack>
@@ -711,6 +837,10 @@ const UnifiedMembersList = () => {
         getRowKey={(member) => member.id}
         emptyMessage={showDeleted ? 'لا توجد مستفيدين محذوفين' : 'لا توجد مستفيدين'}
         loadingMessage="جارِ التحميل..."
+        selectable={!showDeleted}
+        selectedRows={selectedMembers}
+        onSelectAllClick={handleSelectAllClick}
+        onSelectRow={handleSelectRow}
         sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
         tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
       />

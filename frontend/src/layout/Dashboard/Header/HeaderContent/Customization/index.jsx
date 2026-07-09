@@ -203,5 +203,3 @@ export default function Customization() {
     </>
   );
 }
-
-

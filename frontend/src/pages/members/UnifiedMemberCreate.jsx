@@ -704,7 +704,10 @@ const UnifiedMemberCreate = () => {
 
                 {/* Left Column: Photo Upload (Sticky behavior) */}
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <Paper variant="outlined" sx={{ p: '1.5rem', textAlign: 'center', height: '100%', bgcolor: 'grey.50', borderStyle: 'dashed' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: '1.5rem', textAlign: 'center', height: '100%', bgcolor: 'grey.50', borderStyle: 'dashed' }}
+                  >
                     <Box
                       position="relative"
                       sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}
@@ -994,5 +997,3 @@ const UnifiedMemberCreate = () => {
 };
 
 export default UnifiedMemberCreate;
-
-

@@ -128,8 +128,6 @@ export const useRoles = () => useRBACStore((state) => state.roles);
 
 export const useUser = () => useRBACStore((state) => state.user);
 
-
-
 /**
  * Primary RBAC hook — role-based only, no permissions
  */

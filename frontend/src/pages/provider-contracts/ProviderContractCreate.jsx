@@ -286,9 +286,12 @@ const ProviderContractCreate = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 3 }}>
-              <Tooltip title={formData.discountBeforeRejection
-                ? 'قبل: خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض'
-                : 'بعد: خصم المرفوض أولاً ثم تطبيق نسبة التخفيض'}
+              <Tooltip
+                title={
+                  formData.discountBeforeRejection
+                    ? 'قبل: خصم نسبة التخفيض من حصة المرفق أولاً ثم خصم المرفوض'
+                    : 'بعد: خصم المرفوض أولاً ثم تطبيق نسبة التخفيض'
+                }
               >
                 <FormControlLabel
                   control={
@@ -305,14 +308,7 @@ const ProviderContractCreate = () => {
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                multiline
-                rows={2}
-                label="ملاحظات"
-                value={formData.notes}
-                onChange={handleInputChange('notes')}
-              />
+              <TextField fullWidth multiline rows={2} label="ملاحظات" value={formData.notes} onChange={handleInputChange('notes')} />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>

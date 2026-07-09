@@ -104,6 +104,3 @@ TbaFormSection.propTypes = {
 };
 
 export default TbaFormSection;
-
-
-

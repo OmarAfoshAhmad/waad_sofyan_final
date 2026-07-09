@@ -341,5 +341,3 @@ MedicalReviewLayout.propTypes = {
 };
 
 export default memo(MedicalReviewLayout);
-
-

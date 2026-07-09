@@ -28,7 +28,6 @@ const axiosServices = axios.create({
 
 axiosServices.interceptors.request.use(
   (config) => {
-
     // 🔒 Ensure no duplicated /api/v1 prefix
     if (config.url) {
       if (config.url.startsWith('/api/v1/')) {
@@ -74,9 +73,7 @@ axiosServices.interceptors.response.use(
     // 401 - Unauthorized
     // ==========================================
     if (status === 401) {
-      const isLoginRequest =
-        url?.includes('/auth/login') ||
-        url?.includes('/auth/session/login');
+      const isLoginRequest = url?.includes('/auth/login') || url?.includes('/auth/session/login');
 
       const isSessionCheck = url?.includes('/auth/session/me');
 
@@ -114,8 +111,7 @@ axiosServices.interceptors.response.use(
     // 403 - Forbidden
     // ==========================================
     if (status === 403) {
-      const backendMessage =
-        errorData?.message || errorData?.error || 'Access denied';
+      const backendMessage = errorData?.message || errorData?.error || 'Access denied';
 
       window.dispatchEvent(
         new CustomEvent('api:forbidden', {
@@ -143,10 +139,7 @@ axiosServices.interceptors.response.use(
     // ==========================================
     // Suppress expected 404s (e.g. batch lookup)
     // ==========================================
-    const isExpected404 = status === 404 && (
-      url?.includes('/claim-batches/current') ||
-      error.config?.suppressGlobalError === true
-    );
+    const isExpected404 = status === 404 && (url?.includes('/claim-batches/current') || error.config?.suppressGlobalError === true);
 
     if (!isExpected404) {
       const normalized = normalizeApiError(error);

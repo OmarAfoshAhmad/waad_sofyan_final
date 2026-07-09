@@ -313,5 +313,3 @@ export const MEDICAL_THEME = {
 };
 
 export default MEDICAL_THEME;
-
-

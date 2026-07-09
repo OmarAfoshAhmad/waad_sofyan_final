@@ -245,5 +245,3 @@ CoverageGauge.propTypes = {
 };
 
 export default CoverageGauge;
-
-

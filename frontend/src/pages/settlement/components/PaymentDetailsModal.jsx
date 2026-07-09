@@ -32,7 +32,11 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
   const [auditOpen, setAuditOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
 
-  const { data: records, isLoading, refetch } = useQuery({
+  const {
+    data: records,
+    isLoading,
+    refetch
+  } = useQuery({
     queryKey: ['payment-records', summary?.employerId, summary?.providerId, summary?.targetYear, summary?.targetMonth],
     queryFn: () => paymentsService.getPaymentRecords(summary?.employerId, summary?.providerId, summary?.targetYear, summary?.targetMonth),
     enabled: open && !!summary
@@ -49,7 +53,7 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
   };
 
   const handleDelete = async (payment) => {
-    const reason = window.prompt("يرجى إدخال سبب إلغاء الدفعة:");
+    const reason = window.prompt('يرجى إدخال سبب إلغاء الدفعة:');
     if (reason && reason.trim()) {
       try {
         await paymentsService.deletePayment(payment.id, reason);
@@ -59,7 +63,7 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
         alert(err?.response?.data?.message || 'حدث خطأ أثناء الإلغاء');
       }
     } else if (reason !== null) {
-      alert("السبب إلزامي لإلغاء الدفعة!");
+      alert('السبب إلزامي لإلغاء الدفعة!');
     }
   };
 
@@ -72,22 +76,38 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
     <>
       <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">تفاصيل دفعات {summary?.employerName} ({summary?.targetMonth}/{summary?.targetYear})</Typography>
-          <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+          <Typography variant="h6">
+            تفاصيل دفعات {summary?.employerName} ({summary?.targetMonth}/{summary?.targetYear})
+          </Typography>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <Box sx={{ mb: 2, display: 'flex', gap: 2, justifyContent: 'space-between' }}>
             <Box>
-              <Typography variant="body2" color="textSecondary">إجمالي المطالبات:</Typography>
-              <Typography variant="subtitle1" fontWeight="bold">{formatCurrency(summary?.totalAmount)}</Typography>
+              <Typography variant="body2" color="textSecondary">
+                إجمالي المطالبات:
+              </Typography>
+              <Typography variant="subtitle1" fontWeight="bold">
+                {formatCurrency(summary?.totalAmount)}
+              </Typography>
             </Box>
             <Box>
-              <Typography variant="body2" color="textSecondary">إجمالي المدفوع:</Typography>
-              <Typography variant="subtitle1" fontWeight="bold" color="success.main">{formatCurrency(summary?.paidAmount)}</Typography>
+              <Typography variant="body2" color="textSecondary">
+                إجمالي المدفوع:
+              </Typography>
+              <Typography variant="subtitle1" fontWeight="bold" color="success.main">
+                {formatCurrency(summary?.paidAmount)}
+              </Typography>
             </Box>
             <Box>
-              <Typography variant="body2" color="textSecondary">المتبقي:</Typography>
-              <Typography variant="subtitle1" fontWeight="bold" color="error.main">{formatCurrency(summary?.remainingAmount)}</Typography>
+              <Typography variant="body2" color="textSecondary">
+                المتبقي:
+              </Typography>
+              <Typography variant="subtitle1" fontWeight="bold" color="error.main">
+                {formatCurrency(summary?.remainingAmount)}
+              </Typography>
             </Box>
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd} size="small">
               إضافة دفعة جديدة
@@ -95,7 +115,9 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
           </Box>
 
           {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+            </Box>
           ) : (
             <TableContainer component={Paper} variant="outlined">
               <Table size="small">
@@ -114,26 +136,40 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
                     records.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell>{dayjs(row.paymentDate).format('YYYY-MM-DD')}</TableCell>
-                        <TableCell><Typography fontWeight="bold" color="primary">{formatCurrency(row.amount)}</Typography></TableCell>
-                        <TableCell><Chip label={row.paymentMethodLabel} size="small" /></TableCell>
+                        <TableCell>
+                          <Typography fontWeight="bold" color="primary">
+                            {formatCurrency(row.amount)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={row.paymentMethodLabel} size="small" />
+                        </TableCell>
                         <TableCell>{row.referenceNumber || '-'}</TableCell>
                         <TableCell>{row.notes || '-'}</TableCell>
                         <TableCell align="center">
                           <Tooltip title="تعديل">
-                            <IconButton size="small" color="primary" onClick={() => handleEdit(row)}><EditIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" color="primary" onClick={() => handleEdit(row)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
                           </Tooltip>
                           <Tooltip title="سجل التعديلات">
-                            <IconButton size="small" color="info" onClick={() => handleViewAudit(row)}><HistoryIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" color="info" onClick={() => handleViewAudit(row)}>
+                              <HistoryIcon fontSize="small" />
+                            </IconButton>
                           </Tooltip>
                           <Tooltip title="إلغاء">
-                            <IconButton size="small" color="error" onClick={() => handleDelete(row)}><DeleteIcon fontSize="small" /></IconButton>
+                            <IconButton size="small" color="error" onClick={() => handleDelete(row)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
                           </Tooltip>
                         </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} align="center">لا توجد دفعات مسجلة لهذا الشهر</TableCell>
+                      <TableCell colSpan={6} align="center">
+                        لا توجد دفعات مسجلة لهذا الشهر
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -142,7 +178,9 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} color="inherit">إغلاق</Button>
+          <Button onClick={onClose} color="inherit">
+            إغلاق
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -160,11 +198,7 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
       )}
 
       {auditOpen && selectedPayment && (
-        <PaymentAuditModal
-          open={auditOpen}
-          onClose={() => setAuditOpen(false)}
-          paymentId={selectedPayment.id}
-        />
+        <PaymentAuditModal open={auditOpen} onClose={() => setAuditOpen(false)} paymentId={selectedPayment.id} />
       )}
     </>
   );

@@ -24,7 +24,7 @@ import { SystemConfigProvider } from 'contexts/SystemConfigContext';
 
 /**
  * AppProviders centralizes the deeply nested React Context providers
- * into a single component, solving the "Provider Hell" anti-pattern 
+ * into a single component, solving the "Provider Hell" anti-pattern
  * and keeping the root App.jsx clean and declarative.
  */
 export const AppProviders = ({ children }) => {

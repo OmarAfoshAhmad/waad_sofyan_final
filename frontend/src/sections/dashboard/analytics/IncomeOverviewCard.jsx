@@ -49,7 +49,13 @@ export default function IncomeOverviewCard() {
           <Grid size={{ xs: 12, sm: 6 }}>
             <Stack
               direction="row"
-              sx={{ gap: 1, alignItems: 'center', justifyContent: { xs: 'center', sm: 'flex-end' }, mt: '1.5rem', mr: { xs: 0, sm: '1.0rem' } }}
+              sx={{
+                gap: 1,
+                alignItems: 'center',
+                justifyContent: { xs: 'center', sm: 'flex-end' },
+                mt: '1.5rem',
+                mr: { xs: 0, sm: '1.0rem' }
+              }}
             >
               <ToggleButtonGroup exclusive onChange={handleChange} size="small" value={slot}>
                 <ToggleButton disabled={slot === 'week'} value="week" sx={{ px: '1.0rem', py: 0.5 }}>
@@ -81,6 +87,3 @@ export default function IncomeOverviewCard() {
     </MainCard>
   );
 }
-
-
-

@@ -375,7 +375,7 @@ public class ProviderPortalService {
             .remainingLimit(remainingLimit)
             .usagePercentage(usagePercentage)
             .active(memberDto.getActive())
-                .cardNumber(maskCardNumber(memberDto.getCardNumber()))
+                .cardNumber(memberDto.getCardNumber())
                 .profileImage(resolveProfileImageUrl(memberDto.getId(), memberDto.getPhotoUrl(), member))
             .photoPath(member != null ? member.getProfilePhotoPath() : null)
             .build();
@@ -446,7 +446,7 @@ public class ProviderPortalService {
             .remainingLimit(remainingLimit)
             .usagePercentage(usagePercentage)
             .active(dependent.getActive())
-            .cardNumber(maskCardNumber(dependent.getCardNumber()))
+            .cardNumber(dependent.getCardNumber())
             .profileImage(resolveProfileImageUrl(dependent.getId(), dependent.getPhotoUrl(), member))
             .photoPath(member != null ? member.getProfilePhotoPath() : null)
             .build();

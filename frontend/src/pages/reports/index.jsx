@@ -92,11 +92,7 @@ export default function ReportsPage() {
 
   return (
     <>
-      <ModernPageHeader
-        title="مركز التقارير الموحد"
-        subtitle="التقارير التشغيلية والمالية الأساسية للمنظومة"
-        icon={Assessment}
-      />
+      <ModernPageHeader title="مركز التقارير الموحد" subtitle="التقارير التشغيلية والمالية الأساسية للمنظومة" icon={Assessment} />
 
       {/* التقارير المتاحة */}
       <Box sx={{ mt: '2.0rem' }}>
@@ -176,6 +172,3 @@ export default function ReportsPage() {
     </>
   );
 }
-
-
-

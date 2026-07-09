@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  InputAdornment,
-  MenuItem,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography
-} from '@mui/material';
+import { Box, Button, Chip, IconButton, InputAdornment, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import dayjs from 'dayjs';
 import {
   Add as AddIcon,
@@ -42,12 +31,12 @@ import {
 } from 'services/api/benefit-policies.service';
 
 const STATUS_CONFIG = {
-  DRAFT:     { label: 'مسودة',      color: 'default' },
-  ACTIVE:    { label: 'نشط',        color: 'success' },
-  INACTIVE:  { label: 'غير نشط',    color: 'default' },
-  EXPIRED:   { label: 'منتهية',     color: 'warning' },
-  SUSPENDED: { label: 'معلقة',      color: 'warning' },
-  CANCELLED: { label: 'ملغاة',      color: 'error'   }
+  DRAFT: { label: 'مسودة', color: 'default' },
+  ACTIVE: { label: 'نشط', color: 'success' },
+  INACTIVE: { label: 'غير نشط', color: 'default' },
+  EXPIRED: { label: 'منتهية', color: 'warning' },
+  SUSPENDED: { label: 'معلقة', color: 'warning' },
+  CANCELLED: { label: 'ملغاة', color: 'error' }
 };
 
 const BenefitPoliciesList = () => {
@@ -150,11 +139,14 @@ const BenefitPoliciesList = () => {
   const handleNavigateView = useCallback((id) => navigate(`/benefit-policies/${id}`), [navigate]);
   const handleNavigateEdit = useCallback((id) => navigate(`/benefit-policies/edit/${id}`), [navigate]);
 
-  const handleSort = useCallback((columnId) => {
-    setSortDirection((prev) => (sortBy === columnId ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
-    setSortBy(columnId);
-    setPage(0);
-  }, [sortBy]);
+  const handleSort = useCallback(
+    (columnId) => {
+      setSortDirection((prev) => (sortBy === columnId ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+      setSortBy(columnId);
+      setPage(0);
+    },
+    [sortBy]
+  );
 
   const handleResetFilters = useCallback(() => {
     setSearchTerm('');
@@ -349,7 +341,11 @@ const BenefitPoliciesList = () => {
         <MainCard sx={{ mb: 1, flexShrink: 0 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
             <Tooltip title="تحديث">
-              <IconButton onClick={fetchPolicies} color="primary" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}>
+              <IconButton
+                onClick={fetchPolicies}
+                color="primary"
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+              >
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -379,10 +375,13 @@ const BenefitPoliciesList = () => {
                 ),
                 endAdornment: searchTerm ? (
                   <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => {
-                      setSearchTerm('');
-                      setPage(0);
-                    }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setSearchTerm('');
+                        setPage(0);
+                      }}
+                    >
                       <CloseIcon fontSize="small" />
                     </IconButton>
                   </InputAdornment>
@@ -437,7 +436,13 @@ const BenefitPoliciesList = () => {
               ))}
             </TextField>
 
-            <Button variant="outlined" color="secondary" onClick={handleResetFilters} startIcon={<FilterAltOffIcon />} sx={{ minWidth: '7.5rem', height: '2.5rem' }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={handleResetFilters}
+              startIcon={<FilterAltOffIcon />}
+              sx={{ minWidth: '7.5rem', height: '2.5rem' }}
+            >
               إعادة ضبط
             </Button>
           </Stack>
@@ -479,4 +484,3 @@ const BenefitPoliciesList = () => {
 };
 
 export default BenefitPoliciesList;
-

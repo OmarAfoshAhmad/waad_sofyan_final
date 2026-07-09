@@ -53,13 +53,11 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
   // Relationships excluded based on principal's gender:
   // - MALE principal cannot have a HUSBAND
   // - FEMALE principal cannot have a WIFE
-  const GENDER_EXCLUDED_RELATIONSHIPS =
-    principalGender === 'MALE' ? ['HUSBAND'] : principalGender === 'FEMALE' ? ['WIFE'] : [];
+  const GENDER_EXCLUDED_RELATIONSHIPS = principalGender === 'MALE' ? ['HUSBAND'] : principalGender === 'FEMALE' ? ['WIFE'] : [];
 
   // Relationships that can only be used once per principal
   // HUSBAND is unique only for FEMALE principals; WIFE can be multiple for MALE principals
-  const UNIQUE_RELATIONSHIPS =
-    principalGender === 'FEMALE' ? ['HUSBAND', 'FATHER', 'MOTHER'] : ['FATHER', 'MOTHER'];
+  const UNIQUE_RELATIONSHIPS = principalGender === 'FEMALE' ? ['HUSBAND', 'FATHER', 'MOTHER'] : ['FATHER', 'MOTHER'];
 
   // Compute which unique relationships are already taken (excluding current dependent in edit mode)
   const usedUniqueRelationships = existingDependents
@@ -383,4 +381,3 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
 };
 
 export default DependentModal;
-

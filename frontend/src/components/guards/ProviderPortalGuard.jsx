@@ -49,8 +49,8 @@ const ProviderPortalGuard = ({ children }) => {
         </Typography>
 
         <Alert severity="info" sx={{ maxWidth: '32.5rem' }}>
-          تعتمد الشركة حالياً على نظام <strong>الدفعات الشهرية</strong> كمسار رئيسي لإدخال المطالبات.
-          سيتم إعلامكم عند تفعيل البوابة المباشرة.
+          تعتمد الشركة حالياً على نظام <strong>الدفعات الشهرية</strong> كمسار رئيسي لإدخال المطالبات. سيتم إعلامكم عند تفعيل البوابة
+          المباشرة.
         </Alert>
 
         <Typography variant="body2" color="text.disabled" align="center">

@@ -251,5 +251,3 @@ DashboardTable.propTypes = {
 };
 
 export default DashboardTable;
-
-

@@ -46,4 +46,3 @@ export default function ReactQuillDemo({ value, editorMinHeight = 135, onChange 
 }
 
 ReactQuillDemo.propTypes = { value: PropTypes.string, editorMinHeight: PropTypes.number, onChange: PropTypes.func };
-

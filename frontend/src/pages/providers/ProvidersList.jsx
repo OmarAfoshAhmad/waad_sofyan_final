@@ -54,6 +54,8 @@ import UnifiedPageHeader from 'components/UnifiedPageHeader';
 import PermissionGuard from 'components/PermissionGuard';
 import { UnifiedMedicalTable } from 'components/common';
 import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
+import ExcelImportDialog from 'components/ExcelImport/ExcelImportDialog';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 // Hooks
 import useTableState from 'hooks/useTableState';
@@ -78,21 +80,25 @@ const DEFAULT_SORT = { field: 'id', direction: 'desc' };
 // Provider Type Labels (Arabic)
 const PROVIDER_TYPE_LABELS_AR = {
   HOSPITAL: 'مستشفى',
-  CLINIC: 'عيادة',
-  LAB: 'مختبر',
-  LABORATORY: 'مختبر',
+  CLINIC: 'عيادة تخصصية',
+  CLINIC_DEN: 'عياده اسنان',
+  LAB: 'مختبر تحاليل',
+  LABORATORY: 'مختبر تحاليل',
   PHARMACY: 'صيدلية',
-  RADIOLOGY: 'مركز أشعة'
+  RADIOLOGY: 'مركز أشعة',
+  PHYSIOTHERAPY: 'مركز علاج طبيعي'
 };
 
 // Provider Type Colors
 const PROVIDER_TYPE_COLORS = {
   HOSPITAL: 'error',
   CLINIC: 'primary',
+  CLINIC_DEN: 'primary',
   LAB: 'warning',
   LABORATORY: 'warning',
   PHARMACY: 'success',
-  RADIOLOGY: 'info'
+  RADIOLOGY: 'info',
+  PHYSIOTHERAPY: 'secondary'
 };
 
 // ============================================================================
@@ -301,6 +307,7 @@ export default function ProvidersList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showDeleted, setShowDeleted] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [confirmState, setConfirmState] = useState({
     open: false,
     title: '',
@@ -577,7 +584,7 @@ export default function ProvidersList() {
               color={PROVIDER_TYPE_COLORS[provider.providerType] || 'default'}
               size="small"
               variant="outlined"
-              sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }}
+              sx={{ width: '130px', justifyContent: 'center', fontWeight: 600 }}
             />
           );
 
@@ -641,13 +648,15 @@ export default function ProvidersList() {
 
         case 'status': {
           const providerStatusConfig = {
-            ACTIVE:   { label: 'نشط',    color: 'success' },
+            ACTIVE: { label: 'نشط', color: 'success' },
             INACTIVE: { label: 'غير نشط', color: 'error' },
-            SUSPENDED:{ label: 'معلق',   color: 'warning' },
-            PENDING:  { label: 'قيد المراجعة', color: 'warning' }
+            SUSPENDED: { label: 'معلق', color: 'warning' },
+            PENDING: { label: 'قيد المراجعة', color: 'warning' }
           };
           const sc = providerStatusConfig[getProviderStatus(provider)] || { label: getProviderStatus(provider), color: 'default' };
-          return <Chip label={sc.label} color={sc.color} size="small" sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }} />;
+          return (
+            <Chip label={sc.label} color={sc.color} size="small" sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }} />
+          );
         }
 
         case 'actions':
@@ -792,6 +801,9 @@ export default function ProvidersList() {
           onAddClick={handleNavigateAdd}
           additionalActions={
             <Stack direction="row" spacing={1} alignItems="center">
+              <Button variant="outlined" color="secondary" startIcon={<FileUploadIcon />} onClick={() => setIsImportDialogOpen(true)}>
+                استيراد من إكسل
+              </Button>
               <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
             </Stack>
           }
@@ -828,8 +840,25 @@ export default function ProvidersList() {
         onClose={() => setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }))}
         onConfirm={() => confirmState.onConfirm?.()}
       />
+
+      {/* ====== EXCEL IMPORT DIALOG ====== */}
+      <ExcelImportDialog
+        open={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        title="استيراد مقدمي الخدمات من إكسل"
+        templateFilename="Providers_Import_Template.xlsx"
+        onDownloadTemplate={() => providersService.downloadImportTemplate()}
+        onImport={async (file) => {
+          const result = await providersService.importProvidersFromExcel(file);
+          openSnackbar({
+            open: true,
+            message: 'تم استيراد البيانات بنجاح',
+            variant: 'success'
+          });
+          queryClient.invalidateQueries([QUERY_KEY]);
+          return result;
+        }}
+      />
     </Box>
   );
 }
-
-

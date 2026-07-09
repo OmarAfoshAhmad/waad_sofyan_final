@@ -230,7 +230,6 @@ export const initializeStandardRules = async (policyId) => {
   return unwrap(response);
 };
 
-
 // ═══════════════════════════════════════════════════════════════════════════
 // UPDATE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════

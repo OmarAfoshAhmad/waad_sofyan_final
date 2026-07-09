@@ -8,7 +8,8 @@
 import { useMemo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, IconButton, Stack, Tooltip, Typography, Grid, TextField, MenuItem, InputAdornment } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -23,6 +24,7 @@ import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 import useTableState from 'hooks/useTableState';
 import {
   getProviderContracts,
+  searchProviderContracts,
   getDeletedProviderContracts,
   restoreProviderContract,
   hardDeleteProviderContract,
@@ -214,6 +216,9 @@ const ProviderContractsList = () => {
       if (showDeleted) {
         return await getDeletedProviderContracts(params);
       }
+      if (params.q || params.status) {
+        return await searchProviderContracts(params);
+      }
       return await getProviderContracts(params);
     },
     keepPreviousData: true
@@ -270,6 +275,13 @@ const ProviderContractsList = () => {
         id: 'endDate',
         label: 'تاريخ الانتهاء',
         minWidth: '8.125rem',
+        sortable: false
+      },
+      {
+        id: 'pricingItemsCount',
+        label: 'الخدمات',
+        minWidth: '6.25rem',
+        align: 'center',
         sortable: false
       },
       {
@@ -350,6 +362,17 @@ const ProviderContractsList = () => {
             </Typography>
           );
 
+        case 'pricingItemsCount':
+          return (
+            <Chip
+              label={contract.pricingItemsCount || 0}
+              size="small"
+              color={contract.pricingItemsCount > 0 ? 'primary' : 'default'}
+              variant={contract.pricingItemsCount > 0 ? 'filled' : 'outlined'}
+              sx={{ fontWeight: 'bold' }}
+            />
+          );
+
         case 'startDate':
           return <Typography variant="body2">{formatDate(contract.startDate)}</Typography>;
 
@@ -426,19 +449,52 @@ const ProviderContractsList = () => {
           requires="provider_contracts.create"
           additionalActions={<SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />}
         />
+
+        <Box sx={{ p: 2, mb: 2 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="البحث برمز العقد أو اسم المقدم..."
+                value={tableState.columnFilters.q || ''}
+                onChange={(e) => tableState.setFilter('q', e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="الحالة"
+                value={tableState.columnFilters.status || ''}
+                onChange={(e) => tableState.setFilter('status', e.target.value)}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                {Object.entries(CONTRACT_STATUS_CONFIG).map(([key, config]) => (
+                  <MenuItem key={key} value={key}>
+                    {config.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+          </Grid>
+        </Box>
+
         <TableErrorBoundary>
           <UnifiedMedicalTable
             columns={columns}
             rows={Array.isArray(data) ? data : data?.content || data?.items || []}
             loading={isLoading}
             renderCell={renderCell}
-            totalCount={
-              typeof data?.totalElements === 'number'
-                ? data.totalElements
-                : typeof data?.total === 'number'
-                  ? data.total
-                  : 0
-            }
+            totalCount={typeof data?.totalElements === 'number' ? data.totalElements : typeof data?.total === 'number' ? data.total : 0}
             page={tableState.page}
             rowsPerPage={tableState.pageSize}
             onPageChange={(newPage) => tableState.setPage(newPage)}

@@ -9,17 +9,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // MUI
-import {
-  Box,
-  Grid,
-  TextField,
-  Button,
-  Alert,
-  CircularProgress,
-  InputAdornment,
-  IconButton,
-  MenuItem
-} from '@mui/material';
+import { Box, Grid, TextField, Button, Alert, CircularProgress, InputAdornment, IconButton, MenuItem } from '@mui/material';
 
 // MUI Icons
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -151,7 +141,10 @@ const UserCreate = () => {
         const [empData, provData] = await Promise.all([
           employersService.getEmployerSelectors().catch(() => []),
           // use axiosClient directly if providersService doesn't expose getSelectors
-          import('utils/axios').then(m => m.default.get('/providers/selector')).then(res => res.data?.data?.items || res.data?.items || res.data?.data || res.data).catch(() => [])
+          import('utils/axios')
+            .then((m) => m.default.get('/providers/selector'))
+            .then((res) => res.data?.data?.items || res.data?.items || res.data?.data || res.data)
+            .catch(() => [])
         ]);
         setEmployers(empData || []);
         setProviders(provData || []);
@@ -235,11 +228,7 @@ const UserCreate = () => {
         title="إنشاء مستخدم جديد"
         subtitle="إضافة مستخدم جديد للنظام"
         icon={PersonAddIcon}
-        breadcrumbs={[
-          { label: 'الرئيسية', path: '/' },
-          { label: 'المستخدمين', path: '/admin/users' },
-          { label: 'إنشاء مستخدم' }
-        ]}
+        breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمين', path: '/admin/users' }, { label: 'إنشاء مستخدم' }]}
         actions={
           <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate('/admin/users')}>
             العودة للقائمة
@@ -458,7 +447,9 @@ const UserCreate = () => {
         </TbaFormSection>
 
         {/* Submit */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'flex-end', mt: '1.5rem', pt: '1.0rem', borderTop: '1px solid', borderColor: 'divider' }}
+        >
           <Button
             variant="contained"
             onClick={handleSubmit}
@@ -475,4 +466,3 @@ const UserCreate = () => {
 };
 
 export default UserCreate;
-

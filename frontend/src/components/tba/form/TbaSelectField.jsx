@@ -151,6 +151,3 @@ TbaSelectField.propTypes = {
 };
 
 export default TbaSelectField;
-
-
-

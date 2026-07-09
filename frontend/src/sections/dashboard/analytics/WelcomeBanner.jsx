@@ -36,7 +36,12 @@ export default function WelcomeBanner() {
       <Grid container>
         <Grid size={{ md: 6, sm: 6, xs: 12 }}>
           <Stack
-            sx={(theme) => ({ gap: '1.0rem', padding: '1rem', color: 'background.paper', ...theme.applyStyles('dark', { color: 'text.primary' }) })}
+            sx={(theme) => ({
+              gap: '1.0rem',
+              padding: '1rem',
+              color: 'background.paper',
+              ...theme.applyStyles('dark', { color: 'text.primary' })
+            })}
           >
             <Typography variant="h2">{LABELS.welcome}</Typography>
             <Typography variant="h6">{LABELS.welcomeDesc}</Typography>
@@ -74,4 +79,3 @@ export default function WelcomeBanner() {
     </MainCard>
   );
 }
-

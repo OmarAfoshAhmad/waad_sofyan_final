@@ -37,7 +37,7 @@ const fetchWithRetry = async (url, options, maxRetries = 2) => {
     }
 
     const retryAfter = Number(response.headers.get('retry-after'));
-    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * (2 ** attempt);
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt;
     await sleep(waitMs);
   }
   return response;
@@ -207,9 +207,7 @@ const AIKeySettingsPage = ({ embedded = false }) => {
               يتم حفظ القيم في قاعدة البيانات عبر إعدادات النظام (System Settings).
             </Typography>
 
-            <Alert severity="warning">
-              تنبيه أمني: لا تضع مفتاح API داخل الكود المصدري. استخدم هذه الصفحة للحفظ المحلي فقط.
-            </Alert>
+            <Alert severity="warning">تنبيه أمني: لا تضع مفتاح API داخل الكود المصدري. استخدم هذه الصفحة للحفظ المحلي فقط.</Alert>
 
             <TextField
               label="API Key"
@@ -254,7 +252,9 @@ const AIKeySettingsPage = ({ embedded = false }) => {
               placeholder="https://openrouter.ai/api/v1/chat/completions"
             />
 
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>إعدادات نموذج المحرك الطبي المستضاف محلياً (BioBERT/ClinicalBERT)</Typography>
+            <Typography variant="subtitle2" sx={{ mt: 2 }}>
+              إعدادات نموذج المحرك الطبي المستضاف محلياً (BioBERT/ClinicalBERT)
+            </Typography>
             <TextField
               label="BioBERT / ClinicalBERT API Endpoint"
               fullWidth
@@ -285,9 +285,7 @@ const AIKeySettingsPage = ({ embedded = false }) => {
               </Button>
             </Stack>
 
-            <Alert severity={saved ? 'success' : 'info'}>
-              حالة المفتاح الحالي: {maskedPreview}
-            </Alert>
+            <Alert severity={saved ? 'success' : 'info'}>حالة المفتاح الحالي: {maskedPreview}</Alert>
 
             {testStatus.ok !== null && <Alert severity={testStatus.ok ? 'success' : 'error'}>{testStatus.message}</Alert>}
           </Stack>

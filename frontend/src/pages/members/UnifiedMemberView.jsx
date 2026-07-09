@@ -73,7 +73,15 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import MemberAvatar from 'components/tba/MemberAvatar';
 import DependentModal from './DependentModal';
-import { getMember, deleteMember, hardDeleteMember, restoreMember, MEMBER_TYPES, GENDERS, RELATIONSHIPS } from 'services/api/unified-members.service';
+import {
+  getMember,
+  deleteMember,
+  hardDeleteMember,
+  restoreMember,
+  MEMBER_TYPES,
+  GENDERS,
+  RELATIONSHIPS
+} from 'services/api/unified-members.service';
 import { openSnackbar } from 'api/snackbar';
 
 import { RELATIONSHIP_AR } from './member.shared';
@@ -350,8 +358,13 @@ const UnifiedMemberView = () => {
                           sx={{ height: '1.5rem', fontSize: '0.75rem' }}
                         />
                         <Chip
-                          label={{ ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[member.status] || member.status}
-                          color={{ ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[member.status] || 'default'}
+                          label={
+                            { ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[member.status] ||
+                            member.status
+                          }
+                          color={
+                            { ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[member.status] || 'default'
+                          }
                           size="small"
                           sx={{ height: '1.5rem', fontSize: '0.75rem' }}
                         />
@@ -641,8 +654,14 @@ const UnifiedMemberView = () => {
                                   <TableCell align="center">{dep.birthDate || '-'}</TableCell>
                                   <TableCell align="center">
                                     <Chip
-                                      label={{ ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[dep.status] || dep.status}
-                                      color={{ ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[dep.status] || 'default'}
+                                      label={
+                                        { ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[dep.status] ||
+                                        dep.status
+                                      }
+                                      color={
+                                        { ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[dep.status] ||
+                                        'default'
+                                      }
                                       size="small"
                                       sx={{ height: '1.5rem' }}
                                     />
@@ -763,5 +782,3 @@ const UnifiedMemberView = () => {
 };
 
 export default UnifiedMemberView;
-
-

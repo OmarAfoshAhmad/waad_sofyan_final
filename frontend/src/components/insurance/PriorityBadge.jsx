@@ -140,5 +140,3 @@ export default PriorityBadge;
 
 // Export config for use in other components
 export { PRIORITY_CONFIG };
-
-

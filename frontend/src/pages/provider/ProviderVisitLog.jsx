@@ -503,7 +503,6 @@ const ProviderVisitLog = () => {
                   {LABELS.createPreAuth}
                 </Button>
               )}
-
             </Stack>
 
             {/* Linked counts badges */}
@@ -785,4 +784,3 @@ const ProviderVisitLog = () => {
 };
 
 export default ProviderVisitLog;
-

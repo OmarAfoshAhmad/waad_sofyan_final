@@ -38,10 +38,19 @@ export default function EcommerceMetrix({ primary, secondary, content, iconPrima
         }
       }}
     >
-      <Box sx={(theme) => ({ px: '2.25rem', py: '2.0rem', color: 'background.paper', ...theme.applyStyles('dark', { color: 'text.primary' }) })}>
+      <Box
+        sx={(theme) => ({
+          px: '2.25rem',
+          py: '2.0rem',
+          color: 'background.paper',
+          ...theme.applyStyles('dark', { color: 'text.primary' })
+        })}
+      >
         <Grid container sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <Grid>
-            <Typography sx={(theme) => ({ opacity: 0.23, fontSize: '3.5rem', lineHeight: 0, ...theme.applyStyles('dark', { opacity: 0.5 }) })}>
+            <Typography
+              sx={(theme) => ({ opacity: 0.23, fontSize: '3.5rem', lineHeight: 0, ...theme.applyStyles('dark', { opacity: 0.5 }) })}
+            >
               {primaryIcon}
             </Typography>
           </Grid>

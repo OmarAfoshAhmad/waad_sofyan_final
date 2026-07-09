@@ -96,7 +96,7 @@ StatsCard.propTypes = {
 
 export const StatusDistributionChart = ({ data, loading }) => {
   const theme = useTheme();
-  const hasData = Array.isArray(data) ? data.length > 0 : (data && Object.keys(data).length > 0 && Object.values(data).some(v => v > 0));
+  const hasData = Array.isArray(data) ? data.length > 0 : data && Object.keys(data).length > 0 && Object.values(data).some((v) => v > 0);
   if (loading || !hasData) {
     return (
       <Card>
@@ -133,14 +133,16 @@ export const StatusDistributionChart = ({ data, loading }) => {
   };
 
   // Convert object to array if backend returned StatusDistribution object
-  const normalizedData = Array.isArray(data) ? data : [
-    { status: 'PENDING', count: data?.pending || 0 },
-    { status: 'UNDER_REVIEW', count: data?.underReview || 0 },
-    { status: 'APPROVED', count: data?.approved || 0 },
-    { status: 'REJECTED', count: data?.rejected || 0 },
-    { status: 'CANCELLED', count: data?.cancelled || 0 },
-    { status: 'EXPIRED', count: data?.expired || 0 }
-  ].filter(item => item.count > 0);
+  const normalizedData = Array.isArray(data)
+    ? data
+    : [
+        { status: 'PENDING', count: data?.pending || 0 },
+        { status: 'UNDER_REVIEW', count: data?.underReview || 0 },
+        { status: 'APPROVED', count: data?.approved || 0 },
+        { status: 'REJECTED', count: data?.rejected || 0 },
+        { status: 'CANCELLED', count: data?.cancelled || 0 },
+        { status: 'EXPIRED', count: data?.expired || 0 }
+      ].filter((item) => item.count > 0);
 
   const chartData = normalizedData.map((item, index) => ({
     id: index,
@@ -615,6 +617,3 @@ RecentActivityTimeline.propTypes = {
   loading: PropTypes.bool,
   limit: PropTypes.number
 };
-
-
-

@@ -14,8 +14,6 @@
 
 import ExcelJS from 'exceljs';
 
-
-
 /**
  * Get company settings from localStorage (same key as CompanySettingsContext)
  */
@@ -354,10 +352,10 @@ export const exportMedicalServicesToExcel = async (data) => {
  */
 export const exportMedicalCategoriesToExcel = async (data) => {
   const columns = [
-    { key: 'code',       header: 'الرمز',         width: 18,  align: 'center' },
-    { key: 'name',       header: 'الاسم',          width: 35,  align: 'right' },
-    { key: 'parentName', header: 'التصنيف الأب',   width: 28,  align: 'right' },
-    { key: 'active',     header: 'الحالة',         width: 14,  align: 'center' }
+    { key: 'code', header: 'الرمز', width: 18, align: 'center' },
+    { key: 'name', header: 'الاسم', width: 35, align: 'right' },
+    { key: 'parentName', header: 'التصنيف الأب', width: 28, align: 'right' },
+    { key: 'active', header: 'الحالة', width: 14, align: 'center' }
   ];
 
   const transformedData = data.map((item) => ({
@@ -378,5 +376,3 @@ export const exportMedicalCategoriesToExcel = async (data) => {
 };
 
 export default exportToExcel;
-
-

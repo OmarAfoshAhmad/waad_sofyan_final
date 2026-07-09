@@ -180,5 +180,3 @@ export default NetworkBadge;
 
 // Export network tier constants for use in other components
 export { NETWORK_TIERS };
-
-

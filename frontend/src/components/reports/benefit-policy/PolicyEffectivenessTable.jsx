@@ -383,5 +383,3 @@ PolicyEffectivenessTable.propTypes = {
 };
 
 export default PolicyEffectivenessTable;
-
-

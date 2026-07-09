@@ -38,7 +38,12 @@ const ProgressWithLabel = ({ value, max, label, color = 'primary' }) => {
           {value.toLocaleString('en-US')}
         </Typography>
       </Box>
-      <LinearProgress variant="determinate" value={Math.min(percentage, 100)} color={color} sx={{ height: '0.375rem', borderRadius: '0.1875rem' }} />
+      <LinearProgress
+        variant="determinate"
+        value={Math.min(percentage, 100)}
+        color={color}
+        sx={{ height: '0.375rem', borderRadius: '0.1875rem' }}
+      />
     </Box>
   );
 };
@@ -255,6 +260,3 @@ BenefitPolicyInsights.propTypes = {
 };
 
 export default BenefitPolicyInsights;
-
-
-

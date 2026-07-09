@@ -236,7 +236,7 @@ public class ProviderContractPricingExcelService {
 
                 // Step 3: Override Outpatient code for Inpatient service
                 if ("إيواء".equals(mainCatCode) && assignedCategory != null && assignedCategory.getCode().startsWith("CAT-OP")) {
-                    assignedCategory = categoryRepository.findByCode("SUB-INPAT-GENERAL").orElse(null);
+                    assignedCategory = categoryRepository.findByCode("CAT-IP").orElse(null);
                     confidence = ConfidenceLevel.MEDIUM;
                     requiresReview = true;
                     reviewReason = "تصنيف عيادات خارجية مطبَّق على خدمة إيواء — يتطلب مراجعة";

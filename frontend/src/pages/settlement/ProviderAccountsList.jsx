@@ -4,7 +4,20 @@ import dayjs from 'dayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 // MUI
-import { Box, Chip, Typography, Stack, Button, Alert, Tooltip, IconButton, TextField, MenuItem, Grid, CircularProgress } from '@mui/material';
+import {
+  Box,
+  Chip,
+  Typography,
+  Stack,
+  Button,
+  Alert,
+  Tooltip,
+  IconButton,
+  TextField,
+  MenuItem,
+  Grid,
+  CircularProgress
+} from '@mui/material';
 import {
   ReceiptLong as ReceiptIcon,
   TrendingUp as UpIcon,
@@ -178,7 +191,13 @@ export default function ProviderAccountsList() {
     keepPreviousData: true
   });
 
-  const { data: claimsData, isLoading, isError, error, refetch } = useQuery({
+  const {
+    data: claimsData,
+    isLoading,
+    isError,
+    error,
+    refetch
+  } = useQuery({
     queryKey: ['settlement-claims', appliedFilters, tableState.page, tableState.pageSize, sortBy, sortDir],
     queryFn: () => {
       const params = {
@@ -265,8 +284,8 @@ export default function ProviderAccountsList() {
       gross: Number(s.totalClaimsAmount) || 0,
       refused: Number(s.totalRefusedAmount) || 0,
       payable,
-      companyShare,                    // 10% من إجمالي المستحق = حصة الشركة
-      facilityShare: payable - companyShare  // 90% من إجمالي المستحق = حصة المرفق
+      companyShare, // 10% من إجمالي المستحق = حصة الشركة
+      facilityShare: payable - companyShare // 90% من إجمالي المستحق = حصة المرفق
     };
   }, [summaryData, totalElements]);
 
@@ -292,7 +311,16 @@ export default function ProviderAccountsList() {
       </Typography>
       <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="space-between">
         {loading ? (
-          <Box sx={{ width: '5rem', height: '1rem', borderRadius: 0.5, bgcolor: 'action.hover', animation: 'pulse 1.5s ease-in-out infinite', '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.4 } } }} />
+          <Box
+            sx={{
+              width: '5rem',
+              height: '1rem',
+              borderRadius: 0.5,
+              bgcolor: 'action.hover',
+              animation: 'pulse 1.5s ease-in-out infinite',
+              '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.4 } }
+            }}
+          />
         ) : (
           <Typography variant="body2" sx={{ lineHeight: 1.1, fontWeight: 700, whiteSpace: 'nowrap' }}>
             {value}
@@ -352,7 +380,7 @@ export default function ProviderAccountsList() {
         'القيمة المستحقة': getPayableAmount(item),
         'حصة الشركة (10%)': getCompanyShareAmount(item),
         'نصيب المرفق': getFacilityShareAmount(item),
-        'الحالة': STATUS_LABELS[item.status] || item.status || ''
+        الحالة: STATUS_LABELS[item.status] || item.status || ''
       }));
       exportToExcel(exportRows, `مطالبات_مقدمي_الخدمة_${dayjs().format('YYYY-MM-DD')}`);
     } catch (err) {
@@ -363,13 +391,14 @@ export default function ProviderAccountsList() {
   };
 
   const handlePrint = () => {
-    const printRows = claims.map((row, idx) => {
-      const discount = getDiscountPercent(row);
-      const payable = getPayableAmount(row);
-      const facilityShare = getFacilityShareAmount(row);
-      const companyShare = getCompanyShareAmount(row);
-      const status = STATUS_LABELS[row.status] || row.status || '';
-      return `<tr>
+    const printRows = claims
+      .map((row, idx) => {
+        const discount = getDiscountPercent(row);
+        const payable = getPayableAmount(row);
+        const facilityShare = getFacilityShareAmount(row);
+        const companyShare = getCompanyShareAmount(row);
+        const status = STATUS_LABELS[row.status] || row.status || '';
+        return `<tr>
         <td>${idx + 1}</td>
         <td>${row.claimNumber || `CLM-${row.id}`}</td>
         <td>${row.employerName || '-'}</td>
@@ -383,7 +412,8 @@ export default function ProviderAccountsList() {
         <td style="color:#389e0d">${formatCurrency(facilityShare)}</td>
         <td>${status}</td>
       </tr>`;
-    }).join('');
+      })
+      .join('');
 
     const win = window.open('', '_blank', 'width=1200,height=800');
     win.document.write(`<!DOCTYPE html>
@@ -451,7 +481,9 @@ export default function ProviderAccountsList() {
         minWidth: '10rem',
         align: 'center',
         cell: ({ row }) => (
-          <Typography variant="body2" noWrap>{row.original.employerName || '-'}</Typography>
+          <Typography variant="body2" noWrap>
+            {row.original.employerName || '-'}
+          </Typography>
         )
       },
       {
@@ -556,11 +588,7 @@ export default function ProviderAccountsList() {
           title="مطالبات مقدمي الخدمة"
           subtitle="قائمة تفصيلية بمطالبات مقدمي الخدمة"
           icon={<ReceiptIcon />}
-          breadcrumbs={[
-            { label: 'الرئيسية', href: '/' },
-            { label: 'التسويات المالية', href: '/settlement' },
-            { label: 'المطالبات' }
-          ]}
+          breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'التسويات المالية', href: '/settlement' }, { label: 'المطالبات' }]}
           actions={
             <Box
               sx={{
@@ -574,12 +602,47 @@ export default function ProviderAccountsList() {
                 '&::-webkit-scrollbar': { height: '0.375rem' }
               }}
             >
-              {renderSummaryCard('إجمالي المطالبات', String(totals.count), <ReceiptIcon fontSize="small" color="primary" />, 'primary.main')}
-              {renderSummaryCard('إجمالي قبل', formatCurrency(totals.gross), <UpIcon fontSize="small" color="info" />, 'info.main', isSummaryLoading)}
-              {renderSummaryCard('إجمالي المرفوض', formatCurrency(totals.refused), <ClearIcon fontSize="small" color="error" />, 'error.main', isSummaryLoading)}
-              {renderSummaryCard('إجمالي المستحق', formatCurrency(totals.payable), <PaymentsIcon fontSize="small" color="secondary" />, 'secondary.main', isSummaryLoading)}
-              {renderSummaryCard('حصة الشركة', formatCurrency(totals.companyShare), <PaymentsIcon fontSize="small" color="warning" />, 'warning.main', isSummaryLoading)}
-              {renderSummaryCard('حصة المرفق', formatCurrency(totals.facilityShare), <PaymentsIcon fontSize="small" color="success" />, 'success.main', isSummaryLoading)}
+              {renderSummaryCard(
+                'إجمالي المطالبات',
+                String(totals.count),
+                <ReceiptIcon fontSize="small" color="primary" />,
+                'primary.main'
+              )}
+              {renderSummaryCard(
+                'إجمالي قبل',
+                formatCurrency(totals.gross),
+                <UpIcon fontSize="small" color="info" />,
+                'info.main',
+                isSummaryLoading
+              )}
+              {renderSummaryCard(
+                'إجمالي المرفوض',
+                formatCurrency(totals.refused),
+                <ClearIcon fontSize="small" color="error" />,
+                'error.main',
+                isSummaryLoading
+              )}
+              {renderSummaryCard(
+                'إجمالي المستحق',
+                formatCurrency(totals.payable),
+                <PaymentsIcon fontSize="small" color="secondary" />,
+                'secondary.main',
+                isSummaryLoading
+              )}
+              {renderSummaryCard(
+                'حصة الشركة',
+                formatCurrency(totals.companyShare),
+                <PaymentsIcon fontSize="small" color="warning" />,
+                'warning.main',
+                isSummaryLoading
+              )}
+              {renderSummaryCard(
+                'حصة المرفق',
+                formatCurrency(totals.facilityShare),
+                <PaymentsIcon fontSize="small" color="success" />,
+                'success.main',
+                isSummaryLoading
+              )}
             </Box>
           }
         />
@@ -648,7 +711,11 @@ export default function ProviderAccountsList() {
               slotProps={{
                 textField: {
                   size: 'small',
-                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                  sx: {
+                    minWidth: '8.5rem',
+                    '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
+                  }
                 }
               }}
             />
@@ -656,14 +723,16 @@ export default function ProviderAccountsList() {
             <DatePicker
               label="إلى إدخال المطالبة"
               value={filters.dateTo ? dayjs(filters.dateTo) : null}
-              onChange={(newValue) =>
-                setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
-              }
+              onChange={(newValue) => setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))}
               format="DD/MM/YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
-                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                  sx: {
+                    minWidth: '8.5rem',
+                    '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
+                  }
                 }
               }}
             />
@@ -678,7 +747,11 @@ export default function ProviderAccountsList() {
               slotProps={{
                 textField: {
                   size: 'small',
-                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                  sx: {
+                    minWidth: '8.5rem',
+                    '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
+                  }
                 }
               }}
             />
@@ -693,17 +766,29 @@ export default function ProviderAccountsList() {
               slotProps={{
                 textField: {
                   size: 'small',
-                  sx: { minWidth: '8.5rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }
+                  sx: {
+                    minWidth: '8.5rem',
+                    '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
+                  }
                 }
               }}
             />
 
-            <Button variant="contained" startIcon={<SearchIcon />} onClick={applyFilters} sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap' }}>
-
+            <Button
+              variant="contained"
+              startIcon={<SearchIcon />}
+              onClick={applyFilters}
+              sx={{ height: '2.5rem', minHeight: '2.5rem', whiteSpace: 'nowrap' }}
+            >
               بحث
             </Button>
             <Tooltip title="مسح الفلاتر">
-              <IconButton color="default" onClick={clearFilters} sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1, flexShrink: 0 }}>
+              <IconButton
+                color="default"
+                onClick={clearFilters}
+                sx={{ height: '2.5rem', width: '2.5rem', border: '1px solid', borderColor: 'divider', borderRadius: 1, flexShrink: 0 }}
+              >
                 <ClearIcon />
               </IconButton>
             </Tooltip>
@@ -745,8 +830,13 @@ export default function ProviderAccountsList() {
         </MainCard>
 
         {(appliedFilters.dateFrom || appliedFilters.dateTo) && (
-          <Alert severity="warning" icon={false} sx={{ py: 0.25, px: 1.5, fontSize: '0.72rem', '& .MuiAlert-message': { lineHeight: 1.5 } }}>
-            ملاحظة: الإجماليات المالية (قبل / مرفوض / مستحق / مدفوع / غير مسوى) تعكس فلتر تاريخ الخدمة فقط — فلتر تاريخ الإدخال لا يُطبَّق على الإجماليات (قيد الـ backend). العدد الكلي للمطالبات دقيق لجميع الفلاتر.
+          <Alert
+            severity="warning"
+            icon={false}
+            sx={{ py: 0.25, px: 1.5, fontSize: '0.72rem', '& .MuiAlert-message': { lineHeight: 1.5 } }}
+          >
+            ملاحظة: الإجماليات المالية (قبل / مرفوض / مستحق / مدفوع / غير مسوى) تعكس فلتر تاريخ الخدمة فقط — فلتر تاريخ الإدخال لا يُطبَّق
+            على الإجماليات (قيد الـ backend). العدد الكلي للمطالبات دقيق لجميع الفلاتر.
           </Alert>
         )}
         {isError && <Alert severity="error">{error?.message || 'تعذر جلب البيانات. يرجى المحاولة مجدداً.'}</Alert>}
@@ -774,5 +864,3 @@ export default function ProviderAccountsList() {
     </PermissionGuard>
   );
 }
-
-

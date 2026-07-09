@@ -146,5 +146,3 @@ export default function ColorScheme() {
     </RadioGroup>
   );
 }
-
-

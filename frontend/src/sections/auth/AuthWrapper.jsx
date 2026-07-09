@@ -35,7 +35,8 @@ export default function AuthWrapper({ children }) {
     <Box
       sx={{
         minHeight: '100vh',
-        background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.primary.lighter, 0.6)} 0%, ${theme.palette.background.default} 100%)`,
+        background: (theme) =>
+          `linear-gradient(135deg, ${alpha(theme.palette.primary.lighter, 0.6)} 0%, ${theme.palette.background.default} 100%)`,
         color: 'inherit',
         position: 'relative'
       }}
@@ -70,4 +71,3 @@ export default function AuthWrapper({ children }) {
 }
 
 AuthWrapper.propTypes = { children: PropTypes.node };
-

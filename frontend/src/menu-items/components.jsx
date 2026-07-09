@@ -60,9 +60,7 @@ export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false
     .filter((item) => isAllowed(item.resource))
     .map((item) => ({
       ...item,
-      children: item.children
-        ? filterMenuItemsByRole(item.children, role, providerPortalEnabled)
-        : undefined
+      children: item.children ? filterMenuItemsByRole(item.children, role, providerPortalEnabled) : undefined
     }))
     .filter((item) => {
       // Remove groups/collapses with no visible children
@@ -364,7 +362,7 @@ const menuItem = [
               color: 'success',
               size: 'small'
             }
-          },
+          }
           // hidden: إدارة حسابات المقدمين
           // { id: 'provider-users', title: 'إدارة حسابات المقدمين', ... }
         ]
@@ -400,7 +398,7 @@ const menuItem = [
             url: '/claims/batches',
             icon: FolderIcon,
             resource: 'claims',
-            action: 'view',
+            action: 'view'
           },
           {
             id: 'email-preauth-requests',
@@ -530,7 +528,6 @@ const menuItem = [
               size: 'small'
             }
           }
-
         ]
       }
     ]

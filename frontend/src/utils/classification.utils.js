@@ -1,14 +1,14 @@
 import * as XLSX from 'xlsx';
 
 const MAIN_CAT_MAP = {
-  'إيواء': 'إيواء',
+  إيواء: 'إيواء',
   'عيادات خارجية': 'عيادات خارجية',
-  'اشعة': 'عيادات خارجية',
+  اشعة: 'عيادات خارجية',
   'اشعة ': 'عيادات خارجية',
   'تحاليل طبية': 'عيادات خارجية',
   'علاج طبيعي': 'عيادات خارجية',
   'علاج طبيعي ': 'عيادات خارجية',
-  'عمليات': 'إيواء',
+  عمليات: 'إيواء',
   'عمليات ': 'إيواء',
   'اسنان تجميلي': 'عيادات خارجية',
   'اسنان وقائي': 'عيادات خارجية',
@@ -16,7 +16,7 @@ const MAIN_CAT_MAP = {
 };
 
 const SUB_CAT_MAP = {
-  'اشعة': 'أشعة تحاليل رسوم أطباء',
+  اشعة: 'أشعة تحاليل رسوم أطباء',
   'اشعة ': 'أشعة تحاليل رسوم أطباء',
   'خدمات الأسنان': 'أسنان روتيني',
   'خدمات العلاج الطبيعي': 'علاج طبيعي',
@@ -36,10 +36,10 @@ const SUB_CAT_MAP = {
   'خدمات جراحة التجميل': 'عام',
   'خدمات جراحة الصدر': 'عام',
   'خدمات جلسات الغسيل': 'عام',
-  'كشف': 'عام',
-  'مراجعة': 'عام',
-  'معامل': 'أشعة تحاليل رسوم أطباء',
-  'التخصص': ''
+  كشف: 'عام',
+  مراجعة: 'عام',
+  معامل: 'أشعة تحاليل رسوم أطباء',
+  التخصص: ''
 };
 
 const SYSTEM_MAIN = new Set(['إيواء', 'عيادات خارجية']);
@@ -153,7 +153,10 @@ const detectColumns = (rows) => {
       if (serviceCol === -1 && (val.includes('service_name') || val.includes('اسم الخدمة') || val.includes('الخدمه') || val === 'الخدمة')) {
         serviceCol = idx;
       }
-      if (priceCol === -1 && (val.includes('contract_price') || val.includes('unit_price') || val.includes('price') || val.includes('السعر'))) {
+      if (
+        priceCol === -1 &&
+        (val.includes('contract_price') || val.includes('unit_price') || val.includes('price') || val.includes('السعر'))
+      ) {
         priceCol = idx;
       }
       if (subCol === -1 && (val.includes('sub_category') || val.includes('التصنيف الفرعي') || val.includes('التخصص'))) {
@@ -167,9 +170,18 @@ const detectColumns = (rows) => {
     if (serviceCol !== -1 && priceCol !== -1) {
       if (mainCol === -1) {
         const knownMainValues = new Set([
-          'إيواء', 'عيادات خارجية', 'عمليات', 'عمليات ', 'اشعة', 'اشعة ', 
-          'تحاليل طبية', 'علاج طبيعي', 'علاج طبيعي ', 'اسنان تجميلي', 
-          'اسنان وقائي', 'اسنان وقائي '
+          'إيواء',
+          'عيادات خارجية',
+          'عمليات',
+          'عمليات ',
+          'اشعة',
+          'اشعة ',
+          'تحاليل طبية',
+          'علاج طبيعي',
+          'علاج طبيعي ',
+          'اسنان تجميلي',
+          'اسنان وقائي',
+          'اسنان وقائي '
         ]);
 
         let bestCol = -1;
@@ -215,20 +227,49 @@ export const classify = (rawMain, rawSub, serviceName = '') => {
   } else {
     const s = normalize(serviceName).toLowerCase();
     if (s) {
-      if (s.includes('جلسة') || s.includes('تخطيط') || s.includes('علاج طبيعي') || s.includes('اشعة') || s.includes('أشعة') || s.includes('تحليل') || s.includes('كشف') || s.includes('مراجعة') || s.includes('صورة') || s.includes('رنين') || s.includes('حقن') || s.includes('injection') || s.includes('aspiration') || s.includes('study')) {
+      if (
+        s.includes('جلسة') ||
+        s.includes('تخطيط') ||
+        s.includes('علاج طبيعي') ||
+        s.includes('اشعة') ||
+        s.includes('أشعة') ||
+        s.includes('تحليل') ||
+        s.includes('كشف') ||
+        s.includes('مراجعة') ||
+        s.includes('صورة') ||
+        s.includes('رنين') ||
+        s.includes('حقن') ||
+        s.includes('injection') ||
+        s.includes('aspiration') ||
+        s.includes('study')
+      ) {
         main = 'عيادات خارجية';
         confidence = 0.7;
-        
+
         if (s.includes('اسنان') || s.includes('أسنان') || s.includes('حشو') || s.includes('خلع')) {
           sub = 'أسنان روتيني';
         } else if (s.includes('نظارة') || s.includes('عدسة') || s.includes('بصريات')) {
           sub = 'النظارة الطبية';
-        } else if (s.includes('اشعة') || s.includes('أشعة') || s.includes('تحليل') || s.includes('تحاليل') || s.includes('رنين') || s.includes('تخطيط')) {
+        } else if (
+          s.includes('اشعة') ||
+          s.includes('أشعة') ||
+          s.includes('تحليل') ||
+          s.includes('تحاليل') ||
+          s.includes('رنين') ||
+          s.includes('تخطيط')
+        ) {
           sub = 'أشعة تحاليل رسوم أطباء';
         } else if (s.includes('علاج طبيعي') || s.includes('جلسة')) {
           sub = 'علاج طبيعي';
         }
-      } else if (s.includes('عملية') || s.includes('جراحة') || s.includes('تخدير') || s.includes('عناية') || s.includes('تنويم') || s.includes('surgery')) {
+      } else if (
+        s.includes('عملية') ||
+        s.includes('جراحة') ||
+        s.includes('تخدير') ||
+        s.includes('عناية') ||
+        s.includes('تنويم') ||
+        s.includes('surgery')
+      ) {
         main = 'إيواء';
         confidence = 0.7;
       }
@@ -289,17 +330,17 @@ export const parseExcelPriceList = async (file) => {
 
     const codeMatch = service.match(CODE_PATTERN);
     const serviceCode = codeMatch ? codeMatch[0] : '';
-    
+
     // Fast local classification fallback
     const { mappedMain, mappedSub, confidence } = classify(mainRaw, subRaw, service);
 
-    candidates.push({ 
+    candidates.push({
       id: `item-${r}`, // Add a unique ID for React keys and editing
 
-      serviceName: service, 
+      serviceName: service,
       serviceCode: serviceCode,
-      contractPrice: price, 
-      mainCategory: mappedMain, 
+      contractPrice: price,
+      mainCategory: mappedMain,
       subCategory: mappedSub,
       rawMain: mainRaw,
       rawSub: subRaw,
@@ -307,6 +348,6 @@ export const parseExcelPriceList = async (file) => {
       isEdited: false
     });
   }
-  
+
   return candidates;
 };

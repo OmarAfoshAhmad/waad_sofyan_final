@@ -564,5 +564,3 @@ const EligibilityCheckPage = () => {
 };
 
 export default EligibilityCheckPage;
-
-

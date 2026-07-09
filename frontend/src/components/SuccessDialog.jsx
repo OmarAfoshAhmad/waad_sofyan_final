@@ -281,7 +281,12 @@ const SuccessDialog = ({
 
           {/* Pause hint */}
           {!paused && (
-            <Typography variant="caption" color="text.disabled" sx={{ mt: '1.0rem', display: 'block', cursor: 'pointer' }} onClick={handlePause}>
+            <Typography
+              variant="caption"
+              color="text.disabled"
+              sx={{ mt: '1.0rem', display: 'block', cursor: 'pointer' }}
+              onClick={handlePause}
+            >
               (انقر لإيقاف العد التنازلي)
             </Typography>
           )}
@@ -292,5 +297,3 @@ const SuccessDialog = ({
 };
 
 export default SuccessDialog;
-
-

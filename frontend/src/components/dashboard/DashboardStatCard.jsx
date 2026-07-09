@@ -59,5 +59,3 @@ const DashboardStatCard = ({ title, value, change, icon: Icon, color = 'primary'
 };
 
 export default DashboardStatCard;
-
-

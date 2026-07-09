@@ -43,12 +43,7 @@ const isProviderUser = (role) => role === 'PROVIDER_STAFF';
  *    </RoleGuard>
  *
  */
-const RoleGuard = ({
-  allowedRoles,
-  isRouteGuard = false,
-  children,
-  fallback = null
-}) => {
+const RoleGuard = ({ allowedRoles, isRouteGuard = false, children, fallback = null }) => {
   const { user, authStatus } = useAuth();
 
   if (authStatus === 'INITIALIZING') return null;

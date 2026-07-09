@@ -65,7 +65,7 @@ export function buildPalette(presetColor = 'default') {
       divider: extendedLight.grey[200],
       background: {
         paper: '#ffffff',
-        default: '#f4fafa'  // أبيض مع مسحة تيل خفيفة — بدلاً من الفضي #fafafb
+        default: '#f4fafa' // أبيض مع مسحة تيل خفيفة — بدلاً من الفضي #fafafb
       },
       // Override Alert CSS variables to use primary (theme color) instead of hardcoded info (blue)
       Alert: {

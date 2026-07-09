@@ -265,30 +265,28 @@ const GenericDataTable = ({
                   overflow: 'hidden'
                 }}
               >
-                {header.isPlaceholder ? null : (
-                  header.column.getCanSort() ? (
-                    <TableSortLabel
-                      active={header.column.getIsSorted() !== false}
-                      direction={header.column.getIsSorted() || 'asc'}
-                      onClick={header.column.getToggleSortingHandler()}
-                      hideSortIcon
-                      sx={{
-                        width: '100%',
-                        justifyContent: 'inherit',
-                        cursor: 'pointer',
-                        color: 'inherit !important',
-                        '& .MuiTableSortLabel-icon': { display: 'none' }
-                      }}
-                    >
-                      <Typography variant="subtitle2" component="span" sx={{ color: 'inherit' }}>
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </Typography>
-                    </TableSortLabel>
-                  ) : (
-                    <Typography variant="subtitle2" sx={{ color: 'inherit' }}>
+                {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                  <TableSortLabel
+                    active={header.column.getIsSorted() !== false}
+                    direction={header.column.getIsSorted() || 'asc'}
+                    onClick={header.column.getToggleSortingHandler()}
+                    hideSortIcon
+                    sx={{
+                      width: '100%',
+                      justifyContent: 'inherit',
+                      cursor: 'pointer',
+                      color: 'inherit !important',
+                      '& .MuiTableSortLabel-icon': { display: 'none' }
+                    }}
+                  >
+                    <Typography variant="subtitle2" component="span" sx={{ color: 'inherit' }}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
                     </Typography>
-                  )
+                  </TableSortLabel>
+                ) : (
+                  <Typography variant="subtitle2" sx={{ color: 'inherit' }}>
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </Typography>
                 )}
               </TableCell>
             ))}
@@ -511,5 +509,3 @@ GenericDataTable.propTypes = {
 };
 
 export default GenericDataTable;
-
-

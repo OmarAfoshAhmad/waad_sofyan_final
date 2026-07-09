@@ -15,49 +15,17 @@
 export const ROLE_RESOURCE_ACCESS = Object.freeze({
   SUPER_ADMIN: ['*'],
 
-  MEDICAL_REVIEWER: [
-    'claims',
-    'pre_auth',
-    'approvals_dashboard',
-    'documents',
-    'report_claims',
-    'report_pre_approvals'
-  ],
+  MEDICAL_REVIEWER: ['claims', 'pre_auth', 'approvals_dashboard', 'documents', 'report_claims', 'report_pre_approvals'],
 
-  ACCOUNTANT: [
-    'settlements',
-    'provider_accounts',
-    'documents',
-    'report_financial',
-    'report_provider_settlement'
-  ],
+  ACCOUNTANT: ['settlements', 'provider_accounts', 'documents', 'report_financial', 'report_provider_settlement'],
 
-  PROVIDER_STAFF: [
-    'provider_portal'
-  ],
+  PROVIDER_STAFF: ['provider_portal'],
 
-  EMPLOYER_ADMIN: [
-    'members',
-    'benefit_policies',
-    'documents',
-    'report_employers',
-    'report_beneficiaries',
-    'report_benefit_policy'
-  ],
+  EMPLOYER_ADMIN: ['members', 'benefit_policies', 'documents', 'report_employers', 'report_beneficiaries', 'report_benefit_policy'],
 
-  DATA_ENTRY: [
-    'members',
-    'employers',
-    'providers',
-    'claims',
-    'documents',
-    'medical_catalog'
-  ],
+  DATA_ENTRY: ['members', 'employers', 'providers', 'claims', 'documents', 'medical_catalog'],
 
-  FINANCE_VIEWER: [
-    'report_financial',
-    'report_provider_settlement'
-  ]
+  FINANCE_VIEWER: ['report_financial', 'report_provider_settlement']
 });
 
 export default ROLE_RESOURCE_ACCESS;

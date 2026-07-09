@@ -165,7 +165,6 @@ const ProviderSettlementReport = Loadable(lazy(() => import('pages/reports/Provi
 const FinancialConsolidationMatrix = Loadable(lazy(() => import('pages/reports/FinancialConsolidationMatrix')));
 const AccountantProfitReport = Loadable(lazy(() => import('pages/reports/AccountantProfitReport')));
 
-
 // ==============================|| LAZY LOADING - ERROR PAGES ||============================== //
 
 const NoAccess = Loadable(lazy(() => import('pages/errors/NoAccess')));
@@ -180,7 +179,6 @@ const ProviderAccountsList = Loadable(lazy(() => import('pages/settlement/Provid
 const ProviderPaymentsList = Loadable(lazy(() => import('pages/settlement/ProviderPaymentsList')));
 const ProviderAccountView = Loadable(lazy(() => import('pages/settlement/ProviderAccountView')));
 const PaymentsManagement = Loadable(lazy(() => import('pages/settlement/PaymentsManagement')));
-
 
 // ==============================|| MAIN ROUTING ||============================== //
 
@@ -384,7 +382,7 @@ const MainRoutes = {
               <PaymentsManagement />
             </PermissionGuard>
           )
-        },
+        }
       ]
     },
 
@@ -423,7 +421,7 @@ const MainRoutes = {
               <ProviderView />
             </PermissionGuard>
           )
-        },
+        }
       ]
     },
 
@@ -599,7 +597,7 @@ const MainRoutes = {
               <MedicalCategoryEdit />
             </PermissionGuard>
           )
-        },
+        }
       ]
     },
 

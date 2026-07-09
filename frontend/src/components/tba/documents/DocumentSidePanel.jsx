@@ -584,5 +584,3 @@ DocumentSidePanel.propTypes = {
 DocumentSidePanel.displayName = 'DocumentSidePanel';
 
 export default DocumentSidePanel;
-
-

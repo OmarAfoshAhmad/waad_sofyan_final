@@ -76,7 +76,7 @@ export default function AuthResetPassword() {
     loadResetConfig();
   }, []);
 
-  const effectiveMode = modeFromQuery === 'OTP' ? 'OTP' : (token ? 'TOKEN' : resetConfig.method);
+  const effectiveMode = modeFromQuery === 'OTP' ? 'OTP' : token ? 'TOKEN' : resetConfig.method;
 
   useEffect(() => {
     changePassword('');
@@ -100,7 +100,10 @@ export default function AuthResetPassword() {
           effectiveMode === 'OTP'
             ? Yup.string()
                 .required('OTP is required')
-                .matches(new RegExp(`^\\d{${Math.max(4, Math.min(10, resetConfig.otpLength || 6))}}$`), `OTP must be ${Math.max(4, Math.min(10, resetConfig.otpLength || 6))} digits`)
+                .matches(
+                  new RegExp(`^\\d{${Math.max(4, Math.min(10, resetConfig.otpLength || 6))}}$`),
+                  `OTP must be ${Math.max(4, Math.min(10, resetConfig.otpLength || 6))} digits`
+                )
             : Yup.string().nullable(),
         password: Yup.string().max(255).required('Password is required'),
         confirmPassword: Yup.string()
@@ -273,5 +276,3 @@ export default function AuthResetPassword() {
     </Formik>
   );
 }
-
-

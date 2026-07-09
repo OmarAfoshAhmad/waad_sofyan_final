@@ -408,6 +408,41 @@ export const providersService = {
     } catch (error) {
       throw handleProviderErrors(error);
     }
+  },
+
+  /**
+   * Download Excel Template for providers import
+   * GET /api/v1/providers/import/template
+   */
+  downloadImportTemplate: async () => {
+    try {
+      const response = await axiosClient.get(`${BASE_URL}/import/template`, {
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
+   * Import providers from Excel file
+   * POST /api/v1/providers/import
+   */
+  importProvidersFromExcel: async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await axiosClient.post(`${BASE_URL}/import`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
   }
 };
 

@@ -33,9 +33,7 @@ export default function Alert(theme) {
               props: { variant: 'standard' },
               style: ({ ownerState }) => {
                 // Map 'info' severity → 'primary' so info alerts follow the theme color
-                const mappedColor = ownerState.color
-                  || (ownerState.severity === 'info' ? 'primary' : ownerState.severity)
-                  || 'primary';
+                const mappedColor = ownerState.color || (ownerState.severity === 'info' ? 'primary' : ownerState.severity) || 'primary';
                 const paletteColor = theme.palette[mappedColor] || theme.palette.primary;
                 const bgColor = paletteColor?.lighter ?? primaryVars.lighter ?? primaryVars.main;
                 const iconColor = paletteColor?.main ?? primaryVars.main;
@@ -117,5 +115,3 @@ export default function Alert(theme) {
     }
   };
 }
-
-

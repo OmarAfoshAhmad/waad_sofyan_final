@@ -327,9 +327,9 @@ const PreApprovalsList = () => {
             <Stack direction="row" spacing={0.5} justifyContent="center">
               {isPending && (
                 <Tooltip title="مراجعة واتخاذ قرار">
-                  <IconButton 
-                    size="small" 
-                    color="success" 
+                  <IconButton
+                    size="small"
+                    color="success"
                     onClick={() => handleNavigateReview(preApproval?.id)}
                     sx={{ bgcolor: 'success.lighter', '&:hover': { bgcolor: 'success.light' } }}
                   >
@@ -430,5 +430,3 @@ const PreApprovalsList = () => {
 };
 
 export default PreApprovalsList;
-
-

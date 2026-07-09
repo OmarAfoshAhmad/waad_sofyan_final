@@ -253,5 +253,3 @@ LimitsStressTable.propTypes = {
 };
 
 export default LimitsStressTable;
-
-

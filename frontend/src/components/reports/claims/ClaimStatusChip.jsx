@@ -79,5 +79,3 @@ ClaimStatusChip.defaultProps = {
 };
 
 export default ClaimStatusChip;
-
-

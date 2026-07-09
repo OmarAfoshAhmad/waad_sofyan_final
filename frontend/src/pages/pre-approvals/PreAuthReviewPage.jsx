@@ -1,10 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box, Grid, Card, CardContent, CardHeader, Typography, Divider, Button, IconButton,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Chip,
-  Alert, CircularProgress, Stack, Tooltip, LinearProgress
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Divider,
+  Button,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Chip,
+  Alert,
+  CircularProgress,
+  Stack,
+  Tooltip,
+  LinearProgress
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -145,24 +169,31 @@ const PreAuthReviewPage = () => {
     }
   };
 
-  if (loading) return (
-    <Box sx={{ p: 4 }}>
-      <LinearProgress />
-      <Typography color="text.secondary" mt={2} textAlign="center">جاري تحميل بيانات الطلب...</Typography>
-    </Box>
-  );
+  if (loading)
+    return (
+      <Box sx={{ p: 4 }}>
+        <LinearProgress />
+        <Typography color="text.secondary" mt={2} textAlign="center">
+          جاري تحميل بيانات الطلب...
+        </Typography>
+      </Box>
+    );
 
-  if (error) return (
-    <Box sx={{ p: 4 }}>
-      <Alert severity="error" action={<Button onClick={fetchRequest}>إعادة المحاولة</Button>}>{error}</Alert>
-    </Box>
-  );
+  if (error)
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert severity="error" action={<Button onClick={fetchRequest}>إعادة المحاولة</Button>}>
+          {error}
+        </Alert>
+      </Box>
+    );
 
-  if (!request) return (
-    <Box sx={{ p: 4 }}>
-      <Alert severity="warning">الطلب غير موجود أو تعذر تحميله.</Alert>
-    </Box>
-  );
+  if (!request)
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert severity="warning">الطلب غير موجود أو تعذر تحميله.</Alert>
+      </Box>
+    );
 
   const isPending = ['PENDING', 'UNDER_REVIEW', 'APPROVAL_IN_PROGRESS'].includes(request.status);
   const canStartReview = request.status === 'PENDING';
@@ -214,7 +245,11 @@ const PreAuthReviewPage = () => {
             <Button
               variant="outlined"
               color="error"
-              onClick={() => { setNotes(''); setRejectionReason(''); setDialogType('reject'); }}
+              onClick={() => {
+                setNotes('');
+                setRejectionReason('');
+                setDialogType('reject');
+              }}
               startIcon={<CancelIcon />}
               disabled={actionLoading}
             >
@@ -223,7 +258,10 @@ const PreAuthReviewPage = () => {
             <Button
               variant="contained"
               color="success"
-              onClick={() => { setNotes(''); setDialogType('approve'); }}
+              onClick={() => {
+                setNotes('');
+                setDialogType('approve');
+              }}
               startIcon={<CheckCircleIcon />}
               disabled={actionLoading}
               sx={{ fontWeight: 'bold' }}
@@ -245,7 +283,6 @@ const PreAuthReviewPage = () => {
       <Grid container spacing={3}>
         {/* Left: Request Details */}
         <Grid item xs={12} md={7}>
-
           {/* Member Info */}
           <Card sx={{ mb: 3 }}>
             <CardHeader
@@ -256,19 +293,27 @@ const PreAuthReviewPage = () => {
             <CardContent>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">اسم المستفيد</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    اسم المستفيد
+                  </Typography>
                   <Typography fontWeight="bold">{request.memberName || request.memberFullName || '-'}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">رقم البطاقة</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    رقم البطاقة
+                  </Typography>
                   <Typography fontWeight="bold">{request.memberCardNumber || '-'}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">مقدم الخدمة</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    مقدم الخدمة
+                  </Typography>
                   <Typography fontWeight="bold">{request.providerName || '-'}</Typography>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">تاريخ الطلب</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    تاريخ الطلب
+                  </Typography>
                   <Typography fontWeight="bold">
                     {request.createdAt ? new Date(request.createdAt).toLocaleDateString('ar-LY') : '-'}
                   </Typography>
@@ -288,25 +333,33 @@ const PreAuthReviewPage = () => {
               <Grid container spacing={2}>
                 {request.chiefComplaint && (
                   <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary">الشكوى الرئيسية</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      الشكوى الرئيسية
+                    </Typography>
                     <Typography>{request.chiefComplaint}</Typography>
                   </Grid>
                 )}
                 {request.diagnosis && (
                   <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary">التشخيص</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      التشخيص
+                    </Typography>
                     <Typography fontWeight="bold">{request.diagnosis}</Typography>
                   </Grid>
                 )}
                 {request.treatmentPlan && (
                   <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary">الخطة العلاجية</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      الخطة العلاجية
+                    </Typography>
                     <Typography>{request.treatmentPlan}</Typography>
                   </Grid>
                 )}
                 {request.clinicalNotes && (
                   <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary">الملاحظات الطبية</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      الملاحظات الطبية
+                    </Typography>
                     <Typography color="text.secondary">{request.clinicalNotes}</Typography>
                   </Grid>
                 )}
@@ -316,33 +369,43 @@ const PreAuthReviewPage = () => {
 
           {/* Service Lines */}
           <Card>
-            <CardHeader
-              title="الخدمات والأسعار المطلوبة"
-              titleTypographyProps={{ variant: 'h6', fontWeight: 'bold' }}
-            />
+            <CardHeader title="الخدمات والأسعار المطلوبة" titleTypographyProps={{ variant: 'h6', fontWeight: 'bold' }} />
             <CardContent sx={{ p: 0 }}>
               <TableContainer>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'grey.100' }}>
-                      <TableCell><strong>الخدمة</strong></TableCell>
-                      <TableCell align="center"><strong>الكود</strong></TableCell>
-                      <TableCell align="right"><strong>سعر العقد</strong></TableCell>
-                      <TableCell align="right"><strong>السعر المطلوب</strong></TableCell>
-                      <TableCell align="center"><strong>الفرق</strong></TableCell>
+                      <TableCell>
+                        <strong>الخدمة</strong>
+                      </TableCell>
+                      <TableCell align="center">
+                        <strong>الكود</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>سعر العقد</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>السعر المطلوب</strong>
+                      </TableCell>
+                      <TableCell align="center">
+                        <strong>الفرق</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {/* If request has lines array */}
                     {request.lines?.length > 0 ? (
                       request.lines.map((line, idx) => {
-                        const variance = line.contractPrice && line.manualPrice
-                          ? Math.round(((line.manualPrice - line.contractPrice) / line.contractPrice) * 100)
-                          : 0;
+                        const variance =
+                          line.contractPrice && line.manualPrice
+                            ? Math.round(((line.manualPrice - line.contractPrice) / line.contractPrice) * 100)
+                            : 0;
                         return (
                           <TableRow key={idx} hover>
                             <TableCell>
-                              <Typography variant="body2" fontWeight="bold">{line.name || line.serviceName || '-'}</Typography>
+                              <Typography variant="body2" fontWeight="bold">
+                                {line.name || line.serviceName || '-'}
+                              </Typography>
                               {line.overrideReason && (
                                 <Typography variant="caption" color="warning.main" display="block">
                                   ⚠ {line.overrideReason}
@@ -367,7 +430,11 @@ const PreAuthReviewPage = () => {
                                   color={variance > 20 ? 'error' : variance > 10 ? 'warning' : 'default'}
                                   size="small"
                                 />
-                              ) : <Typography variant="caption" color="text.secondary">—</Typography>}
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  —
+                                </Typography>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -376,7 +443,9 @@ const PreAuthReviewPage = () => {
                       // Single-line request
                       <TableRow hover>
                         <TableCell>
-                          <Typography variant="body2" fontWeight="bold">{request.serviceName || request.serviceCode || '-'}</Typography>
+                          <Typography variant="body2" fontWeight="bold">
+                            {request.serviceName || request.serviceCode || '-'}
+                          </Typography>
                         </TableCell>
                         <TableCell align="center">
                           <Chip label={request.serviceCode || '-'} size="small" variant="outlined" />
@@ -399,14 +468,18 @@ const PreAuthReviewPage = () => {
               {/* Total */}
               <Box sx={{ p: 2, bgcolor: 'grey.50', display: 'flex', justifyContent: 'flex-end', gap: 3 }}>
                 <Box textAlign="right">
-                  <Typography variant="caption" color="text.secondary">إجمالي المطلوب</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    إجمالي المطلوب
+                  </Typography>
                   <Typography variant="h6" fontWeight="bold" color="primary.main">
                     {Number(request.requestedAmount || 0).toLocaleString()} د.ل
                   </Typography>
                 </Box>
                 {request.approvedAmount && (
                   <Box textAlign="right">
-                    <Typography variant="caption" color="text.secondary">المبلغ المعتمد</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      المبلغ المعتمد
+                    </Typography>
                     <Typography variant="h6" fontWeight="bold" color="success.main">
                       {Number(request.approvedAmount).toLocaleString()} د.ل
                     </Typography>
@@ -421,10 +494,7 @@ const PreAuthReviewPage = () => {
         <Grid item xs={12} md={5}>
           {/* Decision Action Card - sticky */}
           <Card sx={{ mb: 3, border: isPending ? '2px solid' : undefined, borderColor: 'primary.main' }}>
-            <CardHeader
-              title="قرار المراجعة"
-              titleTypographyProps={{ variant: 'h6', fontWeight: 'bold', color: 'primary.main' }}
-            />
+            <CardHeader title="قرار المراجعة" titleTypographyProps={{ variant: 'h6', fontWeight: 'bold', color: 'primary.main' }} />
             <CardContent>
               {isPending ? (
                 <Stack spacing={2}>
@@ -449,7 +519,10 @@ const PreAuthReviewPage = () => {
                     variant="contained"
                     color="success"
                     size="large"
-                    onClick={() => { setNotes(''); setDialogType('approve'); }}
+                    onClick={() => {
+                      setNotes('');
+                      setDialogType('approve');
+                    }}
                     startIcon={<CheckCircleIcon />}
                     disabled={actionLoading}
                     sx={{ fontWeight: 'bold', py: 1.5 }}
@@ -461,7 +534,11 @@ const PreAuthReviewPage = () => {
                     variant="contained"
                     color="error"
                     size="large"
-                    onClick={() => { setNotes(''); setRejectionReason(''); setDialogType('reject'); }}
+                    onClick={() => {
+                      setNotes('');
+                      setRejectionReason('');
+                      setDialogType('reject');
+                    }}
                     startIcon={<CancelIcon />}
                     disabled={actionLoading}
                     sx={{ py: 1.5 }}
@@ -472,7 +549,10 @@ const PreAuthReviewPage = () => {
                     fullWidth
                     variant="outlined"
                     color="warning"
-                    onClick={() => { setNotes(''); setDialogType('info'); }}
+                    onClick={() => {
+                      setNotes('');
+                      setDialogType('info');
+                    }}
                     startIcon={<HelpOutlineIcon />}
                     disabled={actionLoading}
                   >
@@ -489,13 +569,17 @@ const PreAuthReviewPage = () => {
                   />
                   {request.approvalNotes && (
                     <Box mt={2}>
-                      <Typography variant="caption" color="text.secondary">ملاحظات المراجع</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        ملاحظات المراجع
+                      </Typography>
                       <Typography>{request.approvalNotes}</Typography>
                     </Box>
                   )}
                   {request.rejectionReason && (
                     <Box mt={2}>
-                      <Typography variant="caption" color="text.secondary">سبب الرفض</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        سبب الرفض
+                      </Typography>
                       <Typography color="error">{request.rejectionReason}</Typography>
                     </Box>
                   )}
@@ -542,7 +626,9 @@ const PreAuthReviewPage = () => {
           />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>إلغاء</Button>
+          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>
+            إلغاء
+          </Button>
           <Button
             variant="contained"
             color="success"
@@ -573,8 +659,10 @@ const PreAuthReviewPage = () => {
             onChange={(e) => setRejectionReason(e.target.value)}
             sx={{ mb: 2 }}
           >
-            {REJECTION_REASONS.map(r => (
-              <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+            {REJECTION_REASONS.map((r) => (
+              <MenuItem key={r.value} value={r.value}>
+                {r.label}
+              </MenuItem>
             ))}
           </TextField>
           <TextField
@@ -588,7 +676,9 @@ const PreAuthReviewPage = () => {
           />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>إلغاء</Button>
+          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>
+            إلغاء
+          </Button>
           <Button
             variant="contained"
             color="error"
@@ -622,7 +712,9 @@ const PreAuthReviewPage = () => {
           />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>إلغاء</Button>
+          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>
+            إلغاء
+          </Button>
           <Button
             variant="contained"
             color="warning"

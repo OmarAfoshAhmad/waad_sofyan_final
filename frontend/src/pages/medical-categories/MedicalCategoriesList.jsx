@@ -7,10 +7,7 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Box, Chip, IconButton, Stack, Tooltip, Typography, Button,
-  TextField, MenuItem, InputAdornment
-} from '@mui/material';
+import { Box, Chip, IconButton, Stack, Tooltip, Typography, Button, TextField, MenuItem, InputAdornment } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
@@ -28,7 +25,13 @@ import { ModernPageHeader, ActionConfirmDialog, SoftDeleteToggle } from 'compone
 import { UnifiedMedicalTable } from 'components/common';
 import PermissionGuard from 'components/PermissionGuard';
 import { useTableRefresh } from 'contexts/TableRefreshContext';
-import { getMedicalCategories, deleteMedicalCategory, hardDeleteMedicalCategory, getAllMedicalCategories, restoreMedicalCategory } from 'services/api/medical-categories.service';
+import {
+  getMedicalCategories,
+  deleteMedicalCategory,
+  hardDeleteMedicalCategory,
+  getAllMedicalCategories,
+  restoreMedicalCategory
+} from 'services/api/medical-categories.service';
 import { exportMedicalCategoriesToExcel } from 'utils/excelExport';
 import { openSnackbar } from 'api/snackbar';
 
@@ -56,7 +59,12 @@ const MedicalCategoriesList = () => {
 
   // Confirmation dialog
   const [confirmDialog, setConfirmDialog] = useState({
-    open: false, title: '', message: '', onConfirm: null, confirmColor: 'error', confirmText: 'نعم، احذف'
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    confirmColor: 'error',
+    confirmText: 'نعم، احذف'
   });
 
   // ========================================
@@ -87,79 +95,88 @@ const MedicalCategoriesList = () => {
   // ========================================
   // DELETE with ActionConfirmDialog
   // ========================================
-  const handleDeleteClick = useCallback((row) => {
-    setConfirmDialog({
-      open: true,
-      title: 'تأكيد حذف التصنيف',
-      message: `هل أنت متأكد من حذف التصنيف "${row.name || row.code}"؟\nسيتم إيقاف تشغيله ولن يظهر في القوائم.`,
-      confirmColor: 'error',
-      confirmText: 'نعم، احذف',
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, open: false }));
-        try {
-          await deleteMedicalCategory(row.id);
-          openSnackbar({ message: 'تم حذف التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
-          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-        } catch (err) {
-          console.error('[MedicalCategories] Delete failed:', err);
-          const errorMsg = err?.response?.data?.message || 'فشل حذف التصنيف - قد يكون مرتبطاً بخدمات طبية';
-          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+  const handleDeleteClick = useCallback(
+    (row) => {
+      setConfirmDialog({
+        open: true,
+        title: 'تأكيد حذف التصنيف',
+        message: `هل أنت متأكد من حذف التصنيف "${row.name || row.code}"؟\nسيتم إيقاف تشغيله ولن يظهر في القوائم.`,
+        confirmColor: 'error',
+        confirmText: 'نعم، احذف',
+        onConfirm: async () => {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+          try {
+            await deleteMedicalCategory(row.id);
+            openSnackbar({ message: 'تم حذف التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[MedicalCategories] Delete failed:', err);
+            const errorMsg = err?.response?.data?.message || 'فشل حذف التصنيف - قد يكون مرتبطاً بخدمات طبية';
+            openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+          }
         }
-      }
-    });
-  }, [queryClient]);
+      });
+    },
+    [queryClient]
+  );
 
   const closeDialog = () => setConfirmDialog((prev) => ({ ...prev, open: false }));
 
   // ========================================
   // HARD DELETE (permanent — only in showDeleted view)
   // ========================================
-  const handleHardDeleteClick = useCallback((row) => {
-    setConfirmDialog({
-      open: true,
-      title: '⚠️ حذف نهائي — لا يمكن التراجع',
-      message: `سيتم حذف التصنيف "${row.name || row.code}" نهائياً من قاعدة البيانات.\n\nهذا الإجراء لا يمكن التراجع عنه ولا يمكن استعادة السجل بعد الحذف.\n\nهل أنت متأكد تماماً؟`,
-      confirmColor: 'error',
-      confirmText: 'نعم، احذف نهائياً',
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, open: false }));
-        try {
-          await hardDeleteMedicalCategory(row.id);
-          openSnackbar({ message: 'تم الحذف النهائي للتصنيف', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
-          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-        } catch (err) {
-          console.error('[MedicalCategories] Hard delete failed:', err);
-          const errorMsg = err?.response?.data?.message || 'فشل الحذف النهائي - قد يكون التصنيف مرتبطاً ببيانات أخرى';
-          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+  const handleHardDeleteClick = useCallback(
+    (row) => {
+      setConfirmDialog({
+        open: true,
+        title: '⚠️ حذف نهائي — لا يمكن التراجع',
+        message: `سيتم حذف التصنيف "${row.name || row.code}" نهائياً من قاعدة البيانات.\n\nهذا الإجراء لا يمكن التراجع عنه ولا يمكن استعادة السجل بعد الحذف.\n\nهل أنت متأكد تماماً؟`,
+        confirmColor: 'error',
+        confirmText: 'نعم، احذف نهائياً',
+        onConfirm: async () => {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+          try {
+            await hardDeleteMedicalCategory(row.id);
+            openSnackbar({ message: 'تم الحذف النهائي للتصنيف', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[MedicalCategories] Hard delete failed:', err);
+            const errorMsg = err?.response?.data?.message || 'فشل الحذف النهائي - قد يكون التصنيف مرتبطاً ببيانات أخرى';
+            openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+          }
         }
-      }
-    });
-  }, [queryClient]);
+      });
+    },
+    [queryClient]
+  );
 
   // ========================================
   // RESTORE (for soft-deleted items)
   // ========================================
-  const handleRestoreClick = useCallback((row) => {
-    setConfirmDialog({
-      open: true,
-      title: 'تأكيد استعادة التصنيف',
-      message: `هل تريد استعادة التصنيف "${row.name || row.code}"؟\nسيتم تفعيله مجدداً وسيظهر في القوائم.`,
-      confirmColor: 'success',
-      confirmText: 'نعم، استعد',
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, open: false }));
-        try {
-          await restoreMedicalCategory(row.id);
-          openSnackbar({ message: 'تم استعادة التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
-          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-        } catch (err) {
-          console.error('[MedicalCategories] Restore failed:', err);
-          const errorMsg = err?.response?.data?.message || 'فشل استعادة التصنيف';
-          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+  const handleRestoreClick = useCallback(
+    (row) => {
+      setConfirmDialog({
+        open: true,
+        title: 'تأكيد استعادة التصنيف',
+        message: `هل تريد استعادة التصنيف "${row.name || row.code}"؟\nسيتم تفعيله مجدداً وسيظهر في القوائم.`,
+        confirmColor: 'success',
+        confirmText: 'نعم، استعد',
+        onConfirm: async () => {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+          try {
+            await restoreMedicalCategory(row.id);
+            openSnackbar({ message: 'تم استعادة التصنيف بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (err) {
+            console.error('[MedicalCategories] Restore failed:', err);
+            const errorMsg = err?.response?.data?.message || 'فشل استعادة التصنيف';
+            openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+          }
         }
-      }
-    });
-  }, [queryClient]);
+      });
+    },
+    [queryClient]
+  );
 
   // ========================================
   // MAIN DATA QUERY
@@ -178,7 +195,9 @@ const MedicalCategoriesList = () => {
     keepPreviousData: true
   });
 
-  useEffect(() => { refetch(); }, [refreshSignal, refetch]);
+  useEffect(() => {
+    refetch();
+  }, [refreshSignal, refetch]);
 
   // ========================================
   // RESET FILTERS
@@ -218,111 +237,126 @@ const MedicalCategoriesList = () => {
   // ========================================
   // COLUMN DEFINITIONS
   // ========================================
-  const columns = useMemo(() => [
-    { id: 'index',      label: '#',              minWidth: '3.125rem',  sortable: false, align: 'center' },
-    { id: 'code',       label: 'الرمز',          minWidth: '8rem',      sortable: true,  align: 'center' },
-    { id: 'name',       label: 'الاسم',          minWidth: '11.25rem',  sortable: true,  align: 'right'  },
-    { id: 'parentName', label: 'التصنيف الأب',   minWidth: '9.375rem',  sortable: true,  align: 'center' },
-    { id: 'active',     label: 'الحالة',         minWidth: '6.25rem',   sortable: true,  align: 'center' },
-    { id: 'actions',    label: 'الإجراءات',      minWidth: '8.125rem',  sortable: false, align: 'center' }
-  ], []);
+  const columns = useMemo(
+    () => [
+      { id: 'index', label: '#', minWidth: '3.125rem', sortable: false, align: 'center' },
+      { id: 'code', label: 'الرمز', minWidth: '8rem', sortable: true, align: 'center' },
+      { id: 'name', label: 'الاسم', minWidth: '11.25rem', sortable: true, align: 'right' },
+      { id: 'parentName', label: 'التصنيف الأب', minWidth: '9.375rem', sortable: true, align: 'center' },
+      { id: 'active', label: 'الحالة', minWidth: '6.25rem', sortable: true, align: 'center' },
+      { id: 'actions', label: 'الإجراءات', minWidth: '8.125rem', sortable: false, align: 'center' }
+    ],
+    []
+  );
 
   // ========================================
   // CELL RENDERER
   // ========================================
-  const renderCell = useCallback((row, column, rowIndex) => {
-    switch (column.id) {
-      case 'index':
-        return <Typography variant="body2" color="textSecondary" fontWeight="bold">{page * rowsPerPage + rowIndex + 1}</Typography>;
+  const renderCell = useCallback(
+    (row, column, rowIndex) => {
+      switch (column.id) {
+        case 'index':
+          return (
+            <Typography variant="body2" color="textSecondary" fontWeight="bold">
+              {page * rowsPerPage + rowIndex + 1}
+            </Typography>
+          );
 
-      case 'code':
-        return (
-          <Chip
-            label={row.code || '-'}
-            variant="outlined"
-            size="small"
-            color="secondary"
-            sx={{ fontWeight: 'medium', fontFamily: 'monospace', minWidth: '7rem', justifyContent: 'center' }}
-          />
-        );
+        case 'code':
+          return (
+            <Chip
+              label={row.code || '-'}
+              variant="outlined"
+              size="small"
+              color="secondary"
+              sx={{ fontWeight: 'medium', fontFamily: 'monospace', minWidth: '7rem', justifyContent: 'center' }}
+            />
+          );
 
-      case 'name':
-        return <Typography variant="body2" fontWeight="500" sx={{ textAlign: 'right', width: '100%' }}>{row.name || '-'}</Typography>;
+        case 'name':
+          return (
+            <Typography variant="body2" fontWeight="500" sx={{ textAlign: 'right', width: '100%' }}>
+              {row.name || '-'}
+            </Typography>
+          );
 
-      case 'parentName':
-        return row.parentName
-          ? (
+        case 'parentName':
+          return row.parentName ? (
             <Chip
               label={row.parentName}
               size="small"
               color={getParentColor(row.parentId)}
               sx={{ fontWeight: 500, minWidth: '5.5rem', justifyContent: 'center' }}
             />
-          )
-          : <Typography variant="body2" color="text.disabled">—</Typography>;
+          ) : (
+            <Typography variant="body2" color="text.disabled">
+              —
+            </Typography>
+          );
 
-      case 'active':
-        return (
-          <Chip
-            label={row.active ? 'نشط' : 'غير نشط'}
-            color={row.active ? 'success' : 'default'}
-            size="small"
-            sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }}
-          />
-        );
+        case 'active':
+          return (
+            <Chip
+              label={row.active ? 'نشط' : 'غير نشط'}
+              color={row.active ? 'success' : 'default'}
+              size="small"
+              sx={{ minWidth: '5.5rem', justifyContent: 'center', fontWeight: 600 }}
+            />
+          );
 
-      case 'actions':
-        return (
-          <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
-            {showDeleted ? (
-              <>
-                {/* زر الاستعادة */}
-                <PermissionGuard requires="medical-categories.delete">
-                  <Tooltip title="استعادة" arrow>
-                    <IconButton size="small" color="success" onClick={() => handleRestoreClick(row)}>
-                      <ReplayIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </PermissionGuard>
-                {/* زر الحذف القاسي */}
-                <PermissionGuard requires="medical-categories.delete">
-                  <Tooltip title="حذف نهائي — لا يمكن الاسترجاع" arrow>
-                    <IconButton size="small" color="error" onClick={() => handleHardDeleteClick(row)}>
-                      <DeleteForeverIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </PermissionGuard>
-              </>
-            ) : (
-              <>
-                <Tooltip title="تعديل">
-                  <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="حذف (يمكن استعادته لاحقاً)">
+        case 'actions':
+          return (
+            <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+              {showDeleted ? (
+                <>
+                  {/* زر الاستعادة */}
                   <PermissionGuard requires="medical-categories.delete">
-                    <IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title="استعادة" arrow>
+                      <IconButton size="small" color="success" onClick={() => handleRestoreClick(row)}>
+                        <ReplayIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </PermissionGuard>
-                </Tooltip>
-              </>
-            )}
-          </Stack>
-        );
+                  {/* زر الحذف القاسي */}
+                  <PermissionGuard requires="medical-categories.delete">
+                    <Tooltip title="حذف نهائي — لا يمكن الاسترجاع" arrow>
+                      <IconButton size="small" color="error" onClick={() => handleHardDeleteClick(row)}>
+                        <DeleteForeverIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </PermissionGuard>
+                </>
+              ) : (
+                <>
+                  <Tooltip title="تعديل">
+                    <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="حذف (يمكن استعادته لاحقاً)">
+                    <PermissionGuard requires="medical-categories.delete">
+                      <IconButton size="small" color="error" onClick={() => handleDeleteClick(row)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </PermissionGuard>
+                  </Tooltip>
+                </>
+              )}
+            </Stack>
+          );
 
-      default:
-        return row[column.id];
-    }
-  }, [page, rowsPerPage, handleNavigateEdit, handleDeleteClick, handleHardDeleteClick, handleRestoreClick, showDeleted]);
+        default:
+          return row[column.id];
+      }
+    },
+    [page, rowsPerPage, handleNavigateEdit, handleDeleteClick, handleHardDeleteClick, handleRestoreClick, showDeleted]
+  );
 
   // ========================================
   // RENDER
   // ========================================
   return (
     <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-
       {/* ====== PAGE HEADER ====== */}
       <PermissionGuard requires="medical-categories.view">
         <ModernPageHeader
@@ -335,7 +369,10 @@ const MedicalCategoriesList = () => {
               {/* Soft Delete Toggle */}
               <SoftDeleteToggle
                 showDeleted={showDeleted}
-                onToggle={() => { setShowDeleted((prev) => !prev); setPage(0); }}
+                onToggle={() => {
+                  setShowDeleted((prev) => !prev);
+                  setPage(0);
+                }}
               />
 
               {/* Excel Export */}
@@ -356,12 +393,7 @@ const MedicalCategoriesList = () => {
               </Button>
 
               {/* Add Button */}
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleNavigateAdd}
-                sx={{ height: '2.25rem' }}
-              >
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleNavigateAdd} sx={{ height: '2.25rem' }}>
                 إضافة تصنيف جديد
               </Button>
             </Stack>
@@ -373,7 +405,6 @@ const MedicalCategoriesList = () => {
       {/* ====== FILTER BAR ====== */}
       <MainCard sx={{ mb: 1, flexShrink: 0 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
-
           {/* Refresh */}
           <Tooltip title="تحديث">
             <IconButton
@@ -400,14 +431,25 @@ const MedicalCategoriesList = () => {
             size="small"
             placeholder="بحث بالاسم أو الرمز..."
             value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(0);
+            }}
             InputProps={{
               startAdornment: (
-                <InputAdornment position="start"><SearchIcon color="action" /></InputAdornment>
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
               ),
               endAdornment: searchTerm && (
                 <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => { setSearchTerm(''); setPage(0); }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setPage(0);
+                    }}
+                  >
                     <CloseIcon fontSize="small" />
                   </IconButton>
                 </InputAdornment>
@@ -422,14 +464,21 @@ const MedicalCategoriesList = () => {
             size="small"
             label="التصنيف الأب"
             value={parentFilter}
-            onChange={(e) => { setParentFilter(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setParentFilter(e.target.value);
+              setPage(0);
+            }}
             sx={{ minWidth: '10rem', bgcolor: 'background.paper' }}
             InputProps={{ sx: { height: '2.5rem' } }}
             InputLabelProps={{ shrink: true }}
           >
-            <MenuItem value=""><em>الكل</em></MenuItem>
+            <MenuItem value="">
+              <em>الكل</em>
+            </MenuItem>
             {parentCategories.map((cat) => (
-              <MenuItem key={cat.id} value={cat.id}>{cat.name || cat.code}</MenuItem>
+              <MenuItem key={cat.id} value={cat.id}>
+                {cat.name || cat.code}
+              </MenuItem>
             ))}
           </TextField>
 
@@ -455,10 +504,17 @@ const MedicalCategoriesList = () => {
         page={page}
         rowsPerPage={rowsPerPage}
         onPageChange={(newPage) => setPage(newPage)}
-        onRowsPerPageChange={(newSize) => { setRowsPerPage(newSize); setPage(0); }}
+        onRowsPerPageChange={(newSize) => {
+          setRowsPerPage(newSize);
+          setPage(0);
+        }}
         sortBy={sortBy}
         sortDirection={sortDirection}
-        onSort={(columnId, direction) => { setSortBy(columnId); setSortDirection(direction); setPage(0); }}
+        onSort={(columnId, direction) => {
+          setSortBy(columnId);
+          setSortDirection(direction);
+          setPage(0);
+        }}
         renderCell={renderCell}
         getRowKey={(row) => row.id}
         emptyMessage="لا توجد تصنيفات طبية"

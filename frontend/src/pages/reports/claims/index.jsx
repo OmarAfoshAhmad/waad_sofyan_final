@@ -85,7 +85,10 @@ const ClaimsReport = () => {
   };
 
   const handlePageChange = (newPage) => setPage(newPage);
-  const handleRowsPerPageChange = (newSize) => { setRowsPerPage(newSize); setPage(0); };
+  const handleRowsPerPageChange = (newSize) => {
+    setRowsPerPage(newSize);
+    setPage(0);
+  };
 
   const handleExportExcel = () => {
     try {
@@ -183,9 +186,7 @@ const ClaimsReport = () => {
         onRowsPerPageChange={handleRowsPerPageChange}
       />
 
-      <style>
-        {`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
-      </style>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </MainCard>
   );
 };

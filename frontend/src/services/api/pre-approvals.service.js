@@ -174,7 +174,7 @@ export const preApprovalsService = {
   /**
    * Get pending pre-approvals (Operations Queue)
    * Uses /inbox/pending endpoint (FIFO order by default)
-  * @param {Object} params - Optional pagination params {page, size, sortBy, sortDir, status, priority, search, fromDate, toDate, providerId}
+   * @param {Object} params - Optional pagination params {page, size, sortBy, sortDir, status, priority, search, fromDate, toDate, providerId}
    * @returns {Promise<Object>} Paginated pending pre-approvals
    */
   getPending: async (params = {}) => {
@@ -304,7 +304,7 @@ export const preApprovalsService = {
       axiosClient.get(`${BASE_URL}/status/APPROVED?page=0&size=100`).catch(() => null),
       axiosClient.get(`${BASE_URL}/status/ACKNOWLEDGED?page=0&size=100`).catch(() => null),
       axiosClient.get(`${BASE_URL}/status/PENDING?page=0&size=100`).catch(() => null),
-      axiosClient.get(`${BASE_URL}/status/NEEDS_CORRECTION?page=0&size=100`).catch(() => null),
+      axiosClient.get(`${BASE_URL}/status/NEEDS_CORRECTION?page=0&size=100`).catch(() => null)
     ]);
     const extract = (res) => {
       if (!res) return [];
@@ -318,10 +318,9 @@ export const preApprovalsService = {
       approved: extract(approved),
       acknowledged: extract(acknowledged),
       pending: extract(pending),
-      infoRequested: extract(infoRequested),
+      infoRequested: extract(infoRequested)
     };
   },
-
 
   /**
    * Get pending pre-approvals for inbox (with pagination)

@@ -290,4 +290,3 @@ VisitsFilters.propTypes = {
 };
 
 export default VisitsFilters;
-

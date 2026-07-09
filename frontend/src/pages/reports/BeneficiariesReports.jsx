@@ -290,7 +290,7 @@ const BeneficiariesReports = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error("Excel Export failed", error);
+      console.error('Excel Export failed', error);
     }
   };
 
@@ -483,12 +483,7 @@ const BeneficiariesReports = () => {
         ]}
         additionalActions={
           <Stack direction="row" spacing={1}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={handleExportExcel}
-              color="primary"
-            >
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportExcel} color="primary">
               تصدير إكسيل
             </Button>
             {viewMode === 'SINGLE' && (
@@ -502,7 +497,16 @@ const BeneficiariesReports = () => {
 
       {/* --- Filter Section (Only in Table Mode) --- */}
       {viewMode === 'TABLE' && (
-        <Card sx={{ mb: '1.5rem', p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.25rem', border: '1px solid', borderColor: 'divider' }}>
+        <Card
+          sx={{
+            mb: '1.5rem',
+            p: '1.0rem',
+            bgcolor: 'background.paper',
+            borderRadius: '0.25rem',
+            border: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
           <Stack direction="row" alignItems="center" spacing={1} mb={2}>
             <FilterAltIcon color="primary" />
             <Typography variant="h6" fontWeight="bold">
@@ -932,7 +936,16 @@ const SingleBeneficiaryReport = ({ member, financialStats, loadingStats, onBack 
       {/* Printable Area */}
       <Box ref={componentRef} sx={{ p: '1.0rem', bgcolor: 'background.paper', borderRadius: '0.25rem' }}>
         {/* Report Header */}
-        <Box sx={{ borderBottom: '2px solid #eee', mb: '1.5rem', pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box
+          sx={{
+            borderBottom: '2px solid #eee',
+            mb: '1.5rem',
+            pb: 1,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
           <Box>
             <Typography variant="h4" color="primary.main" fontWeight="bold">
               تقرير تفاصيل المنتفع

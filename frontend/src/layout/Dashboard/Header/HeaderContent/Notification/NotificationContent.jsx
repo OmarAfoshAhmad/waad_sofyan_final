@@ -32,7 +32,14 @@ export default function NotificationContent({ notifications, filter, setFilter, 
       {/* Notification Filter Chips */}
       <Stack
         direction="row"
-        sx={{ py: '0.75rem', px: '1.25rem', gap: '0.625rem', alignItems: 'center', borderBottom: '1px solid', borderBottomColor: 'divider' }}
+        sx={{
+          py: '0.75rem',
+          px: '1.25rem',
+          gap: '0.625rem',
+          alignItems: 'center',
+          borderBottom: '1px solid',
+          borderBottomColor: 'divider'
+        }}
       >
         {notificationFilterOptions.map((opt, index) => (
           <Chip
@@ -81,5 +88,3 @@ NotificationContent.propTypes = {
   setFilter: PropTypes.func,
   onMarkAllRead: PropTypes.func
 };
-
-

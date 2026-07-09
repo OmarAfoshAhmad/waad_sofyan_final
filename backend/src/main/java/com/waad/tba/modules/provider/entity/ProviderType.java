@@ -12,14 +12,19 @@ public enum ProviderType {
     HOSPITAL,
     
     /**
-     * عيادة - Clinic
+     * عيادة تخصصية - Clinic
      */
     CLINIC,
+
+    /**
+     * عيادة أسنان - Dental Clinic
+     */
+    CLINIC_DEN,
     
     /**
-     * طبيب - Doctor
+     * مختبر تحاليل - Laboratory
      */
-    DOCTOR,
+    LAB,
     
     /**
      * صيدلية - Pharmacy
@@ -27,7 +32,12 @@ public enum ProviderType {
     PHARMACY,
     
     /**
-     * مختبر - Laboratory
+     * مركز أشعة - Radiology
      */
-    LAB
+    RADIOLOGY,
+
+    /**
+     * مركز علاج طبيعي - Physiotherapy
+     */
+    PHYSIOTHERAPY
 }

@@ -110,8 +110,8 @@ const PreApprovalsReport = () => {
   };
 
   /**
-    * Export pre-approvals to Excel (XLSX format with Arabic support)
-    * Uses the unified XLSX export utility.
+   * Export pre-approvals to Excel (XLSX format with Arabic support)
+   * Uses the unified XLSX export utility.
    */
   const handleExportExcel = () => {
     try {

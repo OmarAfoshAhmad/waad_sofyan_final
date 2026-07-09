@@ -19,7 +19,13 @@ export default function PlaceholderContent({ type }) {
       {type !== DropzoneType.STANDARD && (
         <Stack
           direction={{ xs: 'column', md: 'row' }}
-          sx={{ gap: '1.0rem', alignItems: 'center', justifyContent: 'center', width: '0.0625rem', textAlign: { xs: 'center', md: 'left' } }}
+          sx={{
+            gap: '1.0rem',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '0.0625rem',
+            textAlign: { xs: 'center', md: 'left' }
+          }}
         >
           <CardMedia component="img" image={UploadCover} sx={{ width: '9.375rem' }} />
           <Stack sx={{ gap: 1, p: '1.5rem' }}>

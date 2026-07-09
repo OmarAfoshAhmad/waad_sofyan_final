@@ -390,6 +390,3 @@ export const tw = {
 };
 
 export default tailwindTheme;
-
-
-
