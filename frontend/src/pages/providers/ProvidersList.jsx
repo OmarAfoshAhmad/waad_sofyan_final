@@ -52,6 +52,7 @@ import SearchIcon from '@mui/icons-material/Search'; // Added SearchIcon
 import BusinessIcon from '@mui/icons-material/Business'; // Added BusinessIcon
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 // Project Components
 import MainCard from 'components/MainCard';
@@ -127,6 +128,16 @@ const getNetworkTier = (provider) => {
   if (provider?.contracted === true) return 'IN_NETWORK';
   if (provider?.contracted === false) return 'OUT_OF_NETWORK';
   return null;
+};
+
+/**
+ * Get provider status
+ */
+const getProviderStatus = (provider) => {
+  if (provider?.status) return provider.status;
+  if (provider?.active === true) return 'ACTIVE';
+  if (provider?.active === false) return 'INACTIVE';
+  return 'PENDING';
 };
 
 // ============================================================================
@@ -242,6 +253,8 @@ export default function ProvidersList() {
   });
 
   const { page, pageSize: rowsPerPage, sorting } = tableState;
+  const sortColumn = sorting?.[0]?.id;
+  const sortDirection = sorting?.[0]?.desc ? 'desc' : 'asc';
 
   const handleNavigateAdd = useCallback(() => {
     navigate('/providers/add');
@@ -377,6 +390,7 @@ export default function ProvidersList() {
     },
     [queryClient]
   );
+
 
   // ========================================
   // DATA FETCHING WITH REACT QUERY
@@ -667,7 +681,9 @@ export default function ProvidersList() {
         sort: sortColumn ? `${sortColumn},${sortDirection}` : 'id,desc',
         active: showDeleted ? false : true,
         search: tableState.columnFilters.q || undefined,
-        providerType: tableState.columnFilters.providerType || undefined
+        providerType: tableState.columnFilters.providerType || undefined,
+        networkStatus: tableState.columnFilters.networkStatus || undefined,
+        status: tableState.columnFilters.status || undefined
       };
 
       const result = await providersService.getAll(params);
@@ -695,6 +711,53 @@ export default function ProvidersList() {
     if (typeof data?.total === 'number') return data.total;
     return providers.length;
   }, [data, providers.length]);
+
+  const handleSelectAllClick = useCallback(
+    async (event) => {
+      if (event.target.checked) {
+        try {
+          const params = {
+            page: 1,
+            size: 100000,
+            sort: sortColumn ? `${sortColumn},${sortDirection}` : 'id,desc',
+            active: showDeleted ? false : true,
+            search: tableState.columnFilters.q || undefined,
+            providerType: tableState.columnFilters.providerType || undefined,
+            networkStatus: tableState.columnFilters.networkStatus || undefined,
+            status: tableState.columnFilters.status || undefined
+          };
+          const allResult = await providersService.getAll(params);
+          const allProviders = allResult?.content || allResult?.items || [];
+          setSelectedIds(allProviders.map(p => p.id));
+        } catch (error) {
+          console.error("Failed to fetch all providers for selection", error);
+          setSelectedIds(providers.map((n) => n.id));
+        }
+        return;
+      }
+      setSelectedIds([]);
+    },
+    [providers, showDeleted, sortColumn, sortDirection, tableState.columnFilters]
+  );
+
+  const handleSelectRow = useCallback(
+    (event, id) => {
+      const selectedIndex = selectedIds.indexOf(id);
+      let newSelected = [];
+
+      if (selectedIndex === -1) {
+        newSelected = newSelected.concat(selectedIds, id);
+      } else if (selectedIndex === 0) {
+        newSelected = newSelected.concat(selectedIds.slice(1));
+      } else if (selectedIndex === selectedIds.length - 1) {
+        newSelected = newSelected.concat(selectedIds.slice(0, -1));
+      } else if (selectedIndex > 0) {
+        newSelected = newSelected.concat(selectedIds.slice(0, selectedIndex), selectedIds.slice(selectedIndex + 1));
+      }
+      setSelectedIds(newSelected);
+    },
+    [selectedIds]
+  );
 
   // ========================================
   // MAIN RENDER
@@ -727,7 +790,7 @@ export default function ProvidersList() {
       {/* ====== FILTERS & BULK ACTIONS ====== */}
       <Box sx={{ p: 2, mb: 2 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               fullWidth
               size="small"
@@ -743,7 +806,7 @@ export default function ProvidersList() {
               }}
             />
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
             <FormControl fullWidth size="small">
               <InputLabel id="provider-type-label">نوع المرفق</InputLabel>
               <Select
@@ -761,7 +824,39 @@ export default function ProvidersList() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="provider-network-label">الشبكة</InputLabel>
+              <Select
+                labelId="provider-network-label"
+                value={tableState.columnFilters.networkStatus || ''}
+                label="الشبكة"
+                onChange={(e) => tableState.setFilter('networkStatus', e.target.value)}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                <MenuItem value="IN_NETWORK">داخل الشبكة</MenuItem>
+                <MenuItem value="OUT_OF_NETWORK">خارج الشبكة</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="provider-status-label">الحالة</InputLabel>
+              <Select
+                labelId="provider-status-label"
+                value={tableState.columnFilters.status || ''}
+                label="الحالة"
+                onChange={(e) => tableState.setFilter('status', e.target.value)}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                <MenuItem value="ACTIVE">نشط</MenuItem>
+                <MenuItem value="INACTIVE">غير نشط</MenuItem>
+                <MenuItem value="PENDING">قيد المراجعة</MenuItem>
+                <MenuItem value="SUSPENDED">معلق</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
             <Button
               variant="outlined"
               color="secondary"
@@ -769,15 +864,18 @@ export default function ProvidersList() {
               onClick={() => {
                 tableState.setFilter('q', '');
                 tableState.setFilter('providerType', '');
+                tableState.setFilter('networkStatus', '');
+                tableState.setFilter('status', '');
               }}
               fullWidth
+              sx={{ height: '40px' }}
             >
               إعادة ضبط
             </Button>
           </Grid>
 
           {selectedIds.length > 0 && (
-            <Grid item xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Stack direction="row" spacing={2} alignItems="center" sx={{ bgcolor: 'rgba(0, 0, 0, 0.04)', p: 1, borderRadius: 1 }}>
                 <Typography variant="body2" fontWeight="bold">
                   تم تحديد {selectedIds.length} مرفق

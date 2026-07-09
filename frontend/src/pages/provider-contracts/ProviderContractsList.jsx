@@ -8,8 +8,9 @@
 import { useMemo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Chip, IconButton, Stack, Tooltip, Typography, Grid, TextField, MenuItem, InputAdornment } from '@mui/material';
+import { Box, Chip, IconButton, Stack, Tooltip, Typography, Grid, TextField, MenuItem, InputAdornment, Button } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import EditIcon from '@mui/icons-material/Edit';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -216,7 +217,7 @@ const ProviderContractsList = () => {
       if (showDeleted) {
         return await getDeletedProviderContracts(params);
       }
-      if (params.q || params.status) {
+      if (params.q || params.status || params.discountBeforeRejection || params.discountPercentage) {
         return await searchProviderContracts(params);
       }
       return await getProviderContracts(params);
@@ -369,7 +370,7 @@ const ProviderContractsList = () => {
               size="small"
               color={contract.pricingItemsCount > 0 ? 'primary' : 'default'}
               variant={contract.pricingItemsCount > 0 ? 'filled' : 'outlined'}
-              sx={{ fontWeight: 'bold' }}
+              sx={{ fontWeight: 'bold', minWidth: '60px' }}
             />
           );
 
@@ -451,8 +452,8 @@ const ProviderContractsList = () => {
         />
 
         <Box sx={{ p: 2, mb: 2 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -468,7 +469,7 @@ const ProviderContractsList = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField
                 select
                 fullWidth
@@ -484,6 +485,48 @@ const ProviderContractsList = () => {
                   </MenuItem>
                 ))}
               </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="آلية الخصم"
+                value={tableState.columnFilters.discountBeforeRejection || ''}
+                onChange={(e) => tableState.setFilter('discountBeforeRejection', e.target.value)}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                <MenuItem value="true">قبل المرفوض</MenuItem>
+                <MenuItem value="false">بعد المرفوض</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <TextField
+                type="number"
+                fullWidth
+                size="small"
+                label="نسبة الخصم %"
+                placeholder="مثال: 10"
+                value={tableState.columnFilters.discountPercentage || ''}
+                onChange={(e) => tableState.setFilter('discountPercentage', e.target.value)}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<RefreshIcon />}
+                onClick={() => {
+                  tableState.setFilter('q', '');
+                  tableState.setFilter('status', '');
+                  tableState.setFilter('discountBeforeRejection', '');
+                  tableState.setFilter('discountPercentage', '');
+                }}
+                fullWidth
+                sx={{ height: '40px' }}
+              >
+                إعادة ضبط
+              </Button>
             </Grid>
           </Grid>
         </Box>
