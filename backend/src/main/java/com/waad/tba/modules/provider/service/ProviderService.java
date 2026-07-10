@@ -301,6 +301,47 @@ public class ProviderService {
         }
     }
 
+    /**
+     * Bulk allow all employers for selected providers
+     */
+    @Transactional
+    public void bulkAllowAllEmployers(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+
+        for (Long id : ids) {
+            Provider provider = providerRepository.findById(id)
+                    .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+            
+            provider.setAllowAllEmployers(true);
+            providerRepository.save(provider);
+            
+            // Clear specific allowed employers since all are allowed now
+            providerAllowedEmployerRepository.deleteByProviderId(id);
+            log.info("Provider {} bulk allowed all employers", id);
+        }
+    }
+
+    /**
+     * Bulk remove all employers for selected providers
+     */
+    @Transactional
+    public void bulkRemoveEmployers(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+
+        for (Long id : ids) {
+            Provider provider = providerRepository.findById(id)
+                    .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
+            
+            provider.setAllowAllEmployers(false);
+            providerRepository.save(provider);
+            
+            // Clear specific allowed employers so none are allowed
+            providerAllowedEmployerRepository.deleteByProviderId(id);
+            log.info("Provider {} bulk removed all employers", id);
+        }
+    }
+
+
 
     @Transactional(readOnly = true)
     public List<ProviderViewDto> getAllActiveProviders() {

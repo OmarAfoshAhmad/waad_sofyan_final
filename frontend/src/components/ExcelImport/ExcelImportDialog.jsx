@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -37,6 +37,7 @@ import { downloadBlob } from 'services/api/excel-import.service';
  */
 const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport, templateFilename }) => {
   const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -154,9 +155,9 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
                 bgcolor: 'action.hover'
               }
             }}
-            onClick={() => document.getElementById('excel-file-input').click()}
+            onClick={() => fileInputRef.current?.click()}
           >
-            <input id="excel-file-input" type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileChange} />
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileChange} />
             <CloudUpload sx={{ fontSize: '3.0rem', color: 'text.secondary', mb: 1 }} />
             <Typography variant="body1">{file ? file.name : 'انقر لاختيار الملف'}</Typography>
             <Typography variant="caption" color="text.secondary">

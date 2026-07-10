@@ -83,8 +83,8 @@ const DEFAULT_SORT = { field: 'id', direction: 'desc' };
 const PROVIDER_TYPES = [
   { value: 'HOSPITAL', label: 'مستشفى' },
   { value: 'CLINIC', label: 'عيادة تخصصية' },
-  { value: 'POLYCLINIC', label: 'مجمع عيادات' },
-  { value: 'LABORATORY', label: 'مختبر طبي' },
+  { value: 'CLINIC_DEN', label: 'عيادة أسنان' },
+  { value: 'LAB', label: 'مختبر طبي' },
   { value: 'PHARMACY', label: 'صيدلية' },
   { value: 'RADIOLOGY', label: 'مركز أشعة' },
   { value: 'PHYSIOTHERAPY', label: 'علاج طبيعي' }
@@ -94,7 +94,7 @@ const PROVIDER_TYPES = [
 const PROVIDER_TYPE_LABELS_AR = {
   HOSPITAL: 'مستشفى',
   CLINIC: 'عيادة تخصصية',
-  CLINIC_DEN: 'عياده اسنان',
+  CLINIC_DEN: 'عيادة أسنان',
   LAB: 'مختبر تحاليل',
   LABORATORY: 'مختبر تحاليل',
   PHARMACY: 'صيدلية',
@@ -914,6 +914,32 @@ export default function ProvidersList() {
                   </>
                 ) : (
                   <PermissionGuard resource="providers" action="delete">
+                    <Button
+                      size="small"
+                      color="primary"
+                      variant="contained"
+                      startIcon={<VerifiedUserIcon />}
+                      onClick={() => providersService.bulkAllowAllEmployers(selectedIds).then(() => {
+                        openSnackbar({ message: 'تم تفعيل جميع الجهات للمرافق المحددة بنجاح', variant: 'success' });
+                        setSelectedIds([]);
+                        queryClient.invalidateQueries([QUERY_KEY]);
+                      }).catch(e => openSnackbar({ message: e.message || 'حدث خطأ', variant: 'error' }))}
+                    >
+                      تفعيل جميع الجهات للمحدد
+                    </Button>
+                    <Button
+                      size="small"
+                      color="warning"
+                      variant="contained"
+                      startIcon={<CloseIcon />}
+                      onClick={() => providersService.bulkRemoveEmployers(selectedIds).then(() => {
+                        openSnackbar({ message: 'تمت إزالة جهات العمل من المرافق المحددة بنجاح', variant: 'success' });
+                        setSelectedIds([]);
+                        queryClient.invalidateQueries([QUERY_KEY]);
+                      }).catch(e => openSnackbar({ message: e.message || 'حدث خطأ', variant: 'error' }))}
+                    >
+                      إزالة جهات العمل من المحدد
+                    </Button>
                     <Button
                       size="small"
                       color="error"

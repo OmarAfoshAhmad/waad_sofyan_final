@@ -103,6 +103,13 @@ const getRoleColor = (roleName) => {
 const validateStep1 = (form) => {
   const errors = {};
 
+  // Username validation
+  if (!form.username?.trim()) {
+    errors.username = 'اسم المستخدم مطلوب';
+  } else if (form.username.length < 4) {
+    errors.username = 'اسم المستخدم يجب أن يكون 4 أحرف على الأقل';
+  }
+
   // Full name validation
   if (!form.fullName?.trim()) {
     errors.fullName = 'الاسم الكامل مطلوب';
@@ -136,21 +143,22 @@ const Step1UserInfoEdit = ({ form, setForm, errors, setErrors }) => {
   return (
     <TbaFormSection title="معلومات المستخدم الأساسية" icon={PersonIcon}>
       <Grid container spacing={2.5}>
-        {/* Username (readonly) */}
+        {/* Username */}
         <Grid size={{ xs: 12, sm: 6 }}>
           <TextField
             fullWidth
             label="اسم المستخدم"
             value={form.username}
-            disabled
+            onChange={handleChange('username')}
+            error={!!errors.username}
+            helperText={errors.username}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <PersonIcon color="action" />
+                  <PersonIcon color={errors.username ? 'error' : 'action'} />
                 </InputAdornment>
               )
             }}
-            helperText="لا يمكن تغيير اسم المستخدم"
           />
         </Grid>
 

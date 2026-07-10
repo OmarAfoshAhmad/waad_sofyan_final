@@ -59,7 +59,7 @@ import { NetworkBadge, CardStatusBadge } from 'components/insurance';
 const PROVIDER_TYPE_LABELS = {
   HOSPITAL: 'مستشفى',
   CLINIC: 'عيادة تخصصية',
-  CLINIC_DEN: 'عياده اسنان',
+  CLINIC_DEN: 'عيادة أسنان',
   LAB: 'مختبر تحاليل',
   PHARMACY: 'صيدلية',
   RADIOLOGY: 'مركز أشعة',

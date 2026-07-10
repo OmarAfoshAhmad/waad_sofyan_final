@@ -226,6 +226,34 @@ export const providersService = {
   },
 
   /**
+   * Bulk allow all employers
+   * @param {Array<number>} ids - Array of provider IDs
+   */
+  bulkAllowAllEmployers: async (ids) => {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) throw new Error('يرجى تحديد مرفق واحد على الأقل');
+      const response = await axiosClient.post(`${BASE_URL}/bulk-allow-all-employers`, ids);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
+   * Bulk remove employers
+   * @param {Array<number>} ids - Array of provider IDs
+   */
+  bulkRemoveEmployers: async (ids) => {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) throw new Error('يرجى تحديد مرفق واحد على الأقل');
+      const response = await axiosClient.post(`${BASE_URL}/bulk-remove-employers`, ids);
+      return unwrap(response);
+    } catch (error) {
+      throw handleProviderErrors(error);
+    }
+  },
+
+  /**
    * Search providers
    * @param {string} query - Search query
    * @returns {Promise<Array>} Matching providers

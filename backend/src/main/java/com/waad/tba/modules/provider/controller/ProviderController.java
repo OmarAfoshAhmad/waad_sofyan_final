@@ -202,6 +202,20 @@ public class ProviderController {
         return ResponseEntity.ok(ApiResponse.success("Providers restored successfully", null));
     }
 
+    @PostMapping("/bulk-allow-all-employers")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> bulkAllowAllEmployers(@RequestBody List<Long> ids) {
+        providerService.bulkAllowAllEmployers(ids);
+        return ResponseEntity.ok(ApiResponse.success("Employers allowed successfully for selected providers", null));
+    }
+
+    @PostMapping("/bulk-remove-employers")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> bulkRemoveEmployers(@RequestBody List<Long> ids) {
+        providerService.bulkRemoveEmployers(ids);
+        return ResponseEntity.ok(ApiResponse.success("Employers removed successfully for selected providers", null));
+    }
+
     @GetMapping("/active")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getAllActiveProviders() {

@@ -109,6 +109,11 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
 
+        // Check username uniqueness if changed
+        if (!user.getUsername().equalsIgnoreCase(dto.getUsername()) && userRepository.existsByUsernameIgnoreCase(dto.getUsername())) {
+            throw new IllegalArgumentException("اسم المستخدم '" + dto.getUsername() + "' موجود مسبقاً");
+        }
+
         // Check email uniqueness if changed
         if (!user.getEmail().equalsIgnoreCase(dto.getEmail()) && userRepository.existsByEmailIgnoreCase(dto.getEmail())) {
             throw new IllegalArgumentException("البريد الإلكتروني '" + dto.getEmail() + "' مسجل مسبقاً");

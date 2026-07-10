@@ -73,7 +73,7 @@ import {
 const PROVIDER_TYPES = [
   { value: 'HOSPITAL', label: 'مستشفى', icon: '🏥' },
   { value: 'CLINIC', label: 'عيادة تخصصية', icon: '🏥' },
-  { value: 'CLINIC_DEN', label: 'عياده اسنان', icon: '🦷' },
+  { value: 'CLINIC_DEN', label: 'عيادة أسنان', icon: '🦷' },
   { value: 'LAB', label: 'مختبر تحاليل', icon: '🔬' },
   { value: 'PHARMACY', label: 'صيدلية', icon: '💊' },
   { value: 'RADIOLOGY', label: 'مركز أشعة', icon: '📷' },

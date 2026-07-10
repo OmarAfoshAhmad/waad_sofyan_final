@@ -13,6 +13,12 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.providercontract.dto.ProviderContractCreateDto;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.service.ProviderContractService;
+import com.waad.tba.modules.rbac.dto.UserCreateDto;
+import com.waad.tba.modules.rbac.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Row;
@@ -41,6 +47,8 @@ public class ProviderExcelTemplateService {
     private final ExcelTemplateService templateService;
     private final ExcelParserService parserService;
     private final ProviderRepository providerRepository;
+    private final ProviderContractService contractService;
+    private final UserService userService;
     
     // ═══════════════════════════════════════════════════════════════════════════
     // TEMPLATE GENERATION
@@ -134,6 +142,28 @@ public class ProviderExcelTemplateService {
                 .description("Full address")
                 .descriptionAr("العنوان الكامل")
                 .width(35)
+                .build(),
+                
+            ExcelTemplateColumn.builder()
+                .name("username")
+                .nameAr("اسم المستخدم")
+                .type(ColumnType.TEXT)
+                .required(false)
+                .example("ali_2026")
+                .description("System username (auto-generated if empty)")
+                .descriptionAr("اسم مستخدم النظام (يولد تلقائياً إذا كان فارغاً)")
+                .width(20)
+                .build(),
+
+            ExcelTemplateColumn.builder()
+                .name("network")
+                .nameAr("الشبكة")
+                .type(ColumnType.TEXT)
+                .required(false)
+                .example("داخل الشبكة")
+                .description("Network status (Inside Network / Outside Network), default is Inside")
+                .descriptionAr("حالة الشبكة (داخل الشبكة / خارج الشبكة)، الافتراضي داخل الشبكة")
+                .width(20)
                 .build()
         );
     }
@@ -206,6 +236,49 @@ public class ProviderExcelTemplateService {
                         } else {
                             summary.setCreated(summary.getCreated() + 1);
                             log.debug("[ProviderImport] Created provider: {}", provider.getLicenseNumber());
+                            
+                            // 1. Create a DRAFT contract for the new provider
+                            try {
+                                ProviderContractCreateDto contractDto = ProviderContractCreateDto.builder()
+                                        .providerId(provider.getId())
+                                        .status(ContractStatus.DRAFT)
+                                        .pricingModel(PricingModel.DISCOUNT)
+                                        .startDate(java.time.LocalDate.now())
+                                        .build();
+                                contractService.create(contractDto);
+                                log.debug("[ProviderImport] Created draft contract for provider: {}", provider.getId());
+                            } catch (Exception e) {
+                                log.error("[ProviderImport] Failed to create contract for provider: {}", provider.getId(), e);
+                            }
+
+                            // 2. Create a User for the new provider
+                            try {
+                                String name = provider.getName() != null ? provider.getName() : "";
+                                String licenseNumber = provider.getLicenseNumber() != null ? provider.getLicenseNumber() : "";
+                                String email = provider.getEmail();
+                                
+                                String excelUsername = getCellValue(row, columnIndices.get("username"));
+                                String username;
+                                if (excelUsername != null && !excelUsername.trim().isEmpty()) {
+                                    username = excelUsername.trim();
+                                } else {
+                                    String englishName = name.trim().replaceAll("[^a-zA-Z0-9]", "").toLowerCase();
+                                    username = (englishName.isEmpty() ? licenseNumber.trim().toLowerCase() : englishName) + "@tpa";
+                                }
+                                
+                                UserCreateDto userDto = UserCreateDto.builder()
+                                        .username(username)
+                                        .password("P@123456")
+                                        .fullName(name.trim())
+                                        .email(email != null && !email.trim().isEmpty() ? email.trim() : username + ".local")
+                                        .userType("PROVIDER_STAFF")
+                                        .providerId(provider.getId())
+                                        .build();
+                                userService.create(userDto);
+                                log.debug("[ProviderImport] Created user {} for provider: {}", username, provider.getId());
+                            } catch (Exception e) {
+                                log.error("[ProviderImport] Failed to create user for provider: {}", provider.getId(), e);
+                            }
                         }
                     } else {
                         summary.setRejected(summary.getRejected() + 1);
@@ -262,6 +335,10 @@ public class ProviderExcelTemplateService {
             "phone", "رقم الهاتف", "الهاتف"));
         indices.put("email", parserService.findColumnIndex(headerRow, 
             "email", "البريد الإلكتروني"));
+        indices.put("username", parserService.findColumnIndex(headerRow, 
+            "username", "اسم المستخدم"));
+        indices.put("network", parserService.findColumnIndex(headerRow, 
+            "network", "الشبكة"));
         indices.put("address", parserService.findColumnIndex(headerRow, 
             "address", "العنوان"));
         
@@ -340,6 +417,14 @@ public class ProviderExcelTemplateService {
         Optional<Provider> existingOpt = providerRepository.findByName(nameValue);
         Provider provider;
 
+        String networkStatusStr = getCellValue(row, columnIndices.get("network"));
+        Provider.NetworkTier networkTier = Provider.NetworkTier.IN_NETWORK; // default
+        if (networkStatusStr != null && (networkStatusStr.trim().equalsIgnoreCase("خارج الشبكة") 
+                || networkStatusStr.trim().equalsIgnoreCase("OUT_OF_NETWORK")
+                || networkStatusStr.trim().equalsIgnoreCase("OUT"))) {
+            networkTier = Provider.NetworkTier.OUT_OF_NETWORK;
+        }
+
         if (existingOpt.isPresent()) {
             provider = existingOpt.get();
             provider.setProviderType(providerType);
@@ -349,6 +434,7 @@ public class ProviderExcelTemplateService {
             provider.setPhone(getCellValue(row, columnIndices.get("phone")));
             provider.setEmail(getCellValue(row, columnIndices.get("email")));
             provider.setAddress(getCellValue(row, columnIndices.get("address")));
+            provider.setNetworkStatus(networkTier);
             provider.setActive(true);
         } else {
             // Auto-generate license number
@@ -362,6 +448,7 @@ public class ProviderExcelTemplateService {
                 .phone(getCellValue(row, columnIndices.get("phone")))
                 .email(getCellValue(row, columnIndices.get("email")))
                 .address(getCellValue(row, columnIndices.get("address")))
+                .networkStatus(networkTier)
                 .active(true)
                 .build();
         }

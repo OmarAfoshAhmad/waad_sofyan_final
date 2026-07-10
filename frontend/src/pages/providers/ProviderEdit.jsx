@@ -83,7 +83,7 @@ import {
 const PROVIDER_TYPES = [
   { value: 'HOSPITAL', label: 'مستشفى' },
   { value: 'CLINIC', label: 'عيادة تخصصية' },
-  { value: 'CLINIC_DEN', label: 'عياده اسنان' },
+  { value: 'CLINIC_DEN', label: 'عيادة أسنان' },
   { value: 'LAB', label: 'مختبر تحاليل' },
   { value: 'PHARMACY', label: 'صيدلية' },
   { value: 'RADIOLOGY', label: 'مركز أشعة' },
