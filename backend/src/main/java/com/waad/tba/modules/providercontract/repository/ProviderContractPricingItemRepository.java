@@ -136,6 +136,18 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("contractId") Long contractId,
                      @Param("categoryId") Long categoryId);
 
+       /**
+        * Get category summaries (category ID, name, and count of items) for a contract
+        */
+       @Query("SELECT new com.waad.tba.modules.providercontract.dto.CategorySummaryDto(" +
+                     "mc.id, mc.nameAr, COUNT(p)) " +
+                     "FROM ProviderContractPricingItem p " +
+                     "LEFT JOIN p.medicalCategory mc " +
+                     "WHERE p.contract.id = :contractId AND p.active = true " +
+                     "GROUP BY mc.id, mc.nameAr")
+       List<com.waad.tba.modules.providercontract.dto.CategorySummaryDto> getCategorySummariesByContract(
+                     @Param("contractId") Long contractId);
+
        // ═══════════════════════════════════════════════════════════════════════════
        // EFFECTIVE PRICING LOOKUPS
        // ═══════════════════════════════════════════════════════════════════════════

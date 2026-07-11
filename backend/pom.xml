@@ -163,6 +163,13 @@
             <version>5.4.0</version>
         </dependency>
 
+        <!-- Fast Streaming Excel Reader to prevent OutOfMemoryError for large files -->
+        <dependency>
+            <groupId>com.github.pjfanning</groupId>
+            <artifactId>excel-streaming-reader</artifactId>
+            <version>5.0.3</version>
+        </dependency>
+
         <!-- OpenPDF for Professional PDF Generation -->
         <dependency>
             <groupId>com.github.librepdf</groupId>

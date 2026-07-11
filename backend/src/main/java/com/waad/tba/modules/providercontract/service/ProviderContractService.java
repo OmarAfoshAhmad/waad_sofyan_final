@@ -224,6 +224,17 @@ public class ProviderContractService {
             throw new BusinessRuleException("Start date must be before end date");
         }
 
+        ContractStatus targetStatus = dto.getStatus() != null ? dto.getStatus() : ContractStatus.DRAFT;
+        
+        // Enforce single active contract if creating as ACTIVE
+        if (targetStatus == ContractStatus.ACTIVE) {
+            contractRepository.findActiveContractByProvider(dto.getProviderId())
+                    .ifPresent(existing -> {
+                        throw new BusinessRuleException(
+                                "يوجد عقد نشط مسبقاً لمقدم الخدمة: " + existing.getContractCode());
+                    });
+        }
+
         // Generate contract code if not provided
         String contractCode = dto.getContractCode();
         if (contractCode == null || contractCode.isBlank()) {
@@ -237,7 +248,7 @@ public class ProviderContractService {
                 .contractCode(contractCode)
                 .contractNumber(contractCode) // Legacy compatibility
                 .provider(provider)
-                .status(dto.getStatus() != null ? dto.getStatus() : ContractStatus.DRAFT)
+                .status(targetStatus)
                 .pricingModel(dto.getPricingModel() != null ? dto.getPricingModel() : PricingModel.DISCOUNT)
                 .discountPercent(dto.getDiscountPercent() != null ? dto.getDiscountPercent() : BigDecimal.ZERO)
                 .discountBeforeRejection(dto.getDiscountBeforeRejection() != null ? dto.getDiscountBeforeRejection() : false)

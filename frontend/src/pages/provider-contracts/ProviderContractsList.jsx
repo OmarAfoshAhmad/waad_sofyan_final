@@ -17,6 +17,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import UndoIcon from '@mui/icons-material/Undo';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 import UnifiedPageHeader from 'components/UnifiedPageHeader';
 import { UnifiedMedicalTable } from 'components/common';
@@ -34,6 +35,7 @@ import {
   PRICING_MODEL_CONFIG
 } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
+import BulkPriceListImportDialog from './components/BulkPriceListImportDialog';
 
 const QUERY_KEY = 'provider-contracts';
 const MODULE_NAME = 'provider-contracts';
@@ -56,6 +58,7 @@ const ProviderContractsList = () => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   const [showDeleted, setShowDeleted] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [confirmState, setConfirmState] = useState({
     open: false,
     title: '',
@@ -448,7 +451,21 @@ const ProviderContractsList = () => {
           addButtonLabel="إنشاء عقد جديد"
           onAddClick={handleNavigateAdd}
           requires="provider_contracts.create"
-          additionalActions={<SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />}
+          additionalActions={
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<FileUploadIcon />}
+                size="small"
+                onClick={() => setBulkImportOpen(true)}
+                sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+              >
+                استيراد جماعي
+              </Button>
+              <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
+            </Stack>
+          }
         />
 
         <Box sx={{ p: 2, mb: 2 }}>
@@ -556,6 +573,15 @@ const ProviderContractsList = () => {
           confirmColor={confirmState.confirmColor}
           onClose={() => setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }))}
           onConfirm={() => confirmState.onConfirm?.()}
+        />
+
+        {/* ── Bulk Price List Import Dialog ── */}
+        <BulkPriceListImportDialog
+          open={bulkImportOpen}
+          onClose={() => setBulkImportOpen(false)}
+          onImportComplete={() => {
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          }}
         />
       </Box>
     </>

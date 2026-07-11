@@ -87,6 +87,12 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
         setShowErrors(true);
       }
     } catch (err) {
+      if (err.response?.data?.data) {
+        setResult(err.response.data.data);
+        if (err.response.data.data.errors?.length > 0) {
+          setShowErrors(true);
+        }
+      }
       setError(err.response?.data?.message || err.message || 'فشل الاستيراد');
     } finally {
       setLoading(false);
@@ -198,15 +204,15 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
             {/* Statistics */}
             <Paper variant="outlined" sx={{ p: '1.0rem', mb: '1.0rem' }}>
               <Box display="flex" gap={2} flexWrap="wrap">
-                <Chip label={`إجمالي الصفوف: ${result.summary?.total || 0}`} color="default" size="small" />
-                <Chip label={`تم الإنشاء: ${result.summary?.inserted || 0}`} color="success" size="small" />
-                <Chip label={`تم التحديث: ${result.summary?.updated || 0}`} color="info" size="small" />
-                {(result.summary?.failed || 0) > 0 && <Chip label={`فشل: ${result.summary?.failed || 0}`} color="warning" size="small" />}
+                <Chip label={`إجمالي الصفوف: ${result.summary?.totalRows ?? result.summary?.total ?? 0}`} color="default" size="small" />
+                <Chip label={`تم الإنشاء: ${result.summary?.created ?? result.summary?.inserted ?? 0}`} color="success" size="small" />
+                <Chip label={`تم التحديث: ${result.summary?.updated ?? 0}`} color="info" size="small" />
+                {((result.summary?.failed || 0) + (result.summary?.rejected || 0)) > 0 && <Chip label={`فشل: ${(result.summary?.failed || 0) + (result.summary?.rejected || 0)}`} color="warning" size="small" />}
               </Box>
             </Paper>
 
             {/* Errors List */}
-            {result.summary?.errors && result.summary.errors.length > 0 && (
+            {((result.errors && result.errors.length > 0) || (result.summary?.errors && result.summary.errors.length > 0)) && (
               <Box>
                 <Button
                   onClick={() => setShowErrors(!showErrors)}
@@ -214,7 +220,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
                   size="small"
                   sx={{ mb: 1 }}
                 >
-                  عرض الأخطاء ({result.summary.errors.length})
+                  عرض الأخطاء ({(result.errors || result.summary.errors).length})
                 </Button>
 
                 <Collapse in={showErrors}>
@@ -223,19 +229,19 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
                       <TableHead>
                         <TableRow>
                           <TableCell>الصف</TableCell>
-                          <TableCell>النوع</TableCell>
+                          <TableCell>العمود/النوع</TableCell>
                           <TableCell>الوصف</TableCell>
                           <TableCell>القيمة</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {result.summary.errors.map((err, idx) => (
+                        {(result.errors || result.summary.errors).map((err, idx) => (
                           <TableRow key={idx}>
-                            <TableCell>{err.row || '-'}</TableCell>
+                            <TableCell>{err.rowNumber ?? err.row ?? '-'}</TableCell>
                             <TableCell>
-                              <Chip label={err.column || 'خطأ'} color="error" size="small" />
+                              <Chip label={err.columnName ?? err.column ?? 'خطأ'} color="error" size="small" />
                             </TableCell>
-                            <TableCell>{err.error || '-'}</TableCell>
+                            <TableCell>{err.messageAr ?? err.error ?? '-'}</TableCell>
                             <TableCell>
                               <Typography variant="caption" color="text.secondary">
                                 {err.value || '-'}

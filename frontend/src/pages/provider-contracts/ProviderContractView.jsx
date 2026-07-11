@@ -51,7 +51,8 @@ import {
   Tooltip,
   Typography,
   Autocomplete,
-  Alert
+  Alert,
+  Checkbox
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -97,7 +98,10 @@ import {
   CONTRACT_STATUS,
   CONTRACT_STATUS_CONFIG,
   PRICING_MODEL_CONFIG,
-  importPriceListPreview
+  importPriceListPreview,
+  getContractCategoriesSummary,
+  bulkUpdatePricingCategories,
+  exportPricingToExcel
 } from 'services/api/provider-contracts.service';
 import { getAllMedicalCategories, getMedicalServicesByCategory } from 'services/api/medical-categories.service';
 import PricingImportReviewDialog from './components/PricingImportReviewDialog';
@@ -267,6 +271,9 @@ const ProviderContractView = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [pricingPage, setPricingPage] = useState(0);
   const [pricingRowsPerPage, setPricingRowsPerPage] = useState(10);
+  const [selectedItemIds, setSelectedItemIds] = useState(new Set()); // For bulk selection across pages
+  const [bulkCategoryDialogOpen, setBulkCategoryDialogOpen] = useState(false);
+  const [bulkCategoryForm, setBulkCategoryForm] = useState({ categoryId: null });
 
   // Dialog states
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
@@ -283,6 +290,7 @@ const ProviderContractView = () => {
   const [previewData, setPreviewData] = useState(null);
   const [selectedPricingFile, setSelectedPricingFile] = useState(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [exportingPricing, setExportingPricing] = useState(false);
   const [uploadingPricingFile, setUploadingPricingFile] = useState(false);
   const [selectedPricingItem, setSelectedPricingItem] = useState(null);
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
@@ -341,6 +349,16 @@ const ProviderContractView = () => {
     staleTime: 60 * 60 * 1000 // 1 hour
   });
 
+  // Fetch category summaries for the specific contract (dropdown filtering with counts)
+  const { data: contractCategorySummaries = [], refetch: refetchCategorySummaries } = useQuery({
+    queryKey: ['provider-contract-categories-summary', id],
+    queryFn: async () => {
+      const data = await getContractCategoriesSummary(id);
+      return Array.isArray(data) ? data : data?.data || [];
+    },
+    enabled: !!id,
+  });
+
   const mainCategoriesList = useMemo(() => {
     return medicalCategories.filter((c) => !c.parentId);
   }, [medicalCategories]);
@@ -380,6 +398,29 @@ const ProviderContractView = () => {
   // MUTATIONS
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Bulk Update Categories
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (data) => bulkUpdatePricingCategories(id, data),
+    onSuccess: () => {
+      enqueueSnackbar('تم تحديث تصنيفات الخدمات بنجاح', { variant: 'success' });
+      setSelectedItemIds(new Set());
+      setBulkCategoryDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+      refetchCategorySummaries();
+    },
+    onError: (err) => {
+      enqueueSnackbar(err.message || 'حدث خطأ أثناء تحديث التصنيفات', { variant: 'error' });
+    }
+  });
+
+  const handleBulkCategoryUpdate = useCallback(() => {
+    if (!bulkCategoryForm.categoryId) return;
+    bulkUpdateMutation.mutate({
+      pricingItemIds: Array.from(selectedItemIds),
+      categoryId: bulkCategoryForm.categoryId
+    });
+  }, [bulkCategoryForm.categoryId, selectedItemIds, bulkUpdateMutation]);
+
   // Excel Upload Handler
   const handleExcelUpload = useCallback(
     async (file) => {
@@ -418,6 +459,18 @@ const ProviderContractView = () => {
       enqueueSnackbar('فشل تحميل القالب', { variant: 'error' });
     } finally {
       setDownloadingTemplate(false);
+    }
+  }, [id, enqueueSnackbar]);
+
+  const handleExportPricing = useCallback(async () => {
+    try {
+      setExportingPricing(true);
+      await exportPricingToExcel(id);
+      enqueueSnackbar('تم تصدير سجل الخدمات بنجاح.', { variant: 'success' });
+    } catch (error) {
+      enqueueSnackbar(error.message || 'فشل تصدير الخدمات', { variant: 'error' });
+    } finally {
+      setExportingPricing(false);
     }
   }, [id, enqueueSnackbar]);
 
@@ -521,6 +574,7 @@ const ProviderContractView = () => {
     onSuccess: () => {
       enqueueSnackbar('تم إضافة الخدمة بنجاح', { variant: 'success' });
       queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-categories-summary', id] });
       setAddPricingDialogOpen(false);
       setServiceInputValue('');
       setPricingForm({
@@ -543,6 +597,7 @@ const ProviderContractView = () => {
     onSuccess: () => {
       enqueueSnackbar('تم تحديث الخدمة بنجاح', { variant: 'success' });
       queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-categories-summary', id] });
       setEditPricingDialogOpen(false);
       setSelectedPricingItem(null);
     },
@@ -556,6 +611,7 @@ const ProviderContractView = () => {
     onSuccess: () => {
       enqueueSnackbar('تم حذف الخدمة بنجاح', { variant: 'success' });
       queryClient.invalidateQueries({ queryKey: ['provider-contract-pricing', id] });
+      queryClient.invalidateQueries({ queryKey: ['provider-contract-categories-summary', id] });
       setDeletePricingDialogOpen(false);
       setSelectedPricingItem(null);
     },
@@ -915,6 +971,12 @@ const ProviderContractView = () => {
 
         {/* Pricing Items Tab */}
         <TabPanel value={activeTab} index={0}>
+          {contractCategorySummaries?.find(c => c.categoryId === null)?.count > 0 && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              يوجد {contractCategorySummaries.find(c => c.categoryId === null).count} خدمة/خدمات بدون تصنيف طبي، يرجى تصنيفها لضمان عمل المطالبات بشكل صحيح.
+            </Alert>
+          )}
+
           {/* Search and Excel Upload */}
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: '1.0rem' }} alignItems={{ xs: 'stretch', md: 'center' }}>
             <TextField
@@ -951,12 +1013,12 @@ const ProviderContractView = () => {
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Autocomplete
                 size="small"
-                sx={{ minWidth: '12.5rem' }}
-                options={medicalCategories || []}
-                getOptionLabel={(option) => option.nameAr || option.name || option.code || ''}
-                value={medicalCategories?.find((c) => c.id === selectedCategoryId) || null}
+                sx={{ minWidth: '15.0rem' }}
+                options={contractCategorySummaries || []}
+                getOptionLabel={(option) => `${option.categoryName || 'بدون تصنيف'} (${option.count || 0})`}
+                value={contractCategorySummaries?.find((c) => c.categoryId === selectedCategoryId) || null}
                 onChange={(event, newValue) => {
-                  setSelectedCategoryId(newValue?.id || null);
+                  setSelectedCategoryId(newValue?.categoryId || null);
                   setPricingPage(0);
                 }}
                 renderInput={(params) => <TextField {...params} placeholder="فلترة حسب التصنيف" size="small" />}
@@ -975,7 +1037,7 @@ const ProviderContractView = () => {
                 onClick={handleOpenAddPricing}
                 startIcon={<AddIcon />}
                 size="medium"
-                disabled={contract.status === CONTRACT_STATUS.TERMINATED}
+                disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED}
               >
                 إضافة خدمة
               </Button>
@@ -987,13 +1049,27 @@ const ProviderContractView = () => {
                 onClick={handleImportPriceList}
                 startIcon={<CloudUploadIcon />}
                 size="medium"
-                disabled={contract.status === CONTRACT_STATUS.TERMINATED}
+                disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED}
               >
                 استيراد الأسعار
               </Button>
 
+              {/* Export Price List Button */}
+              {pricingItems.length > 0 && (
+                <Button
+                  variant="outlined"
+                  color="success"
+                  onClick={handleExportPricing}
+                  startIcon={exportingPricing ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />}
+                  size="medium"
+                  disabled={exportingPricing}
+                >
+                  تصدير كسجل إكسل
+                </Button>
+              )}
+
               {/* Clear All Button */}
-              {pricingItems.length > 0 && contract.status !== CONTRACT_STATUS.TERMINATED && (
+              {pricingItems.length > 0 && contract.status !== CONTRACT_STATUS.TERMINATED && contract.status !== CONTRACT_STATUS.EXPIRED && (
                 <Tooltip title="مسح جميع بنود التسعير الحالية">
                   <Button
                     variant="outlined"
@@ -1009,11 +1085,59 @@ const ProviderContractView = () => {
             </Stack>
           </Stack>
 
+          {/* Bulk Actions Bar */}
+          {selectedItemIds.size > 0 && (
+            <Box sx={{ bgcolor: 'primary.light', p: 1, px: 2, display: 'flex', alignItems: 'center', gap: 2, borderTopLeftRadius: 4, borderTopRightRadius: 4 }}>
+              <Typography variant="subtitle2" sx={{ color: 'primary.contrastText' }}>
+                تم تحديد {selectedItemIds.size} بند
+              </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                color="secondary"
+                onClick={() => setBulkCategoryDialogOpen(true)}
+              >
+                تغيير التصنيف
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                sx={{ color: 'primary.contrastText', opacity: 0.8 }}
+                onClick={() => setSelectedItemIds(new Set())}
+              >
+                إلغاء التحديد
+              </Button>
+            </Box>
+          )}
+
           {/* Pricing Table */}
-          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: '35.0rem' }}>
+          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: '35.0rem', borderTopLeftRadius: selectedItemIds.size > 0 ? 0 : 4, borderTopRightRadius: selectedItemIds.size > 0 ? 0 : 4 }}>
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow sx={{ backgroundColor: 'grey.50' }}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      color="primary"
+                      indeterminate={
+                        pricingItems.length > 0 &&
+                        pricingItems.some(i => selectedItemIds.has(i.id)) &&
+                        !pricingItems.every(i => selectedItemIds.has(i.id))
+                      }
+                      checked={
+                        pricingItems.length > 0 &&
+                        pricingItems.every(i => selectedItemIds.has(i.id))
+                      }
+                      onChange={(e) => {
+                        const newSelected = new Set(selectedItemIds);
+                        if (e.target.checked) {
+                          pricingItems.forEach(i => newSelected.add(i.id));
+                        } else {
+                          pricingItems.forEach(i => newSelected.delete(i.id));
+                        }
+                        setSelectedItemIds(newSelected);
+                      }}
+                    />
+                  </TableCell>
                   <TableCell sx={{ width: '7.5rem' }}>كود الخدمة</TableCell>
                   <TableCell sx={{ minWidth: '15.625rem' }}>اسم الخدمة</TableCell>
                   <TableCell sx={{ minWidth: '11.25rem' }}>التصنيف الرئيسي</TableCell>
@@ -1048,6 +1172,18 @@ const ProviderContractView = () => {
                       hover
                       sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:nth-of-type(even)': { bgcolor: 'grey.25' } }}
                     >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          color="primary"
+                          checked={selectedItemIds.has(item.id)}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedItemIds);
+                            if (e.target.checked) newSelected.add(item.id);
+                            else newSelected.delete(item.id);
+                            setSelectedItemIds(newSelected);
+                          }}
+                        />
+                      </TableCell>
                       <TableCell>
                         {(() => {
                           const service = getServiceDisplay(item);
@@ -1101,18 +1237,30 @@ const ProviderContractView = () => {
                         {(() => {
                           const hierarchy = getCategoryHierarchy(item, medicalCategories);
                           return (
-                            <Stack spacing={0.25}>
-                              {hierarchy.subCode !== '-' && (
-                                <Chip
-                                  label={hierarchy.subCode}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ width: 'fit-content', opacity: 0.7 }}
-                                />
-                              )}
-                              <Typography variant="body2" color="text.secondary">
-                                {hierarchy.sub}
-                              </Typography>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                              <Stack spacing={0.25}>
+                                {hierarchy.subCode !== '-' && (
+                                  <Chip
+                                    label={hierarchy.subCode}
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ width: 'fit-content', opacity: 0.7 }}
+                                  />
+                                )}
+                                <Typography variant="body2" color="text.secondary">
+                                  {hierarchy.sub}
+                                </Typography>
+                              </Stack>
+                              <Tooltip title="تغيير التصنيف">
+                                <span>
+                                  <IconButton size="small" disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED} onClick={() => {
+                                    setSelectedItemIds(new Set([item.id]));
+                                    setBulkCategoryDialogOpen(true);
+                                  }}>
+                                    <EditIcon fontSize="1rem" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
                             </Stack>
                           );
                         })()}
@@ -1126,15 +1274,19 @@ const ProviderContractView = () => {
                       <TableCell align="center">
                         <Stack direction="row" spacing={1} justifyContent="center">
                           <Tooltip title="تعديل السعر">
-                            <IconButton size="small" color="primary" onClick={() => handleOpenEditPricing(item)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
+                            <span>
+                              <IconButton size="small" color="primary" disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED} onClick={() => handleOpenEditPricing(item)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
 
                           <Tooltip title="حذف">
-                            <IconButton size="small" color="error" onClick={() => handleOpenDeletePricing(item)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
+                            <span>
+                              <IconButton size="small" color="error" disabled={contract.status === CONTRACT_STATUS.TERMINATED || contract.status === CONTRACT_STATUS.EXPIRED} onClick={() => handleOpenDeletePricing(item)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </Stack>
                       </TableCell>
@@ -1654,6 +1806,42 @@ const ProviderContractView = () => {
             disabled={!selectedPricingFile || uploadingPricingFile}
           >
             {uploadingPricingFile ? 'جار الرفع...' : 'رفع واستيراد'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Category Update Dialog */}
+      <Dialog
+        open={bulkCategoryDialogOpen}
+        onClose={() => setBulkCategoryDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>تحديث تصنيف الخدمات المحددة</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: '1.5rem', mt: '0.5rem' }}>
+            سيتم تغيير التصنيف لـ {selectedItemIds.size} خدمة محددة. يرجى اختيار التصنيف الجديد.
+          </DialogContentText>
+          <Autocomplete
+            fullWidth
+            options={medicalCategories || []}
+            getOptionLabel={(option) => option.nameAr || option.name || option.code || ''}
+            value={medicalCategories?.find((c) => c.id === bulkCategoryForm.categoryId) || null}
+            onChange={(event, newValue) => {
+              setBulkCategoryForm({ categoryId: newValue?.id || null });
+            }}
+            renderInput={(params) => <TextField {...params} label="التصنيف الجديد *" required fullWidth />}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkCategoryDialogOpen(false)}>إلغاء</Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleBulkCategoryUpdate}
+            disabled={!bulkCategoryForm.categoryId || bulkUpdateMutation.isPending}
+          >
+            {bulkUpdateMutation.isPending ? <CircularProgress size={20} /> : 'تحديث'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -164,6 +164,51 @@ public class ProviderExcelTemplateService {
                 .description("Network status (Inside Network / Outside Network), default is Inside")
                 .descriptionAr("حالة الشبكة (داخل الشبكة / خارج الشبكة)، الافتراضي داخل الشبكة")
                 .width(20)
+                .build(),
+                
+            ExcelTemplateColumn.builder()
+                .name("start_date")
+                .nameAr("تاريخ بداية العقد")
+                .type(ColumnType.DATE)
+                .required(false)
+                .example("2025-01-01")
+                .description("Contract start date (default: Jan 1st of current year)")
+                .descriptionAr("تاريخ البداية (الافتراضي: 1 يناير من السنة الحالية)")
+                .width(15)
+                .build(),
+                
+            ExcelTemplateColumn.builder()
+                .name("duration_months")
+                .nameAr("المدة بالأشهر")
+                .type(ColumnType.NUMBER)
+                .required(false)
+                .example("12")
+                .description("Contract duration in months (default: 12)")
+                .descriptionAr("مدة العقد بالأشهر (الافتراضي: 12)")
+                .width(15)
+                .build(),
+                
+            ExcelTemplateColumn.builder()
+                .name("discount")
+                .nameAr("نسبة الخصم")
+                .type(ColumnType.NUMBER)
+                .required(false)
+                .example("10")
+                .description("Contract discount percentage (default: 10)")
+                .descriptionAr("نسبة الخصم للعقد (الافتراضي: 10)")
+                .width(15)
+                .build(),
+                
+            ExcelTemplateColumn.builder()
+                .name("status")
+                .nameAr("الحالة")
+                .type(ColumnType.ENUM)
+                .required(false)
+                .allowedValues(Arrays.asList("ACTIVE", "DRAFT", "SUSPENDED", "نشط", "مسودة", "موقوف"))
+                .example("نشط")
+                .description("Contract status (default: ACTIVE)")
+                .descriptionAr("حالة العقد (الافتراضي: نشط)")
+                .width(15)
                 .build()
         );
     }
@@ -185,8 +230,21 @@ public class ProviderExcelTemplateService {
             .description("Valid provider types")
             .descriptionAr("أنواع مقدمي الخدمة الصالحة")
             .build();
+            
+        ExcelLookupData statusLookup = ExcelLookupData.builder()
+            .sheetName("Contract Statuses")
+            .sheetNameAr("حالات العقد")
+            .headers(Arrays.asList("Status (EN)", "Status (AR)"))
+            .data(Arrays.asList(
+                Arrays.asList("ACTIVE", "نشط"),
+                Arrays.asList("DRAFT", "مسودة"),
+                Arrays.asList("SUSPENDED", "موقوف")
+            ))
+            .description("Valid contract statuses")
+            .descriptionAr("حالات العقد الصالحة")
+            .build();
         
-        return List.of(typesLookup);
+        return List.of(typesLookup, statusLookup);
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -237,16 +295,53 @@ public class ProviderExcelTemplateService {
                             summary.setCreated(summary.getCreated() + 1);
                             log.debug("[ProviderImport] Created provider: {}", provider.getLicenseNumber());
                             
-                            // 1. Create a DRAFT contract for the new provider
+                            // 1. Create a contract for the new provider
                             try {
+                                String discountStr = getCellValue(row, columnIndices.get("discount"));
+                                String statusStr = getCellValue(row, columnIndices.get("status"));
+                                String startDateStr = getCellValue(row, columnIndices.get("start_date"));
+                                String durationStr = getCellValue(row, columnIndices.get("duration_months"));
+                                
+                                java.math.BigDecimal discount = new java.math.BigDecimal("10.00");
+                                if (discountStr != null && !discountStr.trim().isEmpty()) {
+                                    try {
+                                        discount = new java.math.BigDecimal(discountStr.trim());
+                                    } catch (NumberFormatException ignored) {}
+                                }
+                                
+                                ContractStatus cStatus = ContractStatus.ACTIVE;
+                                if (statusStr != null && !statusStr.trim().isEmpty()) {
+                                    String s = statusStr.trim().toUpperCase();
+                                    if (s.equals("مسودة") || s.equals("DRAFT")) cStatus = ContractStatus.DRAFT;
+                                    else if (s.equals("موقوف") || s.equals("SUSPENDED")) cStatus = ContractStatus.SUSPENDED;
+                                }
+
+                                java.time.LocalDate startDate = java.time.LocalDate.of(java.time.LocalDate.now().getYear(), 1, 1);
+                                if (startDateStr != null && !startDateStr.trim().isEmpty()) {
+                                    try {
+                                        startDate = java.time.LocalDate.parse(startDateStr.trim());
+                                    } catch (Exception ignored) {}
+                                }
+                                
+                                int durationMonths = 12;
+                                if (durationStr != null && !durationStr.trim().isEmpty()) {
+                                    try {
+                                        durationMonths = (int) Double.parseDouble(durationStr.trim());
+                                    } catch (NumberFormatException ignored) {}
+                                }
+                                java.time.LocalDate endDate = startDate.plusMonths(durationMonths).minusDays(1);
+
                                 ProviderContractCreateDto contractDto = ProviderContractCreateDto.builder()
                                         .providerId(provider.getId())
-                                        .status(ContractStatus.DRAFT)
+                                        .status(cStatus)
                                         .pricingModel(PricingModel.DISCOUNT)
-                                        .startDate(java.time.LocalDate.now())
+                                        .discountPercent(discount)
+                                        .startDate(startDate)
+                                        .endDate(endDate)
                                         .build();
                                 contractService.create(contractDto);
-                                log.debug("[ProviderImport] Created draft contract for provider: {}", provider.getId());
+                                log.debug("[ProviderImport] Created contract for provider: {} with status: {} and discount: {}", 
+                                    provider.getId(), cStatus, discount);
                             } catch (Exception e) {
                                 log.error("[ProviderImport] Failed to create contract for provider: {}", provider.getId(), e);
                             }
@@ -341,6 +436,14 @@ public class ProviderExcelTemplateService {
             "network", "الشبكة"));
         indices.put("address", parserService.findColumnIndex(headerRow, 
             "address", "العنوان"));
+        indices.put("start_date", parserService.findColumnIndex(headerRow, 
+            "start_date", "تاريخ البداية", "تاريخ بداية العقد"));
+        indices.put("duration_months", parserService.findColumnIndex(headerRow, 
+            "duration_months", "المدة بالأشهر", "المدة"));
+        indices.put("discount", parserService.findColumnIndex(headerRow, 
+            "discount", "نسبة الخصم", "الخصم"));
+        indices.put("status", parserService.findColumnIndex(headerRow, 
+            "status", "الحالة", "حالة العقد"));
         
         return indices;
     }

@@ -187,6 +187,103 @@ public class PriceListExcelTemplateService {
         }
     }
 
+    /**
+     * Export all pricing items for a contract to an Excel file.
+     */
+    @Transactional(readOnly = true)
+    public byte[] exportPricingToExcel(Long contractId) throws IOException {
+        if (contractId == null) {
+            throw new BusinessRuleException("معرف العقد غير صالح");
+        }
+        ProviderContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new BusinessRuleException("العقد غير موجود: " + contractId));
+
+        // Use SXSSFWorkbook to keep only 100 rows in memory, preventing OOM for large contracts
+        try (org.apache.poi.xssf.streaming.SXSSFWorkbook workbook = new org.apache.poi.xssf.streaming.SXSSFWorkbook(100)) {
+            org.apache.poi.xssf.streaming.SXSSFSheet sheet = workbook.createSheet("Pricing_Export");
+            sheet.setRightToLeft(true);
+
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle dataStyle = createExampleStyle(workbook);
+
+            // Header row
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {"service_name / اسم الخدمة", "service_code / الكود", "contract_price / سعر العقد", "main_category / التصنيف الرئيسي", "sub_category / البند (التصنيف الفرعي)", "notes / ملاحظات"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            int pageNumber = 0;
+            int pageSize = 1000;
+            org.springframework.data.domain.Page<ProviderContractPricingItem> page;
+
+            do {
+                page = pricingRepository.findByContractIdAndActiveTrue(contractId, org.springframework.data.domain.PageRequest.of(pageNumber, pageSize));
+                
+                for (ProviderContractPricingItem item : page.getContent()) {
+                    Row row = sheet.createRow(rowNum++);
+                    
+                    Cell c0 = row.createCell(COL_SERVICE_NAME);
+                    c0.setCellValue(item.getServiceName() != null ? item.getServiceName() : "-");
+                    c0.setCellStyle(dataStyle);
+
+                    Cell c1 = row.createCell(COL_SERVICE_CODE);
+                    c1.setCellValue(item.getServiceCode() != null ? item.getServiceCode() : "-");
+                    c1.setCellStyle(dataStyle);
+
+                    Cell c2 = row.createCell(COL_CONTRACT_PRICE);
+                    if (item.getContractPrice() != null) {
+                        c2.setCellValue(item.getContractPrice().doubleValue());
+                    }
+                    c2.setCellStyle(dataStyle);
+
+                    String mainCategory = "-";
+                    String subCategory = "-";
+                    if (item.getMedicalCategory() != null) {
+                        MedicalCategory cat = item.getMedicalCategory();
+                        if (cat.getParentId() != null) {
+                            MedicalCategory parent = medicalCategoryRepository.findById(cat.getParentId()).orElse(null);
+                            mainCategory = parent != null ? parent.getName() : "-";
+                            subCategory = cat.getName();
+                        } else {
+                            mainCategory = cat.getName();
+                        }
+                    } else if (item.getCategoryName() != null) {
+                        mainCategory = item.getCategoryName();
+                    }
+                    
+                    Cell c3 = row.createCell(COL_CATEGORY); // was COL_MAIN_CATEGORY but let's use what exists
+                    c3.setCellValue(mainCategory);
+                    c3.setCellStyle(dataStyle);
+
+                    Cell c4 = row.createCell(COL_SUB_CATEGORY);
+                    c4.setCellValue(subCategory);
+                    c4.setCellStyle(dataStyle);
+
+                    Cell c5 = row.createCell(COL_NOTES);
+                    c5.setCellValue(item.getNotes() != null ? item.getNotes() : "");
+                    c5.setCellStyle(dataStyle);
+                }
+                pageNumber++;
+            } while (page.hasNext());
+
+            sheet.trackAllColumnsForAutoSizing();
+            sheet.setColumnWidth(COL_SERVICE_NAME, 40 * 256);
+            sheet.setColumnWidth(COL_SERVICE_CODE, 15 * 256);
+            sheet.setColumnWidth(COL_CONTRACT_PRICE, 15 * 256);
+            sheet.setColumnWidth(COL_CATEGORY, 25 * 256);
+            sheet.setColumnWidth(COL_SUB_CATEGORY, 25 * 256);
+            sheet.setColumnWidth(COL_NOTES, 40 * 256);
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+        }
+    }
+
     private void createInstructionsSheet(XSSFWorkbook workbook, ProviderContract contract) {
         XSSFSheet sheet = workbook.createSheet("التعليمات");
         sheet.setRightToLeft(true);
@@ -300,7 +397,7 @@ public class PriceListExcelTemplateService {
         sheet.setColumnWidth(3, 25 * 256);
     }
 
-    private CellStyle createHeaderStyle(XSSFWorkbook workbook) {
+    private CellStyle createHeaderStyle(org.apache.poi.ss.usermodel.Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
         font.setBold(true);
@@ -312,7 +409,7 @@ public class PriceListExcelTemplateService {
         return style;
     }
 
-    private CellStyle createRequiredHeaderStyle(XSSFWorkbook workbook) {
+    private CellStyle createRequiredHeaderStyle(org.apache.poi.ss.usermodel.Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         Font font = workbook.createFont();
         font.setBold(true);
@@ -325,7 +422,7 @@ public class PriceListExcelTemplateService {
         return style;
     }
 
-    private CellStyle createExampleStyle(XSSFWorkbook workbook) {
+    private CellStyle createExampleStyle(org.apache.poi.ss.usermodel.Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         style.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);

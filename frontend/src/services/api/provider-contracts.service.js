@@ -449,6 +449,28 @@ export const confirmPriceListImport = async (contractId, data) => {
   return unwrap(response);
 };
 
+/**
+ * Get summary of categories and item counts for a contract
+ * Endpoint: GET /api/provider-contracts/{contractId}/pricing/categories-summary
+ */
+export const getContractCategoriesSummary = async (contractId) => {
+  const response = await axiosClient.get(`${BASE_URL}/${contractId}/pricing/categories-summary`);
+  return unwrap(response);
+};
+
+/**
+ * Bulk update categories for pricing items
+ * Endpoint: PATCH /api/provider-contracts/{contractId}/pricing/bulk-category
+ */
+export const bulkUpdatePricingCategories = async (contractId, data) => {
+  const response = await axiosClient.patch(`${BASE_URL}/${contractId}/pricing/bulk-category`, data);
+  return unwrap(response);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BULK IMPORT — Multi-provider
+// ═══════════════════════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════════════════════════════════
 // EXCEL IMPORT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -500,6 +522,50 @@ export const downloadPricingTemplate = async (contractId) => {
     }
     // Re-throw with better message
     throw new Error(error.response?.data?.message || error.message || 'فشل تحميل القالب');
+  }
+};
+
+/**
+ * Export Excel file for existing pricing items of a contract
+ * Endpoint: GET /api/provider-contracts/{contractId}/pricing/export
+ * @param {number} contractId - Contract ID
+ * @returns {Promise<Blob>} Excel export file
+ */
+export const exportPricingToExcel = async (contractId) => {
+  try {
+    const response = await axiosClient.get(`${BASE_URL}/${contractId}/pricing/export`, {
+      responseType: 'blob'
+    });
+
+    const contentType = response.headers?.['content-type'] || '';
+    if (contentType.includes('application/json')) {
+      const text = await response.data.text();
+      const errorData = JSON.parse(text);
+      throw new Error(errorData.message || errorData.messageAr || 'فشل التصدير');
+    }
+
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Price_List_Export_Contract_${contractId}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    return response.data;
+  } catch (error) {
+    console.error('[exportPricingToExcel] Error:', error);
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message || errorData.messageAr || 'فشل تصدير الخدمات');
+      } catch (parseError) {
+        throw new Error('فشل تصدير الخدمات - تأكد من صلاحياتك');
+      }
+    }
+    throw new Error(error.response?.data?.message || error.message || 'فشل تصدير الخدمات');
   }
 };
 
@@ -659,6 +725,36 @@ export const downloadSimulationReport = async (contractId, policyId, encounterTy
   return response.data;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BULK IMPORT — Multi-Provider Classified Price List
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Import the full classified price-list Excel file that covers multiple providers.
+ * The backend reads the "المرفق" column, groups rows per provider, and
+ * auto-creates missing Providers + Contracts.
+ *
+ * @param {File} file - The classified Excel file (نتيجة_تصنيف_قوائم_الاسعار_بالقاموس_الموحد.xlsx)
+ * @param {function} onUploadProgress - Optional axios upload progress callback
+ * @returns {Promise<BulkImportResultDto>}
+ */
+export const bulkImportPriceList = async (file, onUploadProgress) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await axiosClient.post(
+    `${BASE_URL}/bulk-import`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress,
+      // Large file may take a while — extend timeout to 15 min
+      timeout: 900_000
+    }
+  );
+  return unwrap(response);
+};
+
 const providerContractsService = {
   getProviderContracts,
   getDeletedProviderContracts,
@@ -696,7 +792,11 @@ const providerContractsService = {
   confirmPriceListImport,
   runCoverageSimulation,
   runRawCoverageSimulation,
-  downloadSimulationReport
+  downloadSimulationReport,
+  bulkImportPriceList,
+  getContractCategoriesSummary,
+  bulkUpdatePricingCategories,
+  exportPricingToExcel
 };
 
 export default providerContractsService;

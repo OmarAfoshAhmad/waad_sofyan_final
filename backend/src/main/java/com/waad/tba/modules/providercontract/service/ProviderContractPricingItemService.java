@@ -535,6 +535,47 @@ public class ProviderContractPricingItemService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // UI HELPER OPERATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Get category summaries (counts) for a contract
+     */
+    @Transactional(readOnly = true)
+    public List<CategorySummaryDto> getCategorySummaries(Long contractId) {
+        verifyContractExists(contractId);
+        return pricingRepository.getCategorySummariesByContract(contractId);
+    }
+
+    /**
+     * Bulk update categories for pricing items
+     */
+    @Transactional
+    public void bulkUpdateCategories(Long contractId, BulkCategoryUpdateDto dto) {
+        verifyContractExists(contractId);
+        
+        MedicalCategory category = null;
+        if (dto.getCategoryId() != null) {
+            category = medicalCategoryRepository.findById(dto.getCategoryId())
+                .orElseThrow(() -> new BusinessRuleException("التصنيف غير موجود"));
+        }
+
+        List<ProviderContractPricingItem> items = pricingRepository.findAllById(dto.getPricingItemIds());
+        for (ProviderContractPricingItem item : items) {
+            if (!item.getContract().getId().equals(contractId)) {
+                throw new BusinessRuleException("الخدمة ذات المعرف " + item.getId() + " لا تنتمي لهذا العقد.");
+            }
+            item.setMedicalCategory(category);
+            if (category != null) {
+                item.setCategoryName(category.getNameAr() != null ? category.getNameAr() : category.getName());
+            } else {
+                item.setCategoryName(null);
+            }
+        }
+        pricingRepository.saveAll(items);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // INNER DTOs (Consider moving to dto package if needed elsewhere)
     // ═══════════════════════════════════════════════════════════════════════════
 

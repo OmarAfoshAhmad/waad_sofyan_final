@@ -104,6 +104,10 @@ public interface ProviderRepository extends JpaRepository<Provider, Long> {
 
        java.util.Optional<Provider> findByName(String name);
 
+       /** Case-insensitive name lookup used by bulk price-list import. */
+       @Query("SELECT p FROM Provider p WHERE LOWER(p.name) = LOWER(:name)")
+       java.util.Optional<Provider> findByNameIgnoreCase(@Param("name") String name);
+
        boolean existsByName(String name);
 
        boolean existsByLicenseNumber(String licenseNumber);

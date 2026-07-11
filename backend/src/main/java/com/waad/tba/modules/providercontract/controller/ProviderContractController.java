@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -446,6 +447,37 @@ public class ProviderContractController {
         Page<ProviderContractPricingItemResponseDto> result = pricingService.searchInContract(contractId, q, null,
                 pageable);
         return ResponseEntity.ok(ApiResponse.success("Search completed", result));
+    }
+
+    /**
+     * GET /api/provider-contracts/{contractId}/pricing/categories-summary
+     * Get summary of categories and item counts for a contract
+     */
+    @GetMapping("/{contractId}/pricing/categories-summary")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Get categories summary", description = "Get category names and item counts for a contract")
+    public ResponseEntity<ApiResponse<List<com.waad.tba.modules.providercontract.dto.CategorySummaryDto>>> getCategoriesSummary(
+            @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId) {
+
+        log.debug("REST request to get category summaries for contract: {}", contractId);
+        List<com.waad.tba.modules.providercontract.dto.CategorySummaryDto> result = pricingService.getCategorySummaries(contractId);
+        return ResponseEntity.ok(ApiResponse.success("Category summaries retrieved", result));
+    }
+
+    /**
+     * PATCH /api/provider-contracts/{contractId}/pricing/bulk-category
+     * Bulk update categories
+     */
+    @PatchMapping("/{contractId}/pricing/bulk-category")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Bulk update categories", description = "Update the category for multiple pricing items")
+    public ResponseEntity<ApiResponse<Void>> bulkUpdateCategories(
+            @Parameter(description = "Contract ID") @PathVariable("contractId") Long contractId,
+            @Valid @RequestBody com.waad.tba.modules.providercontract.dto.BulkCategoryUpdateDto dto) {
+
+        log.debug("REST request to bulk update categories for contract: {}", contractId);
+        pricingService.bulkUpdateCategories(contractId, dto);
+        return ResponseEntity.ok(ApiResponse.success("Categories updated successfully", null));
     }
 
     /**
