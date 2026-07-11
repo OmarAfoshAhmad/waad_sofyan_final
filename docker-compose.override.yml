@@ -1,0 +1,7 @@
+# Local development override — automatically merged by Docker Compose.
+# Publishes the DB port to localhost so the backend can run outside Docker (e.g. via run_dev.bat).
+# This file should NOT be used in production.
+services:
+  db:
+    ports:
+      - "5432:5432"
