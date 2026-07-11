@@ -274,6 +274,21 @@ export const deleteProviderContract = async (id) => {
   return unwrap(response);
 };
 
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+/**
+ * Bulk update provider contracts
+ * Endpoint: POST /api/provider-contracts/bulk-update
+ * @param {Object} data - Bulk update payload
+ * @returns {Promise<number>} Number of updated contracts
+ */
+export const bulkUpdateProviderContracts = async (data) => {
+  const response = await axiosClient.post(`${BASE_URL}/bulk-update`, data);
+  return unwrap(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LIFECYCLE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════

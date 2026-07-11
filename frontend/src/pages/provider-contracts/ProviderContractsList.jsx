@@ -31,11 +31,13 @@ import {
   restoreProviderContract,
   hardDeleteProviderContract,
   deleteProviderContract,
+  bulkUpdateProviderContracts,
   CONTRACT_STATUS_CONFIG,
   PRICING_MODEL_CONFIG
 } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
 import BulkPriceListImportDialog from './components/BulkPriceListImportDialog';
+import BulkEditContractsDialog from './components/BulkEditContractsDialog';
 
 const QUERY_KEY = 'provider-contracts';
 const MODULE_NAME = 'provider-contracts';
@@ -59,6 +61,8 @@ const ProviderContractsList = () => {
   const { enqueueSnackbar } = useSnackbar();
   const [showDeleted, setShowDeleted] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [confirmState, setConfirmState] = useState({
     open: false,
     title: '',
@@ -205,6 +209,22 @@ const ProviderContractsList = () => {
     },
     [enqueueSnackbar, queryClient]
   );
+
+  const handleBulkEditConfirm = async (updateData) => {
+    try {
+      const payload = {
+        contractIds: selectedIds,
+        ...updateData
+      };
+      const count = await bulkUpdateProviderContracts(payload);
+      enqueueSnackbar(`تم تحديث ${count} عقود بنجاح`, { variant: 'success' });
+      setBulkEditOpen(false);
+      setSelectedIds([]);
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    } catch (err) {
+      enqueueSnackbar(err?.response?.data?.message || 'فشل التحديث الجماعي', { variant: 'error' });
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: [QUERY_KEY, showDeleted, tableState.page, tableState.pageSize, tableState.sorting, tableState.columnFilters],
@@ -453,6 +473,18 @@ const ProviderContractsList = () => {
           requires="provider_contracts.create"
           additionalActions={
             <Stack direction="row" spacing={1} alignItems="center">
+              {selectedIds.length > 0 && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<EditIcon />}
+                  size="small"
+                  onClick={() => setBulkEditOpen(true)}
+                  sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+                >
+                  تعديل جماعي ({selectedIds.length})
+                </Button>
+              )}
               <Button
                 variant="contained"
                 color="secondary"
@@ -561,6 +593,9 @@ const ProviderContractsList = () => {
             onRowsPerPageChange={(newSize) => tableState.setPageSize(newSize)}
             emptyIcon={DescriptionIcon}
             emptyMessage="لا توجد عقود مسجلة لمقدمي الخدمة"
+            enableRowSelection={true}
+            selectedRowIds={selectedIds}
+            onRowSelectionChange={setSelectedIds}
           />
         </TableErrorBoundary>
 
@@ -582,6 +617,13 @@ const ProviderContractsList = () => {
           onImportComplete={() => {
             queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
           }}
+        />
+
+        <BulkEditContractsDialog
+          open={bulkEditOpen}
+          onClose={() => setBulkEditOpen(false)}
+          onConfirm={handleBulkEditConfirm}
+          selectedCount={selectedIds.length}
         />
       </Box>
     </>

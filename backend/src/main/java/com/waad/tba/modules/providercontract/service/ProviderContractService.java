@@ -561,6 +561,88 @@ public class ProviderContractService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // BULK UPDATE OPERATION
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Bulk update contracts
+     */
+    @Transactional
+    public int bulkUpdateContracts(com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
+        log.info("Bulk updating provider contracts: {} contracts", dto.getContractIds().size());
+
+        if (dto.getContractIds() == null || dto.getContractIds().isEmpty()) {
+            throw new BusinessRuleException("يجب تحديد العقود المراد تحديثها");
+        }
+
+        List<ProviderContract> contracts = contractRepository.findAllById(dto.getContractIds());
+        int updatedCount = 0;
+
+        for (ProviderContract contract : contracts) {
+            // Cannot update terminated contracts
+            if (contract.getStatus() == ContractStatus.TERMINATED) {
+                continue;
+            }
+
+            boolean modified = false;
+
+            if (dto.isUpdateStatus() && dto.getStatus() != null) {
+                if (contract.getStatus() != dto.getStatus()) {
+                    if (dto.getStatus() == ContractStatus.ACTIVE) {
+                        // Avoid multiple active contracts for the same provider
+                        contractRepository.findActiveContractByProvider(contract.getProvider().getId())
+                            .filter(existing -> !existing.getId().equals(contract.getId()))
+                            .ifPresent(existing -> {
+                                throw new BusinessRuleException(
+                                        "يوجد عقد نشط مسبقاً لمقدم الخدمة: " + existing.getContractCode());
+                            });
+                    }
+                    contract.setStatus(dto.getStatus());
+                    modified = true;
+                }
+            }
+
+            if (dto.isUpdatePricingModel() && dto.getPricingModel() != null) {
+                contract.setPricingModel(dto.getPricingModel());
+                modified = true;
+            }
+
+            if (dto.isUpdateDiscountPercent()) {
+                contract.setDiscountPercent(dto.getDiscountPercent() != null ? dto.getDiscountPercent() : BigDecimal.ZERO);
+                modified = true;
+            }
+
+            if (dto.isUpdateDiscountTiming() && dto.getDiscountBeforeRejection() != null) {
+                contract.setDiscountBeforeRejection(dto.getDiscountBeforeRejection());
+                modified = true;
+            }
+
+            if (dto.isUpdateStartDate() && dto.getStartDate() != null) {
+                contract.setStartDate(dto.getStartDate());
+                modified = true;
+            }
+
+            if (dto.isUpdateEndDate()) {
+                contract.setEndDate(dto.getEndDate());
+                modified = true;
+            }
+
+            // Validate dates
+            if (contract.getEndDate() != null && contract.getStartDate().isAfter(contract.getEndDate())) {
+                throw new BusinessRuleException("تاريخ البدء يجب أن يكون قبل تاريخ الانتهاء للعقد: " + contract.getContractCode());
+            }
+
+            if (modified) {
+                contract.setUpdatedBy(getCurrentUsername());
+                contractRepository.save(contract);
+                updatedCount++;
+            }
+        }
+
+        return updatedCount;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // HELPER METHODS
     // ═══════════════════════════════════════════════════════════════════════════
 

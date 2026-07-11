@@ -358,6 +358,25 @@ public class ProviderContractController {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // BULK OPERATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * POST /api/provider-contracts/bulk-update
+     * Bulk update contracts
+     */
+    @PostMapping("/bulk-update")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Bulk update contracts", description = "Update multiple contracts at once")
+    public ResponseEntity<ApiResponse<Integer>> bulkUpdateContracts(
+            @Valid @RequestBody com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
+
+        log.debug("REST request to bulk update contracts: {}", dto.getContractIds().size());
+        int updatedCount = contractService.bulkUpdateContracts(dto);
+        return ResponseEntity.ok(ApiResponse.success(String.format("تم تحديث %d عقداً بنجاح", updatedCount), updatedCount));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // CONTRACT LIFECYCLE ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════════
 

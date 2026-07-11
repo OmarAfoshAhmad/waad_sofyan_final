@@ -200,6 +200,18 @@ public class ProviderExcelTemplateService {
                 .build(),
                 
             ExcelTemplateColumn.builder()
+                .name("discount_timing")
+                .nameAr("آلية الخصم")
+                .type(ColumnType.ENUM)
+                .required(false)
+                .allowedValues(Arrays.asList("بعد المرفوض", "قبل المرفوض"))
+                .example("بعد المرفوض")
+                .description("Discount timing (default: بعد المرفوض)")
+                .descriptionAr("آلية الخصم (الافتراضي: بعد المرفوض)")
+                .width(15)
+                .build(),
+
+            ExcelTemplateColumn.builder()
                 .name("status")
                 .nameAr("الحالة")
                 .type(ColumnType.ENUM)
@@ -244,7 +256,19 @@ public class ProviderExcelTemplateService {
             .descriptionAr("حالات العقد الصالحة")
             .build();
         
-        return List.of(typesLookup, statusLookup);
+        ExcelLookupData discountTimingLookup = ExcelLookupData.builder()
+            .sheetName("Discount Timing")
+            .sheetNameAr("آلية الخصم")
+            .headers(Arrays.asList("Timing (AR)"))
+            .data(Arrays.asList(
+                Arrays.asList("بعد المرفوض"),
+                Arrays.asList("قبل المرفوض")
+            ))
+            .description("Valid discount timing")
+            .descriptionAr("آلية الخصم الصالحة")
+            .build();
+        
+        return List.of(typesLookup, statusLookup, discountTimingLookup);
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -301,12 +325,18 @@ public class ProviderExcelTemplateService {
                                 String statusStr = getCellValue(row, columnIndices.get("status"));
                                 String startDateStr = getCellValue(row, columnIndices.get("start_date"));
                                 String durationStr = getCellValue(row, columnIndices.get("duration_months"));
+                                String discountTimingStr = getCellValue(row, columnIndices.get("discount_timing"));
                                 
                                 java.math.BigDecimal discount = new java.math.BigDecimal("10.00");
                                 if (discountStr != null && !discountStr.trim().isEmpty()) {
                                     try {
                                         discount = new java.math.BigDecimal(discountStr.trim());
                                     } catch (NumberFormatException ignored) {}
+                                }
+                                
+                                boolean discountBeforeRejection = false; // Default to بعد المرفوض
+                                if (discountTimingStr != null && discountTimingStr.trim().equals("قبل المرفوض")) {
+                                    discountBeforeRejection = true;
                                 }
                                 
                                 ContractStatus cStatus = ContractStatus.ACTIVE;
@@ -336,6 +366,7 @@ public class ProviderExcelTemplateService {
                                         .status(cStatus)
                                         .pricingModel(PricingModel.DISCOUNT)
                                         .discountPercent(discount)
+                                        .discountBeforeRejection(discountBeforeRejection)
                                         .startDate(startDate)
                                         .endDate(endDate)
                                         .build();
@@ -442,6 +473,8 @@ public class ProviderExcelTemplateService {
             "duration_months", "المدة بالأشهر", "المدة"));
         indices.put("discount", parserService.findColumnIndex(headerRow, 
             "discount", "نسبة الخصم", "الخصم"));
+        indices.put("discount_timing", parserService.findColumnIndex(headerRow, 
+            "discount_timing", "آلية الخصم", "الية الخصم"));
         indices.put("status", parserService.findColumnIndex(headerRow, 
             "status", "الحالة", "حالة العقد"));
         
