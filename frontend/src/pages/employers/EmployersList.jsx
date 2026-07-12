@@ -21,6 +21,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 // Project Components
 import MainCard from 'components/MainCard';
@@ -30,6 +31,7 @@ import PermissionGuard from 'components/PermissionGuard';
 
 // Services
 import { getEmployers, archiveEmployer, restoreEmployer, deleteEmployer, exportEmployers } from 'services/api/employers.service';
+import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
 import { useSnackbar } from 'notistack';
 
 // ============================================================================
@@ -78,6 +80,23 @@ const EmployersList = () => {
       navigate(`/employers/edit/${id}`);
     },
     [navigate]
+  );
+
+  const handleViewPolicy = useCallback(
+    async (employerId) => {
+      try {
+        const policy = await getEffectiveBenefitPolicy(employerId);
+        if (policy && policy.id) {
+          navigate(`/benefit-policies/${policy.id}`);
+        } else {
+          enqueueSnackbar('لا توجد وثيقة منافع فعالة لهذه الجهة', { variant: 'warning' });
+        }
+      } catch (error) {
+        console.error(error);
+        enqueueSnackbar('حدث خطأ أثناء البحث عن وثيقة المنافع', { variant: 'error' });
+      }
+    },
+    [navigate, enqueueSnackbar]
   );
 
   const handleArchive = useCallback(
@@ -225,14 +244,14 @@ const EmployersList = () => {
 
   const columns = useMemo(
     () => [
-      { id: 'code', label: 'الرمز', minWidth: '6.25rem', align: 'center', sortable: true },
-      { id: 'name', label: 'جهة العمل', minWidth: '15.625rem', align: 'right', sortable: true },
-      { id: 'email', label: 'البريد الإلكتروني', minWidth: '12.5rem', align: 'right', sortable: true },
-      { id: 'phone', label: 'رقم الهاتف', minWidth: '9.375rem', align: 'right', sortable: true },
-      { id: 'address', label: 'العنوان', minWidth: '12.5rem', align: 'right', sortable: true },
-      { id: 'membersCount', label: 'المستفيدون', minWidth: '6.875rem', align: 'center', sortable: true },
-      { id: 'active', label: 'الحالة', minWidth: '6.25rem', align: 'center', sortable: true },
-      { id: 'actions', label: 'الإجراءات', minWidth: '8.125rem', align: 'center', sortable: false }
+      { id: 'code', label: 'الرمز', minWidth: '6.25rem', align: 'center', headerAlign: 'center', sortable: true },
+      { id: 'name', label: 'جهة العمل', minWidth: '15.625rem', align: 'left', headerAlign: 'center', sortable: true },
+      { id: 'email', label: 'البريد الإلكتروني', minWidth: '12.5rem', align: 'center', headerAlign: 'center', sortable: true },
+      { id: 'phone', label: 'رقم الهاتف', minWidth: '9.375rem', align: 'center', headerAlign: 'center', sortable: true },
+      { id: 'address', label: 'العنوان', minWidth: '12.5rem', align: 'center', headerAlign: 'center', sortable: true },
+      { id: 'membersCount', label: 'المستفيدون', minWidth: '6.875rem', align: 'center', headerAlign: 'center', sortable: true },
+      { id: 'active', label: 'الحالة', minWidth: '6.25rem', align: 'center', headerAlign: 'center', sortable: true },
+      { id: 'actions', label: 'الإجراءات', minWidth: '8.125rem', align: 'center', headerAlign: 'center', sortable: false }
     ],
     []
   );
@@ -240,11 +259,11 @@ const EmployersList = () => {
   const renderCell = (row, column) => {
     switch (column.id) {
       case 'code':
-        return <Chip label={row.code || '-'} size="small" variant="outlined" color="primary" />;
+        return <Chip label={row.code || '-'} size="small" variant="outlined" color="primary" sx={{ minWidth: '4.5rem', justifyContent: 'center' }} />;
       case 'name':
         return (
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="body2" fontWeight={500}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ justifyContent: 'flex-start', width: '100%' }}>
+            <Typography variant="body2" fontWeight={500} sx={{ textAlign: 'right' }}>
               {row.name || '-'}
             </Typography>
             {row.archived && <Chip label="محذوف" size="small" color="error" variant="outlined" />}
@@ -275,6 +294,7 @@ const EmployersList = () => {
             size="small"
             color={row.membersCount > 0 ? 'info' : 'default'}
             icon={<PeopleIcon sx={{ fontSize: '14px !important' }} />}
+            sx={{ minWidth: '4.5rem', justifyContent: 'center' }}
           />
         );
       case 'active':
@@ -303,6 +323,13 @@ const EmployersList = () => {
             ) : (
               /* ── الوضع النشط: تعديل + حذف ── */
               <>
+                <PermissionGuard resource="employers" action="read">
+                  <Tooltip title="وثائق جهة العمل">
+                    <IconButton size="small" color="primary" onClick={() => handleViewPolicy(row.id)}>
+                      <AssignmentIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </PermissionGuard>
                 <PermissionGuard resource="employers" action="update">
                   <Tooltip title="تعديل">
                     <IconButton size="small" color="info" onClick={() => handleNavigateEdit(row.id)}>

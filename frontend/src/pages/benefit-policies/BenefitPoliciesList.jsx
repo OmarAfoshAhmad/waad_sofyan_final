@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Button, Chip, IconButton, InputAdornment, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import dayjs from 'dayjs';
 import {
@@ -52,7 +52,9 @@ const BenefitPoliciesList = () => {
   const [sortDirection, setSortDirection] = useState('desc');
   const [showDeleted, setShowDeleted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({ employerId: '', status: '' });
+  const location = useLocation();
+  const initialEmployerId = location.state?.employerId || '';
+  const [filters, setFilters] = useState({ employerId: initialEmployerId, status: '' });
   const [employers, setEmployers] = useState([]);
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,

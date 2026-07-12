@@ -307,7 +307,7 @@ const UnifiedMedicalTable = ({
                 return (
                   <TableCell
                     key={column.id}
-                    align={column.align || 'left'}
+                    align={column.headerAlign || column.align || 'left'}
                     sx={{
                       bgcolor: headerBg,
                       color: headerText,

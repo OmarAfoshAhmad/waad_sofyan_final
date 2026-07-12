@@ -105,6 +105,16 @@ export const getAllMembers = async (params = {}) => {
 };
 
 /**
+ * Count members based on filters
+ * @param {Object} filters - Search filters (employerId, status, type)
+ * @returns {Promise<number>} Count of members
+ */
+export const countMembers = async (filters = {}) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/count`, { params: filters });
+  return response.data?.data || response.data || 0;
+};
+
+/**
  * Advanced search for members
  *
  * @param {Object} criteria - Search criteria
@@ -628,6 +638,7 @@ export default {
   getAllMembers,
   unifiedSearch,
   searchMembers,
+  countMembers,
   searchBeneficiaries,
   checkEligibility,
   updateMember,

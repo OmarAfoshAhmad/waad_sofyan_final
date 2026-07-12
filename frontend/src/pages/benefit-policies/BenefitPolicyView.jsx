@@ -32,7 +32,8 @@ import {
   Percent as PercentIcon,
   Code as CodeIcon,
   Info as InfoIcon,
-  Rule as RuleIcon
+  Rule as RuleIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -48,6 +49,7 @@ import {
   cancelBenefitPolicy,
   deleteBenefitPolicy
 } from 'services/api/benefit-policies.service';
+import { countMembers } from 'services/api/unified-members.service';
 
 import BenefitPolicyRulesTab from './BenefitPolicyRulesTab';
 
@@ -121,7 +123,7 @@ const DetailRow = ({ label, value, icon: Icon }) => (
       </Stack>
     </Grid>
     <Grid size={{ xs: 12, sm: 8 }}>
-      <Typography variant="body1">{value || 'غير متوفر'}</Typography>
+      <Typography variant="body1">{value !== undefined && value !== null && value !== '' ? value : 'غير متوفر'}</Typography>
     </Grid>
   </Grid>
 );
@@ -208,6 +210,20 @@ const BenefitPolicyView = () => {
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always'
+  });
+
+  const { data: coveredMembersCount = 0, isLoading: isLoadingCount } = useQuery({
+    queryKey: ['employer-members-count', policy?.employerOrgId],
+    queryFn: async () => {
+      try {
+        const count = await countMembers({ employerId: policy.employerOrgId });
+        return count || 0;
+      } catch (err) {
+        console.error('Failed to fetch members count', err);
+        return 0;
+      }
+    },
+    enabled: !!policy?.employerOrgId
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -465,19 +481,20 @@ const BenefitPolicyView = () => {
         <Grid container spacing={3}>
           {/* Basic Information */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <MainCard title="معلومات أساسية" secondary={<StatusChip status={policy?.status} />}>
+            <MainCard title="معلومات أساسية" secondary={<StatusChip status={policy?.status} />} sx={{ height: '100%' }}>
               <DetailRow label="اسم الوثيقة" value={policy?.name} icon={PolicyIcon} />
               <DetailRow label="رمز الوثيقة" value={policy?.policyCode} icon={CodeIcon} />
               <DetailRow label="الشريك" value={policy?.employerName} icon={BusinessIcon} />
               <Divider sx={{ my: '1.0rem' }} />
               <DetailRow
-                label="تاريخ البدء"
-                value={policy?.startDate ? new Date(policy.startDate).toLocaleDateString('en-US') : null}
-                icon={CalendarIcon}
-              />
-              <DetailRow
-                label="تاريخ الانتهاء"
-                value={policy?.endDate ? new Date(policy.endDate).toLocaleDateString('en-US') : null}
+                label="تاريخ البدء والانتهاء"
+                value={
+                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <span dir="ltr">{policy?.startDate ? new Date(policy.startDate).toLocaleDateString('en-US') : 'غير متوفر'}</span>
+                    <span>-</span>
+                    <span dir="ltr">{policy?.endDate ? new Date(policy.endDate).toLocaleDateString('en-US') : 'غير متوفر'}</span>
+                  </Box>
+                }
                 icon={CalendarIcon}
               />
             </MainCard>
@@ -485,7 +502,7 @@ const BenefitPolicyView = () => {
 
           {/* Coverage Information */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <MainCard title="معلومات التغطية">
+            <MainCard title="معلومات التغطية" sx={{ height: '100%' }}>
               <DetailRow
                 label="الحد السنوي"
                 value={policy?.annualLimit ? formatCurrency(policy.annualLimit) : 'غير محدد'}
@@ -501,8 +518,28 @@ const BenefitPolicyView = () => {
                 icon={PercentIcon}
               />
               <Divider sx={{ my: '1.0rem' }} />
-              <DetailRow label="عدد القواعد" value={policy?.rulesCount || 0} />
-              <DetailRow label="عدد الأعضاء المرتبطين" value={policy?.membersCount || 0} />
+              <DetailRow 
+                label="عدد القواعد" 
+                value={policy?.rulesCount || 0} 
+                icon={RuleIcon}
+              />
+              <DetailRow 
+                label="عدد الأعضاء المرتبطين" 
+                icon={PeopleIcon}
+                value={
+                  <Chip 
+                    label={isLoadingCount ? '...' : coveredMembersCount}
+                    size="small"
+                    sx={{ 
+                      bgcolor: 'primary.lighter', 
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      minWidth: '60px',
+                      borderRadius: 1
+                    }} 
+                  />
+                } 
+              />
             </MainCard>
           </Grid>
 
