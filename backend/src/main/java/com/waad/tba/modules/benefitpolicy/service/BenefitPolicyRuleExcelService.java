@@ -215,6 +215,7 @@ public class BenefitPolicyRuleExcelService {
                 covCell.setCellValue(rule.getCoveragePercent());
                 covCell.setCellStyle(styles.existingStyle);
             } else {
+                covCell.setCellValue(policy.getDefaultCoveragePercent() != null ? policy.getDefaultCoveragePercent() : 80);
                 covCell.setCellStyle(styles.editableStyle);
             }
 
@@ -303,19 +304,30 @@ public class BenefitPolicyRuleExcelService {
      * Creates new rules and updates existing ones (upsert by category code).
      */
     @Transactional
-    public ExcelImportResult importRules(Long policyId, MultipartFile file) {
+    public ExcelImportResult importRules(Long policyId, MultipartFile file, boolean clearOld) {
         ImportSummary summary = new ImportSummary();
         List<ImportError> errors = new ArrayList<>();
 
         BenefitPolicy policy = policyRepository.findById(policyId)
                 .orElseThrow(() -> new BusinessRuleException("الوثيقة غير موجودة: " + policyId));
 
+        if (clearOld) {
+            log.info("[BPRuleExcel] Clearing old rules for policy={}", policyId);
+            List<BenefitPolicyRule> existingRules = ruleRepository.findByBenefitPolicyId(policyId);
+            ruleRepository.deleteAll(existingRules);
+        }
+
         try (XSSFWorkbook wb = new XSSFWorkbook(file.getInputStream())) {
             XSSFSheet sheet = wb.getSheet(TEMPLATE_SHEET);
             if (sheet == null) {
-                return buildErrorResult(summary, errors,
-                        "الملف غير صحيح: يجب أن يحتوي على ورقة باسم '" + TEMPLATE_SHEET + "'. " +
-                                "استخدم القالب الذي تم تحميله من النظام.");
+                if (wb.getNumberOfSheets() > 0) {
+                    sheet = wb.getSheetAt(0);
+                    log.info("[BPRuleExcel] Sheet '{}' not found, using the first sheet '{}'", TEMPLATE_SHEET, sheet.getSheetName());
+                } else {
+                    return buildErrorResult(summary, errors,
+                            "الملف غير صحيح: يجب أن يحتوي على ورقة باسم '" + TEMPLATE_SHEET + "'. " +
+                                    "استخدم القالب الذي تم تحميله من النظام.");
+                }
             }
 
             // Verify marker - BYPASSED AS REQUESTED

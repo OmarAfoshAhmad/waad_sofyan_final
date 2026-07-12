@@ -19,6 +19,7 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
+import { CloudUpload } from '@mui/icons-material';
 
 import MainCard from 'components/MainCard';
 import { ModernPageHeader, ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
@@ -34,6 +35,9 @@ import {
 } from 'services/api/medical-categories.service';
 import { exportMedicalCategoriesToExcel } from 'utils/excelExport';
 import { openSnackbar } from 'api/snackbar';
+import BulkMoveMedicalCategoryDialog from './BulkMoveMedicalCategoryDialog';
+import ExcelImportDialog from 'components/ExcelImport/ExcelImportDialog';
+import { uploadMedicalCategoriesExcel, bulkDeleteMedicalCategories } from 'services/api/medical-categories.service';
 
 const QUERY_KEY = 'medical-categories';
 
@@ -56,6 +60,9 @@ const MedicalCategoriesList = () => {
   const [parentFilter, setParentFilter] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
 
   // Confirmation dialog
   const [confirmDialog, setConfirmDialog] = useState({
@@ -179,6 +186,63 @@ const MedicalCategoriesList = () => {
   );
 
   // ========================================
+  // BULK ACTIONS
+  // ========================================
+  const handleSelectAll = (event) => {
+    if (event.target.checked) {
+      const newSelected = data?.items?.map((n) => n.id) || [];
+      setSelectedIds(newSelected);
+      return;
+    }
+    setSelectedIds([]);
+  };
+
+  const handleSelectRow = (event, id) => {
+    const selectedIndex = selectedIds.indexOf(id);
+    let newSelected = [];
+
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selectedIds, id);
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selectedIds.slice(1));
+    } else if (selectedIndex === selectedIds.length - 1) {
+      newSelected = newSelected.concat(selectedIds.slice(0, -1));
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(selectedIds.slice(0, selectedIndex), selectedIds.slice(selectedIndex + 1));
+    }
+
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDeleteClick = () => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد حذف جماعي',
+      message: `هل أنت متأكد من حذف ${selectedIds.length} تصنيف؟`,
+      confirmColor: 'error',
+      confirmText: 'نعم، احذف',
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try {
+          await bulkDeleteMedicalCategories(selectedIds);
+          openSnackbar({ message: 'تم حذف التصنيفات بنجاح', variant: 'alert', alert: { color: 'success', variant: 'filled' } });
+          setSelectedIds([]);
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+        } catch (err) {
+          console.error('[MedicalCategories] Bulk delete failed:', err);
+          const errorMsg = err?.response?.data?.message || 'فشل حذف التصنيفات';
+          openSnackbar({ message: errorMsg, variant: 'alert', alert: { color: 'error', variant: 'filled' } });
+        }
+      }
+    });
+  };
+
+  const handleImportSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    queryClient.invalidateQueries({ queryKey: ['medical-categories-all'] });
+  };
+
+  // ========================================
   // MAIN DATA QUERY
   // ========================================
   const { data, isLoading, refetch } = useQuery({
@@ -206,6 +270,7 @@ const MedicalCategoriesList = () => {
     setSearchTerm('');
     setParentFilter('');
     setShowDeleted(false);
+    setSelectedIds([]);
     setPage(0);
   }, []);
 
@@ -392,6 +457,16 @@ const MedicalCategoriesList = () => {
                 {isExporting ? 'جاري التصدير...' : 'تصدير Excel'}
               </Button>
 
+              <Button
+                variant="outlined"
+                color="info"
+                startIcon={<CloudUpload />}
+                onClick={() => setImportDialogOpen(true)}
+                sx={{ height: '2.25rem' }}
+              >
+                استيراد Excel
+              </Button>
+
               {/* Add Button */}
               <Button variant="contained" startIcon={<AddIcon />} onClick={handleNavigateAdd} sx={{ height: '2.25rem' }}>
                 إضافة تصنيف جديد
@@ -424,6 +499,29 @@ const MedicalCategoriesList = () => {
             color="primary"
             sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
           />
+          
+          {/* Bulk Actions */}
+          {selectedIds.length > 0 && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button 
+                variant="outlined" 
+                color="secondary" 
+                size="small" 
+                onClick={() => setBulkMoveDialogOpen(true)}
+              >
+                نقل المحدد ({selectedIds.length})
+              </Button>
+              <Button 
+                variant="outlined" 
+                color="error" 
+                size="small" 
+                startIcon={<DeleteIcon />} 
+                onClick={handleBulkDeleteClick}
+              >
+                حذف المحدد
+              </Button>
+            </Stack>
+          )}
 
           {/* Search */}
           <TextField
@@ -515,6 +613,10 @@ const MedicalCategoriesList = () => {
           setSortDirection(direction);
           setPage(0);
         }}
+        selectable={true}
+        selectedRows={selectedIds}
+        onSelectAllClick={handleSelectAll}
+        onSelectRow={handleSelectRow}
         renderCell={renderCell}
         getRowKey={(row) => row.id}
         emptyMessage="لا توجد تصنيفات طبية"
@@ -533,6 +635,46 @@ const MedicalCategoriesList = () => {
         cancelText="إلغاء الأمر"
         onConfirm={confirmDialog.onConfirm}
         onClose={closeDialog}
+      />
+      
+      {/* ====== EXCEL IMPORT DIALOG ====== */}
+      <ExcelImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        title="استيراد التصنيفات الطبية"
+        onDownloadTemplate={async () => {
+          const response = await fetch('/api/v1/medical-categories/import/template', {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          if (!response.ok) throw new Error('فشل تنزيل القالب');
+          return response.blob();
+        }}
+        onImport={async (file, clearOld) => {
+          const result = await uploadMedicalCategoriesExcel(file, clearOld);
+          if (result && result.success) {
+            handleImportSuccess();
+            // Reset filters to show the newly imported data
+            setParentFilter('');
+            setSearchTerm('');
+            setPage(0);
+          }
+          return result;
+        }}
+        templateFilename={`Medical_Categories_Template.xlsx`}
+        showClearOldOption={true}
+      />
+
+      {/* ====== BULK MOVE DIALOG ====== */}
+      <BulkMoveMedicalCategoryDialog
+        open={bulkMoveDialogOpen}
+        onClose={() => setBulkMoveDialogOpen(false)}
+        selectedIds={selectedIds}
+        parentCategories={parentCategories}
+        onMoveSuccess={() => {
+          setSelectedIds([]);
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          queryClient.invalidateQueries({ queryKey: ['medical-categories-all'] });
+        }}
       />
     </Box>
   );

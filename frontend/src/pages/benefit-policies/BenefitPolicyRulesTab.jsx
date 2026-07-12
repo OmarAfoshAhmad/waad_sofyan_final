@@ -30,7 +30,8 @@ import {
   MenuItem,
   Select,
   InputLabel,
-  FormControl
+  FormControl,
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -326,7 +327,7 @@ const RuleFormModal = ({
               onChange={handleChildCategoryChange}
               getOptionLabel={getCategoryOptionLabel}
               isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
-              disabled={isEdit || loadingCategories || !formData.mainMedicalCategoryId}
+              disabled={loadingCategories || !formData.mainMedicalCategoryId}
               noOptionsText={
                 !formData.mainMedicalCategoryId ? 'اختر التصنيف الرئيسي أولاً' : loadingCategories ? 'جاري التحميل...' : 'لا توجد نتائج'
               }
@@ -348,7 +349,7 @@ const RuleFormModal = ({
               value={formData.serviceName}
               onChange={handleChange('serviceName')}
               placeholder="اكتب اسم الخدمة..."
-              disabled={isEdit || loadingCategories || !selectedTargetCategoryId}
+              disabled={loadingCategories || !selectedTargetCategoryId}
               helperText="اختياري: للبحث عن خدمات مشابهة وتجنب التكرار. (تطبيق الاستثناء على خدمة بعينها يتطلب تفعيل دعم الخدمة في الخلفية)"
               fullWidth
             />
@@ -755,7 +756,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
   // Pagination state
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(6);
   // Sort state
   const [sortBy, setSortBy] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
@@ -787,8 +788,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const result = await getMedicalCategories({
         page: 0,
         size: 500,
-        sortBy: 'id',
-        sortDir: 'DESC',
+        sortBy: 'code',
+        sortDir: 'ASC',
         active: true
       });
       return result?.items || [];
@@ -891,6 +892,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [clearOld, setClearOld] = useState(false);
   const importFileInputRef = useRef(null);
 
   const handleDownloadTemplate = useCallback(async () => {
@@ -919,7 +921,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setImporting(true);
     setImportResult(null);
     try {
-      const result = await importPolicyRulesFromExcel(policyId, importFile);
+      const result = await importPolicyRulesFromExcel(policyId, importFile, clearOld);
       setImportResult(result);
       if (result?.success) {
         enqueueSnackbar(result.messageAr || 'تم الاستيراد بنجاح', { variant: 'success' });
@@ -1580,7 +1582,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       ═══════════════════════════════════════════════════════════════════ */}
       <MainCard
         key={showDeleted ? 'rules-mode-deleted' : 'rules-mode-active'}
-        sx={{ mt: -4 }}
+        sx={{ minHeight: 'calc(100vh - 310px)', display: 'flex', flexDirection: 'column' }}
         title={
           <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
             <Stack direction="row" alignItems="center" spacing={1}>
@@ -1589,104 +1591,78 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 قواعد التغطية التفصيلية
               </Typography>
             </Stack>
-            {!showDeleted && (
-              <Stack direction="row" spacing={1} alignItems="center">
-                {[
-                  { id: 'ALL', label: 'الكل', count: filterStats.all, color: 'primary' },
-                  { id: 'AMOUNT_LIMIT', label: 'سقف مالي', count: filterStats.amountLimit, color: 'warning' },
-                  { id: 'TIMES_LIMIT', label: 'سقف مرات', count: filterStats.timesLimit, color: 'info' },
-                  { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval, color: 'error' }
-                ].map((item) => (
-                  <Chip
-                    key={item.id}
-                    label={`${item.label} (${item.count})`}
-                    color={item.color}
-                    variant={filterType === item.id ? 'filled' : 'outlined'}
-                    onClick={() => {
-                      setFilterType(item.id);
-                      setPage(0);
-                    }}
-                    sx={{ fontWeight: 600, cursor: 'pointer', height: '2rem' }}
-                  />
-                ))}
-              </Stack>
-            )}
           </Stack>
         }
         secondary={
           canEdit && (
             <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<CategoryIcon />}
-                onClick={() => setCategoryCoverageModalOpen(true)}
-                sx={{ height: '2.25rem' }}
-              >
-                إضافة قالب
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                color="secondary"
-                startIcon={<AutoAwesomeIcon />}
-                onClick={handleOpenTemplateDialog}
-                sx={{ height: '2.25rem' }}
-              >
-                تطبيق قالب قياسي
-              </Button>
-              <Button
-                size="small"
-                variant={showDeleted ? 'contained' : 'outlined'}
-                color={showDeleted ? 'error' : 'inherit'}
-                onClick={() => setShowDeleted((prev) => !prev)}
-                sx={{ height: '2.25rem' }}
-              >
-                {showDeleted ? `عرض النشطة (${activeRulesCount})` : `عرض المحذوفات (${deletedRulesCount})`}
-              </Button>
-              <Tooltip title="تحميل قالب Excel مع التصنيفات الموحّدة">
-                <span>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    color="success"
-                    startIcon={downloadingTemplate ? <CircularProgress size={14} color="inherit" /> : <FileDownloadIcon />}
-                    onClick={handleDownloadTemplate}
-                    disabled={downloadingTemplate}
-                    sx={{ height: '2.25rem' }}
-                  >
-                    قالب Excel
-                  </Button>
-                </span>
+              <Tooltip title="إضافة قالب">
+                <IconButton
+                  color="primary"
+                  onClick={() => setCategoryCoverageModalOpen(true)}
+                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                >
+                  <CategoryIcon fontSize="small" />
+                </IconButton>
               </Tooltip>
+              
+              <Tooltip title="تطبيق قالب قياسي">
+                <IconButton
+                  color="secondary"
+                  onClick={handleOpenTemplateDialog}
+                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                >
+                  <AutoAwesomeIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title={showDeleted ? `عرض النشطة (${activeRulesCount})` : `عرض المحذوفات (${deletedRulesCount})`}>
+                <IconButton
+                  onClick={() => setShowDeleted((prev) => !prev)}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: showDeleted ? 'error.main' : 'divider',
+                    width: '2.25rem',
+                    height: '2.25rem',
+                    borderRadius: 1,
+                    color: showDeleted ? 'error.main' : 'action.active'
+                  }}
+                >
+                  {showDeleted ? <ReplayIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="استيراد قواعد التغطية من Excel">
-                <span>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    color="info"
-                    startIcon={<FileUploadIcon />}
-                    onClick={() => {
-                      setImportFile(null);
-                      setImportResult(null);
-                      setImportDialogOpen(true);
-                    }}
-                    sx={{ height: '2.25rem' }}
-                  >
-                    استيراد Excel
-                  </Button>
-                </span>
+                <IconButton
+                  color="info"
+                  onClick={() => {
+                    setImportFile(null);
+                    setImportResult(null);
+                    setImportDialogOpen(true);
+                  }}
+                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                >
+                  <FileUploadIcon fontSize="small" />
+                </IconButton>
               </Tooltip>
-              <Button
-                variant="contained"
-                size="small"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleAddRule}
-                sx={{ height: '2.25rem' }}
-              >
-                إضافة قاعدة
-              </Button>
+
+              <Tooltip title="إضافة قاعدة">
+                <IconButton
+                  onClick={handleAddRule}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'primary.main',
+                    bgcolor: 'primary.main',
+                    color: 'white',
+                    width: '2.25rem',
+                    height: '2.25rem',
+                    borderRadius: 1,
+                    '&:hover': { bgcolor: 'primary.dark' }
+                  }}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Stack>
           )
         }
@@ -1714,7 +1690,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           <Chip
             size="small"
             label={showDeleted ? `وضع العرض: المحذوفات (${deletedRulesCount})` : 'وضع العرض: النشطة/الموقوفة'}
-            color={showDeleted ? 'error' : 'success'}
+            color={showDeleted ? 'error' : 'primary'}
             variant={showDeleted ? 'filled' : 'outlined'}
             sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }}
           />
@@ -1723,7 +1699,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             value={ruleSearch}
             onChange={(e) => setRuleSearch(e.target.value)}
             size="small"
-            sx={{ flexGrow: 1, maxWidth: 420 }}
+            sx={{ flexGrow: 1, maxWidth: 420, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -1739,6 +1715,28 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               ) : null
             }}
           />
+          {!showDeleted && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              {[
+                { id: 'ALL', label: 'الكل', count: filterStats.all },
+                { id: 'AMOUNT_LIMIT', label: 'سقف مالي', count: filterStats.amountLimit },
+                { id: 'TIMES_LIMIT', label: 'سقف مرات', count: filterStats.timesLimit },
+                { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval }
+              ].map((item) => (
+                <Chip
+                  key={item.id}
+                  label={`${item.label} (${item.count})`}
+                  color="primary"
+                  variant={filterType === item.id ? 'filled' : 'outlined'}
+                  onClick={() => {
+                    setFilterType(item.id);
+                    setPage(0);
+                  }}
+                  sx={{ fontWeight: 600, cursor: 'pointer', height: '2.5rem', px: 0.5 }}
+                />
+              ))}
+            </Stack>
+          )}
         </Stack>
 
         {/* ── Unified Table ── */}
@@ -1749,7 +1747,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           totalCount={filteredRules.length}
           page={page}
           rowsPerPage={rowsPerPage}
-          rowsPerPageOptions={[5, 10, 15, 20, 25, 50, 100]}
+          rowsPerPageOptions={[5, 6, 10, 15, 20, 25, 50, 100]}
           onPageChange={(newPage) => setPage(newPage)}
           onRowsPerPageChange={(newSize) => {
             setRowsPerPage(newSize);
@@ -1762,7 +1760,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSort={handleSort}
-          tableContainerSx={{ maxHeight: 'calc(100vh - 450px)', minHeight: '300px' }}
+          tableContainerSx={{ flexGrow: 1 }}
         />
       </MainCard>
 
@@ -1815,6 +1813,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             setImportDialogOpen(false);
             setImportFile(null);
             setImportResult(null);
+            setClearOld(false);
           }
         }}
         maxWidth="sm"
@@ -1833,10 +1832,22 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 تعليمات الاستيراد:
               </Typography>
               <ol style={{ margin: 0, paddingRight: '1.2rem' }}>
-                <li>حمّل قالب Excel أولاً بالضغط على «قالب Excel»</li>
+                <li>حمّل قالب Excel أولاً بالضغط على «تحميل قالب Excel» أدناه</li>
                 <li>عبّئ نسب التغطية والسقوف في الأعمدة القابلة للتعديل</li>
                 <li>ارفع الملف هنا — القواعد الجديدة تُضاف والموجودة تُحدَّث تلقائياً</li>
               </ol>
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-start' }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="info"
+                  startIcon={downloadingTemplate ? <CircularProgress size={14} color="inherit" /> : <FileDownloadIcon />}
+                  onClick={handleDownloadTemplate}
+                  disabled={downloadingTemplate}
+                >
+                  تحميل قالب Excel
+                </Button>
+              </Box>
             </Alert>
 
             {/* File selector */}
@@ -1876,6 +1887,22 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 </Typography>
               )}
             </Box>
+
+            {!importResult && (
+              <Box sx={{ mt: 1 }}>
+                <FormControlLabel
+                  control={<Checkbox checked={clearOld} onChange={(e) => setClearOld(e.target.checked)} color="error" />}
+                  label={
+                    <Typography variant="body2" color="error.main" fontWeight="bold">
+                      مسح القواعد القديمة والبدء بنظافة
+                    </Typography>
+                  }
+                />
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4 }}>
+                  سيتم مسح جميع قواعد التغطية الحالية للوثيقة، والاعتماد كلياً على القواعد المرفوعة في الملف. (لا يمكن التراجع عن هذا الإجراء)
+                </Typography>
+              </Box>
+            )}
 
             {/* Import result summary */}
             {importResult && (
@@ -1922,6 +1949,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               setImportDialogOpen(false);
               setImportFile(null);
               setImportResult(null);
+              setClearOld(false);
             }}
             disabled={importing}
             color="inherit"

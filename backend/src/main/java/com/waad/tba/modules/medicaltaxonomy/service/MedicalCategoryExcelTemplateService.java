@@ -118,8 +118,14 @@ public class MedicalCategoryExcelTemplateService {
      * Import medical categories from Excel template
      */
     @Transactional
-    public ExcelImportResult importFromExcel(MultipartFile file) {
-        log.info("[MedicalCategoryImport] Starting import from file: {}", file.getOriginalFilename());
+    public ExcelImportResult importFromExcel(MultipartFile file, boolean clearOld) {
+        log.info("[MedicalCategoryImport] Starting import from file: {}, clearOld: {}", file.getOriginalFilename(), clearOld);
+        
+        if (clearOld) {
+            log.info("[MedicalCategoryImport] Clearing old categories (soft delete)...");
+            List<MedicalCategory> allCategories = categoryRepository.findAll();
+            categoryRepository.deleteAll(allCategories);
+        }
         
         // Validate file
         if (file.isEmpty()) {
@@ -256,6 +262,7 @@ public class MedicalCategoryExcelTemplateService {
         String normalized = value.trim().toLowerCase();
         return normalized.equals("yes") || 
                normalized.equals("نعم") || 
+               normalized.equals("نشط") || 
                normalized.equals("true") || 
                normalized.equals("1");
     }

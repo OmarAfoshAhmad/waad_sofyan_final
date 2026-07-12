@@ -22,6 +22,7 @@ import {
   Collapse
 } from '@mui/material';
 import { CloudUpload, Download, Close, ExpandMore, CheckCircle, Error, Warning } from '@mui/icons-material';
+import { FormControlLabel, Checkbox } from '@mui/material';
 import { downloadBlob } from 'services/api/excel-import.service';
 
 /**
@@ -34,14 +35,17 @@ import { downloadBlob } from 'services/api/excel-import.service';
  * @param {Function} props.onDownloadTemplate - Template download function
  * @param {Function} props.onImport - Import function (receives file)
  * @param {string} props.templateFilename - Template filename (e.g., "Members_Template.xlsx")
+ * @param {boolean} props.showClearOldOption - Whether to show "Clear Old Data" checkbox
+ * @param {string} props.clearOldLabel - Label for the "Clear Old Data" checkbox
  */
-const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport, templateFilename }) => {
+const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport, templateFilename, showClearOldOption = false, clearOldLabel = "مسح البيانات القديمة والبدء بنظافة" }) => {
   const [file, setFile] = useState(null);
   const fileInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [clearOld, setClearOld] = useState(false);
 
   const handleDownloadTemplate = async () => {
     try {
@@ -79,7 +83,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
     try {
       setLoading(true);
       setError(null);
-      const importResult = await onImport(file);
+      const importResult = await onImport(file, clearOld);
       setResult(importResult);
 
       // Auto-expand errors if any
@@ -104,6 +108,7 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
     setResult(null);
     setError(null);
     setShowErrors(false);
+    setClearOld(false);
   };
 
   const handleCloseDialog = () => {
@@ -170,6 +175,22 @@ const ExcelImportDialog = ({ open, onClose, title, onDownloadTemplate, onImport,
               Excel files only (.xlsx, .xls)
             </Typography>
           </Box>
+          
+          {showClearOldOption && !result && (
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={<Checkbox checked={clearOld} onChange={(e) => setClearOld(e.target.checked)} color="error" />}
+                label={
+                  <Typography variant="body2" color="error.main" fontWeight="bold">
+                    {clearOldLabel}
+                  </Typography>
+                }
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4 }}>
+                سيتم مسح/إلغاء تفعيل جميع البيانات الحالية وتُعتمد البيانات المرفوعة فقط. (إجراء لا يمكن التراجع عنه)
+              </Typography>
+            </Box>
+          )}
         </Box>
 
         {/* Loading */}

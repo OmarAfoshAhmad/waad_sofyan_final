@@ -79,10 +79,11 @@ public class BenefitPolicyRuleExcelController {
             "القواعد الموجودة تُحدَّث، والجديدة تُضاف (upsert).")
     public ResponseEntity<ApiResponse<ExcelImportResult>> importRules(
             @PathVariable Long policyId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "clearOld", defaultValue = "false") boolean clearOld) {
 
-        log.info("[BPRuleExcel] Import requested: policyId={}, file={}, size={}",
-                policyId, file.getOriginalFilename(), file.getSize());
+        log.info("[BPRuleExcel] Import requested: policyId={}, file={}, size={}, clearOld={}",
+                policyId, file.getOriginalFilename(), file.getSize(), clearOld);
 
         if (file.isEmpty()) {
             ExcelImportResult emptyResult = ExcelImportResult.builder()
@@ -103,7 +104,7 @@ public class BenefitPolicyRuleExcelController {
                     .body(ApiResponse.success("خطأ في الاستيراد", fmtResult));
         }
 
-        ExcelImportResult result = excelService.importRules(policyId, file);
+        ExcelImportResult result = excelService.importRules(policyId, file, clearOld);
 
         if (result.isSuccess()) {
             return ResponseEntity.ok(ApiResponse.success(result.getMessageAr(), result));

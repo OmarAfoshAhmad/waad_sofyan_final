@@ -452,7 +452,7 @@ const BenefitPolicyView = () => {
       />
 
       {/* Tabs Navigation */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '1.5rem' }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '0.5rem', mt: -3 }}>
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
           <Tab icon={<InfoIcon />} iconPosition="start" label="نظرة عامة" />
           <Tab icon={<RuleIcon />} iconPosition="start" label={`قواعد التغطية (${policy?.rulesCount || 0})`} />

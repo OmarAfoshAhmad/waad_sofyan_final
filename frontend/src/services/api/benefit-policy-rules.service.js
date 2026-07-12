@@ -375,12 +375,14 @@ export const downloadPolicyRulesTemplate = async (policyId) => {
  * Endpoint: POST /api/benefit-policies/{policyId}/rules/import
  * @param {number} policyId - Policy ID
  * @param {File} file - Filled Excel .xlsx file
+ * @param {boolean} clearOld - Clear old data before import
  * @returns {Promise<ExcelImportResult>} Import result with summary and errors
  */
-export const importPolicyRulesFromExcel = async (policyId, file) => {
+export const importPolicyRulesFromExcel = async (policyId, file, clearOld = false) => {
   const formData = new FormData();
   formData.append('file', file);
   const response = await axiosClient.post(`/benefit-policies/${policyId}/rules/import`, formData, {
+    params: { clearOld },
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000
   });

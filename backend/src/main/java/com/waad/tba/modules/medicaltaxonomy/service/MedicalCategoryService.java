@@ -1,6 +1,7 @@
 package com.waad.tba.modules.medicaltaxonomy.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryBulkMoveDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryCreateDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryResponseDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryUpdateDto;
@@ -304,6 +305,47 @@ public class MedicalCategoryService {
         categoryRepository.deleteById(id);
 
         log.info("✅ Hard-deleted (permanent) medical category: {}", id);
+    }
+
+    @Transactional
+    public void bulkDelete(List<Long> ids) {
+        log.info("Bulk deleting (soft) medical categories: {}", ids);
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        
+        List<MedicalCategory> categories = categoryRepository.findAllById(ids);
+        for (MedicalCategory category : categories) {
+            category.setActive(false);
+            category.setDeleted(true);
+        }
+        categoryRepository.saveAll(categories);
+        log.info("✅ Bulk deleted {} medical categories", categories.size());
+    }
+
+    @Transactional
+    public void bulkMove(MedicalCategoryBulkMoveDto dto) {
+        log.info("Bulk moving medical categories {} to new parent {}", dto.getIds(), dto.getNewParentId());
+        if (dto.getIds() == null || dto.getIds().isEmpty()) {
+            return;
+        }
+
+        if (dto.getNewParentId() != null) {
+            categoryRepository.findActiveById(dto.getNewParentId())
+                    .orElseThrow(() -> new BusinessRuleException(
+                            "Parent category not found or inactive: " + dto.getNewParentId()));
+        }
+
+        List<MedicalCategory> categories = categoryRepository.findAllById(dto.getIds());
+        for (MedicalCategory category : categories) {
+            if (dto.getNewParentId() != null && dto.getNewParentId().equals(category.getId())) {
+                throw new BusinessRuleException("Category cannot be its own parent: " + category.getId());
+            }
+            category.setParentId(dto.getNewParentId());
+        }
+        
+        categoryRepository.saveAll(categories);
+        log.info("✅ Bulk moved {} medical categories", categories.size());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

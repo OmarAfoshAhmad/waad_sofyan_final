@@ -1,6 +1,7 @@
 package com.waad.tba.modules.medicaltaxonomy.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryBulkMoveDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryCreateDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryResponseDto;
 import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryUpdateDto;
@@ -239,6 +240,25 @@ public class MedicalCategoryController {
         log.info("[MEDICAL-CATEGORIES] DELETE /api/medical-categories/{}/hard", id);
         categoryService.hardDelete(id);
         return ResponseEntity.ok(ApiResponse.success("تم الحذف النهائي للتصنيف بنجاح", null));
+    }
+
+    @DeleteMapping("/bulk")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Bulk delete categories", description = "Soft delete multiple categories")
+    public ResponseEntity<ApiResponse<Void>> bulkDelete(@RequestBody List<Long> ids) {
+        log.info("[MEDICAL-CATEGORIES] DELETE /api/medical-categories/bulk - count={}", ids != null ? ids.size() : 0);
+        categoryService.bulkDelete(ids);
+        return ResponseEntity.ok(ApiResponse.success("تم حذف التصنيفات المحددة بنجاح", null));
+    }
+
+    @PatchMapping("/bulk/move")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Bulk move categories", description = "Move multiple categories to a new parent")
+    public ResponseEntity<ApiResponse<Void>> bulkMove(@Valid @RequestBody MedicalCategoryBulkMoveDto dto) {
+        log.info("[MEDICAL-CATEGORIES] PATCH /api/medical-categories/bulk/move - count={}, newParent={}", 
+            dto.getIds() != null ? dto.getIds().size() : 0, dto.getNewParentId());
+        categoryService.bulkMove(dto);
+        return ResponseEntity.ok(ApiResponse.success("تم نقل التصنيفات بنجاح", null));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

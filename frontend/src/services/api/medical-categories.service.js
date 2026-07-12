@@ -116,18 +116,41 @@ export const getMedicalServicesByCategory = async (categoryId) => {
 /**
  * Upload Excel file to import medical categories
  * @param {File} file - Excel file
+ * @param {boolean} clearOld - Whether to clear old data
  * @returns {Promise<Object>} Import result
  */
-export const uploadMedicalCategoriesExcel = async (file) => {
+export const uploadMedicalCategoriesExcel = async (file, clearOld = false) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await axiosClient.post(`${BASE_URL}/import/excel`, formData, {
+  const response = await axiosClient.post(`${BASE_URL}/import`, formData, {
+    params: { clearOld },
     headers: {
       'Content-Type': 'multipart/form-data'
     },
     timeout: 300000 // 5 minutes for large Excel files
   });
 
+  return unwrap(response);
+};
+
+/**
+ * Bulk delete medical categories
+ * @param {Array<number>} ids - Array of category IDs
+ * @returns {Promise<void>}
+ */
+export const bulkDeleteMedicalCategories = async (ids) => {
+  const response = await axiosClient.delete(`${BASE_URL}/bulk`, { data: ids });
+  return unwrap(response);
+};
+
+/**
+ * Bulk move medical categories to a new parent
+ * @param {Array<number>} ids - Array of category IDs
+ * @param {number|null} newParentId - New parent ID
+ * @returns {Promise<void>}
+ */
+export const bulkMoveMedicalCategories = async (ids, newParentId) => {
+  const response = await axiosClient.patch(`${BASE_URL}/bulk/move`, { ids, newParentId });
   return unwrap(response);
 };

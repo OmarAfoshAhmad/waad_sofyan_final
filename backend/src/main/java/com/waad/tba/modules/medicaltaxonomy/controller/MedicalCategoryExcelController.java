@@ -78,11 +78,12 @@ public class MedicalCategoryExcelController {
                      "Requires ADMIN or SUPER_ADMIN authority."
     )
     public ResponseEntity<ApiResponse<ExcelImportResult>> importMedicalCategories(
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "clearOld", defaultValue = "false") boolean clearOld
     ) {
-        log.info("[MedicalCategoryImport] Import request received: {}", file.getOriginalFilename());
+        log.info("[MedicalCategoryImport] Import request received: {}, clearOld={}", file.getOriginalFilename(), clearOld);
         
-        ExcelImportResult result = templateService.importFromExcel(file);
+        ExcelImportResult result = templateService.importFromExcel(file, clearOld);
         
         log.info("[MedicalCategoryImport] Import completed: {}/{} successful", 
                 result.getSummary().getCreated() + result.getSummary().getUpdated(),
