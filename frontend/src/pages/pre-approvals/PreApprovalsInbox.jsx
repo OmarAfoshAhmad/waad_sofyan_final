@@ -36,7 +36,8 @@ import {
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
 import { DataGrid } from '@mui/x-data-grid';
-import { preApprovalsService } from 'services/api';
+import { reviewerPreAuthService } from 'services/api';
+import { useReviewer } from 'contexts/ReviewerContext';
 
 /**
  * Pre-Approvals Inbox - صندوق الموافقات المسبقة
@@ -54,14 +55,14 @@ const PreApprovalsInbox = () => {
   const [pageSize, setPageSize] = useState(20);
   const [totalRows, setTotalRows] = useState(0);
 
+  // SSE Context
+  const { inboxRefreshTrigger } = useReviewer();
+
   // Dialog states
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedPreApproval, setSelectedPreApproval] = useState(null);
 
   // Form states
-  const [approvedAmount, setApprovedAmount] = useState('');
-  const [approvalNotes, setApprovalNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
 
   // Error/Success states
@@ -73,11 +74,10 @@ const PreApprovalsInbox = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await preApprovalsService.getPending({
+      // Using new reviewer service
+      const response = await reviewerPreAuthService.getInbox({
         page: page + 1,
-        size: pageSize,
-        sortBy: 'createdAt',
-        sortDir: 'asc' // FIFO - الأقدم أولاً
+        size: pageSize
       });
       setPreApprovals(response.items || []);
       setTotalRows(response.total || 0);
@@ -91,16 +91,7 @@ const PreApprovalsInbox = () => {
 
   useEffect(() => {
     fetchPreApprovals();
-  }, [fetchPreApprovals]);
-
-  // Open approve dialog
-  const handleOpenApprove = (preApproval) => {
-    setSelectedPreApproval(preApproval);
-    setApprovedAmount(preApproval.requestedAmount?.toString() || '');
-    setApprovalNotes('');
-    setApproveDialogOpen(true);
-  };
-
+  }, [fetchPreApprovals, inboxRefreshTrigger]); // Refetch on SSE event
   // Open reject dialog
   const handleOpenReject = (preApproval) => {
     setSelectedPreApproval(preApproval);
@@ -113,73 +104,12 @@ const PreApprovalsInbox = () => {
     try {
       setActionLoading(true);
       setError(null);
-      await preApprovalsService.startReview(preApproval.id);
+      await reviewerPreAuthService.startReview(preApproval.id);
       setSuccess('تم بدء مراجعة الطلب');
       fetchPreApprovals();
     } catch (err) {
       setError(err.userMessage || err.response?.data?.message || 'فشل في بدء المراجعة');
     } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Approve pre-approval
-  const handleApprove = async () => {
-    if (!selectedPreApproval) return;
-
-    try {
-      setActionLoading(true);
-      setError(null);
-
-      // Backend calculates approvedAmount automatically - DO NOT send it
-      // Only send approval notes
-      await preApprovalsService.approve(selectedPreApproval.id, {
-        approvalNotes: approvalNotes || '' // Backend expects 'approvalNotes', not 'notes'
-      });
-
-      setApproveDialogOpen(false);
-      setSelectedPreApproval(null);
-      setSuccess('جاري معالجة الموافقة...');
-
-      // Phase 2: Poll for final status
-      const pollInterval = setInterval(async () => {
-        try {
-          const updated = await preApprovalsService.getById(selectedPreApproval.id);
-
-          if (updated.status === 'APPROVED') {
-            clearInterval(pollInterval);
-            clearTimeout(pollTimeout);
-            setActionLoading(false);
-            setSuccess('تمت الموافقة على الطلب بنجاح');
-            fetchPreApprovals();
-          } else if (updated.status === 'REJECTED') {
-            clearInterval(pollInterval);
-            clearTimeout(pollTimeout);
-            setActionLoading(false);
-            setError('تم رفض الطلب: ' + (updated.rejectionReason || 'خطأ في المعالجة'));
-            fetchPreApprovals();
-          }
-          // If still APPROVAL_IN_PROGRESS, continue polling
-        } catch (pollError) {
-          clearInterval(pollInterval);
-          clearTimeout(pollTimeout);
-          setActionLoading(false);
-          setError('خطأ في التحقق من حالة الموافقة');
-        }
-      }, 3000); // Poll every 3 seconds
-
-      // Timeout after 2 minutes
-      const pollTimeout = setTimeout(() => {
-        clearInterval(pollInterval);
-        if (actionLoading) {
-          setActionLoading(false);
-          setSuccess('انتهت مهلة المعالجة. يرجى تحديث الصفحة.');
-          fetchPreApprovals();
-        }
-      }, 120000);
-    } catch (err) {
-      console.error('Approve error:', err);
-      setError(err.userMessage || err.response?.data?.message || 'فشل في الموافقة على الطلب');
       setActionLoading(false);
     }
   };
@@ -194,9 +124,7 @@ const PreApprovalsInbox = () => {
     try {
       setActionLoading(true);
       setError(null);
-      await preApprovalsService.reject(selectedPreApproval.id, {
-        rejectionReason: rejectionReason.trim()
-      });
+      await reviewerPreAuthService.rejectAll(selectedPreApproval.id, rejectionReason.trim());
 
       setSuccess('تم رفض الطلب');
       setRejectDialogOpen(false);
@@ -321,18 +249,10 @@ const PreApprovalsInbox = () => {
             </Tooltip>
           )}
 
-          {/* PENDING/UNDER_REVIEW → Approve/Reject
-              CANONICAL: Both states allow approval/rejection actions */}
+          {/* PENDING/UNDER_REVIEW → Reject (Approve is now line-level only) */}
           {(params.row.status === 'PENDING' || params.row.status === 'UNDER_REVIEW') && (
             <>
-              <Tooltip title="موافقة">
-                <span>
-                  <IconButton size="small" color="success" onClick={() => handleOpenApprove(params.row)} disabled={actionLoading}>
-                    <ApproveIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="رفض">
+              <Tooltip title="رفض كلي">
                 <span>
                   <IconButton size="small" color="error" onClick={() => handleOpenReject(params.row)} disabled={actionLoading}>
                     <RejectIcon fontSize="small" />
@@ -403,67 +323,6 @@ const PreApprovalsInbox = () => {
           />
         </Box>
       </MainCard>
-
-      {/* Approve Dialog */}
-      <Dialog open={approveDialogOpen} onClose={() => !actionLoading && setApproveDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <ApproveIcon color="success" />
-            <span>الموافقة على الطلب #{selectedPreApproval?.id}</span>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Card variant="outlined" sx={{ mb: '1.5rem', mt: '1.0rem' }}>
-            <CardContent>
-              <Typography variant="subtitle2" color="primary" gutterBottom>
-                تفاصيل الطلب
-              </Typography>
-              <Table size="small">
-                <TableBody>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 500 }}>المؤمن عليه</TableCell>
-                    <TableCell>{selectedPreApproval?.memberFullNameArabic}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 500 }}>مقدم الخدمة</TableCell>
-                    <TableCell>{selectedPreApproval?.providerName}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 500 }}>نوع الخدمة</TableCell>
-                    <TableCell>{selectedPreApproval?.serviceType || selectedPreApproval?.procedureName || '-'}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Divider sx={{ my: '1.0rem' }} />
-
-          <TextField
-            fullWidth
-            label="ملاحظات (اختياري)"
-            value={approvalNotes}
-            onChange={(e) => setApprovalNotes(e.target.value)}
-            multiline
-            rows={2}
-            disabled={actionLoading}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setApproveDialogOpen(false)} disabled={actionLoading}>
-            إلغاء
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleApprove}
-            disabled={actionLoading}
-            startIcon={actionLoading ? <CircularProgress size={20} color="inherit" /> : <ApproveIcon />}
-          >
-            {actionLoading ? 'جارِ الموافقة...' : 'موافقة'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Reject Dialog */}
       <Dialog open={rejectDialogOpen} onClose={() => !actionLoading && setRejectDialogOpen(false)} maxWidth="sm" fullWidth>

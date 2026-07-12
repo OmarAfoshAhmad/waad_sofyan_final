@@ -35,4 +35,17 @@ public class MedicalCategoryResponseDto {
 
     // For tree/hierarchy responses
     private List<MedicalCategoryResponseDto> children;
+
+    /**
+     * عدد الخدمات الطبية النشطة المرتبطة بهذا التصنيف مباشرةً.
+     * يُحسب من قاعدة البيانات عند بناء شجرة التصنيفات.
+     */
+    @Builder.Default
+    private long serviceCount = 0L;
+
+    /**
+     * عدد التصنيفات الفرعية المباشرة.
+     */
+    @Builder.Default
+    private int childrenCount = 0;
 }

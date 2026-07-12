@@ -1,68 +1,153 @@
 package com.waad.tba.modules.preauthorization.controller;
 
+import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.modules.preauthorization.dto.PreAuthLineDecisionDto;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
+import com.waad.tba.modules.preauthorization.entity.PreAuthorizationLine;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationLineRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.preauthorization.service.PreAuthReviewService;
+import com.waad.tba.modules.preauthorization.service.PreAuthorizationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Reviewer-facing API for the Pre-Authorization Portal.
- * Handles inbox, fetching details, and decision making (Approve, Reject, Request Info).
+ * واجهة برمجية للمراجع — إدارة الموافقات المسبقة على مستوى سطر الخدمة.
+ *
+ * المسارات:
+ *   GET    /api/v1/reviewer/preauths/inbox                  — صندوق وارد المراجع
+ *   POST   /api/v1/reviewer/preauths/{id}/start-review      — بدء المراجعة
+ *   POST   /api/v1/reviewer/preauths/{id}/lines/{lid}/decision — قرار على سطر
+ *   GET    /api/v1/reviewer/preauths/{id}/lines              — قائمة سطور الموافقة
+ *   POST   /api/v1/reviewer/preauths/{id}/finalize           — إنهاء المراجعة
  */
 @RestController
 @RequestMapping("/api/v1/reviewer/preauths")
+@RequiredArgsConstructor
+@Slf4j
+@Tag(name = "Reviewer - PreAuth Review", description = "واجهات المراجع للموافقات المسبقة")
 public class PreAuthReviewController {
 
+    private final PreAuthReviewService reviewService;
+    private final PreAuthorizationLineRepository lineRepo;
+    private final PreAuthorizationRepository preAuthRepo;
+
+    private final PreAuthorizationService preAuthService;
+    private final com.waad.tba.modules.preauthorization.api.PreAuthorizationApiMapper apiMapper;
+
+    // ── صندوق الوارد ─────────────────────────────────────────────────────────
     @GetMapping("/inbox")
-    public ResponseEntity<List<PreAuthorization>> getInbox(
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "صندوق وارد المراجع", description = "يُرجع الموافقات المسبقة الواصلة للمراجع مع تصفية اختيارية")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.preauthorization.api.response.PreAuthorizationListResponse>> getInbox(
             @RequestParam(required = false) String filterStatus,
-            @RequestParam(required = false) Boolean hasVariance) {
-        // Fetch queue based on filters (e.g. pending, unlisted, variance)
-        return ResponseEntity.ok(List.of());
+            @RequestParam(required = false) Boolean hasVariance,
+            @RequestParam(name = "page", defaultValue = "1") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "ASC") String sortDir) {
+        
+        org.springframework.data.domain.Sort.Direction direction = org.springframework.data.domain.Sort.Direction.fromString(sortDir);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(Math.max(0, page - 1), size, org.springframework.data.domain.Sort.by(direction, sortBy));
+        
+        org.springframework.data.domain.Page<com.waad.tba.modules.preauthorization.dto.PreAuthorizationResponseDto> pageResult = preAuthService.getPendingInbox(pageable);
+        
+        return ResponseEntity.ok(ApiResponse.success(apiMapper.toListResponse(pageResult)));
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<PreAuthorization> getRequestDetails(@PathVariable Long id) {
-        return ResponseEntity.ok(new PreAuthorization());
-    }
-
+    // ── بدء المراجعة ─────────────────────────────────────────────────────────
     @PostMapping("/{id}/start-review")
-    public ResponseEntity<String> startReview(@PathVariable Long id) {
-        // Change status from PENDING -> UNDER_REVIEW
-        // Assign to current reviewer
-        return ResponseEntity.ok("Review Started (Mock)");
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "بدء مراجعة موافقة مسبقة", description = "يُحوّل الوضع من PENDING إلى UNDER_REVIEW")
+    public ResponseEntity<ApiResponse<PreAuthorization>> startReview(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails user) {
+        PreAuthorization result = reviewService.startReview(id, user.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("تم بدء المراجعة بنجاح", result));
     }
 
+    // ── قائمة سطور الموافقة ───────────────────────────────────────────────────
+    @GetMapping("/{id}/lines")
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "جلب سطور خدمات الموافقة", description = "يُرجع جميع سطور الخدمات مع حالة القرار لكل سطر")
+    public ResponseEntity<ApiResponse<List<PreAuthorizationLine>>> getLines(
+            @PathVariable Long id) {
+        List<PreAuthorizationLine> lines = lineRepo.findByPreAuthorizationId(id);
+        return ResponseEntity.ok(ApiResponse.success(lines));
+    }
+
+    // ── قرار على سطر خدمة محدد ───────────────────────────────────────────────
     @PostMapping("/{id}/lines/{lineId}/decision")
-    public ResponseEntity<String> makeLineDecision(
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(
+            summary = "قرار على سطر خدمة",
+            description = "الموافقة / الموافقة الجزئية / الرفض على سطر خدمة بعينه. " +
+                    "contractPrice يبقى محفوظاً ولا يُمس. " +
+                    "varianceAmount يُحسب تلقائياً (contractPrice - approvedAmount).")
+    public ResponseEntity<ApiResponse<PreAuthorizationLine>> makeLineDecision(
             @PathVariable Long id,
             @PathVariable Long lineId,
-            @RequestBody Object decisionDto) {
-        // Update decisionStatus for a single line (APPROVED, REJECTED, INFO_REQUESTED)
-        // Set approvedAmount and decisionNotes
-        return ResponseEntity.ok("Line Decision Saved (Mock)");
+            @Valid @RequestBody PreAuthLineDecisionDto dto,
+            @AuthenticationPrincipal UserDetails user) {
+        PreAuthorizationLine result = reviewService.makeLineDecision(id, lineId, dto, user.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("تم حفظ قرار السطر بنجاح", result));
     }
 
-    @PostMapping("/{id}/approve")
-    public ResponseEntity<String> approveRequest(@PathVariable Long id) {
-        // Approve all lines or process partial approval based on individual line decisions
-        // Transition PreAuth Status -> APPROVED or PARTIALLY_APPROVED
-        // Generate WAAD-PA-YYYY-XXXXX Auth Number
-        // Create Reserve
-        return ResponseEntity.ok("Request Approved (Mock)");
+    // ── إنهاء المراجعة ────────────────────────────────────────────────────────
+    @PostMapping("/{id}/finalize")
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(
+            summary = "إنهاء المراجعة النهائية",
+            description = "يحسب الإجمالي المعتمد من جميع السطور ويُحدث وضع الموافقة. " +
+                    "يرفض الطلب إذا كانت هناك سطور بحالة PENDING لم يُتخذ قرار بشأنها.")
+    public ResponseEntity<ApiResponse<PreAuthorization>> finalizeReview(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails user) {
+        PreAuthorization result = reviewService.finalizeReview(id, user.getUsername());
+        return ResponseEntity.ok(ApiResponse.success(
+                "تمت المراجعة النهائية: " + result.getStatus().getArabicLabel(), result));
     }
 
+    // ── رفض كامل (shortcut) ──────────────────────────────────────────────────
     @PostMapping("/{id}/reject")
-    public ResponseEntity<String> rejectRequest(@PathVariable Long id, @RequestBody Object rejectionDto) {
-        // Reject all lines
-        // Transition PreAuth Status -> REJECTED
-        return ResponseEntity.ok("Request Rejected (Mock)");
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "رفض الموافقة المسبقة كلياً", description = "يرفض جميع السطور دفعةً واحدة")
+    public ResponseEntity<ApiResponse<String>> rejectAll(
+            @PathVariable Long id,
+            @RequestParam String reason,
+            @AuthenticationPrincipal UserDetails user) {
+        List<PreAuthorizationLine> lines = lineRepo.findByPreAuthorizationId(id);
+        PreAuthLineDecisionDto rejectDto = PreAuthLineDecisionDto.builder()
+                .decisionStatus(PreAuthorizationLine.LineDecisionStatus.REJECTED)
+                .decisionNotes(reason)
+                .approvedAmount(BigDecimal.ZERO)
+                .build();
+        lines.forEach(line -> reviewService.makeLineDecision(id, line.getId(), rejectDto, user.getUsername()));
+        reviewService.finalizeReview(id, user.getUsername());
+        return ResponseEntity.ok(ApiResponse.success("تم رفض الموافقة المسبقة بالكامل"));
     }
 
+    // ── طلب معلومات إضافية ───────────────────────────────────────────────────
     @PostMapping("/{id}/request-info")
-    public ResponseEntity<String> requestInfo(@PathVariable Long id, @RequestBody Object infoDto) {
-        // Transition PreAuth Status -> INFO_REQUESTED
-        return ResponseEntity.ok("Info Requested (Mock)");
+    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "طلب معلومات إضافية من المزود")
+    public ResponseEntity<ApiResponse<String>> requestInfo(
+            @PathVariable Long id,
+            @RequestParam String notes,
+            @AuthenticationPrincipal UserDetails user) {
+        // TODO: ربط بـ PreAuthorizationService.reviewPreAuth مع INFO_REQUESTED
+        return ResponseEntity.ok(ApiResponse.success("تم إرسال طلب المعلومات الإضافية"));
     }
 }
+

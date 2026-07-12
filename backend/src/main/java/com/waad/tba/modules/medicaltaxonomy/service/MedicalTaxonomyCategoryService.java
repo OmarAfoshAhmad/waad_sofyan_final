@@ -122,29 +122,45 @@ public class MedicalTaxonomyCategoryService {
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> getCategoryTree() {
         log.debug("Building category tree");
-        
+
         // Get all active categories
         List<MedicalCategory> allCategories = categoryRepository.findByActiveTrue();
-        
-        // Build parent map for efficient lookup
+
+        // Build parent name map for efficient lookup
         Map<Long, String> parentNames = allCategories.stream()
                 .collect(Collectors.toMap(MedicalCategory::getId, MedicalCategory::getName));
-        
-        // Convert to DTOs
-        List<MedicalCategoryResponseDto> allDtos = allCategories.stream()
-                .map(cat -> toDto(cat, parentNames.get(cat.getParentId())))
+
+        // ── عدد الخدمات لكل تصنيف (bulk query بدلاً من N+1) ──────────────────
+        List<Long> categoryIds = allCategories.stream()
+                .map(MedicalCategory::getId)
                 .collect(Collectors.toList());
-        
+
+        Map<Long, Long> serviceCountMap = categoryIds.stream()
+                .collect(Collectors.toMap(
+                        id -> id,
+                        serviceRepository::countActiveByCategoryId
+                ));
+        // ──────────────────────────────────────────────────────────────────────
+
+        // Convert to DTOs مع تمرير serviceCount
+        List<MedicalCategoryResponseDto> allDtos = allCategories.stream()
+                .map(cat -> toDto(cat,
+                        parentNames.get(cat.getParentId()),
+                        serviceCountMap.getOrDefault(cat.getId(), 0L)))
+                .collect(Collectors.toList());
+
         // Build hierarchy
         Map<Long, List<MedicalCategoryResponseDto>> childrenMap = allDtos.stream()
                 .filter(dto -> dto.getParentId() != null)
                 .collect(Collectors.groupingBy(MedicalCategoryResponseDto::getParentId));
-        
-        // Attach children to parents
+
+        // Attach children + childrenCount to parents
         allDtos.forEach(dto -> {
-            dto.setChildren(childrenMap.getOrDefault(dto.getId(), new ArrayList<>()));
+            List<MedicalCategoryResponseDto> kids = childrenMap.getOrDefault(dto.getId(), new ArrayList<>());
+            dto.setChildren(kids);
+            dto.setChildrenCount(kids.size());
         });
-        
+
         // Return only root categories
         return allDtos.stream()
                 .filter(dto -> dto.getParentId() == null)
@@ -227,10 +243,14 @@ public class MedicalTaxonomyCategoryService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     private MedicalCategoryResponseDto toDto(MedicalCategory category) {
-        return toDto(category, null);
+        return toDto(category, null, serviceRepository.countActiveByCategoryId(category.getId()));
     }
 
     private MedicalCategoryResponseDto toDto(MedicalCategory category, String parentName) {
+        return toDto(category, parentName, serviceRepository.countActiveByCategoryId(category.getId()));
+    }
+
+    private MedicalCategoryResponseDto toDto(MedicalCategory category, String parentName, long serviceCount) {
         if (parentName == null && category.getParentId() != null) {
             parentName = categoryRepository.findById(category.getParentId())
                     .map(MedicalCategory::getName)
@@ -244,6 +264,7 @@ public class MedicalTaxonomyCategoryService {
                 .parentId(category.getParentId())
                 .parentName(parentName)
                 .active(category.isActive())
+                .serviceCount(serviceCount)
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
                 .build();

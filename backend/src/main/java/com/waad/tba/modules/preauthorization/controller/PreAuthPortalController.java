@@ -67,8 +67,11 @@ public class PreAuthPortalController {
         log.info("[PORTAL] Received bulk pre-auth request from UI: {}", payload);
         
         // Extract data
+        @SuppressWarnings("unchecked")
         Map<String, Object> memberData = (Map<String, Object>) payload.get("member");
+        @SuppressWarnings("unchecked")
         Map<String, Object> clinical = (Map<String, Object>) payload.get("clinical");
+        @SuppressWarnings("unchecked")
         List<Map<String, Object>> lines = (List<Map<String, Object>>) payload.get("lines");
 
         Long memberId = memberData != null && memberData.get("id") != null ? Long.valueOf(memberData.get("id").toString()) : 1L;

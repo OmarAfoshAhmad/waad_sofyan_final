@@ -1,0 +1,17 @@
+[
+  {"name": "اركاديا", "code": "EMP-ARKA-123", "annualLimit": 50000},
+  {"name": "الاسمنت", "code": "EMP-ALAS-456", "annualLimit": 60000},
+  {"name": "العشيبي", "code": "EMP-ALAS-789", "annualLimit": 50000},
+  {"name": "المنطقة الحرة جليانة", "code": "EMP-ALMA-101", "annualLimit": 60000},
+  {"name": "الواحة", "code": "EMP-ALWA-202", "annualLimit": 0},
+  {"name": "توسيالي أجانب", "code": "EMP-TOUS-303", "annualLimit": 50000},
+  {"name": "توسيالي محليين", "code": "EMP-TOUS-404", "annualLimit": 50000},
+  {"name": "حجر الماس", "code": "EMP-HAJA-505", "annualLimit": 50000},
+  {"name": "رواق", "code": "EMP-REWA-606", "annualLimit": 50000},
+  {"name": "فيوتشر", "code": "EMP-FUTU-707", "annualLimit": 50000},
+  {"name": "مصرف الوحدة", "code": "EMP-MASR-808", "annualLimit": 0},
+  {"name": "مصلحة الجمارك", "code": "EMP-MASL-909", "annualLimit": 60000},
+  {"name": "وثيقة اوزون", "code": "EMP-WATH-111", "annualLimit": 30000},
+  {"name": "وعد TPA", "code": "EMP-WAAD-222", "annualLimit": 50000},
+  {"name": "وعد المعماري", "code": "EMP-WAAD-333", "annualLimit": 50000}
+]

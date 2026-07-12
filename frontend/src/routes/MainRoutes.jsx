@@ -90,6 +90,7 @@ const PreApprovalsList = Loadable(lazy(() => import('pages/pre-approvals/PreAppr
 const PreApprovalView = Loadable(lazy(() => import('pages/pre-approvals/PreApprovalView')));
 const PreAuthAuditPage = Loadable(lazy(() => import('pages/pre-approvals/PreAuthAuditPage')));
 const PreAuthDashboard = Loadable(lazy(() => import('pages/pre-approvals/PreAuthDashboard')));
+const PreApprovalsInbox = Loadable(lazy(() => import('pages/pre-approvals/PreApprovalsInbox')));
 const PreAuthReviewPage = Loadable(lazy(() => import('pages/pre-approvals/PreAuthReviewPage')));
 const EmailPreAuthInbox = Loadable(lazy(() => import('pages/pre-approvals/EmailPreAuthInbox')));
 
@@ -515,6 +516,14 @@ const MainRoutes = {
       path: 'pre-approvals',
       element: <TableRefreshLayout />,
       children: [
+        {
+          path: 'inbox',
+          element: (
+            <PermissionGuard resource="pre_auth" action="view" isRouteGuard>
+              <PreApprovalsInbox />
+            </PermissionGuard>
+          )
+        },
         {
           path: 'email-inbox',
           element: (

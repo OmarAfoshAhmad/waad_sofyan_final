@@ -21,6 +21,7 @@ import { CompanySettingsProvider } from 'contexts/CompanySettingsContext';
 import { ThemeModeProvider } from 'contexts/ThemeModeContext';
 import { GlobalImportProgressProvider } from 'contexts/GlobalImportProgressContext';
 import { SystemConfigProvider } from 'contexts/SystemConfigContext';
+import { ReviewerProvider } from 'contexts/ReviewerContext';
 
 /**
  * AppProviders centralizes the deeply nested React Context providers
@@ -43,8 +44,10 @@ export const AppProviders = ({ children }) => {
                         <ThemeModeProvider>
                           <GlobalImportProgressProvider>
                             <Notistack>
-                              <GlobalApiErrorToaster />
-                              {children}
+                              <ReviewerProvider>
+                                <GlobalApiErrorToaster />
+                                {children}
+                              </ReviewerProvider>
                             </Notistack>
                           </GlobalImportProgressProvider>
                         </ThemeModeProvider>

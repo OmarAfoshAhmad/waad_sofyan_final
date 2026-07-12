@@ -401,6 +401,21 @@ const menuItem = [
             action: 'view'
           },
           {
+            id: 'preauth-inbox',
+            title: 'مراجعة الموافقات (Pre-Auth)',
+            titleEn: 'Pre-Auth Review',
+            type: 'item',
+            url: '/pre-approvals/inbox',
+            icon: InboxIcon,
+            resource: 'pre_auth',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'success',
+              size: 'small'
+            }
+          },
+          {
             id: 'email-preauth-requests',
             title: 'طلبات البريد (Pre-Auth)',
             titleEn: 'Email Pre-Auth Requests',

@@ -636,6 +636,7 @@ const ProviderPreApprovalSubmission = () => {
             visitId: parseInt(visitData.visitId),
             memberId: visitData.memberId ? parseInt(visitData.memberId) : null,
             medicalServiceId: row.service.medicalServiceId || row.service.serviceId || row.service.id,
+            pricingItemId: row.service.pricingItemId || row.service.id,
             serviceCategoryId: row.category?.id || row.service.categoryId || null,
             diagnosisCode: diagnosisCode || null,
             diagnosisDescription: diagnosisDescription || null,

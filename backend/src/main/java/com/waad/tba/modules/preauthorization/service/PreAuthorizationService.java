@@ -15,6 +15,8 @@ import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.notification.service.NotificationSseService;
+import com.waad.tba.modules.notification.dto.NotificationPayload;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.security.ProviderContextGuard;
 import com.waad.tba.common.exception.ResourceNotFoundException;
@@ -64,6 +66,7 @@ public class PreAuthorizationService {
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
     private final PreAuthEmailNotificationService emailNotificationService;
     private final EmailPreAuthService emailPreAuthService;
+    private final NotificationSseService notificationSseService;
 
     // ==================== CREATE ====================
 
@@ -595,6 +598,30 @@ public class PreAuthorizationService {
                 previousStatus.name(), PreAuthStatus.UNDER_REVIEW.name(), "Pre-authorization submitted for review");
 
         log.info("✅ [PRE-AUTH] Submitted: id={}, status={}", id, preAuth.getStatus());
+
+        // ═══ إشعار فوري SSE للمراجعين ══════════════════════════════════
+        try {
+            Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
+            String priority = preAuth.getPriority() != null ? preAuth.getPriority().name() : "NORMAL";
+            String providerName = provider != null ? provider.getName() : "مزود هوية " + preAuth.getProviderId();
+
+            NotificationPayload ssePayload = NotificationPayload.builder()
+                    .type(priority.equals("EMERGENCY") ? "URGENT_PREAUTH" : "NEW_PREAUTH")
+                    .preAuthId(preAuth.getId())
+                    .referenceNumber(preAuth.getReferenceNumber())
+                    .providerName(providerName)
+                    .priority(priority)
+                    .newStatus(PreAuthStatus.UNDER_REVIEW.name())
+                    .message("طلب موافقة مسبقة جديد: " + preAuth.getServiceName()
+                            + " — من " + providerName)
+                    .build();
+
+            notificationSseService.notifyReviewersForProvider(preAuth.getProviderId(), ssePayload);
+        } catch (Exception e) {
+            // لا يوقف SSE عملية الحفظ إذا فشل الإشعار
+            log.warn("[PRE-AUTH] SSE notification failed (non-critical): {}", e.getMessage());
+        }
+        // ═══════════════════════════════════════════════════════════════════════════
 
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
