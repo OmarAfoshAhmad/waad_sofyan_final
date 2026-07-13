@@ -360,6 +360,15 @@ public class PreAuthorizationService {
         if (dto.getDiagnosisDescription() != null) {
             preAuth.setDiagnosisDescription(dto.getDiagnosisDescription());
         }
+        if (dto.getExpectedServiceDate() != null) {
+            preAuth.setRequestDate(dto.getExpectedServiceDate());
+            // Optionally update expiry if logic requires it
+        }
+
+        if (dto.getClinicalJustification() != null) {
+            preAuth.setClinicalNotes(dto.getClinicalJustification());
+        }
+
         if (dto.getNotes() != null) {
             preAuth.setNotes(dto.getNotes());
         }
@@ -422,7 +431,11 @@ public class PreAuthorizationService {
         if (dto.getExpectedServiceDate() != null) {
             preAuth.setExpectedServiceDate(dto.getExpectedServiceDate());
         }
-        // clinicalJustification doesn't exist in PreAuthorization - skip
+        
+        if (dto.getClinicalJustification() != null) {
+            preAuth.setClinicalNotes(dto.getClinicalJustification());
+        }
+        
         if (dto.getNotes() != null) {
             preAuth.setNotes(dto.getNotes());
         }
@@ -1367,6 +1380,7 @@ public class PreAuthorizationService {
                 // Diagnosis
                 .diagnosisCode(preAuth.getDiagnosisCode())
                 .diagnosisDescription(preAuth.getDiagnosisDescription())
+                .clinicalNotes(preAuth.getClinicalNotes())
                 // Dates
                 .requestDate(preAuth.getRequestDate())
                 .expiryDate(preAuth.getExpiryDate())

@@ -55,6 +55,7 @@ public class PreAuthorizationResponseDto {
     // ==================== DIAGNOSIS (System-Selected) ====================
     private String diagnosisCode;
     private String diagnosisDescription;
+    private String clinicalNotes;
     
     // ==================== DATES ====================
     private LocalDate requestDate;

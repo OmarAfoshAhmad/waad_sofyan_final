@@ -299,24 +299,65 @@ const PreAuthReviewPage = () => {
 
           {/* Clinical Info */}
           <Card sx={{ mb: 3 }}>
-            <CardHeader avatar={<MedicalServicesIcon color="secondary" />} title="البيانات السريرية" titleTypographyProps={{ variant: 'h6', fontWeight: 'bold' }} />
+            <CardHeader avatar={<MedicalServicesIcon color="secondary" />} title="البيانات السريرية والمرفقات" titleTypographyProps={{ variant: 'h6', fontWeight: 'bold' }} />
+            <Divider />
             <CardContent>
-              <Grid container spacing={2}>
-                {request.diagnosis && (
-                  <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary">التشخيص</Typography>
-                    <Typography fontWeight="bold">{request.diagnosis}</Typography>
-                  </Grid>
-                )}
-                {request.clinicalNotes && (
-                  <Grid item xs={12}>
-                    <Typography variant="caption" color="text.secondary">الملاحظات الطبية</Typography>
-                    <Typography color="text.secondary">{request.clinicalNotes}</Typography>
-                  </Grid>
-                )}
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">التشخيص (Diagnosis)</Typography>
+                  <Typography fontWeight="bold" sx={{ mt: 0.5 }}>
+                    {request.diagnosisDescription || request.diagnosis || 'غير محدد'} 
+                    {request.diagnosisCode && <Chip size="small" label={request.diagnosisCode} sx={{ ml: 1 }} />}
+                  </Typography>
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">الملاحظات الطبية (Clinical Notes)</Typography>
+                  <Typography color="text.secondary" sx={{ mt: 0.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.200', minHeight: '60px' }}>
+                    {request.clinicalNotes || 'لا توجد ملاحظات طبية مرفقة.'}
+                  </Typography>
+                </Grid>
+
+                {/* Attachments Placeholder */}
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">المرفقات الطبية (Attachments)</Typography>
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {request.attachments && request.attachments.length > 0 ? (
+                      request.attachments.map((att, i) => (
+                        <Chip key={i} label={att.fileName || `مرفق ${i+1}`} onClick={() => window.open(att.url)} variant="outlined" color="primary" />
+                      ))
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" fontStyle="italic">لم يتم رفع أي مرفقات.</Typography>
+                    )}
+                  </Box>
+                </Grid>
               </Grid>
             </CardContent>
           </Card>
+
+          {/* Notes History */}
+          {(request.notes || request.rejectionReason) && (
+            <Card sx={{ mb: 3, borderLeft: '4px solid', borderColor: 'warning.main' }}>
+              <CardHeader title="سجل الملاحظات والتواصل" titleTypographyProps={{ variant: 'h6', fontWeight: 'bold' }} />
+              <Divider />
+              <CardContent>
+                <Stack spacing={2}>
+                  {request.notes && (
+                    <Box sx={{ p: 2, bgcolor: '#fff4e5', borderRadius: 2 }}>
+                      <Typography variant="caption" color="warning.dark" fontWeight="bold">آخر ملاحظة مرسلة:</Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>{request.notes}</Typography>
+                    </Box>
+                  )}
+                  {request.rejectionReason && request.status === 'REJECTED' && (
+                    <Box sx={{ p: 2, bgcolor: '#fdeded', borderRadius: 2 }}>
+                      <Typography variant="caption" color="error.dark" fontWeight="bold">سبب الرفض:</Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>{request.rejectionReason}</Typography>
+                    </Box>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Service Lines Table */}
           <Card>

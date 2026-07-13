@@ -122,6 +122,21 @@ export const preApprovalsService = {
   },
 
   /**
+   * Submit pre-authorization for review
+   * @param {number} id - Pre-approval ID
+   * @returns {Promise<Object>} Updated pre-approval
+   */
+  submit: async (id) => {
+    try {
+      if (!id) throw new Error('معرف الموافقة المسبقة مطلوب');
+      const response = await axiosClient.post(`${BASE_URL}/${id}/submit`);
+      return unwrap(response);
+    } catch (error) {
+      throw handlePreApprovalErrors(error);
+    }
+  },
+
+  /**
    * Reviewer update for pre-authorization review actions
    * @param {number} id - Pre-approval ID
    * @param {Object} data - Review payload

@@ -94,10 +94,12 @@ export const ReviewerProvider = ({ children }) => {
       // Assuming the backend has a way or we are using cookies. Let's try standard EventSource.
       
       const baseUrl = axiosClient.defaults.baseURL || '/api/v1';
-      const sseUrl = `${baseUrl}/notifications/stream`;
+      let sseUrl = `${baseUrl}/notifications/stream`;
 
-      // Some backends check token from URL if standard EventSource is used:
-      // const token = localStorage.getItem('serviceToken'); // if needed
+      const token = localStorage.getItem('serviceToken');
+      if (token) {
+        sseUrl += `?token=${token}`;
+      }
       
       console.log('[SSE] Connecting to:', sseUrl);
       const es = new EventSource(sseUrl, { withCredentials: true });

@@ -18,7 +18,14 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
-import { CheckCircle, Visibility } from '@mui/icons-material';
+import { CheckCircle, Visibility, Edit as EditIcon } from '@mui/icons-material';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
+} from '@mui/material';
 import preApprovalsService from 'services/api/pre-approvals.service';
 import MainCard from 'components/MainCard';
 import { useSnackbar } from 'notistack';
@@ -89,6 +96,46 @@ const ProviderPreAuthInbox = () => {
       setProcessingIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(preAuthId);
+        return newSet;
+      });
+    }
+  };
+
+  const [resubmitOpen, setResubmitOpen] = useState(false);
+  const [selectedResubmitItem, setSelectedResubmitItem] = useState(null);
+  const [resubmitNotes, setResubmitNotes] = useState('');
+
+  const openResubmitDialog = (item) => {
+    setSelectedResubmitItem(item);
+    setResubmitNotes('');
+    setResubmitOpen(true);
+  };
+
+  const closeResubmitDialog = () => {
+    setResubmitOpen(false);
+    setSelectedResubmitItem(null);
+  };
+
+  const handleResubmit = async () => {
+    if (!selectedResubmitItem) return;
+    setProcessingIds((prev) => new Set(prev).add(selectedResubmitItem.id));
+    
+    try {
+      await preApprovalsService.updateData(selectedResubmitItem.id, {
+        clinicalJustification: resubmitNotes
+      });
+      await preApprovalsService.submit(selectedResubmitItem.id);
+      
+      enqueueSnackbar('تمت إعادة التقديم بنجاح', { variant: 'success' });
+      closeResubmitDialog();
+      await loadPreAuthorizations();
+    } catch (error) {
+      console.error('Failed to resubmit:', error);
+      enqueueSnackbar('فشل إعادة التقديم', { variant: 'error' });
+    } finally {
+      setProcessingIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(selectedResubmitItem?.id);
         return newSet;
       });
     }
@@ -202,18 +249,32 @@ const ProviderPreAuthInbox = () => {
                 <TableCell>
                   <Chip label={getStatusLabel(item.status)} color={getStatusColor(item.status)} size="small" />
                 </TableCell>
-                {showAcknowledgeButton && (
+                {(showAcknowledgeButton || item.status === 'INFO_REQUESTED' || item.status === 'NEEDS_CORRECTION') && (
                   <TableCell align="center">
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      size="small"
-                      startIcon={processingIds.has(item.id) ? <CircularProgress size={16} /> : <CheckCircle />}
-                      onClick={() => handleAcknowledge(item.id)}
-                      disabled={processingIds.has(item.id)}
-                    >
-                      تم الاطلاع
-                    </Button>
+                    {showAcknowledgeButton && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        startIcon={processingIds.has(item.id) ? <CircularProgress size={16} /> : <CheckCircle />}
+                        onClick={() => handleAcknowledge(item.id)}
+                        disabled={processingIds.has(item.id)}
+                      >
+                        تم الاطلاع
+                      </Button>
+                    )}
+                    {(item.status === 'INFO_REQUESTED' || item.status === 'NEEDS_CORRECTION') && (
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => openResubmitDialog(item)}
+                        disabled={processingIds.has(item.id)}
+                      >
+                        إعادة التقديم
+                      </Button>
+                    )}
                   </TableCell>
                 )}
               </TableRow>
@@ -294,6 +355,45 @@ const ProviderPreAuthInbox = () => {
         {currentTab === 2 && <Box>{renderTable(approvedItems, true)}</Box>}
         {currentTab === 3 && <Box>{renderTable(acknowledgedItems, false)}</Box>}
       </Box>
+
+      {/* Resubmit Dialog */}
+      <Dialog open={resubmitOpen} onClose={closeResubmitDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>إعادة تقديم الطلب (Resubmit)</DialogTitle>
+        <DialogContent dividers>
+          {selectedResubmitItem && selectedResubmitItem.notes && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="caption" fontWeight="bold">ملاحظة المراجع السابقة:</Typography>
+              <Typography variant="body2">{selectedResubmitItem.notes}</Typography>
+            </Alert>
+          )}
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            الرجاء إدخال الملاحظات الطبية أو التوضيحات المطلوبة للرد على المراجع:
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            variant="outlined"
+            placeholder="اكتب الملاحظات الطبية هنا..."
+            value={resubmitNotes}
+            onChange={(e) => setResubmitNotes(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={closeResubmitDialog} color="inherit" disabled={processingIds.has(selectedResubmitItem?.id)}>
+            إلغاء
+          </Button>
+          <Button
+            onClick={handleResubmit}
+            color="primary"
+            variant="contained"
+            disabled={!resubmitNotes.trim() || processingIds.has(selectedResubmitItem?.id)}
+            startIcon={processingIds.has(selectedResubmitItem?.id) ? <CircularProgress size={16} color="inherit" /> : <EditIcon />}
+          >
+            إعادة إرسال الطلب
+          </Button>
+        </DialogActions>
+      </Dialog>
     </MainCard>
   );
 };
