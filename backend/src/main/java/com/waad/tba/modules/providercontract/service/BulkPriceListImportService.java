@@ -128,8 +128,8 @@ public class BulkPriceListImportService {
             Sheet sheet = null;
             try {
                 sheet = workbook.getSheet(PRIMARY_SHEET);
-            } catch (IllegalArgumentException e) {
-                log.warn("[BulkImport] Sheet '{}' not found, will fallback to first sheet.", PRIMARY_SHEET);
+            } catch (Exception e) {
+                log.warn("[BulkImport] Sheet '{}' not found, will fallback to first sheet. ({})", PRIMARY_SHEET, e.getMessage());
             }
 
             if (sheet == null) {
@@ -592,15 +592,15 @@ public class BulkPriceListImportService {
             if (h == null) continue;
             String v = h.trim().toLowerCase();
 
-            if (v.equals(KW_PROVIDER.toLowerCase()))                         cols.put("provider", i);
-            else if (v.equals(KW_FOLDER.toLowerCase()))                      cols.put("folder", i);
-            else if (v.equals(KW_CODE.toLowerCase()))                        cols.put("code", i);
-            else if (v.equals(KW_NAME_AR.toLowerCase()))                     cols.put("nameAr", i);
-            else if (v.equals(KW_NAME_EN.toLowerCase()))                     cols.put("nameEn", i);
-            else if (v.equals(KW_PRICE.toLowerCase()))                       cols.put("price", i);
-            else if (v.equals(KW_MAIN_CAT.toLowerCase()))                    cols.put("mainCat", i);
-            else if (v.contains("البند") || v.contains("الاختصاص"))         cols.put("subCat", i);
-            else if (v.equals(KW_CAT_CODE.toLowerCase()) || v.startsWith("كود cat")) cols.put("catCode", i);
+            if (v.equals(KW_PROVIDER.toLowerCase()) || v.contains("اسم المرفق"))         cols.put("provider", i);
+            else if (v.equals(KW_FOLDER.toLowerCase()))                                    cols.put("folder", i);
+            else if (v.equals(KW_CODE.toLowerCase()) || v.equals("service_code / الكود") || (v.contains("الكود") && !v.contains("المرفق")))  cols.put("code", i);
+            else if (v.equals(KW_NAME_AR.toLowerCase()) || v.contains("اسم الخدمة"))       cols.put("nameAr", i);
+            else if (v.equals(KW_NAME_EN.toLowerCase()))                                   cols.put("nameEn", i);
+            else if (v.equals(KW_PRICE.toLowerCase()) || v.contains("سعر العقد"))          cols.put("price", i);
+            else if (v.equals(KW_MAIN_CAT.toLowerCase()) || v.contains("التصنيف الرئيسي")) cols.put("mainCat", i);
+            else if (v.contains("البند") || v.contains("الاختصاص") || v.contains("التصنيف الفرعي")) cols.put("subCat", i);
+            else if (v.equals(KW_CAT_CODE.toLowerCase()) || v.startsWith("كود cat"))       cols.put("catCode", i);
         }
         return cols;
     }
