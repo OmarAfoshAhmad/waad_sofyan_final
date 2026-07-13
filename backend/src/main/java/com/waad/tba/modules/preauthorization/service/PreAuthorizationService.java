@@ -360,14 +360,6 @@ public class PreAuthorizationService {
         if (dto.getDiagnosisDescription() != null) {
             preAuth.setDiagnosisDescription(dto.getDiagnosisDescription());
         }
-        if (dto.getExpectedServiceDate() != null) {
-            preAuth.setRequestDate(dto.getExpectedServiceDate());
-            // Optionally update expiry if logic requires it
-        }
-
-        if (dto.getClinicalJustification() != null) {
-            preAuth.setClinicalNotes(dto.getClinicalJustification());
-        }
 
         if (dto.getNotes() != null) {
             preAuth.setNotes(dto.getNotes());
