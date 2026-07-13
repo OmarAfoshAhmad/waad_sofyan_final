@@ -876,7 +876,7 @@ const ProviderContractView = () => {
         ]}
         actions={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" color="inherit" startIcon={<BackIcon />} onClick={handleBack}>
+            <Button variant="outlined" color="inherit" startIcon={<BackIcon />} onClick={() => navigate(-1)}>
               رجوع
             </Button>
 
