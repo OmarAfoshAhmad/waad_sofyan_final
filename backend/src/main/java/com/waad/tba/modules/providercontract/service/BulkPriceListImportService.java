@@ -125,7 +125,13 @@ public class BulkPriceListImportService {
                     .open(tempFile)) {
 
             // ── 1. Locate sheet ──────────────────────────────────────────────
-            Sheet sheet = workbook.getSheet(PRIMARY_SHEET);
+            Sheet sheet = null;
+            try {
+                sheet = workbook.getSheet(PRIMARY_SHEET);
+            } catch (IllegalArgumentException e) {
+                log.warn("[BulkImport] Sheet '{}' not found, will fallback to first sheet.", PRIMARY_SHEET);
+            }
+
             if (sheet == null) {
                 sheet = workbook.getSheetAt(0);
             }

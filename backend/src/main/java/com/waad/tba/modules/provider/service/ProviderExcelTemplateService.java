@@ -167,6 +167,17 @@ public class ProviderExcelTemplateService {
                 .build(),
                 
             ExcelTemplateColumn.builder()
+                .name("allow_all_employers")
+                .nameAr("شبكة عامة")
+                .type(ColumnType.TEXT)
+                .required(false)
+                .example("نعم")
+                .description("Is global network (نعم / لا), default is نعم")
+                .descriptionAr("هل هي شبكة عامة (نعم / لا)، الافتراضي نعم")
+                .width(15)
+                .build(),
+                
+            ExcelTemplateColumn.builder()
                 .name("start_date")
                 .nameAr("تاريخ بداية العقد")
                 .type(ColumnType.DATE)
@@ -465,6 +476,8 @@ public class ProviderExcelTemplateService {
             "username", "اسم المستخدم"));
         indices.put("network", parserService.findColumnIndex(headerRow, 
             "network", "الشبكة"));
+        indices.put("allow_all_employers", parserService.findColumnIndex(headerRow, 
+            "allow_all_employers", "شبكة عامة", "جهات العمل المتعاقدة", "allow_all_employers"));
         indices.put("address", parserService.findColumnIndex(headerRow, 
             "address", "العنوان"));
         indices.put("start_date", parserService.findColumnIndex(headerRow, 
@@ -561,6 +574,15 @@ public class ProviderExcelTemplateService {
             networkTier = Provider.NetworkTier.OUT_OF_NETWORK;
         }
 
+        String allowAllEmployersStr = getCellValue(row, columnIndices.get("allow_all_employers"));
+        boolean allowAllEmployers = true; // default
+        if (allowAllEmployersStr != null && (allowAllEmployersStr.trim().equalsIgnoreCase("لا") 
+                || allowAllEmployersStr.trim().equalsIgnoreCase("false")
+                || allowAllEmployersStr.trim().equalsIgnoreCase("no")
+                || allowAllEmployersStr.trim().equalsIgnoreCase("0"))) {
+            allowAllEmployers = false;
+        }
+
         if (existingOpt.isPresent()) {
             provider = existingOpt.get();
             provider.setProviderType(providerType);
@@ -572,7 +594,7 @@ public class ProviderExcelTemplateService {
             provider.setAddress(getCellValue(row, columnIndices.get("address")));
             provider.setNetworkStatus(networkTier);
             provider.setActive(true);
-            provider.setAllowAllEmployers(true);
+            provider.setAllowAllEmployers(allowAllEmployers);
         } else {
             // Auto-generate license number
             String licenseNumber = generateLicenseNumber(providerType);
@@ -587,7 +609,7 @@ public class ProviderExcelTemplateService {
                 .address(getCellValue(row, columnIndices.get("address")))
                 .networkStatus(networkTier)
                 .active(true)
-                .allowAllEmployers(true)
+                .allowAllEmployers(allowAllEmployers)
                 .build();
         }
         
