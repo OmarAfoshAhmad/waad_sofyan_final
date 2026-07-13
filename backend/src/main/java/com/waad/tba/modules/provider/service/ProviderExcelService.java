@@ -169,6 +169,7 @@ public class ProviderExcelService {
             if (active != null) {
                 existingProvider.setActive(active);
             }
+            existingProvider.setAllowAllEmployers(true);
             existingProvider.setUpdatedAt(LocalDateTime.now());
 
             providerRepository.save(existingProvider);
@@ -185,6 +186,7 @@ public class ProviderExcelService {
                     .phone(phone != null ? phone.trim() : null)
                     .email(email != null ? email.trim() : null)
                     .active(active != null ? active : true)
+                    .allowAllEmployers(true)
                     .build();
 
             Provider savedProvider = providerRepository.save(newProvider);

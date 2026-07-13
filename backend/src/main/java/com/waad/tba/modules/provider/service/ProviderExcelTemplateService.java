@@ -572,6 +572,7 @@ public class ProviderExcelTemplateService {
             provider.setAddress(getCellValue(row, columnIndices.get("address")));
             provider.setNetworkStatus(networkTier);
             provider.setActive(true);
+            provider.setAllowAllEmployers(true);
         } else {
             // Auto-generate license number
             String licenseNumber = generateLicenseNumber(providerType);
@@ -586,6 +587,7 @@ public class ProviderExcelTemplateService {
                 .address(getCellValue(row, columnIndices.get("address")))
                 .networkStatus(networkTier)
                 .active(true)
+                .allowAllEmployers(true)
                 .build();
         }
         
