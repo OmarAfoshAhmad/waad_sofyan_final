@@ -124,7 +124,8 @@ public class MedicalCategoryExcelTemplateService {
         if (clearOld) {
             log.info("[MedicalCategoryImport] Clearing old categories (soft delete)...");
             List<MedicalCategory> allCategories = categoryRepository.findAll();
-            categoryRepository.deleteAll(allCategories);
+            allCategories.forEach(c -> c.setActive(false));
+            categoryRepository.saveAll(allCategories);
         }
         
         // Validate file
