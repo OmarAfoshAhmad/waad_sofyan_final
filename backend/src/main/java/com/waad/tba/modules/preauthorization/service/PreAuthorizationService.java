@@ -1048,6 +1048,18 @@ public class PreAuthorizationService {
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
+        // Check provider restrictions
+        Long providerId = providerContextGuard.getProviderFilter();
+        if (providerId != null) {
+            if (preAuth.getProviderId() == null || !preAuth.getProviderId().equals(providerId)) {
+                throw new SecurityException("Provider cannot access this pre-authorization");
+            }
+            if (preAuth.getStatus() != com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus.DRAFT && 
+                preAuth.getStatus() != com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus.PENDING) {
+                throw new IllegalStateException("لا يمكن حذف الموافقة المسبقة إلا إذا كانت مسودة أو قيد الانتظار");
+            }
+        }
+
         preAuth.setActive(false);
         preAuth.setUpdatedBy(deletedBy);
 
@@ -1155,8 +1167,11 @@ public class PreAuthorizationService {
                 inboxStatuses,
                 pageable);
 
-        log.info("[SERVICE] Found {} pre-authorizations in inbox", preAuths.getTotalElements());
-        return preAuths.map(this::mapToResponseDtoLight);
+        log.info("[SERVICE] Found {} pre-authorizations in inbox (Total Elements), Content Size: {}", preAuths.getTotalElements(), preAuths.getContent().size());
+        
+        Page<PreAuthorizationResponseDto> dtoPage = preAuths.map(this::mapToResponseDtoLight);
+        log.info("[SERVICE] DTO Page Content Size: {}", dtoPage.getContent().size());
+        return dtoPage;
     }
 
     /**

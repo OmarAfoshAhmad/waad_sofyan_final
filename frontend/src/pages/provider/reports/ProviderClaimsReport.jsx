@@ -31,8 +31,7 @@ const ProviderClaimsReport = () => {
   const [filters, setFilters] = useState({
     fromDate: null,
     toDate: null,
-    status: '',
-    memberBarcode: ''
+    status: ''
   });
 
   const [paginationModel, setPaginationModel] = useState({
@@ -58,8 +57,7 @@ const ProviderClaimsReport = () => {
         sortDir: 'DESC',
         ...(fromDate && { fromDate }),
         ...(toDate && { toDate }),
-        ...(status && { status }),
-        ...(filters.memberBarcode && { memberBarcode: filters.memberBarcode })
+        ...(status && { status })
       };
       const response = await axiosClient.get('/api/v1/provider/reports/claims', { params });
       return response?.data?.data ?? response?.data ?? { content: [], totalElements: 0 };
@@ -81,14 +79,13 @@ const ProviderClaimsReport = () => {
     setFilters({
       fromDate: null,
       toDate: null,
-      status: '',
-      memberBarcode: ''
+      status: ''
     });
     setPaginationModel((prev) => ({ ...prev, page: 0 }));
   };
 
   const hasActiveFilters = useMemo(() => {
-    return filters.fromDate || filters.toDate || filters.status || filters.memberBarcode;
+    return filters.fromDate || filters.toDate || filters.status;
   }, [filters]);
 
   const handleExportExcel = async () => {
@@ -101,8 +98,7 @@ const ProviderClaimsReport = () => {
       const params = {
         ...(fromDate && { fromDate }),
         ...(toDate && { toDate }),
-        ...(status && { status }),
-        ...(filters.memberBarcode && { memberBarcode: filters.memberBarcode })
+        ...(status && { status })
       };
 
       const response = await axiosClient.get('/api/v1/provider/reports/claims/export', {
@@ -147,12 +143,6 @@ const ProviderClaimsReport = () => {
         id: 'memberName',
         label: 'اسم المنتفع',
         minWidth: '11.25rem',
-        sortable: false
-      },
-      {
-        id: 'memberBarcode',
-        label: 'الباركود',
-        minWidth: '8.125rem',
         sortable: false
       },
       {
@@ -234,11 +224,7 @@ const ProviderClaimsReport = () => {
         return formatDate(claim.serviceDate);
 
       case 'memberName':
-        return claim.memberName || '-';
-
-      case 'memberBarcode':
-        return claim.memberBarcode || '-';
-
+        return <Typography variant="body2">{claim.memberName || '-'}</Typography>;
       case 'employerName':
         return claim.employerName || '-';
 
@@ -374,17 +360,6 @@ const ProviderClaimsReport = () => {
                   <MenuItem value="REJECTED">مرفوضة</MenuItem>
                   <MenuItem value="PAID">مدفوعة</MenuItem>
                 </TextField>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 2 }}>
-                <TextField
-                  fullWidth
-                  label="الباركود"
-                  value={filters.memberBarcode}
-                  onChange={(e) => handleFilterChange('memberBarcode', e.target.value)}
-                  size="small"
-                  placeholder="اكتب باركود المنتفع"
-                />
               </Grid>
 
               <Grid size={{ xs: 12, md: 2 }}>

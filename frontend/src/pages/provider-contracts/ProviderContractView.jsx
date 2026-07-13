@@ -75,7 +75,13 @@ import {
   Download as DownloadIcon,
   InsertDriveFile as FileIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon
+  ExpandLess as ExpandLessIcon,
+  LocalHospital as HospitalIcon,
+  AttachMoney as MoneyIcon,
+  Security as SecurityIcon,
+  Timeline as TimelineIcon,
+  ArrowBack as ArrowBackIcon,
+  CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
 
 // Project Components
@@ -278,6 +284,7 @@ const ProviderContractView = () => {
   // Dialog states
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [terminateDialogOpen, setTerminateDialogOpen] = useState(false);
+  const [activateDialogOpen, setActivateDialogOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
   const [terminateReason, setTerminateReason] = useState('');
 
@@ -513,6 +520,7 @@ const ProviderContractView = () => {
       enqueueSnackbar('تم تفعيل العقد بنجاح', { variant: 'success' });
       queryClient.invalidateQueries({ queryKey: ['provider-contract', id] });
       queryClient.invalidateQueries({ queryKey: ['provider-contracts'] });
+      setActivateDialogOpen(false);
     },
     onError: (err) => {
       const errorMsg = err.response?.data?.message || err.message || 'فشل تفعيل العقد';
@@ -666,10 +674,6 @@ const ProviderContractView = () => {
   // HANDLERS
   // ─────────────────────────────────────────────────────────────────────────
 
-  const handleBack = useCallback(() => {
-    navigate('/provider-contracts');
-  }, [navigate]);
-
   const handleEdit = useCallback(() => {
     navigate(`/provider-contracts/edit/${id}`);
   }, [navigate, id]);
@@ -799,7 +803,7 @@ const ProviderContractView = () => {
         }
       } else if ('contractPrice' in updates) {
         const bp = parseFloat(newState.basePrice) || 0;
-        const cp = parseFloat(updates.contractPrice) || 0;
+        const cp = parseFloat(newState.contractPrice) || 0;
         if (bp > 0) {
           newState.discountPercent = Math.round(((bp - cp) / bp) * 100);
         }
@@ -842,7 +846,7 @@ const ProviderContractView = () => {
             {error?.message || 'لم يتم العثور على العقد المطلوب'}
           </Typography>
           <Stack direction="row" spacing={2}>
-            <Button variant="outlined" startIcon={<BackIcon />} onClick={handleBack}>
+            <Button variant="outlined" startIcon={<BackIcon />} onClick={() => navigate(-1)}>
               العودة للقائمة
             </Button>
             <Button variant="contained" startIcon={<RefreshIcon />} onClick={() => refetch()}>
@@ -928,39 +932,8 @@ const ProviderContractView = () => {
         }
       />
 
-      {/* Contract Summary Card - Ultra Slim & Horizontal */}
-      <MainCard sx={{ mb: '1.0rem', py: 0.5 }}>
-        <Stack direction="row" spacing={4} alignItems="center" justifyContent="center" flexWrap="wrap">
-          <InfoRow label="نموذج السعر" value={pricingModelConfig.label} icon={PriceIcon} />
-          <InfoRow label="نسبة التخفيض" value={contract.discountPercent ? `${contract.discountPercent}%` : '-'} icon={PriceIcon} />
-          <InfoRow label="عدد البنود" value={contract.pricingItemsCount || pricingItems.length} icon={InfoIcon} />
-          <InfoRow label="بداية العقد" value={formatDate(contract.startDate)} icon={CalendarIcon} />
-          <InfoRow label="نهاية العقد" value={formatDate(contract.endDate)} icon={CalendarIcon} />
-          <Box flexGrow={1} />
-          <Chip label={statusConfig.label} color={statusConfig.color} size="small" variant="combined" />
-        </Stack>
-      </MainCard>
 
-      {/* Notes Section */}
-      {contract.notes && (
-        <MainCard
-          title="ملاحظات"
-          secondary={
-            <Tooltip title={notesExpanded ? 'إخفاء الملاحظات' : 'إظهار الملاحظات'}>
-              <IconButton size="small" onClick={() => setNotesExpanded((v) => !v)}>
-                {notesExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          }
-          sx={{ mb: '1.5rem' }}
-        >
-          <Collapse in={notesExpanded}>
-            <Typography variant="body1" color="text.secondary">
-              {contract.notes}
-            </Typography>
-          </Collapse>
-        </MainCard>
-      )}
+
 
       {/* Tabs Section */}
       <MainCard>

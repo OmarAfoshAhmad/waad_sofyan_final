@@ -13,6 +13,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,9 @@ public class ProviderPortalService {
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final ClaimRepository claimRepository;
+    private final com.waad.tba.modules.visit.repository.VisitRepository visitRepository;
+    private final com.waad.tba.security.ProviderContextGuard providerContextGuard;
+    private final PreAuthorizationRepository preAuthorizationRepository;
     
     /**
      * Check Member Eligibility for Provider.
@@ -358,7 +362,7 @@ public class ProviderPortalService {
                 ? "غير نشط" 
                 : "غير مؤهل");
         
-        return ProviderEligibilityResponse.FamilyMemberInfo.builder()
+        ProviderEligibilityResponse.FamilyMemberInfo.FamilyMemberInfoBuilder builder = ProviderEligibilityResponse.FamilyMemberInfo.builder()
             .memberId(memberDto.getId())
             .isPrincipal(isPrincipal)
             .fullName(memberDto.getFullName())
@@ -377,8 +381,10 @@ public class ProviderPortalService {
             .active(memberDto.getActive())
                 .cardNumber(memberDto.getCardNumber())
                 .profileImage(resolveProfileImageUrl(memberDto.getId(), memberDto.getPhotoUrl(), member))
-            .photoPath(member != null ? member.getProfilePhotoPath() : null)
-            .build();
+            .photoPath(member != null ? member.getProfilePhotoPath() : null);
+            
+        populateOpenVisit(builder, memberDto.getId());
+        return builder.build();
     }
     
     /**
@@ -427,7 +433,7 @@ public class ProviderPortalService {
                 ? "غير نشط" 
                 : "غير مؤهل");
         
-        return ProviderEligibilityResponse.FamilyMemberInfo.builder()
+        ProviderEligibilityResponse.FamilyMemberInfo.FamilyMemberInfoBuilder builder = ProviderEligibilityResponse.FamilyMemberInfo.builder()
             .memberId(dependent.getId())
             .isPrincipal(false)
             .fullName(dependent.getFullName())
@@ -448,8 +454,37 @@ public class ProviderPortalService {
             .active(dependent.getActive())
             .cardNumber(dependent.getCardNumber())
             .profileImage(resolveProfileImageUrl(dependent.getId(), dependent.getPhotoUrl(), member))
-            .photoPath(member != null ? member.getProfilePhotoPath() : null)
-            .build();
+            .photoPath(member != null ? member.getProfilePhotoPath() : null);
+            
+        populateOpenVisit(builder, dependent.getId());
+        return builder.build();
+    }
+
+    private void populateOpenVisit(ProviderEligibilityResponse.FamilyMemberInfo.FamilyMemberInfoBuilder builder, Long memberId) {
+        Long providerId = providerContextGuard.getProviderFilter();
+        if (providerId != null) {
+            java.util.List<com.waad.tba.modules.visit.entity.VisitStatus> openStatuses = java.util.List.of(
+                com.waad.tba.modules.visit.entity.VisitStatus.REGISTERED, 
+                com.waad.tba.modules.visit.entity.VisitStatus.IN_PROGRESS,
+                com.waad.tba.modules.visit.entity.VisitStatus.PENDING_PREAUTH,
+                com.waad.tba.modules.visit.entity.VisitStatus.PREAUTH_APPROVED
+            );
+            
+            java.util.List<com.waad.tba.modules.visit.entity.Visit> openVisits = visitRepository.findByMemberIdAndProviderIdAndStatusIn(memberId, providerId, openStatuses);
+            
+            for (com.waad.tba.modules.visit.entity.Visit visit : openVisits) {
+                boolean hasClaims = !visit.getClaims().isEmpty();
+                boolean hasPreAuths = !preAuthorizationRepository.findByVisitIdAndActiveTrue(visit.getId()).isEmpty();
+                
+                // If status is REGISTERED/IN_PROGRESS AND has no claims AND no pre-auths, it's virtually empty!
+                if (!hasClaims && !hasPreAuths) {
+                    builder.hasOpenVisit(true);
+                    builder.openVisitId(visit.getId());
+                    return; // Found an empty open visit
+                }
+            }
+            builder.hasOpenVisit(false);
+        }
     }
 
     private String resolveProfileImageUrl(Long memberId, String dtoPhotoUrl, Member memberEntity) {

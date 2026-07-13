@@ -2,7 +2,9 @@ package com.waad.tba.modules.preauthorization.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.preauthorization.dto.PreAuthLineDecisionDto;
+import com.waad.tba.modules.preauthorization.dto.PreAuthReviewDto;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
+import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorizationLine;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationLineRepository;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
@@ -138,16 +140,22 @@ public class PreAuthReviewController {
         return ResponseEntity.ok(ApiResponse.success("تم رفض الموافقة المسبقة بالكامل"));
     }
 
-    // ── طلب معلومات إضافية ───────────────────────────────────────────────────
+    // ── طلب معلومات إضافية / إعادة للتعديل ───────────────────────────────────────────────────
     @PostMapping("/{id}/request-info")
     @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
-    @Operation(summary = "طلب معلومات إضافية من المزود")
+    @Operation(summary = "إعادة للتعديل (طلب معلومات إضافية من المزود)")
     public ResponseEntity<ApiResponse<String>> requestInfo(
             @PathVariable Long id,
             @RequestParam String notes,
             @AuthenticationPrincipal UserDetails user) {
-        // TODO: ربط بـ PreAuthorizationService.reviewPreAuth مع INFO_REQUESTED
-        return ResponseEntity.ok(ApiResponse.success("تم إرسال طلب المعلومات الإضافية"));
+        
+        PreAuthReviewDto reviewDto = new PreAuthReviewDto();
+        reviewDto.setStatus(PreAuthStatus.NEEDS_CORRECTION);
+        reviewDto.setReviewerComment(notes);
+        
+        preAuthService.reviewPreAuth(id, reviewDto, user.getUsername());
+        
+        return ResponseEntity.ok(ApiResponse.success("تم إعادة الطلب للمزود للتعديل بنجاح"));
     }
 }
 

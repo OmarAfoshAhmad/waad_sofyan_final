@@ -46,8 +46,7 @@ const ProviderVisitsReport = () => {
   const [filters, setFilters] = useState({
     fromDate: null,
     toDate: null,
-    status: '',
-    memberBarcode: ''
+    status: ''
   });
 
   const [paginationModel, setPaginationModel] = useState({
@@ -73,8 +72,7 @@ const ProviderVisitsReport = () => {
         sortDir: 'DESC',
         ...(fromDate && { fromDate }),
         ...(toDate && { toDate }),
-        ...(status && { status }),
-        ...(filters.memberBarcode && { memberBarcode: filters.memberBarcode })
+        ...(status && { status })
       };
       const response = await axiosClient.get('/api/v1/provider/reports/visits', { params });
       return response?.data?.data ?? response?.data ?? { content: [], totalElements: 0 };
@@ -96,14 +94,13 @@ const ProviderVisitsReport = () => {
     setFilters({
       fromDate: null,
       toDate: null,
-      status: '',
-      memberBarcode: ''
+      status: ''
     });
     setPaginationModel((prev) => ({ ...prev, page: 0 }));
   };
 
   const hasActiveFilters = useMemo(() => {
-    return filters.fromDate || filters.toDate || filters.status || filters.memberBarcode;
+    return filters.fromDate || filters.toDate || filters.status;
   }, [filters]);
 
   const handleExportExcel = async () => {
@@ -116,8 +113,7 @@ const ProviderVisitsReport = () => {
       const params = {
         ...(fromDate && { fromDate }),
         ...(toDate && { toDate }),
-        ...(status && { status }),
-        ...(filters.memberBarcode && { memberBarcode: filters.memberBarcode })
+        ...(status && { status })
       };
 
       const response = await axiosClient.get('/api/v1/provider/reports/visits/export', {
@@ -162,12 +158,6 @@ const ProviderVisitsReport = () => {
         id: 'memberName',
         label: 'اسم المنتفع',
         minWidth: '11.25rem',
-        sortable: false
-      },
-      {
-        id: 'memberBarcode',
-        label: 'الباركود',
-        minWidth: '8.125rem',
         sortable: false
       },
       {
@@ -260,11 +250,7 @@ const ProviderVisitsReport = () => {
         return formatDate(visit.visitDate);
 
       case 'memberName':
-        return visit.memberName || '-';
-
-      case 'memberBarcode':
-        return visit.memberBarcode || '-';
-
+        return <Typography variant="body2">{visit.memberName || '-'}</Typography>;
       case 'employerName':
         return visit.employerName || '-';
 
@@ -407,17 +393,6 @@ const ProviderVisitsReport = () => {
                   <MenuItem value="COMPLETED">مكتملة</MenuItem>
                   <MenuItem value="CANCELLED">ملغاة</MenuItem>
                 </TextField>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 2 }}>
-                <TextField
-                  fullWidth
-                  label="الباركود"
-                  value={filters.memberBarcode}
-                  onChange={(e) => handleFilterChange('memberBarcode', e.target.value)}
-                  size="small"
-                  placeholder="اكتب باركود المنتفع"
-                />
               </Grid>
 
               <Grid size={{ xs: 12, md: 2 }}>

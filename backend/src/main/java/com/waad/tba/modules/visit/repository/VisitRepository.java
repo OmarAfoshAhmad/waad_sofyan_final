@@ -116,5 +116,12 @@ public interface VisitRepository extends JpaRepository<Visit, Long>, JpaSpecific
 
     @Query("SELECT DISTINCT v.member.id FROM Visit v WHERE v.member.id IN :memberIds")
     List<Long> findMemberIdsWithVisits(@Param("memberIds") java.util.Collection<Long> memberIds);
+
+    @Query("SELECT CASE WHEN COUNT(v) > 0 THEN true ELSE false END FROM Visit v WHERE v.member.id = :memberId AND v.providerId = :providerId AND v.status IN :statuses")
+    boolean existsByMemberIdAndProviderIdAndStatusIn(@Param("memberId") Long memberId, @Param("providerId") Long providerId, @Param("statuses") List<com.waad.tba.modules.visit.entity.VisitStatus> statuses);
+    
+    List<Visit> findByMemberIdAndProviderIdAndStatusIn(@Param("memberId") Long memberId, @Param("providerId") Long providerId, @Param("statuses") List<com.waad.tba.modules.visit.entity.VisitStatus> statuses);
+
+    java.util.Optional<Visit> findFirstByMemberIdAndProviderIdAndStatusInOrderByVisitDateDesc(Long memberId, Long providerId, List<com.waad.tba.modules.visit.entity.VisitStatus> statuses);
 }
 

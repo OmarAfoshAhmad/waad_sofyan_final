@@ -233,5 +233,11 @@ public class ProviderEligibilityResponse {
         
         @Schema(description = "Photo path in storage", example = "/uploads/members/123.jpg")
         private String photoPath;
+        
+        @Schema(description = "Flag if member has an open visit at this provider", example = "true")
+        private Boolean hasOpenVisit;
+        
+        @Schema(description = "Open visit ID if it exists", example = "456")
+        private Long openVisitId;
     }
 }

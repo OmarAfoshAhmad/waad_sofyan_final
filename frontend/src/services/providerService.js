@@ -282,6 +282,18 @@ export const providerApi = {
     if (!visitId) throw new Error('معرف الزيارة مطلوب');
     const response = await api.get(`${PROVIDER_BASE_URL}/visits/${visitId}`);
     return response.data;
+  },
+
+  /**
+   * Cancel a registered visit (Provider Portal).
+   * 
+   * @param {number} visitId - Visit ID
+   * @returns {Promise<Object>} ProviderVisitResponse
+   */
+  cancelVisit: async (visitId) => {
+    if (!visitId) throw new Error('معرف الزيارة مطلوب');
+    const response = await api.delete(`${PROVIDER_BASE_URL}/visits/${visitId}`);
+    return response.data;
   }
 };
 

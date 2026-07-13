@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,6 +138,33 @@ public class ProviderVisitService {
             }
         }
         
+        // --- SMART LOCK LOGIC ---
+        // Prevent creating a new visit if there is already an open visit for the same member at the same provider
+        List<VisitStatus> openStatuses = Arrays.asList(
+            VisitStatus.REGISTERED, 
+            VisitStatus.IN_PROGRESS, 
+            VisitStatus.PENDING_PREAUTH, 
+            VisitStatus.PREAUTH_APPROVED
+        );
+        List<Visit> openVisits = visitRepository.findByMemberIdAndProviderIdAndStatusIn(request.getMemberId(), providerId, openStatuses);
+        boolean hasEmptyOpenVisit = false;
+        for (Visit v : openVisits) {
+            boolean hasPreAuth = !preAuthorizationRepository.findByVisitIdAndActiveTrue(v.getId()).isEmpty();
+            boolean hasClaims = !v.getClaims().isEmpty();
+            if (!hasPreAuth && !hasClaims) {
+                hasEmptyOpenVisit = true;
+                break;
+            }
+        }
+        
+        if (hasEmptyOpenVisit) {
+            return ProviderVisitResponse.builder()
+                .success(false)
+                .message("يوجد زيارة مفتوحة مسبقاً (فارغة) لهذا المستفيد. الرجاء استخدامها أو إغلاقها لتتمكن من إنشاء زيارة جديدة.")
+                .build();
+        }
+        // ------------------------
+        
         // 4. Create visit
         Visit visit = Visit.builder()
             .member(member)
@@ -222,9 +250,18 @@ public class ProviderVisitService {
             if (normalizedMemberName != null) {
                 String pattern = "%" + normalizedMemberName.toLowerCase() + "%";
                 Predicate byFullName = cb.like(cb.lower(memberJoin.get("fullName")), pattern);
-                Predicate byCardNumber = cb.like(cb.lower(memberJoin.get("cardNumber")), pattern);
-                Predicate byCivilId = cb.like(cb.lower(memberJoin.get("civilId")), pattern);
-                predicates.add(cb.or(byFullName, byCardNumber, byCivilId));
+                Predicate byCardNumber = cb.equal(cb.lower(memberJoin.get("cardNumber")), normalizedMemberName.toLowerCase());
+                Predicate byCivilId = cb.equal(cb.lower(memberJoin.get("civilId")), normalizedMemberName.toLowerCase());
+                
+                Predicate finalNameOrIdPredicate = cb.or(byFullName, byCardNumber, byCivilId);
+                try {
+                    Long parsedId = Long.valueOf(normalizedMemberName);
+                    Predicate byVisitId = cb.equal(root.get("id"), parsedId);
+                    finalNameOrIdPredicate = cb.or(finalNameOrIdPredicate, byVisitId);
+                } catch (NumberFormatException e) {
+                    // Ignore, it's not a valid ID
+                }
+                predicates.add(finalNameOrIdPredicate);
             }
             if (finalNormalizedStatus != null) {
                 VisitStatus statusEnum = VisitStatus.valueOf(finalNormalizedStatus);
@@ -453,6 +490,38 @@ public class ProviderVisitService {
             log.error("[PROVIDER-VISIT] PDF generation failed", e);
             throw new RuntimeException("Failed to generate PDF: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Cancel a registered visit.
+     * 
+     * @param visitId Visit ID
+     * @param providerId Provider ID
+     */
+    @Transactional
+    public ProviderVisitResponse cancelVisit(Long visitId, Long providerId) {
+        Visit visit = visitRepository.findById(visitId)
+            .orElseThrow(() -> new IllegalArgumentException("Visit not found: " + visitId));
+        
+        if (!visit.getProviderId().equals(providerId)) {
+            throw new SecurityException("Provider cannot access this visit");
+        }
+        
+        if (visit.getStatus() != VisitStatus.REGISTERED && visit.getStatus() != VisitStatus.CANCELLED) {
+            throw new IllegalStateException("لا يمكن إلغاء الزيارة أو حذفها إلا إذا كانت مسجلة حديثاً أو ملغاة مسبقاً ولم يتم تقديم خدمات طبية عليها");
+        }
+
+        // Must not have claims or pre-auths
+        if (!visit.getClaims().isEmpty() || !preAuthorizationRepository.findByVisitIdAndActiveTrue(visit.getId()).isEmpty()) {
+            throw new IllegalStateException("لا يمكن إلغاء الزيارة لارتباطها بمطالبات أو موافقات مسبقة");
+        }
+        
+        visitRepository.delete(visit);
+        
+        return ProviderVisitResponse.builder()
+            .success(true)
+            .message("تم إلغاء الزيارة بنجاح")
+            .build();
     }
 }
 

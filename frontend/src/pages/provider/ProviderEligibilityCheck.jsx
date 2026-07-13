@@ -48,6 +48,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import HistoryIcon from '@mui/icons-material/History';
 import TipsAndUpdatesIcon from '@mui/icons-material/TipsAndUpdates';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 // Components
 import MainCard from '../../components/MainCard';
@@ -405,9 +406,12 @@ export default function ProviderEligibilityCheck() {
   // ========================================
 
   const handleRegisterVisit = async () => {
-    setVisitError(null);
-    if (!selectedVisitType) {
-      setVisitError('يجب اختيار نوع الزيارة');
+    if (!selectedMember || !selectedVisitType) return;
+    
+    if (selectedMember.hasOpenVisit) {
+      // Navigate to the visit log passing the member's civil ID or card number for an exact match
+      const exactIdentifier = selectedMember.civilId || selectedMember.cardNumber || selectedMember.fullName;
+      navigate('/provider/visits', { state: { memberName: exactIdentifier } });
       return;
     }
 
@@ -875,15 +879,7 @@ export default function ProviderEligibilityCheck() {
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {result.barcode && (
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ mr: 2, bgcolor: 'grey.100', px: 1, py: 0.5, borderRadius: 1 }}
-                        >
-                          الباركود: #{result.barcode}
-                        </Typography>
-                      )}
+
                       <IconButton onClick={handleReset} size="small" title="إعادة ضبط" sx={{ bgcolor: 'grey.100' }}>
                         <RefreshIcon />
                       </IconButton>
@@ -1048,27 +1044,29 @@ export default function ProviderEligibilityCheck() {
                           <Divider sx={{ mb: '1.0rem' }} />
                         </Box>
 
-                        {/* Visit Type Selection */}
-                        <FormControl fullWidth size="medium" required error={!selectedVisitType}>
-                          <InputLabel id="visit-type-label">نوع الزيارة *</InputLabel>
-                          <Select
-                            labelId="visit-type-label"
-                            value={selectedVisitType}
-                            onChange={(e) => setSelectedVisitType(e.target.value)}
-                            label="نوع الزيارة *"
-                          >
-                            {VISIT_TYPE_OPTIONS.map((opt) => (
-                              <MenuItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                          {!selectedVisitType && (
-                            <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
-                              يجب اختيار نوع الزيارة قبل التسجيل
-                            </Typography>
-                          )}
-                        </FormControl>
+                        {/* Visit Type Selection (Hide if has open visit) */}
+                        {!selectedMember.hasOpenVisit && (
+                          <FormControl fullWidth size="medium" required error={!selectedVisitType}>
+                            <InputLabel id="visit-type-label">نوع الزيارة *</InputLabel>
+                            <Select
+                              labelId="visit-type-label"
+                              value={selectedVisitType}
+                              onChange={(e) => setSelectedVisitType(e.target.value)}
+                              label="نوع الزيارة *"
+                            >
+                              {VISIT_TYPE_OPTIONS.map((opt) => (
+                                <MenuItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                            {!selectedVisitType && (
+                              <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                                يجب اختيار نوع الزيارة قبل التسجيل
+                              </Typography>
+                            )}
+                          </FormControl>
+                        )}
 
                         {visitError && (
                           <Alert severity="error" onClose={() => setVisitError(null)} sx={{ mb: 1 }}>
@@ -1078,14 +1076,26 @@ export default function ProviderEligibilityCheck() {
 
                         <Button
                           variant="contained"
-                          color="primary"
+                          color={selectedMember.hasOpenVisit ? 'info' : 'primary'}
                           size="large"
                           fullWidth
-                          startIcon={registeringVisit ? <CircularProgress size={20} color="inherit" /> : <AssignmentIcon />}
-                          disabled={registeringVisit || !selectedVisitType}
+                          startIcon={
+                            selectedMember.hasOpenVisit ? (
+                              <OpenInNewIcon />
+                            ) : registeringVisit ? (
+                              <CircularProgress size={20} color="inherit" />
+                            ) : (
+                              <AssignmentIcon />
+                            )
+                          }
+                          disabled={(!selectedMember.hasOpenVisit && registeringVisit) || (!selectedMember.hasOpenVisit && !selectedVisitType)}
                           onClick={handleRegisterVisit}
                         >
-                          {registeringVisit ? 'جاري التسجيل...' : 'تسجيل زيارة'}
+                          {selectedMember.hasOpenVisit
+                            ? 'فتح الزيارة الحالية'
+                            : registeringVisit
+                            ? 'جاري التسجيل...'
+                            : 'تسجيل زيارة'}
                         </Button>
                       </Stack>
                     </Paper>

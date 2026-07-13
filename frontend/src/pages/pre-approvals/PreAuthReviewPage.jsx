@@ -41,6 +41,7 @@ import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import WarningIcon from '@mui/icons-material/Warning';
 import BalanceIcon from '@mui/icons-material/Balance';
 import SettingsIcon from '@mui/icons-material/Settings';
+import EditIcon from '@mui/icons-material/Edit';
 
 import { reviewerPreAuthService, preApprovalsService } from 'services/api';
 import { useSnackbar } from 'notistack';
@@ -152,6 +153,21 @@ const PreAuthReviewPage = () => {
       navigate('/pre-approvals');
     } catch (err) {
       enqueueSnackbar(err?.userMessage || err?.message || 'فشل في رفض الطلب', { variant: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRequestInfo = async () => {
+    setActionLoading(true);
+    try {
+      await reviewerPreAuthService.requestInfo(id, notes);
+      enqueueSnackbar('تم إعادة الطلب للمزود للتعديل بنجاح', { variant: 'success' });
+      setDialogType(null);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      enqueueSnackbar(err.message || 'فشل في إعادة الطلب للتعديل', { variant: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -402,6 +418,9 @@ const PreAuthReviewPage = () => {
                       <Button fullWidth variant="outlined" color="error" onClick={() => { setRejectionReason(''); setDialogType('reject_all'); }} startIcon={<CancelIcon />} disabled={actionLoading}>
                         رفض كلي للطلب
                       </Button>
+                      <Button fullWidth variant="outlined" color="warning" onClick={() => { setNotes(''); setDialogType('request_info'); }} startIcon={<EditIcon />} disabled={actionLoading} sx={{ mt: 1 }}>
+                        إعادة للمزود للتعديل
+                      </Button>
                     </>
                   )}
                 </Stack>
@@ -430,6 +449,21 @@ const PreAuthReviewPage = () => {
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setDialogType(null)} disabled={actionLoading}>إلغاء</Button>
           <Button variant="contained" color="error" onClick={handleRejectAll} disabled={actionLoading || !rejectionReason} startIcon={<CancelIcon />}>تأكيد الرفض</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ===== REQUEST INFO DIALOG ===== */}
+      <Dialog open={dialogType === 'request_info'} onClose={() => setDialogType(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'warning.main', color: 'white', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EditIcon /> إعادة الطلب للمزود للتعديل
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Alert severity="warning" sx={{ mb: 2 }}>سيتم إعادة الطلب لمقدم الخدمة لتعديله بناءً على الملاحظات التالية.</Alert>
+          <TextField fullWidth required multiline rows={3} label="الملاحظات المطلوبة من المزود *" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>إلغاء</Button>
+          <Button variant="contained" color="warning" onClick={handleRequestInfo} disabled={actionLoading || !notes} startIcon={<EditIcon />}>تأكيد الإعادة</Button>
         </DialogActions>
       </Dialog>
 

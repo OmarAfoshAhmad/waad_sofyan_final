@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // Material UI
 import {
@@ -39,6 +39,8 @@ import BadgeIcon from '@mui/icons-material/Badge';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import EventIcon from '@mui/icons-material/Event';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 // Services
 import { providerApi } from 'services/providerService';
@@ -184,6 +186,7 @@ const VISIT_TYPE_LABELS = {
 // ========================= MAIN COMPONENT =========================
 const ProviderVisitLog = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { flags } = useSystemConfig();
 
   const claimSubmissionEnabled = flags?.DIRECT_CLAIM_SUBMISSION_ENABLED !== false;
@@ -201,9 +204,14 @@ const ProviderVisitLog = () => {
 
   // Filters - Default date to TODAY
   const [showFilters, setShowFilters] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [dateFrom, setDateFrom] = useState(dayjs()); // TODAY
-  const [dateTo, setDateTo] = useState(dayjs()); // TODAY
+  
+  // Initialize from location state if we were redirected here (e.g. from registering a visit)
+  const initialSearch = location.state?.newVisitId?.toString() || location.state?.memberName || '';
+  const isRedirected = !!initialSearch;
+  
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [dateFrom, setDateFrom] = useState(isRedirected ? null : dayjs()); // Clear dates if redirected to show the exact visit regardless of date
+  const [dateTo, setDateTo] = useState(isRedirected ? null : dayjs());
   const [statusFilter, setStatusFilter] = useState('');
   const [visitTypeFilter, setVisitTypeFilter] = useState('');
   const [sortBy, setSortBy] = useState('visitId');
@@ -339,6 +347,19 @@ const ProviderVisitLog = () => {
     setSortBy('visitId');
     setSortDir('asc');
     setPage(0);
+  };
+
+  const handleCancelVisit = async (visit) => {
+    if (!window.confirm(`هل أنت متأكد من حذف الزيارة للمنتفع ${visit.memberName} بشكل نهائي؟\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+    try {
+      setLoading(true);
+      await providerApi.cancelVisit(visit.visitId);
+      fetchVisits();
+    } catch (err) {
+      console.error('Error cancelling visit:', err);
+      setError(err.message || 'حدث خطأ أثناء حذف الزيارة');
+      setLoading(false);
+    }
   };
 
   const handleSort = (columnId, direction) => {
@@ -503,6 +524,20 @@ const ProviderVisitLog = () => {
                   {LABELS.createPreAuth}
                 </Button>
               )}
+              
+              {/* Delete Visit */}
+              {['REGISTERED', 'CANCELLED'].includes(visit.status) && visit.claimCount === 0 && visit.preAuthCount === 0 && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="error"
+                  onClick={() => handleCancelVisit(visit)}
+                  startIcon={<DeleteIcon fontSize="small" />}
+                  sx={{ whiteSpace: 'nowrap', py: 0.5, px: 1, minWidth: 0, textTransform: 'none' }}
+                >
+                  حذف الزيارة
+                </Button>
+              )}
             </Stack>
 
             {/* Linked counts badges */}
@@ -562,6 +597,11 @@ const ProviderVisitLog = () => {
                   <RefreshIcon />
                 </IconButton>
               </span>
+            </Tooltip>
+            <Tooltip title="عودة">
+              <IconButton onClick={() => navigate('/provider')} color="primary">
+                <ArrowBackIcon />
+              </IconButton>
             </Tooltip>
           </Stack>
         }

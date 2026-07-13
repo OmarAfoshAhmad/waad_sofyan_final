@@ -172,27 +172,27 @@ const PreApprovalsInbox = () => {
       field: 'id',
       headerName: '#',
       width: '6.25rem',
-      valueGetter: (value, row) => row.referenceNumber || `-`
+      valueGetter: (params) => params.row?.referenceNumber || `-`
     },
     {
       field: 'memberName',
       headerName: 'اسم المؤمن عليه',
       flex: 1,
       minWidth: '9.375rem',
-      valueGetter: (value, row) => row.memberName || '-'
+      valueGetter: (params) => params.row?.memberName || '-'
     },
     {
       field: 'providerName',
       headerName: 'مقدم الخدمة',
       flex: 1,
       minWidth: '9.375rem',
-      valueGetter: (value, row) => row.providerName || '-'
+      valueGetter: (params) => params.row?.providerName || '-'
     },
     {
       field: 'serviceName',
       headerName: 'الخدمة',
       width: '9.375rem',
-      valueGetter: (value, row) => row.serviceName || '-'
+      valueGetter: (params) => params.row?.serviceName || '-'
     },
     {
       field: 'priority',
@@ -204,16 +204,16 @@ const PreApprovalsInbox = () => {
       field: 'requestDate',
       headerName: 'تاريخ الطلب',
       width: '8.125rem',
-      valueGetter: (value, row) => {
-        return row.requestDate ? new Date(row.requestDate).toLocaleDateString('en-US') : '-';
+      valueGetter: (params) => {
+        return params.row?.requestDate ? new Date(params.row.requestDate).toLocaleDateString('en-US') : '-';
       }
     },
     {
       field: 'expiryDate',
       headerName: 'تاريخ الانتهاء',
       width: '8.125rem',
-      valueGetter: (value, row) => {
-        const date = row?.expiryDate || row?.expiresAt;
+      valueGetter: (params) => {
+        const date = params.row?.expiryDate || params.row?.expiresAt;
         return date ? new Date(date).toLocaleDateString('en-US') : '-';
       }
     },

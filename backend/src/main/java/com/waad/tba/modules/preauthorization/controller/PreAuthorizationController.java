@@ -343,7 +343,7 @@ public class PreAuthorizationController {
      * DELETE /api/pre-authorizations/{id}
      */
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Void>> deletePreAuthorization(
             @PathVariable("id") Long id,
             Authentication authentication) {

@@ -27,6 +27,9 @@ import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.modules.visit.dto.VisitCreateDto;
 import com.waad.tba.modules.visit.dto.VisitResponseDto;
+import com.waad.tba.modules.visit.entity.VisitStatus;
+import java.util.Arrays;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.mapper.VisitMapper;
 import com.waad.tba.modules.visit.repository.VisitRepository;
@@ -159,6 +162,21 @@ public class VisitService {
         if (member.getBenefitPolicy() != null) {
             benefitPolicyCoverageService.validateCanCreateClaim(member, visitDate);
         }
+
+        // --- SMART LOCK LOGIC ---
+        // Prevent creating a new visit if there is already an open visit for the same member at the same provider
+        List<VisitStatus> openStatuses = Arrays.asList(
+            VisitStatus.REGISTERED, 
+            VisitStatus.IN_PROGRESS, 
+            VisitStatus.PENDING_PREAUTH, 
+            VisitStatus.PREAUTH_APPROVED
+        );
+        boolean hasOpenVisit = repository.existsByMemberIdAndProviderIdAndStatusIn(dto.getMemberId(), dto.getProviderId(), openStatuses);
+        
+        if (hasOpenVisit) {
+            throw new BusinessRuleException("يوجد زيارة مفتوحة مسبقاً لهذا المستفيد في نفس المنشأة. الرجاء إغلاقها أولاً لتتمكن من إنشاء زيارة جديدة.");
+        }
+        // ------------------------
 
         Visit entity = mapper.toEntity(dto, member);
         Visit saved = repository.save(entity);

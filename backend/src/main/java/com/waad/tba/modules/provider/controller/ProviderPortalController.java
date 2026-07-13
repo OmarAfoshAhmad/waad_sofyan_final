@@ -553,6 +553,33 @@ public class ProviderPortalController {
     }
     
     /**
+     * Cancel Visit (Provider Portal)
+     * 
+     * DELETE /api/v1/provider/visits/{id}
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/visits/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF')")
+    @Operation(
+        summary = "Cancel visit (Provider Portal)",
+        description = "Cancels a registered visit if it has no claims or pre-auths"
+    )
+    public ResponseEntity<ApiResponse<ProviderVisitResponse>> cancelVisit(
+            @PathVariable("id") Long id) {
+        
+        log.info("📋 [VISIT-CANCEL] Request to cancel visitId={}", id);
+        
+        Long providerId = providerContextGuard.getProviderFilter();
+        if (providerId == null) {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("يجب تحديد المنشأة الطبية لإلغاء الزيارة")
+            );
+        }
+        
+        ProviderVisitResponse response = providerVisitService.cancelVisit(id, providerId);
+        return ResponseEntity.ok(ApiResponse.success("تم إلغاء الزيارة", response));
+    }
+    
+    /**
      * ═══════════════════════════════════════════════════════════════════════════
      * GET VISIT CONTEXT (Decision Payload)
      * ═══════════════════════════════════════════════════════════════════════════

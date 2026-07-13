@@ -23,7 +23,8 @@ import {
   FilterList as FilterListIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
-  VerifiedUser as PreAuthIcon
+  VerifiedUser as PreAuthIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers';
 import MainCard from 'components/MainCard';
@@ -44,8 +45,7 @@ const ProviderPreAuthReport = () => {
   const [filters, setFilters] = useState({
     fromDate: null,
     toDate: null,
-    status: '',
-    memberBarcode: ''
+    status: ''
   });
 
   const [paginationModel, setPaginationModel] = useState({
@@ -71,8 +71,7 @@ const ProviderPreAuthReport = () => {
         sortDir: 'DESC',
         ...(fromDate && { fromDate }),
         ...(toDate && { toDate }),
-        ...(status && { status }),
-        ...(filters.memberBarcode && { memberBarcode: filters.memberBarcode })
+        ...(status && { status })
       };
       const response = await axiosClient.get('/api/v1/provider/reports/pre-auth', { params });
       return response?.data?.data ?? response?.data ?? { content: [], totalElements: 0 };
@@ -94,15 +93,25 @@ const ProviderPreAuthReport = () => {
     setFilters({
       fromDate: null,
       toDate: null,
-      status: '',
-      memberBarcode: ''
+      status: ''
     });
     setPaginationModel((prev) => ({ ...prev, page: 0 }));
   };
 
   const hasActiveFilters = useMemo(() => {
-    return filters.fromDate || filters.toDate || filters.status || filters.memberBarcode;
+    return !!(filters.fromDate || filters.toDate || filters.status);
   }, [filters]);
+
+  const handleDeletePreAuth = async (preAuthId) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذه الموافقة المسبقة؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    try {
+      await axiosClient.delete(`/api/v1/pre-authorizations/${preAuthId}`);
+      refetch();
+    } catch (err) {
+      console.error('Error deleting pre-authorization:', err);
+      alert(err?.response?.data?.message || 'فشل حذف الموافقة المسبقة');
+    }
+  };
 
   const handleExportExcel = async () => {
     try {
@@ -114,8 +123,7 @@ const ProviderPreAuthReport = () => {
       const params = {
         ...(fromDate && { fromDate }),
         ...(toDate && { toDate }),
-        ...(status && { status }),
-        ...(filters.memberBarcode && { memberBarcode: filters.memberBarcode })
+        ...(status && { status })
       };
 
       const response = await axiosClient.get('/api/v1/provider/reports/pre-auth/export', {
@@ -160,12 +168,6 @@ const ProviderPreAuthReport = () => {
         id: 'memberName',
         label: 'اسم المنتفع',
         minWidth: '11.25rem',
-        sortable: false
-      },
-      {
-        id: 'memberBarcode',
-        label: 'الباركود',
-        minWidth: '8.125rem',
         sortable: false
       },
       {
@@ -215,6 +217,13 @@ const ProviderPreAuthReport = () => {
         minWidth: '8.75rem',
         align: 'center',
         sortable: false
+      },
+      {
+        id: 'actions',
+        label: 'الإجراءات',
+        minWidth: '6.25rem',
+        align: 'center',
+        sortable: false
       }
     ],
     []
@@ -250,10 +259,7 @@ const ProviderPreAuthReport = () => {
         return formatDate(preAuth.requestDate);
 
       case 'memberName':
-        return preAuth.memberName || '-';
-
-      case 'memberBarcode':
-        return preAuth.memberBarcode || '-';
+        return <Typography variant="body2">{preAuth.memberName || '-'}</Typography>;
 
       case 'serviceName':
         return preAuth.serviceName || '-';
@@ -294,6 +300,17 @@ const ProviderPreAuthReport = () => {
 
       case 'status':
         return getStatusChip(preAuth.status, preAuth.statusLabel);
+
+      case 'actions':
+        return (
+          ['DRAFT', 'PENDING'].includes(preAuth.status) && (
+            <Tooltip title="حذف الموافقة">
+              <IconButton color="error" size="small" onClick={() => handleDeletePreAuth(preAuth.preAuthId || preAuth.id)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )
+        );
 
       default:
         return '-';
@@ -405,17 +422,6 @@ const ProviderPreAuthReport = () => {
                   <MenuItem value="EXPIRED">منتهية الصلاحية</MenuItem>
                   <MenuItem value="CANCELLED">ملغاة</MenuItem>
                 </TextField>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 2 }}>
-                <TextField
-                  fullWidth
-                  label="الباركود"
-                  value={filters.memberBarcode}
-                  onChange={(e) => handleFilterChange('memberBarcode', e.target.value)}
-                  size="small"
-                  placeholder="اكتب باركود المنتفع"
-                />
               </Grid>
 
               <Grid size={{ xs: 12, md: 2 }}>
