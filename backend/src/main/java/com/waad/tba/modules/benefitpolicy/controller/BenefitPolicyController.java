@@ -12,6 +12,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -90,7 +91,9 @@ public class BenefitPolicyController {
             @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
             @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
-            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
+            @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir,
+            @RequestParam(name = "q", defaultValue = "") String query,
+            @RequestParam(name = "status", required = false) BenefitPolicyStatus status) {
 
         log.info(
                 "[BENEFIT-POLICIES] GET /api/benefit-policies - employerId={}, page={}, size={}, sortBy={}, sortDir={}",
@@ -136,12 +139,8 @@ public class BenefitPolicyController {
         Sort sort = Sort.by(safeDirection, safeSortBy);
         Pageable pageable = PageRequest.of(page, Math.min(size, 100), sort);
 
-        Page<BenefitPolicyResponseDto> result;
-        if (effectiveEmployerId != null) {
-            result = benefitPolicyService.findByEmployer(effectiveEmployerId, pageable);
-        } else {
-            result = benefitPolicyService.findAll(pageable);
-        }
+        Page<BenefitPolicyResponseDto> result = benefitPolicyService.findManagementPage(
+                true, effectiveEmployerId, status, query, pageable);
 
         log.info("[BENEFIT-POLICIES] Returning {} records (totalElements: {}, totalPages: {})",
                 result.getContent().size(), result.getTotalElements(), result.getTotalPages());
@@ -154,6 +153,7 @@ public class BenefitPolicyController {
     @Operation(summary = "Get benefit policy by ID")
     public ResponseEntity<ApiResponse<BenefitPolicyResponseDto>> findById(@PathVariable("id") Long id) {
         BenefitPolicyResponseDto result = benefitPolicyService.findById(id);
+        assertEmployerScope(result.getEmployerOrgId());
         return ResponseEntity.ok(ApiResponse.success("Benefit policy retrieved", result));
     }
 
@@ -163,6 +163,7 @@ public class BenefitPolicyController {
     public ResponseEntity<ApiResponse<BenefitPolicyResponseDto>> findByCode(
             @PathVariable("policyCode") String policyCode) {
         BenefitPolicyResponseDto result = benefitPolicyService.findByPolicyCode(policyCode);
+        assertEmployerScope(result.getEmployerOrgId());
         return ResponseEntity.ok(ApiResponse.success("Benefit policy retrieved", result));
     }
 
@@ -171,7 +172,8 @@ public class BenefitPolicyController {
     @Operation(summary = "List benefit policies for an employer")
     public ResponseEntity<ApiResponse<List<BenefitPolicyResponseDto>>> findByEmployer(
             @PathVariable("employerOrgId") Long employerOrgId) {
-        List<BenefitPolicyResponseDto> result = benefitPolicyService.findByEmployer(employerOrgId);
+        Long scopedEmployerId = scopedEmployerId(employerOrgId);
+        List<BenefitPolicyResponseDto> result = benefitPolicyService.findByEmployer(scopedEmployerId);
         return ResponseEntity.ok(ApiResponse.success("Benefit policies for employer retrieved", result));
     }
 
@@ -183,8 +185,10 @@ public class BenefitPolicyController {
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<BenefitPolicyResponseDto> result = benefitPolicyService.findByEmployer(employerOrgId, pageable);
+        Long scopedEmployerId = scopedEmployerId(employerOrgId);
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<BenefitPolicyResponseDto> result = benefitPolicyService.findByEmployer(scopedEmployerId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Benefit policies for employer retrieved", result));
     }
 
@@ -202,7 +206,10 @@ public class BenefitPolicyController {
                     .body(ApiResponse.error("Invalid status: " + status));
         }
 
-        List<BenefitPolicyResponseDto> result = benefitPolicyService.findByStatus(policyStatus);
+        Long employerScope = currentEmployerScope();
+        List<BenefitPolicyResponseDto> result = employerScope == null
+                ? benefitPolicyService.findByStatus(policyStatus)
+                : benefitPolicyService.findByStatusForEmployer(policyStatus, employerScope);
         return ResponseEntity.ok(ApiResponse.success("Benefit policies retrieved", result));
     }
 
@@ -217,7 +224,8 @@ public class BenefitPolicyController {
             date = LocalDate.now();
         }
 
-        BenefitPolicyResponseDto result = benefitPolicyService.findEffectiveForEmployer(employerOrgId, date);
+        Long scopedEmployerId = scopedEmployerId(employerOrgId);
+        BenefitPolicyResponseDto result = benefitPolicyService.findEffectiveForEmployer(scopedEmployerId, date);
         if (result == null) {
             return ResponseEntity.ok(ApiResponse.success("No effective policy found", null));
         }
@@ -232,8 +240,11 @@ public class BenefitPolicyController {
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<BenefitPolicyResponseDto> result = benefitPolicyService.search(q, pageable);
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100));
+        Long employerScope = currentEmployerScope();
+        Page<BenefitPolicyResponseDto> result = employerScope == null
+                ? benefitPolicyService.search(q, pageable)
+                : benefitPolicyService.searchForEmployer(q, employerScope, pageable);
         return ResponseEntity.ok(ApiResponse.success("Search results", result));
     }
 
@@ -241,7 +252,10 @@ public class BenefitPolicyController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','EMPLOYER_ADMIN','ACCOUNTANT','MEDICAL_REVIEWER')")
     @Operation(summary = "Get selector list for dropdowns")
     public ResponseEntity<ApiResponse<List<BenefitPolicySelectorDto>>> getSelectors() {
-        List<BenefitPolicySelectorDto> result = benefitPolicyService.getSelectors();
+        Long employerScope = currentEmployerScope();
+        List<BenefitPolicySelectorDto> result = employerScope == null
+                ? benefitPolicyService.getSelectors()
+                : benefitPolicyService.getSelectorsForEmployer(employerScope);
         return ResponseEntity.ok(ApiResponse.success("Selectors retrieved", result));
     }
 
@@ -250,7 +264,7 @@ public class BenefitPolicyController {
     @Operation(summary = "Get selector list for an employer")
     public ResponseEntity<ApiResponse<List<BenefitPolicySelectorDto>>> getSelectorsForEmployer(
             @PathVariable("employerOrgId") Long employerOrgId) {
-        List<BenefitPolicySelectorDto> result = benefitPolicyService.getSelectorsForEmployer(employerOrgId);
+        List<BenefitPolicySelectorDto> result = benefitPolicyService.getSelectorsForEmployer(scopedEmployerId(employerOrgId));
         return ResponseEntity.ok(ApiResponse.success("Selectors retrieved", result));
     }
 
@@ -261,7 +275,10 @@ public class BenefitPolicyController {
             @Parameter(description = "Number of days to check (default 30, max 365)") @RequestParam(name = "days", defaultValue = "30") int days) {
 
         int safeDays = Math.min(Math.max(1, days), 365);
-        List<BenefitPolicyResponseDto> result = benefitPolicyService.getPoliciesExpiringSoon(safeDays);
+        Long employerScope = currentEmployerScope();
+        List<BenefitPolicyResponseDto> result = employerScope == null
+                ? benefitPolicyService.getPoliciesExpiringSoon(safeDays)
+                : benefitPolicyService.getPoliciesExpiringSoonForEmployer(safeDays, employerScope);
         return ResponseEntity.ok(ApiResponse.success("Expiring policies retrieved", result));
     }
 
@@ -364,10 +381,14 @@ public class BenefitPolicyController {
     @Operation(summary = "List soft-deleted benefit policies")
     public ResponseEntity<ApiResponse<Page<BenefitPolicyResponseDto>>> findDeleted(
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "200") int size) {
-        Pageable pageable = PageRequest.of(page, Math.min(size, 200), Sort.by(Sort.Direction.DESC, "createdAt"));
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "q", defaultValue = "") String query,
+            @RequestParam(name = "employerId", required = false) Long employerId,
+            @RequestParam(name = "status", required = false) BenefitPolicyStatus status) {
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 100), Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(
-                ApiResponse.success("Deleted benefit policies retrieved", benefitPolicyService.findDeleted(pageable)));
+                ApiResponse.success("Deleted benefit policies retrieved",
+                        benefitPolicyService.findManagementPage(false, employerId, status, query, pageable)));
     }
 
     @PostMapping("/{id:\\d+}/restore")
@@ -389,5 +410,29 @@ public class BenefitPolicyController {
         log.info("Running auto-expiration of old policies");
         int count = benefitPolicyService.expireOldPolicies();
         return ResponseEntity.ok(ApiResponse.success("Expired " + count + " policies", count));
+    }
+
+    private Long currentEmployerScope() {
+        User user = authorizationService.getCurrentUser();
+        if (user == null || !authorizationService.isEmployerAdmin(user)) return null;
+        if (!authorizationService.canEmployerViewBenefitPolicies(user) || user.getEmployerId() == null) {
+            throw new AccessDeniedException("لا توجد جهة عمل صالحة أو صلاحية لعرض وثائق التغطية");
+        }
+        return user.getEmployerId();
+    }
+
+    private Long scopedEmployerId(Long requestedEmployerId) {
+        Long scope = currentEmployerScope();
+        if (scope != null && !scope.equals(requestedEmployerId)) {
+            throw new AccessDeniedException("لا تملك صلاحية الوصول إلى وثائق جهة العمل المطلوبة");
+        }
+        return scope == null ? requestedEmployerId : scope;
+    }
+
+    private void assertEmployerScope(Long policyEmployerId) {
+        Long scope = currentEmployerScope();
+        if (scope != null && !scope.equals(policyEmployerId)) {
+            throw new AccessDeniedException("لا تملك صلاحية الوصول إلى هذه الوثيقة");
+        }
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 
 /**
  * Repository for BenefitPolicyRule entity.
@@ -67,6 +68,38 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
    * Find rule for a specific category within a policy
    */
   Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryId(Long policyId, Long categoryId);
+
+  Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryIdAndEncounterType(
+      Long policyId, Long categoryId, EncounterType encounterType);
+
+  Optional<BenefitPolicyRule> findByBenefitPolicyIdAndMedicalCategoryIdAndEncounterTypeAndDeletedFalseAndActiveTrue(
+      Long policyId, Long categoryId, EncounterType encounterType);
+
+  @Query("""
+      SELECT r FROM BenefitPolicyRule r
+      WHERE r.benefitPolicy.id = :policyId
+        AND r.active = true
+        AND r.deleted = false
+        AND (r.encounterType = :encounterType OR r.encounterType = :anyContext)
+        AND (
+          r.medicalCategory.id = :categoryId
+          OR (:parentCategoryId IS NOT NULL
+              AND r.medicalCategory.id = :parentCategoryId
+              AND r.inheritanceEnabled = true)
+        )
+      ORDER BY
+        CASE WHEN r.medicalCategory.id = :categoryId THEN 0 ELSE 1 END,
+        CASE WHEN r.encounterType = :encounterType THEN 0 ELSE 1 END,
+        r.priority ASC,
+        r.id ASC
+      LIMIT 1
+      """)
+  Optional<BenefitPolicyRule> findBestRuleForContext(
+      @Param("policyId") Long policyId,
+      @Param("categoryId") Long categoryId,
+      @Param("parentCategoryId") Long parentCategoryId,
+      @Param("encounterType") EncounterType encounterType,
+      @Param("anyContext") EncounterType anyContext);
 
   /**
    * Find active rule for a specific category within a policy

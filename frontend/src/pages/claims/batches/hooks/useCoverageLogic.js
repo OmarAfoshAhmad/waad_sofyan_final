@@ -6,12 +6,12 @@ export function useCoverageLogic({
   policyInfo,
   member,
   applyBenefits,
-  rootCategories,
   medicalCategories,
-  primaryCategoryCode,
+  encounterType,
   recompute,
   currentClaimId,
   serviceYear,
+  serviceDate,
   fullCoverage,
   onCoverageError
 }) {
@@ -88,17 +88,12 @@ export function useCoverageLogic({
     };
   };
 
-  const buildEngineLineInput = (line, idx, contextCatId = null) => {
+  const buildEngineLineInput = (line, idx) => {
     let serviceOwnCategoryId = line?.service?.categoryId ?? line?.service?.medicalCategoryId ?? line?.service?.medicalCategory?.id ?? null;
 
     const code = line?.serviceCode || line?.service?.serviceCode || line?.service?.code;
     if (code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE') {
-      let targetCode = 'CAT-OP-GEN';
-      if (code === 'GEN-MEDICATION') {
-        targetCode = 'CAT-OP-DRUG';
-      } else if (primaryCategoryCode === 'CAT-IP') {
-        targetCode = 'CAT-IP-GEN';
-      }
+      const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG' : 'CAT-DIAGNOSTIC';
       const foundCat = medicalCategories?.find((c) => c.code === targetCode);
       if (foundCat) {
         serviceOwnCategoryId = foundCat.id;
@@ -112,7 +107,7 @@ export function useCoverageLogic({
       quantity: Math.max(1, toInt(line?.quantity, 1)),
       enteredUnitPrice: toMoney(line?.unitPrice),
       contractPrice: toMoney(line?.contractPrice),
-      categoryId: contextCatId ?? serviceOwnCategoryId,
+      categoryId: serviceOwnCategoryId,
       serviceCategoryId: serviceOwnCategoryId,
       rejected: !!line?.rejected,
       manualRefusedAmount: toMoney(line?.manualRefusedAmount)
@@ -120,19 +115,12 @@ export function useCoverageLogic({
   };
 
   const fetchCoverage = useCallback(
-    async (service, categoryCodeOverride, lineId = null) => {
+    async (service, encounterOverride, lineId = null) => {
       const sid = service?.medicalServiceId || 0;
       let serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
-      let isGeneralSvc = false;
       const code = service?.serviceCode || service?.code;
       if (code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE') {
-        isGeneralSvc = true;
-        let targetCode = 'CAT-OP-GEN';
-        if (code === 'GEN-MEDICATION') {
-          targetCode = 'CAT-OP-DRUG';
-        } else if (categoryCodeOverride === 'CAT-IP') {
-          targetCode = 'CAT-IP-GEN';
-        }
+        const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG' : 'CAT-DIAGNOSTIC';
         const foundCat = medicalCategories?.find((c) => c.code === targetCode);
         if (foundCat) {
           serviceOwnCategoryId = foundCat.id;
@@ -144,21 +132,18 @@ export function useCoverageLogic({
       if (!policyId || !member?.id || !applyBenefits)
         return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
 
-      if (!sid && !categoryId && !categoryCodeOverride)
+      if (!sid && !categoryId)
         return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
 
       try {
-        if (!isGeneralSvc && categoryCodeOverride) {
-          const cat = rootCategories?.find((c) => c.code === categoryCodeOverride);
-          if (cat) categoryId = cat.id;
-        }
-
         const payload = {
           policyId,
           memberId: member?.id || null,
           serviceYear: serviceYear || null,
+          serviceDate: serviceDate || null,
           excludeClaimId: currentClaimId || null,
-          fullCoverage: fullCoverage || categoryCodeOverride === 'FULL_COVERAGE',
+          fullCoverage,
+          encounterType: encounterOverride || encounterType || 'OUTPATIENT',
           lines: [
             {
               lineId: lineId || 'single',
@@ -218,37 +203,34 @@ export function useCoverageLogic({
       policyInfo?.defaultCoveragePercent,
       applyBenefits,
       member?.id,
-      rootCategories,
       currentClaimId,
       serviceYear,
+      serviceDate,
       fullCoverage,
+      encounterType,
       onCoverageError
     ]
   );
 
   const refetchAllLinesCoverage = useCallback(
-    async (newCategoryCode, currentLines, newFullCoverage) => {
+    async (newEncounterType, currentLines, newFullCoverage) => {
       if (!policyId || !member?.id) return currentLines.map((l, i) => recompute(l, i, currentLines));
 
-      const catCode = newCategoryCode !== undefined ? newCategoryCode : primaryCategoryCode;
+      const effectiveEncounterType = newEncounterType || encounterType || 'OUTPATIENT';
       const isFull = newFullCoverage !== undefined ? newFullCoverage : fullCoverage;
 
       const linesToCheck = currentLines.filter((l) => l.service);
       if (linesToCheck.length === 0) return currentLines.map((l, i) => recompute(l, i, currentLines));
 
-      let contextCatId = null;
-      if (catCode && catCode !== 'FULL_COVERAGE') {
-        const cat = rootCategories?.find((c) => c.code === catCode);
-        if (cat) contextCatId = cat.id;
-      }
-
       const payload = {
         policyId,
         memberId: member.id,
         serviceYear: serviceYear || null,
+        serviceDate: serviceDate || null,
         excludeClaimId: currentClaimId || null,
-        fullCoverage: isFull || catCode === 'FULL_COVERAGE',
-        lines: linesToCheck.map((line, idx) => buildEngineLineInput(line, idx, contextCatId))
+        fullCoverage: isFull,
+        encounterType: effectiveEncounterType,
+        lines: linesToCheck.map((line, idx) => buildEngineLineInput(line, idx))
       };
 
       try {
@@ -305,9 +287,9 @@ export function useCoverageLogic({
     [
       policyId,
       member?.id,
-      primaryCategoryCode,
-      rootCategories,
+      encounterType,
       serviceYear,
+      serviceDate,
       currentClaimId,
       recompute,
       fullCoverage,

@@ -72,6 +72,9 @@ const validationSchema = Yup.object().shape({
 
   defaultCoveragePercent: Yup.number().required('نسبة التغطية مطلوبة').min(0, 'النسبة لا تقل عن 0%').max(100, 'النسبة لا تزيد عن 100%'),
 
+  perMemberLimit: Yup.number().nullable().min(0, 'الحد للفرد لا يقل عن صفر'),
+  perFamilyLimit: Yup.number().nullable().min(0, 'الحد للعائلة لا يقل عن صفر'),
+
   status: Yup.string().required('الحالة مطلوبة'),
 
   description: Yup.string().max(1000, 'الوصف طويل جداً')
@@ -209,13 +212,13 @@ const BenefitPolicyEdit = () => {
         name: values.name.trim(),
         policyCode: values.policyCode?.trim() || null,
         description: values.description?.trim() || null,
-        employerOrgId: values.employerOrgId,
         startDate: values.startDate ? dayjs(values.startDate).format('YYYY-MM-DD') : null,
         endDate: values.endDate ? dayjs(values.endDate).format('YYYY-MM-DD') : null,
         annualLimit: parseFloat(values.annualLimit),
         defaultCoveragePercent: parseInt(values.defaultCoveragePercent, 10),
+        perMemberLimit: values.perMemberLimit === '' ? null : parseFloat(values.perMemberLimit),
+        perFamilyLimit: values.perFamilyLimit === '' ? null : parseFloat(values.perFamilyLimit),
         notes: values.notes?.trim() || null,
-        status: values.status
       };
 
       await updateBenefitPolicy(id, payload);
@@ -258,6 +261,8 @@ const BenefitPolicyEdit = () => {
     endDate: policy?.endDate ? dayjs(policy.endDate) : dayjs().add(1, 'year'),
     annualLimit: policy?.annualLimit || '10000',
     defaultCoveragePercent: policy?.defaultCoveragePercent || 80,
+    perMemberLimit: policy?.perMemberLimit ?? '',
+    perFamilyLimit: policy?.perFamilyLimit ?? '',
     notes: policy?.notes || '',
     status: policy?.status || 'DRAFT'
   };
@@ -363,8 +368,8 @@ const BenefitPolicyEdit = () => {
                         onChange={handleChange}
                         onBlur={handleBlur}
                         error={touched.employerOrgId && Boolean(errors.employerOrgId)}
-                        helperText={(touched.employerOrgId && errors.employerOrgId) || 'اختر المؤسسة صاحبة الوثيقة'}
-                        disabled={loadingEmployers}
+                        helperText="جهة العمل ثابتة بعد إنشاء الوثيقة"
+                        disabled
                       >
                         {loadingEmployers ? (
                           <MenuItem value="" disabled>
@@ -392,8 +397,8 @@ const BenefitPolicyEdit = () => {
                         label="حالة الوثيقة"
                         name="status"
                         value={values.status}
-                        onChange={handleChange}
-                        onBlur={handleBlur}
+                        disabled
+                        helperText="غيّر الحالة من إجراءات دورة حياة الوثيقة"
                       >
                         <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>
                           مسودة (Draft)
@@ -401,9 +406,9 @@ const BenefitPolicyEdit = () => {
                         <MenuItem value="ACTIVE" sx={{ fontSize: '0.8125rem' }}>
                           نشط (Active)
                         </MenuItem>
-                        <MenuItem value="INACTIVE" sx={{ fontSize: '0.8125rem' }}>
-                          غير نشط (Inactive)
-                        </MenuItem>
+                        <MenuItem value="SUSPENDED">موقوفة مؤقتًا</MenuItem>
+                        <MenuItem value="EXPIRED">منتهية</MenuItem>
+                        <MenuItem value="CANCELLED">ملغاة</MenuItem>
                       </TextField>
                     </Grid>
 

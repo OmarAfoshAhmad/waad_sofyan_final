@@ -28,7 +28,7 @@ public class MedicalCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Unique business identifier (immutable). E.g. "CAT-OP", "CAT-IP-NURSE" */
+    /** Unique business identifier (immutable). E.g. "CAT-DRUG", "CAT-PHYSIO". */
     @Column(nullable = false, unique = true, length = 50)
     private String code;
 
@@ -57,11 +57,16 @@ public class MedicalCategory {
     @Builder.Default
     private Set<MedicalCategory> roots = new HashSet<>();
 
-    /** Clinical context — controls where this category is applicable. */
+    /**
+     * Clinical contexts — controls where this category is applicable.
+     * Uses a join table to allow a category to map to multiple contexts.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "medical_category_contexts", joinColumns = @JoinColumn(name = "category_id"))
     @Enumerated(EnumType.STRING)
-    @Column(name = "context", length = 20, nullable = false)
+    @Column(name = "context_type", length = 20)
     @Builder.Default
-    private CategoryContext context = CategoryContext.ANY;
+    private Set<CategoryContext> contexts = new HashSet<>(Set.of(CategoryContext.ANY));
 
     /** Admin-configured coverage percentage (0–100). NULL = not yet set. */
     @Column(name = "coverage_percent", precision = 5, scale = 2)

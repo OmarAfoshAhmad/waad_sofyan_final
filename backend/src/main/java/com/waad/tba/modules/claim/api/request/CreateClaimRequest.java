@@ -132,20 +132,9 @@ public class CreateClaimRequest {
      */
     private String rejectionReason;
 
-    /**
-     * Whether the user manually selected a coverage category context.
-     * If FALSE (default), coverage is determined from each service's own category.
-     * If TRUE, every service in the claim uses the rule from primaryCategoryCode.
-     */
-    private Boolean manualCategoryEnabled;
-
-    /**
-     * The primary category code used for coverage context.
-     * Always send this so unmapped services get appliedCategoryId set correctly.
-     * Example: "CAT-OUTPAT" (عيادات خارجية), "CAT-OPER" (عمليات)
-     */
-    @Size(max = 50, message = "Primary category code must not exceed 50 characters")
-    private String primaryCategoryCode;
+    @Builder.Default
+    private com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
+            com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
 
     /**
      * Full coverage override: 100% coverage, bypasses all limits.

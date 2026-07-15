@@ -906,8 +906,8 @@ public class BenefitPolicyCoverageService {
         MedicalCategory actualCategory = null;
         Long parentCategoryId = null;
         String categoryCodeToCheck = null;
-        CategoryContext categoryContext = null;
-        
+        java.util.Set<CategoryContext> categoryContexts = null;
+
         if (overrideCategoryId != null) {
             Optional<MedicalCategory> catOpt = categoryRepository.findById(overrideCategoryId);
             if (catOpt.isPresent()) {
@@ -923,7 +923,7 @@ public class BenefitPolicyCoverageService {
         if (actualCategory != null) {
             parentCategoryId = actualCategory.getParentId();
             categoryCodeToCheck = actualCategory.getCode();
-            categoryContext = actualCategory.getContext();
+            categoryContexts = actualCategory.getContexts();
         }
 
         // 1. INVALID_CATEGORY
@@ -954,8 +954,8 @@ public class BenefitPolicyCoverageService {
         }
 
         // 4. CONTEXT_MISMATCH
-        if (requestedEncounterContext != null && categoryContext != null && categoryContext != CategoryContext.ANY) {
-            if (requestedEncounterContext != categoryContext) {
+        if (requestedEncounterContext != null && categoryContexts != null && !categoryContexts.isEmpty()) {
+            if (!categoryContexts.contains(CategoryContext.ANY) && !categoryContexts.contains(requestedEncounterContext)) {
                 return ResolvedCoverage.builder()
                         .covered(false)
                         .coveragePercent(0)
@@ -980,8 +980,16 @@ public class BenefitPolicyCoverageService {
 
         // 6. EXACT_CATEGORY_RULE
         // 7. PARENT_CATEGORY_RULE
-        Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForService(
-                policyId, serviceId, serviceCategoryId, overrideCategoryId, parentCategoryId);
+        com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
+                requestedEncounterContext != null
+                        ? com.waad.tba.modules.providercontract.enums.EncounterType.valueOf(requestedEncounterContext.name())
+                        : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
+        Optional<BenefitPolicyRule> ruleOpt = ruleRepository.findBestRuleForContext(
+                policyId,
+                actualCategory.getId(),
+                parentCategoryId,
+                encounterType,
+                com.waad.tba.modules.providercontract.enums.EncounterType.ANY);
 
         if (ruleOpt.isPresent()) {
             BenefitPolicyRule rule = ruleOpt.get();
@@ -1016,18 +1024,7 @@ public class BenefitPolicyCoverageService {
             return res;
         }
 
-        // 8. POLICY_DEFAULT
-        if (policy != null && policy.getDefaultCoveragePercent() != null) {
-            log.debug("⚠️ No specific rule found, using POLICY_DEFAULT");
-            return ResolvedCoverage.builder()
-                    .covered(true)
-                    .coveragePercent(policy.getDefaultCoveragePercent())
-                    .requiresPreApproval(false)
-                    .source(CoverageSource.POLICY_DEFAULT)
-                    .build();
-        }
-
-        // 9. NO_BENEFIT_RULE
+        // No silent fallback to another context or to a general policy percent.
         return ResolvedCoverage.builder()
                 .covered(false)
                 .coveragePercent(0)

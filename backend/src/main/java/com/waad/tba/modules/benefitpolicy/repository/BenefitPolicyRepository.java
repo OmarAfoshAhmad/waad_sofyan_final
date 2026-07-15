@@ -19,6 +19,18 @@ import java.util.Optional;
 @Repository
 public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Long> {
 
+    @Query("SELECT bp FROM BenefitPolicy bp WHERE bp.active = :active " +
+           "AND (:employerId IS NULL OR bp.employer.id = :employerId) " +
+           "AND (:status IS NULL OR bp.status = :status) " +
+           "AND (:search = '' OR LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(COALESCE(bp.policyCode, '')) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(bp.employer.name) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<BenefitPolicy> findManagementPage(@Param("active") boolean active,
+                                           @Param("employerId") Long employerId,
+                                           @Param("status") BenefitPolicyStatus status,
+                                           @Param("search") String search,
+                                           Pageable pageable);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // BASIC QUERIES
     // ═══════════════════════════════════════════════════════════════════════════
@@ -67,6 +79,9 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
      */
     List<BenefitPolicy> findByEmployerIdAndStatusAndActiveTrue(
             Long employerOrgId, BenefitPolicyStatus status);
+
+    Page<BenefitPolicy> findByEmployerIdAndStatusAndActiveTrue(
+            Long employerOrgId, BenefitPolicyStatus status, Pageable pageable);
 
     /**
      * Find paginated policies for an employer
@@ -147,6 +162,14 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
            "     OR LOWER(bp.policyCode) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<BenefitPolicy> searchByNameOrCode(@Param("search") String search, Pageable pageable);
 
+    @Query("SELECT bp FROM BenefitPolicy bp " +
+           "WHERE bp.active = true AND bp.employer.id = :employerId " +
+           "AND (LOWER(bp.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "     OR LOWER(bp.policyCode) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<BenefitPolicy> searchByEmployerAndNameOrCode(@Param("employerId") Long employerId,
+                                                       @Param("search") String search,
+                                                       Pageable pageable);
+
     /**
      * Find policies expiring soon (within N days)
      */
@@ -155,6 +178,14 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
            "AND bp.active = true " +
            "AND bp.endDate BETWEEN :today AND :futureDate")
     List<BenefitPolicy> findPoliciesExpiringSoon(
+            @Param("today") LocalDate today,
+            @Param("futureDate") LocalDate futureDate);
+
+    @Query("SELECT bp FROM BenefitPolicy bp " +
+           "WHERE bp.employer.id = :employerId AND bp.status = 'ACTIVE' " +
+           "AND bp.active = true AND bp.endDate BETWEEN :today AND :futureDate")
+    List<BenefitPolicy> findPoliciesExpiringSoonForEmployer(
+            @Param("employerId") Long employerId,
             @Param("today") LocalDate today,
             @Param("futureDate") LocalDate futureDate);
 
@@ -191,5 +222,8 @@ public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Lo
            "LIMIT 1",
            nativeQuery = true)
     Optional<String> findMaxPolicyCodeByYearPrefix(@Param("yearPrefix") String yearPrefix);
+
+    @Query(value = "SELECT pg_advisory_xact_lock(:lockKey)", nativeQuery = true)
+    void acquireTransactionLock(@Param("lockKey") Long lockKey);
 }
 

@@ -266,9 +266,7 @@ export default function ClaimBatchEntry() {
     setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }));
   };
 
-  // ✅ Claim Category Context (Manual Rule Selection)
-  const [manualCategoryEnabled, setManualCategoryEnabled] = useState(true);
-  const [primaryCategoryCode, setPrimaryCategoryCode] = useState('CAT-OP');
+  const [encounterType, setEncounterType] = useState('OUTPATIENT');
   const [fullCoverage, setFullCoverage] = useState(false);
 
   const defaultDate = useMemo(
@@ -316,9 +314,8 @@ export default function ClaimBatchEntry() {
     policyInfo,
     member,
     applyBenefits,
-    rootCategories,
     medicalCategories,
-    primaryCategoryCode,
+    encounterType,
     setLines,
     recompute,
     serviceYear: serviceDate ? new Date(serviceDate).getFullYear() : year || new Date().getFullYear(),
@@ -329,8 +326,8 @@ export default function ClaimBatchEntry() {
   });
 
   const refetchAllLinesCoverageCallback = useCallback(
-    async (newCategoryCode, newFullCoverage) => {
-      const updated = await refetchAllLinesCoverage(newCategoryCode, linesRef.current, newFullCoverage);
+    async (newEncounterType, newFullCoverage) => {
+      const updated = await refetchAllLinesCoverage(newEncounterType, linesRef.current, newFullCoverage);
       if (updated) setLines(updated);
     },
     [refetchAllLinesCoverage]
@@ -723,8 +720,7 @@ export default function ClaimBatchEntry() {
       );
       setServiceDate(editingClaim.serviceDate || defaultDate);
       setPreAuthId(editingClaim.preAuthorizationId || '');
-      setManualCategoryEnabled(editingClaim.manualCategoryEnabled ?? true);
-      setPrimaryCategoryCode(editingClaim.primaryCategoryCode || 'CAT-OP');
+      setEncounterType(editingClaim.encounterType || 'OUTPATIENT');
       setFullCoverage(!!editingClaim.fullCoverage);
       setIsDirty(false);
 
@@ -732,7 +728,7 @@ export default function ClaimBatchEntry() {
       // يستخدم الـ ref لضمان استخدام النسخة الأحدث دائماً (تجنّب stale closure)
       if (policyId && editingClaim.memberId) {
         setTimeout(() => {
-          refetchCoverageOnEditRef.current(editingClaim.primaryCategoryCode || 'CAT-OP');
+          refetchCoverageOnEditRef.current(editingClaim.encounterType || 'OUTPATIENT');
         }, 300);
       }
     }
@@ -747,8 +743,7 @@ export default function ClaimBatchEntry() {
       lines,
       serviceDate,
       preAuthId,
-      manualCategoryEnabled,
-      primaryCategoryCode,
+      encounterType,
       fullCoverage,
       applyBenefits,
       isClaimRejected,
@@ -762,8 +757,7 @@ export default function ClaimBatchEntry() {
       lines,
       serviceDate,
       preAuthId,
-      manualCategoryEnabled,
-      primaryCategoryCode,
+      encounterType,
       fullCoverage,
       applyBenefits,
       isClaimRejected,
@@ -781,8 +775,7 @@ export default function ClaimBatchEntry() {
       setLines(Array.isArray(payload.lines) && payload.lines.length ? payload.lines : [newLine()]);
       setServiceDate(payload.serviceDate || defaultDate);
       setPreAuthId(payload.preAuthId || '');
-      setManualCategoryEnabled(payload.manualCategoryEnabled ?? true);
-      setPrimaryCategoryCode(payload.primaryCategoryCode || 'CAT-OP');
+      setEncounterType(payload.encounterType || 'OUTPATIENT');
       setFullCoverage(!!payload.fullCoverage);
       setApplyBenefits(payload.applyBenefits ?? true);
       setIsClaimRejected(!!payload.isClaimRejected);
@@ -977,13 +970,13 @@ export default function ClaimBatchEntry() {
       if (needsBackendRefresh && policyId && member?.id) {
         if (coverageRefetchTimerRef.current) clearTimeout(coverageRefetchTimerRef.current);
         coverageRefetchTimerRef.current = setTimeout(() => {
-          refetchAllLinesCoverage(primaryCategoryCode, linesRef.current).then((updated) => {
+          refetchAllLinesCoverage(encounterType, linesRef.current).then((updated) => {
             if (updated) setLines(updated);
           });
         }, 600);
       }
     },
-    [recompute, policyId, member?.id, refetchAllLinesCoverage, primaryCategoryCode]
+    [recompute, policyId, member?.id, refetchAllLinesCoverage, encounterType]
   );
 
   const handleServiceChange = useCallback(
@@ -1020,7 +1013,7 @@ export default function ClaimBatchEntry() {
 
       let cov = { coveragePercent: policyInfo?.defaultCoveragePercent ?? 100, requiresPreApproval: false, notCovered: false };
       if (!isFreeText) {
-        cov = await fetchCoverage(svc, primaryCategoryCode);
+        cov = await fetchCoverage(svc, encounterType);
         if (cov?.__stale) {
           return;
         }
@@ -1036,25 +1029,25 @@ export default function ClaimBatchEntry() {
         ...cov
       });
     },
-    [fetchCoverage, updateLine, lines, enqueueSnackbar, primaryCategoryCode, policyInfo]
+    [fetchCoverage, updateLine, lines, enqueueSnackbar, encounterType, policyInfo]
   );
 
   useEffect(() => {
     if (!policyId || !member?.id) return;
 
     // Force refetch usage/limits for ALL lines when member or policy changes
-    refetchAllLinesCoverage(primaryCategoryCode, linesRef.current).then((updated) => {
+    refetchAllLinesCoverage(encounterType, linesRef.current).then((updated) => {
       if (updated) setLines(updated);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [policyId, member?.id, primaryCategoryCode]);
+  }, [policyId, member?.id, encounterType]);
 
   // ✅ FIX: Refetch coverage when editing a DIFFERENT claim of the SAME member
   // The member useEffect above won't fire if member?.id didn't change, so we need this
   useEffect(() => {
     if (!editingClaimId || !policyId || !member?.id) return;
     const timer = setTimeout(() => {
-      refetchCoverageOnEditRef.current(primaryCategoryCode);
+      refetchCoverageOnEditRef.current(encounterType);
     }, 350);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1093,8 +1086,7 @@ export default function ClaimBatchEntry() {
     setIsDirty(false);
     setServiceDate(defaultDate);
     setPreAuthId('');
-    setManualCategoryEnabled(true);
-    setPrimaryCategoryCode('CAT-OP');
+    setEncounterType('OUTPATIENT');
     setIsClaimRejected(false);
     setRejectionInput('');
     setAttachments([]);
@@ -1359,9 +1351,7 @@ export default function ClaimBatchEntry() {
         status: effectivelyRejected ? 'REJECTED' : 'APPROVED',
         rejectionReason: effectivelyRejected ? effectiveRejectionReason : null,
         preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
-        manualCategoryEnabled,
-        // Always send context category so backend can set appliedCategoryId on unmapped services
-        primaryCategoryCode: primaryCategoryCode,
+        encounterType,
         fullCoverage: fullCoverage,
         lines: lines.map((l) => ({
           pricingItemId: l.service?.pricingItemId || null,
@@ -1536,7 +1526,7 @@ export default function ClaimBatchEntry() {
       invalidateBatchData();
       // ✅ FIX: Restore ceiling in current form after deletion
       if (member?.id && policyId) {
-        setTimeout(() => refetchCoverageOnEditRef.current(primaryCategoryCode), 200);
+        setTimeout(() => refetchCoverageOnEditRef.current(encounterType), 200);
       }
     } catch (err) {
       enqueueSnackbar(err.message || 'فشل إلغاء المطالبة', { variant: 'error' });
@@ -1693,12 +1683,10 @@ export default function ClaimBatchEntry() {
                 memberRef={memberRef}
                 diagnosis={diagnosis}
                 setDiagnosis={setDiagnosis}
-                primaryCategoryCode={primaryCategoryCode}
-                setPrimaryCategoryCode={setPrimaryCategoryCode}
+                encounterType={encounterType}
+                setEncounterType={setEncounterType}
                 fullCoverage={fullCoverage}
                 setFullCoverage={setFullCoverage}
-                setManualCategoryEnabled={setManualCategoryEnabled}
-                rootCategories={rootCategories}
                 onRefetchAll={refetchAllLinesCoverageCallback}
                 linesRef={linesRef}
                 preAuthResults={preAuthResults}

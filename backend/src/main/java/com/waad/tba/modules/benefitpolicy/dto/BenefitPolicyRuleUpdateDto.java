@@ -32,6 +32,10 @@ public class BenefitPolicyRuleUpdateDto {
     @DecimalMin(value = "0.00", message = "Amount limit must be >= 0")
     private BigDecimal amountLimit;
 
+    @DecimalMin(value = "0.00", message = "Copay percentage must be >= 0")
+    @DecimalMax(value = "100.00", message = "Copay percentage must be <= 100")
+    private BigDecimal copayPercentage;
+
     /**
      * Maximum times this benefit can be used per period
      */
@@ -54,6 +58,13 @@ public class BenefitPolicyRuleUpdateDto {
      */
     @Size(max = 500, message = "Notes must not exceed 500 characters")
     private String notes;
+
+    private String encounterType;
+
+    private Boolean inheritanceEnabled;
+
+    @Min(value = 0, message = "Priority must be >= 0")
+    private Integer priority;
 
     /**
      * Whether the rule is active

@@ -83,10 +83,9 @@ public class ClaimMapper {
                                 .reviewerComment(dto.getRejectionReason())
                                 .preAuthorization(preAuth)
                                 .claimBatch(claimBatch)
-                                .manualCategoryEnabled(
-                                                dto.getManualCategoryEnabled() != null ? dto.getManualCategoryEnabled()
-                                                                : false)
-                                .primaryCategoryCode(dto.getPrimaryCategoryCode())
+                                .encounterType(dto.getEncounterType() != null
+                                                ? dto.getEncounterType()
+                                                : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT)
                                 .fullCoverage(dto.getFullCoverage() != null ? dto.getFullCoverage() : false)
                                 .isBacklog(visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.LEGACY_BACKLOG)
                                 .build();
@@ -102,9 +101,9 @@ public class ClaimMapper {
                 claim.setDoctorName(dto.getDoctorName());
                 claim.setComplaint(dto.getComplaint());
                 claim.setReviewerComment(dto.getRejectionReason());
-                claim.setManualCategoryEnabled(
-                                dto.getManualCategoryEnabled() != null ? dto.getManualCategoryEnabled() : false);
-                claim.setPrimaryCategoryCode(dto.getPrimaryCategoryCode());
+                claim.setEncounterType(dto.getEncounterType() != null
+                                ? dto.getEncounterType()
+                                : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT);
                 claim.setFullCoverage(dto.getFullCoverage() != null ? dto.getFullCoverage() : false);
                 claim.setPreAuthorization(preAuth);
 
@@ -123,16 +122,11 @@ public class ClaimMapper {
                                 .memberId(claim.getMember().getId())
                                 .serviceYear(claim.getServiceDate() != null ? claim.getServiceDate().getYear()
                                                 : LocalDate.now().getYear())
+                                .serviceDate(claim.getServiceDate())
                                 .fullCoverage(Boolean.TRUE.equals(claim.getFullCoverage()))
+                                .encounterType(claim.getEncounterType())
                                 .excludeClaimId(claim.getId())
                                 .build();
-
-                Long contextCategoryId = null;
-                if (claim.getPrimaryCategoryCode() != null) {
-                        contextCategoryId = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
-                                        .map(MedicalCategory::getId)
-                                        .orElse(null);
-                }
 
                 List<ClaimLine> lines = new ArrayList<>();
                 BigDecimal totalRequestedAmount = BigDecimal.ZERO;
@@ -187,12 +181,9 @@ public class ClaimMapper {
                         String serviceCatName = lineDto.getServiceCategoryName();
 
                         if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
-                                String targetCode = "CAT-OP-GEN";
-                                if ("CAT-IP".equals(claim.getPrimaryCategoryCode())) {
-                                        targetCode = "CAT-IP-GEN";
-                                } else if ("GEN-MEDICATION".equals(codeToLookup)) {
-                                        targetCode = "CAT-OP-DRUG";
-                                }
+                                String targetCode = "GEN-MEDICATION".equals(codeToLookup)
+                                                ? "CAT-DRUG"
+                                                : "CAT-DIAGNOSTIC";
                                 var optionalCat = medicalCategoryRepository.findByCode(targetCode);
                                 if (optionalCat.isPresent()) {
                                         serviceCatIdForCoverage = optionalCat.get().getId();
@@ -203,7 +194,7 @@ public class ClaimMapper {
                         ClaimLineInput lineInput = ClaimLineInput.builder()
                                         .lineId(String.valueOf(lines.size()))
                                         .serviceId(resolvedPricingItemId)
-                                        .categoryId(contextCategoryId)
+                                        .categoryId(serviceCatIdForCoverage)
                                         .serviceCategoryId(serviceCatIdForCoverage)
                                         .enteredUnitPrice(enteredUnitPrice)
                                         .contractPrice(resolvedUnitPrice)
@@ -279,6 +270,12 @@ public class ClaimMapper {
                                                         : "N/A")
                                         .requiresPA(result.isRequiresPreApproval())
                                         .coveragePercentSnapshot(result.getCoveragePercent())
+                                        .appliedRuleId(result.getAppliedRuleId())
+                                        .appliedContext(claim.getEncounterType() == null ? null : claim.getEncounterType().name())
+                                        .timesLimitSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getTimesLimit())
+                                        .amountLimitSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getAmountLimit())
+                                        .usedAmountSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getUsedAmount())
+                                        .remainingAmountSnapshot(result.getUsageDetails() == null ? null : result.getUsageDetails().getRemainingAmount())
                                         .patientCopayPercentSnapshot(result.getCoveragePercent() != null
                                                         ? 100 - result.getCoveragePercent()
                                                         : 0)
@@ -433,19 +430,6 @@ public class ClaimMapper {
                 var member = claim.getMember();
                 var employer = (member != null) ? member.getEmployer() : null;
 
-                String primaryCategoryName = null;
-                if (claim.getPrimaryCategoryCode() != null) {
-                        primaryCategoryName = medicalCategoryRepository.findByCode(claim.getPrimaryCategoryCode())
-                                        .map(MedicalCategory::getName)
-                                        .orElse(null);
-                }
-
-                if (Boolean.TRUE.equals(claim.getFullCoverage())) {
-                        primaryCategoryName = (primaryCategoryName != null)
-                                        ? primaryCategoryName + " (تغطية كاملة)"
-                                        : "تغطية كاملة";
-                }
-
                 BigDecimal appliedDiscount = claim.getAppliedDiscountPercent();
                 if (appliedDiscount == null) {
                         appliedDiscount = resolveActiveProviderDiscountPercent(claim.getProviderId());
@@ -491,9 +475,7 @@ public class ClaimMapper {
                                 .diagnosisDescription(claim.getDiagnosisDescription())
                                 .complaint(claim.getComplaint())
                                 .reviewerComment(claim.getReviewerComment())
-                                .manualCategoryEnabled(claim.getManualCategoryEnabled())
-                                .primaryCategoryCode(claim.getPrimaryCategoryCode())
-                                .primaryCategoryName(primaryCategoryName)
+                                .encounterType(claim.getEncounterType())
                                 .fullCoverage(claim.getFullCoverage())
                                 .claimBatchId(claim.getClaimBatch() != null ? claim.getClaimBatch().getId() : null)
                                 .claimBatchCode(claim.getClaimBatch() != null ? claim.getClaimBatch().getBatchCode()

@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.dto;
 
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -68,15 +69,7 @@ public class ClaimUpdateDto {
      */
     private String rejectionReason;
 
-    /**
-     * Category Identification (ICD-10 or local code)
-     */
-    private String primaryCategoryCode;
-
-    /**
-     * Manual Category override
-     */
-    private Boolean manualCategoryEnabled;
+    private EncounterType encounterType;
 
     /**
      * Full Coverage override (100% company share)

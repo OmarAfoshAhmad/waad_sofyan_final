@@ -52,11 +52,7 @@ public class UpdateClaimDataRequest {
     @Valid
     private List<ClaimLineRequest> lines;
 
-    /**
-     * Manual category selection — provider can override the derived category
-     */
-    private String primaryCategoryCode;
-    private Boolean manualCategoryEnabled;
+    private com.waad.tba.modules.providercontract.enums.EncounterType encounterType;
     private Boolean fullCoverage;
 
     @Data

@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.time.LocalDate;
 
 /**
  * DTO طلب Bulk لمحرك التغطية.
@@ -48,6 +49,9 @@ public class BulkCoverageEngineRequest {
     @NotNull(message = "serviceYear مطلوب")
     private Integer serviceYear;
 
+    /** Exact service date used for daily/monthly/policy-period bucket windows. */
+    private LocalDate serviceDate;
+
     /**
      * معرّف المطالبة المستثناة من حساب السقوف (عند التعديل).
      * يمنع احتساب المطالبة الحالية ضمن سجل الاستخدام عند إعادة حسابها.
@@ -61,6 +65,11 @@ public class BulkCoverageEngineRequest {
      */
     @Builder.Default
     private boolean fullCoverage = false;
+
+    /** Encounter context selected on the claim header. */
+    @Builder.Default
+    private com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
+            com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
 
     /**
      * قائمة أسطر الخدمات المطلوب حسابها.

@@ -59,7 +59,7 @@ public class EmployerService {
      * @return Page of employers
      */
     public Page<EmployerResponseDto> getAll(Pageable pageable) {
-        return employerRepository.findAll(pageable)
+        return employerRepository.findByActiveTrue(pageable)
                 .map(mapper::toResponse);
     }
 
@@ -81,6 +81,11 @@ public class EmployerService {
     public Page<EmployerResponseDto> getAllIncludingArchived(Pageable pageable) {
         return employerRepository.findAll(pageable)
                 .map(mapper::toResponse);
+    }
+
+    public Page<EmployerResponseDto> getPage(Boolean active, String query, Pageable pageable) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        return employerRepository.searchPage(active, normalizedQuery, pageable).map(mapper::toResponse);
     }
 
     /**
@@ -177,6 +182,7 @@ public class EmployerService {
         log.info("[EmployerService] Creating employer with name: {}", dto.getName());
 
         String employerCode = dto.getCode().trim().toUpperCase();
+        validateEmployerTerms(dto.getContractStartDate(), dto.getContractEndDate(), dto.getMaxMemberLimit(), 0L);
 
         // Validate code uniqueness
         if (employerRepository.existsByCodeIgnoreCase(employerCode)) {
@@ -245,9 +251,11 @@ public class EmployerService {
         employer.setCode(dto.getCode().trim().toUpperCase());
         employer.setName(dto.getName().trim());
 
-        if (dto.getActive() != null) {
-            employer.setActive(dto.getActive());
+        if (dto.getActive() != null && !dto.getActive().equals(employer.getActive())) {
+            throw new BusinessRuleException("غيّر حالة جهة العمل عبر إجراء الأرشفة أو الاستعادة لضمان سلامة العلاقات");
         }
+        validateEmployerTerms(dto.getContractStartDate(), dto.getContractEndDate(), dto.getMaxMemberLimit(),
+                memberRepository.countByEmployerIdAndActiveTrue(id));
         employer.setAddress(dto.getAddress());
         employer.setPhone(dto.getPhone());
         employer.setEmail(dto.getEmail());
@@ -283,16 +291,8 @@ public class EmployerService {
      */
     @Transactional
     public void delete(Long id) {
-        Employer employer = findEmployerById(id);
-        // Only allow hard delete if already archived (inactive)
-        if (Boolean.TRUE.equals(employer.getActive())) {
-            throw new BusinessRuleException("لا يمكن الحذف النهائي إلا بعد الأرشفة. أرشف جهة العمل أولاً.");
-        }
-        DeletionGuard.of("جهة العمل")
-                .check("مستفيدون نشطون", memberRepository.countByEmployerIdAndActiveTrue(id))
-                .throwIfBlocked("أوقف تفعيل المستفيدين أولاً قبل الحذف النهائي.");
-        employerRepository.deleteById(id);
-        log.info("[EmployerService] Hard-deleted employer ID: {}", id);
+        findEmployerById(id);
+        throw new BusinessRuleException("الحذف النهائي لجهة العمل غير مسموح لحماية السجل التأميني؛ استخدم الأرشفة");
     }
 
     /**
@@ -454,6 +454,16 @@ public class EmployerService {
         String trimmed = name.trim();
         if (excludeId == null) return !employerRepository.existsByNameIgnoreCase(trimmed);
         return !employerRepository.existsByNameIgnoreCaseAndIdNot(trimmed, excludeId);
+    }
+
+    private void validateEmployerTerms(java.time.LocalDate startDate, java.time.LocalDate endDate,
+                                       Integer maxMemberLimit, long activeMembers) {
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            throw new BusinessRuleException("تاريخ نهاية التعاقد يجب ألا يسبق تاريخ البداية");
+        }
+        if (maxMemberLimit != null && maxMemberLimit < activeMembers) {
+            throw new BusinessRuleException("الحد الأقصى للمستفيدين أقل من عدد المستفيدين النشطين الحالي: " + activeMembers);
+        }
     }
 
     /**

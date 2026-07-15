@@ -1,13 +1,9 @@
-import React from 'react';
-import { Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Chip, MenuItem, Alert, Button } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Alert, Button } from '@mui/material';
 
 const inlineSx = {
   '& .MuiInputBase-root': { fontSize: '0.9rem' },
   '& .MuiInput-input': { fontSize: '0.9rem' }
 };
-
-const FULL_COVERAGE_OPTION = { id: -1, code: 'FULL_COVERAGE', name: '✦ تغطية كاملة' };
 
 export const ClaimHeaderFields = ({
   member,
@@ -20,12 +16,10 @@ export const ClaimHeaderFields = ({
   memberRef,
   diagnosis,
   setDiagnosis,
-  primaryCategoryCode,
-  setPrimaryCategoryCode,
+  encounterType,
+  setEncounterType,
   fullCoverage,
   setFullCoverage,
-  setManualCategoryEnabled,
-  rootCategories,
   onRefetchAll,
   linesRef,
   preAuthResults,
@@ -71,7 +65,7 @@ export const ClaimHeaderFields = ({
             setMember(v);
             setIsDirty(true);
             if (v?.id) {
-              onRefetchAll(primaryCategoryCode, fullCoverage);
+              onRefetchAll(encounterType, fullCoverage);
             }
           }}
           onInputChange={(_, v) => setMemberInput(v)}
@@ -158,80 +152,28 @@ export const ClaimHeaderFields = ({
       {/* Column 4: Coverage Context */}
       <Box>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
-          سياق التغطية (Context)
+          سياق المطالبة
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <FormControlLabel
             control={
               <Checkbox
                 size="small"
-                checked={primaryCategoryCode === 'CAT-OP'}
+                checked={encounterType === 'INPATIENT'}
                 onChange={(e) => {
-                  const checked = e.target.checked;
-                  const newCode = checked ? 'CAT-OP' : 'CAT-IP';
-                  setPrimaryCategoryCode(newCode);
-                  if (checked) setFullCoverage(false);
+                  const newEncounterType = e.target.checked ? 'INPATIENT' : 'OUTPATIENT';
+                  setEncounterType(newEncounterType);
                   setIsDirty(true);
-                  onRefetchAll(newCode, checked ? false : fullCoverage);
+                  onRefetchAll(newEncounterType, fullCoverage);
                 }}
                 sx={{ p: 0.5 }}
               />
             }
-            label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>عيادات خارجية</Typography>}
+            label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>حالة إيواء</Typography>}
           />
-
-          {primaryCategoryCode !== 'CAT-OP' && (
-            <Autocomplete
-              size="small"
-              sx={{ flexGrow: 1 }}
-              options={[
-                // ✅ Ensure Housing (CAT-IP) comes FIRST, then Full Coverage
-                ...(rootCategories?.filter((c) => c.code === 'CAT-IP') || []),
-                FULL_COVERAGE_OPTION
-              ].filter(Boolean)}
-              getOptionLabel={(o) => o.label || o.name || o.nameAr || ''}
-              value={fullCoverage ? FULL_COVERAGE_OPTION : rootCategories?.find((c) => c.code === primaryCategoryCode) || null}
-              isOptionEqualToValue={(o, v) => o?.code === v?.code}
-              onChange={(_, v) => {
-                const isFull = v?.code === 'FULL_COVERAGE';
-                const newCode = isFull ? 'CAT-IP' : v?.code || '';
-
-                setFullCoverage(isFull);
-                setPrimaryCategoryCode(newCode);
-                setManualCategoryEnabled(!!v);
-                setIsDirty(true);
-
-                // ✅ Fix: Only pass 2 arguments to the callback wrapper
-                onRefetchAll?.(newCode, isFull);
-              }}
-              renderOption={(props, option) => (
-                <li {...props} key={option.code}>
-                  <Typography
-                    sx={{
-                      fontSize: '0.8rem',
-                      fontWeight: option.code === 'FULL_COVERAGE' ? 700 : 400,
-                      color: option.code === 'FULL_COVERAGE' ? 'success.main' : 'inherit'
-                    }}
-                  >
-                    {option.name || option.nameAr || option.label}
-                  </Typography>
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  variant="standard"
-                  placeholder="اختر التصنيف..."
-                  sx={{
-                    ...inlineSx,
-                    ...(fullCoverage && {
-                      '& .MuiInputBase-input': { color: '#00695c', fontWeight: 700 }
-                    })
-                  }}
-                />
-              )}
-            />
-          )}
+          <Typography variant="caption" color="text.secondary">
+            {encounterType === 'INPATIENT' ? 'إيواء' : 'عيادات خارجية'}
+          </Typography>
         </Stack>
       </Box>
     </Box>

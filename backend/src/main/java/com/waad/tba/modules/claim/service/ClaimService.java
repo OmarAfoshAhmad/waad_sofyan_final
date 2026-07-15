@@ -616,17 +616,10 @@ public class ClaimService {
             claim.setReviewerComment(dto.getRejectionReason());
         }
 
-        if (dto.getPrimaryCategoryCode() != null) {
-            String previousPrimaryCategoryCode = claim.getPrimaryCategoryCode();
-            claim.setPrimaryCategoryCode(dto.getPrimaryCategoryCode());
-            if (!Objects.equals(previousPrimaryCategoryCode, claim.getPrimaryCategoryCode())) {
-                claim.markCoverageDirty();
-            }
-        }
-        if (dto.getManualCategoryEnabled() != null) {
-            Boolean previousManualCategoryEnabled = claim.getManualCategoryEnabled();
-            claim.setManualCategoryEnabled(dto.getManualCategoryEnabled());
-            if (!Objects.equals(previousManualCategoryEnabled, claim.getManualCategoryEnabled())) {
+        if (dto.getEncounterType() != null) {
+            var previousEncounterType = claim.getEncounterType();
+            claim.setEncounterType(dto.getEncounterType());
+            if (!Objects.equals(previousEncounterType, claim.getEncounterType())) {
                 claim.markCoverageDirty();
             }
         }

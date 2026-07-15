@@ -59,8 +59,7 @@ public class ClaimApiMapper {
                                 .status(request.getStatus())
                                 .complaint(request.getComplaint())
                                 .rejectionReason(request.getRejectionReason())
-                                .manualCategoryEnabled(request.getManualCategoryEnabled())
-                                .primaryCategoryCode(request.getPrimaryCategoryCode())
+                                .encounterType(request.getEncounterType())
                                 .fullCoverage(request.getFullCoverage())
                                 .build();
         }
@@ -110,8 +109,7 @@ public class ClaimApiMapper {
                                 .diagnosisDescription(request.getDiagnosisDescription())
                                 .complaint(request.getComplaint())
                                 .rejectionReason(request.getRejectionReason())
-                                .primaryCategoryCode(request.getPrimaryCategoryCode())
-                                .manualCategoryEnabled(request.getManualCategoryEnabled())
+                                .encounterType(request.getEncounterType())
                                 .fullCoverage(request.getFullCoverage())
                                 .preAuthorizationId(request.getPreAuthorizationId())
                                 .status(request.getStatus() != null

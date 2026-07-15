@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.dto;
 
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -110,8 +111,8 @@ public class ClaimCreateDto {
     private String complaint;
 
     // ==================== COVERAGE CONTEXT ====================
-    private Boolean manualCategoryEnabled;
-    private String primaryCategoryCode;
+    @Builder.Default
+    private EncounterType encounterType = EncounterType.OUTPATIENT;
     private Boolean fullCoverage;
 
     /**

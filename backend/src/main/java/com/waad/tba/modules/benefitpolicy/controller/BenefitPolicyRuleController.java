@@ -3,6 +3,7 @@ package com.waad.tba.modules.benefitpolicy.controller;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.benefitpolicy.dto.*;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,6 +39,7 @@ import java.util.Optional;
 public class BenefitPolicyRuleController {
 
     private final BenefitPolicyRuleService ruleService;
+    private final BenefitPolicyService policyService;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ ENDPOINTS
@@ -112,10 +114,12 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "categoryId", required = false) Long categoryId,
-            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId) {
+            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId,
+            @RequestParam(name = "encounterType", defaultValue = "OUTPATIENT")
+            com.waad.tba.modules.providercontract.enums.EncounterType encounterType) {
 
         Optional<BenefitPolicyRuleResponseDto> result = ruleService.findCoverageForService(policyId, serviceId,
-                categoryId, serviceCategoryId);
+                serviceCategoryId != null ? serviceCategoryId : categoryId, encounterType);
 
         if (result.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success("Service not covered under this policy", null));
@@ -131,10 +135,12 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("serviceId") Long serviceId,
             @RequestParam(name = "categoryId", required = false) Long categoryId,
-            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId) {
+            @RequestParam(name = "serviceCategoryId", required = false) Long serviceCategoryId,
+            @RequestParam(name = "encounterType", defaultValue = "OUTPATIENT")
+            com.waad.tba.modules.providercontract.enums.EncounterType encounterType) {
 
         Optional<BenefitPolicyRuleResponseDto> ruleOpt = ruleService.findCoverageForService(policyId, serviceId,
-                categoryId, serviceCategoryId);
+                serviceCategoryId != null ? serviceCategoryId : categoryId, encounterType);
         boolean isCovered = ruleOpt.isPresent();
         int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
                 .orElse(ruleService.getDefaultCoveragePercent(policyId));
@@ -193,6 +199,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @Valid @RequestBody BenefitPolicyRuleCreateDto dto) {
 
+        policyService.assertDraftConfiguration(policyId);
+
         log.info("Creating rule for policy {} - category: {}, service: {}",
                 policyId, dto.getMedicalCategoryId(), dto.getMedicalServiceId());
 
@@ -208,6 +216,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @Valid @RequestBody List<BenefitPolicyRuleCreateDto> dtos) {
 
+        policyService.assertDraftConfiguration(policyId);
+
         log.info("Bulk creating {} rules for policy {}", dtos.size(), policyId);
 
         List<BenefitPolicyRuleResponseDto> result = ruleService.createBulk(policyId, dtos);
@@ -220,6 +230,8 @@ public class BenefitPolicyRuleController {
     @Operation(summary = "Initialize policy with the 16 standard professional rules")
     public ResponseEntity<ApiResponse<List<BenefitPolicyRuleResponseDto>>> initializeStandardRules(
             @PathVariable("policyId") Long policyId) {
+
+        policyService.assertDraftConfiguration(policyId);
 
         log.info("Initializing standard 16 rules for policy {}", policyId);
         List<BenefitPolicyRuleResponseDto> result = ruleService.initializeStandardRules(policyId);
@@ -239,6 +251,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("ruleId") Long ruleId,
             @Valid @RequestBody BenefitPolicyRuleUpdateDto dto) {
 
+        assertMutableRule(policyId, ruleId);
+
         log.info("Updating rule {} for policy {}", ruleId, policyId);
 
         BenefitPolicyRuleResponseDto result = ruleService.update(ruleId, dto);
@@ -252,6 +266,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("ruleId") Long ruleId) {
 
+        assertMutableRule(policyId, ruleId);
+
         BenefitPolicyRuleResponseDto result = ruleService.toggleActive(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule toggled", result));
     }
@@ -262,6 +278,8 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> restore(
             @PathVariable("policyId") Long policyId,
             @PathVariable("ruleId") Long ruleId) {
+
+        assertMutableRule(policyId, ruleId);
 
         log.info("Restoring rule {} for policy {}", ruleId, policyId);
         BenefitPolicyRuleResponseDto result = ruleService.restore(ruleId);
@@ -279,6 +297,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("ruleId") Long ruleId) {
 
+        assertMutableRule(policyId, ruleId);
+
         log.info("Deleting rule {} from policy {}", ruleId, policyId);
         ruleService.delete(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule deleted", null));
@@ -291,6 +311,8 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("ruleId") Long ruleId) {
 
+        assertMutableRule(policyId, ruleId);
+
         log.info("Hard deleting rule {} from policy {}", ruleId, policyId);
         ruleService.hardDelete(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule permanently deleted", null));
@@ -302,6 +324,8 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<Void>> deleteAll(
             @PathVariable("policyId") Long policyId) {
 
+        policyService.assertDraftConfiguration(policyId);
+
         log.info("Deleting all rules for policy {}", policyId);
         ruleService.deleteAllForPolicy(policyId);
         return ResponseEntity.ok(ApiResponse.success("All rules deleted", null));
@@ -312,6 +336,8 @@ public class BenefitPolicyRuleController {
     @Operation(summary = "Deactivate all rules for this policy")
     public ResponseEntity<ApiResponse<Integer>> deactivateAll(
             @PathVariable("policyId") Long policyId) {
+
+        policyService.assertDraftConfiguration(policyId);
 
         log.info("Deactivating all rules for policy {}", policyId);
         int count = ruleService.deactivateAllForPolicy(policyId);
@@ -334,6 +360,7 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("templateId") Long templateId,
             @RequestParam(value = "mode", defaultValue = "UPDATE") String mode) {
+        policyService.assertDraftConfiguration(policyId);
         log.info("Request to apply template {} to policy {} with mode {}", templateId, policyId, mode);
         ruleService.applyTemplate(policyId, templateId, mode);
         return ResponseEntity.ok(ApiResponse.success("Template applied successfully", null));
@@ -346,9 +373,15 @@ public class BenefitPolicyRuleController {
             @PathVariable("policyId") Long policyId,
             @PathVariable("sourcePolicyId") Long sourcePolicyId,
             @RequestParam(value = "mode", defaultValue = "UPDATE") String mode) {
+        policyService.assertDraftConfiguration(policyId);
         log.info("Request to copy rules from policy {} to policy {} with mode {}", sourcePolicyId, policyId, mode);
         ruleService.copyRulesFromPolicy(policyId, sourcePolicyId, mode);
         return ResponseEntity.ok(ApiResponse.success("Rules copied successfully", null));
+    }
+
+    private void assertMutableRule(Long policyId, Long ruleId) {
+        policyService.assertDraftConfiguration(policyId);
+        ruleService.assertBelongsToPolicy(ruleId, policyId);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

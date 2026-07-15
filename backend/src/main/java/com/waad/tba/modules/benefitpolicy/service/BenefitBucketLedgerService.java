@@ -1,0 +1,173 @@
+package com.waad.tba.modules.benefitpolicy.service;
+
+import com.waad.tba.modules.benefitpolicy.entity.*;
+import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
+import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
+import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.common.exception.BusinessRuleException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.TemporalAdjusters;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+
+/**
+ * Append-only, idempotent balance ledger for shared and hierarchical limits.
+ * Entries are created only after claim approval and are neutralized on reversal.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class BenefitBucketLedgerService {
+    private final ClaimRepository claimRepository;
+    private final BenefitRuleBucketRepository ruleBucketRepository;
+    private final BenefitLimitBucketRepository bucketRepository;
+    private final BenefitBucketConsumptionRepository consumptionRepository;
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void commitClaim(Long claimId) {
+        Claim claim = claimRepository.findById(claimId).orElseThrow();
+        if (claim.getMember() == null || claim.getMember().getBenefitPolicy() == null) {
+            log.warn("Skipping benefit ledger for claim {}: member has no policy", claimId);
+            return;
+        }
+        BenefitPolicy policy = claim.getMember().getBenefitPolicy();
+        Long memberId = claim.getMember().getId();
+        LocalDate serviceDate = claim.getServiceDate() == null ? LocalDate.now() : claim.getServiceDate();
+        Set<Long> countedOnce = new HashSet<>();
+        Set<Long> validatedDays = new HashSet<>();
+
+        for (ClaimLine line : claim.getLines()) {
+            if (line.getAppliedRuleId() == null || amount(line).signum() <= 0) continue;
+            LinkedHashMap<Long, BenefitLimitBucket> buckets = new LinkedHashMap<>();
+            for (BenefitRuleBucket link : ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(line.getAppliedRuleId())) {
+                addWithParents(link.getBucket(), buckets);
+            }
+            for (BenefitLimitBucket candidate : buckets.values()) {
+                BenefitLimitBucket bucket = bucketRepository.findByIdForUpdate(candidate.getId()).orElseThrow();
+                if (!bucket.isActive()) continue;
+                String key = "CLAIM:" + claimId + ":LINE:" + line.getId() + ":BUCKET:" + bucket.getId() + ":V" + line.getCalculationVersion();
+                if (consumptionRepository.existsByIdempotencyKey(key)) continue;
+                Period period = period(bucket, policy, serviceDate);
+                int times = consumedTimes(bucket, line, countedOnce);
+                BigDecimal consumedAmount = bucket.getConsumptionBasis() == ConsumptionBasis.COMPANY_SHARE
+                        ? amount(line) : eligibleAmount(line);
+                validateAvailableBalance(bucket, memberId, serviceDate, period, consumedAmount, times,
+                        validatedDays.add(bucket.getId()));
+                consumptionRepository.save(BenefitBucketConsumption.builder()
+                        .claim(claim).claimLine(line).policy(policy).memberId(memberId).bucket(bucket)
+                        .periodStart(period.start()).periodEnd(period.end())
+                        .approvedAmount(consumedAmount).timesConsumed(times)
+                        .status(BenefitBucketConsumption.Status.COMMITTED)
+                        .calculationVersion(line.getCalculationVersion()).idempotencyKey(key)
+                        .committedAt(LocalDateTime.now()).build());
+            }
+        }
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void reverseClaim(Long claimId) {
+        for (BenefitBucketConsumption original : consumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED)) {
+            String key = original.getIdempotencyKey() + ":REVERSAL";
+            if (consumptionRepository.existsByIdempotencyKey(key)) continue;
+            bucketRepository.findByIdForUpdate(original.getBucket().getId()).orElseThrow();
+            LocalDateTime now = LocalDateTime.now();
+            original.setStatus(BenefitBucketConsumption.Status.REVERSED);
+            original.setReversedAt(now);
+            consumptionRepository.save(original);
+            consumptionRepository.save(BenefitBucketConsumption.builder()
+                    .claim(original.getClaim()).claimLine(original.getClaimLine()).policy(original.getPolicy())
+                    .memberId(original.getMemberId()).bucket(original.getBucket())
+                    .periodStart(original.getPeriodStart()).periodEnd(original.getPeriodEnd())
+                    .approvedAmount(original.getApprovedAmount()).timesConsumed(original.getTimesConsumed())
+                    .status(BenefitBucketConsumption.Status.REVERSED)
+                    .calculationVersion(original.getCalculationVersion()).idempotencyKey(key)
+                    .reversalOf(original).reversedAt(now).build());
+        }
+    }
+
+    private void addWithParents(BenefitLimitBucket bucket, Map<Long, BenefitLimitBucket> target) {
+        BenefitLimitBucket current = bucket;
+        while (current != null) {
+            target.putIfAbsent(current.getId(), current);
+            current = current.getParentBucket();
+        }
+    }
+
+    private int consumedTimes(BenefitLimitBucket bucket, ClaimLine line, Set<Long> countedOnce) {
+        return switch (bucket.getCountingMethod()) {
+            case EACH_UNIT -> Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+            case PER_VISIT, PER_DAY -> countedOnce.add(bucket.getId()) ? 1 : 0;
+            case EACH_LINE -> 1;
+        };
+    }
+
+    private void validateAvailableBalance(BenefitLimitBucket bucket, Long memberId, LocalDate serviceDate,
+                                          Period period, BigDecimal consumedAmount, int consumedTimes,
+                                          boolean validateDay) {
+        BigDecimal usedAmount = consumptionRepository.sumCommittedAmount(memberId, bucket.getId(),
+                period.start(), period.end(), null);
+        Integer usedTimes = consumptionRepository.sumCommittedTimes(memberId, bucket.getId(),
+                period.start(), period.end(), null);
+
+        if (bucket.getAmountLimit() != null
+                && usedAmount.add(consumedAmount).compareTo(bucket.getAmountLimit()) > 0) {
+            throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز السقف المالي للوعاء «"
+                    + bucket.getNameAr() + "». أعد احتساب المطالبة ثم حاول مجددًا.");
+        }
+        if (bucket.getTimesLimit() != null
+                && (usedTimes == null ? 0 : usedTimes) + consumedTimes > bucket.getTimesLimit()) {
+            throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز حد المرات للوعاء «"
+                    + bucket.getNameAr() + "». أعد احتساب المطالبة ثم حاول مجددًا.");
+        }
+        if (validateDay && bucket.getDaysLimit() != null
+                && !consumptionRepository.existsCommittedForServiceDay(memberId, bucket.getId(), serviceDate, null)) {
+            long usedDays = consumptionRepository.countCommittedServiceDays(memberId, bucket.getId(),
+                    period.start(), period.end(), null);
+            if (usedDays + 1 > bucket.getDaysLimit()) {
+                throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز حد الأيام للوعاء «"
+                        + bucket.getNameAr() + "». أعد احتساب المطالبة ثم حاول مجددًا.");
+            }
+        }
+    }
+
+    private BigDecimal amount(ClaimLine line) {
+        return Optional.ofNullable(line.getCompanyShare()).orElseGet(() ->
+                Optional.ofNullable(line.getApprovedAmount()).orElse(BigDecimal.ZERO));
+    }
+
+    private BigDecimal eligibleAmount(ClaimLine line) {
+        return Optional.ofNullable(line.getTotalPrice()).orElse(BigDecimal.ZERO);
+    }
+
+    private Period period(BenefitLimitBucket bucket, BenefitPolicy policy, LocalDate date) {
+        return switch (bucket.getPeriodType()) {
+            case PER_SERVICE, PER_VISIT, DAILY -> new Period(date, date);
+            case MONTHLY -> new Period(date.withDayOfMonth(1), date.with(TemporalAdjusters.lastDayOfMonth()));
+            case ANNUAL -> new Period(LocalDate.of(date.getYear(), 1, 1), LocalDate.of(date.getYear(), 12, 31));
+            case MULTI_YEAR_POLICY -> {
+                int years = bucket.getPeriodValue() == null ? 1 : Math.max(1, bucket.getPeriodValue());
+                long elapsed = Math.max(0, ChronoUnit.YEARS.between(policy.getStartDate(), date));
+                LocalDate start = policy.getStartDate().plusYears((elapsed / years) * years);
+                LocalDate end = start.plusYears(years).minusDays(1);
+                if (policy.getEndDate() != null && end.isAfter(policy.getEndDate())) end = policy.getEndDate();
+                yield new Period(start, end);
+            }
+            case POLICY_PERIOD -> new Period(policy.getStartDate(), policy.getEndDate());
+            case LIFETIME -> new Period(LocalDate.of(1900, 1, 1), null);
+        };
+    }
+
+    private record Period(LocalDate start, LocalDate end) {}
+}

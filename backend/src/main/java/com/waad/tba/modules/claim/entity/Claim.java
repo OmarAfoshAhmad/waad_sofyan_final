@@ -2,6 +2,7 @@ package com.waad.tba.modules.claim.entity;
 
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -185,21 +186,13 @@ public class Claim {
     // ====================
 
     /**
-     * Whether the user manually selected a coverage category context.
-     * If FALSE (default), coverage is determined from each service's own category.
-     * If TRUE, every service in the claim uses the rule from primaryCategoryCode.
+     * Care setting for the whole encounter. Changing it selects a different
+     * policy rule; it never changes a line's medical category.
      */
-    @Column(name = "manual_category_enabled")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "encounter_type", length = 20, nullable = false)
     @Builder.Default
-    private Boolean manualCategoryEnabled = false;
-
-    /**
-     * The primary category code used for overriding coverage rules.
-     * Only relevant if manualCategoryEnabled is TRUE.
-     * Example: "CAT-OUTPAT" (عيادات خارجية), "CAT-OPER" (عمليات)
-     */
-    @Column(name = "primary_category_code", length = 50)
-    private String primaryCategoryCode;
+    private EncounterType encounterType = EncounterType.OUTPATIENT;
 
     /**
      * Full coverage override: 100% coverage, no limits.

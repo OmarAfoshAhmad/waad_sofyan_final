@@ -1,6 +1,7 @@
 package com.waad.tba.modules.employer.controller;
 
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,20 +36,29 @@ import lombok.RequiredArgsConstructor;
 @PreAuthorize("isAuthenticated()")
 public class EmployerController {
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "code", "name", "email", "active", "createdAt", "updatedAt");
+
     private final EmployerService service;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     public ResponseEntity<ApiResponse<Page<EmployerResponseDto>>> getAll(
             @RequestParam(name = "includeArchived", required = false, defaultValue = "false") boolean includeArchived,
+            @RequestParam(name = "archivedOnly", required = false, defaultValue = "false") boolean archivedOnly,
+            @RequestParam(name = "q", required = false, defaultValue = "") String query,
             @RequestParam(name = "page", required = false, defaultValue = "0") int page,
-            @RequestParam(name = "size", required = false, defaultValue = "20") int size) {
+            @RequestParam(name = "size", required = false, defaultValue = "20") int size,
+            @RequestParam(name = "sortBy", required = false, defaultValue = "name") String sortBy,
+            @RequestParam(name = "sortDir", required = false, defaultValue = "ASC") String sortDir) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
+        String safeSort = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "name";
+        Sort.Direction direction;
+        try { direction = Sort.Direction.fromString(sortDir); }
+        catch (IllegalArgumentException ex) { direction = Sort.Direction.ASC; }
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 200), Sort.by(direction, safeSort));
 
-        Page<EmployerResponseDto> employers = includeArchived
-                ? service.getAllIncludingArchived(pageable)
-                : service.getAll(pageable);
+        Boolean activeFilter = archivedOnly ? Boolean.FALSE : includeArchived ? null : Boolean.TRUE;
+        Page<EmployerResponseDto> employers = service.getPage(activeFilter, query, pageable);
 
         return ResponseEntity.ok(ApiResponse.success(employers));
     }

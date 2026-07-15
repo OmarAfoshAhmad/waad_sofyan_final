@@ -114,7 +114,15 @@ export const normalizeEmployerRequest = (frontendDto) => {
     active,
     email,
     phone,
-    address
+    address,
+    businessType: frontendDto.businessType || null,
+    website: frontendDto.website || null,
+    logoUrl: frontendDto.logoUrl || null,
+    crNumber: frontendDto.crNumber || null,
+    taxNumber: frontendDto.taxNumber || null,
+    contractStartDate: frontendDto.contractStartDate || null,
+    contractEndDate: frontendDto.contractEndDate || null,
+    maxMemberLimit: frontendDto.maxMemberLimit === '' ? null : (frontendDto.maxMemberLimit ?? null)
   };
 
   // Only include code if provided (otherwise backend auto-generates)
@@ -185,6 +193,14 @@ export const normalizeEmployerResponse = (backendDto) => {
     email: backendDto.email,
     phone: backendDto.phone,
     address: backendDto.address,
+    businessType: backendDto.businessType,
+    website: backendDto.website,
+    logoUrl: backendDto.logoUrl,
+    crNumber: backendDto.crNumber,
+    taxNumber: backendDto.taxNumber,
+    contractStartDate: backendDto.contractStartDate,
+    contractEndDate: backendDto.contractEndDate,
+    maxMemberLimit: backendDto.maxMemberLimit,
     membersCount: backendDto.membersCount ?? 0,
     createdAt: backendDto.createdAt,
     updatedAt: backendDto.updatedAt
@@ -392,6 +408,20 @@ export const getEmployers = async () => {
     return normalizeEmployerArrayResponse(rawData);
   } catch (error) {
     console.error('[EmployerService] getEmployers failed:', error);
+    throw handleEmployerErrors(error);
+  }
+};
+
+/** Server-paginated employer list used by the management screen. */
+export const getEmployersPage = async (params = {}) => {
+  try {
+    const response = await axiosClient.get(BASE_URL, { params });
+    const page = unwrap(response) || {};
+    return {
+      ...page,
+      content: normalizeEmployerArrayResponse(page.content || [])
+    };
+  } catch (error) {
     throw handleEmployerErrors(error);
   }
 };
@@ -754,6 +784,7 @@ export const exportEmployers = async (params = {}) => {
 const employersService = {
   // CRUD Operations
   getEmployers,
+  getEmployersPage,
   getEmployerById,
   createEmployer,
   updateEmployer,

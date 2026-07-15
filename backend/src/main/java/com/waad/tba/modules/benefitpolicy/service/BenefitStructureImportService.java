@@ -1,0 +1,336 @@
+package com.waad.tba.modules.benefitpolicy.service;
+
+import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.modules.benefitpolicy.dto.BenefitStructureImportResult;
+import com.waad.tba.modules.benefitpolicy.entity.*;
+import com.waad.tba.modules.benefitpolicy.enums.*;
+import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
+import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+public class BenefitStructureImportService {
+    private final BenefitPolicyRepository policyRepository;
+    private final BenefitPolicyRuleRepository ruleRepository;
+    private final MedicalCategoryRepository categoryRepository;
+    private final BenefitGroupRepository groupRepository;
+    private final BenefitLimitBucketRepository bucketRepository;
+    private final BenefitRuleBucketRepository linkRepository;
+    private final BenefitDefinitionRepository definitionRepository;
+
+    @Transactional
+    public BenefitStructureImportResult importWorkbook(Long policyId, MultipartFile file, boolean dryRun) {
+        BenefitPolicy policy = policyRepository.findById(policyId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicy", "id", policyId));
+        Parsed parsed = parse(file);
+        if (!dryRun) {
+            assertImportAllowed(policy);
+        }
+        List<String> errors = validate(policyId, parsed);
+        if (!errors.isEmpty() && !dryRun) {
+            throw new BusinessRuleException("ملف المنافع غير صالح: " + String.join(" | ", errors));
+        }
+        Counter counter = new Counter();
+        if (errors.isEmpty() && !dryRun) apply(policy, parsed, counter);
+        return BenefitStructureImportResult.builder()
+                .dryRun(dryRun).rules(parsed.rules.size()).groups(parsed.groups.size())
+                .buckets(parsed.buckets.size()).links(parsed.links.size())
+                .specialBenefits(parsed.specials.size()).created(counter.created).updated(counter.updated)
+                .warnings(parsed.warnings).errors(errors).build();
+    }
+
+    private void assertImportAllowed(BenefitPolicy policy) {
+        if (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.DRAFT && policy.isActive()) {
+            return;
+        }
+        boolean emptyStructure = ruleRepository.countByBenefitPolicyId(policy.getId()) == 0
+                && groupRepository.countByPolicyId(policy.getId()) == 0
+                && bucketRepository.countByPolicyId(policy.getId()) == 0
+                && linkRepository.countByRuleBenefitPolicyId(policy.getId()) == 0;
+        if (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.ACTIVE && policy.isActive() && emptyStructure) {
+            return;
+        }
+        throw new BusinessRuleException("لا يمكن اعتماد الاستيراد إلا لمسودة، أو كتهيئة أولى لوثيقة نشطة لا تحتوي أي قواعد أو مجموعات أو أوعية بعد");
+    }
+
+    private Parsed parse(MultipartFile file) {
+        if (file == null || file.isEmpty()) throw new BusinessRuleException("ملف الاستيراد فارغ");
+        if (file.getSize() > 10L * 1024 * 1024) throw new BusinessRuleException("حجم ملف الاستيراد يتجاوز 10 ميجابايت");
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || !originalName.toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
+            throw new BusinessRuleException("صيغة الملف غير مدعومة؛ المطلوب ملف xlsx");
+        }
+        try (InputStream input = file.getInputStream(); Workbook workbook = new XSSFWorkbook(input)) {
+            Parsed p = new Parsed();
+            read(workbook, "Rules", 10, (row, n) -> p.rules.add(new RuleRow(
+                    text(row, 0), text(row, 1), enumValue(EncounterType.class, row, 2, n),
+                    integer(row, 3), decimal(row, 4), integer(row, 5), bool(row, 6, false),
+                    integer(row, 7, 100), text(row, 8), bool(row, 9, true), n)));
+            read(workbook, "Groups", 5, (row, n) -> p.groups.add(new GroupRow(
+                    text(row, 0), text(row, 1), enumValue(EncounterType.class, row, 2, n),
+                    enumValue(AggregationMode.class, row, 3, n), bool(row, 4, true), n)));
+            read(workbook, "Buckets", 14, (row, n) -> p.buckets.add(new BucketRow(
+                    text(row, 0), text(row, 1), text(row, 2), enumValue(EncounterType.class, row, 3, n),
+                    decimal(row, 4), integer(row, 5), integer(row, 6), enumValue(LimitPeriodType.class, row, 7, n), integer(row, 8, 1),
+                    enumValue(CountingMethod.class, row, 9, n), enumValue(ConsumptionBasis.class, row, 10, n),
+                    text(row, 11), bool(row, 12, false), bool(row, 13, true), n)));
+            read(workbook, "Links", 6, (row, n) -> p.links.add(new LinkRow(
+                    text(row, 0), enumValue(EncounterType.class, row, 1, n), text(row, 2),
+                    integer(row, 3, 1), enumValue(ConsumptionMode.class, row, 4, n), bool(row, 5, true), n)));
+            Sheet special = workbook.getSheet("SpecialBenefits");
+            if (special != null) read(workbook, "SpecialBenefits", 11, (row, n) -> p.specials.add(new SpecialRow(
+                    text(row, 0), text(row, 1), integer(row, 2), decimal(row, 3), decimal(row, 4),
+                    integer(row, 5), enumValue(LimitPeriodType.class, row, 6, n), bool(row, 7, false),
+                    text(row, 8), text(row, 9), bool(row, 10, true), n)));
+            Sheet review = workbook.getSheet("Review");
+            if (review != null) read(workbook, "Review", 5, (row, n) -> {
+                String message = "Review صف " + n + ": البند «" + text(row, 2) + "»؛ السبب: " + text(row, 3)
+                        + "؛ المعالجة المطلوبة: " + text(row, 4);
+                if ("BLOCKER".equalsIgnoreCase(text(row, 0))) p.reviewErrors.add(message);
+                else p.warnings.add(message);
+            });
+            return p;
+        } catch (BusinessRuleException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessRuleException("تعذر قراءة ملف المنافع: " + e.getMessage());
+        }
+    }
+
+    private List<String> validate(Long policyId, Parsed p) {
+        List<String> errors = new ArrayList<>(p.reviewErrors);
+        Set<String> groupCodes = uniqueCodes(p.groups.stream().map(GroupRow::code).toList(), "Groups", errors);
+        Set<String> bucketCodes = uniqueCodes(p.buckets.stream().map(BucketRow::code).toList(), "Buckets", errors);
+        uniqueNames(p.groups.stream().map(GroupRow::name).toList(), "Groups", errors);
+        uniqueNames(p.buckets.stream().map(BucketRow::name).toList(), "Buckets", errors);
+        Set<String> ruleKeys = new HashSet<>();
+        for (RuleRow r : p.rules) {
+            if (blank(r.categoryCode) || r.context == null || r.coverage == null) {
+                errors.add("Rules صف " + r.row + ": بيانات ناقصة — category_code=" + r.categoryCode
+                        + ", encounter_type=" + r.context + ", coverage_percent=" + r.coverage);
+                continue;
+            }
+            String key = r.categoryCode + "|" + r.context;
+            if (!ruleKeys.add(key)) errors.add("Rules صف " + r.row + ": قاعدة مكررة " + key);
+            MedicalCategory category = categoryRepository.findByCode(r.categoryCode).orElse(null);
+            if (category == null) errors.add("Rules صف " + r.row + ": تصنيف غير معتمد " + r.categoryCode);
+            else if (!supports(category, r.context)) errors.add("Rules صف " + r.row + ": السياق " + r.context
+                    + " غير مسموح للتصنيف " + r.categoryCode);
+            if (r.coverage < 0 || r.coverage > 100) errors.add("Rules صف " + r.row + ": نسبة تغطية خارج 0-100");
+        }
+        for (GroupRow g : p.groups) {
+            if (blank(g.code) || blank(g.name) || g.context == null || g.mode == null)
+                errors.add("Groups صف " + g.row + ": بيانات ناقصة — group_code=" + g.code + ", group_name=" + g.name
+                        + ", context_type=" + g.context + ", aggregation_mode=" + g.mode);
+            if (!blank(g.name)) groupRepository.findByPolicyIdAndNameArIgnoreCase(policyId, g.name).ifPresent(existing -> {
+                if (g.code == null || !existing.getCode().equalsIgnoreCase(g.code))
+                    errors.add("Groups صف " + g.row + ": الاسم «" + g.name + "» مستخدم مسبقًا للمجموعة " + existing.getCode());
+            });
+        }
+        for (BucketRow b : p.buckets) {
+            if (blank(b.code) || blank(b.name))
+                errors.add("Buckets صف " + b.row + ": bucket_code أو bucket_name فارغ — code=" + b.code + ", name=" + b.name);
+            if (!groupCodes.contains(b.groupCode))
+                errors.add("Buckets صف " + b.row + ": group_code «" + b.groupCode + "» غير موجود في ورقة Groups");
+            if (!blank(b.parentCode) && !bucketCodes.contains(b.parentCode))
+                errors.add("Buckets صف " + b.row + ": الوعاء الأب غير موجود " + b.parentCode);
+            if (b.period == LimitPeriodType.MULTI_YEAR_POLICY && (b.periodValue == null || b.periodValue < 2))
+                errors.add("Buckets صف " + b.row + ": الدورة متعددة السنوات تتطلب period_value أكبر من 1");
+            if (b.amount != null && b.amount.signum() < 0) errors.add("Buckets صف " + b.row + ": السقف المالي لا يقبل قيمة سالبة");
+            if (b.times != null && b.times < 0) errors.add("Buckets صف " + b.row + ": حد المرات لا يقبل قيمة سالبة");
+            if (b.days != null && b.days < 0) errors.add("Buckets صف " + b.row + ": حد الأيام لا يقبل قيمة سالبة");
+            if (!blank(b.name)) bucketRepository.findByPolicyIdAndNameArIgnoreCase(policyId, b.name).ifPresent(existing -> {
+                if (b.code == null || !existing.getCode().equalsIgnoreCase(b.code))
+                    errors.add("Buckets صف " + b.row + ": الاسم «" + b.name + "» مستخدم مسبقًا للوعاء " + existing.getCode());
+            });
+        }
+        validateParentCycles(p.buckets, errors);
+        for (LinkRow l : p.links) {
+            if (!ruleKeys.contains(l.categoryCode + "|" + l.context))
+                errors.add("Links صف " + l.row + ": القاعدة غير موجودة في Rules");
+            if (!bucketCodes.contains(l.bucketCode)) errors.add("Links صف " + l.row + ": bucket_code «" + l.bucketCode + "» غير موجود في ورقة Buckets");
+        }
+        for (SpecialRow s : p.specials) {
+            BenefitDefinition definition = definitionRepository.findByCode(s.definitionCode).orElse(null);
+            if (definition == null || definition.getBenefitType() != BenefitDefinition.BenefitType.SPECIAL_EXPENSE)
+                errors.add("SpecialBenefits صف " + s.row + ": منفعة خاصة غير معتمدة " + s.definitionCode);
+            if (s.coverage == null || s.coverage < 0 || s.coverage > 100 || s.period == null)
+                errors.add("SpecialBenefits صف " + s.row + ": coverage_percent من 0 إلى 100 و period_type مطلوبان");
+        }
+        return errors;
+    }
+
+    private void apply(BenefitPolicy policy, Parsed p, Counter c) {
+        deactivateMissingConfiguration(policy.getId(), p);
+        Map<String, BenefitGroup> groups = new HashMap<>();
+        for (GroupRow row : p.groups) {
+            BenefitGroup group = groupRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), row.code).orElse(null);
+            if (group == null) { group = new BenefitGroup(); group.setPolicy(policy); group.setCode(row.code); c.created++; }
+            else c.updated++;
+            group.setNameAr(row.name); group.setContextType(row.context); group.setAggregationMode(row.mode); group.setActive(row.active);
+            groups.put(row.code, groupRepository.save(group));
+        }
+        for (SpecialRow row : p.specials) {
+            BenefitDefinition definition = definitionRepository.findByCode(row.definitionCode).orElseThrow();
+            String groupCode = "SPECIAL-" + definition.getCode().substring(4);
+            BenefitGroup group = groupRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), groupCode).orElse(null);
+            if (group == null) { group = new BenefitGroup(); group.setPolicy(policy); group.setCode(groupCode); c.created++; }
+            else c.updated++;
+            group.setBenefitDefinition(definition); group.setNameAr(row.name); group.setContextType(EncounterType.SPECIAL);
+            group.setAggregationMode(AggregationMode.INDIVIDUAL); group.setActive(row.active);
+            group.setCoveragePercent(row.coverage); group.setCopayPercentage(row.copay);
+            group.setRequiresPreApproval(row.preApproval); group.setNotes(row.notes); group.setSourceClause(row.sourceClause);
+            groups.put(groupCode, groupRepository.save(group));
+            String bucketCode = "LIMIT-" + definition.getCode().substring(4);
+            BenefitLimitBucket bucket = bucketRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), bucketCode).orElse(null);
+            if (bucket == null) { bucket = new BenefitLimitBucket(); bucket.setPolicy(policy); bucket.setCode(bucketCode); c.created++; }
+            else c.updated++;
+            bucket.setBenefitGroup(group); bucket.setNameAr(row.name); bucket.setContextType(EncounterType.SPECIAL);
+            bucket.setAmountLimit(row.amount); bucket.setTimesLimit(row.times); bucket.setPeriodType(row.period); bucket.setPeriodValue(1);
+            bucket.setCountingMethod(CountingMethod.EACH_LINE); bucket.setConsumptionBasis(ConsumptionBasis.COMPANY_SHARE);
+            bucket.setShared(false); bucket.setActive(row.active); bucketRepository.save(bucket);
+        }
+        Map<String, BenefitLimitBucket> buckets = new HashMap<>();
+        for (BucketRow row : p.buckets) {
+            BenefitLimitBucket b = bucketRepository.findByPolicyIdAndCodeIgnoreCase(policy.getId(), row.code).orElse(null);
+            if (b == null) { b = new BenefitLimitBucket(); b.setPolicy(policy); b.setCode(row.code); c.created++; }
+            else c.updated++;
+            b.setBenefitGroup(groups.get(row.groupCode)); b.setNameAr(row.name); b.setContextType(row.context);
+            b.setAmountLimit(row.amount); b.setTimesLimit(row.times); b.setDaysLimit(row.days); b.setPeriodType(row.period); b.setPeriodValue(row.periodValue);
+            b.setCountingMethod(row.counting); b.setConsumptionBasis(row.basis); b.setShared(row.shared); b.setActive(row.active);
+            buckets.put(row.code, bucketRepository.save(b));
+        }
+        for (BucketRow row : p.buckets) if (!blank(row.parentCode)) {
+            BenefitLimitBucket b = buckets.get(row.code); b.setParentBucket(buckets.get(row.parentCode)); bucketRepository.save(b);
+        }
+        Map<String, BenefitPolicyRule> rules = new HashMap<>();
+        for (RuleRow row : p.rules) {
+            MedicalCategory category = categoryRepository.findByCode(row.categoryCode).orElseThrow();
+            BenefitPolicyRule rule = ruleRepository.findByBenefitPolicyIdAndMedicalCategoryIdAndEncounterType(
+                    policy.getId(), category.getId(), row.context).orElse(null);
+            if (rule == null) { rule = new BenefitPolicyRule(); rule.setBenefitPolicy(policy); rule.setMedicalCategory(category); rule.setEncounterType(row.context); c.created++; }
+            else c.updated++;
+            rule.setCoveragePercent(row.coverage); rule.setCopayPercentage(row.copay); rule.setWaitingPeriodDays(row.waitingDays);
+            rule.setRequiresPreApproval(row.preApproval); rule.setPriority(row.priority); rule.setNotes(row.notes);
+            rule.setInheritanceEnabled(false); rule.setActive(row.active); rule.setDeleted(false);
+            rules.put(row.categoryCode + "|" + row.context, ruleRepository.save(rule));
+        }
+        for (LinkRow row : p.links) {
+            BenefitPolicyRule rule = rules.get(row.categoryCode + "|" + row.context);
+            BenefitLimitBucket bucket = buckets.get(row.bucketCode);
+            BenefitRuleBucket link = linkRepository.findByRuleIdAndBucketId(rule.getId(), bucket.getId()).orElse(null);
+            if (link == null) { link = new BenefitRuleBucket(); link.setRule(rule); link.setBucket(bucket); c.created++; }
+            else c.updated++;
+            link.setConsumptionOrder(row.order); link.setConsumptionMode(row.mode); link.setMandatory(row.mandatory);
+            linkRepository.save(link);
+        }
+    }
+
+    private boolean supports(MedicalCategory category, EncounterType context) {
+        return category.getContexts().contains(CategoryContext.ANY)
+                || category.getContexts().contains(CategoryContext.valueOf(context.name()));
+    }
+
+    private Set<String> uniqueCodes(List<String> values, String sheet, List<String> errors) {
+        Set<String> result = new HashSet<>();
+        Set<String> normalizedValues = new HashSet<>();
+        for (String value : values) {
+            String normalized = blank(value) ? null : value.trim().toLowerCase(Locale.ROOT);
+            if (normalized == null || !normalizedValues.add(normalized)) errors.add(sheet + ": كود فارغ أو مكرر " + value);
+            else result.add(value);
+        }
+        return result;
+    }
+
+    private void validateParentCycles(List<BucketRow> rows, List<String> errors) {
+        Map<String, String> parents = new HashMap<>();
+        for (BucketRow row : rows) if (!blank(row.code)) {
+            parents.put(normalizedCode(row.code), blank(row.parentCode) ? null : normalizedCode(row.parentCode));
+        }
+        for (String start : parents.keySet()) {
+            Set<String> path = new HashSet<>();
+            String current = start;
+            while (!blank(current)) {
+                if (!path.add(current)) {
+                    errors.add("Buckets: توجد حلقة في تسلسل الأوعية الأب تبدأ من «" + start + "»");
+                    break;
+                }
+                current = parents.get(current);
+            }
+        }
+    }
+
+    private void deactivateMissingConfiguration(Long policyId, Parsed p) {
+        Set<String> ruleKeys = p.rules.stream()
+                .map(row -> normalizedCode(row.categoryCode) + "|" + row.context).collect(java.util.stream.Collectors.toSet());
+        for (BenefitPolicyRule rule : ruleRepository.findByBenefitPolicyId(policyId)) {
+            String key = normalizedCode(rule.getMedicalCategory().getCode()) + "|" + rule.getEncounterType();
+            if (!ruleKeys.contains(key)) { rule.setActive(false); ruleRepository.save(rule); }
+        }
+
+        Set<String> groupCodes = p.groups.stream().map(GroupRow::code).map(this::normalizedCode)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> bucketCodes = p.buckets.stream().map(BucketRow::code).map(this::normalizedCode)
+                .collect(java.util.stream.Collectors.toSet());
+        for (SpecialRow row : p.specials) {
+            String suffix = row.definitionCode.substring(4);
+            groupCodes.add(normalizedCode("SPECIAL-" + suffix));
+            bucketCodes.add(normalizedCode("LIMIT-" + suffix));
+        }
+        for (BenefitGroup group : groupRepository.findByPolicyIdOrderByCode(policyId)) {
+            if (!groupCodes.contains(normalizedCode(group.getCode()))) { group.setActive(false); groupRepository.save(group); }
+        }
+        for (BenefitLimitBucket bucket : bucketRepository.findByPolicyIdOrderByCode(policyId)) {
+            if (!bucketCodes.contains(normalizedCode(bucket.getCode()))) { bucket.setActive(false); bucketRepository.save(bucket); }
+        }
+    }
+
+    private void uniqueNames(List<String> values, String sheet, List<String> errors) {
+        Set<String> result = new HashSet<>();
+        for (String value : values) {
+            if (!blank(value) && !result.add(value.trim().toLowerCase(Locale.ROOT))) {
+                errors.add(sheet + ": اسم مكرر ضمن الملف «" + value + "»");
+            }
+        }
+    }
+
+    private void read(Workbook wb, String name, int columns, RowConsumer consumer) {
+        Sheet sheet = wb.getSheet(name);
+        if (sheet == null) throw new BusinessRuleException("ورقة " + name + " مطلوبة");
+        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i); if (row == null || blank(text(row, 0))) continue;
+            consumer.accept(row, i + 1);
+        }
+    }
+    private String text(Row row, int i) { Cell c=row.getCell(i); if(c==null) return null; String v=new DataFormatter().formatCellValue(c).trim(); return v.isEmpty()?null:v; }
+    private Integer integer(Row row, int i) { String v=text(row,i); if(v==null)return null; return new BigDecimal(v.replace("%","").replace(",","")).intValueExact(); }
+    private Integer integer(Row row, int i, int fallback) { Integer v=integer(row,i); return v==null?fallback:v; }
+    private BigDecimal decimal(Row row, int i) { String v=text(row,i); if(v==null)return null; return new BigDecimal(v.replace("%","").replace(",","")); }
+    private boolean bool(Row row, int i, boolean fallback) { String v=text(row,i); if(v==null)return fallback; return Set.of("TRUE","YES","1","نعم","صح").contains(v.toUpperCase()); }
+    private <E extends Enum<E>> E enumValue(Class<E> type, Row row, int i, int n) { String v=text(row,i); if(v==null)return null; try{return Enum.valueOf(type,v.toUpperCase());}catch(Exception e){throw new BusinessRuleException("قيمة غير صحيحة في الصف "+n+": "+v);} }
+    private boolean blank(String value) { return value == null || value.isBlank(); }
+    private String normalizedCode(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
+
+    private interface RowConsumer { void accept(Row row, int number); }
+    private record RuleRow(String categoryCode,String categoryName,EncounterType context,Integer coverage,BigDecimal copay,Integer waitingDays,boolean preApproval,Integer priority,String notes,boolean active,int row){}
+    private record GroupRow(String code,String name,EncounterType context,AggregationMode mode,boolean active,int row){}
+    private record BucketRow(String code,String name,String groupCode,EncounterType context,BigDecimal amount,Integer times,Integer days,LimitPeriodType period,Integer periodValue,CountingMethod counting,ConsumptionBasis basis,String parentCode,boolean shared,boolean active,int row){}
+    private record LinkRow(String categoryCode,EncounterType context,String bucketCode,Integer order,ConsumptionMode mode,boolean mandatory,int row){}
+    private record SpecialRow(String definitionCode,String name,Integer coverage,BigDecimal copay,BigDecimal amount,Integer times,LimitPeriodType period,boolean preApproval,String notes,String sourceClause,boolean active,int row){}
+    private static class Parsed { List<RuleRow> rules=new ArrayList<>(); List<GroupRow> groups=new ArrayList<>(); List<BucketRow> buckets=new ArrayList<>(); List<LinkRow> links=new ArrayList<>(); List<SpecialRow> specials=new ArrayList<>(); List<String> warnings=new ArrayList<>(); List<String> reviewErrors=new ArrayList<>(); }
+    private static class Counter { int created; int updated; }
+}

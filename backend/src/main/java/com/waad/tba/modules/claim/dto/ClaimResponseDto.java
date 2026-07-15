@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.dto;
 
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -39,7 +40,6 @@ public class ClaimResponseDto {
     // Lines
     private List<ClaimLineDto> lines;
 
-    private Boolean manualCategoryEnabled;
-    private String primaryCategoryCode;
+    private EncounterType encounterType;
     private Boolean fullCoverage;
 }

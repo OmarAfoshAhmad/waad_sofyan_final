@@ -101,8 +101,7 @@ public class ClaimLine {
 
     /**
      * The category ID actually used for coverage calculation.
-     * This might be different from serviceCategoryId if Claim.manualCategoryEnabled
-     * is TRUE.
+     * Snapshot of the category selected by the context-aware rule resolver.
      */
     @Column(name = "applied_category_id")
     private Long appliedCategoryId;
@@ -129,6 +128,20 @@ public class ClaimLine {
 
     @Column(name = "remaining_amount_snapshot", precision = 15, scale = 2)
     private BigDecimal remainingAmountSnapshot;
+
+    /** Exact rule/context and limit configuration applied at calculation time. */
+    @Column(name = "applied_rule_id")
+    private Long appliedRuleId;
+
+    @Column(name = "applied_context", length = 20)
+    private String appliedContext;
+
+    @Column(name = "bucket_snapshot_json", columnDefinition = "jsonb")
+    private String bucketSnapshotJson;
+
+    @Column(name = "calculation_version", nullable = false)
+    @Builder.Default
+    private Integer calculationVersion = 1;
 
     // ==================== QUANTITY & PRICING ====================
 

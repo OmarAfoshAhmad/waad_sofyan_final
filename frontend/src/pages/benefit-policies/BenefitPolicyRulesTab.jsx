@@ -35,9 +35,7 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  DeleteForever as DeleteForeverIcon,
   Replay as ReplayIcon,
   Category as CategoryIcon,
   MedicalServices as ServiceIcon,
@@ -45,13 +43,14 @@ import {
   Clear as ClearIcon,
   Save as SaveIcon,
   Refresh as RefreshIcon,
+  Link as LinkIcon,
+  LinkOff as LinkOffIcon,
   AutoAwesome as AutoAwesomeIcon,
   FileDownload as FileDownloadIcon,
   FileUpload as FileUploadIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
-import { formatCurrency } from 'utils/currency-formatter';
 
 import MainCard from 'components/MainCard';
 import { UnifiedMedicalTable } from 'components/common';
@@ -70,6 +69,7 @@ import {
   downloadPolicyRulesTemplate,
   importPolicyRulesFromExcel
 } from 'services/api/benefit-policy-rules.service';
+import { getBenefitStructure } from 'services/api/benefit-structure.service';
 import { getMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector } from 'services/api/benefit-policies.service';
@@ -82,12 +82,28 @@ const INITIAL_FORM_STATE = {
   mainMedicalCategoryId: '',
   childMedicalCategoryId: '',
   serviceName: '',
+  encounterType: 'OUTPATIENT',
   coveragePercent: '',
-  amountLimit: '',
-  timesLimit: '',
   waitingPeriodDays: '0',
   requiresPreApproval: false,
   notes: ''
+};
+
+const FIXED_RULE_CHIP_SX = {
+  code: { width: '9rem', justifyContent: 'center' },
+  context: { width: '7rem', justifyContent: 'center' },
+  coverage: { width: '7.25rem', justifyContent: 'center', fontWeight: 700 },
+  preApproval: { width: '4.25rem', justifyContent: 'center' },
+  bucket: {
+    width: '14rem',
+    justifyContent: 'flex-start',
+    '& .MuiChip-label': {
+      display: 'block',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }
 };
 
 /**
@@ -172,9 +188,8 @@ const RuleFormModal = ({
           mainMedicalCategoryId: parentId,
           childMedicalCategoryId: childId,
           serviceName: initialData.medicalServiceName || '',
+          encounterType: initialData.encounterType || 'OUTPATIENT',
           coveragePercent: initialData.coveragePercent ?? '',
-          amountLimit: initialData.amountLimit ?? '',
-          timesLimit: initialData.timesLimit ?? '',
           waitingPeriodDays: initialData.waitingPeriodDays ?? '0',
           requiresPreApproval: initialData.requiresPreApproval || false,
           notes: initialData.notes || ''
@@ -241,22 +256,6 @@ const RuleFormModal = ({
       }
     }
 
-    // Amount limit validation
-    if (formData.amountLimit !== '' && formData.amountLimit !== null) {
-      const amount = Number(formData.amountLimit);
-      if (isNaN(amount) || amount < 0) {
-        newErrors.amountLimit = 'حد المبلغ يجب أن يكون رقم موجب';
-      }
-    }
-
-    // Times limit validation
-    if (formData.timesLimit !== '' && formData.timesLimit !== null) {
-      const times = Number(formData.timesLimit);
-      if (isNaN(times) || times < 0 || !Number.isInteger(times)) {
-        newErrors.timesLimit = 'حد المرات يجب أن يكون رقم صحيح موجب';
-      }
-    }
-
     // Waiting period validation
     if (formData.waitingPeriodDays !== '' && formData.waitingPeriodDays !== null) {
       const days = Number(formData.waitingPeriodDays);
@@ -275,9 +274,10 @@ const RuleFormModal = ({
     const payload = {
       medicalCategoryId: Number(selectedTargetCategoryId),
       medicalServiceId: null,
+      encounterType: formData.encounterType || 'OUTPATIENT',
       coveragePercent: formData.coveragePercent !== '' ? Number(formData.coveragePercent) : null,
-      amountLimit: formData.amountLimit !== '' ? Number(formData.amountLimit) : null,
-      timesLimit: formData.timesLimit !== '' ? Number(formData.timesLimit) : null,
+      amountLimit: null,
+      timesLimit: null,
       waitingPeriodDays: formData.waitingPeriodDays !== '' ? Number(formData.waitingPeriodDays) : 0,
       requiresPreApproval: formData.requiresPreApproval,
       notes: formData.notes || null
@@ -391,6 +391,21 @@ const RuleFormModal = ({
             </Grid>
           )}
 
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              select
+              fullWidth
+              label="سياق القاعدة"
+              value={formData.encounterType}
+              onChange={handleChange('encounterType')}
+              helperText="السياق يحدد القاعدة ولا يغيّر تصنيف الخدمة"
+            >
+              <MenuItem value="OUTPATIENT">عيادات خارجية</MenuItem>
+              <MenuItem value="INPATIENT">إيواء</MenuItem>
+              <MenuItem value="ANY">عام (ANY)</MenuItem>
+            </TextField>
+          </Grid>
+
           {/* Coverage Percent */}
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField
@@ -403,39 +418,6 @@ const RuleFormModal = ({
               InputProps={{
                 endAdornment: <InputAdornment position="end">%</InputAdornment>,
                 inputProps: { min: 0, max: 100 }
-              }}
-              fullWidth
-            />
-          </Grid>
-
-          {/* Amount Limit */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField
-              label="الحد الأقصى للمبلغ"
-              type="number"
-              value={formData.amountLimit}
-              onChange={handleChange('amountLimit')}
-              error={!!errors.amountLimit}
-              helperText={errors.amountLimit}
-              InputProps={{
-                endAdornment: <InputAdornment position="end">د.ل</InputAdornment>,
-                inputProps: { min: 0 }
-              }}
-              fullWidth
-            />
-          </Grid>
-
-          {/* Times Limit */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <TextField
-              label="الحد الأقصى للمرات"
-              type="number"
-              value={formData.timesLimit}
-              onChange={handleChange('timesLimit')}
-              error={!!errors.timesLimit}
-              helperText={errors.timesLimit || 'عدد المرات المسموح بها خلال فترة الوثيقة'}
-              InputProps={{
-                inputProps: { min: 0, step: 1 }
               }}
               fullWidth
             />
@@ -567,7 +549,7 @@ const CategoryCoverageModal = ({
   <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
     <DialogTitle>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography variant="h5">القواعد الأساسية — التغطية حسب التصنيف</Typography>
+        <Typography variant="h5">القواعد الأساسية — نسب التغطية حسب التصنيف</Typography>
         <Button
           size="small"
           variant="contained"
@@ -582,7 +564,7 @@ const CategoryCoverageModal = ({
     </DialogTitle>
     <DialogContent dividers sx={{ p: 0 }}>
       <Typography variant="body2" color="text.secondary" sx={{ px: '1.0rem', py: 1 }}>
-        حدّد نسبة التغطية لكل تصنيف. هذه النسبة تُطبّق على جميع خدمات التصنيف ما لم توجد قاعدة خدمة خاصة.
+        حدّد قرار ونسبة التغطية فقط. السقوف المالية وعدد المرات والأيام تُدار حصريًا من تبويب «مجموعات المنافع والسقوف».
       </Typography>
       <TableContainer sx={{ maxHeight: '32.5rem' }}>
         <Table size="small" stickyHeader>
@@ -594,12 +576,6 @@ const CategoryCoverageModal = ({
               </TableCell>
               <TableCell align="center" sx={{ width: '8.75rem' }}>
                 نسبة التغطية (اختياري)
-              </TableCell>
-              <TableCell align="center" sx={{ width: '8.75rem' }}>
-                عدد المرات
-              </TableCell>
-              <TableCell align="center" sx={{ width: '9.375rem' }}>
-                سقف التصنيف
               </TableCell>
               <TableCell align="center" sx={{ width: '8.75rem' }}>
                 الإجراءات
@@ -650,29 +626,6 @@ const CategoryCoverageModal = ({
                       inputProps={{ min: 0, max: 100 }}
                       InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
                       placeholder="افتراضي"
-                      fullWidth
-                      disabled={!canEdit || bulkSavingCoverage}
-                    />
-                  </TableCell>
-                  <TableCell align="center" sx={{ width: '8.75rem' }}>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={row.timesLimitInputValue}
-                      onChange={(e) => handleCoverageInputChange(row.category.id, 'timesLimit', e.target.value)}
-                      inputProps={{ min: 0, step: 1 }}
-                      fullWidth
-                      disabled={!canEdit || bulkSavingCoverage}
-                    />
-                  </TableCell>
-                  <TableCell align="center" sx={{ width: '9.375rem' }}>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={row.amountLimitInputValue}
-                      onChange={(e) => handleCoverageInputChange(row.category.id, 'amountLimit', e.target.value)}
-                      inputProps={{ min: 0 }}
-                      InputProps={{ endAdornment: <InputAdornment position="end">د.ل</InputAdornment> }}
                       fullWidth
                       disabled={!canEdit || bulkSavingCoverage}
                     />
@@ -741,7 +694,7 @@ CategoryCoverageModal.propTypes = {
  *
  * Displays and manages coverage rules for a benefit policy
  */
-const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePercent }) => {
+const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePercent, onOpenStructure }) => {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -779,6 +732,17 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always'
+  });
+
+  const {
+    data: benefitStructure = { groups: [], buckets: [], links: [] },
+    isError: structureLoadFailed,
+    isSuccess: structureLoaded
+  } = useQuery({
+    queryKey: ['benefit-structure', policyId],
+    queryFn: () => getBenefitStructure(policyId),
+    enabled: !!policyId,
+    staleTime: 0
   });
 
   // Fetch categories for selector from the same source used in MedicalCategoriesList
@@ -976,7 +940,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       } else {
         await copyPolicyRules(policyId, selectedTemplateId, applyMode);
       }
-      enqueueSnackbar('تم التطبيق بنجاح وتحديث قيم السقوف والمرات', { variant: 'success' });
+      enqueueSnackbar('تم تطبيق قواعد التغطية بنجاح', { variant: 'success' });
       setTemplateDialogOpen(false);
       refetchRules();
     } catch (err) {
@@ -1045,7 +1009,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // COMPUTED
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const canEdit = policyStatus !== 'CANCELLED';
+  const canEdit = policyStatus === 'DRAFT';
   const isLoading =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -1069,16 +1033,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const tableColumns = useMemo(
     () => [
       { id: 'code', label: 'الرمز', minWidth: '7.5rem', align: 'center' },
-      { id: 'nameAr', label: 'العنصر المغطى', minWidth: '11rem' },
-      { id: 'parentNameAr', label: 'التصنيف الأب', minWidth: '9rem' },
-      { id: 'coveragePercent', label: 'نسبة التغطية', minWidth: '8rem', align: 'center' },
-      { id: 'amountLimit', label: 'حد المبلغ', minWidth: '7rem', align: 'center' },
-      { id: 'timesLimit', label: 'حد المرات', minWidth: '6rem', align: 'center' },
-      { id: 'waitingPeriodDays', label: 'فترة الانتظار', minWidth: '7rem', align: 'center' },
+      { id: 'nameAr', label: 'التصنيف الطبي', minWidth: '15rem' },
+      { id: 'encounterType', label: 'السياق', minWidth: '8rem', align: 'center' },
+      { id: 'coveragePercent', label: 'قرار التغطية', minWidth: '10rem', align: 'center' },
+      { id: 'daysLimit', label: 'حد الأيام', minWidth: '7rem', align: 'center' },
       { id: 'requiresPreApproval', label: 'موافقة مسبقة', minWidth: '7.5rem', align: 'center' },
+      { id: 'bucketLinks', label: 'المجموعة والوعاء', minWidth: '15rem', align: 'center', sortable: false },
       { id: 'active', label: 'نشط', minWidth: '5rem', align: 'center', sortable: false },
-      { id: 'changedAt', label: 'آخر تحديث', minWidth: '8rem', align: 'center', sortable: false },
-      { id: 'actions', label: 'الإجراءات', minWidth: '7rem', align: 'center', sortable: false }
+      { id: 'changedAt', label: 'آخر تحديث', minWidth: '8rem', align: 'center', sortable: false }
     ],
     []
   );
@@ -1097,8 +1059,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 fontSize: '0.72rem',
                 borderColor: 'primary.main',
                 color: 'primary.main',
-                width: '9rem',
-                justifyContent: 'center'
+                ...FIXED_RULE_CHIP_SX.code
               }}
             />
           );
@@ -1113,43 +1074,72 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   {rule.nameEn}
                 </Typography>
               )}
+              {rule.parentNameAr !== '-' && (
+                <Typography variant="caption" color="text.secondary">
+                  يتبع: {rule.parentNameAr}
+                </Typography>
+              )}
             </Stack>
           );
-        case 'parentNameAr':
-          return (
-            <Typography variant="body2" color="text.secondary">
-              {rule.parentNameAr || '-'}
-            </Typography>
-          );
         case 'coveragePercent':
-          return rule.coveragePercent !== null && rule.coveragePercent !== undefined ? (
+          {
+            const value = rule.coveragePercent ?? rule.effectiveCoveragePercent;
+            const inherited = rule.coveragePercent === null || rule.coveragePercent === undefined;
+            const label = value === 0 ? 'غير مغطى' : value === 100 ? 'تغطية كاملة' : value == null ? 'غير محدد' : `تغطية جزئية ${value}%`;
+            const color = value === 0 ? 'error' : value === 100 ? 'success' : value == null ? 'default' : 'warning';
+            return (
+              <Tooltip title={inherited && value != null ? `النسبة الافتراضية للوثيقة: ${value}%` : label}>
+                <Chip label={label} size="small" color={color} variant={inherited ? 'outlined' : 'filled'} sx={FIXED_RULE_CHIP_SX.coverage} />
+              </Tooltip>
+            );
+          }
+        case 'encounterType':
+          return (
             <Chip
-              label={`${rule.coveragePercent}%`}
               size="small"
-              color="primary"
-              sx={{ fontWeight: 700, width: '5rem', justifyContent: 'center' }}
+              variant="outlined"
+              label={rule.encounterType === 'INPATIENT' ? 'إيواء' : rule.encounterType === 'ANY' ? 'عام' : 'عيادات خارجية'}
+              sx={FIXED_RULE_CHIP_SX.context}
             />
-          ) : (
-            <Tooltip title={`افتراضي الوثيقة: ${rule.effectiveCoveragePercent}%`}>
-              <Chip
-                label={`${rule.effectiveCoveragePercent}% (افتراضي)`}
-                size="small"
-                variant="outlined"
-                sx={{ width: '5rem', justifyContent: 'center' }}
-              />
-            </Tooltip>
           );
-        case 'amountLimit':
-          return rule.amountLimit ? formatCurrency(rule.amountLimit) : '-';
-        case 'timesLimit':
-          return rule.timesLimit ?? '-';
-        case 'waitingPeriodDays':
-          return rule.waitingPeriodDays ? `${rule.waitingPeriodDays} يوم` : '-';
+        case 'bucketLinks':
+          if (structureLoadFailed) {
+            return <Chip size="small" color="warning" variant="outlined" label="تعذر التحقق من الربط" sx={FIXED_RULE_CHIP_SX.bucket} />;
+          }
+          return rule.bucketLinks.length > 0 ? (
+            <Stack spacing={0.5} alignItems="center">
+              {rule.bucketLinks.map((link) => (
+                <Tooltip key={link.id} title={`المجموعة: ${link.groupName || 'غير محددة'} — اضغط لإدارة الربط`}>
+                  <Chip
+                    size="small"
+                    icon={<LinkIcon />}
+                    color="success"
+                    variant="outlined"
+                    label={`${link.groupName || 'مجموعة'} ← ${link.bucket?.nameAr || 'وعاء'}`}
+                    onClick={onOpenStructure}
+                    sx={FIXED_RULE_CHIP_SX.bucket}
+                  />
+                </Tooltip>
+              ))}
+            </Stack>
+          ) : (
+            <Chip
+              size="small"
+              icon={<LinkOffIcon />}
+              color="error"
+              variant="outlined"
+              label="غير مرتبط بوعاء"
+              onClick={onOpenStructure}
+              sx={FIXED_RULE_CHIP_SX.bucket}
+            />
+          );
+        case 'daysLimit':
+          return rule.daysLimitLabel || '-';
         case 'requiresPreApproval':
           return rule.requiresPreApproval ? (
-            <Chip label="نعم" size="small" color="warning" />
+            <Chip label="نعم" size="small" color="warning" sx={FIXED_RULE_CHIP_SX.preApproval} />
           ) : (
-            <Chip label="لا" size="small" variant="outlined" />
+            <Chip label="لا" size="small" variant="outlined" sx={FIXED_RULE_CHIP_SX.preApproval} />
           );
         case 'active':
           if (rule.isDeleted) {
@@ -1186,43 +1176,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               {rule.changedAt ? new Date(rule.changedAt).toLocaleDateString('ar-LY') : '-'}
             </Typography>
           );
-        case 'actions':
-          return canEdit ? (
-            <Stack direction="row" spacing={0} justifyContent="center">
-              {showDeleted ? (
-                <>
-                  <Tooltip title="استعادة">
-                    <IconButton size="small" color="success" onClick={() => handleRestoreRule(rule)}>
-                      <ReplayIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="حذف نهائي">
-                    <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)}>
-                      <DeleteForeverIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              ) : (
-                <>
-                  <Tooltip title="تعديل">
-                    <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="حذف ناعم (تعطيل)">
-                    <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-            </Stack>
-          ) : null;
         default:
           return rule[column.id] ?? '-';
       }
     },
-    [canEdit, handleEditRule, handleDeleteRule, handleRestoreRule, handleToggleActive, toggleMutation.isPending, showDeleted]
+    [handleToggleActive, onOpenStructure, structureLoadFailed, toggleMutation.isPending]
   );
 
   const categoryMap = useMemo(() => {
@@ -1230,6 +1188,21 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     categories.forEach((cat) => map.set(cat.id, cat));
     return map;
   }, [categories]);
+
+  const structureLinksByRuleId = useMemo(() => {
+    const groupNames = new Map((benefitStructure.groups || []).map((group) => [group.id, group.nameAr]));
+    const linksByRule = new Map();
+    (benefitStructure.links || []).forEach((link) => {
+      const enriched = {
+        ...link,
+        groupName: groupNames.get(link.bucket?.benefitGroupId) || null
+      };
+      const current = linksByRule.get(link.ruleId) || [];
+      current.push(enriched);
+      linksByRule.set(link.ruleId, current);
+    });
+    return linksByRule;
+  }, [benefitStructure.groups, benefitStructure.links]);
 
   const normalizedRules = useMemo(() => {
     return rules.map((rule) => {
@@ -1257,7 +1230,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       }
 
       const changedAt = rule.updatedAt || rule.lastModifiedAt || rule.modifiedAt || rule.createdAt || null;
-      const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr}`.toLowerCase();
+      const bucketLinks = structureLinksByRuleId.get(rule.id) || [];
+      const linkSearch = bucketLinks.map((link) => `${link.groupName || ''} ${link.bucket?.nameAr || ''}`).join(' ');
+      const linkedDaysLimits = bucketLinks
+        .map((link) => link.bucket?.daysLimit)
+        .filter((value) => value !== null && value !== undefined);
+      const uniqueDaysLimits = [...new Set(linkedDaysLimits)];
+      const daysLimitLabel = uniqueDaysLimits.length > 0 ? uniqueDaysLimits.map((value) => `${value} يوم`).join('، ') : null;
+      const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`.toLowerCase();
 
       // Normalize active state defensively (backend may return boolean/string/number)
       const activeRaw = rule.active;
@@ -1274,40 +1254,39 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         typeLabel,
         parentNameAr,
         changedAt,
+        bucketLinks,
+        daysLimit: uniqueDaysLimits.length > 0 ? Math.min(...uniqueDaysLimits) : null,
+        daysLimitLabel,
+        isLinked: bucketLinks.length > 0,
         searchable,
         isActive,
         isDeleted
       };
     });
-  }, [rules, categoryMap]);
+  }, [rules, categoryMap, structureLinksByRuleId]);
 
   const filterStats = useMemo(() => {
     const activeRules = normalizedRules.filter((r) => !r.isDeleted);
-    let amountLimitCount = 0;
-    let timesLimitCount = 0;
-    let preApprovalCount = 0;
-    activeRules.forEach((rule) => {
-      if (rule.amountLimit != null && rule.amountLimit > 0) amountLimitCount++;
-      if (rule.timesLimit != null && rule.timesLimit > 0) timesLimitCount++;
-      if (rule.requiresPreApproval === true) preApprovalCount++;
-    });
     return {
       all: activeRules.length,
-      amountLimit: amountLimitCount,
-      timesLimit: timesLimitCount,
-      preApproval: preApprovalCount
+      uncovered: activeRules.filter((rule) => (rule.coveragePercent ?? rule.effectiveCoveragePercent) === 0).length,
+      linked: structureLoaded ? activeRules.filter((rule) => rule.isLinked).length : 0,
+      unlinked: structureLoaded ? activeRules.filter((rule) => !rule.isLinked).length : 0,
+      preApproval: activeRules.filter((rule) => rule.requiresPreApproval === true).length
     };
-  }, [normalizedRules]);
+  }, [normalizedRules, structureLoaded]);
 
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
     let statusFiltered = normalizedRules.filter((rule) => (showDeleted ? rule.isDeleted : !rule.isDeleted));
 
     if (!showDeleted && filterType !== 'ALL') {
-      if (filterType === 'AMOUNT_LIMIT') {
-        statusFiltered = statusFiltered.filter((r) => r.amountLimit != null && r.amountLimit > 0);
-      } else if (filterType === 'TIMES_LIMIT') {
-        statusFiltered = statusFiltered.filter((r) => r.timesLimit != null && r.timesLimit > 0);
+      if (filterType === 'UNCOVERED') {
+        statusFiltered = statusFiltered.filter((r) => (r.coveragePercent ?? r.effectiveCoveragePercent) === 0);
+      } else if (filterType === 'LINKED') {
+        statusFiltered = statusFiltered.filter((r) => r.isLinked);
+      } else if (filterType === 'UNLINKED') {
+        statusFiltered = statusFiltered.filter((r) => !r.isLinked);
       } else if (filterType === 'PRE_APPROVAL') {
         statusFiltered = statusFiltered.filter((r) => r.requiresPreApproval === true);
       }
@@ -1340,7 +1319,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       if (bVal == null) return -1;
 
       // numeric fields
-      if (['coveragePercent', 'amountLimit', 'timesLimit', 'waitingPeriodDays'].includes(sortBy)) {
+      if (['coveragePercent', 'daysLimit'].includes(sortBy)) {
         aVal = Number(aVal);
         bVal = Number(bVal);
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
@@ -1402,26 +1381,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             ? String(existingCoveragePercent)
             : '';
 
-      const timesLimitInputValue =
-        categoryCoverageInputs[category.id]?.timesLimit !== undefined
-          ? categoryCoverageInputs[category.id].timesLimit
-          : existingRule?.timesLimit !== null && existingRule?.timesLimit !== undefined
-            ? String(existingRule.timesLimit)
-            : '';
-
-      const amountLimitInputValue =
-        categoryCoverageInputs[category.id]?.amountLimit !== undefined
-          ? categoryCoverageInputs[category.id].amountLimit
-          : existingRule?.amountLimit !== null && existingRule?.amountLimit !== undefined
-            ? String(existingRule.amountLimit)
-            : '';
-
       return {
         category,
         existingRule,
         coverageInputValue,
-        timesLimitInputValue,
-        amountLimitInputValue,
         effectiveCoveragePercent: existingRule?.effectiveCoveragePercent ?? existingCoveragePercent ?? null,
         serviceRulesCount: serviceRulesCountByCategoryId.get(category.id) || 0
       };
@@ -1441,12 +1404,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const saveCategoryCoverage = useCallback(
     (row) => {
       const rawCoverage = (row.coverageInputValue ?? '').trim();
-      const rawTimesLimit = (row.timesLimitInputValue ?? '').trim();
-      const rawAmountLimit = (row.amountLimitInputValue ?? '').trim();
 
-      // At least one limit must be specified
-      if (rawCoverage === '' && rawTimesLimit === '' && rawAmountLimit === '') {
-        enqueueSnackbar('يجب تحديد نسبة التغطية أو حد المبلغ أو حد المرات على الأقل', { variant: 'warning' });
+      if (rawCoverage === '') {
+        enqueueSnackbar('يجب تحديد نسبة التغطية من 0 إلى 100', { variant: 'warning' });
         return;
       }
 
@@ -1456,15 +1416,12 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         return;
       }
 
-      const timesLimit = rawTimesLimit !== '' ? Number(rawTimesLimit) : null;
-      const amountLimit = rawAmountLimit !== '' ? Number(rawAmountLimit) : null;
-
       const payload = {
         medicalCategoryId: Number(row.category.id),
         medicalServiceId: null,
         coveragePercent,
-        amountLimit,
-        timesLimit,
+        amountLimit: null,
+        timesLimit: null,
         waitingPeriodDays: row.existingRule?.waitingPeriodDays ?? 0,
         requiresPreApproval: row.existingRule?.requiresPreApproval ?? false,
         notes: row.existingRule?.notes ?? null
@@ -1489,12 +1446,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
     for (const row of changedRows) {
       const rawCoverage = (row.coverageInputValue ?? '').trim();
-      const rawTimes = (row.timesLimitInputValue ?? '').trim();
-      const rawAmount = (row.amountLimitInputValue ?? '').trim();
       const catName = row.category.nameAr || row.category.name || row.category.code;
 
-      if (rawCoverage === '' && rawTimes === '' && rawAmount === '') {
-        enqueueSnackbar(`يجب تحديد نسبة التغطية أو حد المبلغ أو حد المرات للتصنيف: ${catName}`, {
+      if (rawCoverage === '') {
+        enqueueSnackbar(`يجب تحديد نسبة التغطية للتصنيف: ${catName}`, {
           variant: 'warning'
         });
         return;
@@ -1514,19 +1469,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const results = await Promise.allSettled(
         changedRows.map(async (row) => {
           const rawCoverage = (row.coverageInputValue ?? '').trim();
-          const rawTimesLimit = (row.timesLimitInputValue ?? '').trim();
-          const rawAmountLimit = (row.amountLimitInputValue ?? '').trim();
 
           const coveragePercent = rawCoverage !== '' ? Number(rawCoverage) : null;
-          const timesLimit = rawTimesLimit !== '' ? Number(rawTimesLimit) : null;
-          const amountLimit = rawAmountLimit !== '' ? Number(rawAmountLimit) : null;
 
           const payload = {
             medicalCategoryId: Number(row.category.id),
             medicalServiceId: null,
             coveragePercent,
-            amountLimit,
-            timesLimit,
+            amountLimit: null,
+            timesLimit: null,
             waitingPeriodDays: row.existingRule?.waitingPeriodDays ?? 0,
             requiresPreApproval: row.existingRule?.requiresPreApproval ?? false,
             notes: row.existingRule?.notes ?? null
@@ -1596,7 +1547,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         secondary={
           canEdit && (
             <Stack direction="row" spacing={1}>
-              <Tooltip title="إضافة قالب">
+              <Tooltip title="إدارة نسب التغطية حسب التصنيف">
                 <IconButton
                   color="primary"
                   onClick={() => setCategoryCoverageModalOpen(true)}
@@ -1606,16 +1557,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 </IconButton>
               </Tooltip>
               
-              <Tooltip title="تطبيق قالب قياسي">
-                <IconButton
-                  color="secondary"
-                  onClick={handleOpenTemplateDialog}
-                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
-                >
-                  <AutoAwesomeIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-
               <Tooltip title={showDeleted ? `عرض النشطة (${activeRulesCount})` : `عرض المحذوفات (${deletedRulesCount})`}>
                 <IconButton
                   onClick={() => setShowDeleted((prev) => !prev)}
@@ -1632,17 +1573,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title="استيراد قواعد التغطية من Excel">
+              <Tooltip title="استيراد الوثيقة وإدارة المجموعات والأوعية والروابط">
                 <IconButton
-                  color="info"
-                  onClick={() => {
-                    setImportFile(null);
-                    setImportResult(null);
-                    setImportDialogOpen(true);
-                  }}
+                  color="success"
+                  onClick={onOpenStructure}
                   sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
                 >
-                  <FileUploadIcon fontSize="small" />
+                  <LinkIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
 
@@ -1667,8 +1604,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           )
         }
       >
+        {structureLoadFailed && (
+          <Alert severity="warning" sx={{ mb: 1.5 }}>
+            تعذر تحميل حالة ربط القواعد بالأوعية؛ أعد المحاولة بعد التأكد من تشغيل الخلفية.
+          </Alert>
+        )}
         {/* ── Filter bar ── */}
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: '1.0rem' }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap" sx={{ mb: '1.0rem' }}>
           <Tooltip title="تحديث">
             <IconButton
               size="small"
@@ -1719,8 +1661,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             <Stack direction="row" spacing={1} alignItems="center">
               {[
                 { id: 'ALL', label: 'الكل', count: filterStats.all },
-                { id: 'AMOUNT_LIMIT', label: 'سقف مالي', count: filterStats.amountLimit },
-                { id: 'TIMES_LIMIT', label: 'سقف مرات', count: filterStats.timesLimit },
+                { id: 'UNCOVERED', label: 'غير مغطى', count: filterStats.uncovered },
+                { id: 'LINKED', label: 'مرتبطة بوعاء', count: filterStats.linked },
+                { id: 'UNLINKED', label: 'غير مرتبطة', count: filterStats.unlinked },
                 { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval }
               ].map((item) => (
                 <Chip
@@ -1755,7 +1698,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           }}
           renderCell={renderRuleCell}
           getRowKey={(row) => row.id}
-          emptyMessage={ruleSearch ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد قواعد تغطية. استخدم "إضافة قالب" أو "إضافة قاعدة".'}
+          emptyMessage={ruleSearch ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد قواعد تغطية. استخدم إدارة نسب التصنيفات أو أضف قاعدة جديدة.'}
           hover
           sortBy={sortBy}
           sortDirection={sortDirection}
@@ -1816,7 +1759,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             setClearOld(false);
           }
         }}
-        maxWidth="sm"
+        maxWidth="lg"
         fullWidth
       >
         <DialogTitle>
@@ -1836,6 +1779,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 <li>عبّئ نسب التغطية والسقوف في الأعمدة القابلة للتعديل</li>
                 <li>ارفع الملف هنا — القواعد الجديدة تُضاف والموجودة تُحدَّث تلقائياً</li>
               </ol>
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                هذه النافذة تقبل قالب <strong>قواعد_التغطية</strong> فقط. ملفات <strong>استيراد_اسم الوثيقة</strong> الخاصة
+                بالأوعية تُرفع من تبويب «مجموعات المنافع والسقوف» عبر «فحص الملف».
+              </Alert>
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-start' }}>
                 <Button
                   variant="outlined"
@@ -1929,16 +1876,31 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
             {/* Error list */}
             {importResult?.errors?.length > 0 && (
-              <Box sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid', borderColor: 'error.light', borderRadius: 1, p: 1 }}>
+              <Box sx={{ maxHeight: 340, overflowY: 'auto', border: '1px solid', borderColor: 'error.light', borderRadius: 1 }}>
                 <Typography variant="caption" color="error" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
                   تفاصيل الأخطاء:
                 </Typography>
-                {importResult.errors.map((err, idx) => (
-                  <Typography key={idx} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    • سطر {err.rowNumber}: [{err.fieldName}] {err.errorMessage}
-                    {err.fieldValue ? ` (القيمة: ${err.fieldValue})` : ''}
-                  </Typography>
-                ))}
+                <Table size="small" stickyHeader aria-label="تفاصيل أخطاء استيراد قواعد التغطية">
+                  <TableHead><TableRow>
+                    <TableCell>الصف</TableCell><TableCell>الحقل</TableCell><TableCell>القيمة المرفوضة</TableCell>
+                    <TableCell>سبب الرفض</TableCell><TableCell>كيفية المعالجة</TableCell>
+                  </TableRow></TableHead>
+                  <TableBody>{importResult.errors.map((err, idx) => {
+                    const message = err.messageAr || err.errorMessage || err.message || 'خطأ غير موضح من الخادم';
+                    const value = err.value ?? err.fieldValue ?? '—';
+                    const suggestion = err.errorType === 'LOOKUP_FAILED'
+                      ? 'استخدم رمزًا موجودًا في ورقة التصنيفات المرجعية أو في قائمة التصنيفات المعتمدة.'
+                      : err.errorType === 'INVALID_FORMAT'
+                        ? 'صحّح تنسيق الخلية وفق الوصف، ثم أعد رفع الملف.'
+                        : 'راجع الخلية المشار إليها وعدّلها وفق سبب الرفض.';
+                    return <TableRow key={`${err.rowNumber}-${err.fieldName}-${idx}`}>
+                      <TableCell>{err.rowNumber ?? '—'}</TableCell>
+                      <TableCell>{err.fieldName || err.columnName || '—'}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', direction: 'ltr' }}>{value}</TableCell>
+                      <TableCell>{message}</TableCell><TableCell>{suggestion}</TableCell>
+                    </TableRow>;
+                  })}</TableBody>
+                </Table>
               </Box>
             )}
           </Stack>
@@ -2110,7 +2072,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 BenefitPolicyRulesTab.propTypes = {
   policyId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   policyStatus: PropTypes.string,
-  policyDefaultCoveragePercent: PropTypes.number
+  policyDefaultCoveragePercent: PropTypes.number,
+  onOpenStructure: PropTypes.func.isRequired
 };
 
 export default BenefitPolicyRulesTab;

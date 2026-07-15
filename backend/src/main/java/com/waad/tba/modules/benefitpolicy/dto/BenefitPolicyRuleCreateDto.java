@@ -73,6 +73,24 @@ public class BenefitPolicyRuleCreateDto {
     private String notes;
 
     /**
+     * The clinical context this rule applies to.
+     * Example: OUTPATIENT vs INPATIENT
+     */
+    @Builder.Default
+    private String encounterType = "OUTPATIENT";
+
+    @DecimalMin(value = "0.00", message = "Copay percentage must be >= 0")
+    @DecimalMax(value = "100.00", message = "Copay percentage must be <= 100")
+    private BigDecimal copayPercentage;
+
+    @Builder.Default
+    private Boolean inheritanceEnabled = false;
+
+    @Min(value = 0, message = "Priority must be >= 0")
+    @Builder.Default
+    private Integer priority = 100;
+
+    /**
      * Whether the rule is active
      */
     @Builder.Default

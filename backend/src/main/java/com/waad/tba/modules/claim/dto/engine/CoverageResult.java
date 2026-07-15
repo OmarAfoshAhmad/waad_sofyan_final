@@ -174,6 +174,10 @@ public class CoverageResult {
         /** معرّف القاعدة المطبّقة */
         private Long ruleId;
 
+        /** Shared/hierarchical bucket that constrained this line, if configured. */
+        private Long bucketId;
+        private String bucketName;
+
         /** هل توجد سقوف؟ */
         private boolean hasLimit;
 
@@ -183,11 +187,17 @@ public class CoverageResult {
         /** سقف المبلغ السنوي (null = غير محدود) */
         private BigDecimal amountLimit;
 
+        /** سقف عدد أيام الاستفادة المميزة داخل الدورة (null = غير محدود) */
+        private Integer daysLimit;
+
         /** عدد مرات الاستخدام السابقة (من قاعدة البيانات، لا تشمل هذا السطر) */
         private Integer usedCount;
 
         /** المبلغ المستخدم سابقاً من السقف */
         private BigDecimal usedAmount;
+
+        /** عدد أيام الاستفادة المحتسبة داخل الدورة */
+        private Integer usedDays;
 
         /** المبلغ المتبقي بعد هذه المطالبة */
         private BigDecimal remainingAmount;
@@ -197,6 +207,9 @@ public class CoverageResult {
 
         /** هل تجاوز المستفيد المبلغ المسموح؟ */
         private boolean amountExceeded;
+
+        /** هل تجاوز المستفيد عدد الأيام المسموح بها؟ */
+        private boolean daysExceeded;
 
         /** هل تجاوز بأي شكل من الأشكال؟ */
         private boolean exceeded;

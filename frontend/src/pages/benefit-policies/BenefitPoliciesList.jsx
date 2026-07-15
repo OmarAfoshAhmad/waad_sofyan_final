@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Button, Chip, IconButton, InputAdornment, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import dayjs from 'dayjs';
@@ -26,7 +26,6 @@ import {
   deleteBenefitPolicy,
   getBenefitPolicies,
   getDeletedBenefitPolicies,
-  permanentDeleteBenefitPolicy,
   restoreBenefitPolicy
 } from 'services/api/benefit-policies.service';
 
@@ -52,6 +51,7 @@ const BenefitPoliciesList = () => {
   const [sortDirection, setSortDirection] = useState('desc');
   const [showDeleted, setShowDeleted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const location = useLocation();
   const initialEmployerId = location.state?.employerId || '';
   const [filters, setFilters] = useState({ employerId: initialEmployerId, status: '' });
@@ -77,47 +77,18 @@ const BenefitPoliciesList = () => {
     setLoading(true);
     try {
       const params = {
-        page: 0,
-        size: 200,
+        page,
+        size: rowsPerPage,
         sortBy,
         sortDir: sortDirection.toUpperCase(),
-        ...(filters.employerId && { employerId: filters.employerId })
+        q: deferredSearchTerm.trim(),
+        ...(filters.employerId && { employerId: filters.employerId }),
+        ...(filters.status && { status: filters.status })
       };
 
       const response = showDeleted ? await getDeletedBenefitPolicies(params) : await getBenefitPolicies(params);
-      let content = response?.content || [];
-
-      if (searchTerm.trim()) {
-        const query = searchTerm.trim().toLowerCase();
-        content = content.filter(
-          (item) =>
-            item.name?.toLowerCase().includes(query) ||
-            item.policyCode?.toLowerCase().includes(query) ||
-            item.employerName?.toLowerCase().includes(query)
-        );
-      }
-
-      if (filters.status) {
-        content = content.filter((item) => item.status === filters.status);
-      }
-
-      if (sortBy) {
-        content = [...content].sort((left, right) => {
-          let leftValue = left?.[sortBy] ?? '';
-          let rightValue = right?.[sortBy] ?? '';
-
-          if (typeof leftValue === 'string') leftValue = leftValue.toLowerCase();
-          if (typeof rightValue === 'string') rightValue = rightValue.toLowerCase();
-
-          if (leftValue < rightValue) return sortDirection === 'asc' ? -1 : 1;
-          if (leftValue > rightValue) return sortDirection === 'asc' ? 1 : -1;
-          return 0;
-        });
-      }
-
-      const startIndex = page * rowsPerPage;
-      setTotalCount(content.length);
-      setPolicies(content.slice(startIndex, startIndex + rowsPerPage));
+      setTotalCount(response?.totalElements || 0);
+      setPolicies(response?.content || []);
     } catch (error) {
       console.error('[BenefitPolicies] Failed to fetch policies:', error);
       const apiMessage = error?.response?.data?.message || error?.message;
@@ -127,7 +98,7 @@ const BenefitPoliciesList = () => {
     } finally {
       setLoading(false);
     }
-  }, [enqueueSnackbar, filters.employerId, filters.status, page, rowsPerPage, searchTerm, showDeleted, sortBy, sortDirection]);
+  }, [deferredSearchTerm, enqueueSnackbar, filters.employerId, filters.status, page, rowsPerPage, showDeleted, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchEmployers();
@@ -208,30 +179,6 @@ const BenefitPoliciesList = () => {
     [closeDialog, enqueueSnackbar, fetchPolicies]
   );
 
-  const handlePermanentDelete = useCallback(
-    (policy) => {
-      setConfirmDialog({
-        open: true,
-        title: 'حذف نهائي',
-        message: `تحذير: هل أنت متأكد من الحذف النهائي لـ "${policy.name || policy.policyCode}"؟\n\nلا يمكن التراجع عن هذا الإجراء.`,
-        confirmColor: 'error',
-        onConfirm: async () => {
-          try {
-            await permanentDeleteBenefitPolicy(policy.id);
-            enqueueSnackbar('تم الحذف النهائي بنجاح', { variant: 'success' });
-            closeDialog();
-            fetchPolicies();
-          } catch (error) {
-            console.error('[BenefitPolicies] Permanent delete failed:', error);
-            const apiMessage = error?.response?.data?.message || error?.message;
-            enqueueSnackbar(apiMessage || 'فشل الحذف النهائي', { variant: 'error' });
-          }
-        }
-      });
-    },
-    [closeDialog, enqueueSnackbar, fetchPolicies]
-  );
-
   const columns = useMemo(
     () => [
       { id: 'policyCode', label: 'رمز السياسة', minWidth: '8.75rem', align: 'center', sortable: true },
@@ -276,11 +223,6 @@ const BenefitPoliciesList = () => {
                       <UndoIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="حذف نهائي">
-                    <IconButton size="small" color="error" onClick={() => handlePermanentDelete(row)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
                 </PermissionGuard>
               ) : (
                 <>
@@ -311,7 +253,7 @@ const BenefitPoliciesList = () => {
           return row[column.id] ?? '-';
       }
     },
-    [handleDelete, handleNavigateEdit, handleNavigateView, handlePermanentDelete, handleRestore, showDeleted]
+    [handleDelete, handleNavigateEdit, handleNavigateView, handleRestore, showDeleted]
   );
 
   return (

@@ -11,6 +11,7 @@ import com.waad.tba.common.excel.service.ExcelParserService;
 import com.waad.tba.common.excel.service.ExcelTemplateService;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class MedicalCategoryExcelTemplateService {
+    private static final String APPROVED_CATEGORIES_SHEET = "تصنيفات الخدمات المعتمدة";
     
     private final ExcelTemplateService templateService;
     private final ExcelParserService parserService;
@@ -120,19 +122,11 @@ public class MedicalCategoryExcelTemplateService {
     @Transactional
     public ExcelImportResult importFromExcel(MultipartFile file, boolean clearOld) {
         log.info("[MedicalCategoryImport] Starting import from file: {}, clearOld: {}", file.getOriginalFilename(), clearOld);
-        
-        if (clearOld) {
-            log.info("[MedicalCategoryImport] Clearing old categories (soft delete)...");
-            List<MedicalCategory> allCategories = categoryRepository.findAll();
-            allCategories.forEach(c -> c.setActive(false));
-            categoryRepository.saveAll(allCategories);
-        }
-        
-        // Validate file
+
         if (file.isEmpty()) {
             throw new BusinessRuleException("الملف فارغ");
         }
-        
+
         ImportSummary summary = ImportSummary.builder()
                 .totalRows(0)
                 .created(0)
@@ -143,113 +137,143 @@ public class MedicalCategoryExcelTemplateService {
         
         List<ImportError> errors = new ArrayList<>();
         
-        try {
-            Workbook workbook = parserService.openWorkbook(file);
-            Sheet dataSheet = parserService.getDataSheet(workbook);
-            
-            // Process data rows
-            int lastRow = dataSheet.getLastRowNum();
-            log.info("[MedicalCategoryImport] Processing {} rows", lastRow);
-            
-            for (int rowNum = 2; rowNum <= lastRow; rowNum++) { // Start from row 2 (after header)
-                Row row = dataSheet.getRow(rowNum);
-                if (row == null || parserService.isEmptyRow(row)) {
-                    continue;
-                }
-                
-                summary.setTotalRows(summary.getTotalRows() + 1);
-                
-                try {
-                    processRow(row, rowNum + 1, summary, errors);
-                } catch (Exception e) {
-                    log.warn("[MedicalCategoryImport] Row {} failed: {}", rowNum + 1, e.getMessage());
-                    summary.setFailed(summary.getFailed() + 1);
-                    errors.add(ImportError.builder()
-                            .rowNumber(rowNum + 1)
-                            .errorType(ErrorType.PROCESSING_ERROR)
-                            .messageAr(e.getMessage())
-                            .messageEn(e.getMessage())
-                            .build());
-                }
+        try (Workbook workbook = parserService.openWorkbook(file)) {
+            Sheet approvedSheet = workbook.getSheet(APPROVED_CATEGORIES_SHEET);
+            boolean approvedFormat = approvedSheet != null;
+            Sheet dataSheet = approvedFormat ? approvedSheet : parserService.getDataSheet(workbook);
+            int firstDataRow = approvedFormat ? 1 : 2;
+
+            validateHeaders(dataSheet, approvedFormat);
+            List<ParsedCategoryRow> parsedRows = parseAndValidateRows(dataSheet, firstDataRow, approvedFormat, errors);
+            summary.setTotalRows(parsedRows.size());
+
+            if (!errors.isEmpty() || parsedRows.isEmpty()) {
+                summary.setFailed(errors.size());
+                String message = parsedRows.isEmpty()
+                        ? "لم تُقرأ أي تصنيفات. الملف غير مطابق لقالب التصنيفات أو ملف الاعتماد النهائي."
+                        : "لم يتم الحفظ: يوجد " + errors.size() + " أخطاء. صُحح الملف ثم أعد الاستيراد.";
+                return ExcelImportResult.builder().summary(summary).errors(errors).success(false)
+                        .messageAr(message).messageEn("Import validation failed; no data was changed").build();
             }
-            
+
+            // Destructive replacement is allowed only after the entire workbook validates.
+            if (clearOld) {
+                log.info("[MedicalCategoryImport] Validation passed; deactivating old categories...");
+                List<MedicalCategory> allCategories = categoryRepository.findAll();
+                allCategories.forEach(c -> c.setActive(false));
+                categoryRepository.saveAll(allCategories);
+            }
+
+            Map<String, MedicalCategory> savedByCode = new HashMap<>();
+            for (ParsedCategoryRow parsed : parsedRows) {
+                MedicalCategory category = categoryRepository.findByCode(parsed.code()).orElseGet(MedicalCategory::new);
+                boolean created = category.getId() == null;
+                if (created) category.setCode(parsed.code());
+                category.setName(parsed.name());
+                category.setNameAr(parsed.name());
+                category.setActive(parsed.active());
+                category.setDeleted(false);
+                category.setDeletedAt(null);
+                category.setDeletedBy(null);
+                category.setContexts(new HashSet<>(parsed.contexts()));
+                category.setParentId(null);
+                savedByCode.put(parsed.code(), categoryRepository.save(category));
+                if (created) summary.setCreated(summary.getCreated() + 1);
+                else summary.setUpdated(summary.getUpdated() + 1);
+            }
+
+            // Resolve hierarchy after every imported code exists.
+            for (ParsedCategoryRow parsed : parsedRows) {
+                if (parsed.parentCode() == null) continue;
+                MedicalCategory parent = Optional.ofNullable(savedByCode.get(parsed.parentCode()))
+                        .orElseGet(() -> categoryRepository.findByCode(parsed.parentCode()).orElseThrow());
+                MedicalCategory child = savedByCode.get(parsed.code());
+                child.setParentId(parent.getId());
+                categoryRepository.save(child);
+            }
+
             log.info("[MedicalCategoryImport] Import completed: {} total, {} created, {} updated, {} failed",
                     summary.getTotalRows(), summary.getCreated(), summary.getUpdated(), summary.getFailed());
-            
+
             return ExcelImportResult.builder()
                     .summary(summary)
                     .errors(errors)
-                    .success(summary.getCreated() + summary.getUpdated() > 0)
-                    .messageAr(String.format("تم استيراد %d فئة", summary.getCreated() + summary.getUpdated()))
+                    .success(true)
+                    .messageAr(String.format("تم استيراد %d تصنيف وتفعيلها بنجاح", summary.getCreated() + summary.getUpdated()))
                     .messageEn(String.format("Imported %d categories", summary.getCreated() + summary.getUpdated()))
                     .build();
-            
         } catch (IOException e) {
             log.error("[MedicalCategoryImport] Failed to read Excel file", e);
             throw new BusinessRuleException("فشل قراءة ملف Excel");
         }
     }
-    
-    private void processRow(Row row, int rowNumber, ImportSummary summary, List<ImportError> errors) {
-        // Read columns based on new template structure
-        String code = getCellValue(row, 0);         // Column A: code
-        String name = getCellValue(row, 1);         // Column B: name
-        String parentCode = getCellValue(row, 2);   // Column C: parent_code
-        String activeStr = getCellValue(row, 3);    // Column D: active
-        
-        // Validate required fields
-        if (code == null || code.trim().isEmpty()) {
-            throw new BusinessRuleException("رمز التصنيف مطلوب");
+
+    private void validateHeaders(Sheet sheet, boolean approvedFormat) {
+        Row header = sheet.getRow(0);
+        String first = header == null ? null : getCellValue(header, approvedFormat ? 1 : 0);
+        String second = header == null ? null : getCellValue(header, approvedFormat ? 2 : 1);
+        boolean valid = approvedFormat
+                ? "الكود المعتمد".equals(first) && "الاسم النهائي المعتمد".equals(second)
+                : first != null && first.toLowerCase().contains("code") && second != null && second.toLowerCase().contains("name");
+        if (!valid) throw new BusinessRuleException(
+                "أعمدة الملف غير معروفة. استخدم قالب النظام أو ملف «التصنيفات_النهائية_المعتمدة_للوثائق.xlsx» دون تغيير رؤوس الأعمدة.");
+    }
+
+    private List<ParsedCategoryRow> parseAndValidateRows(Sheet sheet, int firstRow, boolean approvedFormat,
+                                                          List<ImportError> errors) {
+        List<ParsedCategoryRow> result = new ArrayList<>();
+        Set<String> inputCodes = new HashSet<>();
+        for (int rowIndex = firstRow; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null || parserService.isEmptyRow(row)) continue;
+            int codeColumn = approvedFormat ? 1 : 0;
+            int nameColumn = approvedFormat ? 2 : 1;
+            String code = clean(getCellValue(row, codeColumn));
+            String name = clean(getCellValue(row, nameColumn));
+            String parentCode = approvedFormat ? null : clean(getCellValue(row, 2));
+            String activeValue = getCellValue(row, approvedFormat ? 4 : 3);
+            Set<CategoryContext> contexts;
+            try {
+                contexts = approvedFormat ? parseContexts(getCellValue(row, 3)) : Set.of(CategoryContext.ANY);
+            } catch (IllegalArgumentException ex) {
+                addError(errors, rowIndex + 1, "السياقات المسموحة", getCellValue(row, 3), ex.getMessage());
+                continue;
+            }
+            if (code == null) { addError(errors, rowIndex + 1, "رمز التصنيف", null, "رمز التصنيف مطلوب"); continue; }
+            if (name == null) { addError(errors, rowIndex + 1, "اسم التصنيف", null, "اسم التصنيف مطلوب"); continue; }
+            if (!inputCodes.add(code)) { addError(errors, rowIndex + 1, "رمز التصنيف", code, "رمز مكرر داخل الملف"); continue; }
+            boolean active = approvedFormat ? "معتمد".equals(clean(activeValue)) : parseBoolean(activeValue, true);
+            result.add(new ParsedCategoryRow(code, name, parentCode, active, contexts, rowIndex + 1));
         }
-        
-        if (name == null || name.trim().isEmpty()) {
-            throw new BusinessRuleException("اسم التصنيف مطلوب");
-        }
-        
-        // Parse active flag
-        boolean active = parseBoolean(activeStr, true); // Default to true
-        
-        // Resolve parent if provided
-        Long parentId = null;
-        if (parentCode != null && !parentCode.trim().isEmpty()) {
-            Optional<MedicalCategory> parentOpt = categoryRepository.findByCode(parentCode.trim());
-            if (parentOpt.isPresent()) {
-                parentId = parentOpt.get().getId();
-            } else {
-                log.warn("[MedicalCategoryImport] Row {}: Parent code '{}' not found, will be created as root", rowNumber, parentCode);
+        for (ParsedCategoryRow row : result) {
+            if (row.parentCode() != null && !inputCodes.contains(row.parentCode())
+                    && categoryRepository.findByCode(row.parentCode()).isEmpty()) {
+                addError(errors, row.rowNumber(), "رمز التصنيف الأب", row.parentCode(), "التصنيف الأب غير موجود في الملف أو النظام");
             }
         }
-        
-        // Check if category exists (upsert logic)
-        Optional<MedicalCategory> existingOpt = categoryRepository.findByCode(code.trim());
-        
-        MedicalCategory category;
-        boolean isUpdate = false;
-        
-        if (existingOpt.isPresent()) {
-            // Update existing
-            category = existingOpt.get();
-            isUpdate = true;
-        } else {
-            // Create new
-            category = new MedicalCategory();
-            category.setCode(code.trim());
-        }
-        
-        // Set/Update fields
-        category.setName(name.trim());
-        category.setParentId(parentId);
-        category.setActive(active);
-        
-        // Save
-        categoryRepository.save(category);
-        
-        if (isUpdate) {
-            summary.setUpdated(summary.getUpdated() + 1);
-        } else {
-            summary.setCreated(summary.getCreated() + 1);
-        }
+        return result;
     }
+
+    private Set<CategoryContext> parseContexts(String raw) {
+        String value = clean(raw);
+        if (value == null) return Set.of(CategoryContext.ANY);
+        Set<CategoryContext> contexts = new LinkedHashSet<>();
+        for (String token : value.split("\\+")) {
+            String normalized = token.trim().toUpperCase();
+            try { contexts.add(CategoryContext.valueOf(normalized)); }
+            catch (Exception ex) { throw new IllegalArgumentException("سياق غير معتمد: " + token.trim()); }
+        }
+        return contexts.isEmpty() ? Set.of(CategoryContext.ANY) : contexts;
+    }
+
+    private void addError(List<ImportError> errors, int row, String field, String value, String message) {
+        errors.add(ImportError.builder().rowNumber(row).fieldName(field).value(value)
+                .errorType(ErrorType.INVALID_FORMAT).messageAr(message).messageEn(message).build());
+    }
+
+    private String clean(String value) { return value == null || value.trim().isEmpty() ? null : value.trim(); }
+    private record ParsedCategoryRow(String code, String name, String parentCode, boolean active,
+                                     Set<CategoryContext> contexts, int rowNumber) {}
     
     private String getCellValue(Row row, int columnIndex) {
         return parserService.getCellValueAsString(row.getCell(columnIndex));

@@ -3,7 +3,7 @@
  * Pattern: UnifiedPageHeader → MainCard → GenericDataTable
  */
 
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useDeferredValue, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -30,7 +30,7 @@ import { ModernPageHeader, SoftDeleteToggle, DataExportWizard, ActionConfirmDial
 import PermissionGuard from 'components/PermissionGuard';
 
 // Services
-import { getEmployers, archiveEmployer, restoreEmployer, deleteEmployer, exportEmployers } from 'services/api/employers.service';
+import { getEmployersPage, archiveEmployer, restoreEmployer, exportEmployers } from 'services/api/employers.service';
 import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
 import { useSnackbar } from 'notistack';
 
@@ -56,6 +56,7 @@ const EmployersList = () => {
   const [sortDirection, setSortDirection] = useState('asc');
 
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [filters, setFilters] = useState({ active: '' });
   const [showArchived, setShowArchived] = useState(false);
   const [exportWizardOpen, setExportWizardOpen] = useState(false);
@@ -148,95 +149,28 @@ const EmployersList = () => {
     [queryClient]
   );
 
-  const handlePermanentDelete = useCallback(
-    (id, name) => {
-      setConfirmDialog({
-        open: true,
-        title: 'حذف نهائي',
-        message: `⚠️ سيتم حذف جهة العمل "${name}" نهائياً ولا يمكن التراجع عن هذا الإجراء.\n\nهل أنت متأكد؟`,
-        confirmColor: 'error',
-        onConfirm: async () => {
-          try {
-            await deleteEmployer(id);
-            enqueueSnackbar('تم الحذف النهائي بنجاح', { variant: 'success' });
-            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
-          } catch (err) {
-            console.error('[Employers] Permanent delete failed:', err);
-            const apiMsg = err?.response?.data?.message || err?.message;
-            enqueueSnackbar(apiMsg || 'فشل الحذف النهائي', { variant: 'error' });
-          } finally {
-            setConfirmDialog((prev) => ({ ...prev, open: false }));
-          }
-        }
-      });
-    },
-    [queryClient]
-  );
-
   const { data, isLoading, refetch } = useQuery({
-    queryKey: [QUERY_KEY],
-    queryFn: async () => {
-      const result = await getEmployers();
-      if (Array.isArray(result)) {
-        return { content: result, totalElements: result.length };
-      }
-      return result;
-    },
+    queryKey: [QUERY_KEY, page, rowsPerPage, sortBy, sortDirection, deferredSearchTerm, filters.active, showArchived],
+    queryFn: () => getEmployersPage({
+      page,
+      size: rowsPerPage,
+      sortBy,
+      sortDir: sortDirection,
+      q: deferredSearchTerm.trim(),
+      archivedOnly: showArchived || filters.active === 'inactive'
+    }),
     staleTime: 0,
     refetchOnMount: 'always',
     keepPreviousData: true
   });
 
-  // Calculate processed data (sorting + pagination + filtering)
+  // Filtering, sorting and pagination are executed by the server so totals remain exact.
   const processedData = useMemo(() => {
-    let rawData = [...(data?.content || [])];
-
-    // Search Filtering
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      rawData = rawData.filter(
-        (item) =>
-          item.name?.toLowerCase().includes(lowerSearch) ||
-          item.code?.toLowerCase().includes(lowerSearch) ||
-          item.email?.toLowerCase().includes(lowerSearch)
-      );
-    }
-
-    // Archived Filtering — use active field directly (no separate archived column in DB)
-    rawData = rawData.filter((item) => (showArchived ? item.active === false : item.active !== false));
-
-    // Active Status Filtering
-    if (filters.active !== '') {
-      rawData = rawData.filter((item) => {
-        if (filters.active === 'active') return item.active === true;
-        if (filters.active === 'inactive') return item.active === false;
-        return true;
-      });
-    }
-
-    // Sorting
-    if (sortBy) {
-      rawData.sort((a, b) => {
-        let valA = a[sortBy] || '';
-        let valB = b[sortBy] || '';
-        if (typeof valA === 'string') valA = valA.toLowerCase();
-        if (typeof valB === 'string') valB = valB.toLowerCase();
-
-        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-
-    const totalFiltered = rawData.length;
-
-    // Pagination
-    const startIndex = page * rowsPerPage;
     return {
-      content: rawData.slice(startIndex, startIndex + rowsPerPage),
-      totalCount: totalFiltered
+      content: data?.content || [],
+      totalCount: data?.totalElements || 0
     };
-  }, [data, page, rowsPerPage, sortBy, sortDirection, searchTerm, filters, showArchived]);
+  }, [data]);
 
   // ========================================
   // COLUMN DEFINITIONS
@@ -303,19 +237,12 @@ const EmployersList = () => {
         return (
           <Stack direction="row" spacing={0.5} justifyContent="center">
             {row.active === false ? (
-              /* ── سجل المحذوفات: استعادة + حذف نهائي ── */
+              /* السجل المؤرشف: الاستعادة فقط، فلا حذف نهائي للسجل التأميني */
               <>
                 <PermissionGuard resource="employers" action="delete">
                   <Tooltip title="استعادة">
                     <IconButton size="small" color="success" onClick={() => handleRestore(row.id, row.name || row.code)}>
                       <UndoIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </PermissionGuard>
-                <PermissionGuard resource="employers" action="delete">
-                  <Tooltip title="حذف نهائي">
-                    <IconButton size="small" color="error" onClick={() => handlePermanentDelete(row.id, row.name || row.code)}>
-                      <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </PermissionGuard>

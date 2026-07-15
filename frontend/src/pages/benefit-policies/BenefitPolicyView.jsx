@@ -33,6 +33,7 @@ import {
   Code as CodeIcon,
   Info as InfoIcon,
   Rule as RuleIcon,
+  AccountTree as StructureIcon,
   People as PeopleIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -52,6 +53,7 @@ import {
 import { countMembers } from 'services/api/unified-members.service';
 
 import BenefitPolicyRulesTab from './BenefitPolicyRulesTab';
+import BenefitStructureTab from './BenefitStructureTab';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATUS CONFIGURATION
@@ -123,7 +125,9 @@ const DetailRow = ({ label, value, icon: Icon }) => (
       </Stack>
     </Grid>
     <Grid size={{ xs: 12, sm: 8 }}>
-      <Typography variant="body1">{value !== undefined && value !== null && value !== '' ? value : 'غير متوفر'}</Typography>
+      <Typography component="div" variant="body1">
+        {value !== undefined && value !== null && value !== '' ? value : 'غير متوفر'}
+      </Typography>
     </Grid>
   </Grid>
 );
@@ -310,7 +314,7 @@ const BenefitPolicyView = () => {
   }, [dialogState.action, activateMutation, suspendMutation, cancelMutation, deleteMutation, closeDialog]);
 
   const handleActivate = () => {
-    openConfirmDialog('activate', 'تفعيل الوثيقة', 'هل أنت متأكد من تفعيل هذه الوثيقة؟ سيتم إلغاء تفعيل أي وثيقة أخرى نشطة لنفس الشريك.');
+    openConfirmDialog('activate', 'تفعيل الوثيقة', 'سيتم فحص جاهزية القواعد والأوعية وعدم وجود وثيقة نشطة متداخلة. هل تريد المتابعة؟');
   };
 
   const handleSuspend = () => {
@@ -326,7 +330,7 @@ const BenefitPolicyView = () => {
   };
 
   const handleDelete = () => {
-    openConfirmDialog('delete', 'حذف الوثيقة', 'هل أنت متأكد من حذف هذه الوثيقة؟ سيتم حذفها بشكل نهائي.');
+    openConfirmDialog('delete', 'أرشفة الوثيقة', 'سيتم نقل الوثيقة إلى سجل المحذوفات مع إمكانية استعادتها لاحقًا. هل تريد المتابعة؟');
   };
 
   // Tab change handler
@@ -403,7 +407,7 @@ const BenefitPolicyView = () => {
               variant="outlined"
               color="primary"
               size="small"
-              disabled={policy?.status === 'CANCELLED'}
+              disabled={policy?.status !== 'DRAFT'}
             >
               تعديل
             </Button>
@@ -472,6 +476,7 @@ const BenefitPolicyView = () => {
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
           <Tab icon={<InfoIcon />} iconPosition="start" label="نظرة عامة" />
           <Tab icon={<RuleIcon />} iconPosition="start" label={`قواعد التغطية (${policy?.rulesCount || 0})`} />
+          <Tab icon={<StructureIcon />} iconPosition="start" label="مجموعات المنافع والسقوف" />
         </Tabs>
       </Box>
 
@@ -580,8 +585,14 @@ const BenefitPolicyView = () => {
 
       {/* Rules Tab */}
       {activeTab === 1 && (
-        <BenefitPolicyRulesTab policyId={id} policyStatus={policy?.status} policyDefaultCoveragePercent={policy?.defaultCoveragePercent} />
+        <BenefitPolicyRulesTab
+          policyId={id}
+          policyStatus={policy?.status}
+          policyDefaultCoveragePercent={policy?.defaultCoveragePercent}
+          onOpenStructure={() => setActiveTab(2)}
+        />
       )}
+      {activeTab === 2 && <BenefitStructureTab policyId={id} policyStatus={policy?.status} />}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog

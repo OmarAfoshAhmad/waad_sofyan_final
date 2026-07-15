@@ -249,12 +249,12 @@
                 </configuration>
             </plugin>
 
-            <!-- Skip tests during build -->
+            <!-- Tests are part of every build; use -DskipTests explicitly only for local diagnostics. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <skipTests>true</skipTests>
+                    <skipTests>false</skipTests>
                 </configuration>
             </plugin>
 

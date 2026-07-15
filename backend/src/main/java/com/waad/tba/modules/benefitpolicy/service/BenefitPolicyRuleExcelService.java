@@ -320,6 +320,11 @@ public class BenefitPolicyRuleExcelService {
         try (XSSFWorkbook wb = new XSSFWorkbook(file.getInputStream())) {
             XSSFSheet sheet = wb.getSheet(TEMPLATE_SHEET);
             if (sheet == null) {
+                if (wb.getSheet("Rules") != null && wb.getSheet("Groups") != null && wb.getSheet("Buckets") != null) {
+                    return buildErrorResult(summary, errors,
+                            "هذا ملف بنية المنافع والأوعية، وليس ملف قواعد التغطية البسيط. " +
+                                    "ارفعه من تبويب «مجموعات المنافع والسقوف» باستخدام زر «فحص الملف».");
+                }
                 if (wb.getNumberOfSheets() > 0) {
                     sheet = wb.getSheetAt(0);
                     log.info("[BPRuleExcel] Sheet '{}' not found, using the first sheet '{}'", TEMPLATE_SHEET, sheet.getSheetName());
@@ -466,8 +471,8 @@ public class BenefitPolicyRuleExcelService {
                 if (existing != null) {
                     // Update
                     existing.setCoveragePercent(coveragePercent);
-                    existing.setAmountLimit(amountLimit);
-                    existing.setTimesLimit(timesLimit);
+                    existing.setAmountLimit(null);
+                    existing.setTimesLimit(null);
                     existing.setWaitingPeriodDays(waitingDays);
                     existing.setRequiresPreApproval(requiresPreApproval);
                     existing.setNotes(notes);
@@ -481,8 +486,9 @@ public class BenefitPolicyRuleExcelService {
                             .benefitPolicy(policy)
                             .medicalCategory(category)
                             .coveragePercent(coveragePercent)
-                            .amountLimit(amountLimit)
-                            .timesLimit(timesLimit)
+                            // Limits belong exclusively to linked benefit buckets.
+                            .amountLimit(null)
+                            .timesLimit(null)
                             .waitingPeriodDays(waitingDays)
                             .requiresPreApproval(requiresPreApproval)
                             .notes(notes)

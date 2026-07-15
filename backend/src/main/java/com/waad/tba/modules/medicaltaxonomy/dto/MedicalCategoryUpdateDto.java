@@ -42,6 +42,12 @@ public class MedicalCategoryUpdateDto {
     private String context;
 
     /**
+     * All encounter contexts in which this category may be used. When supplied,
+     * this replaces the persisted context set for the category.
+     */
+    private java.util.List<String> contexts;
+
+    /**
      * Active status
      */
     private Boolean active;

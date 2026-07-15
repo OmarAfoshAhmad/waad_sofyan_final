@@ -71,7 +71,7 @@ public class MedicalCategoryService {
                 .name(normalizedName)
                 .parentId(dto.getParentId())
                 .active(dto.getActive() != null ? dto.getActive() : true)
-                .context(parseContext(dto.getContext()))
+                .contexts(parseContexts(dto.getContexts(), dto.getContext()))
                 .coveragePercent(dto.getCoveragePercent())
                 .build();
 
@@ -256,8 +256,8 @@ public class MedicalCategoryService {
         if (dto.getActive() != null) {
             category.setActive(dto.getActive());
         }
-        if (dto.getContext() != null) {
-            category.setContext(parseContext(dto.getContext()));
+        if (dto.getContexts() != null || dto.getContext() != null) {
+            category.setContexts(parseContexts(dto.getContexts(), dto.getContext()));
         }
         if (dto.getCoveragePercent() != null) {
             category.setCoveragePercent(dto.getCoveragePercent());
@@ -445,7 +445,8 @@ public class MedicalCategoryService {
                 .name(category.getName())
                 .parentId(category.getParentId())
                 .parentName(parentName)
-                .context(category.getContext() != null ? category.getContext().name() : "ANY")
+                .context(!category.getContexts().isEmpty() ? category.getContexts().iterator().next().name() : "ANY")
+                .contexts(category.getContexts().stream().map(Enum::name).sorted().collect(Collectors.toList()))
                 .active(category.isActive())
                 .coveragePercent(category.getCoveragePercent())
                 .multiParentIds(category.getRoots().stream().map(MedicalCategory::getId).collect(Collectors.toList()))
@@ -511,6 +512,20 @@ public class MedicalCategoryService {
      * Returns {@code CategoryContext.ANY} for null or unrecognised values
      * (backward-compatible).
      */
+    private java.util.Set<com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext> parseContexts(
+            java.util.List<String> rawContexts, String fallbackContext) {
+        if (rawContexts == null || rawContexts.isEmpty()) {
+            return new java.util.HashSet<>(java.util.Set.of(parseContext(fallbackContext)));
+        }
+        java.util.Set<com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext> result = rawContexts.stream()
+                .map(this::parseContext)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (result.contains(com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext.ANY) && result.size() > 1) {
+            result.remove(com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext.ANY);
+        }
+        return result;
+    }
+
     private com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext parseContext(String raw) {
         if (raw == null || raw.isBlank()) {
             return com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext.ANY;

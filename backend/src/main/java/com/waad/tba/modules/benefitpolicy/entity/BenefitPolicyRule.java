@@ -35,8 +35,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_bpr_active", columnList = "active"),
         @Index(name = "idx_bpr_deleted", columnList = "deleted")
 }, uniqueConstraints = {
-        // Prevent duplicate category rules within same policy
-        @UniqueConstraint(name = "uk_bpr_policy_category", columnNames = { "benefit_policy_id", "medical_category_id" })
+        // Prevent duplicate category rules within same policy and context
+        @UniqueConstraint(name = "uk_bpr_policy_category_context", columnNames = { "benefit_policy_id", "medical_category_id", "encounter_type" })
 })
 @Data
 @Builder
@@ -68,6 +68,28 @@ public class BenefitPolicyRule {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "medical_category_id")
     private MedicalCategory medicalCategory;
+
+    /**
+     * The clinical context this rule applies to.
+     * Example: OUTPATIENT vs INPATIENT
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "encounter_type", length = 20)
+    @Builder.Default
+    private com.waad.tba.modules.providercontract.enums.EncounterType encounterType = com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
+
+    @DecimalMin(value = "0.00", message = "Copay percentage must be >= 0")
+    @DecimalMax(value = "100.00", message = "Copay percentage must be <= 100")
+    @Column(name = "copay_percentage", precision = 5, scale = 2)
+    private BigDecimal copayPercentage;
+
+    @Column(name = "inheritance_enabled", nullable = false)
+    @Builder.Default
+    private boolean inheritanceEnabled = false;
+
+    @Column(name = "priority", nullable = false)
+    @Builder.Default
+    private Integer priority = 100;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // COVERAGE SETTINGS

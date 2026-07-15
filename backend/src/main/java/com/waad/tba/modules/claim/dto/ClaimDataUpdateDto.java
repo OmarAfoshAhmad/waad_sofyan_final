@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.dto;
 
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -55,8 +56,7 @@ public class ClaimDataUpdateDto {
 
     private String complaint;
     private String rejectionReason;
-    private String primaryCategoryCode;
-    private Boolean manualCategoryEnabled;
+    private EncounterType encounterType;
     private Boolean fullCoverage;
 
     /**

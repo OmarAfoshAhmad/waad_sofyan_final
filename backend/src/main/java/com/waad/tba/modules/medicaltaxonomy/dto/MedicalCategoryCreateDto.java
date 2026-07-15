@@ -52,6 +52,13 @@ public class MedicalCategoryCreateDto {
     private String context;
 
     /**
+     * All encounter contexts in which this category may be used. The legacy
+     * single context field is accepted only as an API convenience when this list
+     * is omitted; persistence always uses medical_category_contexts.
+     */
+    private java.util.List<String> contexts;
+
+    /**
      * Active status (defaults to true)
      */
     @Builder.Default

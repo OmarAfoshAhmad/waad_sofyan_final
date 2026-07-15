@@ -2,6 +2,10 @@ package com.waad.tba.modules.claim.service;
 
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService.LimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
+import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
@@ -29,6 +33,7 @@ import java.util.*;
 public class CoverageEngineService {
 
     private final BenefitPolicyRuleService benefitPolicyRuleService;
+    private final BenefitBucketLimitService benefitBucketLimitService;
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -84,8 +89,8 @@ public class CoverageEngineService {
                 : benefitPolicyRuleService.findCoverageForService(
                         request.getPolicyId(),
                         line.getServiceId(),
-                        line.getCategoryId(),
-                        line.getServiceCategoryId());
+                        line.getServiceCategoryId() != null ? line.getServiceCategoryId() : line.getCategoryId(),
+                        request.getEncounterType());
 
         int coveragePercent = request.isFullCoverage()
                 ? 100
@@ -116,6 +121,8 @@ public class CoverageEngineService {
         if (limitRefused.compareTo(ZERO) > 0) {
             if ("USAGE_TIMES_LIMIT_EXCEEDED".equals(usageComputation.refusalReason())) {
                 reasons.add("تجاوز عدد المرات المسموح بها");
+            } else if ("USAGE_DAYS_LIMIT_EXCEEDED".equals(usageComputation.refusalReason())) {
+                reasons.add("تجاوز عدد أيام الاستفادة المسموح بها");
             } else {
                 reasons.add("تجاوز سقف المبلغ المسموح به");
             }
@@ -185,105 +192,117 @@ public class CoverageEngineService {
             return new UsageComputation(ZERO, null, null);
         }
 
-        Map<String, Object> usage = benefitPolicyRuleService.checkUsageLimit(
-                request.getPolicyId(),
-                line.getServiceId(),
-                line.getCategoryId(),
-                line.getServiceCategoryId(),
-                request.getMemberId(),
-                request.getServiceYear(),
+        Long appliedRuleId = ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null);
+        List<LimitSnapshot> bucketLimits = benefitBucketLimitService.findApplicable(
+                appliedRuleId, request.getMemberId(), request.getServiceDate(), request.getEncounterType(),
                 request.getExcludeClaimId());
-
-        if (usage == null || !Boolean.TRUE.equals(usage.get("hasLimit"))) {
-            return new UsageComputation(ZERO, null, null);
+        if (!bucketLimits.isEmpty()) {
+            return computeBucketUsage(line, ruleOpt, bucketLimits, batchUsageContext, effectiveTotal);
         }
 
-        Long ruleId = asLong(usage.get("ruleId"));
-        Integer timesLimit = asInteger(usage.get("timesLimit"));
-        BigDecimal amountLimit = asBigDecimal(usage.get("amountLimit"));
-        long usedCountDb = asLongValue(usage.get("usedCount"));
-        BigDecimal usedAmountDb = scale2(asBigDecimalOrZero(usage.get("usedAmount")));
+        // Full bucket cutover: an unlinked rule has no usage ceiling. Never fall back
+        // to the retired amount_limit/times_limit columns on benefit_policy_rules.
+        return new UsageComputation(ZERO, null, null);
+    }
 
-        BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(
-                ruleId != null ? ruleId : (ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(-1L)),
-                key -> new BatchUsageAccumulator());
+    private UsageComputation computeBucketUsage(
+            ClaimLineInput line,
+            Optional<BenefitPolicyRuleResponseDto> ruleOpt,
+            List<LimitSnapshot> limits,
+            Map<Long, BatchUsageAccumulator> batchUsageContext,
+            BigDecimal effectiveTotal) {
 
-        long usedCount = usedCountDb + acc.addedCount;
-        BigDecimal usedAmount = scale2(usedAmountDb.add(acc.addedAmount));
-
-        boolean timesExceeded = timesLimit != null && usedCount >= timesLimit;
-
-        if (timesExceeded) {
-            CoverageResult.UsageDetails usageDetails = CoverageResult.UsageDetails.builder()
-                    .ruleId(ruleId)
-                    .hasLimit(true)
-                    .timesLimit(timesLimit)
-                    .amountLimit(amountLimit)
-                    .usedCount((int) Math.min(Integer.MAX_VALUE, usedCount))
-                    .usedAmount(usedAmount)
-                    .remainingAmount(amountLimit == null ? null : maxZero(scale2(amountLimit.subtract(usedAmount))))
-                    .timesExceeded(true)
-                    .amountExceeded(false)
-                    .exceeded(true)
-                    .build();
-
-            return new UsageComputation(effectiveTotal, "USAGE_TIMES_LIMIT_EXCEEDED", usageDetails);
-        }
-
-        BigDecimal limitRefused = ZERO;
+        int coveragePercent = ruleOpt.map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent).orElse(0);
+        BigDecimal greatestRefusal = ZERO;
+        boolean timesExceeded = false;
         boolean amountExceeded = false;
+        boolean daysExceeded = false;
+        LimitSnapshot constraining = limits.get(0);
 
-        if (amountLimit != null) {
-            BigDecimal remaining = scale2(amountLimit.subtract(usedAmount));
-            if (remaining.compareTo(ZERO) <= 0) {
-                amountExceeded = true;
-                limitRefused = effectiveTotal;
-            } else if (effectiveTotal.compareTo(remaining) > 0) {
-                amountExceeded = true;
-                limitRefused = scale2(effectiveTotal.subtract(remaining));
+        for (LimitSnapshot limit : limits) {
+            BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(bucketAccumulatorKey(limit.bucketId()),
+                    ignored -> new BatchUsageAccumulator());
+            long usedTimes = (limit.usedTimes() == null ? 0 : limit.usedTimes()) + acc.addedCount;
+            long requestedTimes = requestedTimes(limit.countingMethod(), line, acc);
+            boolean thisTimesExceeded = limit.timesLimit() != null
+                    && usedTimes + requestedTimes > limit.timesLimit();
+            boolean thisDaysExceeded = limit.daysLimit() != null
+                    && !limit.serviceDayAlreadyUsed() && !acc.addedDay
+                    && limit.usedDays() + 1 > limit.daysLimit();
+            BigDecimal refusal = (thisTimesExceeded || thisDaysExceeded) ? effectiveTotal : ZERO;
+            boolean thisAmountExceeded = false;
+
+            BigDecimal usedAmount = scale2(defaultIfNull(limit.usedAmount(), ZERO).add(acc.addedAmount));
+            BigDecimal requestedBasis = basisAmount(limit.consumptionBasis(), effectiveTotal, coveragePercent);
+        if (!thisTimesExceeded && !thisDaysExceeded && limit.amountLimit() != null) {
+                BigDecimal available = maxZero(scale2(limit.amountLimit().subtract(usedAmount)));
+                if (requestedBasis.compareTo(available) > 0) {
+                    thisAmountExceeded = true;
+                    BigDecimal refusedBasis = scale2(requestedBasis.subtract(available));
+                    refusal = toGrossRefusal(limit.consumptionBasis(), refusedBasis, coveragePercent);
+                }
+            }
+            if (refusal.compareTo(greatestRefusal) > 0) {
+                greatestRefusal = min(effectiveTotal, refusal);
+                constraining = limit;
+                timesExceeded = thisTimesExceeded;
+                amountExceeded = thisAmountExceeded;
+                daysExceeded = thisDaysExceeded;
             }
         }
 
-        limitRefused = maxZero(limitRefused);
-        BigDecimal approvedForUsage = maxZero(scale2(effectiveTotal.subtract(limitRefused)));
-
-        Long finalUsedCount = usedCount;
-        BigDecimal finalUsedAmount = usedAmount;
-        long quantity = line.getQuantity() != null && line.getQuantity() > 0 ? line.getQuantity() : 1L;
-
-        if (approvedForUsage.compareTo(ZERO) > 0) {
-            finalUsedCount += quantity;
-            finalUsedAmount = scale2(usedAmount.add(approvedForUsage));
-
-            acc.addedCount += quantity;
-            acc.addedAmount = scale2(acc.addedAmount.add(approvedForUsage));
+        BigDecimal approvedGross = maxZero(scale2(effectiveTotal.subtract(greatestRefusal)));
+        for (LimitSnapshot limit : limits) {
+            BatchUsageAccumulator acc = batchUsageContext.get(bucketAccumulatorKey(limit.bucketId()));
+            if (approvedGross.signum() > 0) {
+                acc.addedCount += requestedTimes(limit.countingMethod(), line, acc);
+                acc.addedAmount = scale2(acc.addedAmount.add(
+                        basisAmount(limit.consumptionBasis(), approvedGross, coveragePercent)));
+                if (!limit.serviceDayAlreadyUsed()) acc.addedDay = true;
+            }
         }
 
-        BigDecimal remainingAmount = amountLimit == null
-                ? null
-                : maxZero(scale2(amountLimit.subtract(finalUsedAmount)));
+        BatchUsageAccumulator selectedAcc = batchUsageContext.get(bucketAccumulatorKey(constraining.bucketId()));
+        long finalTimes = (constraining.usedTimes() == null ? 0 : constraining.usedTimes()) + selectedAcc.addedCount;
+        BigDecimal finalAmount = scale2(defaultIfNull(constraining.usedAmount(), ZERO).add(selectedAcc.addedAmount));
+        UsageDetails details = UsageDetails.builder()
+                .ruleId(ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null))
+                .bucketId(constraining.bucketId()).bucketName(constraining.bucketName())
+                .hasLimit(true).timesLimit(constraining.timesLimit()).amountLimit(constraining.amountLimit())
+                .daysLimit(constraining.daysLimit())
+                .usedCount((int) Math.min(Integer.MAX_VALUE, finalTimes)).usedAmount(finalAmount)
+                .usedDays(constraining.usedDays() + (selectedAcc.addedDay ? 1 : 0))
+                .remainingAmount(constraining.amountLimit() == null ? null
+                        : maxZero(scale2(constraining.amountLimit().subtract(finalAmount))))
+                .timesExceeded(timesExceeded).amountExceeded(amountExceeded).daysExceeded(daysExceeded)
+                .exceeded(timesExceeded || amountExceeded || daysExceeded).build();
+        String reason = timesExceeded ? "USAGE_TIMES_LIMIT_EXCEEDED"
+                : daysExceeded ? "USAGE_DAYS_LIMIT_EXCEEDED"
+                : amountExceeded ? "USAGE_AMOUNT_LIMIT_EXCEEDED" : null;
+        return new UsageComputation(greatestRefusal, reason, details);
+    }
 
-        CoverageResult.UsageDetails usageDetails = CoverageResult.UsageDetails.builder()
-                .ruleId(ruleId)
-                .hasLimit(true)
-                .timesLimit(timesLimit)
-                .amountLimit(amountLimit)
-                .usedCount((int) Math.min(Integer.MAX_VALUE, finalUsedCount))
-                .usedAmount(finalUsedAmount)
-                .remainingAmount(remainingAmount)
-                .timesExceeded(timesExceeded)
-                .amountExceeded(amountExceeded)
-                .exceeded(timesExceeded || amountExceeded)
-                .build();
+    private long requestedTimes(CountingMethod method, ClaimLineInput line, BatchUsageAccumulator acc) {
+        return switch (method) {
+            case EACH_UNIT -> Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+            case PER_VISIT, PER_DAY -> acc.addedCount == 0 ? 1 : 0;
+            case EACH_LINE -> 1;
+        };
+    }
 
-        String reason = null;
-        if (timesExceeded) {
-            reason = "USAGE_TIMES_LIMIT_EXCEEDED";
-        } else if (amountExceeded) {
-            reason = "USAGE_AMOUNT_LIMIT_EXCEEDED";
-        }
+    private BigDecimal basisAmount(ConsumptionBasis basis, BigDecimal gross, int coveragePercent) {
+        if (basis == ConsumptionBasis.ELIGIBLE_AMOUNT) return scale2(gross);
+        return scale2(gross.multiply(BigDecimal.valueOf(coveragePercent)).divide(HUNDRED, 2, RoundingMode.HALF_UP));
+    }
 
-        return new UsageComputation(limitRefused, reason, usageDetails);
+    private BigDecimal toGrossRefusal(ConsumptionBasis basis, BigDecimal refusedBasis, int coveragePercent) {
+        if (basis == ConsumptionBasis.ELIGIBLE_AMOUNT || coveragePercent <= 0) return scale2(refusedBasis);
+        return scale2(refusedBasis.multiply(HUNDRED)
+                .divide(BigDecimal.valueOf(coveragePercent), 2, RoundingMode.HALF_UP));
+    }
+
+    private long bucketAccumulatorKey(Long bucketId) {
+        return Long.MIN_VALUE + bucketId;
     }
 
     private BigDecimal resolveEffectiveUnitPrice(BigDecimal enteredUnitPrice, BigDecimal contractPrice) {
@@ -320,42 +339,6 @@ public class CoverageEngineService {
         return a.min(b);
     }
 
-    private static Long asLong(Object value) {
-        if (value == null)
-            return null;
-        if (value instanceof Number n)
-            return n.longValue();
-        return Long.parseLong(String.valueOf(value));
-    }
-
-    private static long asLongValue(Object value) {
-        Long parsed = asLong(value);
-        return parsed == null ? 0L : parsed;
-    }
-
-    private static Integer asInteger(Object value) {
-        if (value == null)
-            return null;
-        if (value instanceof Number n)
-            return n.intValue();
-        return Integer.parseInt(String.valueOf(value));
-    }
-
-    private static BigDecimal asBigDecimal(Object value) {
-        if (value == null)
-            return null;
-        if (value instanceof BigDecimal bd)
-            return scale2(bd);
-        if (value instanceof Number n)
-            return scale2(BigDecimal.valueOf(n.doubleValue()));
-        return scale2(new BigDecimal(String.valueOf(value)));
-    }
-
-    private static BigDecimal asBigDecimalOrZero(Object value) {
-        BigDecimal parsed = asBigDecimal(value);
-        return parsed == null ? ZERO : parsed;
-    }
-
     private BigDecimal validateRefusedWithinRequested(BigDecimal finalRefusedAmount, BigDecimal requestedTotal,
             String lineId) {
         BigDecimal safeRefused = maxZero(finalRefusedAmount);
@@ -382,5 +365,6 @@ public class CoverageEngineService {
     public static class BatchUsageAccumulator {
         public long addedCount = 0;
         public BigDecimal addedAmount = BigDecimal.ZERO;
+        public boolean addedDay = false;
     }
 }

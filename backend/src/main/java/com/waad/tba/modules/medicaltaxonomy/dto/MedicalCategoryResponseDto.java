@@ -24,6 +24,7 @@ public class MedicalCategoryResponseDto {
     private String parentName; // For UX - display parent category name
     private String context; // Clinical care-setting: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY,
                             // SPECIAL, ANY
+    private java.util.List<String> contexts;
     private boolean active;
     private java.math.BigDecimal coveragePercent;
     private LocalDateTime createdAt;

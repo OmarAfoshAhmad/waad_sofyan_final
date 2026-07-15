@@ -45,6 +45,11 @@ public class BenefitPolicyRuleResponseDto {
     private Integer waitingPeriodDays;
     private boolean requiresPreApproval;
 
+    private String encounterType;
+    private BigDecimal copayPercentage;
+    private boolean inheritanceEnabled;
+    private Integer priority;
+
     // Display label
     private String label;
 
@@ -67,6 +72,10 @@ public class BenefitPolicyRuleResponseDto {
                 .timesLimit(rule.getTimesLimit())
                 .waitingPeriodDays(rule.getWaitingPeriodDays())
                 .requiresPreApproval(rule.isRequiresPreApproval())
+                .encounterType(rule.getEncounterType() != null ? rule.getEncounterType().name() : null)
+                .copayPercentage(rule.getCopayPercentage())
+                .inheritanceEnabled(rule.isInheritanceEnabled())
+                .priority(rule.getPriority())
                 .notes(rule.getNotes())
                 .active(rule.isActive())
                 .deleted(rule.isDeleted())

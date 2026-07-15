@@ -3,6 +3,7 @@ package com.waad.tba.modules.benefitpolicy.controller;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.excel.dto.ExcelImportResult;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleExcelService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ import java.time.LocalDate;
 public class BenefitPolicyRuleExcelController {
 
     private final BenefitPolicyRuleExcelService excelService;
+    private final BenefitPolicyService policyService;
 
     /**
      * Download Excel template pre-filled with all unified medical categories
@@ -81,6 +83,8 @@ public class BenefitPolicyRuleExcelController {
             @PathVariable Long policyId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "clearOld", defaultValue = "false") boolean clearOld) {
+
+        policyService.assertDraftConfiguration(policyId);
 
         log.info("[BPRuleExcel] Import requested: policyId={}, file={}, size={}, clearOld={}",
                 policyId, file.getOriginalFilename(), file.getSize(), clearOld);

@@ -12,6 +12,8 @@ public class BulkCoverageCheckDto {
     private Long memberId;
     private Integer year;
     private Long excludeClaimId;
+    private com.waad.tba.modules.providercontract.enums.EncounterType encounterType =
+            com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
     private List<BulkCoverageLineDto> lines;
 
     @Data

@@ -325,8 +325,8 @@ const EmployerEdit = () => {
             {/* Active Status */}
             <Grid size={{ xs: 12, sm: 12, md: 4 }}>
               <FormControlLabel
-                control={<Switch checked={employer.active || false} onChange={handleChange('active')} color="primary" />}
-                label={LABELS.active}
+                control={<Switch checked={employer.active || false} disabled color="primary" />}
+                label={`${LABELS.active} — غيّر الحالة من الأرشفة/الاستعادة`}
                 sx={{ mt: 1 }}
               />
             </Grid>

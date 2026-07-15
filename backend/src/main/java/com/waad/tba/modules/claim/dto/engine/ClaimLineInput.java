@@ -71,14 +71,14 @@ public class ClaimLineInput {
 
     /**
      * معرّف التصنيف الطبي السياقي (context override).
-     * مثال: 51 = CAT-OP (عيادات خارجية).
+     * التصنيف الطبي المختار للخدمة، مثل CAT-DRUG أو CAT-PHYSIO.
      * يُستخدم في خوارزمية "المرآة" لتحديد القاعدة الصحيحة.
      */
     private Long categoryId;
 
     /**
      * معرّف تصنيف الخدمة الأصلي (intrinsic category).
-     * مثال: 201 = CAT-IP-PHYSIO (علاج طبيعي).
+     * التصنيف الأصلي للخدمة من قائمة التصنيفات المعتمدة.
      * يُستخدم مع categoryId في خوارزمية "المرآة".
      */
     private Long serviceCategoryId;

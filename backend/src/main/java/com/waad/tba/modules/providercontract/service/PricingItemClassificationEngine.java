@@ -42,12 +42,8 @@ public class PricingItemClassificationEngine {
             }
         }
 
-        // Fallback based on mainCategory
-        if ("إيواء".equals(mainCategory) || "inpatient".equalsIgnoreCase(mainCategory)) {
-            MedicalCategory fallbackCategory = categoryRepository.findByCode("CAT-IP").orElse(null);
-            return ClassificationResult.inpatientGeneral(fallbackCategory, "MAIN_CATEGORY_FALLBACK");
-        }
-
+        // Full cutover: an unmatched service remains unclassified and must be mapped
+        // to one of the approved service categories; no legacy OP/IP root fallback.
         return ClassificationResult.unclassified();
     }
 

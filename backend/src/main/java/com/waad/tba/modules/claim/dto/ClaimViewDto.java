@@ -274,9 +274,7 @@ public class ClaimViewDto {
     }
 
     // ==================== COVERAGE CONTEXT ====================
-    private Boolean manualCategoryEnabled;
-    private String primaryCategoryCode;
-    private String primaryCategoryName;
+    private com.waad.tba.modules.providercontract.enums.EncounterType encounterType;
     private Boolean fullCoverage;
 
     // Monthly Batch Information
