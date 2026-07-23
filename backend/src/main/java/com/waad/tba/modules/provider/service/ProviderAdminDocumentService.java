@@ -8,6 +8,7 @@ import com.waad.tba.modules.provider.dto.ProviderAdminDocumentResponseDto;
 import com.waad.tba.modules.provider.entity.ProviderAdminDocument;
 import com.waad.tba.modules.provider.repository.ProviderAdminDocumentRepository;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class ProviderAdminDocumentService {
     private final ProviderAdminDocumentRepository documentRepository;
     private final ProviderRepository providerRepository;
     private final LocalFileStorageService fileStorageService;
+    private final AuthorizationService authorizationService;
     
     /**
      * Get all documents for a provider
@@ -36,6 +38,7 @@ public class ProviderAdminDocumentService {
     @Transactional(readOnly = true)
     public List<ProviderAdminDocumentResponseDto> getDocumentsByProviderId(Long providerId) {
         log.debug("Getting documents for provider: {}", providerId);
+        assertCanAccessProvider(providerId);
         
         // Validate provider exists
         if (!providerRepository.existsById(providerId)) {
@@ -57,6 +60,7 @@ public class ProviderAdminDocumentService {
             MultipartFile file) {
         
         log.info("Creating document for provider {} of type {}", providerId, dto.getType());
+        assertCanAccessProvider(providerId);
         
         // Validate provider exists
         if (!providerRepository.existsById(providerId)) {
@@ -103,6 +107,7 @@ public class ProviderAdminDocumentService {
     @Transactional
     public void deleteDocument(Long providerId, Long docId) {
         log.info("Deleting document {} for provider {}", docId, providerId);
+        assertCanAccessProvider(providerId);
         
         ProviderAdminDocument document = documentRepository.findById(docId)
                 .orElseThrow(() -> new ResourceNotFoundException("Document", "id", docId));
@@ -145,7 +150,6 @@ public class ProviderAdminDocumentService {
                 .typeLabel(ProviderAdminDocument.getTypeLabel(entity.getType()))
                 .fileName(entity.getFileName())
                 .fileUrl(entity.getFileUrl())
-                .filePath(entity.getFilePath())
                 .documentNumber(entity.getDocumentNumber())
                 .expiryDate(entity.getExpiryDate())
                 .notes(entity.getNotes())
@@ -153,5 +157,13 @@ public class ProviderAdminDocumentService {
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
+    }
+
+    private void assertCanAccessProvider(Long providerId) {
+        var currentUser = authorizationService.requireCurrentUser();
+        if (!authorizationService.canAccessProvider(currentUser, providerId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access to provider administrative documents denied");
+        }
     }
 }

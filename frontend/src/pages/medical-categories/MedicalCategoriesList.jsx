@@ -644,7 +644,7 @@ const MedicalCategoriesList = () => {
         title="استيراد التصنيفات الطبية"
         onDownloadTemplate={async () => {
           const response = await fetch('/api/v1/medical-categories/import/template', {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            credentials: 'include'
           });
           if (!response.ok) throw new Error('فشل تنزيل القالب');
           return response.blob();

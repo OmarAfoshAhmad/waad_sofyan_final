@@ -7,7 +7,7 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import { getEmployerSelectors } from 'services/api/employers.service';
 import { providersService } from 'services/api/providers.service';
 import { usersService } from 'services/rbac/users.service';
-import { refreshToken } from 'services/auth/tokenRefresh.service';
+import { useAuth } from 'contexts/AuthContext';
 import {
   Box,
   Button,
@@ -111,6 +111,7 @@ const ProviderEdit = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const { user: currentUser, refreshUser } = useAuth();
   const { provider, loading } = useProviderDetails(id);
   const { update, updating } = useUpdateProvider();
 
@@ -433,16 +434,14 @@ const ProviderEdit = () => {
       setLoadingUser(true);
       await usersService.updateUser(selectedUserToLink.id, { providerId: id });
 
-      // ✨ AUTO-REFRESH TOKEN: If linking current user to provider
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      if (currentUser.id === selectedUserToLink.id) {
+      if (currentUser?.id === selectedUserToLink.id) {
         try {
-          await refreshToken();
+          await refreshUser();
           enqueueSnackbar('تم ربط المستخدم وتحديث بياناتك بنجاح', {
             variant: 'success'
           });
-        } catch (refreshErr) {
-          console.warn('⚠️ Failed to auto-refresh token:', refreshErr);
+        } catch (refreshError) {
+          console.warn('Failed to refresh session user data:', refreshError);
           enqueueSnackbar('تم ربط المستخدم بنجاح. يرجى تسجيل الخروج والدخول لتحديث بياناتك.', { variant: 'warning' });
         }
       } else {

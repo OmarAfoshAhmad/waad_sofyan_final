@@ -7,6 +7,7 @@ import com.waad.tba.modules.visit.entity.VisitAttachment;
 import com.waad.tba.modules.visit.entity.VisitAttachmentType;
 import com.waad.tba.modules.visit.repository.VisitAttachmentRepository;
 import com.waad.tba.modules.visit.repository.VisitRepository;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -41,6 +42,7 @@ public class VisitAttachmentService {
     private final VisitAttachmentRepository attachmentRepository;
     private final VisitRepository visitRepository;
     private final FileStorageService fileStorageService;
+    private final AuthorizationService authorizationService;
 
     /**
      * Upload an attachment for a visit
@@ -72,6 +74,7 @@ public class VisitAttachmentService {
         // Verify visit exists
         Visit visit = visitRepository.findById(visitId)
                 .orElseThrow(() -> new RuntimeException("Visit not found with ID: " + visitId));
+        assertCanAccessVisit(visitId);
 
         // Upload file to storage
         String folder = "visits/" + visitId;
@@ -102,11 +105,10 @@ public class VisitAttachmentService {
      * @param attachmentId Attachment ID
      * @return File content as byte array
      */
-    public byte[] downloadAttachment(Long attachmentId) {
+    public byte[] downloadAttachment(Long visitId, Long attachmentId) {
         log.info("Downloading attachment ID: {}", attachmentId);
 
-        VisitAttachment attachment = attachmentRepository.findById(attachmentId)
-                .orElseThrow(() -> new RuntimeException("Attachment not found with ID: " + attachmentId));
+        VisitAttachment attachment = getAttachment(visitId, attachmentId);
 
         return fileStorageService.download(attachment.getFileKey());
     }
@@ -117,11 +119,10 @@ public class VisitAttachmentService {
      * @param attachmentId Attachment ID
      */
     @Transactional
-    public void deleteAttachment(Long attachmentId) {
+    public void deleteAttachment(Long visitId, Long attachmentId) {
         log.info("Deleting attachment ID: {}", attachmentId);
 
-        VisitAttachment attachment = attachmentRepository.findById(attachmentId)
-                .orElseThrow(() -> new RuntimeException("Attachment not found with ID: " + attachmentId));
+        VisitAttachment attachment = getAttachment(visitId, attachmentId);
 
         // Delete from storage
         fileStorageService.delete(attachment.getFileKey());
@@ -140,6 +141,7 @@ public class VisitAttachmentService {
      */
     public List<VisitAttachment> getVisitAttachments(Long visitId) {
         log.info("Fetching attachments for visit ID: {}", visitId);
+        assertCanAccessVisit(visitId);
         return attachmentRepository.findByVisitId(visitId);
     }
 
@@ -149,9 +151,14 @@ public class VisitAttachmentService {
      * @param attachmentId Attachment ID
      * @return VisitAttachment entity
      */
-    public VisitAttachment getAttachment(Long attachmentId) {
-        return attachmentRepository.findById(attachmentId)
+    public VisitAttachment getAttachment(Long visitId, Long attachmentId) {
+        assertCanAccessVisit(visitId);
+        VisitAttachment attachment = attachmentRepository.findById(attachmentId)
                 .orElseThrow(() -> new RuntimeException("Attachment not found with ID: " + attachmentId));
+        if (attachment.getVisit() == null || !visitId.equals(attachment.getVisit().getId())) {
+            throw new RuntimeException("Attachment not found with ID: " + attachmentId);
+        }
+        return attachment;
     }
 
     /**
@@ -161,6 +168,7 @@ public class VisitAttachmentService {
      * @return Number of attachments
      */
     public long countAttachments(Long visitId) {
+        assertCanAccessVisit(visitId);
         return attachmentRepository.countByVisitId(visitId);
     }
 
@@ -172,6 +180,7 @@ public class VisitAttachmentService {
     @Transactional
     public void deleteAllVisitAttachments(Long visitId) {
         log.info("Deleting all attachments for visit ID: {}", visitId);
+        assertCanAccessVisit(visitId);
 
         List<VisitAttachment> attachments = attachmentRepository.findByVisitId(visitId);
 
@@ -205,5 +214,12 @@ public class VisitAttachmentService {
             log.warn("Could not get current username", e);
         }
         return "system";
+    }
+
+    private void assertCanAccessVisit(Long visitId) {
+        var currentUser = authorizationService.requireCurrentUser();
+        if (!authorizationService.canAccessVisit(currentUser, visitId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access to visit attachment denied");
+        }
     }
 }

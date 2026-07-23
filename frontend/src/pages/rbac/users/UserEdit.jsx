@@ -64,7 +64,6 @@ import { useTableRefresh } from 'contexts/TableRefreshContext';
 // Services
 import usersService from 'services/rbac/users.service';
 import { SystemRole, getRoleDisplayName } from 'constants/rbac';
-import { refreshToken } from 'services/auth/tokenRefresh.service';
 import providersService from 'services/api/providers.service';
 import employersService from 'services/api/employers.service';
 
@@ -749,7 +748,7 @@ const UserEdit = () => {
           fullName: user.fullName || '',
           email: user.email || '',
           phone: user.phone || '',
-          active: user.active !== false && user.enabled !== false,
+          active: user.active !== false,
           employerId: user.employerId || null,
           providerId: user.providerId || null,
           // Custom permissions for EMPLOYER users

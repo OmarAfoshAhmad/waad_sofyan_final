@@ -21,7 +21,10 @@ const axiosServices = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  withCredentials: true // for session-based auth (JSESSIONID)
+  withCredentials: true, // for session-based auth (JSESSIONID)
+  withXSRFToken: true,
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN'
 });
 
 // ==============================|| REQUEST INTERCEPTOR ||============================== //

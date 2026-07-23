@@ -100,8 +100,8 @@ public class VisitAttachmentController {
         log.info("Download attachment: visitId={}, attachmentId={}", visitId, attachmentId);
         
         try {
-            VisitAttachment attachment = attachmentService.getAttachment(attachmentId);
-            byte[] fileContent = attachmentService.downloadAttachment(attachmentId);
+            VisitAttachment attachment = attachmentService.getAttachment(visitId, attachmentId);
+            byte[] fileContent = attachmentService.downloadAttachment(visitId, attachmentId);
             
             ByteArrayResource resource = new ByteArrayResource(fileContent);
             
@@ -134,7 +134,7 @@ public class VisitAttachmentController {
         log.info("Delete attachment: visitId={}, attachmentId={}", visitId, attachmentId);
         
         try {
-            attachmentService.deleteAttachment(attachmentId);
+            attachmentService.deleteAttachment(visitId, attachmentId);
             return ResponseEntity.ok("Attachment deleted successfully");
             
         } catch (RuntimeException e) {

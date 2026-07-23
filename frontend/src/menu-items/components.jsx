@@ -416,21 +416,6 @@ const menuItem = [
             }
           },
           {
-            id: 'email-preauth-requests',
-            title: 'طلبات البريد (Pre-Auth)',
-            titleEn: 'Email Pre-Auth Requests',
-            type: 'item',
-            url: '/pre-approvals/email-inbox',
-            icon: InboxIcon,
-            resource: 'pre_auth',
-            action: 'view',
-            chip: {
-              label: 'وارد',
-              color: 'error',
-              size: 'small'
-            }
-          },
-          {
             id: 'claims-report',
             title: 'تقرير المطالبات (مراجعة)',
             titleEn: 'Claims Report',

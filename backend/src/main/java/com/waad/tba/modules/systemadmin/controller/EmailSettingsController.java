@@ -26,12 +26,6 @@ public class EmailSettingsController {
         return ResponseEntity.ok(service.updateSettings(dto));
     }
 
-    @PostMapping("/test-imap")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Boolean> testImap(@RequestBody EmailSettingsDto dto) {
-        return ResponseEntity.ok(service.testImapConnection(dto));
-    }
-
     @PostMapping("/test-smtp")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Boolean> testSmtp(@RequestBody EmailSettingsDto dto) {

@@ -45,7 +45,6 @@ import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
-import com.waad.tba.modules.preauthorization.repository.PreAuthEmailRequestRepository;
 import com.waad.tba.security.AuthorizationService;
 
 import lombok.RequiredArgsConstructor;
@@ -79,7 +78,6 @@ public class MemberExcelImportService {
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
     private final PreAuthorizationRepository preAuthorizationRepository;
-    private final PreAuthEmailRequestRepository preAuthEmailRequestRepository;
 
     public MemberImportPreviewDto parseAndPreview(MultipartFile file) throws Exception {
         return parseAndPreview(file, null, null, null);
@@ -448,8 +446,6 @@ public class MemberExcelImportService {
             return;
         }
 
-        // Nullify in PreAuthEmailRequest in bulk
-        preAuthEmailRequestRepository.nullifyMemberIds(memberIdsToDelete);
 
         // Separate dependents and principals to delete
         List<Long> dependentsToDelete = new ArrayList<>();

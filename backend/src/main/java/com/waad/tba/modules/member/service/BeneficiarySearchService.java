@@ -5,6 +5,10 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.service.search.BeneficiarySearchStrategy;
 import com.waad.tba.modules.member.service.search.BeneficiarySearchType;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
+import com.waad.tba.modules.provider.service.ProviderService;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +33,8 @@ public class BeneficiarySearchService {
 
     private final List<BeneficiarySearchStrategy> strategies;
     private final UnifiedMemberMapper unifiedMemberMapper;
+    private final AuthorizationService authorizationService;
+    private final ProviderService providerService;
 
     public List<MemberViewDto> search(
             BeneficiarySearchType type,
@@ -51,7 +57,18 @@ public class BeneficiarySearchService {
             throw new ResponseStatusException(BAD_REQUEST, "Unsupported beneficiary search type: " + type);
         }
 
-        return strategy.search(normalizedValue, employerId, normalizedStatus, normalizedSize)
+        User currentUser = authorizationService.requireCurrentUser();
+        Long effectiveEmployerId = authorizationService.resolveEmployerScope(currentUser, employerId);
+        if (authorizationService.isProvider(currentUser)) {
+            if (currentUser.getProviderId() == null || effectiveEmployerId == null) {
+                throw new AccessDeniedException("Provider beneficiary search requires an employer scope");
+            }
+            if (!providerService.getAllowedEmployerIds(currentUser.getProviderId()).contains(effectiveEmployerId)) {
+                throw new AccessDeniedException("Provider is not allowed to access the requested employer");
+            }
+        }
+
+        return strategy.search(normalizedValue, effectiveEmployerId, normalizedStatus, normalizedSize)
                 .stream()
                 .map(unifiedMemberMapper::toViewDto)
                 .toList();

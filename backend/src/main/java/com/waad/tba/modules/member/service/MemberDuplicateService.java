@@ -16,7 +16,6 @@ import com.waad.tba.modules.member.dto.MemberDuplicateGroupDto.DuplicateMemberIn
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberAttributeRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
-import com.waad.tba.modules.preauthorization.repository.PreAuthEmailRequestRepository;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 
@@ -31,7 +30,6 @@ public class MemberDuplicateService {
     private final MemberRepository memberRepository;
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
-    private final PreAuthEmailRequestRepository preAuthEmailRequestRepository;
     private final MemberAttributeRepository memberAttributeRepository;
     private final CardNumberGeneratorService cardNumberGeneratorService;
 
@@ -167,7 +165,6 @@ public class MemberDuplicateService {
             }
 
             // 4. Update PreAuths
-            preAuthEmailRequestRepository.updateMemberId(dupId, primaryMemberId);
             
             // 5. Delete Member Attributes to avoid FK constraints during duplicate deletion
             memberAttributeRepository.deleteByMemberId(dupId);

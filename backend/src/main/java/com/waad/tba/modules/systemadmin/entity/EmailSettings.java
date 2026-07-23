@@ -38,35 +38,8 @@ public class EmailSettings {
     @Column(name = "smtp_password")
     private String smtpPassword;
 
-    @Column(name = "imap_host")
-    private String imapHost;
-
-    @Column(name = "imap_port")
-    private Integer imapPort;
-
-    @Column(name = "imap_username")
-    private String imapUsername;
-
-    @Column(name = "imap_password")
-    private String imapPassword;
-
     @Column(name = "encryption_type")
     private String encryptionType;
-
-    @Column(name = "listener_enabled")
-    private Boolean listenerEnabled;
-
-    @Column(name = "sync_interval_mins")
-    private Integer syncIntervalMins;
-
-    @Column(name = "subject_filter")
-    private String subjectFilter;
-
-    @Column(name = "only_from_providers")
-    private Boolean onlyFromProviders;
-
-    @Column(name = "last_sync_at")
-    private LocalDateTime lastSyncAt;
 
     @Column(name = "is_active")
     private Boolean isActive;

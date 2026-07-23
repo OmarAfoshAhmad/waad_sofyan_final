@@ -99,10 +99,10 @@ export const usersService = {
 
   /**
    * Reset user password (Super Admin Only)
-   * PUT /api/admin/user-management/{id}/reset-password
+   * PUT /api/admin/users/{id}/reset-password
    */
   resetPassword: async (id, newPassword) => {
-    const response = await axiosServices.put(`/admin/user-management/${id}/reset-password`, { newPassword });
+    const response = await axiosServices.put(`${BASE_URL}/${id}/reset-password`, { newPassword });
     return response?.data;
   },
 

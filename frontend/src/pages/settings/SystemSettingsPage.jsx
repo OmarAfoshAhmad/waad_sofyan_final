@@ -218,13 +218,7 @@ const SystemSettingsPage = () => {
     smtpPort: 587,
     smtpUsername: '',
     smtpPassword: '',
-    imapHost: '',
-    imapPort: 993,
-    imapUsername: '',
-    imapPassword: '',
-    encryptionType: 'TLS',
-    listenerEnabled: false,
-    syncIntervalMins: 5
+    encryptionType: 'TLS'
   });
 
   const settingsMap = useMemo(() => {
@@ -255,7 +249,7 @@ const SystemSettingsPage = () => {
 
       const emailResponse = emailSettingsBatch?.data;
       if (emailResponse && emailResponse.id) {
-        setEmailSettings({ ...emailResponse, smtpPassword: '', imapPassword: '' });
+        setEmailSettings({ ...emailResponse, smtpPassword: '' });
       }
 
       const company = companyResponse?.data || {};

@@ -3,12 +3,12 @@ package com.waad.tba.modules.systemadmin.service;
 import com.waad.tba.modules.systemadmin.dto.EmailSettingsDto;
 import com.waad.tba.modules.systemadmin.entity.EmailSettings;
 import com.waad.tba.modules.systemadmin.repository.EmailSettingsRepository;
+import com.waad.tba.security.SecretEncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.mail.*;
 import java.util.Properties;
 
 @Slf4j
@@ -17,6 +17,7 @@ import java.util.Properties;
 public class EmailSettingsService {
 
     private final EmailSettingsRepository repository;
+    private final SecretEncryptionService secretEncryptionService;
 
     public EmailSettingsDto getActiveSettings() {
         return repository.findFirstByIsActiveTrueOrderByIdDesc()
@@ -34,95 +35,31 @@ public class EmailSettingsService {
         settings.setSmtpPort(dto.getSmtpPort());
         settings.setSmtpUsername(dto.getSmtpUsername());
         if (dto.getSmtpPassword() != null && !dto.getSmtpPassword().isEmpty()) {
-            settings.setSmtpPassword(dto.getSmtpPassword());
-        }
-        
-        settings.setImapHost(dto.getImapHost());
-        settings.setImapPort(dto.getImapPort());
-        settings.setImapUsername(dto.getImapUsername());
-        if (dto.getImapPassword() != null && !dto.getImapPassword().isEmpty()) {
-            settings.setImapPassword(dto.getImapPassword());
+            settings.setSmtpPassword(secretEncryptionService.encrypt(dto.getSmtpPassword()));
         }
         
         settings.setEncryptionType(dto.getEncryptionType());
-        settings.setListenerEnabled(dto.getListenerEnabled());
-        settings.setSyncIntervalMins(dto.getSyncIntervalMins());
-        settings.setSubjectFilter(dto.getSubjectFilter());
-        settings.setOnlyFromProviders(dto.getOnlyFromProviders());
         settings.setIsActive(true);
 
         EmailSettings saved = repository.save(settings);
         return convertToDto(saved);
     }
 
-    public boolean testImapConnection(EmailSettingsDto dto) {
-        // Fetch saved settings if password is empty to support testing existing config
-        if (dto.getImapPassword() == null || dto.getImapPassword().isEmpty()) {
-            repository.findFirstByIsActiveTrueOrderByIdDesc().ifPresent(saved -> {
-                dto.setImapPassword(saved.getImapPassword());
-                if (dto.getImapHost() == null) dto.setImapHost(saved.getImapHost());
-                if (dto.getImapUsername() == null) dto.setImapUsername(saved.getImapUsername());
-            });
-        }
-
-        if (dto.getImapPassword() == null || dto.getImapPassword().isEmpty()) {
-            throw new RuntimeException("كلمة المرور فارغة. يرجى إدخال كلمة المرور أولاً.");
-        }
-
-        Properties props = new Properties();
-        String protocol = "imaps";
-        if ("NONE".equalsIgnoreCase(dto.getEncryptionType())) {
-            protocol = "imap";
-        }
-        
-        props.put("mail.store.protocol", protocol);
-        props.put("mail.debug", "false");
-        props.put("mail.imaps.timeout", "8000");
-        props.put("mail.imaps.connectiontimeout", "8000");
-
-        Store store = null;
-        try {
-            Session session = Session.getInstance(props);
-            store = session.getStore(protocol);
-            store.connect(dto.getImapHost(), dto.getImapUsername(), dto.getImapPassword());
-            return true;
-        } catch (AuthenticationFailedException e) {
-            log.error("IMAP Auth failed for {}: {}", dto.getImapUsername(), e.getMessage());
-            throw new RuntimeException("فشل المصادقة: اسم المستخدم أو كلمة المرور غير صحيحة. (إذا كنت تستخدم Gmail، تأكد من استخدام App Password)");
-        } catch (MessagingException e) {
-            log.error("IMAP Connection error for {}: {}", dto.getImapUsername(), e.getMessage());
-            throw new RuntimeException("فشل الاتصال بخادم الاستقبال: " + e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected IMAP error: {}", e.getMessage());
-            throw new RuntimeException("خطأ غير متوقع: " + e.getMessage());
-        } finally {
-            if (store != null) {
-                try {
-                    store.close();
-                } catch (MessagingException ignored) {}
-            }
-        }
-    }
-
     public boolean testSmtpConnection(EmailSettingsDto dto) {
-        // Fetch saved settings if password is empty
-        if (dto.getSmtpPassword() == null || dto.getSmtpPassword().isEmpty()) {
-            repository.findFirstByIsActiveTrueOrderByIdDesc().ifPresent(saved -> {
-                dto.setSmtpPassword(saved.getSmtpPassword());
-                if (dto.getSmtpHost() == null) dto.setSmtpHost(saved.getSmtpHost());
-                if (dto.getSmtpUsername() == null) dto.setSmtpUsername(saved.getSmtpUsername());
-            });
-        }
-
-        if (dto.getSmtpPassword() == null || dto.getSmtpPassword().isEmpty()) {
+        EmailSettings saved = repository.findFirstByIsActiveTrueOrderByIdDesc().orElse(null);
+        String password = suppliedOrSaved(dto.getSmtpPassword(),
+                saved == null ? null : saved.getSmtpPassword());
+        String host = firstNonBlank(dto.getSmtpHost(), saved == null ? null : saved.getSmtpHost());
+        String username = firstNonBlank(dto.getSmtpUsername(), saved == null ? null : saved.getSmtpUsername());
+        if (password == null || password.isEmpty()) {
             throw new RuntimeException("كلمة المرور فارغة. يرجى إدخال كلمة المرور أولاً.");
         }
 
         org.springframework.mail.javamail.JavaMailSenderImpl mailSender = new org.springframework.mail.javamail.JavaMailSenderImpl();
-        mailSender.setHost(dto.getSmtpHost());
+        mailSender.setHost(host);
         mailSender.setPort(dto.getSmtpPort());
-        mailSender.setUsername(dto.getSmtpUsername());
-        mailSender.setPassword(dto.getSmtpPassword());
+        mailSender.setUsername(username);
+        mailSender.setPassword(password);
 
         Properties props = mailSender.getJavaMailProperties();
         props.put("mail.transport.protocol", "smtp");
@@ -142,12 +79,12 @@ public class EmailSettingsService {
             mailSender.testConnection();
             return true;
         } catch (Exception e) {
-            log.error("SMTP Connection test failed for {}: {}", dto.getSmtpUsername(), e.getMessage());
-            String msg = e.getMessage();
-            if (msg.contains("authentication failed") || msg.contains("535")) {
+            String msg = e.getMessage() == null ? "" : e.getMessage();
+            log.warn("SMTP connection test failed: {}", e.getClass().getSimpleName());
+            if (msg.toLowerCase().contains("authentication failed") || msg.contains("535")) {
                 throw new RuntimeException("فشل المصادقة: اسم المستخدم أو كلمة المرور غير صحيحة. (تأكد من استخدام App Password لـ Gmail)");
             }
-            throw new RuntimeException("فشل الاتصال بخادم الإرسال: " + msg);
+            throw new RuntimeException("فشل الاتصال بخادم الإرسال");
         }
     }
 
@@ -159,16 +96,24 @@ public class EmailSettingsService {
                 .smtpHost(entity.getSmtpHost())
                 .smtpPort(entity.getSmtpPort())
                 .smtpUsername(entity.getSmtpUsername())
-                // Don't return password
-                .imapHost(entity.getImapHost())
-                .imapPort(entity.getImapPort())
-                .imapUsername(entity.getImapUsername())
+                .smtpPasswordConfigured(hasText(entity.getSmtpPassword()))
                 .encryptionType(entity.getEncryptionType())
-                .listenerEnabled(entity.getListenerEnabled())
-                .syncIntervalMins(entity.getSyncIntervalMins())
-                .subjectFilter(entity.getSubjectFilter())
-                .onlyFromProviders(entity.getOnlyFromProviders())
                 .isActive(entity.getIsActive())
                 .build();
+    }
+
+    private String suppliedOrSaved(String supplied, String stored) {
+        if (hasText(supplied)) {
+            return supplied;
+        }
+        return hasText(stored) ? secretEncryptionService.decrypt(stored) : null;
+    }
+
+    private String firstNonBlank(String preferred, String fallback) {
+        return hasText(preferred) ? preferred : fallback;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

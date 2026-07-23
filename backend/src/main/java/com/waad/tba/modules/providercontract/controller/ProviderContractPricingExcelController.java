@@ -101,7 +101,7 @@ public class ProviderContractPricingExcelController {
      * GET /api/provider-contracts/{contractId}/pricing/export
      */
     @GetMapping("/{contractId}/pricing/export")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(
         summary = "Export Price List to Excel",
         description = "Exports all existing pricing items for a contract into an Excel file."

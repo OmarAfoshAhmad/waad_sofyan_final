@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import com.waad.tba.modules.auth.service.SessionManagementService;
 
 /**
  * Implementation of UserPasswordService
@@ -28,6 +29,7 @@ public class UserPasswordServiceImpl implements UserPasswordService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SessionManagementService sessionManagementService;
 
     @Override
     @Transactional
@@ -57,6 +59,7 @@ public class UserPasswordServiceImpl implements UserPasswordService {
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setPasswordChangedAt(LocalDateTime.now());
         userRepository.save(user);
+        sessionManagementService.revokeAll(username);
         
         log.info("Password changed successfully for user: {}", username);
     }

@@ -1,7 +1,7 @@
 package com.waad.tba.modules.systemadmin.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import com.waad.tba.common.validation.PasswordPolicy;
 import lombok.Data;
 
 /**
@@ -20,7 +20,7 @@ public class ChangePasswordRequest {
     private String currentPassword;
 
     @NotBlank(message = "كلمة المرور الجديدة مطلوبة")
-    @Size(min = 8, message = "كلمة المرور يجب أن تكون 8 أحرف على الأقل")
+    @PasswordPolicy
     private String newPassword;
 
     @NotBlank(message = "تأكيد كلمة المرور مطلوب")

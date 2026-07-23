@@ -36,6 +36,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import com.waad.tba.common.validation.PasswordPolicy;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -173,6 +175,21 @@ public class UserController {
                 UserResponseDto user = userService.toggleStatus(id);
                 String message = Boolean.TRUE.equals(user.getActive()) ? "تم تفعيل المستخدم بنجاح" : "تم تعطيل المستخدم بنجاح";
                 return ResponseEntity.ok(ApiResponse.success(message, user));
+        }
+
+        @PutMapping("/{id:\\d+}/reset-password")
+        @Operation(summary = "Reset user password", description = "Resets a user password and revokes all active sessions.")
+        public ResponseEntity<ApiResponse<Void>> resetPassword(
+                        @PathVariable("id") Long id,
+                        @Valid @RequestBody AdminPasswordResetRequest payload) {
+                userService.resetPassword(id, payload.newPassword());
+                return ResponseEntity.ok(ApiResponse.success("Password reset successfully", null));
+        }
+
+        public record AdminPasswordResetRequest(
+                        @NotBlank(message = "New password is required")
+                        @PasswordPolicy
+                        String newPassword) {
         }
 
         @GetMapping("/unassigned-providers")

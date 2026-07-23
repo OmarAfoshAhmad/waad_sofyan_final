@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,14 +14,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.claim.dto.ClaimApproveDto;
 import com.waad.tba.modules.claim.dto.ClaimCreateDto;
 import com.waad.tba.modules.claim.dto.ClaimLineDto;
+import com.waad.tba.modules.claim.dto.ClaimLineReviewDecision;
 import com.waad.tba.modules.claim.dto.ClaimSettleDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
@@ -40,6 +45,7 @@ import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
@@ -67,6 +73,9 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
         @Autowired
         private BenefitPolicyRepository benefitPolicyRepository;
+
+        @Autowired
+        private BenefitPolicyRuleRepository benefitPolicyRuleRepository;
 
         @Autowired
         private com.waad.tba.modules.rbac.repository.UserRepository userRepository;
@@ -111,27 +120,29 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
         @BeforeEach
         void setupData() {
+                String suffix = UUID.randomUUID().toString().substring(0, 8);
                 // 0. User for auditing
-                userRepository.save(com.waad.tba.modules.rbac.entity.User.builder()
+                userRepository.findByUsername("admin").orElseGet(() -> userRepository.save(
+                                com.waad.tba.modules.rbac.entity.User.builder()
                                 .username("admin")
                                 .password("password")
                                 .fullName("System Admin")
                                 .email("admin@waad.ly")
                                 .userType("SUPER_ADMIN")
                                 .active(true)
-                                .build());
+                                .build()));
 
                 // 1. Employer
                 employer = employerRepository.save(Employer.builder()
-                                .name("Test Company")
-                                .code("EMP-TEST")
+                                .name("Test Company " + suffix)
+                                .code("EMP-" + suffix)
                                 .active(true)
                                 .build());
 
                 // 2. Benefit Policy
                 policy = benefitPolicyRepository.save(BenefitPolicy.builder()
-                                .name("Standard Plan")
-                                .policyCode("POL-TEST")
+                                .name("Standard Plan " + suffix)
+                                .policyCode("POL-" + suffix)
                                 .employer(employer)
                                 .annualLimit(new BigDecimal("50000"))
                                 .defaultCoveragePercent(80)
@@ -144,8 +155,8 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
                 // 3. Member
                 member = memberRepository.save(Member.builder()
                                 .fullName("John Doe")
-                                .barcode("1234567890")
-                                .nationalNumber("TEST-123")
+                                .barcode("BC-" + suffix)
+                                .nationalNumber("NAT-" + suffix)
                                 .employer(employer)
                                 .benefitPolicy(policy)
                                 .active(true)
@@ -153,9 +164,9 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
                 // 4. Provider
                 provider = providerRepository.save(Provider.builder()
-                                .name("General Hospital")
+                                .name("General Hospital " + suffix)
                                 .providerType(ProviderType.HOSPITAL)
-                                .licenseNumber("LIC-TEST-456")
+                                .licenseNumber("LIC-" + suffix)
                                 .allowAllEmployers(true)
                                 .active(true)
                                 .build());
@@ -172,14 +183,23 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
                 // 5. Medical Category
                 var category = medicalCategoryRepository.save(MedicalCategory.builder()
-                                .code("CAT-001")
+                                .code("CAT-" + suffix)
                                 .name("General Services")
                                 .active(true)
                                 .build());
 
+                benefitPolicyRuleRepository.save(BenefitPolicyRule.builder()
+                                .benefitPolicy(policy)
+                                .medicalCategory(category)
+                                .encounterType(EncounterType.OUTPATIENT)
+                                .coveragePercent(80)
+                                .active(true)
+                                .deleted(false)
+                                .build());
+
                 // 6. Medical Service
                 service = medicalServiceRepository.save(MedicalService.builder()
-                                .code("SRV-001")
+                                .code("SRV-" + suffix)
                                 .name("General Consultation")
                                 .categoryId(category.getId())
                                 .cost(new BigDecimal("150"))
@@ -188,8 +208,8 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
                 // 6. Contract
                 contract = contractRepository.save(ProviderContract.builder()
-                                .contractCode("CON-TEST")
-                                .contractNumber("CNT-2026-001")
+                                .contractCode("CON-" + suffix)
+                                .contractNumber("CNT-" + suffix)
                                 .provider(provider)
                                 .startDate(LocalDate.now().minusMonths(1))
                                 .endDate(LocalDate.now().plusMonths(11))
@@ -202,6 +222,7 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
                                 .contract(contract)
                                 .serviceCode(service.getCode())
                                 .serviceName(service.getName())
+                                .medicalCategory(category)
                                 .basePrice(new BigDecimal("150"))
                                 .contractPrice(new BigDecimal("120"))
                                 .active(true)
@@ -217,12 +238,13 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
         }
 
         @Test
-        @WithMockUser(username = "admin", roles = { "ADMIN", "REVIEWER" })
+        @WithMockUser(username = "admin", roles = { "SUPER_ADMIN", "MEDICAL_REVIEWER" })
         void fullClaimLifecycle_shouldSucceed() {
                 // Step 1: Create Claim from Visit
                 ClaimCreateDto createDto = ClaimCreateDto.builder()
                                 .visitId(visit.getId())
                                 .serviceDate(LocalDate.now())
+                                .encounterType(EncounterType.OUTPATIENT)
                                 .lines(List.of(ClaimLineDto.builder()
                                                 .medicalServiceId(service.getId())
                                                 .quantity(1)
@@ -247,10 +269,17 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
                 // But for Lifecycle verification, let's assume we can settle once Approved.
 
                 ClaimApproveDto approveDto = ClaimApproveDto.builder()
+                                .lineDecisions(createdClaim.getLines().stream()
+                                                .map(line -> ClaimApproveDto.LineDecision.builder()
+                                                                .lineId(line.getId())
+                                                                .decision(ClaimLineReviewDecision.APPROVE)
+                                                                .build())
+                                                .toList())
                                 .notes("Looks good")
                                 .build();
 
                 claimReviewService.requestApproval(createdClaim.getId(), approveDto);
+                commitRequestAndAwaitApproval(createdClaim.getId());
 
                 // Note: In real environment, it goes to APPROVAL_IN_PROGRESS then APPROVED.
                 // In local test context without async task executor enabled in @SpringBootTest
@@ -282,7 +311,7 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
         }
 
         @Test
-        @WithMockUser(username = "admin", roles = { "ADMIN", "REVIEWER" })
+        @WithMockUser(username = "admin", roles = { "SUPER_ADMIN", "MEDICAL_REVIEWER" })
         void deletingApprovedClaimReversesProviderBalanceAndIsIdempotent() {
                 var account = providerAccountRepository.findByProviderId(provider.getId()).orElseThrow();
                 account.setRunningBalance(BigDecimal.ZERO);
@@ -293,6 +322,7 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
                 ClaimViewDto created = claimService.createClaim(ClaimCreateDto.builder()
                                 .visitId(visit.getId())
                                 .serviceDate(LocalDate.now())
+                                .encounterType(EncounterType.OUTPATIENT)
                                 .lines(List.of(ClaimLineDto.builder()
                                                 .medicalServiceId(service.getId())
                                                 .quantity(1)
@@ -302,9 +332,16 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
                 claimReviewService.startReview(created.getId());
                 claimReviewService.requestApproval(created.getId(), ClaimApproveDto.builder()
+                                .lineDecisions(created.getLines().stream()
+                                                .map(line -> ClaimApproveDto.LineDecision.builder()
+                                                                .lineId(line.getId())
+                                                                .decision(ClaimLineReviewDecision.APPROVE)
+                                                                .build())
+                                                .toList())
                                 .notes("approve before void")
                                 .build());
-                providerAccountService.creditOnClaimApproval(created.getId(), null);
+                commitRequestAndAwaitApproval(created.getId());
+                awaitProviderBalance(provider.getId(), new BigDecimal("96.00"));
                 assertThat(providerAccountRepository.findByProviderId(provider.getId()).orElseThrow()
                                 .getRunningBalance()).isEqualByComparingTo("96.00");
 
@@ -316,5 +353,45 @@ public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
                 assertThatThrownBy(() -> claimService.deleteClaim(created.getId(), "repeat void"))
                                 .isInstanceOf(BusinessRuleException.class)
                                 .hasMessageContaining("مسبق");
+        }
+
+        private void commitRequestAndAwaitApproval(Long claimId) {
+                TestTransaction.flagForCommit();
+                TestTransaction.end();
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+                ClaimStatus status;
+                do {
+                        status = claimRepository.findById(claimId).orElseThrow().getStatus();
+                        if (status == ClaimStatus.APPROVED || status == ClaimStatus.REJECTED) {
+                                break;
+                        }
+                        try {
+                                Thread.sleep(50);
+                        } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new IllegalStateException("Interrupted while awaiting claim approval", e);
+                        }
+                } while (System.nanoTime() < deadline);
+                assertThat(status).isEqualTo(ClaimStatus.APPROVED);
+        }
+
+        private void awaitProviderBalance(Long providerId, BigDecimal expectedBalance) {
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+                BigDecimal balance;
+                do {
+                        balance = providerAccountRepository.findByProviderId(providerId)
+                                        .orElseThrow()
+                                        .getRunningBalance();
+                        if (balance.compareTo(expectedBalance) == 0) {
+                                return;
+                        }
+                        try {
+                                Thread.sleep(50);
+                        } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new IllegalStateException("Interrupted while awaiting provider balance", e);
+                        }
+                } while (System.nanoTime() < deadline);
+                assertThat(balance).isEqualByComparingTo(expectedBalance);
         }
 }

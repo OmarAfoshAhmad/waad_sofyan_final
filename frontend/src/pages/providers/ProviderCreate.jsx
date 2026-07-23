@@ -57,7 +57,6 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { useCreateProvider } from 'hooks/useProviders';
 import { usersService } from 'services/rbac/users.service';
-import { refreshToken } from 'services/auth/tokenRefresh.service';
 import { getEmployerSelectors } from 'services/api/employers.service';
 import { providersService } from 'services/api/providers.service';
 import GregorianDatePicker from 'components/common/GregorianDatePicker';

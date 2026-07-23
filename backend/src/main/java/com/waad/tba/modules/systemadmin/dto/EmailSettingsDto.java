@@ -1,5 +1,6 @@
 package com.waad.tba.modules.systemadmin.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,15 +17,9 @@ public class EmailSettingsDto {
     private String smtpHost;
     private Integer smtpPort;
     private String smtpUsername;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String smtpPassword;
-    private String imapHost;
-    private Integer imapPort;
-    private String imapUsername;
-    private String imapPassword;
+    private Boolean smtpPasswordConfigured;
     private String encryptionType;
-    private Boolean listenerEnabled;
-    private Integer syncIntervalMins;
-    private String subjectFilter;
-    private Boolean onlyFromProviders;
     private Boolean isActive;
 }

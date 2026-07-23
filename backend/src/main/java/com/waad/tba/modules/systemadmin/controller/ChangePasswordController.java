@@ -9,21 +9,23 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Controller for user profile operations
  * Self-service only - users manage their own account
  * 
  * Endpoint: POST /api/profile/change-password
- * Authentication: JWT required (any authenticated user)
- * 
- * NO @PreAuthorize - all authenticated users can change their password
+ * Authentication: server session for web or mobile access token.
  */
 @RestController
 @RequestMapping("/api/v1/profile")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("isAuthenticated()")
 public class ChangePasswordController {
 
     private final UserPasswordService userPasswordService;
@@ -38,7 +40,8 @@ public class ChangePasswordController {
     @PostMapping("/change-password")
     public ResponseEntity<ApiResponse<Void>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
-            Authentication authentication
+            Authentication authentication,
+            HttpServletRequest httpRequest
     ) {
         log.info("Change password request received for user: {}", authentication.getName());
         
@@ -54,6 +57,11 @@ public class ChangePasswordController {
                 request.getNewPassword()
         );
 
+        if (httpRequest.getSession(false) != null) {
+            httpRequest.getSession(false).invalidate();
+        }
+        SecurityContextHolder.clearContext();
+
         return ResponseEntity.ok(
                 ApiResponse.success("تم تغيير كلمة المرور بنجاح", null)
         );
@@ -63,7 +71,7 @@ public class ChangePasswordController {
      * Update profile for the currently authenticated user.
      *
      * PUT /api/v1/profile/me
-     * Authentication: JWT required (any authenticated user)
+     * Authentication: any authenticated user; updates only the current account.
      *
      * Only provided (non-null) fields are updated.
      */

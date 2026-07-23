@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -42,6 +43,8 @@ import com.waad.tba.modules.providercontract.entity.*;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.providercontract.repository.*;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.modules.visit.entity.*;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -68,9 +71,23 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     @Autowired MedicalServiceRepository serviceRepository;
     @Autowired VisitRepository visitRepository;
     @Autowired ClaimRepository claimRepository;
+    @Autowired UserRepository userRepository;
+
+    @BeforeEach
+    void ensureAuthenticatedUserExists() {
+        userRepository.findByUsername("superadmin").orElseGet(() ->
+                userRepository.save(User.builder()
+                        .username("superadmin")
+                        .password("test-password-not-used-for-authentication")
+                        .fullName("Integration Test Super Admin")
+                        .email("superadmin.integration@waad.test")
+                        .userType("SUPER_ADMIN")
+                        .active(true)
+                        .build()));
+    }
 
     @Test
-    @WithMockUser(username = "superadmin", roles = "ADMIN")
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
     void concurrentClaimsCannotOverdrawAndReversalIsIdempotent() throws Exception {
         Fixture f = createFixture(new BigDecimal("70"), null, null);
         Long firstClaim = createClaim(f, createVisit(f, LocalDate.now()), LocalDate.now());
@@ -117,7 +134,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    @WithMockUser(username = "superadmin", roles = "ADMIN")
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
     void concurrentClaimsCannotExceedTimesLimit() throws Exception {
         Fixture f = createFixture(null, 1, null);
         Long firstClaim = createClaim(f, createVisit(f, LocalDate.now()), LocalDate.now());
@@ -133,7 +150,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    @WithMockUser(username = "superadmin", roles = "ADMIN")
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
     void concurrentClaimsOnDifferentDatesCannotExceedDaysLimit() throws Exception {
         Fixture f = createFixture(null, null, 1);
         LocalDate firstDate = LocalDate.now().minusDays(1);
@@ -151,7 +168,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     }
 
     @Test
-    @WithMockUser(username = "superadmin", roles = "ADMIN")
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
     void twelveConcurrentClaimsRespectSharedAmountLimit() throws Exception {
         int workers = 12;
         Fixture f = createFixture(new BigDecimal("250"), null, null);

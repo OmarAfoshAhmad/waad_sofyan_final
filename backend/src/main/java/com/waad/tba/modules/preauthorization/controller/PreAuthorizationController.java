@@ -672,8 +672,8 @@ public class PreAuthorizationController {
         log.info("[API] Downloading attachment {} from pre-authorization {}", attachmentId, id);
         
         try {
-            PreAuthorizationAttachment attachment = attachmentService.getAttachment(attachmentId);
-            byte[] fileContent = attachmentService.downloadAttachment(attachmentId);
+            PreAuthorizationAttachment attachment = attachmentService.getAttachment(id, attachmentId);
+            byte[] fileContent = attachmentService.downloadAttachment(id, attachmentId);
             
             ByteArrayResource resource = new ByteArrayResource(fileContent);
             
@@ -702,7 +702,7 @@ public class PreAuthorizationController {
         log.info("[API] Deleting attachment {} from pre-authorization {}", attachmentId, id);
         
         try {
-            attachmentService.deleteAttachment(attachmentId);
+            attachmentService.deleteAttachment(id, attachmentId);
             return ResponseEntity.ok(ApiResponse.<Void>success("تم حذف المرفق بنجاح", null));
         } catch (RuntimeException e) {
             log.error("Failed to delete attachment {}: {}", attachmentId, e.getMessage());

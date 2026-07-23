@@ -27,6 +27,7 @@ import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.provider.service.ProviderService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
 
@@ -71,6 +72,7 @@ public class UnifiedMemberService {
     private final CardNumberGeneratorService cardNumberGenerator;
     private final UnifiedMemberMapper mapper;
     private final AuthorizationService authorizationService;
+    private final ProviderService providerService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
 
@@ -1038,8 +1040,7 @@ public class UnifiedMemberService {
     public MemberViewDto updateMemberPhoto(Long memberId, String photoPath) {
         log.info("📸 Updating photo for member: memberId={}, path={}", memberId, photoPath);
 
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+        Member member = requirePhotoAccess(memberId);
 
         member.setProfilePhotoPath(photoPath);
 
@@ -1065,10 +1066,39 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public String getMemberPhotoPath(Long memberId) {
+        Member member = requirePhotoAccess(memberId);
+
+        return member.getProfilePhotoPath();
+    }
+
+    /**
+     * Verify member-photo resource access before callers upload or touch storage.
+     */
+    @Transactional(readOnly = true)
+    public void assertCanAccessMemberPhoto(Long memberId) {
+        requirePhotoAccess(memberId);
+    }
+
+    private Member requirePhotoAccess(Long memberId) {
+        User currentUser = authorizationService.requireCurrentUser();
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
 
-        return member.getProfilePhotoPath();
+        boolean allowed = authorizationService.isInternalStaff(currentUser)
+                || authorizationService.canAccessMember(currentUser, memberId);
+
+        if (!allowed && authorizationService.isProvider(currentUser)
+                && currentUser.getProviderId() != null
+                && member.getEmployer() != null) {
+            allowed = providerService.getAllowedEmployerIds(currentUser.getProviderId())
+                    .contains(member.getEmployer().getId());
+        }
+
+        if (!allowed) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access to member photo denied");
+        }
+        return member;
     }
 
     // ==================== RESTORE & HARD DELETE ====================

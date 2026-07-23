@@ -115,8 +115,4 @@ public class PreAuthorizationCreateDto {
     @Builder.Default
     private Integer expiryDays = 30;
 
-    /**
-     * ID of the email request this pre-authorization originated from (Optional)
-     */
-    private Long emailRequestId;
 }

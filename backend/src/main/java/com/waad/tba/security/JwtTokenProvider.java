@@ -13,6 +13,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
+import java.util.Set;
 
 /**
  * JWT Token Provider — Static Role-Based Authorization (Phase 5)
@@ -30,6 +31,14 @@ public class JwtTokenProvider {
 
     @Value("${jwt.expiration:86400000}")
     private long jwtExpiration;
+
+    @Value("${jwt.issuer:tba-waad}")
+    private String jwtIssuer;
+
+    @Value("${jwt.audience:tba-waad-mobile}")
+    private String jwtAudience;
+
+    private static final String ACCESS_TOKEN_TYPE = "mobile_access";
 
     private SecretKey key;
 
@@ -51,6 +60,9 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(user.getUsername())
+                .issuer(jwtIssuer)
+                .audience().add(jwtAudience).and()
+                .claim("tokenType", ACCESS_TOKEN_TYPE)
                 .claim("userId", user.getId())
                 .claim("fullName", user.getFullName())
                 .claim("email", user.getEmail())
@@ -76,8 +88,16 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
-            return true;
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .requireIssuer(jwtIssuer)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            Set<String> audience = claims.getAudience();
+            return audience != null
+                    && audience.contains(jwtAudience)
+                    && ACCESS_TOKEN_TYPE.equals(claims.get("tokenType", String.class));
         } catch (SecurityException ex) {
             log.error("Invalid JWT signature");
         } catch (MalformedJwtException ex) {

@@ -23,7 +23,6 @@ public class ProviderAdminDocumentResponseDto {
     private String typeLabel;
     private String fileName;
     private String fileUrl;
-    private String filePath;
     private String documentNumber;
     private LocalDate expiryDate;
     private String notes;

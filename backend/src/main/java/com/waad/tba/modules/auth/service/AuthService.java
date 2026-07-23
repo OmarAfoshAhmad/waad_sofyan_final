@@ -44,6 +44,7 @@ public class AuthService {
         private final PasswordResetTokenRepository passwordResetTokenRepository;
         private final ProviderRepository providerRepository;
         private final SystemSettingsService systemSettingsService;
+        private final SessionManagementService sessionManagementService;
         private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -403,6 +404,7 @@ public class AuthService {
                 // 5) Encode password and save user
                 user.setPassword(passwordEncoder.encode(newPassword));
                 userRepository.save(user);
+                sessionManagementService.revokeAll(user.getUsername());
 
                 // 6) Delete token record for this email
                 passwordResetTokenRepository.deleteByEmail(email);

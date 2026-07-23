@@ -36,6 +36,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -1164,6 +1165,9 @@ public class UnifiedMemberController {
                                 id, file.getOriginalFilename(), file.getSize());
 
                 try {
+                        // Authorize before writing to storage to avoid orphan files on denial.
+                        unifiedMemberService.assertCanAccessMemberPhoto(id);
+
                         // Validate file
                         if (file.isEmpty()) {
                                 return ResponseEntity.badRequest()
@@ -1189,6 +1193,8 @@ public class UnifiedMemberController {
 
                         return ResponseEntity.ok(ApiResponse.success("تم رفع الصورة بنجاح", updated));
 
+                } catch (AccessDeniedException e) {
+                        throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo upload failed: memberId={}, error={}", id, e.getMessage(), e);
                         return ResponseEntity.internalServerError()
@@ -1225,6 +1231,8 @@ public class UnifiedMemberController {
                                         .contentType(MediaType.parseMediaType(contentType))
                                         .body(photoData);
 
+                } catch (AccessDeniedException e) {
+                        throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo retrieval failed: memberId={}, error={}", id, e.getMessage());
                         return ResponseEntity.notFound().build();
@@ -1256,6 +1264,8 @@ public class UnifiedMemberController {
 
                         return ResponseEntity.ok(ApiResponse.success("تم حذف الصورة بنجاح", null));
 
+                } catch (AccessDeniedException e) {
+                        throw e;
                 } catch (Exception e) {
                         log.error("❌ Photo deletion failed: memberId={}, error={}", id, e.getMessage(), e);
                         return ResponseEntity.internalServerError()

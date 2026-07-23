@@ -3,6 +3,7 @@ package com.waad.tba.modules.rbac.service;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +20,7 @@ import com.waad.tba.modules.rbac.entity.UserAuditLog;
 import com.waad.tba.modules.rbac.exception.PasswordPolicyViolationException;
 import com.waad.tba.modules.rbac.mapper.UserMapper;
 import com.waad.tba.modules.rbac.repository.UserRepository;
+import com.waad.tba.modules.auth.service.SessionManagementService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +44,7 @@ public class UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final UserSecurityService securityService;
+    private final SessionManagementService sessionManagementService;
 
     @Transactional(readOnly = true)
     public List<UserResponseDto> findAll() {
@@ -236,6 +239,26 @@ public class UserService {
         
         log.info("User {} status changed to: {}", id, newStatus ? "ACTIVE" : "INACTIVE");
         return userMapper.toResponseDto(savedUser);
+    }
+
+    @Transactional
+    public void resetPassword(Long id, String newPassword) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+
+        if (newPassword.equalsIgnoreCase(user.getUsername())) {
+            throw new PasswordPolicyViolationException(
+                    "Password cannot be the same as username",
+                    java.util.Collections.singletonList("PASSWORD_SAME_AS_USERNAME"));
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPasswordChangedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        securityService.auditLog(id, UserAuditLog.ACTION_PASSWORD_RESET,
+                "Password reset by administrator", null, null, null);
+        sessionManagementService.revokeAll(user.getUsername());
     }
 
     private String resolveUserType(String requestedUserType, Long employerId, Long providerId) {

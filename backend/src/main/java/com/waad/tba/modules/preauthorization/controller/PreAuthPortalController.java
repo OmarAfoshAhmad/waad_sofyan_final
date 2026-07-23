@@ -122,7 +122,6 @@ public class PreAuthPortalController {
                         .serviceType("MEDICAL")
                         .currency("LYD")
                         .diagnosisCode("Z00.0")
-                        .emailRequestId(9999L) // Bypass Architectural Check
                         .createdAt(LocalDateTime.now())
                         .createdBy("PROVIDER_UI")
                         .build();

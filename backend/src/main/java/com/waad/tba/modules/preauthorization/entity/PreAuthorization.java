@@ -70,9 +70,6 @@ public class PreAuthorization {
     @Column(name = "provider_id", nullable = false)
     private Long providerId;
 
-    @Column(name = "email_request_id")
-    private Long emailRequestId;
-
     @Column(name = "contract_id")
     private Long contractId;
 
@@ -82,9 +79,8 @@ public class PreAuthorization {
     // ==================== VISIT-CENTRIC ARCHITECTURE ====================
 
     /**
-     * Visit this pre-authorization is linked to
-     * ARCHITECTURAL LAW: Pre-authorizations MUST always reference an existing Visit
-     * This is NON-NEGOTIABLE - no standalone pre-authorization creation allowed
+     * Optional visit linked to this pre-authorization. Provider portal requests
+     * may be created directly without manufacturing a visit or email identifier.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "visit_id", nullable = true)
@@ -465,12 +461,6 @@ public class PreAuthorization {
      * THROWS IllegalStateException if any rule is violated
      */
     private void validateArchitecturalRules() {
-        // RULE: Visit is MANDATORY (unless it's an email request)
-        if (visit == null && emailRequestId == null) {
-            throw new IllegalStateException(
-                    "ARCHITECTURAL VIOLATION: PreAuthorization MUST reference a Visit or an Email Request");
-        }
-
         // RULE: Service must be identifiable (code + category mandatory)
         if (serviceCode == null || serviceCode.isBlank()) {
             throw new IllegalStateException(

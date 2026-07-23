@@ -64,8 +64,6 @@ public class PreAuthorizationService {
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final ArchitecturalGuardService architecturalGuard;
     private final com.waad.tba.modules.claim.service.ReviewerProviderIsolationService reviewerIsolationService;
-    private final PreAuthEmailNotificationService emailNotificationService;
-    private final EmailPreAuthService emailPreAuthService;
     private final NotificationSseService notificationSseService;
 
     // ==================== CREATE ====================
@@ -232,7 +230,6 @@ public class PreAuthorizationService {
                 .diagnosisCode(dto.getDiagnosisCode() != null ? dto.getDiagnosisCode() : "Z00.0")
                 .diagnosisDescription(dto.getDiagnosisDescription())
                 .notes(dto.getNotes())
-                .emailRequestId(dto.getEmailRequestId())
                 .active(true)
                 .createdBy(createdBy)
                 .build();
@@ -247,96 +244,6 @@ public class PreAuthorizationService {
         // Log audit trail
         auditService.logCreate(preAuth.getId(), preAuth.getReferenceNumber(), createdBy,
                 "Created with contract price: " + contractPrice + " LYD");
-
-        // Mark email request as processed if provided
-        if (dto.getEmailRequestId() != null) {
-            emailPreAuthService.markAsProcessed(dto.getEmailRequestId(), preAuth.getId());
-        }
-        return mapToResponseDto(preAuth, member, provider, null);
-    }
-
-    @Transactional
-    public PreAuthorizationResponseDto createPreAuthorizationFromEmail(Long emailRequestId, Long memberId,
-            Long medicalServiceId, String notes, String createdBy) {
-        log.info("[PRE-AUTH] Creating pre-authorization from email request: {}", emailRequestId);
-
-        // 1. Fetch Email Request
-        PreAuthEmailRequestDto emailRequest = emailPreAuthService.getById(emailRequestId);
-
-        // 2. Resolve Provider and Member
-        Long providerId = emailRequest.getProviderId();
-        if (providerId == null)
-            throw new IllegalArgumentException("Email request has no associated provider");
-        Provider provider = providerRepository.findById(providerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Provider not found: " + providerId));
-
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
-
-        // 3. Resolve Contract Price via pricingItem lookup (medicalServiceId used as
-        // pricingItemId for email path)
-        com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem emailPricingItem = pricingItemRepository
-                .findById(medicalServiceId).orElse(null);
-        String emailServiceCode = emailPricingItem != null ? emailPricingItem.getServiceCode() : null;
-        String emailServiceName = emailPricingItem != null ? emailPricingItem.getServiceName() : "Unknown Service";
-        Long emailCategoryId = emailPricingItem != null && emailPricingItem.getMedicalCategory() != null
-                ? emailPricingItem.getMedicalCategory().getId()
-                : null;
-
-        // 4. Resolve Contract Price
-        Long memberEmployerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
-        BigDecimal contractPrice = null;
-        if (emailServiceCode != null) {
-            EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(providerId,
-                    memberEmployerId, emailServiceCode, LocalDate.now());
-            if (priceResponse.isHasContract()) {
-                contractPrice = priceResponse.getContractPrice();
-            }
-        }
-        if (contractPrice == null && emailPricingItem != null) {
-            log.warn("[PRE-AUTH] Effective price lookup did not return a scoped email price; falling back to selected pricing item {}",
-                    emailPricingItem.getId());
-            contractPrice = emailPricingItem.getContractPrice();
-        }
-        if (contractPrice == null) {
-            throw new IllegalArgumentException("Service not in provider's contract");
-        }
-
-        // 5. Build PreAuthorization
-        String referenceNumber = generateUniqueReferenceNumber();
-        PreAuthorization preAuth = PreAuthorization.builder()
-                .preAuthNumber(referenceNumber)
-                .referenceNumber(referenceNumber)
-                .memberId(member.getId())
-                .providerId(providerId)
-                .serviceCode(emailServiceCode)
-                .serviceName(emailServiceName)
-                .serviceType(emailCategoryId != null ? "CATEGORY_" + emailCategoryId : "MEDICAL")
-                .serviceCategoryId(emailCategoryId)
-                .requestDate(LocalDate.now())
-                .expectedServiceDate(LocalDate.now())
-                .expiryDate(LocalDate.now().plusDays(30))
-                .contractPrice(contractPrice)
-                .requiresPA(true)
-                .status(PreAuthStatus.APPROVED)
-                .approvedAmount(contractPrice)
-                .copayAmount(BigDecimal.ZERO)
-                .insuranceCoveredAmount(contractPrice)
-                .active(true)
-                .emailRequestId(emailRequestId)
-                .notes(notes)
-                .createdBy(createdBy)
-                .approvedBy(createdBy)
-                .approvedAt(LocalDateTime.now())
-                .build();
-
-        preAuth = preAuthorizationRepository.save(preAuth);
-
-        // 6. Mark Email Request as Processed
-        emailPreAuthService.markAsProcessed(emailRequestId, preAuth.getId());
-
-        // 7. Notify Provider
-        emailNotificationService.sendDecisionEmail(preAuth);
 
         return mapToResponseDto(preAuth, member, provider, null);
     }
@@ -573,9 +480,6 @@ public class PreAuthorizationService {
         }
 
         log.info("✅ [PRE-AUTH] Reviewed: id={}, status={}", id, preAuth.getStatus());
-
-        // Notify if originated from email
-        emailNotificationService.sendDecisionEmail(preAuth);
 
         // Fetch related entities for response
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
@@ -858,9 +762,6 @@ public class PreAuthorizationService {
 
             log.info("✅ [SPLIT-PHASE] Phase 2 complete: PreAuth {} approved successfully", id);
 
-            // Notify if originated from email
-            emailNotificationService.sendDecisionEmail(preAuth);
-
         } catch (Exception e) {
             log.error("❌ [SPLIT-PHASE] Phase 2 failed for pre-auth {}: {}", id, e.getMessage(), e);
 
@@ -875,8 +776,6 @@ public class PreAuthorizationService {
                     preAuthorizationRepository.save(failedPreAuth);
                     log.info("🔄 PreAuth {} transitioned to REJECTED due to processing failure", id);
 
-                    // Notify if originated from email
-                    emailNotificationService.sendDecisionEmail(failedPreAuth);
                 }
             } catch (Exception rollbackError) {
                 log.error("❌ Failed to rollback pre-auth {} to REJECTED: {}", id, rollbackError.getMessage());

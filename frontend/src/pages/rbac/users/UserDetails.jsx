@@ -264,7 +264,7 @@ const UserDetails = () => {
               {user?.email || '-'}
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Chip label={user?.enabled !== false ? 'نشط' : 'معطل'} color={user?.enabled !== false ? 'success' : 'default'} size="small" />
+              <Chip label={user?.active !== false ? 'نشط' : 'معطل'} color={user?.active !== false ? 'success' : 'default'} size="small" />
               {(user?.roles || (user?.role ? [{ name: user.role }] : [])).map((role) => (
                 <Chip
                   key={role?.id || role?.name}

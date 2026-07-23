@@ -31,6 +31,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
+            // Browser sessions are authoritative. A bearer header must never replace an
+            // authentication already restored from the server-side session.
+            if (SecurityContextHolder.getContext().getAuthentication() != null
+                    && SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
@@ -55,13 +63,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
-        
-        // For SSE (EventSource) which doesn't support custom headers
-        String tokenParam = request.getParameter("token");
-        if (StringUtils.hasText(tokenParam) && request.getRequestURI().contains("/notifications/stream")) {
-            return tokenParam;
-        }
-        
         return null;
     }
 }

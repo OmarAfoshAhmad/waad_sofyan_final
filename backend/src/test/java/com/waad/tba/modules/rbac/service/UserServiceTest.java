@@ -2,6 +2,8 @@ package com.waad.tba.modules.rbac.service;
 
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
+import com.waad.tba.modules.auth.service.SessionManagementService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +24,15 @@ public class UserServiceTest {
 
     @Mock
     private com.waad.tba.modules.rbac.mapper.UserMapper userMapper;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private UserSecurityService securityService;
+
+    @Mock
+    private SessionManagementService sessionManagementService;
 
     @InjectMocks
     private UserService userService;
@@ -57,5 +68,35 @@ public class UserServiceTest {
         assertThrows(com.waad.tba.common.exception.ResourceNotFoundException.class, () -> {
             userService.findById(2L);
         });
+    }
+
+    @Test
+    void resetPasswordMustEncodePersistAuditAndRevokeSessions() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.encode("Strong@Pass123")).thenReturn("encoded-password");
+
+        userService.resetPassword(1L, "Strong@Pass123");
+
+        assertEquals("encoded-password", testUser.getPassword());
+        assertNotNull(testUser.getPasswordChangedAt());
+        verify(userRepository).save(testUser);
+        verify(securityService).auditLog(
+                eq(1L),
+                eq(com.waad.tba.modules.rbac.entity.UserAuditLog.ACTION_PASSWORD_RESET),
+                anyString(), isNull(), isNull(), isNull());
+        verify(sessionManagementService).revokeAll("testuser");
+    }
+
+    @Test
+    void resetPasswordMustRejectPasswordEqualToUsernameWithoutMutation() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+
+        assertThrows(
+                com.waad.tba.modules.rbac.exception.PasswordPolicyViolationException.class,
+                () -> userService.resetPassword(1L, "TESTUSER"));
+
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(userRepository, never()).save(any());
+        verify(sessionManagementService, never()).revokeAll(anyString());
     }
 }

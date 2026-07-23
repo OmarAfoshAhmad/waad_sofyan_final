@@ -12,13 +12,14 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -54,38 +55,32 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfRepository.setCookiePath("/");
+        csrfRepository.setHeaderName("X-XSRF-TOKEN");
+
+        // Resolve the token eagerly so safe bootstrap requests (notably session/me)
+        // issue the XSRF-TOKEN cookie before the first authenticated mutation.
+        CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
+        csrfRequestHandler.setCsrfRequestAttributeName(null);
+
         http
-                // PRODUCTION HARDENING: CSRF Protection via SameSite=Strict Cookies
-                // ====================================================================
-                // CSRF protection is DISABLED in Spring Security, but the system is
-                // protected via SameSite=Strict cookie attribute (see CookieConfig.java)
-                //
-                // WHY SAMESITE=STRICT INSTEAD OF CSRF TOKENS:
-                // 1. Browser-native protection - no custom token handling needed
-                // 2. Zero frontend changes required
-                // 3. SameSite=Strict prevents browsers from sending cookies on cross-site
-                // requests
-                // 4. Malicious site evil.com CANNOT trigger authenticated requests to this API
-                //
-                // HOW IT WORKS:
-                // - Session cookie (JSESSIONID) has SameSite=Strict attribute
-                // - Browser blocks cookie transmission on ALL cross-site requests
-                // - Only same-site navigation (e.g., user clicking links within the app) sends
-                // cookie
-                // - Cross-site form POST from evil.com → cookie NOT sent → request fails (401
-                // Unauthorized)
-                //
-                // PREVIOUS COMMENT (INCORRECT):
-                // "Modern SPA + CORS provides equivalent protection" ❌
-                // CORS does NOT prevent CSRF because browsers send cookies automatically
-                // on cross-site requests regardless of CORS configuration.
-                //
-                // CURRENT PROTECTION (CORRECT):
-                // SameSite=Strict cookies prevent cross-site cookie transmission ✅
-                //
-                // See: CookieConfig.java for SameSite=Strict implementation
-                // See: STEP_3_CSRF_PROTECTION_COMPLETE.md for testing and validation
-                .csrf(AbstractHttpConfigurer::disable)
+                // Session mutations require a synchronizer token in X-XSRF-TOKEN.
+                // Public credential/reset flows are not authenticated by a browser
+                // session and are protected by their own validation/rate-limit controls.
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfRepository)
+                        .csrfTokenRequestHandler(csrfRequestHandler)
+                        .ignoringRequestMatchers(
+                                "/api/v1/auth/session/login",
+                                "/api/v1/auth/login",
+                                "/api/v1/auth/register",
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password",
+                                "/api/v1/auth/token/forgot-password",
+                                "/api/v1/auth/token/reset-password",
+                                "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification"))
 
                 // CORS configuration with credentials support
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

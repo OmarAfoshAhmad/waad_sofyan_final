@@ -2,6 +2,13 @@ spring:
   application:
     name: tba-waad-system-backend
 
+  session:
+    store-type: jdbc
+    jdbc:
+      # Flyway owns the schema; Spring must never mutate production DDL.
+      initialize-schema: never
+    timeout: ${SESSION_TIMEOUT:30m}
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tba_waad_system}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -100,6 +107,8 @@ jwt:
   # Short-lived access token. Long sessions must use a separately revocable,
   # rotating refresh-token flow instead of extending this value.
   expiration: ${JWT_EXPIRATION_MS:1800000}
+  issuer: ${JWT_ISSUER:tba-waad}
+  audience: ${JWT_AUDIENCE:tba-waad-mobile}
   # SECURITY: Secret MUST be provided via JWT_SECRET environment variable.
   # No hardcoded fallback allowed. App will fail to start if not set.
   # In local dev, use application-dev.yml override or set the env var.
@@ -118,6 +127,10 @@ email:
   enabled: ${EMAIL_ENABLED:false}
 
 app:
+  security:
+    secrets:
+      # Base64-encoded 32-byte AES key. Required when email credentials are saved or used.
+      encryption-key: ${APP_SECRET_ENCRYPTION_KEY:}
   admin:
     # Required only when bootstrapping a fresh database. Existing passwords are
     # never synchronized unless sync-password-on-startup is explicitly enabled.

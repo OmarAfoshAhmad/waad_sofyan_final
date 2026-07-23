@@ -119,7 +119,9 @@ public class LocalFileStorageService implements FileStorageService {
                     .size(size)
                     .folder(folder)
                     .filePath(targetPath.toString())
-                    .url("/api/files/" + fileKey + "/download")
+                    // Raw file-key URLs are intentionally not exposed. Resource-specific
+                    // controllers build authorized claim/visit/pre-auth/member URLs.
+                    .url(null)
                     .uploadedAt(LocalDateTime.now())
                     .uploadedBy(getCurrentUserId())
                     .build();
@@ -170,9 +172,8 @@ public class LocalFileStorageService implements FileStorageService {
 
     @Override
     public String getPresignedUrl(String fileKey, int expiryMinutes) {
-        // For local storage, return direct download URL
-        // In production with S3/MinIO, generate actual presigned URL
-        return "/api/files/" + fileKey + "/download";
+        throw new UnsupportedOperationException(
+                "Raw file-key URLs are disabled; use a resource-specific authorized endpoint");
     }
 
     @Override

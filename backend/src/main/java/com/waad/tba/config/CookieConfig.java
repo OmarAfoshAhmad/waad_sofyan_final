@@ -11,18 +11,12 @@ import org.springframework.context.annotation.Configuration;
  * 
  * CSRF PROTECTION STRATEGY:
  * ========================
- * This system uses SameSite=Strict cookies as the primary CSRF defense mechanism.
+ * This system uses a synchronizer CSRF token as the primary defense and
+ * SameSite=Strict as defense in depth.
  * 
- * WHY SameSite=Strict INSTEAD OF CSRF TOKENS:
- * - Zero frontend code changes required
- * - Browser-native protection (all modern browsers support SameSite)
- * - Simpler architecture (no token synchronization needed)
- * - Equivalent security for session-based authentication
- * 
- * HOW IT WORKS:
- * - SameSite=Strict prevents browsers from sending cookies on cross-site requests
- * - Malicious site evil.com cannot trigger authenticated requests to tba-waad.com
- * - Only same-site requests (e.g., user navigating within tba-waad.com) send cookies
+ * The readable XSRF-TOKEN cookie is separate from the HttpOnly JSESSIONID.
+ * Axios echoes that random token in X-XSRF-TOKEN on mutating requests, while
+ * SameSite=Strict limits cross-site cookie transmission.
  * 
  * TECHNICAL DETAILS:
  * - Cookie Name: JSESSIONID (Spring default)
@@ -41,8 +35,8 @@ import org.springframework.context.annotation.Configuration;
  * 
  * ALTERNATIVES CONSIDERED:
  * - SameSite=Lax: Allows GET requests from cross-site → weaker protection
- * - CSRF Token Header: Requires frontend changes, complex synchronization
- * - Double-Submit Cookie: More complex, no advantage over SameSite
+ * - SameSite alone: rejected because it is defense in depth, not a complete
+ *   replacement for request tokens across all clients/deployment topologies
  * 
  * PRODUCTION CHECKLIST:
  * - [ ] Set SESSION_COOKIE_SECURE=true in production environment
@@ -51,7 +45,7 @@ import org.springframework.context.annotation.Configuration;
  * - [ ] Test same-site navigation → expect normal operation
  * 
  * @since 2026-02-10
- * @see SecurityConfig (CSRF disabled, explained in comments)
+ * @see SecurityConfig
  */
 @Configuration
 public class CookieConfig {
@@ -80,7 +74,7 @@ public class CookieConfig {
             // SameSite=Strict: CRITICAL CSRF PROTECTION
             // Prevents browser from sending cookie on ANY cross-site request
             // This is the core defense against CSRF attacks
-            cookieSerializer.setSameSite("Lax");
+            cookieSerializer.setSameSite("Strict");
             
             // HttpOnly=true: XSS MITIGATION
             // Prevents JavaScript from accessing cookie

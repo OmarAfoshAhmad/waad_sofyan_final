@@ -1,6 +1,8 @@
 package com.waad.tba.modules.auth.controller;
 
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -8,10 +10,13 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,6 +32,7 @@ import com.waad.tba.modules.auth.dto.LoginResponse;
 import com.waad.tba.modules.auth.dto.RegisterRequest;
 import com.waad.tba.modules.auth.dto.ResetPasswordRequest;
 import com.waad.tba.modules.auth.service.AuthService;
+import com.waad.tba.modules.auth.service.SessionManagementService;
 import com.waad.tba.modules.rbac.dto.ChangePasswordDto;
 import com.waad.tba.modules.rbac.dto.ForgotPasswordDto;
 import com.waad.tba.modules.rbac.dto.ResetPasswordDto;
@@ -40,6 +46,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.Cookie;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +63,7 @@ public class AuthController {
         private final UserSecurityService securityService;
         private final UserRepository userRepository;
         private final SystemSettingsService systemSettingsService;
+        private final SessionManagementService sessionManagementService;
 
         private static final String PASSWORD_RESET_METHOD_OTP = "OTP";
         private static final String PASSWORD_RESET_METHOD_TOKEN = "TOKEN";
@@ -105,6 +113,10 @@ public class AuthController {
                 // This ensures role changes take effect immediately without requiring re-login
                 session.setAttribute("userId", userInfo.getId());
                 session.setAttribute("username", userInfo.getUsername());
+                // Required by Spring Session's principal index for inventory/revocation.
+                session.setAttribute(
+                                FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,
+                                userInfo.getUsername());
                 // Note: employerId is used for employer scoping
                 session.setAttribute("employerId", userInfo.getEmployerId());
                 // Ensure providerId is persisted for provider-level isolation
@@ -151,6 +163,77 @@ public class AuthController {
                 SecurityContextHolder.clearContext();
 
                 return ResponseEntity.ok(ApiResponse.success("Logout successful", null));
+        }
+
+        @GetMapping("/session/sessions")
+        @PreAuthorize("isAuthenticated()")
+        @Operation(summary = "List active sessions", description = "Lists the current user's active HTTP sessions.")
+        public ResponseEntity<ApiResponse<java.util.List<SessionManagementService.SessionInfo>>> listSessions(
+                        Authentication authentication,
+                        HttpServletRequest request) {
+                HttpSession current = request.getSession(false);
+                String currentId = resolvePresentedSessionId(request, current);
+                return ResponseEntity.ok(ApiResponse.success(
+                                sessionManagementService.list(authentication.getName(), currentId)));
+        }
+
+        @DeleteMapping("/session/sessions/{sessionId}")
+        @PreAuthorize("isAuthenticated()")
+        @Operation(summary = "Revoke a session", description = "Revokes one session owned by the current user.")
+        public ResponseEntity<ApiResponse<Void>> revokeSession(
+                        @PathVariable String sessionId,
+                        Authentication authentication,
+                        HttpServletRequest request) {
+                HttpSession current = request.getSession(false);
+                String currentId = resolvePresentedSessionId(request, current);
+
+                sessionManagementService.revokeOwnedSession(authentication.getName(), sessionId);
+                if (current != null && sessionId.equals(currentId)) {
+                        current.invalidate();
+                        SecurityContextHolder.clearContext();
+                }
+                return ResponseEntity.ok(ApiResponse.success("Session revoked", null));
+        }
+
+        @PostMapping("/session/logout-all")
+        @PreAuthorize("isAuthenticated()")
+        @Operation(summary = "Logout from all devices", description = "Revokes every active session for the current user.")
+        public ResponseEntity<ApiResponse<Void>> logoutAll(
+                        Authentication authentication,
+                        HttpServletRequest request) {
+                HttpSession current = request.getSession(false);
+                String currentId = resolvePresentedSessionId(request, current);
+
+                sessionManagementService.revokeAllExcept(authentication.getName(), currentId);
+                if (current != null) {
+                        current.invalidate();
+                }
+                SecurityContextHolder.clearContext();
+                return ResponseEntity.ok(ApiResponse.success("All sessions revoked", null));
+        }
+
+        /**
+         * DefaultCookieSerializer Base64-encodes the external cookie value. During
+         * authentication Spring may rotate the request wrapper's id before the
+         * repository flushes it, so inventory must compare against the id actually
+         * presented by the client.
+         */
+        private String resolvePresentedSessionId(HttpServletRequest request, HttpSession fallback) {
+                Cookie[] cookies = request.getCookies();
+                if (cookies != null) {
+                        for (Cookie cookie : cookies) {
+                                if ("JSESSIONID".equals(cookie.getName())) {
+                                        try {
+                                                return new String(
+                                                                Base64.getDecoder().decode(cookie.getValue()),
+                                                                StandardCharsets.UTF_8);
+                                        } catch (IllegalArgumentException ignored) {
+                                                return cookie.getValue();
+                                        }
+                                }
+                        }
+                }
+                return fallback == null ? null : fallback.getId();
         }
 
         // ========== EXISTING JWT-BASED ENDPOINTS (TEMPORARY - Phase B) ==========
@@ -405,12 +488,12 @@ public class AuthController {
         @PreAuthorize("isAuthenticated()")
         @Operation(summary = "Refresh JWT token with updated permissions", description = "Generates new JWT token with current user's updated roles and permissions")
         public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(
-                        @AuthenticationPrincipal UserDetails userDetails) {
+                        Authentication authentication) {
 
-                log.info("🔄 Refreshing JWT token for user: {}", userDetails.getUsername());
+                log.info("🔄 Refreshing session permissions for user: {}", authentication.getName());
 
                 // Get fresh user data with updated roles/permissions from database
-                LoginResponse refreshedToken = authService.refreshUserToken(userDetails.getUsername());
+                LoginResponse refreshedToken = authService.refreshUserToken(authentication.getName());
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Token refreshed successfully with updated permissions",
@@ -429,10 +512,17 @@ public class AuthController {
         @Operation(summary = "Change password", description = "Changes authenticated user's password. Requires current password verification.")
         public ResponseEntity<ApiResponse<Void>> changePassword(
                         @Valid @RequestBody ChangePasswordDto dto,
-                        @AuthenticationPrincipal UserDetails userDetails) {
+                        Authentication authentication,
+                        HttpServletRequest request) {
 
-                securityService.changePassword(userDetails.getUsername(), dto.getCurrentPassword(),
+                securityService.changePassword(authentication.getName(), dto.getCurrentPassword(),
                                 dto.getNewPassword());
+
+                HttpSession session = request.getSession(false);
+                if (session != null) {
+                        session.invalidate();
+                }
+                SecurityContextHolder.clearContext();
 
                 return ResponseEntity.ok(ApiResponse.<Void>builder()
                                 .status("success")

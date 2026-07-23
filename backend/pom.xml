@@ -109,10 +109,10 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
-        <!-- Spring Session for Cookie Configuration -->
+        <!-- Persistent, cluster-safe HTTP sessions backed by PostgreSQL -->
         <dependency>
             <groupId>org.springframework.session</groupId>
-            <artifactId>spring-session-core</artifactId>
+            <artifactId>spring-session-jdbc</artifactId>
         </dependency>
 
         <dependency>

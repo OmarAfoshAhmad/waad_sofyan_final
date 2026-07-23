@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.waad.tba.modules.auth.service.SessionManagementService;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -45,6 +46,7 @@ public class UserSecurityService {
     private final EmailService emailService;
     private final SecurityConfigurationProperties config;
     private final SystemSettingsService systemSettingsService;
+    private final SessionManagementService sessionManagementService;
 
     // =====================================================
     // PASSWORD MANAGEMENT
@@ -95,6 +97,7 @@ public class UserSecurityService {
         auditLog(userId, UserAuditLog.ACTION_PASSWORD_CHANGE,
                 "Success: Password changed by user", ipAddress, userAgent, userId);
 
+        sessionManagementService.revokeAll(user.getUsername());
         log.info("Password changed successfully for user ID: {}", userId);
     }
 
@@ -214,6 +217,7 @@ public class UserSecurityService {
         user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         user.unlockAccount(); // Unlock if locked
         userRepository.save(user);
+        sessionManagementService.revokeAll(user.getUsername());
 
         // Mark token as used
         token.markAsUsed();

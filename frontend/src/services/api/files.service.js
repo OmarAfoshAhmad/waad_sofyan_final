@@ -7,93 +7,6 @@ import api from '../../utils/axios';
  */
 
 /**
- * Upload a file
- *
- * @param {File} file - File to upload
- * @param {string} folder - Target folder (e.g., 'claims', 'preauth', 'visits')
- * @param {string} description - Optional description
- * @param {function} onProgress - Progress callback
- * @returns {Promise} Upload result
- */
-export const uploadFile = async (file, folder, description = null, onProgress = null) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('folder', folder);
-  if (description) {
-    formData.append('description', description);
-  }
-
-  const config = {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  };
-
-  if (onProgress) {
-    config.onUploadProgress = (progressEvent) => {
-      const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-      onProgress(percentCompleted);
-    };
-  }
-
-  const response = await api.post('/files/upload', formData, config);
-  return response.data;
-};
-
-/**
- * Download a file
- *
- * @param {string} folder - Folder name
- * @param {string} filename - File name
- * @returns {Promise<Blob>} File content
- */
-export const downloadFile = async (folder, filename) => {
-  const response = await api.get(`/files/${folder}/${filename}/download`, {
-    responseType: 'blob'
-  });
-  return response.data;
-};
-
-/**
- * Delete a file
- *
- * @param {string} folder - Folder name
- * @param {string} filename - File name
- * @returns {Promise} Deletion result
- */
-export const deleteFile = async (folder, filename) => {
-  const response = await api.delete(`/files/${folder}/${filename}`);
-  return response.data;
-};
-
-/**
- * Get presigned URL for a file
- *
- * @param {string} folder - Folder name
- * @param {string} filename - File name
- * @param {number} expiryMinutes - URL validity duration (default: 60)
- * @returns {Promise<string>} Presigned URL
- */
-export const getFileUrl = async (folder, filename, expiryMinutes = 60) => {
-  const response = await api.get(`/files/${folder}/${filename}/url`, {
-    params: { expiryMinutes }
-  });
-  return response.data;
-};
-
-/**
- * Check if file exists
- *
- * @param {string} folder - Folder name
- * @param {string} filename - File name
- * @returns {Promise<boolean>} True if exists
- */
-export const fileExists = async (folder, filename) => {
-  const response = await api.get(`/files/${folder}/${filename}/exists`);
-  return response.data;
-};
-
-/**
  * Upload claim attachment
  *
  * @param {number} claimId - Claim ID
@@ -281,11 +194,6 @@ export const deleteVisitAttachment = async (visitId, attachmentId) => {
 };
 
 export default {
-  uploadFile,
-  downloadFile,
-  deleteFile,
-  getFileUrl,
-  fileExists,
   uploadClaimAttachment,
   getClaimAttachments,
   downloadClaimAttachment,
