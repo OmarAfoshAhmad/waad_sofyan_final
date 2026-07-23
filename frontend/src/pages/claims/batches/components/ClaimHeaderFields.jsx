@@ -1,4 +1,4 @@
-import { Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Alert, Button } from '@mui/material';
+import { Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Alert, Button, Chip, Select, MenuItem } from '@mui/material';
 
 const inlineSx = {
   '& .MuiInputBase-root': { fontSize: '0.9rem' },
@@ -31,15 +31,29 @@ export const ClaimHeaderFields = ({
   setServiceDate,
   setIsDirty,
   financialSummary,
+  currentCompanyCommitment = 0,
+  editingApprovedAmount = 0,
   loadingSummary,
   t,
   showValidationErrors
 }) => {
+  const isOutpatient = encounterType === 'OUTPATIENT' && !fullCoverage;
+  const alternativeContext = fullCoverage ? 'FULL_COVERAGE' : 'INPATIENT';
+  // Header badges are policy-wide totals. Service/category ceilings belong only
+  // in the corresponding claim-line column.
+  const amountLimit = Number(financialSummary?.annualLimit || 0);
+  const persistedRemaining = Number(financialSummary?.remainingCoverage || 0);
+  // The persisted summary includes an existing claim being edited, while the
+  // coverage engine excludes that claim before recalculation. Add its old
+  // approved amount back, then subtract the current draft commitment so the
+  // badge and engine describe the same state.
+  const availableBeforeDraft = Math.min(amountLimit, persistedRemaining + Number(editingApprovedAmount || 0));
+  const remainingAmount = Math.max(0, availableBeforeDraft - Number(currentCompanyCommitment || 0));
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr 0.8fr 1fr' },
+        gridTemplateColumns: { xs: '1fr', md: '1.05fr 1.15fr 0.72fr minmax(430px, 1.55fr)' },
         gap: 2,
         alignItems: 'flex-start',
         width: '100%',
@@ -150,30 +164,83 @@ export const ClaimHeaderFields = ({
       </Box>
 
       {/* Column 4: Coverage Context */}
-      <Box>
+      <Box sx={{ position: 'relative', minHeight: 58 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
           سياق المطالبة
         </Typography>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1.1}
+          alignItems="flex-start"
+          flexWrap="nowrap"
+          justifyContent="space-between"
+          sx={{
+            whiteSpace: 'nowrap',
+            minWidth: 0,
+            width: '100%',
+            '& .MuiFormControlLabel-root': { mr: 0, ml: 0.25 },
+            '& .MuiFormControlLabel-label': { lineHeight: 1 }
+          }}
+        >
           <FormControlLabel
             control={
               <Checkbox
                 size="small"
-                checked={encounterType === 'INPATIENT'}
+                checked={isOutpatient}
                 onChange={(e) => {
-                  const newEncounterType = e.target.checked ? 'INPATIENT' : 'OUTPATIENT';
+                  const newEncounterType = e.target.checked ? 'OUTPATIENT' : 'INPATIENT';
+                  setFullCoverage(false);
                   setEncounterType(newEncounterType);
                   setIsDirty(true);
-                  onRefetchAll(newEncounterType, fullCoverage);
+                  onRefetchAll(newEncounterType, false);
                 }}
                 sx={{ p: 0.5 }}
               />
             }
-            label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 500 }}>حالة إيواء</Typography>}
+            label={<Typography sx={{ fontSize: '0.75rem', fontWeight: 600 }}>عيادات خارجية</Typography>}
           />
-          <Typography variant="caption" color="text.secondary">
-            {encounterType === 'INPATIENT' ? 'إيواء' : 'عيادات خارجية'}
-          </Typography>
+          {!isOutpatient && (
+            <Select
+              size="small"
+              variant="standard"
+              value={alternativeContext}
+              onChange={(e) => {
+                const isFullCoverage = e.target.value === 'FULL_COVERAGE';
+                const newEncounterType = isFullCoverage ? 'OUTPATIENT' : 'INPATIENT';
+                setEncounterType(newEncounterType);
+                setFullCoverage(isFullCoverage);
+                setIsDirty(true);
+                onRefetchAll(newEncounterType, isFullCoverage);
+              }}
+              sx={{ minWidth: 96, fontSize: '0.72rem', mt: 0 }}
+            >
+              <MenuItem value="INPATIENT">إيواء</MenuItem>
+              <MenuItem value="FULL_COVERAGE">تغطية كاملة</MenuItem>
+            </Select>
+          )}
+          {amountLimit > 0 && (
+            <Stack
+              direction="column"
+              spacing={0.35}
+              alignItems="stretch"
+              flexWrap="nowrap"
+              sx={{ flexShrink: 0 }}
+            >
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`السقف العام: ${amountLimit.toFixed(2)} د.ل`}
+                sx={{ height: 24, '& .MuiChip-label': { px: 0.7, fontSize: '0.68rem' } }}
+              />
+              <Chip
+                size="small"
+                color={remainingAmount <= 0 ? 'error' : 'success'}
+                variant="outlined"
+                label={`المتبقي: ${remainingAmount.toFixed(2)} د.ل`}
+                sx={{ height: 24, '& .MuiChip-label': { px: 0.7, fontSize: '0.68rem' } }}
+              />
+            </Stack>
+          )}
         </Stack>
       </Box>
     </Box>

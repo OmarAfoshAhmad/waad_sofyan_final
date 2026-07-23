@@ -27,13 +27,11 @@ public class FinancialConsolidationService {
                       "SUM(COALESCE(c.netProviderAmount, COALESCE(c.approvedAmount, 0.0))), " +
                       "SUM(COALESCE(c.refusedAmount, 0.0)), " +
                       "SUM(COALESCE(c.paidAmount, 0.0)), " +
-                      "SUM(CASE WHEN COALESCE(c.companyDiscountAmount, 0.0) > 0 THEN c.companyDiscountAmount " +
-                      "ELSE ((COALESCE(c.requestedAmount, 0.0) - COALESCE(c.patientCoPay, 0.0) - COALESCE(c.refusedAmount, 0.0)) * COALESCE(pc.discountPercent, 0.0) / 100.0) END) " +
+                      "SUM(COALESCE(c.companyDiscountAmount, 0.0)) " +
                       "FROM Claim c " +
-                      "LEFT JOIN ModernProviderContract pc ON pc.provider.id = c.providerId AND pc.status = 'ACTIVE' " +
                       "WHERE YEAR(c.serviceDate) = :year " +
                       "AND c.active = true " +
-                      "AND c.status IN ('APPROVED', 'SETTLED') " +
+                      "AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED') " +
                       "GROUP BY c.member.employer.name, MONTH(c.serviceDate)";
 
         Query query = entityManager.createQuery(jpql);
@@ -47,11 +45,11 @@ public class FinancialConsolidationService {
         for (Object[] row : results) {
             String employerName = (String) row[0];
             int month = (Integer) row[1];
-            BigDecimal requested = row[2] != null ? BigDecimal.valueOf(((Number) row[2]).doubleValue()) : BigDecimal.ZERO;
-            BigDecimal approved = row[3] != null ? BigDecimal.valueOf(((Number) row[3]).doubleValue()) : BigDecimal.ZERO;
-            BigDecimal rejected = row[4] != null ? BigDecimal.valueOf(((Number) row[4]).doubleValue()) : BigDecimal.ZERO;
-            BigDecimal paid = row[5] != null ? BigDecimal.valueOf(((Number) row[5]).doubleValue()) : BigDecimal.ZERO;
-            BigDecimal companyDiscount = row[6] != null ? BigDecimal.valueOf(((Number) row[6]).doubleValue()) : BigDecimal.ZERO;
+            BigDecimal requested = decimal(row[2]);
+            BigDecimal approved = decimal(row[3]);
+            BigDecimal rejected = decimal(row[4]);
+            BigDecimal paid = decimal(row[5]);
+            BigDecimal companyDiscount = decimal(row[6]);
             BigDecimal remaining = approved.subtract(paid);
 
             if (employerName == null) employerName = "غير معروف";
@@ -99,5 +97,11 @@ public class FinancialConsolidationService {
         }
 
         return new ArrayList<>(map.values());
+    }
+
+    private BigDecimal decimal(Object value) {
+        if (value == null) return BigDecimal.ZERO;
+        if (value instanceof BigDecimal decimal) return decimal;
+        return new BigDecimal(value.toString());
     }
 }

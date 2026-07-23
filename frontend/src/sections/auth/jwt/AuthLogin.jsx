@@ -108,6 +108,7 @@ export default function AuthLogin({ isDemo = false }) {
                     type="text"
                     value={values.email}
                     name="email"
+                    autoComplete="username"
                     onBlur={handleBlur}
                     onChange={handleChange}
                     placeholder="أدخل اسم المستخدم أو البريد الإلكتروني"
@@ -147,10 +148,11 @@ export default function AuthLogin({ isDemo = false }) {
                   <OutlinedInput
                     fullWidth
                     error={Boolean(touched.password && errors.password)}
-                    id="-password-login"
+                    id="password-login"
                     type={showPassword ? 'text' : 'password'}
                     value={values.password}
                     name="password"
+                    autoComplete="current-password"
                     onBlur={handleBlur}
                     onChange={handleChange}
                     startAdornment={

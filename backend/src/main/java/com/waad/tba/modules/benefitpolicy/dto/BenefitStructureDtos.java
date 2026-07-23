@@ -10,11 +10,17 @@ public final class BenefitStructureDtos {
     private BenefitStructureDtos() {}
 
     public record GroupRequest(
-            @NotBlank @Size(max = 50) String code,
+            @Size(max = 50) String code,
             @NotBlank @Size(max = 255) String nameAr,
             @NotNull EncounterType contextType,
             @NotNull AggregationMode aggregationMode,
-            Boolean active) {}
+            Boolean active,
+            @DecimalMin("0.00") BigDecimal amountLimit,
+            @Min(0) Integer timesLimit,
+            @Min(0) Integer daysLimit,
+            LimitPeriodType periodType,
+            CountingMethod countingMethod,
+            List<Long> ruleIds) {}
 
     public record GroupResponse(Long id, String code, String nameAr, EncounterType contextType,
                                 AggregationMode aggregationMode, Integer coveragePercent,
@@ -45,6 +51,13 @@ public final class BenefitStructureDtos {
 
     public record RuleBucketRequest(@NotNull Long bucketId, @Min(1) Integer consumptionOrder,
                                     @NotNull ConsumptionMode consumptionMode, Boolean mandatory) {}
+
+    public record IndividualLimitRequest(
+            @DecimalMin("0.00") BigDecimal amountLimit,
+            @Min(0) Integer timesLimit,
+            @Min(0) Integer daysLimit,
+            LimitPeriodType periodType,
+            CountingMethod countingMethod) {}
 
     public record RuleBucketResponse(Long id, Long ruleId, BucketResponse bucket,
                                     Integer consumptionOrder, ConsumptionMode consumptionMode,

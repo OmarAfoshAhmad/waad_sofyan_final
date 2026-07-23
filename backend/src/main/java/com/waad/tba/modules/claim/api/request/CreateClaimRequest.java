@@ -73,6 +73,9 @@ public class CreateClaimRequest {
      */
     private Long providerId;
 
+    /** Open monthly provider batch. Validated against provider and employer. */
+    private Long claimBatchId;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // DIAGNOSIS (Selected from dropdown, not free-text)
     // ═══════════════════════════════════════════════════════════════════════════
@@ -117,8 +120,8 @@ public class CreateClaimRequest {
     private String notes;
 
     /**
-     * Optional: Target status for the claim (e.g., SETTLED, REJECTED)
-     * Defaults to SETTLED if not specified to bypass DRAFT.
+     * Internal direct-entry target status. Provider-portal callers are always
+     * forced to DRAFT by the service regardless of this value.
      */
     private com.waad.tba.modules.claim.entity.ClaimStatus status;
 

@@ -19,6 +19,7 @@ public class BenefitStructureService {
     private final BenefitGroupRepository groupRepository;
     private final BenefitLimitBucketRepository bucketRepository;
     private final BenefitRuleBucketRepository ruleBucketRepository;
+    private final BenefitBucketConsumptionRepository consumptionRepository;
 
     @Transactional(readOnly = true)
     public StructureResponse getStructure(Long policyId) {
@@ -35,7 +36,9 @@ public class BenefitStructureService {
 
     public GroupResponse createGroup(Long policyId, GroupRequest request) {
         BenefitPolicy policy = requirePolicy(policyId);
-        String code = request.code().trim();
+        String code = request.code() == null || request.code().isBlank()
+                ? nextGroupCode(policyId)
+                : request.code().trim();
         String name = request.nameAr().trim();
         if (groupRepository.existsByPolicyIdAndCodeIgnoreCase(policyId, code)) {
             throw new BusinessRuleException("يوجد ضمن هذه الوثيقة مجموعة منفعة بالكود نفسه: " + code);
@@ -47,7 +50,110 @@ public class BenefitStructureService {
                 .policy(policy).code(code).nameAr(name)
                 .contextType(request.contextType()).aggregationMode(request.aggregationMode())
                 .active(request.active() == null || request.active()).build();
-        return groupResponse(groupRepository.save(group));
+        BenefitGroup savedGroup = groupRepository.save(group);
+
+        // Simplified administration contract: the user creates one benefit
+        // group. Its technical bucket and rule links are internal details.
+        List<Long> ruleIds = request.ruleIds() == null ? List.of() : request.ruleIds().stream()
+                .filter(Objects::nonNull).distinct().toList();
+        if (ruleIds.size() < 2) {
+            throw new BusinessRuleException("مجموعة المنافع يجب أن تضم منفعتين على الأقل");
+        }
+        if (!ruleIds.isEmpty()) {
+            String bucketCode = "AUTO-GRP-" + code;
+            BenefitLimitBucket bucket = BenefitLimitBucket.builder()
+                    .policy(policy).benefitGroup(savedGroup).code(bucketCode).nameAr(name)
+                    .contextType(request.contextType()).amountLimit(request.amountLimit())
+                    .timesLimit(request.timesLimit()).daysLimit(request.daysLimit())
+                    .periodType(request.periodType() == null
+                            ? com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.POLICY_PERIOD
+                            : request.periodType())
+                    .periodValue(1)
+                    .countingMethod(request.countingMethod() == null
+                            ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT
+                            : request.countingMethod())
+                    .consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .shared(ruleIds.size() > 1).active(request.active() == null || request.active()).build();
+            BenefitLimitBucket savedBucket = bucketRepository.save(bucket);
+            int order = 1;
+            for (Long ruleId : ruleIds) {
+                BenefitPolicyRule rule = ruleRepository.findById(ruleId)
+                        .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicyRule", "id", ruleId));
+                assertSamePolicy(policyId, rule.getBenefitPolicy().getId(), "قاعدة المجموعة");
+                if (rule.getEncounterType() != request.contextType()
+                        && request.contextType() != com.waad.tba.modules.providercontract.enums.EncounterType.ANY) {
+                    throw new BusinessRuleException("سياق إحدى قواعد المجموعة لا يطابق سياق المجموعة: " + ruleId);
+                }
+                ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(savedBucket)
+                        .consumptionOrder(order++)
+                        .consumptionMode(com.waad.tba.modules.benefitpolicy.enums.ConsumptionMode.PRIMARY)
+                        .mandatory(true).build());
+            }
+        }
+        return groupResponse(savedGroup);
+    }
+
+    public GroupResponse updateGroup(Long policyId, Long groupId, GroupRequest request) {
+        BenefitGroup group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitGroup", "id", groupId));
+        assertSamePolicy(policyId, group.getPolicy().getId(), "مجموعة المنفعة");
+        String name = request.nameAr().trim();
+        groupRepository.findByPolicyIdAndNameArIgnoreCase(policyId, name).ifPresent(existing -> {
+            if (!Objects.equals(existing.getId(), groupId))
+                throw new BusinessRuleException("يوجد ضمن هذه الوثيقة مجموعة منفعة بالاسم نفسه: " + name);
+        });
+        List<Long> ruleIds = request.ruleIds() == null ? List.of() : request.ruleIds().stream()
+                .filter(Objects::nonNull).distinct().toList();
+        if (ruleIds.size() < 2) throw new BusinessRuleException("مجموعة المنافع يجب أن تضم منفعتين على الأقل");
+
+        group.setNameAr(name);
+        group.setContextType(request.contextType());
+        group.setAggregationMode(request.aggregationMode());
+        group.setActive(request.active() == null || request.active());
+        BenefitGroup savedGroup = groupRepository.save(group);
+
+        BenefitLimitBucket bucket = bucketRepository.findByBenefitGroupId(groupId).stream()
+                .filter(item -> item.getCode().startsWith("AUTO-GRP-"))
+                .findFirst().orElseGet(() -> BenefitLimitBucket.builder()
+                        .policy(group.getPolicy()).benefitGroup(group).code("AUTO-GRP-" + group.getCode())
+                        .periodValue(1).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                        .build());
+        bucket.setNameAr(name);
+        bucket.setContextType(request.contextType());
+        bucket.setAmountLimit(request.amountLimit());
+        bucket.setTimesLimit(request.timesLimit());
+        bucket.setDaysLimit(request.daysLimit());
+        bucket.setPeriodType(request.periodType() == null
+                ? com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.POLICY_PERIOD : request.periodType());
+        bucket.setCountingMethod(request.countingMethod() == null
+                ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT : request.countingMethod());
+        bucket.setShared(true);
+        bucket.setActive(request.active() == null || request.active());
+        BenefitLimitBucket savedBucket = bucketRepository.save(bucket);
+
+        ruleBucketRepository.deleteAll(ruleBucketRepository.findByBucketId(savedBucket.getId()));
+        int order = 1;
+        for (Long ruleId : ruleIds) {
+            BenefitPolicyRule rule = ruleRepository.findById(ruleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicyRule", "id", ruleId));
+            assertSamePolicy(policyId, rule.getBenefitPolicy().getId(), "قاعدة المجموعة");
+            if (rule.getEncounterType() != request.contextType()
+                    && request.contextType() != com.waad.tba.modules.providercontract.enums.EncounterType.ANY)
+                throw new BusinessRuleException("سياق إحدى المنافع لا يطابق نطاق المجموعة: " + ruleId);
+            ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(savedBucket)
+                    .consumptionOrder(order++).consumptionMode(com.waad.tba.modules.benefitpolicy.enums.ConsumptionMode.PRIMARY)
+                    .mandatory(true).build());
+        }
+        return groupResponse(savedGroup);
+    }
+
+    private String nextGroupCode(Long policyId) {
+        long sequence = groupRepository.countByPolicyId(policyId) + 1;
+        String candidate;
+        do {
+            candidate = "GRP-" + String.format("%04d", sequence++);
+        } while (groupRepository.existsByPolicyIdAndCodeIgnoreCase(policyId, candidate));
+        return candidate;
     }
 
     public BucketResponse createBucket(Long policyId, BucketRequest request) {
@@ -98,6 +204,62 @@ public class BenefitStructureService {
                 saved.getConsumptionMode(), saved.isMandatory());
     }
 
+    public BucketResponse upsertIndividualLimit(Long policyId, Long ruleId, IndividualLimitRequest request) {
+        BenefitPolicyRule rule = ruleRepository.findById(ruleId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicyRule", "id", ruleId));
+        assertSamePolicy(policyId, rule.getBenefitPolicy().getId(), "منفعة الوثيقة");
+        BenefitRuleBucket existingLink = ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId).stream()
+                .filter(link -> link.getBucket().getCode().startsWith("AUTO-BEN-LIMIT-"))
+                .findFirst().orElse(null);
+        boolean noLimit = request.amountLimit() == null && request.timesLimit() == null && request.daysLimit() == null;
+        if (noLimit) {
+            if (existingLink != null) {
+                BenefitLimitBucket oldBucket = existingLink.getBucket();
+                BenefitGroup oldGroup = oldBucket.getBenefitGroup();
+                ruleBucketRepository.delete(existingLink);
+                bucketRepository.delete(oldBucket);
+                groupRepository.delete(oldGroup);
+            }
+            return null;
+        }
+
+        BenefitGroup group;
+        BenefitLimitBucket bucket;
+        if (existingLink == null) {
+            String groupCode = "AUTO-BEN-RULE-" + ruleId;
+            group = BenefitGroup.builder().policy(rule.getBenefitPolicy()).code(groupCode).nameAr(rule.getLabel())
+                    .contextType(rule.getEncounterType()).aggregationMode(com.waad.tba.modules.benefitpolicy.enums.AggregationMode.INDIVIDUAL)
+                    .active(true).build();
+            group = groupRepository.save(group);
+            bucket = BenefitLimitBucket.builder().policy(rule.getBenefitPolicy()).benefitGroup(group)
+                    .code("AUTO-BEN-LIMIT-RULE-" + ruleId).nameAr(rule.getLabel()).contextType(rule.getEncounterType())
+                    .periodValue(1).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .shared(false).active(true).build();
+        } else {
+            bucket = existingLink.getBucket();
+            group = bucket.getBenefitGroup();
+            group.setNameAr(rule.getLabel());
+            group.setContextType(rule.getEncounterType());
+            group.setActive(true);
+            groupRepository.save(group);
+        }
+        bucket.setNameAr(rule.getLabel());
+        bucket.setContextType(rule.getEncounterType());
+        bucket.setAmountLimit(request.amountLimit());
+        bucket.setTimesLimit(request.timesLimit());
+        bucket.setDaysLimit(request.daysLimit());
+        bucket.setPeriodType(request.periodType() == null
+                ? com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.POLICY_PERIOD : request.periodType());
+        bucket.setCountingMethod(request.countingMethod() == null
+                ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT : request.countingMethod());
+        bucket = bucketRepository.save(bucket);
+        if (existingLink == null) {
+            ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(bucket).consumptionOrder(1)
+                    .consumptionMode(com.waad.tba.modules.benefitpolicy.enums.ConsumptionMode.PRIMARY).mandatory(true).build());
+        }
+        return bucketResponse(bucket);
+    }
+
     public void deleteBucket(Long policyId, Long bucketId) {
         BenefitLimitBucket bucket = bucketRepository.findById(bucketId)
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitLimitBucket", "id", bucketId));
@@ -108,6 +270,7 @@ public class BenefitStructureService {
         if (ruleBucketRepository.existsByBucketId(bucketId)) {
             throw new BusinessRuleException("لا يمكن حذف الوعاء قبل فك جميع روابط قواعد التغطية منه");
         }
+        assertBucketHasNoFinancialHistory(bucket);
         bucketRepository.delete(bucket);
     }
 
@@ -115,10 +278,25 @@ public class BenefitStructureService {
         BenefitGroup group = groupRepository.findById(groupId)
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitGroup", "id", groupId));
         assertSamePolicy(policyId, group.getPolicy().getId(), "مجموعة المنفعة");
-        if (bucketRepository.existsByBenefitGroupId(groupId)) {
-            throw new BusinessRuleException("لا يمكن حذف المجموعة قبل حذف جميع الأوعية التابعة لها");
+        List<BenefitLimitBucket> buckets = bucketRepository.findByBenefitGroupId(groupId);
+        boolean generatedOnly = buckets.stream().allMatch(bucket -> bucket.getCode().startsWith("AUTO-GRP-"));
+        if (!generatedOnly) {
+            throw new BusinessRuleException("لا يمكن حذف المجموعة قبل حذف جميع السقوف المتقدمة التابعة لها");
+        }
+        buckets.forEach(this::assertBucketHasNoFinancialHistory);
+        for (BenefitLimitBucket bucket : buckets) {
+            ruleBucketRepository.deleteAll(ruleBucketRepository.findByBucketId(bucket.getId()));
+            bucketRepository.delete(bucket);
         }
         groupRepository.delete(group);
+    }
+
+    private void assertBucketHasNoFinancialHistory(BenefitLimitBucket bucket) {
+        if (consumptionRepository.existsByBucketId(bucket.getId())) {
+            throw new BusinessRuleException(
+                    "لا يمكن حذف المنفعة أو المجموعة لوجود سجل استهلاك مالي مرتبط بها. يمكن تعطيلها مع الاحتفاظ بالسجل التاريخي: "
+                            + bucket.getNameAr());
+        }
     }
 
     public void deleteLink(Long policyId, Long linkId) {

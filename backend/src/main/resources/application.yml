@@ -83,7 +83,7 @@ server:
     max-connections: 10000
     accept-count: 200
   error:
-    include-message: always
+    include-message: never
     include-stacktrace: never
   servlet:
     encoding:
@@ -91,13 +91,15 @@ server:
       enabled: true
       force: true
     session:
-      timeout: 3650d
+      timeout: ${SESSION_TIMEOUT:30m}
       cookie:
         name: JSESSIONID
         http-only: true
 
 jwt:
-  expiration: 315360000000
+  # Short-lived access token. Long sessions must use a separately revocable,
+  # rotating refresh-token flow instead of extending this value.
+  expiration: ${JWT_EXPIRATION_MS:1800000}
   # SECURITY: Secret MUST be provided via JWT_SECRET environment variable.
   # No hardcoded fallback allowed. App will fail to start if not set.
   # In local dev, use application-dev.yml override or set the env var.
@@ -117,7 +119,10 @@ email:
 
 app:
   admin:
-    default-password: ${ADMIN_DEFAULT_PASSWORD:Admin@123}
+    # Required only when bootstrapping a fresh database. Existing passwords are
+    # never synchronized unless sync-password-on-startup is explicitly enabled.
+    default-password: ${ADMIN_DEFAULT_PASSWORD:}
+    sync-password-on-startup: ${ADMIN_SYNC_PASSWORD_ON_STARTUP:false}
   frontend:
     url: ${APP_FRONTEND_URL:http://localhost:3000}
   cors:
@@ -127,7 +132,7 @@ file:
   storage:
     type: ${FILE_STORAGE_TYPE:local}
     local:
-      base-dir: ${FILE_STORAGE_LOCAL_BASE_DIR:./storage/uploads}
+      base-path: ${FILE_STORAGE_LOCAL_BASE_PATH:./uploads}
     s3:
       region: ${AWS_REGION:me-south-1}
       bucket-name: ${AWS_S3_BUCKET:waad-medical-documents}

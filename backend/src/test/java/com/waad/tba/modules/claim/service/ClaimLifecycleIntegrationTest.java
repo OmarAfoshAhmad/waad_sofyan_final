@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,6 +24,8 @@ import com.waad.tba.modules.claim.dto.ClaimLineDto;
 import com.waad.tba.modules.claim.dto.ClaimSettleDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
@@ -39,14 +42,19 @@ import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractSta
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.settlement.entity.ProviderAccount;
+import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
+import com.waad.tba.modules.settlement.service.ProviderAccountService;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.entity.VisitStatus;
 import com.waad.tba.modules.visit.repository.VisitRepository;
+import com.waad.tba.TbaWaadApplication;
+import com.waad.tba.support.PostgresIntegrationTestBase;
 
-@SpringBootTest
+@SpringBootTest(classes = TbaWaadApplication.class)
 @ActiveProfiles("test")
 @Transactional
-public class ClaimLifecycleIntegrationTest {
+public class ClaimLifecycleIntegrationTest extends PostgresIntegrationTestBase {
 
         @Autowired
         private ClaimService claimService;
@@ -83,6 +91,15 @@ public class ClaimLifecycleIntegrationTest {
 
         @Autowired
         private VisitRepository visitRepository;
+
+        @Autowired
+        private ProviderAccountRepository providerAccountRepository;
+
+        @Autowired
+        private ClaimRepository claimRepository;
+
+        @Autowired
+        private ProviderAccountService providerAccountService;
 
         private Employer employer;
         private BenefitPolicy policy;
@@ -141,6 +158,16 @@ public class ClaimLifecycleIntegrationTest {
                                 .licenseNumber("LIC-TEST-456")
                                 .allowAllEmployers(true)
                                 .active(true)
+                                .build());
+
+                // The transactional lifecycle fixture cannot observe an
+                // after-commit approval event. Seed the account with the exact
+                // approved provider share so settlement can verify its debit.
+                providerAccountRepository.save(ProviderAccount.builder()
+                                .providerId(provider.getId())
+                                .runningBalance(new BigDecimal("96.00"))
+                                .totalApproved(new BigDecimal("96.00"))
+                                .totalPaid(BigDecimal.ZERO)
                                 .build());
 
                 // 5. Medical Category
@@ -207,6 +234,8 @@ public class ClaimLifecycleIntegrationTest {
                 assertThat(createdClaim).isNotNull();
                 assertThat(createdClaim.getStatus()).isEqualTo(ClaimStatus.SUBMITTED);
                 assertThat(createdClaim.getRequestedAmount()).isEqualByComparingTo("120.00");
+                assertThat(visitRepository.findById(visit.getId()).orElseThrow().getStatus())
+                                .isEqualTo(VisitStatus.CLAIM_SUBMITTED);
 
                 // Step 2: Start Review
                 ClaimViewDto underReview = claimReviewService.startReview(createdClaim.getId());
@@ -218,7 +247,6 @@ public class ClaimLifecycleIntegrationTest {
                 // But for Lifecycle verification, let's assume we can settle once Approved.
 
                 ClaimApproveDto approveDto = ClaimApproveDto.builder()
-                                .useSystemCalculation(true)
                                 .notes("Looks good")
                                 .build();
 
@@ -236,10 +264,6 @@ public class ClaimLifecycleIntegrationTest {
                 // OR we just verify the state transition was initiated.
 
                 // For this lifecycle test, we want to see it reach SETTLED.
-                // We'll call the internal async processing logic directly for the test
-                // stability.
-                claimReviewService.processApprovalAsync(createdClaim.getId(), approveDto);
-
                 ClaimViewDto approvedClaim = claimService.getClaim(createdClaim.getId());
                 assertThat(approvedClaim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
                 assertThat(approvedClaim.getApprovedAmount()).isGreaterThan(BigDecimal.ZERO);
@@ -253,5 +277,44 @@ public class ClaimLifecycleIntegrationTest {
                 ClaimViewDto settledClaim = claimReviewService.settleClaim(createdClaim.getId(), settleDto);
                 assertThat(settledClaim.getStatus()).isEqualTo(ClaimStatus.SETTLED);
                 assertThat(settledClaim.getPaymentReference()).isEqualTo("PAY-001");
+                assertThatThrownBy(() -> claimService.deleteClaim(createdClaim.getId(), "invalid settled void"))
+                                .isInstanceOf(BusinessRuleException.class);
+        }
+
+        @Test
+        @WithMockUser(username = "admin", roles = { "ADMIN", "REVIEWER" })
+        void deletingApprovedClaimReversesProviderBalanceAndIsIdempotent() {
+                var account = providerAccountRepository.findByProviderId(provider.getId()).orElseThrow();
+                account.setRunningBalance(BigDecimal.ZERO);
+                account.setTotalApproved(BigDecimal.ZERO);
+                account.setTotalPaid(BigDecimal.ZERO);
+                providerAccountRepository.save(account);
+
+                ClaimViewDto created = claimService.createClaim(ClaimCreateDto.builder()
+                                .visitId(visit.getId())
+                                .serviceDate(LocalDate.now())
+                                .lines(List.of(ClaimLineDto.builder()
+                                                .medicalServiceId(service.getId())
+                                                .quantity(1)
+                                                .build()))
+                                .status(ClaimStatus.SUBMITTED)
+                                .build());
+
+                claimReviewService.startReview(created.getId());
+                claimReviewService.requestApproval(created.getId(), ClaimApproveDto.builder()
+                                .notes("approve before void")
+                                .build());
+                providerAccountService.creditOnClaimApproval(created.getId(), null);
+                assertThat(providerAccountRepository.findByProviderId(provider.getId()).orElseThrow()
+                                .getRunningBalance()).isEqualByComparingTo("96.00");
+
+                claimService.deleteClaim(created.getId(), "duplicate approved claim");
+
+                assertThat(claimRepository.findById(created.getId()).orElseThrow().getActive()).isFalse();
+                assertThat(providerAccountRepository.findByProviderId(provider.getId()).orElseThrow()
+                                .getRunningBalance()).isZero();
+                assertThatThrownBy(() -> claimService.deleteClaim(created.getId(), "repeat void"))
+                                .isInstanceOf(BusinessRuleException.class)
+                                .hasMessageContaining("مسبق");
         }
 }

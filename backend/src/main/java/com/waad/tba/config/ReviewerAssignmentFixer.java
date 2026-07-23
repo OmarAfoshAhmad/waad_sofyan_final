@@ -2,6 +2,7 @@ package com.waad.tba.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,10 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(
+        name = "waad.maintenance.reviewer-assignment-fixer.enabled",
+        havingValue = "true",
+        matchIfMissing = false)
 @RequiredArgsConstructor
 public class ReviewerAssignmentFixer implements CommandLineRunner {
 

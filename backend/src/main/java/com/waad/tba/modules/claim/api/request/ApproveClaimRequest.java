@@ -1,6 +1,10 @@
 package com.waad.tba.modules.claim.api.request;
 
 import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+import java.util.List;
+import com.waad.tba.modules.claim.dto.ClaimLineReviewDecision;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -49,6 +53,25 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ApproveClaimRequest {
+
+    @Valid
+    @NotNull(message = "قرارات بنود المطالبة مطلوبة")
+    private List<LineDecisionRequest> lineDecisions;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LineDecisionRequest {
+        @NotNull(message = "معرف بند المطالبة مطلوب")
+        private Long lineId;
+
+        @NotNull(message = "قرار بند المطالبة مطلوب")
+        private ClaimLineReviewDecision decision;
+
+        @Size(max = 500, message = "سبب قرار البند يجب ألا يتجاوز 500 حرف")
+        private String reason;
+    }
     
     // ═══════════════════════════════════════════════════════════════════════════
     // ALLOWED FIELDS (Non-financial metadata only)
@@ -60,23 +83,6 @@ public class ApproveClaimRequest {
      */
     @Size(max = 1000, message = "Notes must not exceed 1000 characters")
     private String notes;
-    
-    /**
-     * Whether to use system-calculated amount (default: true).
-     * 
-     * If true (default):
-     * - Backend uses CostCalculationService.calculateApprovedAmount()
-     * - Amount is derived from contract pricing and benefit rules
-     * 
-     * If false:
-     * - Backend uses reviewer's judgment
-     * - Amount is STILL calculated by backend, not from frontend
-     * - Reviewer's judgment is applied via business rules, not direct input
-     * 
-     * This flag does NOT allow frontend to send amounts.
-     */
-    @Builder.Default
-    private Boolean useSystemCalculation = true;
     
     // ═══════════════════════════════════════════════════════════════════════════
     // ⛔⛔⛔ FORBIDDEN FIELDS - FINANCIAL SAFETY CRITICAL ⛔⛔⛔

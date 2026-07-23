@@ -1274,7 +1274,7 @@ public class ProviderPortalController {
      * POST /api/v1/provider/my-contract/pricing
      */
     @PostMapping("/my-contract/pricing")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     @Operation(
         summary = "Add custom service pricing to my active contract (Provider Portal)",
         description = "Adds a custom service pricing item to the active contract of the current provider."

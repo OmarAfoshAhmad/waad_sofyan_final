@@ -185,9 +185,9 @@ export default function ClaimBatchDetail() {
   });
 
   const suspendMutation = useMutation({
-    mutationFn: ({ claimId, comment }) => claimsService.updateReview(claimId, { status: 'NEEDS_CORRECTION', reviewerComment: comment }),
+    mutationFn: ({ claimId, comment }) => claimsService.requestCorrection(claimId, comment),
     onSuccess: () => {
-      enqueueSnackbar('تم تعليق المطالبة بنجاح', { variant: 'success' });
+      enqueueSnackbar('تمت إعادة فتح المطالبة للتصحيح وعكس أثرها المالي', { variant: 'success' });
       setSuspendDialogOpen(false);
       setSuspendComment('');
       setSuspendingClaimId(null);
@@ -196,7 +196,7 @@ export default function ClaimBatchDetail() {
       queryClient.invalidateQueries({ queryKey: ['claim'] });
     },
     onError: (err) => {
-      enqueueSnackbar(err?.response?.data?.message || 'حدث خطأ أثناء تعليق المطالبة', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'تعذرت إعادة فتح المطالبة للتصحيح', { variant: 'error' });
     }
   });
 
@@ -208,7 +208,7 @@ export default function ClaimBatchDetail() {
 
   const handleConfirmSuspend = () => {
     if (!suspendComment.trim()) {
-      enqueueSnackbar('يجب إدخال سبب التعليق', { variant: 'warning' });
+      enqueueSnackbar('يجب إدخال سبب إعادة فتح المطالبة', { variant: 'warning' });
       return;
     }
     suspendMutation.mutate({ claimId: suspendingClaimId, comment: suspendComment });
@@ -555,13 +555,15 @@ export default function ClaimBatchDetail() {
 
   // Totals for footer
   const totals = useMemo(() => {
+    const financiallyFinal = (claim) => ['APPROVED', 'BATCHED', 'SETTLED', 'PAID'].includes(claim.status);
+    const finalizedClaims = claims.filter(financiallyFinal);
     return {
       amount: claims.reduce((s, c) => s + (c.requestedAmount || 0), 0),
-      covered: claims.reduce((s, c) => s + getApprovedAfterDiscount(c), 0),
+      covered: finalizedClaims.reduce((s, c) => s + getApprovedAfterDiscount(c), 0),
       refused: claims.reduce((s, c) => s + getDisplayRefused(c), 0),
-      dueAfterRefused: claims.reduce((s, c) => s + getDueAfterRefused(c), 0),
-      copay: claims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
-      paid: claims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
+      dueAfterRefused: finalizedClaims.reduce((s, c) => s + getDueAfterRefused(c), 0),
+      copay: finalizedClaims.reduce((s, c) => s + (c.patientCoPay || 0), 0),
+      paid: finalizedClaims.reduce((s, c) => s + (c.netProviderAmount || 0), 0)
     };
   }, [claims]);
 
@@ -574,7 +576,7 @@ export default function ClaimBatchDetail() {
       SETTLED: { label: 'تمت التسوية', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       PAID: { label: 'مدفوعة', color: 'success', bgcolor: '#f6ffed', border: '#b7eb8f' },
       BATCHED: { label: 'في دفعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
-      NEEDS_CORRECTION: { label: 'معلقة للمراجعة', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
+      NEEDS_CORRECTION: { label: 'تحتاج تصحيح', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
       PENDING: { label: 'قيد الانتظار', color: 'warning', bgcolor: '#fffbe6', border: '#ffe58f' },
       REJECTED: { label: 'مرفوضة', color: 'error', bgcolor: '#fff1f0', border: '#ffa39e' },
       UNDER_REVIEW: { label: 'تحت المراجعة', color: 'info', bgcolor: '#e6f7ff', border: '#91d5ff' },
@@ -677,6 +679,9 @@ export default function ClaimBatchDetail() {
           </Stack>
         );
       case 'covered':
+        if (claim.status === 'NEEDS_CORRECTION') {
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
+        }
         return (
           <Typography variant="body2" color="success.main" fontWeight={400}>
             {getApprovedAfterDiscount(claim).toFixed(2)}
@@ -722,6 +727,9 @@ export default function ClaimBatchDetail() {
           </Tooltip>
         );
       case 'dueAfterRefused':
+        if (claim.status === 'NEEDS_CORRECTION') {
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
+        }
         return (
           <Typography variant="body2" color="primary.main" fontWeight={600}>
             {getDueAfterRefused(claim).toFixed(2)}
@@ -734,6 +742,9 @@ export default function ClaimBatchDetail() {
           </Typography>
         );
       case 'paid':
+        if (claim.status === 'NEEDS_CORRECTION') {
+          return <Typography variant="body2" color="text.secondary">—</Typography>;
+        }
         // For providers, paid is netProviderAmount (approved - patient share)
         return (
           <Typography variant="body2" color="secondary.main" fontWeight={600}>
@@ -743,7 +754,7 @@ export default function ClaimBatchDetail() {
       case 'actions':
         return (
           <Stack direction="row" spacing={0.5} justifyContent="center">
-            <Tooltip title="عرض / تعديل">
+            <Tooltip title={claim.status === 'NEEDS_CORRECTION' ? 'فتح للتصحيح وإعادة الاعتماد' : 'عرض / تعديل'}>
               <IconButton
                 color="primary"
                 onClick={() =>
@@ -756,7 +767,7 @@ export default function ClaimBatchDetail() {
               </IconButton>
             </Tooltip>
             {canSuspend && claim.status === 'APPROVED' && (
-              <Tooltip title="تعليق للمراجعة">
+              <Tooltip title="إعادة فتح للتصحيح (مع عكس الأثر المالي)">
                 <IconButton color="warning" onClick={() => handleOpenSuspend(claim.id)}>
                   <SuspendIcon fontSize="small" sx={{ fontSize: '1.2rem' }} />
                 </IconButton>
@@ -1153,21 +1164,21 @@ export default function ClaimBatchDetail() {
         </Box>
       </Box>
 
-      {/* Suspend Dialog */}
+      {/* Financial correction dialog */}
       <Dialog open={suspendDialogOpen} onClose={() => setSuspendDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 400, borderBottom: '1px solid', borderColor: 'divider' }}>تعليق المطالبة للمراجعة</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 400, borderBottom: '1px solid', borderColor: 'divider' }}>إعادة فتح المطالبة للتصحيح</DialogTitle>
         <DialogContent sx={{ pt: '1.0rem' }}>
           <Typography variant="body2" color="text.secondary" mb={2}>
-            سيتم تغيير حالة المطالبة إلى «يحتاج تصحيح». يجب إدخال سبب التعليق.
+            ستصبح المطالبة غير مستحقة ماليًا مؤقتًا، وسيُعكس أثرها من حساب مقدم الخدمة ودفتر سقوف المنافع حتى إعادة اعتمادها.
           </Typography>
           <TextField
             fullWidth
             multiline
             rows={3}
-            label="سبب التعليق"
+            label="سبب إعادة الفتح"
             value={suspendComment}
             onChange={(e) => setSuspendComment(e.target.value)}
-            placeholder="اكتب سبب التعليق أو الخلل الذي وجدته..."
+            placeholder="اكتب التصحيح المطلوب بوضوح..."
             autoFocus
           />
         </DialogContent>
@@ -1176,7 +1187,7 @@ export default function ClaimBatchDetail() {
             إلغاء
           </Button>
           <Button variant="contained" color="warning" onClick={handleConfirmSuspend} disabled={suspendMutation.isPending}>
-            تعليق المطالبة
+            عكس الأثر وإعادة الفتح
           </Button>
         </DialogActions>
       </Dialog>

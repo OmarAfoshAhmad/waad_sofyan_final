@@ -158,6 +158,14 @@ const getServiceDisplay = (item) => ({
   nameAr: getServiceNameAr(item),
   nameEn: getServiceNameEn(item)
 });
+const getOptionalMedicalCategoryLabel = (item) =>
+  item?.medicalService?.categoryName ||
+  item?.medicalService?.category?.nameAr ||
+  item?.medicalService?.category?.name ||
+  item?.service?.categoryName ||
+  item?.service?.category?.nameAr ||
+  item?.service?.category?.name ||
+  null;
 
 /**
  * Get category hierarchy names
@@ -370,36 +378,33 @@ const ProviderContractView = () => {
     return medicalCategories.filter((c) => !c.parentId);
   }, [medicalCategories]);
 
-  const subCategoriesList = useMemo(() => {
-    if (!pricingForm.mainCategoryId) return [];
-    return medicalCategories.filter((c) => c.parentId === pricingForm.mainCategoryId.id);
-  }, [medicalCategories, pricingForm.mainCategoryId]);
-
   const [availableServices, setAvailableServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(false);
+  const [servicesLoadError, setServicesLoadError] = useState('');
   const [serviceInputValue, setServiceInputValue] = useState('');
 
   useEffect(() => {
     const fetchServices = async () => {
-      // Use mainCategoryId if medicalCategoryId is removed
-      const categoryId = pricingForm.medicalCategoryId?.id || pricingForm.mainCategoryId?.id;
+      const categoryId = pricingForm.mainCategoryId?.id;
       if (!categoryId) {
         setAvailableServices([]);
+        setServicesLoadError('');
         return;
       }
       try {
         setServicesLoading(true);
+        setServicesLoadError('');
         const services = await getMedicalServicesByCategory(categoryId);
         setAvailableServices(services || []);
       } catch (err) {
-        console.error('Failed to fetch services:', err);
         setAvailableServices([]);
+        setServicesLoadError('تعذر تحميل خدمات هذا التصنيف. يمكنك كتابة اسم الخدمة يدويًا.');
       } finally {
         setServicesLoading(false);
       }
     };
     fetchServices();
-  }, [pricingForm.medicalCategoryId, pricingForm.mainCategoryId]);
+  }, [pricingForm.mainCategoryId]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // MUTATIONS
@@ -718,11 +723,13 @@ const ProviderContractView = () => {
       discountPercent: contract?.discountPercent ?? '',
       notes: ''
     });
+    setServiceInputValue('');
+    setServicesLoadError('');
     setAddPricingDialogOpen(true);
   }, [contract?.discountPercent]);
 
   const handleAddPricingSubmit = useCallback(async () => {
-    const effectiveCategoryId = pricingForm.medicalCategoryId?.id || pricingForm.mainCategoryId?.id;
+    const effectiveCategoryId = pricingForm.mainCategoryId?.id;
     if (!effectiveCategoryId || !pricingForm.contractPrice) return;
 
     const selectedService = pricingForm.medicalServiceId;
@@ -750,14 +757,12 @@ const ProviderContractView = () => {
   const handleOpenEditPricing = useCallback(
     (item) => {
       setSelectedPricingItem(item);
-      const hierarchy = getCategoryHierarchy(item, medicalCategories);
       const catObj = getCategoryObject(item);
-      const mainCat = catObj?.parentId ? medicalCategories.find((c) => c.id === catObj.parentId) : catObj;
 
       setPricingForm({
         medicalServiceId: item.medicalService || null,
-        mainCategoryId: mainCat || null,
-        medicalCategoryId: catObj || null,
+        mainCategoryId: catObj || null,
+        medicalCategoryId: null,
         basePrice: item.basePrice ?? '',
         contractPrice: item.contractPrice ?? '',
         discountPercent: item.discountPercent ?? '',
@@ -773,7 +778,7 @@ const ProviderContractView = () => {
 
     updatePricingMutation.mutate({
       medicalServiceId: pricingForm.medicalServiceId?.id || null,
-      medicalCategoryId: pricingForm.medicalCategoryId?.id || pricingForm.mainCategoryId?.id || null,
+      medicalCategoryId: pricingForm.mainCategoryId?.id || null,
       basePrice: parseFloat(pricingForm.contractPrice), // BasePrice becomes ContractPrice
       contractPrice: parseFloat(pricingForm.contractPrice),
       notes: pricingForm.notes
@@ -937,6 +942,24 @@ const ProviderContractView = () => {
 
       {/* Tabs Section */}
       <MainCard>
+        <Alert
+          severity={contract.pricingScope === 'EMPLOYER_SPECIFIC' ? 'info' : 'success'}
+          sx={{ mb: 2 }}
+          icon={false}
+        >
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }}>
+            <Chip
+              size="small"
+              color={contract.pricingScope === 'EMPLOYER_SPECIFIC' ? 'secondary' : 'success'}
+              label={contract.pricingScopeLabel || (contract.pricingScope === 'EMPLOYER_SPECIFIC' ? 'عقد خاص بجهة عمل' : 'عقد عام')}
+            />
+            <Typography variant="body2">
+              {contract.pricingScope === 'EMPLOYER_SPECIFIC'
+                ? `تُستخدم هذه الأسعار فقط لجهة العمل: ${contract.employer?.name || '-'}`
+                : 'تُستخدم هذه الأسعار كعقد عام fallback عند عدم وجود عقد خاص بجهة العمل.'}
+            </Typography>
+          </Stack>
+        </Alert>
         <Tabs value={activeTab} onChange={handleTabChange} aria-label="contract tabs" sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="بنود التسعير" id="contract-tab-0" />
           <Tab label="سجل بنود التسعير" id="contract-tab-1" />
@@ -1113,8 +1136,7 @@ const ProviderContractView = () => {
                   </TableCell>
                   <TableCell sx={{ width: '7.5rem' }}>كود الخدمة</TableCell>
                   <TableCell sx={{ minWidth: '15.625rem' }}>اسم الخدمة</TableCell>
-                  <TableCell sx={{ minWidth: '11.25rem' }}>التصنيف الرئيسي</TableCell>
-                  <TableCell sx={{ minWidth: '11.25rem' }}>البند (التصنيف الفرعي)</TableCell>
+                  <TableCell sx={{ minWidth: '18rem' }}>التصنيف التأميني</TableCell>
                   <TableCell align="right" sx={{ width: '7.5rem' }}>
                     سعر العقد
                   </TableCell>
@@ -1126,13 +1148,13 @@ const ProviderContractView = () => {
               <TableBody>
                 {pricingLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: '2.0rem' }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: '2.0rem' }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : pricingItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: '2.0rem' }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: '2.0rem' }}>
                       <Typography color="text.secondary">
                         {pricingSearch ? 'لم يتم العثور على بنود مطابقة' : 'لا توجد بنود تسعير'}
                       </Typography>
@@ -1182,29 +1204,16 @@ const ProviderContractView = () => {
                         })()}
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: '21.875rem' }}>
-                          {getServiceDisplay(item).nameAr}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const hierarchy = getCategoryHierarchy(item, medicalCategories);
-                          return (
-                            <Stack spacing={0.25}>
-                              {hierarchy.mainCode !== '-' && (
-                                <Chip
-                                  label={hierarchy.mainCode}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{ width: 'fit-content', opacity: 0.7 }}
-                                />
-                              )}
-                              <Typography variant="body2" fontWeight={500}>
-                                {hierarchy.main}
-                              </Typography>
-                            </Stack>
-                          );
-                        })()}
+                        <Stack spacing={0.25}>
+                          <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: '21.875rem' }}>
+                            {getServiceDisplay(item).nameAr}
+                          </Typography>
+                          {getOptionalMedicalCategoryLabel(item) && (
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: '21.875rem' }}>
+                              التصنيف الطبي: {getOptionalMedicalCategoryLabel(item)}
+                            </Typography>
+                          )}
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -1212,17 +1221,17 @@ const ProviderContractView = () => {
                           return (
                             <Stack direction="row" alignItems="center" justifyContent="space-between">
                               <Stack spacing={0.25}>
-                                {hierarchy.subCode !== '-' && (
-                                  <Chip
-                                    label={hierarchy.subCode}
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ width: 'fit-content', opacity: 0.7 }}
-                                  />
-                                )}
-                                <Typography variant="body2" color="text.secondary">
-                                  {hierarchy.sub}
-                                </Typography>
+                              {hierarchy.subCode !== '-' || hierarchy.mainCode !== '-' ? (
+                                <Chip
+                                  label={hierarchy.subCode !== '-' ? hierarchy.subCode : hierarchy.mainCode}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ width: 'fit-content', opacity: 0.7 }}
+                                />
+                              ) : null}
+                              <Typography variant="body2" fontWeight={500}>
+                                {hierarchy.sub !== '-' ? hierarchy.sub : hierarchy.main}
+                              </Typography>
                               </Stack>
                               <Tooltip title="تغيير التصنيف">
                                 <span>
@@ -1415,12 +1424,14 @@ const ProviderContractView = () => {
       >
         <DialogTitle>إضافة خدمة طبية للتسعير</DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ mb: '1.5rem' }}>اختر التصنيف أولاً ثم الخدمة من القاموس وأدخل السعر المتفق عليه.</DialogContentText>
+          <DialogContentText sx={{ mb: '1.5rem' }}>
+            اختر التصنيف التأميني الذي سيحكم التغطية، ثم اختر خدمة من القاموس إن وجدت أو اكتب اسم الخدمة يدويًا.
+          </DialogContentText>
           <Stack spacing={3}>
             <Autocomplete
               fullWidth
               sx={{ width: '100%' }}
-              options={mainCategoriesList}
+              options={medicalCategories}
               getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
               value={pricingForm.mainCategoryId}
               onChange={(e, newValue) => {
@@ -1430,27 +1441,11 @@ const ProviderContractView = () => {
                   medicalCategoryId: null,
                   medicalServiceId: null
                 });
+                setServiceInputValue('');
+                setServicesLoadError('');
               }}
-              renderInput={(params) => <TextField {...params} label="التصنيف الرئيسي *" required fullWidth />}
+              renderInput={(params) => <TextField {...params} label="التصنيف التأميني *" required fullWidth />}
             />
-
-            {/* Subcategory - shown when main category is chosen and subcategories exist */}
-            {pricingForm.mainCategoryId && subCategoriesList.length > 0 && (
-              <Autocomplete
-                fullWidth
-                options={subCategoriesList}
-                getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
-                value={pricingForm.medicalCategoryId}
-                onChange={(e, newValue) => {
-                  setPricingForm({
-                    ...pricingForm,
-                    medicalCategoryId: newValue,
-                    medicalServiceId: null
-                  });
-                }}
-                renderInput={(params) => <TextField {...params} label="التصنيف الفرعي (اختياري)" fullWidth placeholder="اختر للتصفية" />}
-              />
-            )}
 
             {pricingForm.mainCategoryId && (
               <Autocomplete
@@ -1513,7 +1508,13 @@ const ProviderContractView = () => {
                     required
                     fullWidth
                     placeholder="ابحث من القائمة أو اكتب اسم خدمة جديدة..."
-                    helperText="يمكنك اختيار خدمة موجودة أو كتابة اسم خدمة جديدة بحرية"
+                    error={!!servicesLoadError}
+                    helperText={
+                      servicesLoadError ||
+                      (pricingForm.medicalServiceId?.categoryName
+                        ? `التصنيف الطبي: ${pricingForm.medicalServiceId.categoryName}`
+                        : 'الخدمة الطبية اختيارية من القاموس؛ ويمكن كتابة اسم خدمة جديدة بحرية')
+                    }
                   />
                 )}
               />
@@ -1578,7 +1579,7 @@ const ProviderContractView = () => {
                 <Autocomplete
                   fullWidth
                   sx={{ width: '100%' }}
-                  options={mainCategoriesList}
+                  options={medicalCategories}
                   getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
                   value={pricingForm.mainCategoryId}
                   onChange={(e, newValue) => {
@@ -1588,27 +1589,10 @@ const ProviderContractView = () => {
                       medicalCategoryId: null
                     });
                   }}
-                  renderInput={(params) => <TextField {...params} label="التصنيف الرئيسي" fullWidth placeholder="اختر للتغيير" />}
+                  renderInput={(params) => <TextField {...params} label="التصنيف التأميني" fullWidth placeholder="اختر للتغيير" />}
                 />
               </Grid>
             </Grid>
-
-            {/* Sub category (if applicable) */}
-            {pricingForm.mainCategoryId && subCategoriesList.length > 0 && (
-              <Autocomplete
-                fullWidth
-                options={subCategoriesList}
-                getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
-                value={pricingForm.medicalCategoryId}
-                onChange={(e, newValue) => {
-                  setPricingForm({
-                    ...pricingForm,
-                    medicalCategoryId: newValue
-                  });
-                }}
-                renderInput={(params) => <TextField {...params} label="التصنيف الفرعي (اختياري)" fullWidth placeholder="اختر للتصفية" />}
-              />
-            )}
 
             <TextField
               label="سعر الخدمة الجديد *"

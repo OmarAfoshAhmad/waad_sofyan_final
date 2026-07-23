@@ -170,6 +170,9 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
                 .serviceCode(request.getServiceCode())
                 .medicalCategoryId(request.getMedicalCategoryId())
                 .medicalServiceId(request.getMedicalServiceId())
+                .encounterType(request.getEncounterType() != null
+                        ? request.getEncounterType()
+                        : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT)
                 .member(member)
                 .benefitPolicy(benefitPolicy)
                 .provider(provider)
@@ -331,7 +334,12 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
                     null, // overrideCategoryId
                     member != null ? member.getId() : null, // memberId
                     context.getServiceDate(),
-                    null // claimIdToExclude
+                    null, // claimIdToExclude
+                    com.waad.tba.modules.medicaltaxonomy.enums.CategoryContext.valueOf(
+                            context.getEncounterType().name()),
+                    1.0,
+                    null,
+                    true
             );
 
             if (coverage != null) {

@@ -9,6 +9,8 @@ import com.waad.tba.modules.benefitpolicy.dto.BenefitStructureImportResult;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,21 +23,39 @@ public class BenefitStructureController {
     private final BenefitPolicyService policyService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN','MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<StructureResponse>> get(@PathVariable Long policyId) {
         return ResponseEntity.ok(ApiResponse.success(service.getStructure(policyId)));
     }
 
+    @GetMapping("/import-template")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MEDICAL_REVIEWER')")
+    public ResponseEntity<byte[]> downloadTemplate(@PathVariable Long policyId) {
+        service.getStructure(policyId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=benefits-groups-template.xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(importService.createSimplifiedTemplate());
+    }
+
     @PostMapping("/groups")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<GroupResponse>> createGroup(@PathVariable Long policyId,
             @Valid @RequestBody GroupRequest request) {
         policyService.assertDraftConfiguration(policyId);
         return ResponseEntity.ok(ApiResponse.success(service.createGroup(policyId, request)));
     }
 
+    @PutMapping("/groups/{groupId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<GroupResponse>> updateGroup(@PathVariable Long policyId,
+            @PathVariable Long groupId, @Valid @RequestBody GroupRequest request) {
+        policyService.assertDraftConfiguration(policyId);
+        return ResponseEntity.ok(ApiResponse.success(service.updateGroup(policyId, groupId, request)));
+    }
+
     @PostMapping("/buckets")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BucketResponse>> createBucket(@PathVariable Long policyId,
             @Valid @RequestBody BucketRequest request) {
         policyService.assertDraftConfiguration(policyId);
@@ -43,15 +63,23 @@ public class BenefitStructureController {
     }
 
     @PostMapping("/rules/{ruleId}/buckets")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<RuleBucketResponse>> link(@PathVariable Long policyId,
             @PathVariable Long ruleId, @Valid @RequestBody RuleBucketRequest request) {
         policyService.assertDraftConfiguration(policyId);
         return ResponseEntity.ok(ApiResponse.success(service.linkRuleBucket(policyId, ruleId, request)));
     }
 
+    @PutMapping("/rules/{ruleId}/individual-limit")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<BucketResponse>> upsertIndividualLimit(@PathVariable Long policyId,
+            @PathVariable Long ruleId, @Valid @RequestBody IndividualLimitRequest request) {
+        policyService.assertDraftConfiguration(policyId);
+        return ResponseEntity.ok(ApiResponse.success(service.upsertIndividualLimit(policyId, ruleId, request)));
+    }
+
     @DeleteMapping("/buckets/{bucketId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteBucket(@PathVariable Long policyId, @PathVariable Long bucketId) {
         policyService.assertDraftConfiguration(policyId);
         service.deleteBucket(policyId, bucketId);
@@ -59,7 +87,7 @@ public class BenefitStructureController {
     }
 
     @DeleteMapping("/groups/{groupId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteGroup(@PathVariable Long policyId, @PathVariable Long groupId) {
         policyService.assertDraftConfiguration(policyId);
         service.deleteGroup(policyId, groupId);
@@ -67,7 +95,7 @@ public class BenefitStructureController {
     }
 
     @DeleteMapping("/links/{linkId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteLink(@PathVariable Long policyId, @PathVariable Long linkId) {
         policyService.assertDraftConfiguration(policyId);
         service.deleteLink(policyId, linkId);
@@ -75,11 +103,12 @@ public class BenefitStructureController {
     }
 
     @PostMapping(value = "/import", consumes = "multipart/form-data")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<BenefitStructureImportResult>> importWorkbook(
             @PathVariable Long policyId,
             @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
-            @RequestParam(defaultValue = "true") boolean dryRun) {
-        return ResponseEntity.ok(ApiResponse.success(importService.importWorkbook(policyId, file, dryRun)));
+            @RequestParam(defaultValue = "true") boolean dryRun,
+            @RequestParam(defaultValue = "MERGE") BenefitStructureImportService.ImportMode mode) {
+        return ResponseEntity.ok(ApiResponse.success(importService.importWorkbook(policyId, file, dryRun, mode)));
     }
 }

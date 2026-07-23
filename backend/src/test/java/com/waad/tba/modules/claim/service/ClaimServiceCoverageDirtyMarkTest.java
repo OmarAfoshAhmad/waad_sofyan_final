@@ -89,6 +89,8 @@ class ClaimServiceCoverageDirtyMarkTest {
     @Mock
     private ClaimReviewService claimReviewService;
     @Mock
+    private ClaimFinancialSnapshotService financialSnapshotService;
+    @Mock
     private EntityManager em;
 
     @InjectMocks
@@ -115,10 +117,10 @@ class ClaimServiceCoverageDirtyMarkTest {
                 .userType("PROVIDER_STAFF")
                 .build();
 
-        when(claimRepository.findById(100L)).thenReturn(Optional.of(claim));
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
         when(authorizationService.getCurrentUser()).thenReturn(currentUser);
         when(authorizationService.canModifyClaim(currentUser, 100L)).thenReturn(true);
-        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimRepository.saveAndFlush(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
 
         claimService.updateClaimData(100L, dto);
@@ -151,10 +153,10 @@ class ClaimServiceCoverageDirtyMarkTest {
                 .userType("PROVIDER_STAFF")
                 .build();
 
-        when(claimRepository.findById(101L)).thenReturn(Optional.of(claim));
+        when(claimRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(claim));
         when(authorizationService.getCurrentUser()).thenReturn(currentUser);
         when(authorizationService.canModifyClaim(currentUser, 101L)).thenReturn(true);
-        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimRepository.saveAndFlush(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
 
         claimService.updateClaimData(101L, dto);

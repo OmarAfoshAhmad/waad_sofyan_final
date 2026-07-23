@@ -4,6 +4,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 
 import lombok.Builder;
 import lombok.Data;
@@ -70,6 +71,10 @@ public class EligibilityContext {
      * Medical Service ID (optional)
      */
     private final Long medicalServiceId;
+
+    /** Explicit care setting; never inferred from the selected service. */
+    @Builder.Default
+    private final EncounterType encounterType = EncounterType.OUTPATIENT;
 
     // ============================================
     // Resolved Entities (loaded from database)

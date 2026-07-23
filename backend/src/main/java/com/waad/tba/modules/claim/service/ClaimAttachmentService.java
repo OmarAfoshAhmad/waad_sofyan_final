@@ -7,6 +7,7 @@ import com.waad.tba.modules.claim.entity.ClaimAttachment;
 import com.waad.tba.modules.claim.entity.ClaimAttachmentType;
 import com.waad.tba.modules.claim.repository.ClaimAttachmentRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -40,6 +41,7 @@ public class ClaimAttachmentService {
     private final ClaimAttachmentRepository attachmentRepository;
     private final ClaimRepository claimRepository;
     private final FileStorageService fileStorageService;
+    private final AuthorizationService authorizationService;
 
     /**
      * Upload an attachment for a claim
@@ -69,6 +71,7 @@ public class ClaimAttachmentService {
         // Verify claim exists
         Claim claim = claimRepository.findById(claimId)
                 .orElseThrow(() -> new RuntimeException("Claim not found with ID: " + claimId));
+        assertCanAccessClaim(claimId);
 
         // Upload file to storage
         String folder = "claims/" + claimId;
@@ -100,11 +103,10 @@ public class ClaimAttachmentService {
      * @param attachmentId Attachment ID
      * @return File content as byte array
      */
-    public byte[] downloadAttachment(Long attachmentId) {
+    public byte[] downloadAttachment(Long claimId, Long attachmentId) {
         log.info("Downloading attachment ID: {}", attachmentId);
 
-        ClaimAttachment attachment = attachmentRepository.findById(attachmentId)
-                .orElseThrow(() -> new RuntimeException("Attachment not found with ID: " + attachmentId));
+        ClaimAttachment attachment = getAttachment(claimId, attachmentId);
 
         return fileStorageService.download(attachment.getFileKey());
     }
@@ -115,11 +117,10 @@ public class ClaimAttachmentService {
      * @param attachmentId Attachment ID
      */
     @Transactional
-    public void deleteAttachment(Long attachmentId) {
+    public void deleteAttachment(Long claimId, Long attachmentId) {
         log.info("Deleting attachment ID: {}", attachmentId);
 
-        ClaimAttachment attachment = attachmentRepository.findById(attachmentId)
-                .orElseThrow(() -> new RuntimeException("Attachment not found with ID: " + attachmentId));
+        ClaimAttachment attachment = getAttachment(claimId, attachmentId);
 
         // Delete from storage
         fileStorageService.delete(attachment.getFileKey());
@@ -138,6 +139,7 @@ public class ClaimAttachmentService {
      */
     public List<ClaimAttachment> getClaimAttachments(Long claimId) {
         log.info("Fetching attachments for claim ID: {}", claimId);
+        assertCanAccessClaim(claimId);
         return attachmentRepository.findByClaimId(claimId);
     }
 
@@ -147,9 +149,14 @@ public class ClaimAttachmentService {
      * @param attachmentId Attachment ID
      * @return ClaimAttachment entity
      */
-    public ClaimAttachment getAttachment(Long attachmentId) {
-        return attachmentRepository.findById(attachmentId)
+    public ClaimAttachment getAttachment(Long claimId, Long attachmentId) {
+        assertCanAccessClaim(claimId);
+        ClaimAttachment attachment = attachmentRepository.findById(attachmentId)
                 .orElseThrow(() -> new RuntimeException("Attachment not found with ID: " + attachmentId));
+        if (attachment.getClaim() == null || !claimId.equals(attachment.getClaim().getId())) {
+            throw new RuntimeException("Attachment not found with ID: " + attachmentId);
+        }
+        return attachment;
     }
 
     /**
@@ -159,6 +166,7 @@ public class ClaimAttachmentService {
      * @return Number of attachments
      */
     public long countAttachments(Long claimId) {
+        assertCanAccessClaim(claimId);
         return attachmentRepository.countByClaimId(claimId);
     }
 
@@ -170,6 +178,7 @@ public class ClaimAttachmentService {
     @Transactional
     public void deleteAllClaimAttachments(Long claimId) {
         log.info("Deleting all attachments for claim ID: {}", claimId);
+        assertCanAccessClaim(claimId);
 
         List<ClaimAttachment> attachments = attachmentRepository.findByClaimId(claimId);
 
@@ -203,5 +212,12 @@ public class ClaimAttachmentService {
             log.warn("Could not get current username", e);
         }
         return "system";
+    }
+
+    private void assertCanAccessClaim(Long claimId) {
+        var currentUser = authorizationService.requireCurrentUser();
+        if (!authorizationService.canAccessClaim(currentUser, claimId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access to claim attachment denied");
+        }
     }
 }

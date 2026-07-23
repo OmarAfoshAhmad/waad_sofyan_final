@@ -118,7 +118,10 @@ export const visitsService = {
   create: async (data) => {
     try {
       if (!data) throw new Error('بيانات الزيارة مطلوبة');
-      const response = await axiosClient.post(BASE_URL, data);
+      // The caller displays the backend's precise validation/conflict message.
+      // Suppress the global interceptor here to avoid two error snackbars for
+      // the same failed visit creation.
+      const response = await axiosClient.post(BASE_URL, data, { suppressGlobalError: true });
       return unwrap(response);
     } catch (error) {
       throw handleVisitErrors(error);

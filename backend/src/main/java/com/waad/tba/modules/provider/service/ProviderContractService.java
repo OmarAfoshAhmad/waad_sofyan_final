@@ -304,6 +304,22 @@ public class ProviderContractService {
                         Long providerId,
                         String serviceCode,
                         LocalDate date) {
+                return getEffectivePrice(providerId, null, serviceCode, date);
+        }
+
+        /**
+         * Get effective price with employer-aware resolution.
+         *
+         * Resolution order:
+         * 1. EMPLOYER_SPECIFIC contract for provider + employer.
+         * 2. GLOBAL provider contract fallback.
+         */
+        @Transactional(readOnly = true)
+        public EffectivePriceResponseDto getEffectivePrice(
+                        Long providerId,
+                        Long employerId,
+                        String serviceCode,
+                        LocalDate date) {
                 log.debug("[PROVIDER-CONTRACT] Getting effective price for provider {}, service {}, date {}",
                                 providerId, serviceCode, date);
 
@@ -314,18 +330,32 @@ public class ProviderContractService {
                                 .orElseThrow(() -> new ResourceNotFoundException(
                                                 "Provider not found with ID: " + providerId));
 
-                // Use NORMALIZED table (provider_contract_pricing_items)
-                Optional<ProviderContractPricingItem> pricingOpt = pricingItemRepository
-                                .findEffectivePricingByCode(providerId, serviceCode, effectiveDate);
+                Optional<ProviderContractPricingItem> employerPricingOpt = employerId != null
+                                ? pricingItemRepository.findEffectiveEmployerPricingByCode(
+                                                providerId, employerId, serviceCode, effectiveDate)
+                                : Optional.empty();
+
+                Optional<ProviderContractPricingItem> pricingOpt = employerPricingOpt.isPresent()
+                                ? employerPricingOpt
+                                : pricingItemRepository.findEffectiveGlobalPricingByCode(
+                                                providerId, serviceCode, effectiveDate);
 
                 if (pricingOpt.isPresent()) {
                         ProviderContractPricingItem pricing = pricingOpt.get();
+                        boolean usedGlobalFallback = employerId != null && employerPricingOpt.isEmpty();
                         log.debug("✅ Found effective pricing: provider={}, service={}, price={}",
                                         providerId, serviceCode, pricing.getContractPrice());
 
                         return EffectivePriceResponseDto.builder()
                                         .providerId(providerId)
                                         .providerName(provider.getName())
+                                        .employerId(pricing.getContract().getEmployer() != null
+                                                        ? pricing.getContract().getEmployer().getId()
+                                                        : employerId)
+                                        .pricingScope(pricing.getContract().getPricingScope() != null
+                                                        ? pricing.getContract().getPricingScope().name()
+                                                        : "GLOBAL")
+                                        .usedGlobalFallback(usedGlobalFallback)
                                         .serviceCode(serviceCode)
                                         .serviceName(pricing.getServiceName() != null ? pricing.getServiceName()
                                                         : serviceCode)
@@ -339,7 +369,9 @@ public class ProviderContractService {
                                                         : pricing.getContract().getEndDate())
                                         .pricingItemId(pricing.getId())
                                         .hasContract(true)
-                                        .message("Contract found")
+                                        .message(usedGlobalFallback
+                                                        ? "Global provider contract fallback used"
+                                                        : "Contract found")
                                         .build();
                 }
 
@@ -350,6 +382,9 @@ public class ProviderContractService {
                 return EffectivePriceResponseDto.builder()
                                 .providerId(providerId)
                                 .providerName(provider.getName())
+                                .employerId(employerId)
+                                .pricingScope(null)
+                                .usedGlobalFallback(false)
                                 .serviceCode(serviceCode)
                                 .serviceName(serviceCode)
                                 .contractPrice(null)

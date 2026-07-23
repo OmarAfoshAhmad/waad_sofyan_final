@@ -20,10 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.claim.api.ClaimApiMapper;
 import com.waad.tba.modules.claim.api.request.ApproveClaimRequest;
+import com.waad.tba.modules.claim.api.request.PauseClaimReviewRequest;
 import com.waad.tba.modules.claim.api.request.CreateClaimRequest;
 import com.waad.tba.modules.claim.api.request.RejectClaimRequest;
 import com.waad.tba.modules.claim.api.request.ReturnForInfoClaimRequest;
-import com.waad.tba.modules.claim.api.request.ReviewClaimRequest;
 import com.waad.tba.modules.claim.api.request.UpdateClaimDataRequest;
 import com.waad.tba.modules.claim.api.request.UpdateClaimRequest;
 import com.waad.tba.modules.claim.api.response.ClaimListResponse;
@@ -164,36 +164,6 @@ public class ClaimController {
     }
 
     /**
-     * Review claim (for REVIEWER and INSURANCE_ADMIN).
-     * SECURITY: Reviewers can ONLY change status/comment/approvedAmount.
-     * Data fields cannot be modified.
-     * 
-     * @since Provider Portal Security Fix (Phase 0)
-     */
-    @PutMapping("/{id:\\d+}/review")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
-    @Operation(summary = "Review claim", description = "Reviewer action: change status, add comment, set approved amount.")
-    public ResponseEntity<ApiResponse<ClaimResponse>> reviewClaim(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody ReviewClaimRequest apiRequest) {
-        log.info("🧐 Reviewing claim {}", id);
-
-        // NOTE: Review is an INTERNAL operation by MEDICAL_REVIEWER/SUPER_ADMIN.
-        // It is NOT gated by feature flags (those only affect provider-facing
-        // submission channels).
-
-        try {
-            ClaimViewDto claim = claimService.reviewClaim(id, apiMapper.toReviewDto(apiRequest));
-            ClaimResponse response = apiMapper.toResponse(claim);
-
-            return ResponseEntity.ok(ApiResponse.success("Claim reviewed successfully", response));
-        } catch (Exception e) {
-            log.error("❌ [CLAIM-API] Failed to review claim: id={}, error={}", id, e.getMessage(), e);
-            throw e;
-        }
-    }
-
-    /**
      * Submit claim for review.
      * Transitions from DRAFT or NEEDS_CORRECTION to SUBMITTED.
      * 
@@ -261,7 +231,7 @@ public class ClaimController {
     }
 
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<Void>> deleteClaim(
             @PathVariable("id") Long id,
             @RequestParam(name = "reason", required = false) String reason) {
@@ -270,7 +240,7 @@ public class ClaimController {
     }
 
     @PutMapping("/{id:\\d+}/restore")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<ClaimViewDto>> restoreClaim(@PathVariable("id") Long id) {
         ClaimViewDto restored = claimService.restoreClaim(id);
         return ResponseEntity.ok(ApiResponse.success("تمت استعادة المطالبة بنجاح", restored));
@@ -352,6 +322,35 @@ public class ClaimController {
         ClaimViewDto claim = claimService.startReview(id);
         ClaimResponse response = apiMapper.toResponse(claim);
         return ResponseEntity.ok(ApiResponse.success("تم استلام المطالبة للمراجعة", response));
+    }
+
+    @PostMapping("/{id:\\d+}/review/pause")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @Operation(summary = "Pause internal claim review", description = "Keeps the claim UNDER_REVIEW and records an internal pause reason.")
+    public ResponseEntity<ApiResponse<ClaimResponse>> pauseReview(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody PauseClaimReviewRequest request) {
+        ClaimResponse response = apiMapper.toResponse(claimService.pauseReview(id, request.getReason()));
+        return ResponseEntity.ok(ApiResponse.success("تم تعليق المراجعة داخلياً", response));
+    }
+
+    @PostMapping("/{id:\\d+}/review/resume")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @Operation(summary = "Resume internal claim review")
+    public ResponseEntity<ApiResponse<ClaimResponse>> resumeReview(@PathVariable("id") Long id) {
+        ClaimResponse response = apiMapper.toResponse(claimService.resumeReview(id));
+        return ResponseEntity.ok(ApiResponse.success("تم استئناف المراجعة", response));
+    }
+
+    @PostMapping("/{id:\\d+}/request-correction")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT')")
+    @Operation(summary = "Re-open an approved internal claim for correction",
+            description = "Reverses its benefit/provider financial effects, then transitions APPROVED to NEEDS_CORRECTION.")
+    public ResponseEntity<ApiResponse<ClaimResponse>> requestCorrection(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody PauseClaimReviewRequest request) {
+        ClaimResponse response = apiMapper.toResponse(claimService.requestCorrection(id, request.getReason()));
+        return ResponseEntity.ok(ApiResponse.success("تمت إعادة فتح المطالبة للتصحيح وعكس أثرها المالي", response));
     }
 
     /**

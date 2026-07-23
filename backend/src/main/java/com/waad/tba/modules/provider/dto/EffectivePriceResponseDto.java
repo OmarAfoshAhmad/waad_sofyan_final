@@ -30,6 +30,22 @@ public class EffectivePriceResponseDto {
     private String providerName;
 
     /**
+     * Employer/work entity used for resolving employer-specific pricing.
+     */
+    private Long employerId;
+
+    /**
+     * GLOBAL or EMPLOYER_SPECIFIC.
+     */
+    private String pricingScope;
+
+    /**
+     * true when no employer-specific price was found and global provider pricing
+     * was used instead.
+     */
+    private Boolean usedGlobalFallback;
+
+    /**
      * Service Code
      */
     private String serviceCode;

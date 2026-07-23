@@ -54,4 +54,10 @@ coverage/
 ############################
 # Local dev Docker overrides
 ############################
-docker-compose.override.ymlbiobert_env/
+docker-compose.override.yml
+biobert_env/
+
+############################
+# Local cleanup quarantine
+############################
+project-quarantine/

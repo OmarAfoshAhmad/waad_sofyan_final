@@ -47,6 +47,7 @@ public class ClaimApiMapper {
                                 .visitId(request.getVisitId())
                                 .memberId(request.getMemberId())
                                 .providerId(request.getProviderId())
+                                .claimBatchId(request.getClaimBatchId())
                                 .diagnosisCode(request.getDiagnosisCode())
                                 .diagnosisDescription(request.getDiagnosisDescription())
                                 .preAuthorizationId(request.getPreAuthorizationId())
@@ -118,6 +119,7 @@ public class ClaimApiMapper {
                                                 : null)
                                 .lines(request.getLines() != null ? request.getLines().stream()
                                                 .map(line -> ClaimLineDto.builder()
+                                                                .id(line.getId())
                                                                 .medicalServiceId(line.getMedicalServiceId())
                                                                 .pricingItemId(line.getPricingItemId())
                                                                 .serviceCode(line.getServiceCode())
@@ -137,19 +139,6 @@ public class ClaimApiMapper {
         }
 
         /**
-         * Convert ReviewClaimRequest (API v1) to ClaimReviewDto (internal)
-         * 
-         * @since Provider Portal Security Fix (Phase 0)
-         */
-        public ClaimReviewDto toReviewDto(ReviewClaimRequest request) {
-                return ClaimReviewDto.builder()
-                                .status(request.getStatus())
-                                .reviewerComment(request.getReviewerComment())
-                                .approvedAmount(request.getApprovedAmount())
-                                .build();
-        }
-
-        /**
          * Convert ApproveClaimRequest (API v1) to ClaimApproveDto (internal)
          * 
          * ⚠️ CRITICAL: This conversion MUST NOT include approvedAmount.
@@ -158,7 +147,14 @@ public class ClaimApiMapper {
         public ClaimApproveDto toApproveDto(ApproveClaimRequest request) {
                 return ClaimApproveDto.builder()
                                 .notes(request.getNotes())
-                                .useSystemCalculation(request.getUseSystemCalculation())
+                                .lineDecisions(request.getLineDecisions() == null ? null
+                                                : request.getLineDecisions().stream()
+                                                                .map(line -> ClaimApproveDto.LineDecision.builder()
+                                                                                .lineId(line.getLineId())
+                                                                                .decision(line.getDecision())
+                                                                                .reason(line.getReason())
+                                                                                .build())
+                                                                .toList())
                                 // ✅ approvedAmount is NOT set - backend calculates it
                                 .build();
         }
@@ -270,9 +266,16 @@ public class ClaimApiMapper {
 
                                 // Status and workflow (READ-ONLY)
                                 .status(dto.getStatus())
+                                .submissionSource(dto.getSubmissionSource())
                                 .statusLabel(dto.getStatusLabel())
                                 .reviewerComment(dto.getReviewerComment())
                                 .reviewedAt(dto.getReviewedAt())
+                                .reviewedById(dto.getReviewedById())
+                                .reviewedBy(dto.getReviewedBy())
+                                .reviewPaused(dto.getReviewPaused())
+                                .reviewPauseReason(dto.getReviewPauseReason())
+                                .reviewPausedAt(dto.getReviewPausedAt())
+                                .reviewPausedBy(dto.getReviewPausedBy())
                                 .allowedNextStatuses(dto.getAllowedNextStatuses())
                                 .canEdit(dto.getCanEdit())
 
@@ -321,6 +324,7 @@ public class ClaimApiMapper {
                                 .coveragePercent(dto.getCoveragePercent())
                                 .patientSharePercent(dto.getPatientSharePercent())
                                 .benefitLimit(dto.getBenefitLimit())
+                                .timesLimit(dto.getTimesLimit())
                                 .usedAmount(dto.getUsedAmount())
                                 .remainingAmount(dto.getRemainingAmount())
                                 .rejectionReasonCode(dto.getRejectionReasonCode())

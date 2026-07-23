@@ -2,7 +2,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tba_waad_system}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${DB_PASSWORD:12345}
+    password: ${DB_PASSWORD}
 
   jpa:
     show-sql: true
@@ -19,15 +19,13 @@ spring:
     out-of-order: false
 
 jwt:
-  # DEV ONLY: fallback secret for local development. Override via JWT_SECRET env var.
-  # NEVER use this value in staging or production.
-  secret: ${JWT_SECRET:waad_dev_secret_not_for_production_only_local_dev_9dda11e5}
+  # Required explicitly in every environment to prevent accidental reuse.
+  secret: ${JWT_SECRET}
 
 app:
-  # DEV ONLY: default super admin password for fresh database installs.
-  # Override via ADMIN_DEFAULT_PASSWORD env var in staging/production.
   admin:
-    default-password: ${ADMIN_DEFAULT_PASSWORD:Admin@123}
+    default-password: ${ADMIN_DEFAULT_PASSWORD:}
+    sync-password-on-startup: ${ADMIN_SYNC_PASSWORD_ON_STARTUP:false}
   cors:
     allowed-origins: "https://waadapp.ly,https://www.waadapp.ly,http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000"
 

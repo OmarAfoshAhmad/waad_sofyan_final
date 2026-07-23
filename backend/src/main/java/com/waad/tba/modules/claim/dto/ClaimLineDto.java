@@ -109,6 +109,7 @@ public class ClaimLineDto {
     private BigDecimal benefitLimit;
     private BigDecimal usedAmount;
     private BigDecimal remainingAmount;
+    private Integer timesLimit;
     private BigDecimal companyShare;
     private BigDecimal patientShare;
 

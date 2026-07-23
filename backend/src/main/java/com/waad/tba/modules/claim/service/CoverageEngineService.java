@@ -1,15 +1,16 @@
 package com.waad.tba.modules.claim.service;
 
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
-import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyRuleService;
-import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService;
-import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLimitService.LimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionRequest;
+import com.waad.tba.modules.benefitpolicy.dto.CoverageLimitSnapshot;
+import com.waad.tba.modules.benefitpolicy.service.CoverageDecisionService;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.claim.dto.engine.BulkCoverageEngineRequest;
 import com.waad.tba.modules.claim.dto.engine.ClaimLineInput;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult;
 import com.waad.tba.modules.claim.dto.engine.CoverageResult.UsageDetails;
+import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,8 +33,8 @@ import java.util.*;
 @RequiredArgsConstructor
 public class CoverageEngineService {
 
-    private final BenefitPolicyRuleService benefitPolicyRuleService;
-    private final BenefitBucketLimitService benefitBucketLimitService;
+    private final CoverageDecisionService coverageDecisionService;
+    private final ProviderContractPricingItemRepository pricingItemRepository;
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
@@ -50,8 +51,18 @@ public class CoverageEngineService {
         List<CoverageResult> results = new ArrayList<>(request.getLines().size());
 
         for (ClaimLineInput line : request.getLines()) {
-            CoverageResult result = evaluateLine(request, line, batchUsageContext);
-            results.add(result);
+            try {
+                CoverageResult result = evaluateLine(request, line, batchUsageContext);
+                results.add(result);
+            } catch (Exception e) {
+                log.error("[COVERAGE-ENGINE] Failed to calculate lineId={}, pricingItemId={}, serviceId={}, categoryId={}: {}",
+                        line != null ? line.getLineId() : null,
+                        line != null ? line.getPricingItemId() : null,
+                        line != null ? line.getServiceId() : null,
+                        line != null ? line.getServiceCategoryId() : null,
+                        e.getMessage(), e);
+                results.add(fallbackFailedResult(line, e));
+            }
         }
 
         recordRecalculationAudit(request, results);
@@ -60,7 +71,15 @@ public class CoverageEngineService {
     }
 
     public CoverageResult calculateSingle(BulkCoverageEngineRequest request, ClaimLineInput line) {
-        return evaluateLine(request, line, new HashMap<>());
+        try {
+            return evaluateLine(request, line, new HashMap<>());
+        } catch (Exception e) {
+            log.error("[COVERAGE-ENGINE] Failed to calculate single lineId={}, pricingItemId={}: {}",
+                    line != null ? line.getLineId() : null,
+                    line != null ? line.getPricingItemId() : null,
+                    e.getMessage(), e);
+            return fallbackFailedResult(line, e);
+        }
     }
 
     /**
@@ -74,6 +93,9 @@ public class CoverageEngineService {
 
         BigDecimal quantity = bd(line.getQuantity());
         BigDecimal enteredUnitPrice = scale2(defaultIfNull(line.getEnteredUnitPrice(), ZERO));
+
+        applyPricingItemSnapshot(line);
+
         BigDecimal contractPrice = scale2(defaultIfNull(line.getContractPrice(), ZERO));
         BigDecimal manualRefusedInput = maxZero(scale2(defaultIfNull(line.getManualRefusedAmount(), ZERO)));
 
@@ -84,13 +106,17 @@ public class CoverageEngineService {
         BigDecimal priceRefused = maxZero(scale2(requestedTotal.subtract(effectiveTotal)));
 
         // 2) Coverage Lookup
-        Optional<BenefitPolicyRuleResponseDto> ruleOpt = request.isFullCoverage()
-                ? Optional.empty()
-                : benefitPolicyRuleService.findCoverageForService(
-                        request.getPolicyId(),
-                        line.getServiceId(),
-                        line.getServiceCategoryId() != null ? line.getServiceCategoryId() : line.getCategoryId(),
-                        request.getEncounterType());
+        // Full coverage is a co-pay exception, not a benefit-limit bypass. Keep
+        // resolving the rule so amount/times/day buckets remain enforceable.
+        var coverageDecision = coverageDecisionService.resolve(CoverageDecisionRequest.builder()
+                .policyId(request.getPolicyId()).memberId(request.getMemberId())
+                .serviceId(line.getServiceId())
+                .serviceCategoryId(line.getServiceCategoryId() != null
+                        ? line.getServiceCategoryId() : line.getCategoryId())
+                .serviceDate(request.getServiceDate()).encounterType(request.getEncounterType())
+                .excludeClaimId(request.getExcludeClaimId())
+                .requestedAmount(effectiveTotal).build());
+        Optional<BenefitPolicyRuleResponseDto> ruleOpt = coverageDecision.appliedRuleOptional();
 
         int coveragePercent = request.isFullCoverage()
                 ? 100
@@ -107,6 +133,7 @@ public class CoverageEngineService {
                 request,
                 line,
                 ruleOpt,
+                coverageDecision.limitsOrEmpty(),
                 resolvedCategoryId,
                 batchUsageContext,
                 effectiveTotal);
@@ -128,22 +155,31 @@ public class CoverageEngineService {
             }
         }
         String refusalReason = reasons.isEmpty() ? usageComputation.refusalReason() : String.join(" و ", reasons);
+        if (notCovered && (refusalReason == null || refusalReason.isBlank())) {
+            refusalReason = "لا توجد قاعدة تغطية فعالة للتصنيف في سياق المطالبة "
+                    + request.getEncounterType();
+        }
 
-        // 4) Financial Split (Strict sequence, no patient impact from rejection)
-        // Patient share is calculated first from gross and never changed by later
-        // adjustments.
+        // 4) Financial Split (Strict sequence)
+        // First cap the gross allowed amount by the benefit ceiling, then split that
+        // allowed amount between company and patient. Calculating the patient share
+        // before the ceiling would incorrectly charge the member for a non-covered
+        // excess (the exact defect reported for MRI, dental and annual limits).
+        BigDecimal allowedGross = maxZero(scale2(effectiveTotal.subtract(limitRefused)));
         BigDecimal patientRate = request.isFullCoverage()
                 ? ZERO
                 : maxZero(scale2(BigDecimal.valueOf(100 - coveragePercent)));
-        BigDecimal patientShare = scale2(requestedTotal.multiply(patientRate).divide(HUNDRED, 2, RoundingMode.HALF_UP));
+        BigDecimal patientShare = scale2(allowedGross.multiply(patientRate).divide(HUNDRED, 2, RoundingMode.HALF_UP));
 
-        BigDecimal providerShareBeforeRejection = maxZero(scale2(requestedTotal.subtract(patientShare)));
+        BigDecimal providerShareBeforeRejection = maxZero(scale2(allowedGross.subtract(patientShare)));
 
-        BigDecimal systemRefusedAmount = maxZero(scale2(priceRefused.add(limitRefused)));
-        // Option 2: If rejected, the patient still pays their share, and the provider share is fully refused
+        BigDecimal systemRefusedAmount = maxZero(scale2(limitRefused));
+        // The ceiling has already reduced allowedGross above. Do not subtract the
+        // same limit refusal again from the company share. Only a reviewer refusal
+        // is applied at this stage.
         BigDecimal rejectionCandidate = line.isRejected()
                 ? providerShareBeforeRejection
-                : maxZero(scale2(systemRefusedAmount.add(manualRefusedInput)));
+                : manualRefusedInput;
 
         BigDecimal finalRefusedAmount = min(providerShareBeforeRejection, rejectionCandidate);
         finalRefusedAmount = validateRefusedWithinRequested(finalRefusedAmount, providerShareBeforeRejection,
@@ -184,18 +220,15 @@ public class CoverageEngineService {
             BulkCoverageEngineRequest request,
             ClaimLineInput line,
             Optional<BenefitPolicyRuleResponseDto> ruleOpt,
+            List<CoverageLimitSnapshot> bucketLimits,
             Long resolvedCategoryId,
             Map<Long, BatchUsageAccumulator> batchUsageContext,
             BigDecimal effectiveTotal) {
 
-        if (request.isFullCoverage() || request.getMemberId() == null) {
+        if (request.getMemberId() == null) {
             return new UsageComputation(ZERO, null, null);
         }
 
-        Long appliedRuleId = ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null);
-        List<LimitSnapshot> bucketLimits = benefitBucketLimitService.findApplicable(
-                appliedRuleId, request.getMemberId(), request.getServiceDate(), request.getEncounterType(),
-                request.getExcludeClaimId());
         if (!bucketLimits.isEmpty()) {
             return computeBucketUsage(line, ruleOpt, bucketLimits, batchUsageContext, effectiveTotal);
         }
@@ -205,10 +238,40 @@ public class CoverageEngineService {
         return new UsageComputation(ZERO, null, null);
     }
 
+    /**
+     * Pricing item is the canonical bridge between provider price lists and
+     * insurance classifications. If the frontend omits categoryId/serviceCategoryId
+     * or contractPrice, recover them from the provider contract pricing item so
+     * coverage is not falsely marked as "not covered" for free-text services.
+     */
+    private void applyPricingItemSnapshot(ClaimLineInput line) {
+        if (line == null || line.getPricingItemId() == null) {
+            return;
+        }
+
+        pricingItemRepository.findById(line.getPricingItemId())
+                .filter(item -> Boolean.TRUE.equals(item.getActive()))
+                .ifPresent(item -> {
+                    if (item.getMedicalCategory() != null) {
+                        Long categoryId = item.getMedicalCategory().getId();
+                        if (line.getServiceCategoryId() == null) {
+                            line.setServiceCategoryId(categoryId);
+                        }
+                        if (line.getCategoryId() == null) {
+                            line.setCategoryId(categoryId);
+                        }
+                    }
+                    if ((line.getContractPrice() == null || line.getContractPrice().compareTo(ZERO) <= 0)
+                            && item.getContractPrice() != null) {
+                        line.setContractPrice(item.getContractPrice());
+                    }
+                });
+    }
+
     private UsageComputation computeBucketUsage(
             ClaimLineInput line,
             Optional<BenefitPolicyRuleResponseDto> ruleOpt,
-            List<LimitSnapshot> limits,
+            List<CoverageLimitSnapshot> limits,
             Map<Long, BatchUsageAccumulator> batchUsageContext,
             BigDecimal effectiveTotal) {
 
@@ -217,9 +280,9 @@ public class CoverageEngineService {
         boolean timesExceeded = false;
         boolean amountExceeded = false;
         boolean daysExceeded = false;
-        LimitSnapshot constraining = limits.get(0);
+        CoverageLimitSnapshot constraining = limits.get(0);
 
-        for (LimitSnapshot limit : limits) {
+        for (CoverageLimitSnapshot limit : limits) {
             BatchUsageAccumulator acc = batchUsageContext.computeIfAbsent(bucketAccumulatorKey(limit.bucketId()),
                     ignored -> new BatchUsageAccumulator());
             long usedTimes = (limit.usedTimes() == null ? 0 : limit.usedTimes()) + acc.addedCount;
@@ -252,7 +315,7 @@ public class CoverageEngineService {
         }
 
         BigDecimal approvedGross = maxZero(scale2(effectiveTotal.subtract(greatestRefusal)));
-        for (LimitSnapshot limit : limits) {
+        for (CoverageLimitSnapshot limit : limits) {
             BatchUsageAccumulator acc = batchUsageContext.get(bucketAccumulatorKey(limit.bucketId()));
             if (approvedGross.signum() > 0) {
                 acc.addedCount += requestedTimes(limit.countingMethod(), line, acc);
@@ -262,24 +325,84 @@ public class CoverageEngineService {
             }
         }
 
-        BatchUsageAccumulator selectedAcc = batchUsageContext.get(bucketAccumulatorKey(constraining.bucketId()));
-        long finalTimes = (constraining.usedTimes() == null ? 0 : constraining.usedTimes()) + selectedAcc.addedCount;
-        BigDecimal finalAmount = scale2(defaultIfNull(constraining.usedAmount(), ZERO).add(selectedAcc.addedAmount));
+        // Every applicable bucket (including the annual/general parent) has
+        // already participated in enforcement above. The line-level display,
+        // however, must expose only limits directly linked to this benefit.
+        // General/parent ceilings belong in the policy summary, not in the
+        // "benefit limit" column.
+        CoverageLimitSnapshot amountDisplay = limits.stream()
+                .filter(CoverageLimitSnapshot::directlyLinked)
+                .filter(limit -> limit.amountLimit() != null)
+                .min(Comparator.comparing(CoverageLimitSnapshot::amountLimit))
+                .orElse(null);
+        CoverageLimitSnapshot timesDisplay = limits.stream()
+                .filter(CoverageLimitSnapshot::directlyLinked)
+                .filter(limit -> limit.timesLimit() != null)
+                .min(Comparator.comparing(CoverageLimitSnapshot::timesLimit))
+                .orElse(null);
+        CoverageLimitSnapshot daysDisplay = limits.stream()
+                .filter(CoverageLimitSnapshot::directlyLinked)
+                .filter(limit -> limit.daysLimit() != null)
+                .min(Comparator.comparing(CoverageLimitSnapshot::daysLimit))
+                .orElse(null);
+
+        BatchUsageAccumulator amountAcc = amountDisplay == null ? null
+                : batchUsageContext.get(bucketAccumulatorKey(amountDisplay.bucketId()));
+        BatchUsageAccumulator timesAcc = timesDisplay == null ? null
+                : batchUsageContext.get(bucketAccumulatorKey(timesDisplay.bucketId()));
+        BigDecimal finalAmount = amountDisplay == null ? ZERO
+                : scale2(defaultIfNull(amountDisplay.usedAmount(), ZERO).add(amountAcc.addedAmount));
+        long finalTimes = timesDisplay == null ? 0
+                : (timesDisplay.usedTimes() == null ? 0 : timesDisplay.usedTimes()) + timesAcc.addedCount;
         UsageDetails details = UsageDetails.builder()
                 .ruleId(ruleOpt.map(BenefitPolicyRuleResponseDto::getId).orElse(null))
                 .bucketId(constraining.bucketId()).bucketName(constraining.bucketName())
-                .hasLimit(true).timesLimit(constraining.timesLimit()).amountLimit(constraining.amountLimit())
-                .daysLimit(constraining.daysLimit())
+                .hasLimit(true)
+                .timesLimit(timesDisplay == null ? null : timesDisplay.timesLimit())
+                .amountLimit(amountDisplay == null ? null : amountDisplay.amountLimit())
+                .daysLimit(daysDisplay == null ? null : daysDisplay.daysLimit())
                 .usedCount((int) Math.min(Integer.MAX_VALUE, finalTimes)).usedAmount(finalAmount)
-                .usedDays(constraining.usedDays() + (selectedAcc.addedDay ? 1 : 0))
-                .remainingAmount(constraining.amountLimit() == null ? null
-                        : maxZero(scale2(constraining.amountLimit().subtract(finalAmount))))
+                .usedDays(daysDisplay == null ? 0 : daysDisplay.usedDays()
+                        + (batchUsageContext.get(bucketAccumulatorKey(daysDisplay.bucketId())).addedDay ? 1 : 0))
+                .remainingAmount(amountDisplay == null ? null
+                        : maxZero(scale2(amountDisplay.amountLimit().subtract(finalAmount))))
                 .timesExceeded(timesExceeded).amountExceeded(amountExceeded).daysExceeded(daysExceeded)
                 .exceeded(timesExceeded || amountExceeded || daysExceeded).build();
         String reason = timesExceeded ? "USAGE_TIMES_LIMIT_EXCEEDED"
                 : daysExceeded ? "USAGE_DAYS_LIMIT_EXCEEDED"
                 : amountExceeded ? "USAGE_AMOUNT_LIMIT_EXCEEDED" : null;
         return new UsageComputation(greatestRefusal, reason, details);
+    }
+
+    private CoverageResult fallbackFailedResult(ClaimLineInput line, Exception e) {
+        BigDecimal quantity = bd(line != null ? line.getQuantity() : null);
+        BigDecimal enteredUnitPrice = scale2(defaultIfNull(line != null ? line.getEnteredUnitPrice() : null, ZERO));
+        BigDecimal requestedTotal = scale2(enteredUnitPrice.multiply(quantity));
+        return CoverageResult.builder()
+                .lineId(line != null ? line.getLineId() : null)
+                .effectiveUnitPrice(enteredUnitPrice)
+                .effectiveTotal(requestedTotal)
+                .requestedTotal(requestedTotal)
+                .coveragePercent(0)
+                .notCovered(true)
+                .requiresPreApproval(false)
+                .approvedTotal(ZERO)
+                .companyShare(ZERO)
+                .patientShare(requestedTotal)
+                .refusalReason("تعذر حساب التغطية لهذا البند: " + safeMessage(e))
+                .priceRefused(ZERO)
+                .limitRefused(ZERO)
+                .systemRefusedAmount(requestedTotal)
+                .manualRefusedAmount(ZERO)
+                .resolvedCategoryId(line != null
+                        ? (line.getServiceCategoryId() != null ? line.getServiceCategoryId() : line.getCategoryId())
+                        : null)
+                .build();
+    }
+
+    private String safeMessage(Exception e) {
+        String message = e == null ? null : e.getMessage();
+        return message == null || message.isBlank() ? "خطأ داخلي في محرك التغطية" : message;
     }
 
     private long requestedTimes(CountingMethod method, ClaimLineInput line, BatchUsageAccumulator acc) {

@@ -10,6 +10,7 @@ public interface BenefitRuleBucketRepository extends JpaRepository<BenefitRuleBu
     Optional<BenefitRuleBucket> findByRuleIdAndBucketId(Long ruleId, Long bucketId);
     List<BenefitRuleBucket> findByRuleBenefitPolicyIdOrderByConsumptionOrder(Long policyId);
     boolean existsByBucketId(Long bucketId);
+    List<BenefitRuleBucket> findByBucketId(Long bucketId);
     long countByRuleBenefitPolicyId(Long policyId);
     void deleteByRuleIdAndBucketId(Long ruleId, Long bucketId);
 }

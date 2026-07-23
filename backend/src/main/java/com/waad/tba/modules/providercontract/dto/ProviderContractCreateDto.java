@@ -2,6 +2,7 @@ package com.waad.tba.modules.providercontract.dto;
 
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,6 +30,20 @@ public class ProviderContractCreateDto {
     @NotNull(message = "Provider ID is required")
     @Positive(message = "Provider ID must be positive")
     private Long providerId;
+
+    /**
+     * Pricing scope:
+     * GLOBAL = applies to the provider generally.
+     * EMPLOYER_SPECIFIC = applies only to employerId.
+     */
+    @Builder.Default
+    private PricingScope pricingScope = PricingScope.GLOBAL;
+
+    /**
+     * Employer ID is required when pricingScope = EMPLOYER_SPECIFIC.
+     */
+    @Positive(message = "Employer ID must be positive")
+    private Long employerId;
 
     /**
      * Custom contract code (optional - auto-generated if not provided)

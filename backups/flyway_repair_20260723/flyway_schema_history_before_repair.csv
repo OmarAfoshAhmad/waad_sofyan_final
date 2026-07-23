@@ -1,0 +1,94 @@
+installed_rank,version,description,type,script,checksum,installed_by,installed_on,execution_time,success
+1,1,sequences,SQL,V1__sequences.sql,-270735125,postgres,2026-03-17 22:14:18.87257,14,t
+2,2,employers,SQL,V2__employers.sql,-689593469,postgres,2026-03-17 22:14:18.967004,12,t
+3,3,providers,SQL,V3__providers.sql,-839545182,postgres,2026-03-17 22:14:18.98693,10,t
+4,4,provider sub tables,SQL,V4__provider_sub_tables.sql,-1618696638,postgres,2026-03-17 22:14:19.00312,12,t
+5,5,users,SQL,V5__users.sql,1078071477,postgres,2026-03-17 22:14:19.021517,14,t
+6,6,auth tokens,SQL,V6__auth_tokens.sql,1163423468,postgres,2026-03-17 22:14:19.043301,15,t
+7,7,login audit,SQL,V7__login_audit.sql,-96967970,postgres,2026-03-17 22:14:19.065055,22,t
+8,8,system config,SQL,V8__system_config.sql,615304478,postgres,2026-03-17 22:14:19.094561,23,t
+9,9,medical categories,SQL,V9__medical_categories.sql,-1220346471,postgres,2026-03-17 22:14:19.124648,14,t
+10,10,provider services,SQL,V10__provider_services.sql,-897707935,postgres,2026-03-17 22:14:19.144564,19,t
+11,11,benefit policies,SQL,V11__benefit_policies.sql,-1648930042,postgres,2026-03-17 22:14:19.170055,18,t
+12,12,provider contracts,SQL,V12__provider_contracts.sql,272712442,postgres,2026-03-17 22:14:19.194449,31,t
+13,13,members,SQL,V13__members.sql,334614314,postgres,2026-03-17 22:14:19.233686,51,t
+14,14,member import,SQL,V14__member_import.sql,1247228950,postgres,2026-03-17 22:14:19.295057,20,t
+15,15,visits,SQL,V15__visits.sql,-991797689,postgres,2026-03-17 22:14:19.324371,24,t
+16,16,eligibility,SQL,V16__eligibility.sql,-159252382,postgres,2026-03-17 22:14:19.35573,13,t
+17,17,preauthorization,SQL,V17__preauthorization.sql,1851904857,postgres,2026-03-17 22:14:19.373877,23,t
+18,18,claim batches,SQL,V18__claim_batches.sql,-932455948,postgres,2026-03-17 22:14:19.404503,6,t
+19,19,claims,SQL,V19__claims.sql,470408557,postgres,2026-03-17 22:14:19.414501,23,t
+20,20,claim lines,SQL,V20__claim_lines.sql,-716755365,postgres,2026-03-17 22:14:19.444952,8,t
+21,21,claim sub tables,SQL,V21__claim_sub_tables.sql,561464771,postgres,2026-03-17 22:14:19.457313,21,t
+22,22,financial,SQL,V22__financial.sql,-710585017,postgres,2026-03-17 22:14:19.484087,17,t
+23,23,email settings,SQL,V23__email_settings.sql,-51704347,postgres,2026-03-17 22:14:19.507645,6,t
+24,24,email preauth,SQL,V24__email_preauth.sql,-1225699697,postgres,2026-03-17 22:14:19.517479,12,t
+25,25,seed data,SQL,V25__seed_data.sql,1793314810,postgres,2026-03-17 22:14:19.533783,15,t
+26,26,fix benefit policies constraints,SQL,V26__fix_benefit_policies_constraints.sql,-2124044784,postgres,2026-03-17 22:14:19.555265,5,t
+27,27,fix member barcode seq and policy name,SQL,V27__fix_member_barcode_seq_and_policy_name.sql,1081872223,postgres,2026-03-17 22:14:19.563877,3,t
+28,28,fix visits missing columns and member card id,SQL,V28__fix_visits_missing_columns_and_member_card_id.sql,-226245248,postgres,2026-03-17 22:14:19.571402,1,t
+29,29,fix providers column mismatch,SQL,V29__fix_providers_column_mismatch.sql,-1765466904,postgres,2026-03-18 00:59:42.095415,67,t
+30,30,fix provider allowed employers and contracts schema,SQL,V30__fix_provider_allowed_employers_and_contracts_schema.sql,1248307250,postgres,2026-03-18 09:35:42.409699,61,t
+31,31,fix providers name not null,SQL,V31__fix_providers_name_not_null.sql,997115839,postgres,2026-03-18 09:35:42.544295,4,t
+32,32,fix provider admin documents and pricing items,SQL,V32__fix_provider_admin_documents_and_pricing_items.sql,60335442,postgres,2026-03-18 09:35:42.554803,67,t
+33,33,fix benefit policies rules and provider contracts,SQL,V33__fix_benefit_policies_rules_and_provider_contracts.sql,-2048579003,postgres,2026-03-18 09:35:42.634745,37,t
+34,34,production cleanup orphaned columns and constraints,SQL,V34__production_cleanup_orphaned_columns_and_constraints.sql,1661096092,postgres,2026-03-18 09:35:42.682519,45,t
+35,35,cleanup medical categories legacy columns,SQL,V35__cleanup_medical_categories_legacy_columns.sql,743954026,postgres,2026-03-19 00:03:48.259043,121,t
+36,36,add pricing item sub category and specialty,SQL,V36__add_pricing_item_sub_category_and_specialty.sql,-1405627007,postgres,2026-03-20 16:29:11.956336,36,t
+37,37,fix claim number nullable,SQL,V37__fix_claim_number_nullable.sql,-942193907,postgres,2026-03-20 18:21:11.181846,21,t
+38,38,add claim full coverage,SQL,V38__add_claim_full_coverage.sql,2082758456,postgres,2026-03-21 06:21:27.668196,46,t
+39,39,add manual refused amount,SQL,V39__add_manual_refused_amount.sql,864021851,postgres,2026-03-21 13:52:23.473184,41,t
+40,40,add coverage percent db constraint,SQL,V40__add_coverage_percent_db_constraint.sql,1744830395,postgres,2026-03-21 13:52:23.789302,12,t
+41,41,add claim line refused breakdown,SQL,V41__add_claim_line_refused_breakdown.sql,-172170857,postgres,2026-03-21 14:00:30.002027,47,t
+42,42,add claim soft delete fields,SQL,V42__add_claim_soft_delete_fields.sql,-775472293,postgres,2026-03-21 16:15:41.718944,44,t
+43,43,map pricing items categories,SQL,V43__map_pricing_items_categories.sql,-916855713,postgres,2026-03-22 16:22:33.65629,14,t
+44,44,add financial check constraints,SQL,V44__add_financial_check_constraints.sql,2083209431,postgres,2026-03-23 17:56:37.470964,174,t
+45,45,fix reference type check constraint,SQL,V45__fix_reference_type_check_constraint.sql,2073436977,postgres,2026-03-29 08:19:56.544595,24,t
+46,46,add applied discount to claims,SQL,V46__add_applied_discount_to_claims.sql,1092307580,postgres,2026-03-29 16:43:27.544865,24,t
+47,47,add deleted flag to benefit policy rules,SQL,V47__add_deleted_flag_to_benefit_policy_rules.sql,-171607681,postgres,2026-04-24 10:42:54.522799,131,t
+48,48,create medical audit logs,SQL,V48__create_medical_audit_logs.sql,589057616,postgres,2026-04-24 19:54:24.709854,343,t
+49,49,add claim coverage guard columns,SQL,V49__add_claim_coverage_guard_columns.sql,93042306,postgres,2026-04-24 19:54:25.368989,11,t
+50,50,create claim rule engine tables,SQL,V50__create_claim_rule_engine_tables.sql,1294723916,postgres,2026-04-24 19:54:25.391079,38,t
+51,51,add claim line financial audit fields,SQL,V51__add_claim_line_financial_audit_fields.sql,1085952855,postgres,2026-04-24 23:26:56.06106,99,t
+52,52,add missing claim line columns,SQL,V52__add_missing_claim_line_columns.sql,462889751,postgres,2026-04-25 00:52:34.796049,42,t
+53,53,add claim void reason,SQL,V53__add_claim_void_reason.sql,1367675278,postgres,2026-04-25 08:27:35.50069,41,t
+54,54,allow audit log deletion,SQL,V54__allow_audit_log_deletion.sql,-415582213,postgres,2026-04-25 08:40:46.344273,25,t
+55,55,create claim drafts,SQL,V55__create_claim_drafts.sql,516276437,postgres,2026-04-29 08:54:35.067061,176,t
+56,56,add discount before rejection,SQL,V56__add_discount_before_rejection.sql,-135076813,postgres,2026-04-29 22:46:12.802234,111,t
+57,57,import standard medical categories,SQL,V57__import_standard_medical_categories.sql,-1567877304,postgres,2026-05-01 08:25:15.44466,49,t
+58,58,create benefit policy templates,SQL,V58__create_benefit_policy_templates.sql,-1657705932,postgres,2026-05-01 08:25:15.951677,230,t
+59,59,update backdated months setting,SQL,V59__update_backdated_months_setting.sql,1689882874,postgres,2026-05-01 08:25:16.198729,7,t
+60,60,verify all existing emails,SQL,V60__verify_all_existing_emails.sql,807487059,postgres,2026-05-07 12:56:03.556302,61,t
+61,61,add company discount amount,SQL,V61__add_company_discount_amount.sql,1740282442,postgres,2026-06-24 11:48:37.229473,78,t
+62,62,create payment records,SQL,V62__create_payment_records.sql,1826129037,postgres,2026-06-27 17:35:13.982819,226,t
+63,63,fix payment audit logs columns,SQL,V63__fix_payment_audit_logs_columns.sql,-8646314,postgres,2026-06-27 18:10:43.647033,17,t
+64,66,recreate payment tables,SQL,V66__recreate_payment_tables.sql,-122988092,postgres,2026-06-27 18:41:49.501931,65,t
+65,67,add kinship verified,SQL,V67__add_kinship_verified.sql,-1028858094,postgres,2026-06-27 20:25:30.888703,31,t
+66,68,pricing classification,SQL,V68__pricing_classification.sql,-843228515,postgres,2026-06-29 11:10:06.239112,181,t
+67,69,add simulation and exclusions,SQL,V69__add_simulation_and_exclusions.sql,641340388,postgres,2026-06-29 19:51:41.600639,246,t
+68,70,create medical semantic tables,SQL,V70__create_medical_semantic_tables.sql,1613401214,postgres,2026-06-29 21:27:19.710578,108,t
+69,71,create provider pre auth portal,SQL,V71__create_provider_pre_auth_portal.sql,1234011799,postgres,2026-06-30 20:46:21.043618,222,t
+70,78,fix medical categories hierarchy,SQL,V78__fix_medical_categories_hierarchy.sql,-1585071400,postgres,2026-07-04 20:08:08.152658,24,t
+71,79,add max contract price,SQL,V79__add_max_contract_price.sql,2129352190,postgres,2026-07-09 09:29:42.857842,59,t
+72,81,remove sub inpat categories,SQL,V81__remove_sub_inpat_categories.sql,946303963,postgres,2026-07-09 09:58:26.912662,96,t
+73,82,fix provider type constraint,SQL,V82__fix_provider_type_constraint.sql,-299779527,postgres,2026-07-09 15:49:08.163141,127,t
+74,83,verify all existing emails,SQL,V83__verify_all_existing_emails.sql,807487059,postgres,2026-07-12 20:55:46.074583,28,t
+75,84,full benefit classification cutover,SQL,V84__full_benefit_classification_cutover.sql,1209039075,postgres,2026-07-13 18:22:55.749722,595,t
+76,85,link special benefits to policy groups,SQL,V85__link_special_benefits_to_policy_groups.sql,-1487405901,postgres,2026-07-13 20:23:11.137596,93,t
+77,86,support multi year benefit bucket periods,SQL,V86__support_multi_year_benefit_bucket_periods.sql,-1141374650,postgres,2026-07-13 20:23:11.411353,13,t
+78,87,store special benefit policy terms,SQL,V87__store_special_benefit_policy_terms.sql,54248909,postgres,2026-07-13 20:23:11.437256,6,t
+79,88,prevent duplicate benefit structure names,SQL,V88__prevent_duplicate_benefit_structure_names.sql,-1212261295,postgres,2026-07-13 21:42:14.538245,27,t
+80,89,retire rule level limits,SQL,V89__retire_rule_level_limits.sql,202588480,postgres,2026-07-15 07:18:32.30265,10,t
+81,90,enforce insurance identity uniqueness,SQL,V90__enforce_insurance_identity_uniqueness.sql,-1005123920,postgres,2026-07-15 07:18:33.523908,114,t
+82,91,add unit bank policy specific categories,SQL,V91__add_unit_bank_policy_specific_categories.sql,-1332652060,postgres,2026-07-15 07:18:33.649014,23,t
+83,92,employer scoped provider pricing,SQL,V92__employer_scoped_provider_pricing.sql,122503373,postgres,2026-07-15 07:18:33.682876,190,t
+84,93,restore unified medical catalog tables,SQL,V93__restore_unified_medical_catalog_tables.sql,45278606,postgres,2026-07-21 11:58:37.060685,179,t
+85,94,create medical specialties,SQL,V94__create_medical_specialties.sql,-1494332209,postgres,2026-07-21 11:58:37.430735,25,t
+86,95,align password reset tokens,SQL,V95__align_password_reset_tokens.sql,353829819,postgres,2026-07-21 11:58:37.466707,45,t
+87,96,align preauthorization attachments,SQL,V96__align_preauthorization_attachments.sql,-848917387,postgres,2026-07-21 11:58:37.521418,15,t
+88,97,align preauthorization request date,SQL,V97__align_preauthorization_request_date.sql,-1245897497,postgres,2026-07-21 11:58:37.547323,24,t
+89,98,count physiotherapy sessions per unit,SQL,V98__count_physiotherapy_sessions_per_unit.sql,192936813,postgres,2026-07-21 15:36:28.795598,35,t
+90,99,add optimistic locking to benefit policies,SQL,V99__add_optimistic_locking_to_benefit_policies.sql,1392723937,postgres,2026-07-21 22:41:12.244313,22,t
+91,100,add claim review pause,SQL,V100__add_claim_review_pause.sql,-1804482630,postgres,2026-07-22 11:20:09.582433,144,t
+92,101,add claim submission source,SQL,V101__add_claim_submission_source.sql,2027556082,postgres,2026-07-22 11:20:11.380261,14,t
+93,102,add claim reviewer identity,SQL,V102__add_claim_reviewer_identity.sql,-1769627184,postgres,2026-07-22 21:40:36.199576,84,t

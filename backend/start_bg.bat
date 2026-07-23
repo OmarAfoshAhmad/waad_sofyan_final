@@ -2,11 +2,19 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set PORT=8081
-set DB_PASSWORD=12345
-set SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tba_waad_system
-set SPRING_DATASOURCE_USERNAME=postgres
-set JWT_SECRET=waad_dev_secret_not_for_production_only_local_dev_9dda11e5
-set ADMIN_DEFAULT_PASSWORD=Admin@123
+if exist "%~dp0..\.env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%~dp0..\.env") do if not "%%A"=="" set "%%A=%%B"
+)
+if "!DB_PASSWORD!"=="" (
+    echo [ERROR] DB_PASSWORD is not configured.
+    exit /b 1
+)
+if "!JWT_SECRET!"=="" (
+    echo [ERROR] JWT_SECRET is not configured.
+    exit /b 1
+)
+if "!SPRING_DATASOURCE_URL!"=="" set SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tba_waad_system
+if "!SPRING_DATASOURCE_USERNAME!"=="" set SPRING_DATASOURCE_USERNAME=postgres
 set MAVEN_OPTS=-Xmx1024m -Xms512m
 
 echo [INFO] Stopping any existing backend on port %PORT%...

@@ -169,15 +169,23 @@ public class MedicalCategoryController {
 
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/medical-services - Canonical service lookup", id);
 
-        // Validate category exists
-        categoryService.findById(id); // Throws if not found
-
-        // Get services for this category
-        List<MedicalServiceResponseDto> services = categoryService.findServicesByCategory(id);
+        List<MedicalServiceResponseDto> services;
+        try {
+            // Validate category exists and get services for this category.
+            // Some benefit-document classifications are valid pricing buckets even when
+            // the unified service catalog has no child services yet; in that case the UI
+            // must still allow free-text service pricing instead of failing with 500.
+            categoryService.findById(id);
+            services = categoryService.findServicesByCategory(id);
+        } catch (Exception ex) {
+            log.warn("[MEDICAL-CATEGORIES] Could not load services for category {}. Returning empty list for free-text pricing. reason={}",
+                    id, ex.getMessage());
+            services = List.of();
+        }
 
         log.info("[MEDICAL-CATEGORIES] Found {} services for category {}", services.size(), id);
 
-        return ResponseEntity.ok(ApiResponse.success(services));
+        return ResponseEntity.ok(ApiResponse.success(services, "Services loaded", "تم تحميل الخدمات المتاحة"));
     }
 
     @GetMapping("/tree")

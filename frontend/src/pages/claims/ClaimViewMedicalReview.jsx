@@ -57,6 +57,8 @@ import {
   CheckCircle as ApproveIcon,
   Cancel as RejectIcon,
   HelpOutline as ClarifyIcon,
+  PauseCircleOutline as PauseIcon,
+  PlayCircleOutline as ResumeIcon,
   NavigateBefore as PreviousIcon,
   NavigateNext as NextIcon
 } from '@mui/icons-material';
@@ -114,7 +116,7 @@ const SERVICE_DECISION = {
   REJECT: 'REJECT',
   CLARIFY: 'CLARIFY'
 };
-const REVIEW_ACTION_ALLOWED_STATUSES = new Set(['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'NEEDS_CORRECTION']);
+const REVIEW_ACTION_ALLOWED_STATUSES = new Set(['SUBMITTED', 'UNDER_REVIEW']);
 const FINALIZED_STATUSES = new Set(['APPROVED', 'REJECTED', 'BATCHED', 'SETTLED']);
 
 const REJECTION_REASONS = ['خدمة غير مغطاة', 'نقص مستندات', 'عدم مطابقة التشخيص', 'تجاوز حدود المنفعة', 'تكرار الخدمة'];
@@ -277,7 +279,9 @@ const ClaimViewMedicalReview = () => {
           pricingItemId: service.pricingItemId,
           benefitLimit: service.benefitLimit,
           usedAmount: service.usedAmount,
-          remainingAmount: service.remainingAmount
+          remainingAmount: service.remainingAmount,
+          rejected: Boolean(service.rejected),
+          rejectionReason: service.rejectionReason || service.reviewerNotes || ''
         }))
       : claim.serviceName
         ? [
@@ -295,6 +299,10 @@ const ClaimViewMedicalReview = () => {
     return {
       claimNumber: claim.claimNumber || `CLM-${claim.id || id}`,
       status: claim.status,
+      reviewPaused: Boolean(claim.reviewPaused),
+      reviewPauseReason: claim.reviewPauseReason || '',
+      reviewPausedAt: claim.reviewPausedAt,
+      reviewPausedBy: claim.reviewPausedBy,
       allowedNextStatuses: Array.isArray(claim.allowedNextStatuses) ? claim.allowedNextStatuses : [],
       memberName: claim.memberName || claim.memberFullName || claim.member?.fullName || claim.member?.name,
       memberCivilId: claim.memberNationalNumber || claim.memberCivilId || claim.member?.nationalId || claim.member?.civilId,
@@ -378,8 +386,8 @@ const ClaimViewMedicalReview = () => {
       normalizedClaim.services.forEach((service) => {
         const previous = previousDecisions[service.serviceKey];
         nextDecisions[service.serviceKey] = {
-          decision: previous?.decision || SERVICE_DECISION.APPROVE,
-          reason: previous?.reason || ''
+          decision: previous?.decision || (service.rejected ? SERVICE_DECISION.REJECT : SERVICE_DECISION.APPROVE),
+          reason: previous?.reason || service.rejectionReason || ''
         };
       });
       return nextDecisions;
@@ -464,6 +472,14 @@ const ClaimViewMedicalReview = () => {
       };
     }
 
+    if (normalizedClaim?.reviewPaused) {
+      return {
+        locked: true,
+        severity: 'warning',
+        message: `المراجعة معلقة داخليًا${normalizedClaim.reviewPauseReason ? `: ${normalizedClaim.reviewPauseReason}` : ''}`
+      };
+    }
+
     if (claimStatus === 'APPROVAL_IN_PROGRESS') {
       return {
         locked: true,
@@ -500,7 +516,7 @@ const ClaimViewMedicalReview = () => {
       severity: 'info',
       message: ''
     };
-  }, [claimStatus]);
+  }, [claimStatus, normalizedClaim?.reviewPaused, normalizedClaim?.reviewPauseReason]);
 
   const hasRejectedServices = useMemo(() => {
     return Object.values(serviceDecisions).some((entry) => entry?.decision === SERVICE_DECISION.REJECT);
@@ -569,9 +585,29 @@ const ClaimViewMedicalReview = () => {
           return;
         }
 
+        const unresolvedServices = (normalizedClaim?.services || []).filter(
+          (service) => serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.CLARIFY
+        );
+        if (unresolvedServices.length > 0) {
+          enqueueSnackbar('البنود التي تحتاج إيضاحًا يجب إعادتها للتصحيح قبل اعتماد المطالبة', { variant: 'warning' });
+          return;
+        }
+
+        const lineDecisions = (normalizedClaim?.services || []).map((service) => ({
+          lineId: service.id,
+          decision:
+            serviceDecisions[service.serviceKey]?.decision === SERVICE_DECISION.REJECT ? 'REJECT' : 'APPROVE',
+          reason: serviceDecisions[service.serviceKey]?.reason || null
+        }));
+
+        if (lineDecisions.some((decision) => !decision.lineId)) {
+          enqueueSnackbar('تعذر تحديد أحد بنود المطالبة. أعد تحميل الصفحة ثم حاول مجددًا.', { variant: 'error' });
+          return;
+        }
+
         await claimsService.approve(id, {
           notes: notes?.trim() || `تمت الموافقة على ${selectedServicesCount} خدمة`,
-          useSystemCalculation: true
+          lineDecisions
         });
 
         localStorage.removeItem(draftStorageKey);
@@ -584,7 +620,17 @@ const ClaimViewMedicalReview = () => {
         setSubmitting(false);
       }
     },
-    [id, selectedServicesCount, selectedApprovedAmount, draftStorageKey, navigate, enqueueSnackbar]
+    [
+      id,
+      selectedServicesCount,
+      selectedApprovedAmount,
+      normalizedClaim?.services,
+      serviceDecisions,
+      draftStorageKey,
+      navigate,
+      enqueueSnackbar,
+      reviewLock
+    ]
   );
 
   const handleReject = useCallback(
@@ -648,6 +694,38 @@ const ClaimViewMedicalReview = () => {
       (id, reviewLock, ensureClaimUnderReview, draftStorageKey, navigate, enqueueSnackbar)
     ]
   );
+
+  const handlePauseReview = useCallback(async () => {
+    const reason = medicalNotes?.trim();
+    if (!reason || reason.length < 10) {
+      enqueueSnackbar('اكتب سبب تعليق واضحًا في الملاحظات الطبية (10 أحرف على الأقل)', { variant: 'warning' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await ensureClaimUnderReview();
+      await claimsService.pauseReview(id, reason);
+      enqueueSnackbar('تم تعليق المراجعة داخليًا دون إرجاع المطالبة للمرفق', { variant: 'info' });
+      await fetchClaim();
+    } catch (error) {
+      enqueueSnackbar(error.message || 'تعذر تعليق المراجعة', { variant: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [medicalNotes, ensureClaimUnderReview, id, enqueueSnackbar, fetchClaim]);
+
+  const handleResumeReview = useCallback(async () => {
+    setSubmitting(true);
+    try {
+      await claimsService.resumeReview(id);
+      enqueueSnackbar('تم استئناف المراجعة ويمكن اتخاذ القرار الآن', { variant: 'success' });
+      await fetchClaim();
+    } catch (error) {
+      enqueueSnackbar(error.message || 'تعذر استئناف المراجعة', { variant: 'error' });
+    } finally {
+      setSubmitting(false);
+    }
+  }, [id, enqueueSnackbar, fetchClaim]);
 
   const handleSendChatMessage = useCallback(() => {
     const text = chatInput.trim();
@@ -1228,11 +1306,24 @@ const ClaimViewMedicalReview = () => {
               إجمالي المبلغ الموافق عليه: {formatCurrency(selectedApprovedAmount || 0)}
             </Typography>
             {reviewLock.locked ? (
-              <Chip
-                color={reviewLock.severity === 'warning' ? 'warning' : 'success'}
-                label={reviewLock.message || 'لا يمكن تنفيذ قرار جديد على هذه المطالبة'}
-                variant="outlined"
-              />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Chip
+                  color={reviewLock.severity === 'warning' ? 'warning' : 'success'}
+                  label={reviewLock.message || 'لا يمكن تنفيذ قرار جديد على هذه المطالبة'}
+                  variant="outlined"
+                />
+                {normalizedClaim?.reviewPaused && (
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    startIcon={<ResumeIcon />}
+                    onClick={handleResumeReview}
+                    disabled={submitting}
+                  >
+                    استئناف المراجعة
+                  </Button>
+                )}
+              </Stack>
             ) : (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                 <Button
@@ -1264,6 +1355,15 @@ const ClaimViewMedicalReview = () => {
                   sx={{ boxShadow: 2 }}
                 >
                   طلب معلومات
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<PauseIcon />}
+                  onClick={handlePauseReview}
+                  disabled={submitting}
+                >
+                  تعليق داخلي
                 </Button>
               </Stack>
             )}

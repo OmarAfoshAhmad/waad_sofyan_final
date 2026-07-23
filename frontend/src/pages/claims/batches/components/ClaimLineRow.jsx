@@ -57,6 +57,20 @@ export const ClaimLineRow = ({
   triggerConfirm,
   onOpenCustomServiceDialog
 }) => {
+  const priceRefused = parseFloat(line.priceRefused) || 0;
+  const limitRefused = parseFloat(line.limitRefused) || 0;
+  const refusedAmount = parseFloat(line.refusedAmount) || 0;
+  const hasFinancialRefusal = refusedAmount > 0 || priceRefused > 0 || limitRefused > 0;
+  const financialRefusalText =
+    line.rejectionReason ||
+    [
+      priceRefused > 0 ? `خصم فارق السعر التعاقدي: ${priceRefused.toFixed(2)} د.ل` : null,
+      limitRefused > 0 ? `تجاوز سقف المنفعة: ${limitRefused.toFixed(2)} د.ل` : null
+    ]
+      .filter(Boolean)
+      .join(' — ') ||
+    'تجاوز السعر التعاقدي و/أو سقف المنفعة';
+
   return (
     <Fragment>
       <TableRow
@@ -216,41 +230,21 @@ export const ClaimLineRow = ({
         )}
         {visibleColumns.benefitLimit && (
           <TableCell align="center">
-            {line.usageDetails && (
-              <Stack spacing={0.3} alignItems="center" justifyContent="center">
-                {line.usageDetails.timesLimit > 0 && (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontSize: '0.75rem',
-                      color:
-                        line.usageDetails.timesExceeded || (line.usageDetails.usedCount ?? 0) > line.usageDetails.timesLimit
-                          ? 'error.main'
-                          : 'text.secondary',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    مرات: {line.usageDetails.usedCount ?? 0}/{line.usageDetails.timesLimit}
+            {Number(line.usageDetails?.amountLimit) > 0 || Number(line.usageDetails?.timesLimit) > 0 ? (
+              <Stack spacing={0.35} alignItems="center">
+                {Number(line.usageDetails?.timesLimit) > 0 && (
+                  <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    مرات: {Number(line.usageDetails.timesLimit)}
                   </Typography>
                 )}
-                {line.usageDetails.amountLimit > 0 && (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontSize: '0.75rem',
-                      color:
-                        line.usageDetails.amountExceeded || line.usageDetails.usedAmount > line.usageDetails.amountLimit
-                          ? 'error.main'
-                          : 'text.secondary',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    د.ل: {(line.usageDetails.usedAmount ?? 0).toFixed(2)}/{line.usageDetails.amountLimit}
+                {Number(line.usageDetails?.amountLimit) > 0 && (
+                  <Typography variant="caption" sx={{ fontSize: '0.75rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    د.ل: {Number(line.usageDetails.amountLimit).toFixed(2)}
                   </Typography>
                 )}
               </Stack>
+            ) : (
+              <Typography variant="caption" sx={{ fontSize: '0.8rem', fontWeight: 700 }}>—</Typography>
             )}
           </TableCell>
         )}
@@ -313,7 +307,7 @@ export const ClaimLineRow = ({
           <TableCell align="center">
             {(() => {
               // refusedAmount يتضمّن: تجاوز السعر + تجاوز السقف + الرفض اليدوي الجزئي + الرفض الكلي
-              const refusedVal = parseFloat(line.refusedAmount) || 0;
+              const refusedVal = Math.max(refusedAmount, priceRefused + limitRefused);
               const isPartial = !line.rejected && (parseFloat(line.manualRefusedAmount) || 0) > 0;
               if (refusedVal <= 0) {
                 return (
@@ -326,7 +320,7 @@ export const ClaimLineRow = ({
                 ? line.rejectionReason || 'الخدمة مرفوضة بالكامل'
                 : isPartial
                   ? `رفض جزئي: ${refusedVal.toFixed(2)} د.ل — ${line.rejectionReason || ''}`
-                  : line.rejectionReason || `تجاوز سعر العقد (${line.contractPrice > 0 ? line.contractPrice : '—'})`;
+                  : financialRefusalText;
               return (
                 <Tooltip title={tooltipTitle} arrow>
                   <Typography
@@ -420,12 +414,11 @@ export const ClaimLineRow = ({
           </TableCell>
         </TableRow>
       )}
-      {!line.rejected && (parseFloat(line.refusedAmount) || 0) > 0 && (
+      {!line.rejected && hasFinancialRefusal && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.warning.main, 0.03) }}>
           <TableCell colSpan={12} sx={{ py: 0.5 }}>
             <Typography variant="caption" color="warning.dark" fontWeight={500} sx={{ fontSize: '0.75rem', px: '1.0rem' }}>
-              ⚠️ رفض جزئي: {parseFloat(line.refusedAmount).toFixed(2)} د.ل —{' '}
-              {line.rejectionReason || 'تجاوز السعر التعاقدي و/أو سقف المنفعة'}
+              ⚠️ خصم/رفض جزئي: {Math.max(refusedAmount, priceRefused + limitRefused).toFixed(2)} د.ل — {financialRefusalText}
             </Typography>
           </TableCell>
         </TableRow>
@@ -469,7 +462,7 @@ export const ClaimLineRow = ({
           </TableCell>
         </TableRow>
       )}
-      {line.notCovered && !line.rejected && (
+      {line.notCovered && !line.coveragePending && !line.rejected && (
         <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.07) }}>
           <TableCell colSpan={12} sx={{ py: 0.5 }}>
             <Typography
@@ -479,7 +472,8 @@ export const ClaimLineRow = ({
               sx={{ fontSize: '0.75rem', px: '1.0rem', display: 'flex', alignItems: 'center', gap: 1 }}
             >
               <RejectIcon sx={{ fontSize: '0.875rem' }} />
-              هذه الخدمة غير مغطاة بالوثيقة (تغطية 0%) — يتحمّل المريض كامل المبلغ أو يجب رفض البند
+              {line.rejectionReason ||
+                'هذه الخدمة غير مغطاة بالوثيقة في سياق المطالبة الحالي (تغطية 0%) — غيّر السياق أو اربط الخدمة بتصنيف مغطى لهذا السياق'}
             </Typography>
           </TableCell>
         </TableRow>

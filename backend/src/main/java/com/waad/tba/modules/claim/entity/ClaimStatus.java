@@ -1,8 +1,5 @@
 package com.waad.tba.modules.claim.entity;
 
-import java.util.Collections;
-import java.util.Set;
-
 /**
  * Claim lifecycle status enum with strict transition rules.
  * 
@@ -131,35 +128,11 @@ public enum ClaimStatus {
 
     /**
      * Check if this status allows editing claim details.
-     * Allowed: DRAFT, NEEDS_CORRECTION, APPROVED, and REJECTED (re-edit by admin).
+     * Only non-final data states are editable. Financially approved or rejected
+     * claims must use an explicit lifecycle command first.
      */
     public boolean allowsEdit() {
-        return this == DRAFT || this == APPROVED || this == NEEDS_CORRECTION || this == REJECTED;
-    }
-
-    /**
-     * Get valid next statuses from current status.
-     * Used by ClaimStateMachine for validation.
-     */
-    public Set<ClaimStatus> getValidTransitions() {
-        return switch (this) {
-            case DRAFT -> Set.of(SUBMITTED);
-            case SUBMITTED -> Set.of(UNDER_REVIEW);
-            case UNDER_REVIEW -> Set.of(APPROVAL_IN_PROGRESS, REJECTED, NEEDS_CORRECTION);
-            case NEEDS_CORRECTION -> Set.of(APPROVED); // Corrected → back to APPROVED
-            case APPROVAL_IN_PROGRESS -> Set.of(APPROVED, REJECTED, UNDER_REVIEW); // Async result + Recovery
-            case APPROVED -> Set.of(SETTLED, BATCHED, NEEDS_CORRECTION); // Directly settlable or via Batch
-            case BATCHED -> Set.of(SETTLED, APPROVED); // Settle from batch, or unbatch back to APPROVED
-            case REJECTED -> Set.of(APPROVED, REJECTED); // Re-editable by admin
-            case SETTLED -> Collections.emptySet(); // Terminal
-        };
-    }
-
-    /**
-     * Check if transition to target status is valid.
-     */
-    public boolean canTransitionTo(ClaimStatus target) {
-        return getValidTransitions().contains(target);
+        return this == DRAFT || this == NEEDS_CORRECTION;
     }
 
     // ========== LEGACY COMPATIBILITY ==========

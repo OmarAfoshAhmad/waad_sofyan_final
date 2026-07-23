@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import claimsService from 'services/api/claims.service';
+import { failedCoverageResult, normalizeCoverageResult } from './coverageContract.mjs';
 
 export function useCoverageLogic({
   policyId,
-  policyInfo,
   member,
-  applyBenefits,
   medicalCategories,
   encounterType,
   recompute,
@@ -58,38 +57,16 @@ export function useCoverageLogic({
     return Number.isFinite(num) ? num : fallback;
   };
 
-  const normalizeEngineResult = (result, fallbackPercent) => {
-    if (!result) {
-      return {
-        coveragePercent: fallbackPercent,
-        requiresPreApproval: false,
-        notCovered: false,
-        usageExceeded: false,
-        usageDetails: null,
-        total: 0,
-        byCompany: 0,
-        byEmployee: 0,
-        refusedAmount: 0,
-        rejectionReason: ''
-      };
-    }
-
-    return {
-      coveragePercent: result.notCovered ? 0 : (result.coveragePercent ?? fallbackPercent),
-      requiresPreApproval: !!result.requiresPreApproval,
-      notCovered: !!result.notCovered,
-      usageExceeded: !!result.usageDetails?.exceeded,
-      usageDetails: result.usageDetails ?? null,
-      total: toMoney(result.requestedTotal),
-      byCompany: toMoney(result.companyShare),
-      byEmployee: toMoney(result.patientShare),
-      refusedAmount: toMoney(result.refusedAmount),
-      rejectionReason: result.refusalReason || undefined
-    };
-  };
-
   const buildEngineLineInput = (line, idx) => {
-    let serviceOwnCategoryId = line?.service?.categoryId ?? line?.service?.medicalCategoryId ?? line?.service?.medicalCategory?.id ?? null;
+    let serviceOwnCategoryId =
+      line?.serviceCategoryId ??
+      line?.medicalCategoryId ??
+      line?.service?.categoryId ??
+      line?.service?.serviceCategoryId ??
+      line?.service?.medicalCategoryId ??
+      line?.service?.medicalCategory?.id ??
+      line?.service?.effectiveCategory?.id ??
+      null;
 
     const code = line?.serviceCode || line?.service?.serviceCode || line?.service?.code;
     if (code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE') {
@@ -100,10 +77,12 @@ export function useCoverageLogic({
       }
     }
 
+    const pricingItemId = line?.pricingItemId ?? line?.service?.pricingItemId ?? null;
+
     return {
       lineId: line?.id || `line_${idx}`,
       serviceId: line?.service?.medicalServiceId || 0,
-      pricingItemId: line?.service?.pricingItemId || null,
+      pricingItemId,
       quantity: Math.max(1, toInt(line?.quantity, 1)),
       enteredUnitPrice: toMoney(line?.unitPrice),
       contractPrice: toMoney(line?.contractPrice),
@@ -117,7 +96,14 @@ export function useCoverageLogic({
   const fetchCoverage = useCallback(
     async (service, encounterOverride, lineId = null) => {
       const sid = service?.medicalServiceId || 0;
-      let serviceOwnCategoryId = service?.categoryId ?? service?.medicalCategoryId ?? service?.medicalCategory?.id ?? null;
+      const pricingItemId = service?.pricingItemId || null;
+      let serviceOwnCategoryId =
+        service?.categoryId ??
+        service?.serviceCategoryId ??
+        service?.medicalCategoryId ??
+        service?.medicalCategory?.id ??
+        service?.effectiveCategory?.id ??
+        null;
       const code = service?.serviceCode || service?.code;
       if (code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE') {
         const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG' : 'CAT-DIAGNOSTIC';
@@ -127,13 +113,11 @@ export function useCoverageLogic({
         }
       }
       let categoryId = serviceOwnCategoryId;
-      const fallbackPercent = policyInfo?.defaultCoveragePercent ?? 100;
+      if (!policyId || !member?.id)
+        return failedCoverageResult('لا توجد وثيقة أو هوية مستفيد صالحة لحساب التغطية');
 
-      if (!policyId || !member?.id || !applyBenefits)
-        return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
-
-      if (!sid && !categoryId)
-        return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
+      if (!sid && !categoryId && !pricingItemId)
+        return failedCoverageResult('الخدمة غير مرتبطة بتصنيف أو عنصر تسعير معتمد');
 
       try {
         const payload = {
@@ -148,7 +132,7 @@ export function useCoverageLogic({
             {
               lineId: lineId || 'single',
               serviceId: sid,
-              pricingItemId: service?.pricingItemId || null,
+              pricingItemId,
               quantity: Math.max(1, toInt(service?.quantity, 1)),
               enteredUnitPrice: toMoney(service?.contractPrice),
               contractPrice: toMoney(service?.contractPrice),
@@ -178,9 +162,9 @@ export function useCoverageLogic({
         }
 
         if (bulkResults && bulkResults.length > 0) {
-          return normalizeEngineResult(bulkResults[0], fallbackPercent);
+          return normalizeCoverageResult(bulkResults[0]);
         }
-        return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
+        return failedCoverageResult('لم يُرجع محرك التغطية قراراً لهذه الخدمة');
       } catch (err) {
         const isCanceled =
           err?.name === 'CanceledError' ||
@@ -194,14 +178,12 @@ export function useCoverageLogic({
           return { __stale: true };
         }
         console.error('[fetchCoverage] error:', err);
-        onCoverageError?.('تعذر حساب التغطية للخدمة المختارة. سيتم استخدام التغطية الافتراضية مؤقتاً.');
-        return { coveragePercent: fallbackPercent, requiresPreApproval: false, notCovered: false };
+        onCoverageError?.('تعذر حساب التغطية. لن تُعتمد حصة الشركة حتى نجاح إعادة الحساب.');
+        return failedCoverageResult('تعذر الاتصال بمحرك التغطية — أعد المحاولة');
       }
     },
     [
       policyId,
-      policyInfo?.defaultCoveragePercent,
-      applyBenefits,
       member?.id,
       currentClaimId,
       serviceYear,
@@ -214,7 +196,17 @@ export function useCoverageLogic({
 
   const refetchAllLinesCoverage = useCallback(
     async (newEncounterType, currentLines, newFullCoverage) => {
-      if (!policyId || !member?.id) return currentLines.map((l, i) => recompute(l, i, currentLines));
+      if (!policyId || !member?.id) {
+        return currentLines.map((line, i, all) =>
+          recompute(
+            line.service
+              ? { ...line, ...failedCoverageResult('لا توجد وثيقة أو هوية مستفيد صالحة لحساب التغطية') }
+              : line,
+            i,
+            all
+          )
+        );
+      }
 
       const effectiveEncounterType = newEncounterType || encounterType || 'OUTPATIENT';
       const isFull = newFullCoverage !== undefined ? newFullCoverage : fullCoverage;
@@ -254,10 +246,12 @@ export function useCoverageLogic({
         const updated = currentLines.map((line, idx) => {
           if (!line.service) return line;
           const lineId = line.id || `line_${idx}`;
-          const cov = bulkResults.find((b) => b.lineId === lineId);
+          // Persisted claim-line IDs are numbers in React, while the Java engine
+          // contract returns lineId as a string. Compare their canonical form.
+          const cov = bulkResults.find((b) => String(b.lineId) === String(lineId));
 
           if (cov) {
-            const normalized = normalizeEngineResult(cov, policyInfo?.defaultCoveragePercent ?? 100);
+            const normalized = normalizeCoverageResult(cov);
             return {
               ...line,
               ...normalized
@@ -281,7 +275,15 @@ export function useCoverageLogic({
         }
         console.error('[refetchAllLinesCoverage] bulk error:', err);
         onCoverageError?.('فشل تحديث تغطية جميع البنود. يرجى المحاولة مرة أخرى.');
-        return currentLines.map((l, i) => recompute(l, i, currentLines));
+        return currentLines.map((line, i, all) =>
+          recompute(
+            line.service
+              ? { ...line, ...failedCoverageResult('فشل تحديث التغطية — أعد المحاولة قبل الحفظ') }
+              : line,
+            i,
+            all
+          )
+        );
       }
     },
     [
@@ -293,7 +295,6 @@ export function useCoverageLogic({
       currentClaimId,
       recompute,
       fullCoverage,
-      policyInfo?.defaultCoveragePercent,
       onCoverageError
     ]
   );

@@ -3,6 +3,8 @@ package com.waad.tba.modules.claim.service;
 import com.waad.tba.common.enums.NetworkType;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.provider.service.ProviderNetworkService;
@@ -14,6 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -38,6 +44,7 @@ public class CostCalculationService {
 
     private final ProviderNetworkService providerNetworkService;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
+    private final ClaimRepository claimRepository;
 
     /**
      * Calculate cost breakdown for a claim.
@@ -62,6 +69,11 @@ public class CostCalculationService {
                     "FINANCIAL_ERROR: Cannot calculate costs - requested amount is null.");
         }
 
+        if (requestedAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new com.waad.tba.common.exception.BusinessRuleException(
+                    "FINANCIAL_ERROR: Cannot calculate costs - requested amount is negative.");
+        }
+
         if (requestedAmount.compareTo(BigDecimal.ZERO) == 0) {
             return CostBreakdown.zero();
         }
@@ -77,11 +89,12 @@ public class CostCalculationService {
         
         BigDecimal totalRefused = BigDecimal.ZERO;
         BigDecimal rejectedLinesPatientShare = BigDecimal.ZERO;
-        BigDecimal approvedNetBaseAmount = BigDecimal.ZERO;
+        BigDecimal approvedNetBaseAmount = lines.isEmpty() ? requestedAmount : BigDecimal.ZERO;
 
         for (ClaimLine l : lines) {
-            BigDecimal lineRequested = (l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice() : l.getUnitPrice())
-                    .multiply(BigDecimal.valueOf(l.getQuantity()));
+            BigDecimal unitPrice = l.getRequestedUnitPrice() != null ? l.getRequestedUnitPrice() : l.getUnitPrice();
+            BigDecimal lineRequested = unitPrice == null ? BigDecimal.ZERO
+                    : unitPrice.multiply(BigDecimal.valueOf(l.getQuantity()));
             
             if (Boolean.TRUE.equals(l.getRejected())) {
                 // Option 2: Patient pays normal share, Facility loses the rest
@@ -171,7 +184,8 @@ public class CostCalculationService {
                 .distinct()
                 .collect(Collectors.toList());
 
-        java.util.Map<Long, Integer> coverageMap = benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(member, categoryIds);
+        java.util.Map<Long, Integer> coverageMap = benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(
+                member, categoryIds, claim.getEncounterType(), claim.getServiceDate());
 
         BigDecimal totalNetAmount = BigDecimal.ZERO;
         BigDecimal weightedCopaySum = BigDecimal.ZERO;
@@ -187,9 +201,9 @@ public class CostCalculationService {
             if (netAmount.compareTo(BigDecimal.ZERO) <= 0) continue;
 
             Long categoryId = line.getAppliedCategoryId() != null ? line.getAppliedCategoryId() : line.getServiceCategoryId();
-            int coveragePercent = 80; // default
+            int coveragePercent = 0; // fail closed when no contextual benefit rule exists
             if (categoryId != null) {
-                coveragePercent = coverageMap.getOrDefault(categoryId, benefitPolicy.getDefaultCoveragePercent() != null ? benefitPolicy.getDefaultCoveragePercent() : 80);
+                coveragePercent = coverageMap.getOrDefault(categoryId, 0);
             }
 
             int copayPercent = 100 - Math.min(100, Math.max(0, coveragePercent));
@@ -210,7 +224,7 @@ public class CostCalculationService {
         BigDecimal defaultCopay = BigDecimal.valueOf(100 - policy.getDefaultCoveragePercent());
         
         if (networkType == NetworkType.OUT_OF_NETWORK) {
-            return defaultCopay; // Standardize on default if specific OON copay not in entity
+            return defaultCopay.add(new BigDecimal("20.00")).min(new BigDecimal("100.00"));
         }
         return defaultCopay;
     }
@@ -220,7 +234,12 @@ public class CostCalculationService {
     }
 
     private BigDecimal getDeductibleMetThisPeriod(Member member, Claim claim) {
-        return BigDecimal.ZERO; // Simplified for MVP
+        if (member == null || member.getId() == null) return BigDecimal.ZERO;
+        BigDecimal value = claimRepository.sumDeductibleForYear(
+                member.getId(), resolveClaimYear(claim),
+                List.copyOf(EnumSet.of(ClaimStatus.APPROVED, ClaimStatus.BATCHED, ClaimStatus.SETTLED)),
+                claim.getId() != null ? claim.getId() : -1L);
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     private BigDecimal getOutOfPocketMax(BenefitPolicy policy) {
@@ -228,7 +247,20 @@ public class CostCalculationService {
     }
 
     private BigDecimal getOutOfPocketSpentThisPeriod(Member member, Claim claim) {
-        return BigDecimal.ZERO; // Simplified for MVP
+        if (member == null || member.getId() == null) return BigDecimal.ZERO;
+        BigDecimal value = claimRepository.sumPatientCopayForYear(
+                member.getId(), resolveClaimYear(claim),
+                List.copyOf(EnumSet.of(ClaimStatus.APPROVED, ClaimStatus.BATCHED, ClaimStatus.SETTLED)),
+                claim.getId() != null ? claim.getId() : -1L);
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private int resolveClaimYear(Claim claim) {
+        if (claim.getServiceDate() != null) {
+            return claim.getServiceDate().getYear();
+        }
+        LocalDateTime createdAt = claim.getCreatedAt();
+        return createdAt != null ? createdAt.atZone(ZoneId.systemDefault()).getYear() : LocalDate.now().getYear();
     }
 
     public record CostBreakdown(

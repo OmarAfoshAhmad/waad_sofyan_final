@@ -61,6 +61,10 @@ public class UpdateClaimDataRequest {
     @AllArgsConstructor
     public static class ClaimLineRequest {
 
+        /** Existing claim-line identity. Required when editing a persisted line. */
+        @Positive(message = "Claim line ID must be positive")
+        private Long id;
+
         /**
          * Medical service ID (from MedicalTaxonomy)
          * Optional if pricingItemId is provided

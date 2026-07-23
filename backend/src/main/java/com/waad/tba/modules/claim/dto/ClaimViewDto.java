@@ -206,9 +206,16 @@ public class ClaimViewDto {
 
     // Status and review
     private ClaimStatus status;
+    private com.waad.tba.modules.claim.entity.ClaimSubmissionSource submissionSource;
     private String statusLabel;
     private String reviewerComment;
     private LocalDateTime reviewedAt;
+    private Long reviewedById;
+    private String reviewedBy;
+    private Boolean reviewPaused;
+    private String reviewPauseReason;
+    private LocalDateTime reviewPausedAt;
+    private String reviewPausedBy;
 
     /**
      * Allowed next statuses for this claim (Backend-Driven Workflow).

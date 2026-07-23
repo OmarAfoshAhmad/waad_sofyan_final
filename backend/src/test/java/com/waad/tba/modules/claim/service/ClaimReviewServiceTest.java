@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,12 +22,16 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
+import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService;
 import com.waad.tba.modules.claim.dto.ClaimApproveDto;
 import com.waad.tba.modules.claim.dto.ClaimRejectDto;
 import com.waad.tba.modules.claim.dto.ClaimSettleDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
 import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.claim.entity.ClaimSubmissionSource;
+import com.waad.tba.modules.claim.dto.ClaimLineReviewDecision;
 import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
@@ -56,6 +61,8 @@ class ClaimReviewServiceTest {
     @Mock
     private BenefitPolicyCoverageService benefitPolicyCoverageService;
     @Mock
+    private BenefitBucketLedgerService benefitBucketLedgerService;
+    @Mock
     private com.waad.tba.common.service.BusinessDaysCalculatorService businessDaysCalculator;
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -65,6 +72,10 @@ class ClaimReviewServiceTest {
     private ProviderAccountService providerAccountService;
     @Mock
     private MedicalAuditLogService medicalAuditLogService;
+    @Mock
+    private ClaimApprovalRecoveryWorker approvalRecoveryWorker;
+    @Mock
+    private ClaimFinancialSnapshotService financialSnapshotService;
 
     @InjectMocks
     private ClaimReviewService claimReviewService;
@@ -107,6 +118,75 @@ class ClaimReviewServiceTest {
         assertThatThrownBy(() -> claimReviewService.startReview(100L))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("لا يمكن بدء المراجعة");
+    }
+
+    @Test
+    void pauseAndResumeReview_shouldKeepUnderReviewStatus() {
+        claim.setStatus(ClaimStatus.UNDER_REVIEW);
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
+
+        claimReviewService.pauseReview(100L, "بانتظار مراجعة التقرير الطبي");
+        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.UNDER_REVIEW);
+        assertThat(claim.getReviewPaused()).isTrue();
+        assertThat(claim.getReviewPauseReason()).contains("التقرير الطبي");
+
+        claimReviewService.resumeReview(100L);
+        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.UNDER_REVIEW);
+        assertThat(claim.getReviewPaused()).isFalse();
+        assertThat(claim.getReviewPauseReason()).isNull();
+    }
+
+    @Test
+    void requestApproval_pausedReview_shouldFailClosed() {
+        claim.setStatus(ClaimStatus.UNDER_REVIEW);
+        claim.setReviewPaused(true);
+        claim.setLines(List.of(ClaimLine.builder().id(501L).claim(claim).build()));
+        ClaimApproveDto dto = ClaimApproveDto.builder()
+                .lineDecisions(List.of(ClaimApproveDto.LineDecision.builder()
+                        .lineId(501L).decision(ClaimLineReviewDecision.APPROVE).build()))
+                .build();
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+
+        assertThatThrownBy(() -> claimReviewService.requestApproval(100L, dto))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("استئناف المراجعة");
+    }
+
+    @Test
+    void requestCorrection_shouldReverseBenefitLedgerAndProviderCredit() {
+        claim.setStatus(ClaimStatus.APPROVED);
+        claim.setSubmissionSource(ClaimSubmissionSource.INTERNAL_DIRECT);
+        claim.setApprovedAmount(new BigDecimal("800"));
+        claim.setNetProviderAmount(new BigDecimal("800"));
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
+
+        claimReviewService.requestCorrection(100L, "تصحيح البنود");
+
+        verify(benefitBucketLedgerService).reverseClaim(100L);
+        verify(claimStateMachine).transition(claim, ClaimStatus.NEEDS_CORRECTION, reviewer);
+        verify(providerAccountService).debitOnClaimReversal(100L, 1L);
+        assertThat(claim.getApprovedAmount()).isNull();
+        assertThat(claim.getNetProviderAmount()).isNull();
+        assertThat(claim.getReviewerComment()).isEqualTo("تصحيح البنود");
+    }
+
+    @Test
+    void requestCorrection_portalClaim_shouldRequireMedicalReviewFlow() {
+        claim.setStatus(ClaimStatus.APPROVED);
+        claim.setSubmissionSource(ClaimSubmissionSource.PROVIDER_PORTAL);
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+
+        assertThatThrownBy(() -> claimReviewService.requestCorrection(100L, "تصحيح"))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("البوابة");
     }
 
     @Test
@@ -181,10 +261,16 @@ class ClaimReviewServiceTest {
     @Test
     void requestApproval_shouldInitiateAsyncPhase() {
         claim.setStatus(ClaimStatus.UNDER_REVIEW);
+        ClaimLine line = ClaimLine.builder().id(501L).claim(claim).build();
+        claim.setLines(List.of(line));
         ClaimApproveDto dto = new ClaimApproveDto();
         dto.setNotes("Approving this");
+        dto.setLineDecisions(List.of(ClaimApproveDto.LineDecision.builder()
+                .lineId(501L)
+                .decision(ClaimLineReviewDecision.APPROVE)
+                .build()));
 
-        when(claimRepository.findById(100L)).thenReturn(Optional.of(claim));
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
         when(authorizationService.getCurrentUser()).thenReturn(reviewer);
         when(claimRepository.save(any(Claim.class))).thenReturn(claim);
         when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
@@ -192,8 +278,44 @@ class ClaimReviewServiceTest {
         claimReviewService.requestApproval(100L, dto);
 
         verify(claimStateMachine).transition(eq(claim), eq(ClaimStatus.APPROVAL_IN_PROGRESS), eq(reviewer), any());
-        // Note: processApprovalAsync is called after this, but since it's @Async it
-        // might be mocked or handled differently in full integration tests.
-        // In unit tests, we just verify the first phase.
+        verify(eventPublisher).publishEvent(any(com.waad.tba.modules.claim.event.ClaimApprovalRequestedEvent.class));
+    }
+
+    @Test
+    void requestApproval_missingLineDecision_shouldFailClosed() {
+        claim.setStatus(ClaimStatus.UNDER_REVIEW);
+        claim.setLines(List.of(ClaimLine.builder().id(501L).claim(claim).build()));
+        ClaimApproveDto dto = ClaimApproveDto.builder().lineDecisions(List.of()).build();
+
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+
+        assertThatThrownBy(() -> claimReviewService.requestApproval(100L, dto))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("قرار واضح لكل بند");
+    }
+
+    @Test
+    void requestApproval_rejectedLine_shouldPersistReviewerReasonBeforeCalculation() {
+        claim.setStatus(ClaimStatus.UNDER_REVIEW);
+        ClaimLine line = ClaimLine.builder().id(501L).claim(claim).rejected(false).build();
+        claim.setLines(List.of(line));
+        ClaimApproveDto dto = ClaimApproveDto.builder()
+                .lineDecisions(List.of(ClaimApproveDto.LineDecision.builder()
+                        .lineId(501L)
+                        .decision(ClaimLineReviewDecision.REJECT)
+                        .reason("غير ضروري طبياً")
+                        .build()))
+                .build();
+
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+        when(claimRepository.save(any(Claim.class))).thenReturn(claim);
+        when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
+
+        claimReviewService.requestApproval(100L, dto);
+
+        assertThat(line.getRejected()).isTrue();
+        assertThat(line.getRejectionReason()).isEqualTo("غير ضروري طبياً");
     }
 }

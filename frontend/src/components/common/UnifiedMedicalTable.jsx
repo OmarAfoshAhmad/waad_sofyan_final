@@ -145,6 +145,9 @@ const UnifiedMedicalTable = ({
   selectedRows = [],
   onSelectAllClick,
   onSelectRow,
+  enableRowSelection = false,
+  selectedRowIds,
+  onRowSelectionChange,
 
   // Empty State - accept both individual props and emptyStateConfig object
   emptyMessage = 'لا توجد بيانات',
@@ -206,6 +209,31 @@ const UnifiedMedicalTable = ({
   const resolvedLoading = isLoading !== undefined ? isLoading : loading;
   const resolvedEmptyMessage = emptyStateConfig?.title || emptyStateConfig?.description || emptyMessage;
   const ResolvedEmptyIcon = emptyStateConfig?.icon || EmptyIcon;
+  const resolvedSelectable = selectable || enableRowSelection;
+  const resolvedSelectedRows = selectedRowIds || selectedRows;
+
+  const handleSelectAllClick = (event) => {
+    if (onSelectAllClick) {
+      onSelectAllClick(event);
+      return;
+    }
+    if (onRowSelectionChange) {
+      onRowSelectionChange(event.target.checked ? rows.map((row, index) => getRowKey(row, index)) : []);
+    }
+  };
+
+  const handleSelectRow = (event, rowKey) => {
+    if (onSelectRow) {
+      onSelectRow(event, rowKey);
+      return;
+    }
+    if (onRowSelectionChange) {
+      const nextSelected = event.target.checked
+        ? [...resolvedSelectedRows, rowKey]
+        : resolvedSelectedRows.filter((selectedKey) => selectedKey !== rowKey);
+      onRowSelectionChange(nextSelected);
+    }
+  };
 
   // Normalize columns: support DataGrid-style 'field'/'headerName' as aliases for 'id'/'label'
   const normalizedColumns = columns.map((col) => ({
@@ -232,7 +260,7 @@ const UnifiedMedicalTable = ({
   };
 
   // Calculate columns span for loading/empty states
-  const colSpan = normalizedColumns.length + (renderExpandedRow ? 1 : 0);
+  const colSpan = normalizedColumns.length + (renderExpandedRow ? 1 : 0) + (resolvedSelectable ? 1 : 0);
 
   // Expansion state
   const [expandedRows, setExpandedRows] = useState({});
@@ -281,13 +309,13 @@ const UnifiedMedicalTable = ({
           {/* Header - Soft Medical Green */}
           <TableHead>
             <TableRow>
-              {selectable && (
+              {resolvedSelectable && (
                 <TableCell padding="checkbox" sx={{ bgcolor: headerBg, borderBottom: `2px solid ${headerBorder}` }}>
                   <Checkbox
                     color="primary"
-                    indeterminate={selectedRows.length > 0 && selectedRows.length < rows.length}
-                    checked={rows.length > 0 && selectedRows.length === rows.length}
-                    onChange={onSelectAllClick}
+                    indeterminate={resolvedSelectedRows.length > 0 && resolvedSelectedRows.length < rows.length}
+                    checked={rows.length > 0 && resolvedSelectedRows.length === rows.length}
+                    onChange={handleSelectAllClick}
                   />
                 </TableCell>
               )}
@@ -402,7 +430,7 @@ const UnifiedMedicalTable = ({
                         ...(getRowSx ? getRowSx(row, rowIndex) : {})
                       }}
                     >
-                      {selectable && (
+                      {resolvedSelectable && (
                         <TableCell
                           padding="checkbox"
                           sx={{
@@ -412,8 +440,8 @@ const UnifiedMedicalTable = ({
                         >
                           <Checkbox
                             color="primary"
-                            checked={selectedRows.indexOf(rowKey) !== -1}
-                            onChange={(event) => onSelectRow(event, rowKey)}
+                            checked={resolvedSelectedRows.indexOf(rowKey) !== -1}
+                            onChange={(event) => handleSelectRow(event, rowKey)}
                           />
                         </TableCell>
                       )}

@@ -6,7 +6,7 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const API_URL = env.VITE_APP_BASE_NAME || '/';
-  const API_BASE_URL = env.VITE_API_URL || 'http://localhost:8081/api';
+  const DEV_API_TARGET = env.VITE_DEV_API_TARGET || 'http://127.0.0.1:8080';
   const PORT = 3000;
 
   return {
@@ -15,10 +15,16 @@ export default defineConfig(({ mode }) => {
     server: {
       open: false,
       port: PORT,
-      host: true,
+      host: 'localhost',
+      strictPort: true,
+      hmr: {
+        host: 'localhost',
+        protocol: 'ws',
+        clientPort: PORT
+      },
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8081',
+          target: DEV_API_TARGET,
           changeOrigin: true,
           secure: false
         }

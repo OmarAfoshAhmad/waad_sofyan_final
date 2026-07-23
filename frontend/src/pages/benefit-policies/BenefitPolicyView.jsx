@@ -314,7 +314,7 @@ const BenefitPolicyView = () => {
   }, [dialogState.action, activateMutation, suspendMutation, cancelMutation, deleteMutation, closeDialog]);
 
   const handleActivate = () => {
-    openConfirmDialog('activate', 'تفعيل الوثيقة', 'سيتم فحص جاهزية القواعد والأوعية وعدم وجود وثيقة نشطة متداخلة. هل تريد المتابعة؟');
+    openConfirmDialog('activate', 'تفعيل الوثيقة', 'سيتم فحص جاهزية المنافع والمجموعات والسقوف وعدم وجود وثيقة نشطة متداخلة. هل تريد المتابعة؟');
   };
 
   const handleSuspend = () => {
@@ -476,7 +476,7 @@ const BenefitPolicyView = () => {
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
           <Tab icon={<InfoIcon />} iconPosition="start" label="نظرة عامة" />
           <Tab icon={<RuleIcon />} iconPosition="start" label={`قواعد التغطية (${policy?.rulesCount || 0})`} />
-          <Tab icon={<StructureIcon />} iconPosition="start" label="مجموعات المنافع والسقوف" />
+          <Tab icon={<StructureIcon />} iconPosition="start" label="مجموعات المنافع" />
         </Tabs>
       </Box>
 

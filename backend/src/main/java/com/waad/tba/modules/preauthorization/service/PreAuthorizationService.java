@@ -148,15 +148,25 @@ public class PreAuthorizationService {
         log.info("[PRE-AUTH] Pricing item validated: {} ({})", serviceCode, serviceName);
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 4: Get Contract Price directly from pricingItem
+        // STEP 4: Resolve Contract Price by member employer scope
         // ═══════════════════════════════════════════════════════════════════════════
         LocalDate requestDate = dto.getRequestDate() != null ? dto.getRequestDate() : LocalDate.now();
-        BigDecimal contractPrice = pricingItem.getContractPrice();
+        Long memberEmployerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
+        EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
+                dto.getProviderId(), memberEmployerId, serviceCode, requestDate);
+        BigDecimal contractPrice = priceResponse.isHasContract() ? priceResponse.getContractPrice() : null;
+        if (contractPrice == null && pricingItem.getContractPrice() != null) {
+            log.warn("[PRE-AUTH] Effective price lookup did not return a scoped price; falling back to selected pricing item {}",
+                    pricingItem.getId());
+            contractPrice = pricingItem.getContractPrice();
+        }
         if (contractPrice == null) {
             throw new IllegalArgumentException(
                     "ARCHITECTURAL VIOLATION: Pricing item '" + serviceCode + "' has no contract price.");
         }
-        log.info("[PRE-AUTH] Contract price resolved: {} LYD for service {}", contractPrice, serviceCode);
+        log.info("[PRE-AUTH] Contract price resolved: {} LYD for service {}, employerId={}, scope={}, fallback={}",
+                contractPrice, serviceCode, memberEmployerId, priceResponse.getPricingScope(),
+                priceResponse.getUsedGlobalFallback());
 
         // ═══════════════════════════════════════════════════════════════════════════
         // STEP 5: Build PreAuthorization Entity
@@ -187,7 +197,12 @@ public class PreAuthorizationService {
         // FINANCIAL SNAPSHOT: Get coverage percentage at creation time (IMMUTABLE)
         // This ensures audit trail is preserved even if policy rules change later
         // ═══════════════════════════════════════════════════════════════════════════
-        var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForCategory(member, serviceCategoryId);
+        var coverageContext = visit != null
+                && visit.getVisitType() == com.waad.tba.modules.visit.entity.VisitType.INPATIENT
+                        ? com.waad.tba.modules.providercontract.enums.EncounterType.INPATIENT
+                        : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
+        var coverageInfoOpt = benefitPolicyCoverageService.getCoverageForCategory(
+                member, serviceCategoryId, coverageContext, requestDate);
         Integer coveragePercentSnapshot = coverageInfoOpt.map(c -> c.getCoveragePercent()).orElse(null);
         Integer patientCopayPercentSnapshot = coveragePercentSnapshot != null ? (100 - coveragePercentSnapshot) : null;
         log.info("[PRE-AUTH] Coverage snapshot: coverage={}%, copay={}%", coveragePercentSnapshot,
@@ -269,13 +284,19 @@ public class PreAuthorizationService {
                 : null;
 
         // 4. Resolve Contract Price
-        BigDecimal contractPrice = emailPricingItem != null ? emailPricingItem.getContractPrice() : null;
-        if (contractPrice == null && emailServiceCode != null) {
+        Long memberEmployerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
+        BigDecimal contractPrice = null;
+        if (emailServiceCode != null) {
             EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(providerId,
-                    emailServiceCode, LocalDate.now());
+                    memberEmployerId, emailServiceCode, LocalDate.now());
             if (priceResponse.isHasContract()) {
                 contractPrice = priceResponse.getContractPrice();
             }
+        }
+        if (contractPrice == null && emailPricingItem != null) {
+            log.warn("[PRE-AUTH] Effective price lookup did not return a scoped email price; falling back to selected pricing item {}",
+                    emailPricingItem.getId());
+            contractPrice = emailPricingItem.getContractPrice();
         }
         if (contractPrice == null) {
             throw new IllegalArgumentException("Service not in provider's contract");

@@ -15,25 +15,25 @@ public class EmailSettingsController {
     private final EmailSettingsService service;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<EmailSettingsDto> getSettings() {
         return ResponseEntity.ok(service.getActiveSettings());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<EmailSettingsDto> updateSettings(@RequestBody EmailSettingsDto dto) {
         return ResponseEntity.ok(service.updateSettings(dto));
     }
 
     @PostMapping("/test-imap")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Boolean> testImap(@RequestBody EmailSettingsDto dto) {
         return ResponseEntity.ok(service.testImapConnection(dto));
     }
 
     @PostMapping("/test-smtp")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Boolean> testSmtp(@RequestBody EmailSettingsDto dto) {
         return ResponseEntity.ok(service.testSmtpConnection(dto));
     }

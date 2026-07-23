@@ -40,7 +40,7 @@ import { useSnackbar } from 'notistack';
 import { providerApi } from 'services/providerService';
 import preApprovalsService from 'services/api/pre-approvals.service';
 import { visitsService } from 'services/api/visits.service';
-import { providerContractsService } from 'services/api/provider-contracts.service';
+import providerContractsService from 'services/api/provider-contracts.service';
 
 const steps = ['بيانات المستفيد والزيارة', 'البيانات السريرية', 'الخدمات والأسعار', 'المراجعة والإرسال'];
 

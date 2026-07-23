@@ -598,10 +598,12 @@ public class BenefitPolicyService {
             throw new BusinessRuleException("لا يمكن تفعيل الوثيقة قبل إضافة قاعدة تغطية فعالة واحدة على الأقل");
         }
         boolean emptyActiveBucket = benefitLimitBucketRepository.findByPolicyIdOrderByCode(policy.getId()).stream()
-                .anyMatch(bucket -> bucket.isActive() && bucket.getAmountLimit() == null
+                .anyMatch(bucket -> bucket.isActive()
+                        && !bucket.getCode().startsWith("AUTO-GRP-")
+                        && bucket.getAmountLimit() == null
                         && bucket.getTimesLimit() == null && bucket.getDaysLimit() == null);
         if (emptyActiveBucket) {
-            throw new BusinessRuleException("توجد أوعية فعالة بلا أي سقف مالي أو حد مرات أو أيام؛ صححها أو احذفها قبل التفعيل");
+            throw new BusinessRuleException("توجد سياسة سقف متقدمة بلا مبلغ أو حد مرات أو أيام؛ أكملها أو احذفها قبل تفعيل الوثيقة");
         }
     }
 

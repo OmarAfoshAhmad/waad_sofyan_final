@@ -9,7 +9,6 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
-import com.waad.tba.modules.claim.entity.ClaimStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -46,6 +45,7 @@ public class BenefitPolicyRuleService {
     private final BenefitPolicyRuleRepository ruleRepository;
     private final BenefitPolicyRepository policyRepository;
     private final MedicalCategoryRepository categoryRepository;
+    private final CoverageDecisionService coverageDecisionService;
     private final jakarta.persistence.EntityManager em;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -178,30 +178,18 @@ public class BenefitPolicyRuleService {
             Long serviceId,
             Long serviceCategoryId,
             com.waad.tba.modules.providercontract.enums.EncounterType encounterType) {
-        if (serviceCategoryId == null) {
-            return Optional.empty();
-        }
-        MedicalCategory category = categoryRepository.findById(serviceCategoryId).orElse(null);
-        if (category == null || !category.isActive() || category.isDeleted()) {
-            return Optional.empty();
-        }
-        var effectiveContext = encounterType != null
-                ? encounterType
-                : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
-        return ruleRepository.findBestRuleForContext(
-                        policyId,
-                        category.getId(),
-                        category.getParentId(),
-                        effectiveContext,
-                        com.waad.tba.modules.providercontract.enums.EncounterType.ANY)
-                .map(BenefitPolicyRuleResponseDto::fromEntity);
+        return coverageDecisionService.resolve(CoverageDecisionRequest.builder()
+                .policyId(policyId).serviceId(serviceId).serviceCategoryId(serviceCategoryId)
+                .encounterType(encounterType != null ? encounterType
+                        : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT)
+                .serviceDate(java.time.LocalDate.now()).build()).appliedRuleOptional();
     }
 
     /**
      * Check if a service is covered under a policy.
-     * A service is covered if:
-     * 1. There is an explicit rule for it (at service or category level)
-     * 2. OR the policy has a default coverage > 0
+     * A service is covered only when an active rule resolves for its category
+     * and encounter context. Missing rules fail closed; the policy default is a
+     * percentage inherited by an existing rule, never an implicit coverage rule.
      */
     @Transactional(readOnly = true)
     public boolean isServiceCovered(Long policyId, Long serviceId, Long categoryOverrideId) {
@@ -220,17 +208,13 @@ public class BenefitPolicyRuleService {
 
     /**
      * Get coverage percentage for a service under a policy.
-     * Returns policy default if no specific rule exists.
+     * Returns zero when no explicit contextual rule exists (fail closed).
      */
     @Transactional(readOnly = true)
     public int getCoveragePercent(Long policyId, Long serviceId, Long categoryOverrideId) {
         return findCoverageForService(policyId, serviceId, categoryOverrideId)
                 .map(BenefitPolicyRuleResponseDto::getEffectiveCoveragePercent)
-                .orElseGet(() -> {
-                    return policyRepository.findById(policyId)
-                            .map(BenefitPolicy::getDefaultCoveragePercent)
-                            .orElse(0);
-                });
+                .orElse(0);
     }
 
     /**
@@ -274,68 +258,54 @@ public class BenefitPolicyRuleService {
         // Resolve usage rule using the same dual-key logic as coverage lookup:
         // categoryId=context override, serviceCategoryId=service intrinsic category.
         Long resolvedCategoryId = serviceCategoryId != null ? serviceCategoryId : categoryId;
-        Optional<BenefitPolicyRuleResponseDto> ruleOpt = findCoverageForService(policyId, serviceId,
-                resolvedCategoryId, encounterType);
-        if (ruleOpt.isEmpty()) {
+        int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
+        java.time.LocalDate referenceDate = java.time.LocalDate.of(targetYear, 1, 1);
+        var decision = coverageDecisionService.resolve(CoverageDecisionRequest.builder()
+                .policyId(policyId).serviceId(serviceId).serviceCategoryId(resolvedCategoryId)
+                .memberId(memberId).serviceDate(referenceDate).excludeClaimId(excludeClaimId)
+                .encounterType(encounterType).build());
+        if (!decision.covered()) {
             return java.util.Map.of("covered", false);
         }
 
-        BenefitPolicyRuleResponseDto rule = ruleOpt.get();
-        if (rule.getTimesLimit() == null && rule.getAmountLimit() == null) {
-            return java.util.Map.of("covered", true, "hasLimit", false);
+        BenefitPolicyRuleResponseDto rule = decision.appliedRule();
+        var limits = decision.limitsOrEmpty();
+        if (limits.isEmpty()) {
+            return java.util.Map.of("covered", true, "hasLimit", false, "ruleId", rule.getId());
         }
 
-        int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
-
-        List<Long> allCategoryIds = new java.util.ArrayList<>();
-        if (rule.getMedicalCategoryId() != null) {
-            allCategoryIds.add(rule.getMedicalCategoryId());
-            collectAllChildCategoryIds(rule.getMedicalCategoryId(), allCategoryIds);
-        }
-
-        // All rules are category-level since V228.
-        // Use COALESCE for backward-compat with old claim lines.
-        // Authoritative: Sum (approvedUnitPrice * approvedQuantity) to match settlement
-        // logic.
-        String q = "SELECT COUNT(DISTINCT c.id), SUM(cl.approvedUnitPrice * cl.approvedQuantity) " +
-                "FROM ClaimLine cl JOIN cl.claim c " +
-                "WHERE c.member.id = :memberId " +
-                "AND COALESCE(cl.appliedCategoryId, cl.serviceCategoryId) IN :catIds " +
-                "AND c.status NOT IN :excludeStatuses " +
-                "AND c.active = true " +
-                (excludeClaimId != null ? "AND c.id <> :excludeClaimId " : "") +
-                "AND YEAR(c.serviceDate) = :year";
-
-        var query = em.createQuery(q)
-                .setParameter("memberId", memberId)
-                .setParameter("catIds", allCategoryIds)
-                .setParameter("excludeStatuses", java.util.List.of(ClaimStatus.REJECTED))
-                .setParameter("year", targetYear);
-
-        if (excludeClaimId != null) {
-            query.setParameter("excludeClaimId", excludeClaimId);
-        }
-
-        Object[] result = (Object[]) query.getSingleResult();
-        long usedCount = result[0] != null ? ((Number) result[0]).longValue() : 0;
-        java.math.BigDecimal usedAmount = result[1] != null ? (java.math.BigDecimal) result[1]
-                : java.math.BigDecimal.ZERO;
-
-        boolean timesExceeded = rule.getTimesLimit() != null && usedCount >= rule.getTimesLimit();
-        boolean amountExceeded = rule.getAmountLimit() != null && usedAmount.compareTo(rule.getAmountLimit()) >= 0;
+        var amountLimit = limits.stream().filter(limit -> limit.amountLimit() != null)
+                .min(java.util.Comparator.comparing(CoverageLimitSnapshot::amountLimit))
+                .orElse(null);
+        var timesLimit = limits.stream().filter(limit -> limit.timesLimit() != null)
+                .min(java.util.Comparator.comparing(CoverageLimitSnapshot::timesLimit))
+                .orElse(null);
+        var daysLimit = limits.stream().filter(limit -> limit.daysLimit() != null)
+                .min(java.util.Comparator.comparing(CoverageLimitSnapshot::daysLimit))
+                .orElse(null);
+        boolean amountExceeded = limits.stream().anyMatch(limit -> limit.amountLimit() != null
+                && limit.usedAmount().compareTo(limit.amountLimit()) >= 0);
+        boolean timesExceeded = limits.stream().anyMatch(limit -> limit.timesLimit() != null
+                && limit.usedTimes() >= limit.timesLimit());
+        boolean daysExceeded = limits.stream().anyMatch(limit -> limit.daysLimit() != null
+                && limit.usedDays() >= limit.daysLimit());
 
         java.util.Map<String, Object> usageMap = new java.util.HashMap<>();
         usageMap.put("covered", true);
         usageMap.put("hasLimit", true);
         usageMap.put("ruleId", rule.getId());
         usageMap.put("medicalCategoryId", rule.getMedicalCategoryId());
-        usageMap.put("timesLimit", rule.getTimesLimit());
-        usageMap.put("amountLimit", rule.getAmountLimit());
-        usageMap.put("usedCount", usedCount);
-        usageMap.put("usedAmount", usedAmount);
-        usageMap.put("exceeded", timesExceeded || amountExceeded);
+        usageMap.put("timesLimit", timesLimit == null ? null : timesLimit.timesLimit());
+        usageMap.put("amountLimit", amountLimit == null ? null : amountLimit.amountLimit());
+        usageMap.put("daysLimit", daysLimit == null ? null : daysLimit.daysLimit());
+        usageMap.put("usedCount", timesLimit == null ? 0 : timesLimit.usedTimes());
+        usageMap.put("usedAmount", amountLimit == null ? java.math.BigDecimal.ZERO : amountLimit.usedAmount());
+        usageMap.put("usedDays", daysLimit == null ? 0 : daysLimit.usedDays());
+        usageMap.put("exceeded", timesExceeded || amountExceeded || daysExceeded);
         usageMap.put("timesExceeded", timesExceeded);
         usageMap.put("amountExceeded", amountExceeded);
+        usageMap.put("daysExceeded", daysExceeded);
+        usageMap.put("limits", limits);
         return usageMap;
     }
 
@@ -817,8 +787,8 @@ public class BenefitPolicyRuleService {
         if (!ruleRepository.existsById(ruleId)) {
             throw new ResourceNotFoundException("Rule", "id", ruleId);
         }
-        ruleRepository.deleteById(ruleId);
-        log.info("Hard deleted rule {}", ruleId);
+        throw new BusinessRuleException(
+                "الحذف النهائي لقواعد التغطية معطل لحماية السجل المالي. استخدم الأرشفة (الحذف الناعم) بدلاً منه.");
     }
 
     /**
@@ -826,8 +796,8 @@ public class BenefitPolicyRuleService {
      */
     public void deleteAllForPolicy(Long policyId) {
         validatePolicyExists(policyId);
-        ruleRepository.deleteByBenefitPolicyId(policyId);
-        log.info("Deleted all rules for policy {}", policyId);
+        throw new BusinessRuleException(
+                "الحذف الجماعي النهائي لقواعد التغطية معطل لحماية السجل المالي. استخدم التعطيل أو الأرشفة.");
     }
 
     /**

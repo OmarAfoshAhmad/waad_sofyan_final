@@ -263,6 +263,12 @@ const ProviderContractsList = () => {
         sortable: false
       },
       {
+        id: 'pricingScope',
+        label: 'نطاق العقد',
+        minWidth: '12rem',
+        sortable: false
+      },
+      {
         id: 'status',
         label: 'الحالة',
         minWidth: '7.5rem',
@@ -348,6 +354,23 @@ const ProviderContractsList = () => {
               )}
             </Stack>
           );
+
+        case 'pricingScope': {
+          const isEmployerSpecific = contract.pricingScope === 'EMPLOYER_SPECIFIC';
+          return (
+            <Stack spacing={0.5} alignItems="flex-start">
+              <Chip
+                label={contract.pricingScopeLabel || (isEmployerSpecific ? 'خاص بجهة عمل' : 'عام')}
+                size="small"
+                color={isEmployerSpecific ? 'secondary' : 'default'}
+                variant={isEmployerSpecific ? 'filled' : 'outlined'}
+              />
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 180 }}>
+                {isEmployerSpecific ? contract.employer?.name || '-' : 'يستخدم كـ fallback عام'}
+              </Typography>
+            </Stack>
+          );
+        }
 
         case 'status':
           const config = CONTRACT_STATUS_CONFIG[contract.status] || { label: contract.status, color: 'default' };

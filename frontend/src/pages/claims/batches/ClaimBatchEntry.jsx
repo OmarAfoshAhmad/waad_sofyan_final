@@ -97,6 +97,7 @@ import axiosClient from 'utils/axios';
 
 import { useCalculationLogic } from './hooks/useCalculationLogic';
 import { useCoverageLogic } from './hooks/useCoverageLogic';
+import { failedCoverageResult } from './hooks/coverageContract.mjs';
 
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
 import { ClaimLineRow } from './components/ClaimLineRow';
@@ -220,6 +221,8 @@ export default function ClaimBatchEntry() {
   const [page, setPage] = useState(0);
   const [attachments, setAttachments] = useState([]);
   const [editingClaimId, setEditingClaimId] = useState(initialClaimId);
+  const [editHydrationVersion, setEditHydrationVersion] = useState(0);
+  const [editCoverageLoading, setEditCoverageLoading] = useState(!!initialClaimId);
   const [preAuthId, setPreAuthId] = useState('');
   const [preAuthSearch, setPreAuthSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -307,13 +310,11 @@ export default function ClaimBatchEntry() {
   }, [medicalCategories]);
 
   // ── المنطق المالي وتغطية الخدمات (المرحلة 3: Hooks المستخرجة) ─────────────────
-  const { recompute } = useCalculationLogic({ applyBenefits, policyInfo });
+  const { recompute } = useCalculationLogic();
 
   const { fetchCoverage, refetchAllLinesCoverage } = useCoverageLogic({
     policyId,
-    policyInfo,
     member,
-    applyBenefits,
     medicalCategories,
     encounterType,
     setLines,
@@ -329,6 +330,7 @@ export default function ClaimBatchEntry() {
     async (newEncounterType, newFullCoverage) => {
       const updated = await refetchAllLinesCoverage(newEncounterType, linesRef.current, newFullCoverage);
       if (updated) setLines(updated);
+      return updated;
     },
     [refetchAllLinesCoverage]
   );
@@ -672,6 +674,7 @@ export default function ClaimBatchEntry() {
 
   useEffect(() => {
     if (editingClaim) {
+      setEditCoverageLoading(true);
       setMember({ id: editingClaim.memberId, fullName: editingClaim.memberName, cardNumber: editingClaim.memberNationalNumber });
       setDiagnosis(editingClaim.diagnosisDescription || editingClaim.diagnosisCode || '');
       setComplaint(editingClaim.complaint || '');
@@ -696,9 +699,13 @@ export default function ClaimBatchEntry() {
           const enteredPrice = l.requestedUnitPrice != null ? parseFloat(l.requestedUnitPrice) || 0 : parseFloat(l.unitPrice) || 0;
 
           const serviceObj = svc || {
+            pricingItemId: l.pricingItemId || null,
+            medicalServiceId: l.medicalServiceId || null,
             serviceCode: lineCode,
             serviceName: lineName,
             categoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
+            serviceCategoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
+            serviceCategoryName: l.appliedCategoryName ?? l.serviceCategoryName ?? null,
             label: `${lineCode ? '[' + lineCode + '] ' : ''}${lineName || ''}`
           };
           const line = {
@@ -706,10 +713,26 @@ export default function ClaimBatchEntry() {
               l.id ||
               (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15)),
             service: serviceObj,
-            quantity: l.quantity,
+            medicalServiceId: l.medicalServiceId || serviceObj.medicalServiceId || null,
+            pricingItemId: l.pricingItemId || serviceObj.pricingItemId || null,
+            serviceName: lineName || serviceObj.serviceName || '',
+            serviceCode: lineCode || serviceObj.serviceCode || '',
+            serviceCategoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? serviceObj.serviceCategoryId ?? null,
+            serviceCategoryName: l.appliedCategoryName ?? l.serviceCategoryName ?? serviceObj.serviceCategoryName ?? null,
+            quantity: l.quantity ?? l.requestedQuantity ?? l.approvedQuantity ?? 1,
             unitPrice: enteredPrice,
             contractPrice: cp,
             coveragePercent: l.coveragePercent,
+            usageDetails:
+              Number(l.benefitLimit) > 0 || Number(l.timesLimit) > 0
+                ? {
+                    amountLimit: Number(l.benefitLimit) > 0 ? Number(l.benefitLimit) : null,
+                    timesLimit: Number(l.timesLimit) > 0 ? Number(l.timesLimit) : null,
+                    usedAmount: Number(l.usedAmount || 0),
+                    remainingAmount: l.remainingAmount != null ? Number(l.remainingAmount) : null,
+                    exceeded: false
+                  }
+                : null,
             rejected: l.rejected,
             rejectionReason: l.rejectionReason,
             manualRefusedAmount: parseFloat(l.manualRefusedAmount) || 0,
@@ -723,14 +746,9 @@ export default function ClaimBatchEntry() {
       setEncounterType(editingClaim.encounterType || 'OUTPATIENT');
       setFullCoverage(!!editingClaim.fullCoverage);
       setIsDirty(false);
-
-      // المرحلة 1.3: إعادة جلب التغطية والسقوف للمطالبة المحملة لضمان دقة العرض
-      // يستخدم الـ ref لضمان استخدام النسخة الأحدث دائماً (تجنّب stale closure)
-      if (policyId && editingClaim.memberId) {
-        setTimeout(() => {
-          refetchCoverageOnEditRef.current(editingClaim.encounterType || 'OUTPATIENT');
-        }, 300);
-      }
+      // Signal that edit fields and lines were committed. One dedicated effect
+      // recalculates coverage after policy/member are ready as well.
+      setEditHydrationVersion((version) => version + 1);
     }
   }, [editingClaim, defaultDate, contractedRaw]);
 
@@ -909,13 +927,33 @@ export default function ClaimBatchEntry() {
     const mapped = items.map((s) => {
       const code = s.serviceCode || s.code || '';
       const name = s.serviceName || s.name || '';
-      const normalizedCategoryId = s.categoryId ?? s.medicalCategoryId ?? s.medicalCategory?.id ?? null;
+      const normalizedCategoryId =
+        s.categoryId ??
+        s.serviceCategoryId ??
+        s.medicalCategoryId ??
+        s.medicalCategory?.id ??
+        s.effectiveCategory?.id ??
+        null;
+      const normalizedCategoryName =
+        s.categoryName ??
+        s.serviceCategoryName ??
+        s.medicalCategoryName ??
+        s.medicalCategory?.nameAr ??
+        s.medicalCategory?.name ??
+        s.effectiveCategory?.nameAr ??
+        s.effectiveCategory?.name ??
+        null;
       return {
         ...s,
         label: `${code ? '[' + code + '] ' : ''}${name}`,
         serviceName: name,
         serviceCode: code,
         categoryId: normalizedCategoryId,
+        serviceCategoryId: normalizedCategoryId,
+        medicalCategoryId: normalizedCategoryId,
+        categoryName: normalizedCategoryName,
+        serviceCategoryName: normalizedCategoryName,
+        medicalCategoryName: normalizedCategoryName,
         pricingItemId: s.pricingItemId,
         contractPrice: s.contractPrice || 0
       };
@@ -958,15 +996,22 @@ export default function ClaimBatchEntry() {
 
   const updateLine = useCallback(
     (idx, patch) => {
+      const affectsCoverage =
+        patch.coveragePending !== false &&
+        ['quantity', 'unitPrice', 'rejected', 'manualRefusedAmount'].some((key) => key in patch);
       setLines((prev) => {
         const n = [...prev];
-        n[idx] = { ...n[idx], ...patch };
+        n[idx] = {
+          ...n[idx],
+          ...patch,
+          ...(affectsCoverage ? { coveragePending: true } : {})
+        };
         return n.map((line, i) => recompute(line, i, n));
       });
       setIsDirty(true);
 
       // Re-fetch coverage from backend when quantity or price changes (affects usageDetails)
-      const needsBackendRefresh = 'quantity' in patch || 'unitPrice' in patch;
+      const needsBackendRefresh = affectsCoverage;
       if (needsBackendRefresh && policyId && member?.id) {
         if (coverageRefetchTimerRef.current) clearTimeout(coverageRefetchTimerRef.current);
         coverageRefetchTimerRef.current = setTimeout(() => {
@@ -1011,7 +1056,7 @@ export default function ClaimBatchEntry() {
         return;
       }
 
-      let cov = { coveragePercent: policyInfo?.defaultCoveragePercent ?? 100, requiresPreApproval: false, notCovered: false };
+      let cov = failedCoverageResult('الخدمة النصية غير مرتبطة بخدمة معتمدة ولا يمكن احتساب تغطيتها');
       if (!isFreeText) {
         cov = await fetchCoverage(svc, encounterType);
         if (cov?.__stale) {
@@ -1020,20 +1065,43 @@ export default function ClaimBatchEntry() {
       }
 
       const price = svc?.contractPrice ?? 0;
+      const resolvedCategoryId =
+        svc.categoryId ??
+        svc.serviceCategoryId ??
+        svc.medicalCategoryId ??
+        svc.medicalCategory?.id ??
+        svc.effectiveCategory?.id ??
+        null;
+      const resolvedCategoryName =
+        svc.categoryName ??
+        svc.serviceCategoryName ??
+        svc.medicalCategoryName ??
+        svc.medicalCategory?.nameAr ??
+        svc.medicalCategory?.name ??
+        svc.effectiveCategory?.nameAr ??
+        svc.effectiveCategory?.name ??
+        null;
       updateLine(idx, {
         service: svc,
+        medicalServiceId: svc.medicalServiceId || null,
+        pricingItemId: svc.pricingItemId || null,
         serviceName: svc.serviceName || (typeof val === 'string' ? val : ''),
         serviceCode: svc.serviceCode || '',
+        medicalCategoryId: resolvedCategoryId,
+        medicalCategoryName: resolvedCategoryName,
+        serviceCategoryId: resolvedCategoryId,
+        serviceCategoryName: resolvedCategoryName,
         unitPrice: price,
         contractPrice: price,
         ...cov
       });
     },
-    [fetchCoverage, updateLine, lines, enqueueSnackbar, encounterType, policyInfo]
+    [fetchCoverage, updateLine, lines, enqueueSnackbar, encounterType]
   );
 
   useEffect(() => {
     if (!policyId || !member?.id) return;
+    if (editingClaimId) return;
 
     // Force refetch usage/limits for ALL lines when member or policy changes
     refetchAllLinesCoverage(encounterType, linesRef.current).then((updated) => {
@@ -1042,16 +1110,21 @@ export default function ClaimBatchEntry() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [policyId, member?.id, encounterType]);
 
-  // ✅ FIX: Refetch coverage when editing a DIFFERENT claim of the SAME member
-  // The member useEffect above won't fire if member?.id didn't change, so we need this
+  // Edit hydration barrier: run only after claim, policy, member, context, date
+  // and mapped lines have all reached committed React state.
   useEffect(() => {
-    if (!editingClaimId || !policyId || !member?.id) return;
-    const timer = setTimeout(() => {
-      refetchCoverageOnEditRef.current(encounterType);
-    }, 350);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingClaimId]);
+    if (!editingClaimId || !editHydrationVersion || !policyId || !member?.id) return;
+    if (!linesRef.current.some((line) => line.service)) return;
+
+    let active = true;
+    setEditCoverageLoading(true);
+    Promise.resolve(refetchCoverageOnEditRef.current(encounterType, fullCoverage)).finally(() => {
+      if (active) setEditCoverageLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [editingClaimId, editHydrationVersion, policyId, member?.id, encounterType, serviceDate, fullCoverage]);
 
   const addLine = useCallback(() => {
     setLines((p) => [...p, newLine()]);
@@ -1087,11 +1160,13 @@ export default function ClaimBatchEntry() {
     setServiceDate(defaultDate);
     setPreAuthId('');
     setEncounterType('OUTPATIENT');
+    setFullCoverage(false);
     setIsClaimRejected(false);
     setRejectionInput('');
     setAttachments([]);
     // FIX: resetForm must also clear the editing state
     setEditingClaimId(null);
+    setEditCoverageLoading(false);
     setTimeout(() => memberRef.current?.focus(), 120);
   }, [defaultDate]);
 
@@ -1273,6 +1348,14 @@ export default function ClaimBatchEntry() {
       return;
     }
 
+    if (!isClaimRejected && lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)) {
+      enqueueSnackbar('لا يمكن الحفظ أثناء انتظار قرار محرك التغطية. انتظر اكتمال تحديث جميع البنود.', {
+        variant: 'warning',
+        autoHideDuration: 5000
+      });
+      return;
+    }
+
     setShowValidationErrors(false);
 
     // تحققات إضافية لأسعار الخدمات
@@ -1353,10 +1436,29 @@ export default function ClaimBatchEntry() {
         preAuthorizationId: preAuthId ? parseInt(preAuthId) : null,
         encounterType,
         fullCoverage: fullCoverage,
-        lines: lines.map((l) => ({
-          pricingItemId: l.service?.pricingItemId || null,
+        // لا ترسل صفوف الإدخال الفارغة التي يضيفها المستخدم ولم يختر لها خدمة.
+        // التحقق أعلاه يعتمد activeLines، ويجب أن يستخدم الحفظ المصدر نفسه حتى
+        // لا تصل أسطر بلا medicalServiceId أو pricingItemId إلى الخادم.
+        lines: activeLines.map((l) => ({
+          id: typeof l.id === 'number' ? l.id : null,
+          medicalServiceId: l.medicalServiceId ?? l.service?.medicalServiceId ?? null,
+          pricingItemId: l.pricingItemId ?? l.service?.pricingItemId ?? null,
           serviceName: l.serviceName || l.service?.serviceName || '',
           serviceCode: l.serviceCode || l.service?.serviceCode || '',
+          serviceCategoryId:
+            l.serviceCategoryId ??
+            l.medicalCategoryId ??
+            l.service?.serviceCategoryId ??
+            l.service?.categoryId ??
+            l.service?.medicalCategoryId ??
+            null,
+          serviceCategoryName:
+            l.serviceCategoryName ??
+            l.medicalCategoryName ??
+            l.service?.serviceCategoryName ??
+            l.service?.categoryName ??
+            l.service?.medicalCategoryName ??
+            null,
           quantity: parseInt(l.quantity) || 1,
           unitPrice: parseFloat(l.unitPrice) || 0,
           refusedAmount: parseFloat(l.refusedAmount) || 0,
@@ -1698,6 +1800,8 @@ export default function ClaimBatchEntry() {
                 setServiceDate={setServiceDate}
                 setIsDirty={setIsDirty}
                 financialSummary={memberFinancialSummary}
+                currentCompanyCommitment={totals.company}
+                editingApprovedAmount={editingClaim?.approvedAmount || 0}
                 loadingSummary={loadingSummary}
                 t={t}
                 showValidationErrors={showValidationErrors}
@@ -1752,7 +1856,7 @@ export default function ClaimBatchEntry() {
                     <ListItemIcon>
                       <Checkbox checked={visibleColumns.remainingLimit} size="small" />
                     </ListItemIcon>
-                    <ListItemText primary="المتبقي" />
+                    <ListItemText primary="المتبقي من السقف" />
                   </MenuItem>
                   <MenuItem onClick={() => handleToggleColumn('refused')}>
                     <ListItemIcon>
@@ -1778,7 +1882,80 @@ export default function ClaimBatchEntry() {
               </Box>
             </Box>
 
-            <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
+            <Box
+              sx={{
+                position: 'relative',
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              {editCoverageLoading && (
+              <Box
+                role="status"
+                aria-live="polite"
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: alpha(theme.palette.background.paper, 0.94),
+                  backdropFilter: 'blur(1px)'
+                }}
+              >
+                <Stack spacing={1.25} alignItems="center">
+                  <CircularProgress size={30} thickness={4} />
+                  <Typography variant="subtitle2" fontWeight={700} color="text.primary">
+                    جارٍ تجهيز الحساب المالي للمطالبة
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    يتم تحديث التغطية والسقوف والأرصدة قبل عرض البنود
+                  </Typography>
+                </Stack>
+              </Box>
+              )}
+
+              <Box
+                aria-hidden={editCoverageLoading ? 'true' : undefined}
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  opacity: editCoverageLoading ? 0 : 1,
+                  pointerEvents: editCoverageLoading ? 'none' : 'auto',
+                  transition: 'opacity 120ms ease-out'
+                }}
+              >
+                {!editCoverageLoading && lines.some((line) => line.coveragePending && !line.rejected) && (
+                  <Alert
+                    severity="info"
+                    role="status"
+                    aria-live="polite"
+                    sx={{
+                      position: 'absolute',
+                      top: 8,
+                      left: 12,
+                      zIndex: 4,
+                      width: 'auto',
+                      maxWidth: 'min(28rem, calc(100% - 24px))',
+                      py: 0,
+                      px: 0.75,
+                      borderRadius: 1.5,
+                      boxShadow: 2,
+                      bgcolor: alpha(theme.palette.info.light, 0.96),
+                      pointerEvents: 'none',
+                      '& .MuiAlert-icon': { py: 0.5, mr: 0.75 },
+                      '& .MuiAlert-message': { py: 0.5, fontSize: '0.75rem', whiteSpace: 'nowrap' }
+                    }}
+                  >
+                    جارٍ تحديث الحساب المالي…
+                  </Alert>
+                )}
+                <TableContainer dir="rtl" sx={{ flex: 1, overflow: 'auto' }}>
               <Table
                 dir="rtl"
                 size="small"
@@ -1878,14 +2055,15 @@ export default function ClaimBatchEntry() {
                   </TableRow>
                 </TableBody>
               </Table>
-            </TableContainer>
+                </TableContainer>
 
-            {/* ── ذيل المطالبة والمجاميع (مكون منفصل) ── */}
-            <ClaimTotalsFooter
+                {/* ── ذيل المطالبة والمجاميع (مكون منفصل) ── */}
+                <ClaimTotalsFooter
               isClaimRejected={isClaimRejected}
               handleSave={handleSave}
               saving={saving}
               isDirty={isDirty}
+              coveragePending={lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)}
               setIsClaimRejected={setIsClaimRejected}
               setIsDirty={setIsDirty}
               setRejectionInput={setRejectionInput}
@@ -1895,7 +2073,9 @@ export default function ClaimBatchEntry() {
               lines={lines}
               t={t}
               visibleColumns={visibleColumns}
-            />
+                />
+              </Box>
+            </Box>
           </Paper>
         </Box>
       </Box>

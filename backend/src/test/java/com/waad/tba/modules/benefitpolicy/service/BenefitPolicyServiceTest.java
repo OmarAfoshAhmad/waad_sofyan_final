@@ -24,8 +24,11 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyCreateDto;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyResponseDto;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
@@ -39,6 +42,10 @@ class BenefitPolicyServiceTest {
     private EmployerRepository employerRepository;
     @Mock
     private MemberRepository memberRepository;
+    @Mock
+    private BenefitPolicyRuleRepository benefitPolicyRuleRepository;
+    @Mock
+    private BenefitLimitBucketRepository benefitLimitBucketRepository;
 
     @InjectMocks
     private BenefitPolicyService benefitPolicyService;
@@ -111,7 +118,7 @@ class BenefitPolicyServiceTest {
     }
 
     @Test
-    void create_overlappingActivePolicy_shouldThrowException() {
+    void create_activePolicy_shouldRequireDraftFirst() {
         // Arrange
         BenefitPolicyCreateDto dto = BenefitPolicyCreateDto.builder()
                 .name("Active Policy")
@@ -122,13 +129,11 @@ class BenefitPolicyServiceTest {
                 .build();
 
         when(employerRepository.findById(1L)).thenReturn(Optional.of(employer));
-        when(benefitPolicyRepository.existsOverlappingActivePolicyNew(eq(1L), any(), any()))
-                .thenReturn(true);
 
         // Act & Assert
         assertThatThrownBy(() -> benefitPolicyService.create(dto))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("يوجد بالفعل وثيقة تأمين فعالة");
+                .hasMessageContaining("يجب إنشاء وثيقة التغطية كمسودة");
     }
 
     @Test
@@ -137,6 +142,10 @@ class BenefitPolicyServiceTest {
         when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
         when(benefitPolicyRepository.existsOverlappingActivePolicy(eq(1L), any(), any(), eq(10L)))
                 .thenReturn(false);
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L))
+                .thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L))
+                .thenReturn(java.util.List.of());
         when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenReturn(policy);
 
         // Act
@@ -145,6 +154,32 @@ class BenefitPolicyServiceTest {
         // Assert
         assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.ACTIVE);
         verify(benefitPolicyRepository).save(policy);
+    }
+
+    @Test
+    void activate_groupWithoutLimit_shouldBeAllowedForOrganizationalGroup() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(benefitPolicyRepository.existsOverlappingActivePolicy(eq(1L), any(), any(), eq(10L))).thenReturn(false);
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L)).thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L)).thenReturn(java.util.List.of(
+                BenefitLimitBucket.builder().code("AUTO-GRP-GRP-0001").active(true).build()));
+        when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenReturn(policy);
+
+        benefitPolicyService.activate(10L);
+
+        assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.ACTIVE);
+    }
+
+    @Test
+    void activate_emptyAdvancedLimit_shouldBeRejectedWithUserFacingMessage() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(10L)).thenReturn(1L);
+        when(benefitLimitBucketRepository.findByPolicyIdOrderByCode(10L)).thenReturn(java.util.List.of(
+                BenefitLimitBucket.builder().code("ADVANCED-001").active(true).build()));
+
+        assertThatThrownBy(() -> benefitPolicyService.activate(10L))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("سياسة سقف متقدمة");
     }
 
     @Test

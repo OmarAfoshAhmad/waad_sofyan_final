@@ -207,7 +207,9 @@ class CostCalculationServiceTest {
         Map<Long, Integer> coverageMap = new HashMap<>();
         coverageMap.put(101L, 90); // 10% copay
         coverageMap.put(102L, 70); // 30% copay
-        when(benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(any(), anyList())).thenReturn(coverageMap);
+        when(benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(
+                any(), anyList(), eq(com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT), isNull()))
+                .thenReturn(coverageMap);
 
         // Act
         CostCalculationService.CostBreakdown result = costCalculationService.calculateCosts(testClaim);

@@ -29,12 +29,18 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 
 import { createProviderContract, PRICING_MODEL_CONFIG } from 'services/api/provider-contracts.service';
 import { getProviderSelector } from 'services/api/providers.service';
+import { getEmployerSelectors } from 'services/api/employers.service';
 
 const PRICING_MODELS = [
   { value: 'DISCOUNT', label: PRICING_MODEL_CONFIG.DISCOUNT.label },
   { value: 'FIXED', label: PRICING_MODEL_CONFIG.FIXED.label },
   { value: 'TIERED', label: PRICING_MODEL_CONFIG.TIERED.label },
   { value: 'NEGOTIATED', label: PRICING_MODEL_CONFIG.NEGOTIATED.label }
+];
+
+const PRICING_SCOPES = [
+  { value: 'GLOBAL', label: 'عقد عام لكل جهات العمل' },
+  { value: 'EMPLOYER_SPECIFIC', label: 'عقد خاص بجهة عمل' }
 ];
 
 const ProviderContractCreate = () => {
@@ -44,10 +50,13 @@ const ProviderContractCreate = () => {
 
   const [errors, setErrors] = useState({});
   const [selectedProvider, setSelectedProvider] = useState(null);
+  const [selectedEmployer, setSelectedEmployer] = useState(null);
   const [autoContractCode, setAutoContractCode] = useState('AUTO-GENERATED');
 
   const [formData, setFormData] = useState({
     providerId: '',
+    pricingScope: 'GLOBAL',
+    employerId: '',
     startDate: new Date(),
     endDate: addYears(new Date(), 1),
     pricingModel: 'DISCOUNT',
@@ -69,6 +78,16 @@ const ProviderContractCreate = () => {
   const providers = useMemo(() => {
     return Array.isArray(providersResponse) ? providersResponse : providersResponse?.data || [];
   }, [providersResponse]);
+
+  const { data: employersResponse, isLoading: employersLoading } = useQuery({
+    queryKey: ['employers', 'selectors'],
+    queryFn: getEmployerSelectors,
+    staleTime: 5 * 60 * 1000
+  });
+
+  const employers = useMemo(() => {
+    return Array.isArray(employersResponse) ? employersResponse : employersResponse?.data || [];
+  }, [employersResponse]);
 
   useEffect(() => {
     if (!selectedProvider || !formData.startDate) {
@@ -123,10 +142,33 @@ const ProviderContractCreate = () => {
     }
   };
 
+  const handleEmployerChange = (_, value) => {
+    setSelectedEmployer(value);
+    setFormData((prev) => ({ ...prev, employerId: value?.id || '' }));
+    if (errors.employerId) {
+      setErrors((prev) => ({ ...prev, employerId: '' }));
+    }
+  };
+
+  const handleScopeChange = (event) => {
+    const pricingScope = event.target.value;
+    setSelectedEmployer(null);
+    setFormData((prev) => ({
+      ...prev,
+      pricingScope,
+      employerId: ''
+    }));
+    setErrors((prev) => ({ ...prev, pricingScope: '', employerId: '' }));
+  };
+
   const validate = () => {
     const nextErrors = {};
 
     if (!formData.providerId) nextErrors.providerId = 'يرجى اختيار مقدم خدمة';
+    if (!formData.pricingScope) nextErrors.pricingScope = 'يرجى اختيار نطاق التسعير';
+    if (formData.pricingScope === 'EMPLOYER_SPECIFIC' && !formData.employerId) {
+      nextErrors.employerId = 'يرجى اختيار جهة العمل لهذا العقد';
+    }
     if (!formData.startDate) nextErrors.startDate = 'تاريخ البداية مطلوب';
     if (!formData.endDate) nextErrors.endDate = 'تاريخ النهاية مطلوب';
 
@@ -154,6 +196,8 @@ const ProviderContractCreate = () => {
     const payload = {
       providerId: formData.providerId,
       contractCode: autoContractCode,
+      pricingScope: formData.pricingScope,
+      employerId: formData.pricingScope === 'EMPLOYER_SPECIFIC' ? formData.employerId : null,
       startDate: format(formData.startDate, 'yyyy-MM-dd'),
       endDate: format(formData.endDate, 'yyyy-MM-dd'),
       pricingModel: formData.pricingModel,
@@ -215,6 +259,49 @@ const ProviderContractCreate = () => {
 
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField fullWidth label="الحالة" value="DRAFT" disabled helperText="سيتم إنشاء العقد كمسودة" />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TextField
+                select
+                fullWidth
+                label="نطاق التسعير *"
+                value={formData.pricingScope}
+                onChange={handleScopeChange}
+                error={!!errors.pricingScope}
+                helperText={errors.pricingScope || 'حدد هل الأسعار عامة أو خاصة بجهة عمل'}
+              >
+                {PRICING_SCOPES.map((scope) => (
+                  <MenuItem key={scope.value} value={scope.value}>
+                    {scope.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 8 }}>
+              <Autocomplete
+                fullWidth
+                options={employers}
+                value={selectedEmployer}
+                onChange={handleEmployerChange}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
+                getOptionLabel={(option) => option?.name || option?.label || option?.nameAr || ''}
+                loading={employersLoading}
+                disabled={formData.pricingScope !== 'EMPLOYER_SPECIFIC' || employersLoading || createMutation.isPending}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="جهة العمل"
+                    error={!!errors.employerId}
+                    helperText={
+                      errors.employerId ||
+                      (formData.pricingScope === 'GLOBAL' ? 'غير مطلوب للعقد العام' : 'اختر الجهة التي تسري عليها هذه الأسعار')
+                    }
+                  />
+                )}
+                noOptionsText={employersLoading ? 'جاري التحميل...' : 'لا توجد جهات عمل'}
+              />
             </Grid>
 
             <Grid size={{ xs: 12, md: 3 }}>

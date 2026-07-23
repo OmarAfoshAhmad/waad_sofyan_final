@@ -176,11 +176,35 @@ public class Claim {
     @Builder.Default
     private ClaimStatus status = ClaimStatus.DRAFT;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "submission_source", length = 30, nullable = false)
+    @Builder.Default
+    private ClaimSubmissionSource submissionSource = ClaimSubmissionSource.INTERNAL_DIRECT;
+
     @Column(name = "reviewer_comment", columnDefinition = "TEXT")
     private String reviewerComment;
 
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
+
+    @Column(name = "reviewed_by_id")
+    private Long reviewedById;
+
+    @Column(name = "reviewed_by", length = 255)
+    private String reviewedBy;
+
+    @Column(name = "review_paused", nullable = false)
+    @Builder.Default
+    private Boolean reviewPaused = false;
+
+    @Column(name = "review_pause_reason", length = 1000)
+    private String reviewPauseReason;
+
+    @Column(name = "review_paused_at")
+    private LocalDateTime reviewPausedAt;
+
+    @Column(name = "review_paused_by", length = 150)
+    private String reviewPausedBy;
 
     // ==================== COVERAGE CONTEXT (PHASE: DYNAMIC BENEFITS)
     // ====================
@@ -406,14 +430,12 @@ public class Claim {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
         validateArchitecturalRules();
-        calculateFields();
         validateBusinessRules();
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
-        calculateFields();
         validateBusinessRules();
     }
 
@@ -489,141 +511,21 @@ public class Claim {
         }
     }
 
-    private void calculateFields() {
-        // 1. Always recalculate base amounts from lines if present
-        if (lines != null && !lines.isEmpty()) {
-            // Gross Requested Amount
-            this.requestedAmount = lines.stream()
-                    .map(line -> {
-                        BigDecimal rPrice = line.getRequestedUnitPrice() != null ? line.getRequestedUnitPrice() : line.getUnitPrice();
-                        return rPrice != null ? rPrice.multiply(BigDecimal.valueOf(line.getQuantity())) : BigDecimal.ZERO;
-                    })
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            // Refused Amount (from each line's stored refusedAmount, set by ClaimMapper)
-            // Option 2: For rejected lines, refusedAmount = providerShare only (not full gross)
-            // The patientShare is kept separately as patient's responsibility.
-            this.refusedAmount = lines.stream()
-                    .map(line -> line.getRefusedAmount() != null ? line.getRefusedAmount() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        } else {
-            if (this.requestedAmount == null) this.requestedAmount = BigDecimal.ZERO;
-            if (this.refusedAmount == null) this.refusedAmount = BigDecimal.ZERO;
-        }
-
-        // 2. Status-Specific Resolution
-        if (status == ClaimStatus.REJECTED) {
-            this.approvedAmount = BigDecimal.ZERO;
-            this.netProviderAmount = BigDecimal.ZERO;
-            this.companyDiscountAmount = BigDecimal.ZERO;
-            
-            // In a rejected claim, the entire balance that ISN'T the patient's expected co-pay is refused.
-            // But for simplicity in reporting, we often set Refused = Requested - PatientCoPay.
-            // If patient co-pay wasn't already set, we assume 0 for a full rejection.
-            if (this.patientCoPay == null) this.patientCoPay = BigDecimal.ZERO;
-            this.refusedAmount = this.requestedAmount.subtract(this.patientCoPay).max(BigDecimal.ZERO);
-            this.differenceAmount = this.requestedAmount;
-            return;
-        }
-
-        // 3. For Non-Finalized statuses, we can provide a "Preview" calculation
-        // But for APPROVED/SETTLED, we MUST NOT overwrite what the service/reviewer set.
-        boolean finalized = (status == ClaimStatus.APPROVED || status == ClaimStatus.SETTLED);
-        
-        if (!finalized || this.approvedAmount == null) {
-            // Provide a naive preview for UI/Drafts
-            BigDecimal netAccepted = this.requestedAmount.subtract(this.refusedAmount).max(BigDecimal.ZERO);
-            
-            // Only generate a default patient co-pay if it's completely missing
-            if (this.patientCoPay == null) {
-                this.patientCoPay = netAccepted.multiply(new BigDecimal("0.20")).setScale(2, RoundingMode.HALF_UP);
-            }
-            
-            // Cap patient co-pay to not exceed the requested amount
-            if (this.patientCoPay.compareTo(this.requestedAmount) > 0) {
-                this.patientCoPay = this.requestedAmount;
-            }
-            
-            // ALWAYS force recalculate using the EXACT validation math to maintain strict financial identity
-            BigDecimal gross = scale2(this.requestedAmount);
-            BigDecimal patient = scale2(this.patientCoPay);
-            BigDecimal rejected = scale2(this.refusedAmount);
-            BigDecimal discountRate = scale2(this.appliedDiscountPercent);
-            boolean beforeRejection = this.discountBeforeRejection != Boolean.FALSE;
-
-            BigDecimal providerShare = scale2(gross.subtract(patient));
-            
-            BigDecimal expectedPayable;
-            if (beforeRejection) {
-                BigDecimal discount = scale2(providerShare.multiply(discountRate)
-                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
-                this.companyDiscountAmount = discount;
-                BigDecimal afterDiscount = scale2(providerShare.subtract(discount));
-                expectedPayable = scale2(afterDiscount.subtract(rejected));
-            } else {
-                BigDecimal afterRejection = scale2(providerShare.subtract(rejected));
-                BigDecimal discount = scale2(afterRejection.multiply(discountRate)
-                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
-                this.companyDiscountAmount = discount;
-                expectedPayable = scale2(afterRejection.subtract(discount));
-            }
-
-            // Assign identical expected payable to prevent mismatch in validateFinancialIdentity()
-            this.approvedAmount = expectedPayable;
-            this.netProviderAmount = expectedPayable;
-        }
-
-        // Ensure difference amount is always set
-        this.differenceAmount = this.requestedAmount.subtract(this.approvedAmount != null ? this.approvedAmount : BigDecimal.ZERO);
-    }
-
     private void validateFinancialIdentity() {
         BigDecimal gross = scale2(requestedAmount);
         BigDecimal patient = scale2(patientCoPay);
         BigDecimal rejected = scale2(refusedAmount);
         BigDecimal payable = scale2(getNetPayableAmount());
-        BigDecimal discountRate = scale2(appliedDiscountPercent);
-        // Consistently treat null as TRUE (BEFORE) to match ClaimMapper and UI
-        boolean beforeRejection = discountBeforeRejection != Boolean.FALSE;
-
-        // Step 1: Co-Pay always splits first → Gross = Patient + ProviderShare
-        BigDecimal providerShare = scale2(gross.subtract(patient));
-
-        if (providerShare.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalStateException("Financial inconsistency: patient share exceeds gross amount");
+        BigDecimal discount = scale2(companyDiscountAmount);
+        if (patient.signum() < 0 || rejected.signum() < 0 || payable.signum() < 0 || discount.signum() < 0) {
+            throw new IllegalStateException("Financial snapshot contains a negative component");
         }
-        if (abs(scale2(gross.subtract(patient.add(providerShare)))).compareTo(new BigDecimal("0.01")) > 0) {
-            throw new IllegalStateException("Financial identity violation: Gross != Patient Share + Provider Share");
-        }
-
-        // Step 2: Apply discount and rejection in the configured order
-        BigDecimal expectedPayable;
-        if (beforeRejection) {
-            // MODE: BEFORE (Discount on full provider share, then subtract rejection)
-            BigDecimal discount = scale2(providerShare.multiply(discountRate)
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
-            BigDecimal afterDiscount = scale2(providerShare.subtract(discount));
-            expectedPayable = scale2(afterDiscount.subtract(rejected));
-        } else {
-            // MODE: AFTER (Subtract rejection first, then discount on remainder)
-            BigDecimal afterRejection = scale2(providerShare.subtract(rejected));
-            BigDecimal discount = scale2(afterRejection.multiply(discountRate)
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
-            expectedPayable = scale2(afterRejection.subtract(discount));
-        }
-
-        if (expectedPayable.compareTo(BigDecimal.ZERO) < 0) {
-            // With Option-2 rejected lines, aggregated refused (post-discount per-line) can cause
-            // expectedPayable to appear slightly negative at claim level. Allow up to -0.05 as rounding.
-            if (expectedPayable.compareTo(new BigDecimal("-0.05")) < 0) {
-                throw new IllegalStateException("Financial inconsistency: net payable is negative (" + expectedPayable + ")");
-            }
-            expectedPayable = BigDecimal.ZERO;
-        }
-        if (abs(scale2(payable.subtract(expectedPayable))).compareTo(new BigDecimal("0.05")) > 0) {
+        BigDecimal components = scale2(patient.add(rejected).add(discount).add(payable));
+        if (abs(scale2(gross.subtract(components))).compareTo(new BigDecimal("0.05")) > 0) {
             throw new IllegalStateException(
-                    "Financial identity violation: Final Payable mismatch. Expected=" + expectedPayable
-                            + " Actual=" + payable + " Mode=" + (beforeRejection ? "BEFORE" : "AFTER"));
+                    "Financial snapshot mismatch: gross=" + gross + " components=" + components
+                            + " [patient=" + patient + ", refused=" + rejected
+                            + ", discount=" + discount + ", payable=" + payable + "]");
         }
     }
 

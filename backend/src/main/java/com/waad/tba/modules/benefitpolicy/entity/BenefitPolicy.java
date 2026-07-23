@@ -37,6 +37,10 @@ public class BenefitPolicy {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @NotBlank(message = "Policy name is required")
     @Size(max = 255)
     @Column(nullable = false)

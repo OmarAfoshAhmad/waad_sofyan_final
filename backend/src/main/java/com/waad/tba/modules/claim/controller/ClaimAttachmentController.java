@@ -63,7 +63,7 @@ public class ClaimAttachmentController {
             ClaimAttachmentDto dto = ClaimAttachmentDto.builder()
                 .id(attachment.getId())
                 .fileName(attachment.getOriginalFileName())
-                .fileUrl(attachment.getFileUrl())
+                .fileUrl("/api/v1/claims/" + claimId + "/attachments/" + attachment.getId())
                 .fileType(attachment.getFileType())
                 .createdAt(attachment.getCreatedAt())
                 .build();
@@ -97,7 +97,7 @@ public class ClaimAttachmentController {
                 ClaimAttachmentDto dto = ClaimAttachmentDto.builder()
                     .id(att.getId())
                     .fileName(att.getOriginalFileName() != null ? att.getOriginalFileName() : att.getFileName())
-                    .fileUrl(att.getFileUrl())
+                    .fileUrl("/api/v1/claims/" + claimId + "/attachments/" + att.getId())
                     .fileType(att.getFileType())
                     .attachmentType(att.getAttachmentType() != null ? att.getAttachmentType().name() : null)
                     .createdAt(att.getCreatedAt())
@@ -129,7 +129,7 @@ public class ClaimAttachmentController {
         log.info("📥 Download attachment request: claimId={}, attachmentId={}", claimId, attachmentId);
         
         try {
-            ClaimAttachment attachment = attachmentService.getAttachment(attachmentId);
+            ClaimAttachment attachment = attachmentService.getAttachment(claimId, attachmentId);
             
             // ⚠️ CRITICAL: Verify attachment belongs to claim (security + data integrity)
             if (!attachment.getClaim().getId().equals(claimId)) {
@@ -141,7 +141,7 @@ public class ClaimAttachmentController {
             log.info("✅ Attachment verified. FileKey: {}, FileName: {}", 
                      attachment.getFileKey(), attachment.getOriginalFileName());
             
-            byte[] fileContent = attachmentService.downloadAttachment(attachmentId);
+            byte[] fileContent = attachmentService.downloadAttachment(claimId, attachmentId);
             
             ByteArrayResource resource = new ByteArrayResource(fileContent);
             
@@ -151,6 +151,7 @@ public class ClaimAttachmentController {
                 .contentType(MediaType.parseMediaType(attachment.getFileType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, 
                       FileResourceUtils.buildAttachmentContentDisposition(attachment.getOriginalFileName()))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store, private")
                 .contentLength(fileContent.length)
                 .body(resource);
                 
@@ -177,7 +178,7 @@ public class ClaimAttachmentController {
         log.info("Delete attachment: claimId={}, attachmentId={}", claimId, attachmentId);
         
         try {
-            attachmentService.deleteAttachment(attachmentId);
+            attachmentService.deleteAttachment(claimId, attachmentId);
             return ResponseEntity.ok("Attachment deleted successfully");
             
         } catch (RuntimeException e) {

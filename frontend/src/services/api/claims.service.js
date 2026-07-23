@@ -526,6 +526,38 @@ export const claimsService = {
     }
   },
 
+  pauseReview: async (id, reason) => {
+    try {
+      if (!id) throw new Error('معرف المطالبة مطلوب');
+      if (!reason?.trim()) throw new Error('سبب تعليق المراجعة مطلوب');
+      const response = await axiosClient.post(`${BASE_URL}/${id}/review/pause`, { reason: reason.trim() });
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  resumeReview: async (id) => {
+    try {
+      if (!id) throw new Error('معرف المطالبة مطلوب');
+      const response = await axiosClient.post(`${BASE_URL}/${id}/review/resume`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
+  requestCorrection: async (id, reason) => {
+    try {
+      if (!id) throw new Error('معرف المطالبة مطلوب');
+      if (!reason?.trim()) throw new Error('سبب إعادة فتح المطالبة مطلوب');
+      const response = await axiosClient.post(`${BASE_URL}/${id}/request-correction`, { reason: reason.trim() });
+      return unwrap(response);
+    } catch (error) {
+      throw handleClaimErrors(error);
+    }
+  },
+
   /**
    * ════════════════════════════════════════════════════════════════════════════
    * ⛔ LEGACY SETTLEMENT - DISABLED (2026-02-01)

@@ -15,6 +15,8 @@ public class BenefitStructureImportResult {
     int specialBenefits;
     int created;
     int updated;
+    int deactivated;
+    String mode;
     List<String> warnings;
     List<String> errors;
 }

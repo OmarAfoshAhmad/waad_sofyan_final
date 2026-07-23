@@ -3,6 +3,7 @@ package com.waad.tba.modules.providercontract.dto;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,6 +38,8 @@ public class ProviderContractResponseDto {
             new EnumMap<>(ContractStatus.class);
     private static final Map<PricingModel, String> PRICING_MODEL_LABELS =
             new EnumMap<>(PricingModel.class);
+    private static final Map<PricingScope, String> PRICING_SCOPE_LABELS =
+            new EnumMap<>(PricingScope.class);
 
     static {
         STATUS_LABELS.put(ContractStatus.DRAFT,      "مسودة");
@@ -49,6 +52,9 @@ public class ProviderContractResponseDto {
         PRICING_MODEL_LABELS.put(PricingModel.DISCOUNT,   "نسبة خصم");
         PRICING_MODEL_LABELS.put(PricingModel.TIERED,     "تسعير متدرج");
         PRICING_MODEL_LABELS.put(PricingModel.NEGOTIATED, "سعر تفاوضي");
+
+        PRICING_SCOPE_LABELS.put(PricingScope.GLOBAL, "عام لكل جهات العمل");
+        PRICING_SCOPE_LABELS.put(PricingScope.EMPLOYER_SPECIFIC, "خاص بجهة عمل");
     }
 
     private Long id;
@@ -57,10 +63,13 @@ public class ProviderContractResponseDto {
 
     // Provider info (embedded)
     private ProviderSummaryDto provider;
+    private EmployerSummaryDto employer;
 
     // Status and model
     private ContractStatus status;
     private String statusLabel;
+    private PricingScope pricingScope;
+    private String pricingScopeLabel;
     private PricingModel pricingModel;
     private String pricingModelLabel;
 
@@ -119,13 +128,25 @@ public class ProviderContractResponseDto {
                     .build();
         }
 
+        EmployerSummaryDto employerDto = null;
+        if (entity.getEmployer() != null) {
+            employerDto = EmployerSummaryDto.builder()
+                    .id(entity.getEmployer().getId())
+                    .code(entity.getEmployer().getCode())
+                    .name(entity.getEmployer().getName())
+                    .build();
+        }
+
         return ProviderContractResponseDto.builder()
                 .id(entity.getId())
                 .contractCode(entity.getContractCode())
                 .contractNumber(entity.getContractNumber())
                 .provider(providerDto)
+                .employer(employerDto)
                 .status(entity.getStatus())
                 .statusLabel(getStatusLabel(entity.getStatus()))
+                .pricingScope(entity.getPricingScope())
+                .pricingScopeLabel(getPricingScopeLabel(entity.getPricingScope()))
                 .pricingModel(entity.getPricingModel())
                 .pricingModelLabel(getPricingModelLabel(entity.getPricingModel()))
                 .discountPercent(entity.getDiscountPercent())
@@ -170,6 +191,11 @@ public class ProviderContractResponseDto {
         return PRICING_MODEL_LABELS.getOrDefault(model, model.name());
     }
 
+    private static String getPricingScopeLabel(PricingScope scope) {
+        if (scope == null) return null;
+        return PRICING_SCOPE_LABELS.getOrDefault(scope, scope.name());
+    }
+
     /**
      * Embedded Provider Summary DTO
      * Single source of truth: name comes from Provider.getName()
@@ -184,6 +210,16 @@ public class ProviderContractResponseDto {
         private String name; // Single name field - no duplication
         private String providerType;
         private String city;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EmployerSummaryDto {
+        private Long id;
+        private String code;
+        private String name;
     }
 }
 

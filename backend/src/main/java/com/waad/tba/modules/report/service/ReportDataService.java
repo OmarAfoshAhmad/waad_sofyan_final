@@ -119,8 +119,10 @@ public class ReportDataService {
                                                 : BigDecimal.ZERO;
                                 boolean claimIsRejected = claim
                                                 .getStatus() == com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED;
-                                if (Boolean.TRUE.equals(line.getRejected()) || claimIsRejected) {
-                                        rejected = gross;
+                                if (claimIsRejected && rejected.compareTo(BigDecimal.ZERO) == 0) {
+                                        BigDecimal patientShare = line.getPatientShare() != null
+                                                        ? line.getPatientShare() : BigDecimal.ZERO;
+                                        rejected = gross.subtract(patientShare).max(BigDecimal.ZERO);
                                 }
 
                                 // Skip if onlyRejected is true and this item is NOT rejected

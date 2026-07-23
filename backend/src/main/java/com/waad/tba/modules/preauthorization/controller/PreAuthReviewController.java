@@ -50,7 +50,7 @@ public class PreAuthReviewController {
 
     // ── صندوق الوارد ─────────────────────────────────────────────────────────
     @GetMapping("/inbox")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(summary = "صندوق وارد المراجع", description = "يُرجع الموافقات المسبقة الواصلة للمراجع مع تصفية اختيارية")
     public ResponseEntity<ApiResponse<com.waad.tba.modules.preauthorization.api.response.PreAuthorizationListResponse>> getInbox(
             @RequestParam(required = false) String filterStatus,
@@ -70,7 +70,7 @@ public class PreAuthReviewController {
 
     // ── بدء المراجعة ─────────────────────────────────────────────────────────
     @PostMapping("/{id}/start-review")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(summary = "بدء مراجعة موافقة مسبقة", description = "يُحوّل الوضع من PENDING إلى UNDER_REVIEW")
     public ResponseEntity<ApiResponse<PreAuthorization>> startReview(
             @PathVariable Long id,
@@ -81,7 +81,7 @@ public class PreAuthReviewController {
 
     // ── قائمة سطور الموافقة ───────────────────────────────────────────────────
     @GetMapping("/{id}/lines")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(summary = "جلب سطور خدمات الموافقة", description = "يُرجع جميع سطور الخدمات مع حالة القرار لكل سطر")
     public ResponseEntity<ApiResponse<List<PreAuthorizationLine>>> getLines(
             @PathVariable Long id) {
@@ -91,7 +91,7 @@ public class PreAuthReviewController {
 
     // ── قرار على سطر خدمة محدد ───────────────────────────────────────────────
     @PostMapping("/{id}/lines/{lineId}/decision")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(
             summary = "قرار على سطر خدمة",
             description = "الموافقة / الموافقة الجزئية / الرفض على سطر خدمة بعينه. " +
@@ -108,7 +108,7 @@ public class PreAuthReviewController {
 
     // ── إنهاء المراجعة ────────────────────────────────────────────────────────
     @PostMapping("/{id}/finalize")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(
             summary = "إنهاء المراجعة النهائية",
             description = "يحسب الإجمالي المعتمد من جميع السطور ويُحدث وضع الموافقة. " +
@@ -123,7 +123,7 @@ public class PreAuthReviewController {
 
     // ── رفض كامل (shortcut) ──────────────────────────────────────────────────
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(summary = "رفض الموافقة المسبقة كلياً", description = "يرفض جميع السطور دفعةً واحدة")
     public ResponseEntity<ApiResponse<String>> rejectAll(
             @PathVariable Long id,
@@ -142,7 +142,7 @@ public class PreAuthReviewController {
 
     // ── طلب معلومات إضافية / إعادة للتعديل ───────────────────────────────────────────────────
     @PostMapping("/{id}/request-info")
-    @PreAuthorize("hasAnyRole('REVIEWER', 'INSURANCE_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('MEDICAL_REVIEWER', 'SUPER_ADMIN')")
     @Operation(summary = "إعادة للتعديل (طلب معلومات إضافية من المزود)")
     public ResponseEntity<ApiResponse<String>> requestInfo(
             @PathVariable Long id,
@@ -158,4 +158,3 @@ public class PreAuthReviewController {
         return ResponseEntity.ok(ApiResponse.success("تم إعادة الطلب للمزود للتعديل بنجاح"));
     }
 }
-

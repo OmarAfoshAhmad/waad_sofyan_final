@@ -120,63 +120,6 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   // ═══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Find the most specific rule for a service within a policy.
-   * Service-specific rules take priority over category rules.
-   * 
-   * Order of precedence:
-   * 1. Direct service match
-   * 2. Category match (for the service's category)
-   */
-  @Query("""
-      SELECT r FROM BenefitPolicyRule r
-      WHERE r.benefitPolicy.id = :policyId
-        AND r.active = true
-        AND r.deleted = false
-        AND r.medicalCategory.id = :categoryId
-      ORDER BY r.id
-      """)
-  List<BenefitPolicyRule> findApplicableRulesForService(
-      @Param("policyId") Long policyId,
-      @Param("serviceId") Long serviceId,
-      @Param("categoryId") Long categoryId);
-
-  /**
-   * Find the best matching rule for a service within a policy.
-   * Returns the most specific rule (service rule > category rule).
-   * Works for both mapped (serviceId given) and unmapped (serviceId=null,
-   * categoryId given) lookups.
-   */
-  @Query("""
-      SELECT r FROM BenefitPolicyRule r
-      WHERE r.benefitPolicy.id = :policyId
-        AND r.active = true
-        AND r.deleted = false
-        AND (
-          (:overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId)
-          OR (:overrideCategoryId IS NOT NULL AND r.medicalCategory.parentId = :overrideCategoryId)
-          OR (:serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId)
-          OR (:serviceCategoryId IS NOT NULL AND r.medicalCategory.parentId = :serviceCategoryId)
-          OR (:parentCategoryId IS NOT NULL AND r.medicalCategory.id = :parentCategoryId)
-        )
-      ORDER BY
-        CASE
-          WHEN :overrideCategoryId IS NOT NULL AND r.medicalCategory.parentId = :overrideCategoryId THEN 0
-          WHEN :overrideCategoryId IS NOT NULL AND r.medicalCategory.id = :overrideCategoryId THEN 1
-          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.id = :serviceCategoryId THEN 2
-          WHEN :serviceCategoryId IS NOT NULL AND r.medicalCategory.parentId = :serviceCategoryId THEN 3
-          ELSE 4
-        END,
-        r.id ASC
-      LIMIT 1
-      """)
-  Optional<BenefitPolicyRule> findBestRuleForService(
-      @Param("policyId") Long policyId,
-      @Param("serviceId") Long serviceId,
-      @Param("serviceCategoryId") Long serviceCategoryId,
-      @Param("overrideCategoryId") Long overrideCategoryId,
-      @Param("parentCategoryId") Long parentCategoryId);
-
-  /**
    * Find active category rule for a policy
    */
   @Query("""

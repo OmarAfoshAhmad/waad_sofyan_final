@@ -139,9 +139,10 @@ axiosServices.interceptors.response.use(
     // ==========================================
     // Suppress expected 404s (e.g. batch lookup)
     // ==========================================
-    const isExpected404 = status === 404 && (url?.includes('/claim-batches/current') || error.config?.suppressGlobalError === true);
+    const suppressGlobalError = error.config?.suppressGlobalError === true;
+    const isExpected404 = status === 404 && url?.includes('/claim-batches/current');
 
-    if (!isExpected404) {
+    if (!isExpected404 && !suppressGlobalError) {
       const normalized = normalizeApiError(error);
       window.dispatchEvent(
         new CustomEvent('api:error', {

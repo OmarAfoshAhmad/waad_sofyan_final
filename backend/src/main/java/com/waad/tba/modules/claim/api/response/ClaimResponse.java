@@ -240,6 +240,7 @@ public class ClaimResponse {
      * READ-ONLY - Managed by workflow state machine
      */
     private ClaimStatus status;
+    private com.waad.tba.modules.claim.entity.ClaimSubmissionSource submissionSource;
 
     /**
      * Status label (localized)
@@ -258,6 +259,12 @@ public class ClaimResponse {
      * READ-ONLY - Set when claim is reviewed
      */
     private LocalDateTime reviewedAt;
+    private Long reviewedById;
+    private String reviewedBy;
+    private Boolean reviewPaused;
+    private String reviewPauseReason;
+    private LocalDateTime reviewPausedAt;
+    private String reviewPausedBy;
 
     /**
      * Allowed next statuses for this claim (BACKEND-DRIVEN WORKFLOW)
@@ -380,6 +387,7 @@ public class ClaimResponse {
         private Integer coveragePercent;
         private Integer patientSharePercent;
         private BigDecimal benefitLimit; // Added for UI display
+        private Integer timesLimit;
         private BigDecimal usedAmount; // Added for UI display
         private BigDecimal remainingAmount; // Added for UI display
 

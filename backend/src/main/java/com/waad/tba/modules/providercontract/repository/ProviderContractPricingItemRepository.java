@@ -191,6 +191,48 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("date") LocalDate date);
 
        /**
+        * Employer-specific effective pricing. This is the first lookup in the new
+        * resolver path because employer contracts override global provider pricing.
+        */
+       @Query("SELECT p FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.provider.id = :providerId " +
+                     "AND p.contract.employer.id = :employerId " +
+                     "AND p.contract.pricingScope = 'EMPLOYER_SPECIFIC' " +
+                     "AND p.active = true " +
+                     "AND p.contract.active = true " +
+                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.serviceCode = :serviceCode " +
+                     "AND p.contract.startDate <= :date " +
+                     "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+       Optional<ProviderContractPricingItem> findEffectiveEmployerPricingByCode(
+                     @Param("providerId") Long providerId,
+                     @Param("employerId") Long employerId,
+                     @Param("serviceCode") String serviceCode,
+                     @Param("date") LocalDate date);
+
+       /**
+        * Global provider fallback pricing.
+        */
+       @Query("SELECT p FROM ProviderContractPricingItem p " +
+                     "WHERE p.contract.provider.id = :providerId " +
+                     "AND p.contract.pricingScope = 'GLOBAL' " +
+                     "AND p.contract.employer IS NULL " +
+                     "AND p.active = true " +
+                     "AND p.contract.active = true " +
+                     "AND p.contract.status = 'ACTIVE' " +
+                     "AND p.serviceCode = :serviceCode " +
+                     "AND p.contract.startDate <= :date " +
+                     "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+       Optional<ProviderContractPricingItem> findEffectiveGlobalPricingByCode(
+                     @Param("providerId") Long providerId,
+                     @Param("serviceCode") String serviceCode,
+                     @Param("date") LocalDate date);
+
+       /**
         * Find effective pricing for a pricing item at a provider (today)
         */
        default Optional<ProviderContractPricingItem> findEffectivePricingToday(Long providerId, Long pricingItemId) {

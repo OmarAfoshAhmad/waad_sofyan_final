@@ -15,10 +15,10 @@ spring:
     open-in-view: false
 
   flyway:
-    out-of-order: true
+    out-of-order: false
     enabled: true
     validate-on-migrate: true
-    baseline-on-migrate: true
+    baseline-on-migrate: false
     clean-disabled: true
 
 jwt:
@@ -29,7 +29,7 @@ server:
   forward-headers-strategy: framework
   servlet:
     session:
-      timeout: 365d
+      timeout: ${SESSION_TIMEOUT:30m}
       cookie:
         secure: true
         same-site: strict

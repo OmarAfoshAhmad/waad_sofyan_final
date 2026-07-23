@@ -1,0 +1,240 @@
+package com.waad.tba.modules.benefitpolicy.service;
+
+import com.waad.tba.modules.benefitpolicy.entity.*;
+import com.waad.tba.modules.benefitpolicy.enums.*;
+import com.waad.tba.modules.benefitpolicy.repository.*;
+import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.member.entity.Member;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class BenefitBucketLedgerServiceTest {
+
+    @Mock ClaimRepository claimRepository;
+    @Mock BenefitPolicyRepository benefitPolicyRepository;
+    @Mock BenefitRuleBucketRepository ruleBucketRepository;
+    @Mock BenefitLimitBucketRepository bucketRepository;
+    @Mock BenefitBucketConsumptionRepository consumptionRepository;
+
+    private BenefitBucketLedgerService service;
+    private BenefitPolicy policy;
+    private BenefitLimitBucket bucket;
+    private Claim claim;
+    private ClaimLine line;
+
+    @BeforeEach
+    void setUp() {
+        service = new BenefitBucketLedgerService(
+                claimRepository, benefitPolicyRepository, ruleBucketRepository, bucketRepository, consumptionRepository);
+
+        policy = BenefitPolicy.builder()
+                .id(1L)
+                .startDate(LocalDate.of(2026, 1, 1))
+                .endDate(LocalDate.of(2026, 12, 31))
+                .build();
+        Member member = Member.builder().id(10L).benefitPolicy(policy).build();
+        line = ClaimLine.builder()
+                .id(100L)
+                .appliedRuleId(50L)
+                .companyShare(new BigDecimal("200.00"))
+                .approvedAmount(new BigDecimal("200.00"))
+                .totalPrice(new BigDecimal("400.00"))
+                .limitRefused(new BigDecimal("200.00"))
+                .quantity(1)
+                .calculationVersion(1)
+                .build();
+        claim = Claim.builder()
+                .id(20L)
+                .member(member)
+                .serviceDate(LocalDate.of(2026, 7, 20))
+                .lines(List.of(line))
+                .build();
+        line.setClaim(claim);
+
+        bucket = BenefitLimitBucket.builder()
+                .id(70L)
+                .policy(policy)
+                .code("MRI")
+                .nameAr("سقف الرنين")
+                .amountLimit(new BigDecimal("1500.00"))
+                .periodType(LimitPeriodType.ANNUAL)
+                .countingMethod(CountingMethod.EACH_LINE)
+                .consumptionBasis(ConsumptionBasis.ELIGIBLE_AMOUNT)
+                .active(true)
+                .build();
+        BenefitRuleBucket link = BenefitRuleBucket.builder().bucket(bucket).build();
+
+        lenient().when(claimRepository.findById(20L)).thenReturn(Optional.of(claim));
+        lenient().when(ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(50L))
+                .thenReturn(List.of(link));
+        lenient().when(bucketRepository.findByIdForUpdate(70L)).thenReturn(Optional.of(bucket));
+        lenient().when(consumptionRepository.existsByIdempotencyKey(anyString())).thenReturn(false);
+        lenient().when(consumptionRepository.existsUnledgeredApprovedBucketClaim(anyLong(), anyLong(), any()))
+                .thenReturn(false);
+        lenient().when(consumptionRepository.sumCommittedAmount(any(), any(), any(), any(), any()))
+                .thenReturn(new BigDecimal("1300.00"));
+        lenient().when(consumptionRepository.sumCommittedTimes(any(), any(), any(), any(), any()))
+                .thenReturn(1);
+        lenient().when(consumptionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    @Test
+    @DisplayName("الاعتماد الجزئي يسجل المبلغ المسموح بعد السقف لا إجمالي الخدمة")
+    void partialApprovalConsumesPostLimitEligibleAmount() {
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        BenefitBucketConsumption saved = captor.getValue();
+
+        assertEquals(0, new BigDecimal("200.00").compareTo(saved.getApprovedAmount()));
+        assertEquals(BenefitBucketConsumption.Status.COMMITTED, saved.getStatus());
+        assertEquals(LocalDate.of(2026, 1, 1), saved.getPeriodStart());
+        assertEquals(LocalDate.of(2026, 12, 31), saved.getPeriodEnd());
+    }
+
+    @Test
+    @DisplayName("وثيقة جهة العمل تُستخدم في الدفتر عندما لا توجد وثيقة مباشرة للمستفيد")
+    void employerPolicyFallbackIsCommitted() {
+        Employer employer = Employer.builder().id(5L).build();
+        claim.getMember().setBenefitPolicy(null);
+        claim.getMember().setEmployer(employer);
+        when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(
+                eq(5L), eq(LocalDate.of(2026, 7, 20))))
+                .thenReturn(Optional.of(policy));
+
+        service.commitClaim(20L);
+
+        verify(consumptionRepository).save(any(BenefitBucketConsumption.class));
+    }
+
+    @Test
+    @DisplayName("يُقفل وعاء المنفعة قبل فحص الرصيد لمنع اعتمادين متزامنين")
+    void bucketIsLockedBeforeBalanceValidation() {
+        service.commitClaim(20L);
+
+        var order = inOrder(bucketRepository, consumptionRepository);
+        order.verify(bucketRepository).findByIdForUpdate(70L);
+        order.verify(consumptionRepository).sumCommittedAmount(
+                eq(10L), eq(70L), any(), any(), isNull());
+        order.verify(consumptionRepository).save(any(BenefitBucketConsumption.class));
+    }
+
+    @Test
+    @DisplayName("مفتاح عدم التكرار يمنع تسجيل استهلاك المطالبة مرتين")
+    void idempotencyPreventsDuplicateConsumption() {
+        when(consumptionRepository.existsByIdempotencyKey(anyString())).thenReturn(true);
+
+        service.commitClaim(20L);
+
+        verify(consumptionRepository, never()).save(any());
+        verify(consumptionRepository, never()).sumCommittedAmount(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("تغير الرصيد أثناء الاعتماد يوقف المطالبة ولا يتجاوز السقف")
+    void stalePreviewCannotOverdrawAtCommit() {
+        when(consumptionRepository.sumCommittedAmount(any(), any(), any(), any(), any()))
+                .thenReturn(new BigDecimal("1400.00"));
+
+        RuntimeException error = assertThrows(RuntimeException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("تغير الرصيد"));
+        verify(consumptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("مطالبة معتمدة سابقة بلا قيد سقف توقف الاعتماد اللاحق")
+    void unledgeredPreviousApprovedClaimFailsClosed() {
+        when(consumptionRepository.existsUnledgeredApprovedBucketClaim(eq(10L), eq(20L), any())).thenReturn(true);
+
+        RuntimeException error = assertThrows(RuntimeException.class, () -> service.commitClaim(20L));
+
+        assertTrue(error.getMessage().contains("لم تُرحّل إلى دفتر سقوف المنافع"));
+        verify(bucketRepository, never()).findByIdForUpdate(anyLong());
+        verify(consumptionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("إلغاء المطالبة يعكس الاستهلاك ويحفظ أثراً تدقيقياً")
+    void reversalMarksOriginalAndCreatesAuditEntry() {
+        BenefitBucketConsumption original = BenefitBucketConsumption.builder()
+                .id(90L)
+                .claim(claim)
+                .claimLine(line)
+                .policy(policy)
+                .memberId(10L)
+                .bucket(bucket)
+                .periodStart(LocalDate.of(2026, 1, 1))
+                .periodEnd(LocalDate.of(2026, 12, 31))
+                .approvedAmount(new BigDecimal("200.00"))
+                .timesConsumed(1)
+                .status(BenefitBucketConsumption.Status.COMMITTED)
+                .calculationVersion(1)
+                .idempotencyKey("ORIGINAL")
+                .build();
+        when(consumptionRepository.findByClaimIdAndStatus(
+                20L, BenefitBucketConsumption.Status.COMMITTED))
+                .thenReturn(List.of(original));
+
+        service.reverseClaim(20L);
+
+        assertEquals(BenefitBucketConsumption.Status.REVERSED, original.getStatus());
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository, times(2)).save(captor.capture());
+        BenefitBucketConsumption reversal = captor.getAllValues().get(1);
+        assertEquals(original, reversal.getReversalOf());
+        assertEquals("ORIGINAL:REVERSAL", reversal.getIdempotencyKey());
+    }
+
+    @Test
+    @DisplayName("الفترة الشهرية تحفظ أول وآخر يوم من شهر الخدمة")
+    void monthlyPeriodUsesCalendarMonth() {
+        bucket.setPeriodType(LimitPeriodType.MONTHLY);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(LocalDate.of(2026, 7, 1), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2026, 7, 31), captor.getValue().getPeriodEnd());
+    }
+
+    @Test
+    @DisplayName("الفترة متعددة السنوات ترتكز على بداية الوثيقة لا السنة الميلادية")
+    void multiYearPeriodAnchorsToPolicyStart() {
+        policy.setStartDate(LocalDate.of(2025, 4, 1));
+        policy.setEndDate(LocalDate.of(2029, 3, 31));
+        bucket.setPeriodType(LimitPeriodType.MULTI_YEAR_POLICY);
+        bucket.setPeriodValue(2);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(LocalDate.of(2025, 4, 1), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2027, 3, 31), captor.getValue().getPeriodEnd());
+    }
+}

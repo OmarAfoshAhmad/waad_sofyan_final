@@ -521,12 +521,7 @@ public class MemberExcelImportService {
                                      Map<String, Integer> fieldToColumnIndex, Employer defaultEmployer,
                                      BenefitPolicy benefitPolicy) {
         Employer rowEmployer = rowProcessor.resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
-        BenefitPolicy resolvedPolicy = benefitPolicy;
-        if (resolvedPolicy == null && rowEmployer != null) {
-            resolvedPolicy = benefitPolicyRepository
-                    .findActiveEffectivePolicyForEmployer(rowEmployer.getId(), java.time.LocalDate.now())
-                    .orElse(null);
-        }
+        BenefitPolicy resolvedPolicy = rowProcessor.resolveAndValidatePolicy(benefitPolicy, rowEmployer, rowNum);
         String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
         
         Member parent = Member.builder()
@@ -534,7 +529,9 @@ public class MemberExcelImportService {
                 .fullName("حامل بطاقة " + parentCardNumber.replace("JFZ2025", ""))
                 .employer(rowEmployer)
                 .benefitPolicy(resolvedPolicy)
-                .policyNumber(policyNumber)
+                .policyNumber(policyNumber != null && !policyNumber.isBlank()
+                        ? policyNumber
+                        : resolvedPolicy.getPolicyCode())
                 .status(Member.MemberStatus.ACTIVE)
                 .cardStatus(Member.CardStatus.ACTIVE)
                 .active(true)

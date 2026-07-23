@@ -146,13 +146,12 @@ public class ProviderAccountService {
                 Claim claim = claimRepository.findByIdForUpdate(claimId)
                                 .orElseThrow(() -> new EntityNotFoundException("Claim not found: " + claimId));
 
-                // 2. Validate claim status — APPROVED (normal) or NEEDS_CORRECTION
-                // (restore-after-delete)
-                if (claim.getStatus() != ClaimStatus.APPROVED
-                                && claim.getStatus() != ClaimStatus.NEEDS_CORRECTION) {
+                // Only a final approval may create provider liability. A claim returned
+                // for correction has already been reversed and must never be re-credited.
+                if (claim.getStatus() != ClaimStatus.APPROVED) {
                         throw new IllegalStateException(
                                         "Cannot credit for claim " + claimId
-                                                        + ". Status must be APPROVED or NEEDS_CORRECTION, but is: "
+                                                        + ". Status must be APPROVED, but is: "
                                                         + claim.getStatus());
                 }
 
@@ -940,8 +939,7 @@ public class ProviderAccountService {
                         // Check whether the claim is active with a status that legitimately holds
                         // credit
                         final Set<ClaimStatus> CREDIT_BEARING_STATUSES = EnumSet.of(
-                                        ClaimStatus.APPROVED, ClaimStatus.NEEDS_CORRECTION,
-                                        ClaimStatus.BATCHED, ClaimStatus.SETTLED);
+                                        ClaimStatus.APPROVED, ClaimStatus.BATCHED, ClaimStatus.SETTLED);
                         boolean claimIsActive = claimRepository.findById(claimId)
                                         .map(c -> Boolean.TRUE.equals(c.getActive())
                                                         && CREDIT_BEARING_STATUSES.contains(c.getStatus()))

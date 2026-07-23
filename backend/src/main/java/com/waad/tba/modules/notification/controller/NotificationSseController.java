@@ -64,7 +64,7 @@ public class NotificationSseController {
      * مفيد لـ DevOps والمراقبة.
      */
     @GetMapping("/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "حالة اتصالات SSE", description = "يُرجع عدد المستخدمين المتصلين حالياً بنظام الإشعارات")
     public ResponseEntity<Map<String, Object>> status() {
         return ResponseEntity.ok(Map.of(

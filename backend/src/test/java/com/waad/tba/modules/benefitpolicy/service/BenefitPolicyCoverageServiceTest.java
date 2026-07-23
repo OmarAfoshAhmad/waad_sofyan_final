@@ -4,12 +4,17 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
+import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyRuleResponseDto;
+import com.waad.tba.modules.benefitpolicy.dto.CoverageDecision;
+import com.waad.tba.modules.benefitpolicy.dto.CoverageDecisionSource;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceCategoryRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
@@ -49,6 +54,8 @@ class BenefitPolicyCoverageServiceTest {
     private MedicalServiceCategoryRepository serviceCategoryRepository;
     @Mock
     private AuthorizationService authorizationService;
+    @Mock
+    private CoverageDecisionService coverageDecisionService;
 
     @InjectMocks
     private BenefitPolicyCoverageService coverageService;
@@ -102,42 +109,94 @@ class BenefitPolicyCoverageServiceTest {
     @DisplayName("Should get coverage from specific service rule")
     void getCoverageForService_ServiceRuleMatch() {
         // Arrange
+        MedicalCategory category = MedicalCategory.builder().id(55L).code("CAT-55").active(true).build();
         BenefitPolicyRule serviceRule = BenefitPolicyRule.builder()
                 .id(10L)
+                .medicalCategory(category)
                 .coveragePercent(90)
                 .active(true)
                 .requiresPreApproval(true)
                 .build();
 
         when(serviceRepository.findById(101L)).thenReturn(Optional.of(testService));
-        when(ruleRepository.findBestRuleForService(eq(1L), eq(101L), any(), any(), any()))
-                .thenReturn(Optional.of(serviceRule));
+        when(coverageDecisionService.resolve(any())).thenReturn(coveredDecision(serviceRule, 55L));
 
         // Act
-        Optional<BenefitPolicyCoverageService.CoverageInfo> result = coverageService.getCoverageForService(testMember, 101L);
+        Optional<BenefitPolicyCoverageService.CoverageInfo> result = coverageService.getCoverageForService(testMember, 101L, 55L);
 
         // Assert
         assertTrue(result.isPresent());
         assertEquals(90, result.get().getCoveragePercent());
         assertTrue(result.get().isRequiresPreApproval());
-        assertEquals("SERVICE", result.get().getRuleType());
+        assertEquals("EXACT_CATEGORY_RULE", result.get().getRuleType());
     }
 
     @Test
-    @DisplayName("Should fallback to policy default when no rule found")
-    void getCoverageForService_PolicyFallback() {
+    @DisplayName("Should fail closed when no contextual benefit rule exists")
+    void getCoverageForService_NoRuleIsNotCovered() {
         // Arrange
+        MedicalCategory category = MedicalCategory.builder().id(55L).code("CAT-55").active(true).build();
         when(serviceRepository.findById(101L)).thenReturn(Optional.of(testService));
-        when(ruleRepository.findBestRuleForService(anyLong(), anyLong(), any(), any(), any()))
-                .thenReturn(Optional.empty());
+        when(coverageDecisionService.resolve(any())).thenReturn(notCoveredDecision());
 
         // Act
-        Optional<BenefitPolicyCoverageService.CoverageInfo> result = coverageService.getCoverageForService(testMember, 101L);
+        Optional<BenefitPolicyCoverageService.CoverageInfo> result = coverageService.getCoverageForService(testMember, 101L, 55L);
 
         // Assert
-        assertTrue(result.isPresent());
-        assertEquals(80, result.get().getCoveragePercent()); // Policy default
-        assertEquals("POLICY_DEFAULT", result.get().getRuleType());
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Should select different rules for outpatient and inpatient context")
+    void getCoverageForCategory_SelectsRuleByEncounterContext() {
+        MedicalCategory category = MedicalCategory.builder().id(55L).code("CAT-55").active(true).build();
+        BenefitPolicyRule outpatientRule = BenefitPolicyRule.builder()
+                .id(20L).medicalCategory(category).coveragePercent(80).active(true).build();
+        BenefitPolicyRule inpatientRule = BenefitPolicyRule.builder()
+                .id(21L).medicalCategory(category).coveragePercent(100).active(true).build();
+
+        when(coverageDecisionService.resolve(argThat(request -> request != null
+                && request.encounterType() == EncounterType.OUTPATIENT)))
+                .thenReturn(coveredDecision(outpatientRule, 55L));
+        when(coverageDecisionService.resolve(argThat(request -> request != null
+                && request.encounterType() == EncounterType.INPATIENT)))
+                .thenReturn(coveredDecision(inpatientRule, 55L));
+
+        var outpatient = coverageService.getCoverageForCategory(
+                testMember, 55L, EncounterType.OUTPATIENT, LocalDate.now());
+        var inpatient = coverageService.getCoverageForCategory(
+                testMember, 55L, EncounterType.INPATIENT, LocalDate.now());
+
+        assertEquals(80, outpatient.orElseThrow().getCoveragePercent());
+        assertEquals(100, inpatient.orElseThrow().getCoveragePercent());
+    }
+
+    @Test
+    @DisplayName("Batch category coverage must fail closed instead of using policy default")
+    void batchCategoryCoverage_NoContextualRuleReturnsZero() {
+        MedicalCategory category = MedicalCategory.builder().id(55L).code("CAT-55").active(true).build();
+        when(coverageDecisionService.resolve(any())).thenReturn(notCoveredDecision());
+
+        var result = coverageService.batchGetCoveragePercentsByCategory(
+                testMember, java.util.List.of(55L), EncounterType.INPATIENT, LocalDate.now());
+
+        assertEquals(0, result.get(55L));
+    }
+
+    @Test
+    @DisplayName("Free-text service without canonical ID must never receive policy default coverage")
+    void validateClaimCoverage_FreeTextServiceFailsClosed() {
+        var input = BenefitPolicyCoverageService.ServiceCoverageInput.builder()
+                .serviceName("خدمة مكتوبة يدويا")
+                .amount(new BigDecimal("100.00"))
+                .build();
+
+        var result = coverageService.validateClaimCoverage(testMember, java.util.List.of(input), LocalDate.now());
+
+        assertFalse(result.isValid());
+        assertFalse(result.getServiceResults().getFirst().isCovered());
+        assertEquals(0, result.getServiceResults().getFirst().getCoveragePercent());
+        assertTrue(result.getServiceResults().getFirst().getReason().contains("غير مرتبطة"));
     }
 
     @Test
@@ -162,5 +221,17 @@ class BenefitPolicyCoverageServiceTest {
         // Act & Assert
         assertThrows(BusinessRuleException.class, () -> 
             coverageService.validateWaitingPeriods(testMember, testPolicy, null, LocalDate.now()));
+    }
+
+    private CoverageDecision coveredDecision(BenefitPolicyRule rule, Long categoryId) {
+        return CoverageDecision.builder().covered(true).coveragePercent(rule.getEffectiveCoveragePercent())
+                .resolvedCategoryId(categoryId).matchingCategoryId(categoryId)
+                .source(CoverageDecisionSource.EXACT_CATEGORY_RULE).reasonCode("COVERED")
+                .appliedRule(BenefitPolicyRuleResponseDto.fromEntity(rule)).build();
+    }
+
+    private CoverageDecision notCoveredDecision() {
+        return CoverageDecision.builder().covered(false).coveragePercent(0)
+                .source(CoverageDecisionSource.NO_BENEFIT_RULE).reasonCode("NO_BENEFIT_RULE").build();
     }
 }

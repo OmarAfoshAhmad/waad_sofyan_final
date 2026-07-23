@@ -34,6 +34,9 @@ public class RbacDataInitializer implements CommandLineRunner {
     @Value("${app.admin.default-password:#{null}}")
     private String configuredAdminPassword;
 
+    @Value("${app.admin.sync-password-on-startup:false}")
+    private boolean syncPasswordOnStartup;
+
     @Override
     @Transactional
     public void run(String... args) {
@@ -67,8 +70,12 @@ public class RbacDataInitializer implements CommandLineRunner {
         }
 
         if (userExists) {
-            log.info("Super admin user already exists: {}. Synchronizing password...", username);
-            updateSuperAdminPassword(username);
+            log.info("Super admin user already exists: {}.", username);
+            if (syncPasswordOnStartup) {
+                updateSuperAdminPassword(username);
+            } else {
+                log.info("Super admin password synchronization is disabled.");
+            }
             return;
         }
 
@@ -113,9 +120,9 @@ public class RbacDataInitializer implements CommandLineRunner {
             adminPassword = configuredAdminPassword;
         }
 
-        // If no configured password, default to 'admin' for safety during this fix
         if (adminPassword == null || adminPassword.isBlank()) {
-            adminPassword = "admin";
+            log.error("Cannot synchronize superadmin password: no explicit ADMIN_DEFAULT_PASSWORD or app.admin.default-password was provided.");
+            return;
         }
 
         String finalAdminPassword = adminPassword;

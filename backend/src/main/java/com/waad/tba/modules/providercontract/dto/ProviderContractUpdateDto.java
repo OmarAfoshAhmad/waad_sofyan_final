@@ -1,6 +1,7 @@
 package com.waad.tba.modules.providercontract.dto;
 
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,6 +24,17 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProviderContractUpdateDto {
+
+    /**
+     * Pricing scope can be changed while the contract is still in draft.
+     */
+    private PricingScope pricingScope;
+
+    /**
+     * Employer ID is required when pricingScope = EMPLOYER_SPECIFIC.
+     */
+    @Positive(message = "Employer ID must be positive")
+    private Long employerId;
 
     /**
      * Pricing model type

@@ -1,12 +1,15 @@
 package com.waad.tba.modules.providercontract.service;
 
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.employer.entity.Employer;
+import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.providercontract.dto.*;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +48,7 @@ public class ProviderContractService {
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingItemRepository;
     private final ProviderRepository providerRepository;
+    private final EmployerRepository employerRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -225,13 +229,15 @@ public class ProviderContractService {
         }
 
         ContractStatus targetStatus = dto.getStatus() != null ? dto.getStatus() : ContractStatus.DRAFT;
+        PricingScope pricingScope = dto.getPricingScope() != null ? dto.getPricingScope() : PricingScope.GLOBAL;
+        Employer employer = resolveEmployerForScope(pricingScope, dto.getEmployerId());
         
         // Enforce single active contract if creating as ACTIVE
         if (targetStatus == ContractStatus.ACTIVE) {
-            contractRepository.findActiveContractByProvider(dto.getProviderId())
+            findActiveContractForScope(dto.getProviderId(), pricingScope, dto.getEmployerId())
                     .ifPresent(existing -> {
                         throw new BusinessRuleException(
-                                "يوجد عقد نشط مسبقاً لمقدم الخدمة: " + existing.getContractCode());
+                                "يوجد عقد نشط مسبقاً لنفس مقدم الخدمة ونطاق التسعير: " + existing.getContractCode());
                     });
         }
 
@@ -248,6 +254,8 @@ public class ProviderContractService {
                 .contractCode(contractCode)
                 .contractNumber(contractCode) // Legacy compatibility
                 .provider(provider)
+                .pricingScope(pricingScope)
+                .employer(employer)
                 .status(targetStatus)
                 .pricingModel(dto.getPricingModel() != null ? dto.getPricingModel() : PricingModel.DISCOUNT)
                 .discountPercent(dto.getDiscountPercent() != null ? dto.getDiscountPercent() : BigDecimal.ZERO)
@@ -293,6 +301,22 @@ public class ProviderContractService {
             throw new BusinessRuleException("Cannot update a terminated contract");
         }
 
+        boolean scopeChanged = dto.getPricingScope() != null
+                || dto.getEmployerId() != null;
+        PricingScope targetScope = dto.getPricingScope() != null
+                ? dto.getPricingScope()
+                : (contract.getPricingScope() != null ? contract.getPricingScope() : PricingScope.GLOBAL);
+        Long targetEmployerId = dto.getEmployerId() != null
+                ? dto.getEmployerId()
+                : (contract.getEmployer() != null ? contract.getEmployer().getId() : null);
+        Employer targetEmployer = scopeChanged
+                ? resolveEmployerForScope(targetScope, targetEmployerId)
+                : contract.getEmployer();
+
+        if (scopeChanged && contract.getStatus() != ContractStatus.DRAFT) {
+            throw new BusinessRuleException("لا يمكن تغيير نطاق التسعير أو جهة العمل إلا في حالة المسودة.");
+        }
+
         // Validate dates if changed
         LocalDate startDate = dto.getStartDate() != null ? dto.getStartDate() : contract.getStartDate();
         LocalDate endDate = dto.getEndDate() != null ? dto.getEndDate() : contract.getEndDate();
@@ -302,11 +326,17 @@ public class ProviderContractService {
         }
 
         // Check for overlapping contracts if dates changed
-        if ((dto.getStartDate() != null || dto.getEndDate() != null) && contract.getStatus() != ContractStatus.DRAFT) {
-            checkForOverlappingContracts(contract.getProvider().getId(), contract.getId(), startDate, endDate);
+        if ((dto.getStartDate() != null || dto.getEndDate() != null || scopeChanged)
+                && contract.getStatus() != ContractStatus.DRAFT) {
+            checkForOverlappingContracts(contract.getProvider().getId(), contract.getId(),
+                    targetScope, targetEmployerId, startDate, endDate);
         }
 
         // Apply updates
+        if (scopeChanged) {
+            contract.setPricingScope(targetScope);
+            contract.setEmployer(targetEmployer);
+        }
         if (dto.getPricingModel() != null) {
             contract.setPricingModel(dto.getPricingModel());
         }
@@ -384,17 +414,22 @@ public class ProviderContractService {
 
         final Long providerId = contractToActivate.getProvider().getId();
         final Long contractId = contractToActivate.getId();
+        PricingScope pricingScope = contractToActivate.getPricingScope() != null
+                ? contractToActivate.getPricingScope()
+                : PricingScope.GLOBAL;
+        Long employerId = contractToActivate.getEmployer() != null ? contractToActivate.getEmployer().getId() : null;
+        resolveEmployerForScope(pricingScope, employerId);
 
-        // Check for existing active contract for same provider
-        contractRepository.findActiveContractByProvider(providerId)
+        // Check for existing active contract for same provider and pricing scope
+        findActiveContractForScope(providerId, pricingScope, employerId)
                 .filter(existing -> !existing.getId().equals(contractId))
                 .ifPresent(existing -> {
                     throw new BusinessRuleException(
-                            "يوجد عقد نشط مسبقاً لمقدم الخدمة: " + existing.getContractCode());
+                            "يوجد عقد نشط مسبقاً لنفس مقدم الخدمة ونطاق التسعير: " + existing.getContractCode());
                 });
 
         // Check for overlapping contracts
-        checkForOverlappingContracts(providerId, contractId,
+        checkForOverlappingContracts(providerId, contractId, pricingScope, employerId,
                 contractToActivate.getStartDate(), contractToActivate.getEndDate());
 
         contractToActivate.setStatus(ContractStatus.ACTIVE);
@@ -589,12 +624,18 @@ public class ProviderContractService {
             if (dto.isUpdateStatus() && dto.getStatus() != null) {
                 if (contract.getStatus() != dto.getStatus()) {
                     if (dto.getStatus() == ContractStatus.ACTIVE) {
-                        // Avoid multiple active contracts for the same provider
-                        contractRepository.findActiveContractByProvider(contract.getProvider().getId())
+                        PricingScope pricingScope = contract.getPricingScope() != null
+                                ? contract.getPricingScope()
+                                : PricingScope.GLOBAL;
+                        Long employerId = contract.getEmployer() != null ? contract.getEmployer().getId() : null;
+                        resolveEmployerForScope(pricingScope, employerId);
+
+                        // Avoid multiple active contracts for the same provider and scope
+                        findActiveContractForScope(contract.getProvider().getId(), pricingScope, employerId)
                             .filter(existing -> !existing.getId().equals(contract.getId()))
                             .ifPresent(existing -> {
                                 throw new BusinessRuleException(
-                                        "يوجد عقد نشط مسبقاً لمقدم الخدمة: " + existing.getContractCode());
+                                        "يوجد عقد نشط مسبقاً لنفس مقدم الخدمة ونطاق التسعير: " + existing.getContractCode());
                             });
                     }
                     contract.setStatus(dto.getStatus());
@@ -662,14 +703,41 @@ public class ProviderContractService {
     /**
      * Check for overlapping contracts
      */
-    private void checkForOverlappingContracts(Long providerId, Long excludeId, LocalDate startDate, LocalDate endDate) {
+    private void checkForOverlappingContracts(Long providerId, Long excludeId, PricingScope pricingScope,
+            Long employerId, LocalDate startDate, LocalDate endDate) {
         if (endDate == null) {
             endDate = LocalDate.of(9999, 12, 31); // Far future date for open-ended contracts
         }
 
-        if (contractRepository.hasOverlappingContract(providerId, excludeId, startDate, endDate)) {
-            throw new BusinessRuleException("Provider has overlapping contract dates");
+        if (contractRepository.hasOverlappingContract(providerId, pricingScope, employerId, excludeId, startDate, endDate)) {
+            throw new BusinessRuleException("Provider has overlapping contract dates for the same pricing scope");
         }
+    }
+
+    private Employer resolveEmployerForScope(PricingScope pricingScope, Long employerId) {
+        PricingScope effectiveScope = pricingScope != null ? pricingScope : PricingScope.GLOBAL;
+        if (effectiveScope == PricingScope.GLOBAL) {
+            if (employerId != null) {
+                throw new BusinessRuleException("العقد العام لا يجب أن يحتوي على جهة عمل.");
+            }
+            return null;
+        }
+
+        if (employerId == null) {
+            throw new BusinessRuleException("يجب تحديد جهة العمل عند اختيار عقد خاص بجهة عمل.");
+        }
+
+        return employerRepository.findById(employerId)
+                .orElseThrow(() -> new BusinessRuleException("Employer not found: " + employerId));
+    }
+
+    private java.util.Optional<ProviderContract> findActiveContractForScope(Long providerId,
+            PricingScope pricingScope, Long employerId) {
+        PricingScope effectiveScope = pricingScope != null ? pricingScope : PricingScope.GLOBAL;
+        if (effectiveScope == PricingScope.EMPLOYER_SPECIFIC) {
+            return contractRepository.findActiveContractByProviderAndEmployer(providerId, employerId);
+        }
+        return contractRepository.findActiveContractByProvider(providerId);
     }
 
     /**

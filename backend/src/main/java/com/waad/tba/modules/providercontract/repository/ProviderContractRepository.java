@@ -2,6 +2,7 @@ package com.waad.tba.modules.providercontract.repository;
 
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -72,8 +73,19 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
        @Query("SELECT c FROM ModernProviderContract c " +
                      "WHERE c.provider.id = :providerId " +
                      "AND c.status = 'ACTIVE' " +
+                     "AND c.pricingScope = 'GLOBAL' " +
                      "AND c.active = true")
        Optional<ProviderContract> findActiveContractByProvider(@Param("providerId") Long providerId);
+
+       @Query("SELECT c FROM ModernProviderContract c " +
+                     "WHERE c.provider.id = :providerId " +
+                     "AND c.status = 'ACTIVE' " +
+                     "AND c.pricingScope = 'EMPLOYER_SPECIFIC' " +
+                     "AND c.employer.id = :employerId " +
+                     "AND c.active = true")
+       Optional<ProviderContract> findActiveContractByProviderAndEmployer(
+                     @Param("providerId") Long providerId,
+                     @Param("employerId") Long employerId);
 
        /**
         * Return distinct provider IDs that have at least one currently ACTIVE
@@ -175,10 +187,14 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
                      "AND c.id != :excludeId " +
                      "AND c.active = true " +
                      "AND c.status IN ('ACTIVE', 'SUSPENDED') " +
+                     "AND c.pricingScope = :pricingScope " +
+                     "AND ((:employerId IS NULL AND c.employer IS NULL) OR c.employer.id = :employerId) " +
                      "AND c.startDate <= :endDate " +
                      "AND (c.endDate IS NULL OR c.endDate >= :startDate)")
        boolean hasOverlappingContract(
                      @Param("providerId") Long providerId,
+                     @Param("pricingScope") PricingScope pricingScope,
+                     @Param("employerId") Long employerId,
                      @Param("excludeId") Long excludeId,
                      @Param("startDate") LocalDate startDate,
                      @Param("endDate") LocalDate endDate);

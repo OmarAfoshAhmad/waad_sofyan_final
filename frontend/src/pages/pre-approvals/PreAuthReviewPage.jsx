@@ -46,6 +46,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { reviewerPreAuthService, preApprovalsService } from 'services/api';
 import { useSnackbar } from 'notistack';
 import { useReviewer } from 'contexts/ReviewerContext';
+import { formatCurrency } from 'utils/currency-formatter';
 
 const REJECTION_REASONS = [
   { value: 'NOT_COVERED', label: 'غير مغطى ضمن الوثيقة' },
@@ -383,11 +384,11 @@ const PreAuthReviewPage = () => {
                           {line.reviewerNotes && <Typography variant="caption" color="text.secondary" display="block">ملاحظة: {line.reviewerNotes}</Typography>}
                         </TableCell>
                         <TableCell align="center"><Chip label={line.serviceCode || line.code || '-'} size="small" variant="outlined" /></TableCell>
-                        <TableCell align="right">{line.requestedAmount || line.manualPrice ? `${Number(line.requestedAmount || line.manualPrice).toLocaleString()} د.ل` : '—'}</TableCell>
+                        <TableCell align="right">{line.requestedAmount || line.manualPrice ? formatCurrency(line.requestedAmount || line.manualPrice) : '—'}</TableCell>
                         <TableCell align="right">
                           {line.status === 'PENDING' ? '—' : 
                             <Typography fontWeight="bold" color={line.status === 'REJECTED' ? 'error' : 'success.main'}>
-                              {line.approvedAmount !== null ? `${Number(line.approvedAmount).toLocaleString()} د.ل` : '—'}
+                              {line.approvedAmount !== null ? formatCurrency(line.approvedAmount) : '—'}
                             </Typography>
                           }
                         </TableCell>

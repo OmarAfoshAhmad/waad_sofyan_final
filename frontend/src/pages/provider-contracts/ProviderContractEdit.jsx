@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -29,12 +30,18 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 
 import { getProviderContractById, updateProviderContract, PRICING_MODEL_CONFIG } from 'services/api/provider-contracts.service';
+import { getEmployerSelectors } from 'services/api/employers.service';
 
 const PRICING_MODELS = [
   { value: 'DISCOUNT', label: PRICING_MODEL_CONFIG.DISCOUNT.label },
   { value: 'FIXED', label: PRICING_MODEL_CONFIG.FIXED.label },
   { value: 'TIERED', label: PRICING_MODEL_CONFIG.TIERED.label },
   { value: 'NEGOTIATED', label: PRICING_MODEL_CONFIG.NEGOTIATED.label }
+];
+
+const PRICING_SCOPES = [
+  { value: 'GLOBAL', label: 'عقد عام لكل جهات العمل' },
+  { value: 'EMPLOYER_SPECIFIC', label: 'عقد خاص بجهة عمل' }
 ];
 
 const ProviderContractEdit = () => {
@@ -52,10 +59,22 @@ const ProviderContractEdit = () => {
     staleTime: 30000
   });
 
+  const { data: employersResponse, isLoading: employersLoading } = useQuery({
+    queryKey: ['employers', 'selectors'],
+    queryFn: getEmployerSelectors,
+    staleTime: 5 * 60 * 1000
+  });
+
+  const employers = useMemo(() => {
+    return Array.isArray(employersResponse) ? employersResponse : employersResponse?.data || [];
+  }, [employersResponse]);
+
   const initialFormData = useMemo(() => {
     if (!contract) {
       return {
         contractCode: '',
+        pricingScope: 'GLOBAL',
+        employerId: '',
         startDate: null,
         endDate: null,
         pricingModel: 'DISCOUNT',
@@ -67,6 +86,8 @@ const ProviderContractEdit = () => {
 
     return {
       contractCode: contract.contractCode || '',
+      pricingScope: contract.pricingScope || 'GLOBAL',
+      employerId: contract.employer?.id || '',
       startDate: contract.startDate ? new Date(contract.startDate) : null,
       endDate: contract.endDate ? new Date(contract.endDate) : null,
       pricingModel: contract.pricingModel || 'DISCOUNT',
@@ -83,6 +104,13 @@ const ProviderContractEdit = () => {
       setFormData(initialFormData);
     }
   }, [contract, formData, initialFormData]);
+
+  const selectedEmployer = useMemo(() => {
+    if (!formData?.employerId) return null;
+    return employers.find((employer) => employer.id === formData.employerId) || contract?.employer || null;
+  }, [contract, employers, formData?.employerId]);
+
+  const canChangeScope = contract?.status === 'DRAFT';
 
   const updateMutation = useMutation({
     mutationFn: (payload) => updateProviderContract(id, payload),
@@ -111,11 +139,28 @@ const ProviderContractEdit = () => {
     }
   };
 
+  const handleScopeChange = (event) => {
+    const pricingScope = event.target.value;
+    setFormData((prev) => ({ ...prev, pricingScope, employerId: '' }));
+    setErrors((prev) => ({ ...prev, pricingScope: '', employerId: '' }));
+  };
+
+  const handleEmployerChange = (_, value) => {
+    setFormData((prev) => ({ ...prev, employerId: value?.id || '' }));
+    if (errors.employerId) {
+      setErrors((prev) => ({ ...prev, employerId: '' }));
+    }
+  };
+
   const validate = () => {
     const nextErrors = {};
 
     if (!formData?.startDate) nextErrors.startDate = 'تاريخ البداية مطلوب';
     if (!formData?.endDate) nextErrors.endDate = 'تاريخ النهاية مطلوب';
+    if (!formData?.pricingScope) nextErrors.pricingScope = 'يرجى اختيار نطاق التسعير';
+    if (formData?.pricingScope === 'EMPLOYER_SPECIFIC' && !formData?.employerId) {
+      nextErrors.employerId = 'يرجى اختيار جهة العمل لهذا العقد';
+    }
 
     if (formData?.startDate && formData?.endDate && formData.endDate <= formData.startDate) {
       nextErrors.endDate = 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية';
@@ -144,6 +189,8 @@ const ProviderContractEdit = () => {
     const payload = {
       providerId: contract.providerId || contract.provider?.id,
       contractCode: formData.contractCode,
+      pricingScope: formData.pricingScope,
+      employerId: formData.pricingScope === 'EMPLOYER_SPECIFIC' ? formData.employerId : null,
       startDate: format(formData.startDate, 'yyyy-MM-dd'),
       endDate: format(formData.endDate, 'yyyy-MM-dd'),
       pricingModel: formData.pricingModel,
@@ -181,7 +228,9 @@ const ProviderContractEdit = () => {
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             <Grid size={12}>
-              <Alert severity="info">رقم العقد ومقدم الخدمة ثابتان، ويمكنك تعديل التواريخ، نموذج التسعير، والخصم والملاحظات.</Alert>
+              <Alert severity="info">
+                نطاق التسعير وجهة العمل يمكن تعديلهما فقط والعقد في حالة مسودة؛ بعد التفعيل يصبح العقد مرجعًا ماليًا.
+              </Alert>
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
@@ -190,6 +239,50 @@ const ProviderContractEdit = () => {
 
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField fullWidth label="مقدم الخدمة" value={contract?.providerName || contract?.provider?.name || '-'} disabled />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TextField
+                select
+                fullWidth
+                label="نطاق التسعير *"
+                value={formData.pricingScope}
+                onChange={handleScopeChange}
+                error={!!errors.pricingScope}
+                helperText={errors.pricingScope || (canChangeScope ? 'عام أو خاص بجهة عمل' : 'مقفل بعد خروج العقد من المسودة')}
+                disabled={!canChangeScope || updateMutation.isPending}
+              >
+                {PRICING_SCOPES.map((scope) => (
+                  <MenuItem key={scope.value} value={scope.value}>
+                    {scope.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 8 }}>
+              <Autocomplete
+                fullWidth
+                options={employers}
+                value={selectedEmployer}
+                onChange={handleEmployerChange}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
+                getOptionLabel={(option) => option?.name || option?.label || option?.nameAr || ''}
+                loading={employersLoading}
+                disabled={!canChangeScope || formData.pricingScope !== 'EMPLOYER_SPECIFIC' || employersLoading || updateMutation.isPending}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="جهة العمل"
+                    error={!!errors.employerId}
+                    helperText={
+                      errors.employerId ||
+                      (formData.pricingScope === 'GLOBAL' ? 'غير مطلوب للعقد العام' : 'اختر جهة العمل المالكة لسعر العقد')
+                    }
+                  />
+                )}
+                noOptionsText={employersLoading ? 'جاري التحميل...' : 'لا توجد جهات عمل'}
+              />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>

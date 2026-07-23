@@ -10,8 +10,11 @@ public class PasswordHashGenerator {
 
     public static void main(String[] args) {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-        String password = args.length > 0 ? args[0]
-                : System.getenv().getOrDefault("ADMIN_DEFAULT_PASSWORD", "ChangeMe!123");
+        String password = args.length > 0 ? args[0] : System.getenv("ADMIN_DEFAULT_PASSWORD");
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Pass the password as the first argument or set ADMIN_DEFAULT_PASSWORD.");
+        }
         String hash = encoder.encode(password);
 
         System.out.println("=".repeat(80));

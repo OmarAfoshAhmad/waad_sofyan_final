@@ -9,44 +9,139 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface BenefitBucketConsumptionRepository extends JpaRepository<BenefitBucketConsumption, Long> {
+    /**
+     * Fail-closed guard for legacy/partially deployed claims. An approved claim
+     * with bucket-backed lines but without a committed ledger entry must never be
+     * silently ignored when approving a later claim for the same member.
+     */
+    @Query(value = """
+        select exists (
+            select 1
+              from claims c
+              join claim_lines cl on cl.claim_id = c.id
+             where c.member_id = :memberId
+               and c.id <> :currentClaimId
+               and c.active = true
+               and c.status in ('APPROVED', 'BATCHED', 'SETTLED')
+               and cl.applied_rule_id is not null
+               and exists (
+                   select 1
+                     from benefit_rule_buckets brb
+                     join benefit_limit_buckets b on b.id = brb.bucket_id and b.active = true
+                     left join benefit_groups g on g.id = b.benefit_group_id
+                    where brb.rule_id = cl.applied_rule_id
+                      and not (
+                          :annualLimit is not null
+                          and b.period_type = 'ANNUAL'
+                          and b.amount_limit = :annualLimit
+                          and (upper(b.code) = 'B-GENERAL' or upper(g.code) = 'G-GENERAL')
+                      )
+               )
+               and not exists (
+                   select 1 from benefit_bucket_consumptions bc
+                    where bc.claim_line_id = cl.id and bc.status = 'COMMITTED'
+               )
+        )
+        """, nativeQuery = true)
+    boolean existsUnledgeredApprovedBucketClaim(@Param("memberId") Long memberId,
+                                                  @Param("currentClaimId") Long currentClaimId,
+                                                  @Param("annualLimit") BigDecimal annualLimit);
+
+    default BigDecimal sumCommittedAmount(Long memberId, Long bucketId, LocalDate periodStart,
+                                          LocalDate periodEnd, Long excludeClaimId) {
+        return periodEnd == null
+                ? sumCommittedAmountOpenEnded(memberId, bucketId, periodStart, excludeClaimId)
+                : sumCommittedAmountBounded(memberId, bucketId, periodStart, periodEnd, excludeClaimId);
+    }
+
     @Query("""
         select coalesce(sum(c.approvedAmount), 0) from BenefitBucketConsumption c
         where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
           and c.periodStart = :periodStart
-          and ((:periodEnd is null and c.periodEnd is null) or c.periodEnd = :periodEnd)
+          and c.periodEnd = :periodEnd
           and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
         """)
-    BigDecimal sumCommittedAmount(@Param("memberId") Long memberId,
-                                  @Param("bucketId") Long bucketId,
-                                  @Param("periodStart") LocalDate periodStart,
-                                  @Param("periodEnd") LocalDate periodEnd,
-                                  @Param("excludeClaimId") Long excludeClaimId);
+    BigDecimal sumCommittedAmountBounded(@Param("memberId") Long memberId,
+                                         @Param("bucketId") Long bucketId,
+                                         @Param("periodStart") LocalDate periodStart,
+                                         @Param("periodEnd") LocalDate periodEnd,
+                                         @Param("excludeClaimId") Long excludeClaimId);
+
+    @Query("""
+        select coalesce(sum(c.approvedAmount), 0) from BenefitBucketConsumption c
+        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
+          and c.periodStart = :periodStart
+          and c.periodEnd is null
+          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
+        """)
+    BigDecimal sumCommittedAmountOpenEnded(@Param("memberId") Long memberId,
+                                           @Param("bucketId") Long bucketId,
+                                           @Param("periodStart") LocalDate periodStart,
+                                           @Param("excludeClaimId") Long excludeClaimId);
+
+    default Integer sumCommittedTimes(Long memberId, Long bucketId, LocalDate periodStart,
+                                      LocalDate periodEnd, Long excludeClaimId) {
+        return periodEnd == null
+                ? sumCommittedTimesOpenEnded(memberId, bucketId, periodStart, excludeClaimId)
+                : sumCommittedTimesBounded(memberId, bucketId, periodStart, periodEnd, excludeClaimId);
+    }
 
     @Query("""
         select coalesce(sum(c.timesConsumed), 0) from BenefitBucketConsumption c
         where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
           and c.periodStart = :periodStart
-          and ((:periodEnd is null and c.periodEnd is null) or c.periodEnd = :periodEnd)
+          and c.periodEnd = :periodEnd
           and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
         """)
-    Integer sumCommittedTimes(@Param("memberId") Long memberId,
-                              @Param("bucketId") Long bucketId,
-                              @Param("periodStart") LocalDate periodStart,
-                              @Param("periodEnd") LocalDate periodEnd,
-                              @Param("excludeClaimId") Long excludeClaimId);
+    Integer sumCommittedTimesBounded(@Param("memberId") Long memberId,
+                                     @Param("bucketId") Long bucketId,
+                                     @Param("periodStart") LocalDate periodStart,
+                                     @Param("periodEnd") LocalDate periodEnd,
+                                     @Param("excludeClaimId") Long excludeClaimId);
+
+    @Query("""
+        select coalesce(sum(c.timesConsumed), 0) from BenefitBucketConsumption c
+        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
+          and c.periodStart = :periodStart
+          and c.periodEnd is null
+          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
+        """)
+    Integer sumCommittedTimesOpenEnded(@Param("memberId") Long memberId,
+                                       @Param("bucketId") Long bucketId,
+                                       @Param("periodStart") LocalDate periodStart,
+                                       @Param("excludeClaimId") Long excludeClaimId);
+
+    default Long countCommittedServiceDays(Long memberId, Long bucketId, LocalDate periodStart,
+                                           LocalDate periodEnd, Long excludeClaimId) {
+        return periodEnd == null
+                ? countCommittedServiceDaysOpenEnded(memberId, bucketId, periodStart, excludeClaimId)
+                : countCommittedServiceDaysBounded(memberId, bucketId, periodStart, periodEnd, excludeClaimId);
+    }
 
     @Query("""
         select count(distinct c.claim.serviceDate) from BenefitBucketConsumption c
         where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
           and c.periodStart = :periodStart
-          and ((:periodEnd is null and c.periodEnd is null) or c.periodEnd = :periodEnd)
+          and c.periodEnd = :periodEnd
           and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
         """)
-    Long countCommittedServiceDays(@Param("memberId") Long memberId,
-                                   @Param("bucketId") Long bucketId,
-                                   @Param("periodStart") LocalDate periodStart,
-                                   @Param("periodEnd") LocalDate periodEnd,
-                                   @Param("excludeClaimId") Long excludeClaimId);
+    Long countCommittedServiceDaysBounded(@Param("memberId") Long memberId,
+                                          @Param("bucketId") Long bucketId,
+                                          @Param("periodStart") LocalDate periodStart,
+                                          @Param("periodEnd") LocalDate periodEnd,
+                                          @Param("excludeClaimId") Long excludeClaimId);
+
+    @Query("""
+        select count(distinct c.claim.serviceDate) from BenefitBucketConsumption c
+        where c.memberId = :memberId and c.bucket.id = :bucketId and c.status = com.waad.tba.modules.benefitpolicy.entity.BenefitBucketConsumption.Status.COMMITTED
+          and c.periodStart = :periodStart
+          and c.periodEnd is null
+          and (:excludeClaimId is null or c.claim.id <> :excludeClaimId)
+        """)
+    Long countCommittedServiceDaysOpenEnded(@Param("memberId") Long memberId,
+                                            @Param("bucketId") Long bucketId,
+                                            @Param("periodStart") LocalDate periodStart,
+                                            @Param("excludeClaimId") Long excludeClaimId);
 
     @Query("""
         select count(c) > 0 from BenefitBucketConsumption c
@@ -60,5 +155,6 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                                          @Param("excludeClaimId") Long excludeClaimId);
 
     List<BenefitBucketConsumption> findByClaimIdAndStatus(Long claimId, BenefitBucketConsumption.Status status);
+    boolean existsByBucketId(Long bucketId);
     boolean existsByIdempotencyKey(String idempotencyKey);
 }

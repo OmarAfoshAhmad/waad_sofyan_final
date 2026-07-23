@@ -60,18 +60,10 @@ public class AdjudicationReportService {
             statuses = List.of(ClaimStatus.APPROVED, ClaimStatus.SETTLED);
         }
         
-        // Fetch claims for the period
-        List<Claim> allClaims = claimRepository.findByStatusIn(statuses, null).getContent();
-        
-        // Filter by date range - use serviceDate (canonical field)
-        List<Claim> claims = allClaims.stream()
-            .filter(c -> c.getServiceDate() != null)
-            .filter(c -> !c.getServiceDate().isBefore(fromDate))
-            .filter(c -> !c.getServiceDate().isAfter(toDate))
-            .filter(c -> providerName == null || providerName.isBlank() || 
-                        (c.getProviderName() != null && 
-                         c.getProviderName().toLowerCase().contains(providerName.toLowerCase())))
-            .collect(Collectors.toList());
+        // Database-owned filtering: never load the complete claims history for a
+        // bounded report request.
+        List<Claim> claims = claimRepository.findForAdjudicationReport(
+            statuses, fromDate, toDate, providerName == null ? null : providerName.trim());
         
         // Calculate totals
         BigDecimal totalRequested = BigDecimal.ZERO;

@@ -15,7 +15,7 @@
 export const handleApiError = (error, customMessages = {}, entityName = 'العنصر') => {
   const status = error?.response?.status;
   const data = error?.response?.data;
-  const message = data?.message || data?.error || error?.response?.statusText || error?.message || 'تعذر الاتصال بالخادم أو حدث خطأ داخلي';
+  const message = data?.messageAr || data?.message || data?.error || error?.response?.statusText || error?.message || 'تعذر الاتصال بالخادم أو حدث خطأ داخلي';
   const backendErrorCode = data?.errorCode || data?.code || null;
 
   console.error(`[API Error] ${entityName}:`, {
@@ -87,7 +87,7 @@ export const handleApiError = (error, customMessages = {}, entityName = 'الع�
       break;
 
     case 422: // Unprocessable Entity
-      errorResponse.message = messages[422];
+      errorResponse.message = data?.messageAr || data?.message || messages[422];
       errorResponse.fieldErrors = data?.errors || {};
       break;
 

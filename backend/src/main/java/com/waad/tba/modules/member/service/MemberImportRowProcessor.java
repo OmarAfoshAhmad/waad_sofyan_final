@@ -45,10 +45,11 @@ public class MemberImportRowProcessor {
 
     private Optional<Employer> findEmployerCached(String nameOrCode) {
         if (nameOrCode == null || nameOrCode.isBlank()) return Optional.empty();
-        String normalized = nameOrCode.trim().toLowerCase();
-        return employerCache.computeIfAbsent(normalized, key -> {
-            return employerRepository.findByNameIgnoreCase(key)
-                    .or(() -> employerRepository.findByCode(key));
+        String lookupValue = nameOrCode.trim();
+        String cacheKey = lookupValue.toLowerCase();
+        return employerCache.computeIfAbsent(cacheKey, key -> {
+            return employerRepository.findByNameIgnoreCase(lookupValue)
+                    .or(() -> employerRepository.findByCode(lookupValue));
         });
     }
 
@@ -162,17 +163,27 @@ public class MemberImportRowProcessor {
 
         Employer rowEmployer = resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
 
-        BenefitPolicy resolvedPolicy = benefitPolicy;
-        if (resolvedPolicy == null && rowEmployer != null) {
-            resolvedPolicy = benefitPolicyRepository
-                    .findActiveEffectivePolicyForEmployer(rowEmployer.getId(), LocalDate.now())
-                    .orElse(null);
-        }
-
-        // If parent is present, use parent's policy, policyNumber and employer
+        // A dependent always belongs to the principal's employer. Prefer an existing
+        // principal policy; otherwise resolve the selected/effective employer policy.
         Employer finalEmployer = parent != null ? parent.getEmployer() : rowEmployer;
-        BenefitPolicy finalPolicy = parent != null ? parent.getBenefitPolicy() : resolvedPolicy;
-        String finalPolicyNumber = parent != null ? parent.getPolicyNumber() : policyNumber;
+        BenefitPolicy policyCandidate = parent != null && parent.getBenefitPolicy() != null
+                ? parent.getBenefitPolicy()
+                : benefitPolicy;
+        BenefitPolicy resolvedPolicy = resolveAndValidatePolicy(policyCandidate, finalEmployer, rowNum);
+        BenefitPolicy finalPolicy = resolvedPolicy;
+        String finalPolicyNumber = parent != null && parent.getPolicyNumber() != null
+                && !parent.getPolicyNumber().isBlank()
+                        ? parent.getPolicyNumber()
+                        : policyNumber;
+
+        if (parent != null && parent.getBenefitPolicy() == null) {
+            // Heal an old unlinked principal while importing one of their dependents.
+            parent.setBenefitPolicy(resolvedPolicy);
+            if (parent.getPolicyNumber() == null || parent.getPolicyNumber().isBlank()) {
+                parent.setPolicyNumber(resolvedPolicy.getPolicyCode());
+            }
+            finalPolicyNumber = parent.getPolicyNumber();
+        }
 
         Member member;
         if (existingMember != null) {
@@ -245,8 +256,11 @@ public class MemberImportRowProcessor {
         if (employeeNumber != null && !employeeNumber.isBlank())
             member.setEmployeeNumber(employeeNumber);
 
-        if (finalPolicyNumber != null && !finalPolicyNumber.isBlank())
+        if (finalPolicyNumber != null && !finalPolicyNumber.isBlank()) {
             member.setPolicyNumber(finalPolicyNumber);
+        } else {
+            member.setPolicyNumber(finalPolicy.getPolicyCode());
+        }
 
         if (startDateStr != null && !startDateStr.isBlank()) {
             LocalDate parsedStartDate = parser.parseDate(startDateStr);
@@ -270,6 +284,29 @@ public class MemberImportRowProcessor {
         }
 
         return member;
+    }
+
+    BenefitPolicy resolveAndValidatePolicy(BenefitPolicy selectedPolicy, Employer employer, int rowNum) {
+        if (employer == null) {
+            throw new BusinessRuleException("الصف " + rowNum + ": تعذر تحديد جهة العمل لربط وثيقة المنافع");
+        }
+
+        BenefitPolicy resolved = selectedPolicy != null
+                ? selectedPolicy
+                : benefitPolicyRepository
+                        .findActiveEffectivePolicyForEmployer(employer.getId(), LocalDate.now())
+                        .orElseThrow(() -> new BusinessRuleException(
+                                "الصف " + rowNum + ": لا توجد وثيقة منافع فعالة لجهة العمل " + employer.getName()));
+
+        if (resolved.getEmployer() == null || !employer.getId().equals(resolved.getEmployer().getId())) {
+            throw new BusinessRuleException(
+                    "الصف " + rowNum + ": وثيقة المنافع المختارة لا تتبع جهة عمل المستفيد");
+        }
+        if (!resolved.isEffectiveOn(LocalDate.now())) {
+            throw new BusinessRuleException(
+                    "الصف " + rowNum + ": وثيقة المنافع المختارة غير فعالة في تاريخ الاستيراد");
+        }
+        return resolved;
     }
 
     Employer resolveEmployerForRow(Row row, int rowNum, Map<String, Integer> fieldToColumnIndex,

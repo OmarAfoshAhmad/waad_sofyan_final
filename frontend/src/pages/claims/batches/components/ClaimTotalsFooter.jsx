@@ -7,6 +7,7 @@ export const ClaimTotalsFooter = ({
   handleSave,
   saving,
   isDirty,
+  coveragePending,
   setIsClaimRejected,
   setIsDirty,
   setRejectionInput,
@@ -39,8 +40,8 @@ export const ClaimTotalsFooter = ({
       <Button
         variant="contained"
         color={showRejected ? 'error' : 'primary'}
-        onClick={handleSave}
-        disabled={saving || !isDirty}
+        onClick={() => handleSave(true)}
+        disabled={saving || !isDirty || coveragePending}
         sx={{ px: '2.0rem', fontWeight: 600 }}
       >
         {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : t('claimEntry.saveAndAdd')}

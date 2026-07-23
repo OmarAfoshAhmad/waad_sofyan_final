@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,8 @@ import org.springframework.mock.web.MockMultipartFile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.dto.MemberImportPreviewDto;
@@ -107,8 +110,15 @@ class MemberExcelImportServiceTest {
 
         employer = Employer.builder().id(10L).code("EMP1").name("Employer One").active(true).build();
 
+        BenefitPolicy activePolicy = BenefitPolicy.builder()
+                .id(20L).name("Active Policy").policyCode("POL-1").employer(employer)
+                .startDate(LocalDate.now().minusDays(1)).endDate(LocalDate.now().plusDays(1))
+                .status(BenefitPolicyStatus.ACTIVE).build();
+
         when(employerRepository.findAll()).thenReturn(List.of(employer));
-        when(benefitPolicyRepository.findAll()).thenReturn(List.of());
+        when(benefitPolicyRepository.findAll()).thenReturn(List.of(activePolicy));
+        when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(10L, LocalDate.now()))
+                .thenReturn(Optional.of(activePolicy));
         when(authorizationService.getCurrentUser()).thenReturn(User.builder().id(1L).username("tester").build());
 
         when(employerRepository.findByNameIgnoreCase(eq("EMP1"))).thenReturn(Optional.empty());

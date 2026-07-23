@@ -10,7 +10,9 @@ import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
+import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.modules.claim.service.CoverageEngineService;
@@ -22,6 +24,7 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.BeanUtils;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +45,7 @@ public class ClaimMapper {
         private final ProviderContractService providerContractService;
         private final BenefitPolicyRepository benefitPolicyRepository;
         private final MedicalCategoryRepository medicalCategoryRepository;
+        private final MedicalServiceRepository medicalServiceRepository;
         private final ProviderContractPricingItemRepository pricingItemRepository;
         private final ProviderContractRepository providerContractRepository;
         private final ClaimBatchRepository claimBatchRepository;
@@ -52,7 +56,7 @@ public class ClaimMapper {
         private static final BigDecimal EPSILON = new BigDecimal("0.01");
 
         private com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy resolvePolicy(
-                        com.waad.tba.modules.member.entity.Member member) {
+                        com.waad.tba.modules.member.entity.Member member, LocalDate serviceDate) {
                 if (member == null)
                         return null;
                 var direct = member.getBenefitPolicy();
@@ -61,7 +65,7 @@ public class ClaimMapper {
                 if (member.getEmployer() != null) {
                         return benefitPolicyRepository
                                         .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(),
-                                                        LocalDate.now())
+                                                        serviceDate != null ? serviceDate : LocalDate.now())
                                         .orElse(null);
                 }
                 return null;
@@ -113,8 +117,8 @@ public class ClaimMapper {
         }
 
         private void processEngineCalculations(Claim claim, List<ClaimLineDto> lineDtos) {
-                Long policyId = resolvePolicy(claim.getMember()) != null ? resolvePolicy(claim.getMember()).getId()
-                                : null;
+                var effectivePolicy = resolvePolicy(claim.getMember(), claim.getServiceDate());
+                Long policyId = effectivePolicy != null ? effectivePolicy.getId() : null;
                 Map<Long, BatchUsageAccumulator> batchUsageContext = new HashMap<>();
 
                 BulkCoverageEngineRequest engineRequest = BulkCoverageEngineRequest.builder()
@@ -132,6 +136,9 @@ public class ClaimMapper {
                 BigDecimal totalRequestedAmount = BigDecimal.ZERO;
                 BigDecimal contractDiscountPercent = resolveActiveProviderDiscountPercent(claim.getProviderId());
                 claim.setAppliedDiscountPercent(contractDiscountPercent);
+                Long claimEmployerId = claim.getMember() != null && claim.getMember().getEmployer() != null
+                                ? claim.getMember().getEmployer().getId()
+                                : null;
 
                 for (ClaimLineDto lineDto : lineDtos) {
                         BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice()
@@ -139,23 +146,52 @@ public class ClaimMapper {
                         BigDecimal resolvedUnitPrice = null;
                         Long resolvedPricingItemId = lineDto.getPricingItemId();
                         String codeToLookup = lineDto.getServiceCode();
+                        String resolvedServiceName = lineDto.getServiceName();
+                        Long catalogCategoryId = lineDto.getServiceCategoryId();
 
-                        if (codeToLookup == null && resolvedPricingItemId != null) {
-                                codeToLookup = pricingItemRepository.findById(resolvedPricingItemId)
-                                                .map(item -> item.getServiceCode())
-                                                .orElse(null);
+                        // The public DTO accepts the unified-catalog service ID as its
+                        // canonical input. Resolve its denormalized values server-side;
+                        // callers must not have to resend editable code/name fields.
+                        if (lineDto.getMedicalServiceId() != null) {
+                                var catalogService = medicalServiceRepository.findById(lineDto.getMedicalServiceId())
+                                                .orElseThrow(() -> new IllegalArgumentException(
+                                                                "Medical service not found: "
+                                                                                + lineDto.getMedicalServiceId()));
+                                codeToLookup = catalogService.getCode();
+                                resolvedServiceName = catalogService.getName();
+                                catalogCategoryId = catalogService.getCategoryId();
+                        }
+
+                        ProviderContractPricingItem matchedPricingItem = resolvePricingItemForLine(
+                                        claim.getProviderId(),
+                                        claimEmployerId,
+                                        resolvedPricingItemId,
+                                        codeToLookup,
+                                        resolvedServiceName);
+
+                        if (matchedPricingItem != null) {
+                                resolvedPricingItemId = matchedPricingItem.getId();
+                                if (!hasBusinessValue(codeToLookup)) {
+                                        codeToLookup = matchedPricingItem.getServiceCode();
+                                }
                         }
 
                         if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
                                 resolvedUnitPrice = enteredUnitPrice;
-                        } else if (codeToLookup != null) {
+                        } else if (hasBusinessValue(codeToLookup)) {
                                 EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
-                                                claim.getProviderId(), codeToLookup, claim.getServiceDate());
+                                                claim.getProviderId(), claimEmployerId, codeToLookup, claim.getServiceDate());
 
                                 if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
                                         resolvedUnitPrice = priceResponse.getContractPrice();
                                         resolvedPricingItemId = priceResponse.getPricingItemId();
                                 }
+                        }
+
+                        if (resolvedUnitPrice == null && matchedPricingItem != null) {
+                                resolvedUnitPrice = matchedPricingItem.getContractPrice() != null
+                                                ? matchedPricingItem.getContractPrice()
+                                                : enteredUnitPrice;
                         }
 
                         if (resolvedUnitPrice == null && resolvedPricingItemId != null) {
@@ -165,10 +201,15 @@ public class ClaimMapper {
                         }
 
                         Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
-                        BigDecimal lineRequestedTotal = enteredUnitPrice.multiply(BigDecimal.valueOf(quantity));
+                        BigDecimal requestedUnitPrice = enteredUnitPrice.compareTo(BigDecimal.ZERO) > 0
+                                        ? enteredUnitPrice
+                                        : (resolvedUnitPrice != null ? resolvedUnitPrice : BigDecimal.ZERO);
+                        BigDecimal lineRequestedTotal = requestedUnitPrice.multiply(BigDecimal.valueOf(quantity));
 
                         Long pricingItemCategoryId = null;
-                        if (resolvedPricingItemId != null) {
+                        if (matchedPricingItem != null && matchedPricingItem.getMedicalCategory() != null) {
+                                pricingItemCategoryId = matchedPricingItem.getMedicalCategory().getId();
+                        } else if (resolvedPricingItemId != null) {
                                 pricingItemCategoryId = pricingItemRepository.findById(resolvedPricingItemId)
                                                 .map(item -> item.getMedicalCategory() != null
                                                                 ? item.getMedicalCategory().getId()
@@ -177,8 +218,14 @@ public class ClaimMapper {
                         }
 
                         Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
-                                        : lineDto.getServiceCategoryId();
+                                        : catalogCategoryId;
                         String serviceCatName = lineDto.getServiceCategoryName();
+                        if (serviceCatName == null && matchedPricingItem != null
+                                        && matchedPricingItem.getMedicalCategory() != null) {
+                                serviceCatName = matchedPricingItem.getMedicalCategory().getNameAr() != null
+                                                ? matchedPricingItem.getMedicalCategory().getNameAr()
+                                                : matchedPricingItem.getMedicalCategory().getName();
+                        }
 
                         if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
                                 String targetCode = "GEN-MEDICATION".equals(codeToLookup)
@@ -196,7 +243,7 @@ public class ClaimMapper {
                                         .serviceId(resolvedPricingItemId)
                                         .categoryId(serviceCatIdForCoverage)
                                         .serviceCategoryId(serviceCatIdForCoverage)
-                                        .enteredUnitPrice(enteredUnitPrice)
+                                        .enteredUnitPrice(requestedUnitPrice)
                                         .contractPrice(resolvedUnitPrice)
                                         .quantity(quantity)
                                         .manualRefusedAmount(lineDto.getManualRefusedAmount())
@@ -220,19 +267,26 @@ public class ClaimMapper {
                         BigDecimal patientRate = BigDecimal.valueOf(100 - normalizedCoverage);
 
                         BigDecimal gross = scale2(lineRequestedTotal);
+                        BigDecimal effectiveGross = result.getEffectiveTotal() != null
+                                        ? scale2(result.getEffectiveTotal())
+                                        : gross;
+                        BigDecimal allowedGross = maxZero(scale2(
+                                        effectiveGross.subtract(maxZero(result.getLimitRefused()))));
                         BigDecimal patientShare = scale2(
-                                        gross.multiply(patientRate).divide(HUNDRED, 2, RoundingMode.HALF_UP));
-                        BigDecimal providerShare = maxZero(scale2(gross.subtract(patientShare)));
+                                        allowedGross.multiply(patientRate).divide(HUNDRED, 2, RoundingMode.HALF_UP));
+                        BigDecimal providerShare = maxZero(scale2(allowedGross.subtract(patientShare)));
 
                         boolean beforeRejection = claim.getDiscountBeforeRejection() != Boolean.FALSE;
                         BigDecimal rejectedAmount;
                         BigDecimal finalPayable;
                         BigDecimal contractDiscount;
 
-                        BigDecimal systemRejected = maxZero(result.getSystemRefusedAmount());
+                        BigDecimal priceExcess = maxZero(result.getPriceRefused());
                         BigDecimal manualRejection = maxZero(manualRefused);
-                        // If the line is marked as rejected, the provider share is the candidate for rejection (Patient still pays their co-pay)
-                        BigDecimal rejectionCandidate = isRejected ? providerShare : maxZero(scale2(systemRejected.add(manualRejection)));
+                        // Price and benefit-limit excesses have already reduced
+                        // effectiveGross/allowedGross. Applying them again here
+                        // would double-reject the same amount.
+                        BigDecimal rejectionCandidate = isRejected ? providerShare : manualRejection;
 
                         if (beforeRejection) {
                             // MODE: BEFORE (Discount on full provider share, then subtract rejection)
@@ -251,13 +305,18 @@ public class ClaimMapper {
                             finalPayable = maxZero(scale2(afterRejection.subtract(contractDiscount)));
                         }
 
+                        BigDecimal financialRefused = scale2(
+                                        priceExcess
+                                                        .add(maxZero(result.getLimitRefused()))
+                                                        .add(rejectedAmount));
+
                         ClaimLine line = ClaimLine.builder()
                                         .claim(claim)
                                         .serviceCode(result.getServiceCode() != null ? result.getServiceCode()
-                                                        : (lineDto.getServiceCode() != null ? lineDto.getServiceCode()
+                                                        : (codeToLookup != null ? codeToLookup
                                                                         : "N/A"))
                                         .serviceName(result.getServiceName() != null ? result.getServiceName()
-                                                        : (lineDto.getServiceName() != null ? lineDto.getServiceName()
+                                                        : (resolvedServiceName != null ? resolvedServiceName
                                                                         : "Unknown Service"))
                                         .pricingItemId(resolvedPricingItemId)
                                         .serviceCategoryId(serviceCatIdForCoverage)
@@ -286,16 +345,16 @@ public class ClaimMapper {
                                                                         : lineDto.getManualRefusalReason())
                                         .unitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
                                         .totalPrice(result.getEffectiveTotal())
-                                        .requestedUnitPrice(enteredUnitPrice)
+                                        .requestedUnitPrice(requestedUnitPrice)
                                         .approvedUnitPrice(result.getEffectiveUnitPrice())
                                         .quantity(quantity)
                                         .requestedTotal(lineRequestedTotal)
                                         .approvedAmount(finalPayable)
                                         .companyShare(finalPayable)
                                         .patientShare(patientShare)
-                                        .refusedAmount(rejectedAmount) // actual rejected (post-discount) not raw candidate
+                                        .refusedAmount(financialRefused)
                                         .priceExcessRefused(isRejected ? BigDecimal.ZERO
-                                                        : maxZero(result.getPriceRefused()))
+                                                        : priceExcess)
                                         .limitRefused(isRejected ? BigDecimal.ZERO : maxZero(result.getLimitRefused()))
                                         .rejected(isRejected)
                                         .rejectionReason(lineDto.getRejectionReason() != null
@@ -311,8 +370,39 @@ public class ClaimMapper {
                 }
 
                 if (claim.getLines() != null) {
+                        List<ClaimLine> persistedLines = new ArrayList<>(claim.getLines());
+                        Map<Long, ClaimLine> persistedById = persistedLines.stream()
+                                        .filter(existing -> existing.getId() != null)
+                                        .collect(Collectors.toMap(ClaimLine::getId, existing -> existing));
+                        List<ClaimLine> reconciled = new ArrayList<>(lines.size());
+
+                        for (int i = 0; i < lines.size(); i++) {
+                                ClaimLine calculated = lines.get(i);
+                                Long requestedId = lineDtos.get(i).getId();
+                                ClaimLine existing = requestedId == null ? null : persistedById.get(requestedId);
+
+                                // Backward compatibility for old clients that did not send line IDs:
+                                // preserve by position only when the shape is unchanged.
+                                if (existing == null && requestedId == null && persistedLines.size() == lines.size()) {
+                                        existing = persistedLines.get(i);
+                                }
+                                if (requestedId != null && existing == null) {
+                                        throw new IllegalArgumentException(
+                                                        "بند المطالبة رقم " + requestedId + " لا يتبع هذه المطالبة.");
+                                }
+
+                                if (existing != null) {
+                                        BeanUtils.copyProperties(calculated, existing, "id", "version", "claim");
+                                        existing.setCalculationVersion(
+                                                        Optional.ofNullable(existing.getCalculationVersion()).orElse(1) + 1);
+                                        reconciled.add(existing);
+                                } else {
+                                        reconciled.add(calculated);
+                                }
+                        }
+
                         claim.getLines().clear();
-                        claim.getLines().addAll(lines);
+                        claim.getLines().addAll(reconciled);
                 } else {
                         claim.setLines(lines);
                 }
@@ -332,31 +422,20 @@ public class ClaimMapper {
                                 .map(l -> l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                BigDecimal discountRate = claim.getAppliedDiscountPercent() != null ? claim.getAppliedDiscountPercent()
-                                : BigDecimal.ZERO;
-                boolean beforeRejection = claim.getDiscountBeforeRejection() != Boolean.FALSE;
-
-                BigDecimal providerShare = scale2(totalRequested.subtract(totalPatientShare));
-                BigDecimal totalApproved;
-
-                if (beforeRejection) {
-                        // MODE: BEFORE (Discount on full provider share, then subtract rejection)
-                        BigDecimal discount = scale2(providerShare.multiply(discountRate)
-                                        .divide(HUNDRED, 2, RoundingMode.HALF_UP));
-                        BigDecimal afterDiscount = scale2(providerShare.subtract(discount));
-                        totalApproved = maxZero(scale2(afterDiscount.subtract(totalRefused)));
-                } else {
-                        // MODE: AFTER (Subtract rejection first, then discount on remainder)
-                        BigDecimal afterRejection = maxZero(scale2(providerShare.subtract(totalRefused)));
-                        BigDecimal discount = scale2(afterRejection.multiply(discountRate)
-                                        .divide(HUNDRED, 2, RoundingMode.HALF_UP));
-                        totalApproved = maxZero(scale2(afterRejection.subtract(discount)));
-                }
+                BigDecimal totalApproved = lines.stream()
+                                .map(l -> l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                totalApproved = scale2(totalApproved);
+                BigDecimal totalDiscount = maxZero(scale2(
+                                totalRequested.subtract(totalPatientShare).subtract(totalRefused).subtract(totalApproved)));
 
                 claim.setRequestedAmount(totalRequested);
                 claim.setRefusedAmount(totalRefused);
+                claim.setApprovedAmount(totalApproved);
                 claim.setNetProviderAmount(totalApproved);
                 claim.setPatientCoPay(totalPatientShare);
+                claim.setCompanyDiscountAmount(totalDiscount);
+                claim.setDifferenceAmount(scale2(totalRequested.subtract(totalApproved)));
 
                 // Validate line-level balance: for each line, companyShare + patientShare + refusedAmount == requestedTotal
                 validateLineBalances(lines);
@@ -424,6 +503,37 @@ public class ClaimMapper {
                 processEngineCalculations(claim, lineDtos);
         }
 
+        /**
+         * Canonical approval recalculation. Reviewer decisions are converted back
+         * into engine inputs, then the exact same pricing/coverage path used by
+         * direct entry rebuilds every line and the claim totals.
+         */
+        public void recalculateForApproval(Claim claim) {
+                if (claim.getLines() == null || claim.getLines().isEmpty()) {
+                        throw new IllegalArgumentException("لا يمكن احتساب مطالبة بدون بنود");
+                }
+                List<ClaimLineDto> inputs = new ArrayList<>(claim.getLines().size());
+                for (ClaimLine line : claim.getLines()) {
+                        inputs.add(ClaimLineDto.builder()
+                                        .id(line.getId())
+                                        .pricingItemId(line.getPricingItemId())
+                                        .serviceCode(line.getServiceCode())
+                                        .serviceName(line.getServiceName())
+                                        .serviceCategoryId(line.getServiceCategoryId())
+                                        .serviceCategoryName(line.getServiceCategoryName())
+                                        .quantity(line.getQuantity())
+                                        .unitPrice(line.getRequestedUnitPrice() != null
+                                                        ? line.getRequestedUnitPrice()
+                                                        : line.getUnitPrice())
+                                        .rejected(line.getRejected())
+                                        .rejectionReason(line.getRejectionReason())
+                                        .manualRefusedAmount(line.getManualRefusedAmount())
+                                        .manualRefusalReason(line.getManualRefusalReason())
+                                        .build());
+                }
+                processEngineCalculations(claim, inputs);
+        }
+
         public ClaimViewDto toViewDto(Claim claim) {
                 if (claim == null)
                         return null;
@@ -450,6 +560,7 @@ public class ClaimMapper {
                                 .doctorName(claim.getDoctorName())
                                 .serviceDate(claim.getServiceDate())
                                 .status(claim.getStatus())
+                                .submissionSource(claim.getSubmissionSource())
                                 .requestedAmount(claim.getRequestedAmount())
                                 .totalAmount(claim.getRequestedAmount())
                                 .approvedAmount(claim.getApprovedAmount())
@@ -475,6 +586,13 @@ public class ClaimMapper {
                                 .diagnosisDescription(claim.getDiagnosisDescription())
                                 .complaint(claim.getComplaint())
                                 .reviewerComment(claim.getReviewerComment())
+                                .reviewedAt(claim.getReviewedAt())
+                                .reviewedById(claim.getReviewedById())
+                                .reviewedBy(claim.getReviewedBy())
+                                .reviewPaused(Boolean.TRUE.equals(claim.getReviewPaused()))
+                                .reviewPauseReason(claim.getReviewPauseReason())
+                                .reviewPausedAt(claim.getReviewPausedAt())
+                                .reviewPausedBy(claim.getReviewPausedBy())
                                 .encounterType(claim.getEncounterType())
                                 .fullCoverage(claim.getFullCoverage())
                                 .claimBatchId(claim.getClaimBatch() != null ? claim.getClaimBatch().getId() : null)
@@ -489,6 +607,9 @@ public class ClaimMapper {
                                 .deletedAt(claim.getDeletedAt())
                                 .deletedBy(claim.getDeletedBy())
                                 .voidReason(claim.getVoidReason())
+                                .paymentReference(claim.getPaymentReference())
+                                .settledAt(claim.getSettledAt())
+                                .settlementNotes(claim.getSettlementNotes())
                                 .build();
         }
 
@@ -502,6 +623,7 @@ public class ClaimMapper {
                                 .serviceCategoryName(line.getServiceCategoryName())
                                 .appliedCategoryId(line.getAppliedCategoryId())
                                 .appliedCategoryName(line.getAppliedCategoryName())
+                                .quantity(line.getQuantity())
                                 .unitPrice(line.getUnitPrice())
                                 .totalPrice(line.getTotalPrice())
                                 .requestedUnitPrice(line.getRequestedUnitPrice())
@@ -517,10 +639,91 @@ public class ClaimMapper {
                                 .manualRefusalReason(line.getManualRefusalReason())
                                 .coveragePercent(line.getCoveragePercentSnapshot())
                                 .patientSharePercent(line.getPatientCopayPercentSnapshot())
-                                .benefitLimit(line.getBenefitLimit())
+                                .benefitLimit(line.getAmountLimitSnapshot() != null
+                                                ? line.getAmountLimitSnapshot()
+                                                : line.getBenefitLimit())
+                                .timesLimit(line.getTimesLimitSnapshot())
+                                .usedAmount(line.getUsedAmountSnapshot())
+                                .remainingAmount(line.getRemainingAmountSnapshot())
                                 .companyShare(line.getCompanyShare())
                                 .patientShare(line.getPatientShare())
                                 .requiresPA(line.getRequiresPA())
                                 .build();
+        }
+
+        private ProviderContractPricingItem resolvePricingItemForLine(
+                        Long providerId,
+                        Long employerId,
+                        Long explicitPricingItemId,
+                        String serviceCode,
+                        String serviceName) {
+                if (explicitPricingItemId != null) {
+                        return pricingItemRepository.findById(explicitPricingItemId)
+                                        .filter(item -> Boolean.TRUE.equals(item.getActive()))
+                                        .orElse(null);
+                }
+
+                if (!hasBusinessValue(serviceCode) && !hasBusinessValue(serviceName)) {
+                        return null;
+                }
+
+                return pricingItemRepository.findAllServicesByProvider(providerId).stream()
+                                .filter(item -> pricingItemAppliesToEmployer(item, employerId))
+                                .filter(item -> matchesPricingItem(item, serviceCode, serviceName))
+                                .sorted(Comparator.comparingInt(item -> pricingScopeRank(item, employerId)))
+                                .findFirst()
+                                .orElse(null);
+        }
+
+        private boolean matchesPricingItem(ProviderContractPricingItem item, String serviceCode, String serviceName) {
+                if (item == null) {
+                        return false;
+                }
+                if (hasBusinessValue(serviceCode) && hasBusinessValue(item.getServiceCode())
+                                && item.getServiceCode().trim().equalsIgnoreCase(serviceCode.trim())) {
+                        return true;
+                }
+                return hasBusinessValue(serviceName)
+                                && hasBusinessValue(item.getServiceName())
+                                && item.getServiceName().trim().equalsIgnoreCase(serviceName.trim());
+        }
+
+        private boolean pricingItemAppliesToEmployer(ProviderContractPricingItem item, Long employerId) {
+                if (item == null || item.getContract() == null || item.getContract().getPricingScope() == null) {
+                        return true;
+                }
+                String scope = item.getContract().getPricingScope().name();
+                if ("GLOBAL".equals(scope)) {
+                        return true;
+                }
+                return "EMPLOYER_SPECIFIC".equals(scope)
+                                && employerId != null
+                                && item.getContract().getEmployer() != null
+                                && employerId.equals(item.getContract().getEmployer().getId());
+        }
+
+        private int pricingScopeRank(ProviderContractPricingItem item, Long employerId) {
+                if (item == null || item.getContract() == null || item.getContract().getPricingScope() == null) {
+                        return 2;
+                }
+                String scope = item.getContract().getPricingScope().name();
+                if ("EMPLOYER_SPECIFIC".equals(scope)
+                                && employerId != null
+                                && item.getContract().getEmployer() != null
+                                && employerId.equals(item.getContract().getEmployer().getId())) {
+                        return 0;
+                }
+                if ("GLOBAL".equals(scope)) {
+                        return 1;
+                }
+                return 2;
+        }
+
+        private boolean hasBusinessValue(String value) {
+                if (value == null) {
+                        return false;
+                }
+                String trimmed = value.trim();
+                return !trimmed.isEmpty() && !"-".equals(trimmed);
         }
 }

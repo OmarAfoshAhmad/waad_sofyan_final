@@ -30,7 +30,6 @@ import com.waad.tba.modules.claim.dto.ClaimDataUpdateDto;
 import com.waad.tba.modules.claim.dto.ClaimLineDto;
 import com.waad.tba.modules.claim.dto.ClaimRejectDto;
 import com.waad.tba.modules.claim.dto.ClaimReturnForInfoDto;
-import com.waad.tba.modules.claim.dto.ClaimReviewDto;
 import com.waad.tba.modules.claim.dto.ClaimSettleDto;
 import com.waad.tba.modules.claim.dto.ClaimUpdateDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
@@ -162,6 +161,8 @@ public class ClaimService {
 
     // Phase 12 (2026-03-13): God-Class Refactoring
     private final ClaimReviewService claimReviewService;
+    private final com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService benefitBucketLedgerService;
+    private final ClaimFinancialSnapshotService financialSnapshotService;
 
     // Jakarta persistence for native cleanup (RESTRICT constraint bypass)
     private final jakarta.persistence.EntityManager em;
@@ -277,6 +278,21 @@ public class ClaimService {
         validateCreateDto(dto);
         validateAndEnforceProviderId(dto, currentUser);
 
+        // A provider submits evidence; it never adjudicates its own claim. Keep
+        // the internal direct-entry workflow unchanged for authorized company
+        // staff, while forcing portal submissions through DRAFT → SUBMITTED → review.
+        if (currentUser != null && "PROVIDER_STAFF".equals(currentUser.getUserType())) {
+            dto.setStatus(ClaimStatus.DRAFT);
+            dto.setFullCoverage(false);
+            if (dto.getLines() != null) {
+                dto.getLines().forEach(line -> {
+                    line.setRejected(false);
+                    line.setRejectionReason(null);
+                    line.setManualRefusedAmount(BigDecimal.ZERO);
+                });
+            }
+        }
+
         // ═══════════════════════════════════════════════════════════════════════════
         // STEP 2: Pre-fetch data for Pure Mapping (Phase 2 Performance Hardening)
         // ═══════════════════════════════════════════════════════════════════════════
@@ -355,8 +371,22 @@ public class ClaimService {
         }
 
         Claim claim = claimMapper.toEntity(dto, visit, provider, preAuth, claimBatch);
+        claim.setSubmissionSource(currentUser != null && "PROVIDER_STAFF".equals(currentUser.getUserType())
+                ? com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL
+                : com.waad.tba.modules.claim.entity.ClaimSubmissionSource.INTERNAL_DIRECT);
         // Status set to APPROVED by mapper — direct entry model (no review workflow)
         Claim savedClaim = claimRepository.save(claim);
+        if (savedClaim.getStatus() == ClaimStatus.APPROVED) {
+            financialSnapshotService.finalizeSnapshot(savedClaim);
+            savedClaim = claimRepository.save(savedClaim);
+        }
+
+        // A visit must stop being considered "open" as soon as a claim is attached.
+        // Otherwise the visit remains REGISTERED forever and the smart lock blocks
+        // every later visit for the same member/provider, even when this claim is
+        // already approved. Keep both writes in this service transaction.
+        visit.updateStatusForClaim();
+        visitRepository.save(visit);
 
         // Assign canonical claim number now that ID is available
         savedClaim.setClaimNumber("CLM-" + savedClaim.getId());
@@ -367,10 +397,13 @@ public class ClaimService {
             claimAuditService.recordCreation(savedClaim, currentUser);
         }
 
-        log.info("✅ Claim {} created in APPROVED status (Direct Implementation)", savedClaim.getId());
+        log.info("✅ Claim {} created in {} status", savedClaim.getId(), savedClaim.getStatus());
 
-        // Credit provider account immediately upon creation (same as approval event)
-        if (savedClaim.getProviderId() != null
+        // Financial side effects are legal only after a real approval. Publishing
+        // this event for SUBMITTED/UNDER_REVIEW claims consumes benefit buckets
+        // and credits provider accounts before a reviewer approves the claim.
+        if (savedClaim.getStatus() == ClaimStatus.APPROVED
+                && savedClaim.getProviderId() != null
                 && savedClaim.getNetPayableAmount().compareTo(java.math.BigDecimal.ZERO) > 0) {
             eventPublisher.publishEvent(new ClaimApprovedEvent(
                     this,
@@ -383,7 +416,8 @@ public class ClaimService {
         // ═══════════════════════════════════════════════════════════════════════════
         // PHASE 5: Auto-mark PreAuthorization as USED when linked to claim
         // ═══════════════════════════════════════════════════════════════════════════
-        if (savedClaim.getPreAuthorization() != null) {
+        if (savedClaim.getStatus() == ClaimStatus.APPROVED
+                && savedClaim.getPreAuthorization() != null) {
             PreAuthorization linkedPreAuth = savedClaim.getPreAuthorization();
 
             // Auto-transition to USED if currently APPROVED or ACKNOWLEDGED
@@ -440,7 +474,7 @@ public class ClaimService {
     public ClaimViewDto updateClaim(Long id, ClaimUpdateDto dto) {
         log.info("📝 Updating claim {}", id);
 
-        Claim claim = claimRepository.findById(id)
+        Claim claim = claimRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
         User currentUser = authorizationService.getCurrentUser();
@@ -561,16 +595,15 @@ public class ClaimService {
     public ClaimViewDto updateClaimData(Long id, ClaimDataUpdateDto dto) {
         log.info("📝 Updating claim DATA: id={}", id);
 
-        Claim claim = claimRepository.findById(id)
+        Claim claim = claimRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
         User currentUser = authorizationService.getCurrentUser();
 
         // PART 2 — CLAIM SAFETY: Protect Claim Modification After Submission
         if (claim.getStatus() != ClaimStatus.DRAFT &&
-                claim.getStatus() != ClaimStatus.APPROVED &&
                 claim.getStatus() != ClaimStatus.NEEDS_CORRECTION &&
-                claim.getStatus() != ClaimStatus.REJECTED) {
+                claim.getStatus() != ClaimStatus.APPROVED) {
             throw new IllegalStateException(
                     "Claim cannot be modified in current status: " + claim.getStatus());
         }
@@ -586,11 +619,14 @@ public class ClaimService {
         reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
 
         // SECURITY: Verify claim is in editable status
-        if (!claim.getStatus().allowsEdit()) {
+        if (!claim.getStatus().allowsEdit() &&
+                claim.getStatus() != ClaimStatus.APPROVED) {
             throw new BusinessRuleException(
                     String.format("Cannot edit claim in %s status.",
                             claim.getStatus()));
         }
+
+        BigDecimal oldApprovedAmount = claim.getApprovedAmount();
 
         // Update data fields only
         if (dto.getDoctorName() != null) {
@@ -631,10 +667,22 @@ public class ClaimService {
             }
         }
 
-        // Allow status update when re-editing a REJECTED claim (admin corrects and
-        // re-approves)
+        // Trusted internal-entry correction path. Portal claims must be corrected
+        // and re-submitted to medical review; they may never jump directly to
+        // APPROVED through the data endpoint.
         ClaimStatus prevStatus = claim.getStatus();
-        if (dto.getStatus() != null && claim.getStatus() == ClaimStatus.REJECTED) {
+        boolean internalCorrectionReapproval = prevStatus == ClaimStatus.NEEDS_CORRECTION
+                && dto.getStatus() == ClaimStatus.APPROVED
+                && claim.getSubmissionSource() != com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL;
+        if (internalCorrectionReapproval) {
+            claim.setReviewerComment(null);
+            claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
+            log.info("✅ Internal claim {} corrected and re-approved", id);
+        } else if (dto.getStatus() == ClaimStatus.APPROVED
+                && prevStatus == ClaimStatus.NEEDS_CORRECTION
+                && claim.getSubmissionSource() == com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL) {
+            throw new BusinessRuleException("يجب إعادة إرسال مطالبة البوابة للمراجعة ولا يمكن اعتمادها من شاشة تعديل البيانات");
+        } else if (dto.getStatus() != null && claim.getStatus() == ClaimStatus.REJECTED) {
             ClaimStatus newStatus = dto.getStatus();
             if (newStatus == ClaimStatus.APPROVED) {
                 // Reset financial fields set to 0 during REJECTED so calculateFields()
@@ -666,14 +714,50 @@ public class ClaimService {
             log.info("🔴 APPROVED claim {} rejected via StateMachine by {}", id, currentUser.getEmail());
         }
 
-        // DRAFT line edits (services/categories/quantities) with backend contract
+        // Approved edits are a financial replacement, not a destructive rewrite:
+        // neutralize the old ledger rows before recalculating the same persisted lines.
+        boolean approvedLinesEdit = dto.getLines() != null && prevStatus == ClaimStatus.APPROVED
+                && claim.getStatus() == ClaimStatus.APPROVED;
+        if (approvedLinesEdit) {
+            Set<Long> persistedLineIds = claim.getLines().stream()
+                    .map(com.waad.tba.modules.claim.entity.ClaimLine::getId)
+                    .filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            Set<Long> submittedLineIds = dto.getLines().stream()
+                    .map(com.waad.tba.modules.claim.dto.ClaimLineDto::getId)
+                    .filter(Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!submittedLineIds.isEmpty() && !submittedLineIds.containsAll(persistedLineIds)) {
+                throw new BusinessRuleException(
+                        "لا يمكن حذف بند من مطالبة معتمدة لأنه مرتبط بسجل مالي. ارفض المطالبة أو أنشئ تسوية تصحيحية.");
+            }
+            benefitBucketLedgerService.reverseClaim(id);
+        }
+
+        // Line edits with backend contract re-pricing.
         // re-pricing
         if (dto.getLines() != null) {
             claimMapper.replaceClaimLinesForDraft(claim, dto.getLines());
         }
 
         // Save and return
-        Claim updatedClaim = claimRepository.save(claim);
+        Claim updatedClaim = claimRepository.saveAndFlush(claim);
+        if (approvedLinesEdit || internalCorrectionReapproval) {
+            benefitBucketLedgerService.commitClaim(updatedClaim.getId());
+        }
+
+        if (approvedLinesEdit
+                && oldApprovedAmount != null
+                && updatedClaim.getApprovedAmount() != null
+                && oldApprovedAmount.compareTo(updatedClaim.getApprovedAmount()) != 0
+                && updatedClaim.getProviderId() != null) {
+            eventPublisher.publishEvent(new ClaimAmountAdjustedEvent(
+                    this, updatedClaim.getId(), updatedClaim.getProviderId(),
+                    oldApprovedAmount, updatedClaim.getApprovedAmount(),
+                    currentUser != null ? currentUser.getId() : null));
+            log.info("📤 ClaimAmountAdjustedEvent published for edited approved claim {}: {} -> {}",
+                    updatedClaim.getId(), oldApprovedAmount, updatedClaim.getApprovedAmount());
+        }
         log.info("✅ Claim DATA updated: id={}", id);
 
         // M1: Fire ClaimApprovedEvent when admin re-approves a REJECTED claim
@@ -685,6 +769,13 @@ public class ClaimService {
                     this, updatedClaim.getId(), updatedClaim.getProviderId(),
                     currentUser != null ? currentUser.getId() : null));
             log.info("📤 ClaimApprovedEvent published for REJECTED→APPROVED claim {}", updatedClaim.getId());
+        }
+
+        if (internalCorrectionReapproval && updatedClaim.getProviderId() != null) {
+            eventPublisher.publishEvent(new ClaimApprovedEvent(
+                    this, updatedClaim.getId(), updatedClaim.getProviderId(),
+                    currentUser != null ? currentUser.getId() : null));
+            log.info("📤 ClaimApprovedEvent published for corrected internal claim {}", updatedClaim.getId());
         }
 
         // FIX #11 (Critical): Fire ClaimReversalEvent when an APPROVED claim is
@@ -706,27 +797,6 @@ public class ClaimService {
         claimAuditService.recordStatusChange(claim, claim.getStatus(), currentUser, "Data updated");
 
         return claimMapper.toViewDto(updatedClaim);
-    }
-
-    /**
-     * Review claim (for REVIEWER and INSURANCE_ADMIN only).
-     * SECURITY: This method enforces that reviewers can ONLY change status/review
-     * fields.
-     * Data fields (doctorName, diagnosisCode, etc.) CANNOT be modified by
-     * reviewers.
-     * 
-     * @param id  Claim ID
-     * @param dto Review DTO (status, comment, approvedAmount only)
-     * @return Updated claim
-     * @throws AccessDeniedException if user is not a reviewer
-     * @since Provider Portal Security Fix (Phase 0)
-     */
-    /**
-     * Review claim (for REVIEWER and INSURANCE_ADMIN only).
-     */
-    @Transactional
-    public ClaimViewDto reviewClaim(Long id, ClaimReviewDto dto) {
-        return claimReviewService.reviewClaim(id, dto);
     }
 
     /**
@@ -1114,6 +1184,21 @@ public class ClaimService {
     @Transactional
     public ClaimViewDto startReview(Long id) {
         return claimReviewService.startReview(id);
+    }
+
+    @Transactional
+    public ClaimViewDto pauseReview(Long id, String reason) {
+        return claimReviewService.pauseReview(id, reason);
+    }
+
+    @Transactional
+    public ClaimViewDto resumeReview(Long id) {
+        return claimReviewService.resumeReview(id);
+    }
+
+    @Transactional
+    public ClaimViewDto requestCorrection(Long id, String reason) {
+        return claimReviewService.requestCorrection(id, reason);
     }
 
     @Transactional(readOnly = true)
@@ -1653,7 +1738,7 @@ public class ClaimService {
 
         User currentUser = authorizationService.getCurrentUser();
 
-        Claim claim = claimRepository.findById(id)
+        Claim claim = claimRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
         if (!Boolean.TRUE.equals(claim.getActive())) {
@@ -1680,6 +1765,15 @@ public class ClaimService {
 
         claimRepository.save(claim);
 
+        // Keep the claim void and provider-account reversal atomic. The previous
+        // AFTER_COMMIT-only flow could leave an inactive claim with an unreversed
+        // provider balance when the second transaction failed.
+        if (wasApproved && claim.getProviderId() != null) {
+            providerAccountService.debitOnClaimReversal(
+                    claim.getId(),
+                    currentUser != null ? currentUser.getId() : null);
+        }
+
         // Record Medical Audit Log (PHASE 10 - Secure Auditing)
         medicalAuditLogService.record(AuditLogWriteRequest.builder()
                 .entityType(EntityType.CLAIM)
@@ -1694,7 +1788,9 @@ public class ClaimService {
         log.info("✅ Claim {} soft-deleted by {}. Reason: {}. Annual limits automatically restored.", id,
                 currentUser != null ? currentUser.getFullName() : "system", finalReason);
 
-        // المطالبة المعتمدة تحمل رصيداً في حساب مقدم الخدمة → يجب عكسه
+        // Keep publishing the domain event for the benefit-bucket ledger. The
+        // provider-account listener is idempotent and will observe the reversal
+        // already committed in this transaction.
         if (wasApproved && claim.getProviderId() != null) {
             log.info(
                     "📤 Claim {} was APPROVED before deletion — publishing ClaimReversalEvent to debit provider account",

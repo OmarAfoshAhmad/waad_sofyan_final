@@ -1,5 +1,6 @@
 package com.waad.tba.modules.eligibility.dto;
 
+import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -78,6 +79,10 @@ public class EligibilityCheckRequest {
      * Preferred over serviceCode for precise coverage lookup
      */
     private Long medicalServiceId;
+
+    /** Care setting used for context-specific coverage resolution. */
+    @Builder.Default
+    private EncounterType encounterType = EncounterType.OUTPATIENT;
 
     /**
      * Convenient factory method for simple checks

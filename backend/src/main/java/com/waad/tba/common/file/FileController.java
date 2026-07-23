@@ -29,7 +29,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/files")
-@RequiredArgsConstructor@SuppressWarnings("null")@PreAuthorize("isAuthenticated()")
+@RequiredArgsConstructor
+@SuppressWarnings("null")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 public class FileController {
     
     private final FileStorageService fileStorageService;
@@ -43,7 +45,7 @@ public class FileController {
      * @return FileUploadResult with file details
      */
     @PostMapping("/upload")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<FileUploadResult> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam("folder") String folder,
@@ -68,7 +70,7 @@ public class FileController {
      * @return File content with appropriate headers
      */
     @GetMapping("/{folder}/{filename}/download")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Resource> downloadFile(
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {
@@ -104,7 +106,7 @@ public class FileController {
      * @return File content with inline display headers
      */
     @GetMapping("/{folder}/{filename}/preview")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Resource> previewFile(
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {
@@ -200,7 +202,7 @@ public class FileController {
      * @return Presigned URL
      */
     @GetMapping(value = "/{folder}/{filename}/url", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<java.util.Map<String, String>> getPresignedUrl(
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename,
@@ -229,7 +231,7 @@ public class FileController {
      * @return true if exists, false otherwise
      */
     @GetMapping("/{folder}/{filename}/exists")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Boolean> fileExists(
             @PathVariable("folder") String folder,
             @PathVariable("filename") String filename) {

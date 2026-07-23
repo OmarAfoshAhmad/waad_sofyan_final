@@ -24,6 +24,17 @@ import com.waad.tba.modules.claim.projection.FinancialSummaryByEmployerProjectio
 @Repository
 public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
+        @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
+                        "WHERE c.active = true AND c.member.id = :memberId " +
+                        "AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) " +
+                        "AND c.serviceDate BETWEEN :yearStart AND :yearEnd " +
+                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
+        java.math.BigDecimal sumApprovedAmountsByMemberAndYearExcludingClaim(
+                        @Param("memberId") Long memberId,
+                        @Param("yearStart") LocalDate yearStart,
+                        @Param("yearEnd") LocalDate yearEnd,
+                        @Param("excludeClaimId") Long excludeClaimId);
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // FINANCIAL CLOSURE: PESSIMISTIC LOCKING FOR ALL FINANCIAL OPERATIONS
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -207,6 +218,19 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         Page<Claim> findByStatusIn(@Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
                         Pageable pageable);
 
+        @EntityGraph(attributePaths = { "member", "member.benefitPolicy", "preAuthorization", "visit", "lines" })
+        @Query("SELECT DISTINCT c FROM Claim c " +
+                        "WHERE c.active = true " +
+                        "AND c.status IN :statuses " +
+                        "AND c.serviceDate BETWEEN :fromDate AND :toDate " +
+                        "AND (:providerName IS NULL OR :providerName = '' OR " +
+                        "LOWER(c.providerName) LIKE LOWER(CONCAT('%', :providerName, '%')))")
+        List<Claim> findForAdjudicationReport(
+                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
+                        @Param("fromDate") java.time.LocalDate fromDate,
+                        @Param("toDate") java.time.LocalDate toDate,
+                        @Param("providerName") String providerName);
+
         /**
          * Find claims by single status with pagination.
          * PHASE 5.B: Full fetch joins for member, benefitPolicy
@@ -218,6 +242,11 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "AND c.status = :status", countQuery = "SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.status = :status")
         Page<Claim> findByStatus(@Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
                         Pageable pageable);
+
+        @Query("SELECT c.id FROM Claim c WHERE c.active = true AND c.status = :status AND c.updatedAt < :threshold")
+        List<Long> findIdsByStatusAndUpdatedAtBefore(
+                        @Param("status") com.waad.tba.modules.claim.entity.ClaimStatus status,
+                        @Param("threshold") java.time.LocalDateTime threshold);
 
         /**
          * Count claims by status.
@@ -833,15 +862,11 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          */
         @Query("SELECT COUNT(c), " +
                         "COALESCE(SUM(c.requestedAmount), 0), " +
-                        "COALESCE(SUM(CASE WHEN c.status <> com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT " +
-                        "               OR (c.status = com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT AND c.approvedAmount IS NOT NULL AND c.approvedAmount > 0) "
-                        +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) " +
                         "               THEN c.approvedAmount ELSE 0 END), 0), " +
-                        "COALESCE(SUM(CASE WHEN c.status <> com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT " +
-                        "               OR (c.status = com.waad.tba.modules.claim.entity.ClaimStatus.DRAFT AND c.approvedAmount IS NOT NULL AND c.approvedAmount > 0) "
-                        +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) " +
                         "               THEN c.refusedAmount ELSE 0 END), 0), " +
-                        "COALESCE(SUM(CASE WHEN c.netProviderAmount IS NOT NULL THEN c.netProviderAmount ELSE 0 END), 0), "
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN COALESCE(c.netProviderAmount, c.approvedAmount) ELSE 0 END), 0), "
                         +
                         "COUNT(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN 1 END), "
                         +
@@ -1115,7 +1140,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          */
         @Query("SELECT c.status as status, COUNT(c) as count, " +
                         "COALESCE(SUM(c.requestedAmount), 0) as totalRequestedAmount, " +
-                        "COALESCE(SUM(c.approvedAmount), 0) as totalApprovedAmount " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.approvedAmount ELSE 0 END), 0) as totalApprovedAmount " +
                         "FROM Claim c " +
                         "WHERE c.active = true " +
                         "GROUP BY c.status")
@@ -1127,7 +1152,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          */
         @Query("SELECT c.status as status, COUNT(c) as count, " +
                         "COALESCE(SUM(c.requestedAmount), 0) as totalRequestedAmount, " +
-                        "COALESCE(SUM(c.approvedAmount), 0) as totalApprovedAmount " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.approvedAmount ELSE 0 END), 0) as totalApprovedAmount " +
                         "FROM Claim c " +
                         "WHERE c.active = true " +
                         "AND c.member.employer.id = :employerOrgId " +
@@ -1147,7 +1172,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "COUNT(c) as claimsCount, " +
                         "COUNT(DISTINCT c.member.id) as membersCount, " +
                         "COALESCE(SUM(c.requestedAmount), 0) as requestedAmount, " +
-                        "COALESCE(SUM(c.approvedAmount), 0) as approvedAmount " +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN c.approvedAmount ELSE 0 END), 0) as approvedAmount " +
                         "FROM Claim c " +
                         "WHERE c.active = true " +
                         "AND c.member.employer IS NOT NULL " +

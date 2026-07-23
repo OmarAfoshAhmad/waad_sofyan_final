@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 
@@ -137,6 +139,7 @@ public class ClaimLine {
     private String appliedContext;
 
     @Column(name = "bucket_snapshot_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String bucketSnapshotJson;
 
     @Column(name = "calculation_version", nullable = false)

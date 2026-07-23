@@ -20,7 +20,7 @@ import java.util.List;
  * Allowed in statuses: DRAFT, NEEDS_CORRECTION only.
  * 
  * Fields NOT included here (financial/review fields):
- * - status (use separate status transition endpoints)
+ * - status (except the trusted internal correction re-approval path)
  * - approvedAmount (reviewer-only field)
  * - reviewerComment (reviewer-only field)
  * 
@@ -59,9 +59,7 @@ public class ClaimDataUpdateDto {
     private EncounterType encounterType;
     private Boolean fullCoverage;
 
-    /**
-     * New status — only honoured when current status is REJECTED (re-edit path).
-     */
+    /** New status for trusted internal re-approval/rejection edit paths. */
     private ClaimStatus status;
 
     /**

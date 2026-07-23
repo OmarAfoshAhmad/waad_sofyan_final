@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 REM ====================================================
 REM TBA WAAD - Backend Restart Helper
 REM - Kills any process on port 8080
-REM - Loads minimal env vars for local run
+REM - Loads configuration from the root .env file
 REM - Starts backend with dev profile
 REM ====================================================
 
@@ -31,13 +31,29 @@ if not exist "%BACKEND_DIR%\pom.xml" (
 )
 
 echo [3/4] Setting local environment variables...
+if exist "%ROOT_DIR%.env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%ROOT_DIR%.env") do (
+        if not "%%A"=="" set "%%A=%%B"
+    )
+)
+REM This launcher is explicitly for a backend running directly on Windows.
+REM Load secrets from .env, but never inherit the Docker/prod host name "db".
 set "SPRING_PROFILES_ACTIVE=dev"
-set "DB_PASSWORD=12345"
-if "%ADMIN_DEFAULT_PASSWORD%"=="" set "ADMIN_DEFAULT_PASSWORD=Admin@123"
-if "%JWT_SECRET%"=="" set "JWT_SECRET=waad_dev_secret_not_for_production_only_local_dev_9dda11e5"
+set "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tba_waad_system"
+set "SPRING_DATASOURCE_USERNAME=postgres"
+if "%DB_PASSWORD%"=="" (
+    echo ERROR: DB_PASSWORD is not configured in .env or the process environment.
+    exit /b 1
+)
+if "%JWT_SECRET%"=="" (
+    echo ERROR: JWT_SECRET is not configured in .env or the process environment.
+    exit /b 1
+)
 
 echo [4/4] Starting backend...
 cd /d "%BACKEND_DIR%"
-call mvn clean spring-boot:run
+call mvn -Dmaven.test.skip=true package
+if errorlevel 1 exit /b 1
+"%JAVA_HOME%\bin\java.exe" -jar target\tba-backend-1.0.0.jar
 
 endlocal

@@ -1,6 +1,7 @@
 package com.waad.tba.modules.providercontract.entity;
 
 import com.waad.tba.modules.provider.entity.Provider;
+import com.waad.tba.modules.employer.entity.Employer;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -23,7 +24,9 @@ import java.util.List;
         @Index(name = "idx_contracts_status", columnList = "status"),
         @Index(name = "idx_contracts_contract_code", columnList = "contract_code"),
         @Index(name = "idx_contracts_start_date", columnList = "start_date"),
-        @Index(name = "idx_contracts_end_date", columnList = "end_date")
+        @Index(name = "idx_contracts_end_date", columnList = "end_date"),
+        @Index(name = "idx_contracts_pricing_scope", columnList = "pricing_scope"),
+        @Index(name = "idx_contracts_employer_id", columnList = "employer_id")
 })
 @Getter
 @Setter
@@ -48,6 +51,25 @@ public class ProviderContract {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "provider_id", nullable = false)
     private Provider provider;
+
+    /**
+     * Scope of the pricing agreement:
+     * - GLOBAL: provider-wide fallback pricing, not tied to a specific employer.
+     * - EMPLOYER_SPECIFIC: pricing applies only to one employer/work entity.
+     */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pricing_scope", nullable = false, length = 30)
+    @Builder.Default
+    private PricingScope pricingScope = PricingScope.GLOBAL;
+
+    /**
+     * Required when pricingScope = EMPLOYER_SPECIFIC.
+     * Null when pricingScope = GLOBAL.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employer_id")
+    private Employer employer;
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -171,6 +193,10 @@ public class ProviderContract {
 
     public enum PricingModel {
         FIXED, DISCOUNT, TIERED, NEGOTIATED
+    }
+
+    public enum PricingScope {
+        GLOBAL, EMPLOYER_SPECIFIC
     }
 
     public boolean isCurrentlyEffective() {
