@@ -1,0 +1,53 @@
+name: Frontend Quality
+
+on:
+  push:
+    branches: [ main, develop, provider-price-lists-employer-scope ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-test.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Type check
+        run: |
+          cd frontend
+          npm run type-check
+        continue-on-error: true
+
+      - name: Lint
+        run: |
+          cd frontend
+          npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: |
+          cd frontend
+          npm run build
