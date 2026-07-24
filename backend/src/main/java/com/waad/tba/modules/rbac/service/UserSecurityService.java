@@ -2,6 +2,8 @@ package com.waad.tba.modules.rbac.service;
 
 import com.waad.tba.modules.rbac.dto.*;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.entity.UserAuditLog;
+import com.waad.tba.modules.rbac.repository.UserAuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ public class UserSecurityService {
     private final PasswordManagementService passwordManagementService;
     private final EmailVerificationService emailVerificationService;
     private final LoginSecurityService loginSecurityService;
+    private final UserAuditLogRepository auditLogRepository;
 
     // =====================================================
     // PASSWORD MANAGEMENT
@@ -112,5 +115,28 @@ public class UserSecurityService {
     public void cleanupExpiredTokens() {
         passwordManagementService.cleanupExpiredTokens();
         emailVerificationService.cleanupExpiredTokens();
+    }
+
+    // =====================================================
+    // AUDIT LOGGING (backward compatibility)
+    // =====================================================
+
+    @Transactional
+    public void auditLog(Long userId, String action, String details,
+            String ipAddress, String userAgent, Long performedBy) {
+        UserAuditLog auditLog = UserAuditLog.builder()
+                .userId(userId)
+                .action(action)
+                .details(details)
+                .ipAddress(ipAddress)
+                .userAgent(userAgent)
+                .performedBy(performedBy)
+                .build();
+
+        try {
+            auditLogRepository.save(auditLog);
+        } catch (Exception ex) {
+            log.warn("Skipping audit log persistence due to schema mismatch: {}", ex.getMessage());
+        }
     }
 }

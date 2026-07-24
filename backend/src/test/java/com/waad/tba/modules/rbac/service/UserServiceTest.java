@@ -3,6 +3,7 @@ package com.waad.tba.modules.rbac.service;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.modules.auth.service.SessionManagementService;
+import com.waad.tba.security.audit.SecurityAuditService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,9 @@ public class UserServiceTest {
 
     @Mock
     private UserSecurityService securityService;
+
+    @Mock
+    private SecurityAuditService auditService;
 
     @Mock
     private SessionManagementService sessionManagementService;

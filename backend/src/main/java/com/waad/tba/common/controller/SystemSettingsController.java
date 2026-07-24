@@ -1,8 +1,9 @@
 package com.waad.tba.common.controller;
 
-import com.waad.tba.common.entity.SystemSetting;
-import com.waad.tba.common.repository.SystemSettingRepository;
+import com.waad.tba.common.dto.SystemSettingDto;
+import com.waad.tba.common.service.SettingsManagementService;
 import com.waad.tba.common.service.SystemSettingsService;
+import com.waad.tba.common.service.UIConfigService;
 import com.waad.tba.modules.claim.service.SlaMonitoringScheduler;
 import com.waad.tba.security.AuthorizationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,7 +33,7 @@ import java.util.List;
 public class SystemSettingsController {
 
     private final SystemSettingsService systemSettingsService;
-    private final SystemSettingRepository settingRepository;
+    private final UIConfigService uiConfigService;
     private final SlaMonitoringScheduler slaMonitoringScheduler;
     private final AuthorizationService authorizationService;
 
@@ -45,8 +46,8 @@ public class SystemSettingsController {
      */
     @GetMapping("/ui-config")
     @Operation(summary = "Get UI configuration (public)")
-    public ResponseEntity<SystemSettingsService.UiConfigDto> getUiConfig() {
-        return ResponseEntity.ok(systemSettingsService.getUiConfig());
+    public ResponseEntity<UIConfigService.UiConfigDto> getUiConfig() {
+        return ResponseEntity.ok(uiConfigService.getUiConfig());
     }
 
     /**
@@ -57,8 +58,8 @@ public class SystemSettingsController {
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get all editable system settings")
-    public ResponseEntity<List<SystemSetting>> getAllSettings() {
-        List<SystemSetting> settings = systemSettingsService.getEditableSettings();
+    public ResponseEntity<List<SystemSettingDto>> getAllSettings() {
+        List<SystemSettingDto> settings = systemSettingsService.getEditableSettings();
         return ResponseEntity.ok(settings);
     }
 
@@ -70,10 +71,10 @@ public class SystemSettingsController {
     @GetMapping("/category/{category}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(summary = "Get settings by category")
-    public ResponseEntity<List<SystemSetting>> getSettingsByCategory(@PathVariable("category") String category) {
+    public ResponseEntity<List<SystemSettingDto>> getSettingsByCategory(@PathVariable("category") String category) {
         log.info("📋 Getting settings for category: {}", category);
 
-        List<SystemSetting> settings = systemSettingsService.getSettingsByCategory(category);
+        List<SystemSettingDto> settings = systemSettingsService.getSettingsByCategory(category);
         return ResponseEntity.ok(settings);
     }
 
@@ -140,7 +141,7 @@ public class SystemSettingsController {
 
         int oldValue = systemSettingsService.getClaimSlaDays();
 
-        systemSettingsService.resetToDefault(SystemSettingsService.CLAIM_SLA_DAYS_KEY, username);
+        systemSettingsService.resetToDefault(SettingsManagementService.CLAIM_SLA_DAYS_KEY, username);
 
         int newValue = systemSettingsService.getClaimSlaDays();
 
@@ -177,7 +178,7 @@ public class SystemSettingsController {
     @PutMapping("/{key}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Update a specific setting by key")
-    public ResponseEntity<SystemSetting> updateSettingByKey(
+    public ResponseEntity<SystemSettingDto> updateSettingByKey(
             @PathVariable("key") String key,
             @RequestBody UpdateSettingRequest request) {
 
@@ -187,11 +188,8 @@ public class SystemSettingsController {
 
         log.info("⚙️ Updating setting {} by {}", key, username);
 
-        systemSettingsService.updateSetting(key, request.value(), username);
-
-        return settingRepository.findBySettingKey(key)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        SystemSettingDto updated = systemSettingsService.updateSetting(key, request.value(), username);
+        return ResponseEntity.ok(updated);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
