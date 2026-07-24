@@ -3,7 +3,7 @@ package com.waad.tba.modules.rbac.service;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.modules.auth.service.SessionManagementService;
-import com.waad.tba.security.audit.SecurityAuditService;
+import com.waad.tba.security.audit.SecurityAuditEvent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,9 +31,6 @@ public class UserServiceTest {
 
     @Mock
     private UserSecurityService securityService;
-
-    @Mock
-    private SecurityAuditService auditService;
 
     @Mock
     private SessionManagementService sessionManagementService;
@@ -86,8 +83,8 @@ public class UserServiceTest {
         verify(userRepository).save(testUser);
         verify(securityService).auditLog(
                 eq(1L),
-                eq(com.waad.tba.modules.rbac.entity.UserAuditLog.ACTION_PASSWORD_RESET),
-                anyString(), isNull(), isNull(), isNull());
+                eq(SecurityAuditEvent.AuditActionType.PASSWORD_RESET),
+                anyString(), isNull(), isNull());
         verify(sessionManagementService).revokeAll("testuser");
     }
 

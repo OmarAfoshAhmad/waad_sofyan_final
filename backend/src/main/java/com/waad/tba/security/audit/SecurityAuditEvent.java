@@ -2,6 +2,8 @@ package com.waad.tba.security.audit;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
@@ -21,7 +23,7 @@ public class SecurityAuditEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column
     private Long actorId;
 
     @Column(nullable = false, length = 100)
@@ -53,9 +55,11 @@ public class SecurityAuditEvent {
     @Column(columnDefinition = "text")
     private String safeReason;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String beforeState;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String afterState;
 
@@ -89,7 +93,10 @@ public class SecurityAuditEvent {
         ACCOUNT_UPDATED,
         ACCOUNT_ACTIVATED,
         ACCOUNT_DEACTIVATED,
+        ACCOUNT_DELETED,
         ACCOUNT_LOCKED,
+        ACCOUNT_UNLOCKED,
+        EMAIL_VERIFIED,
         PERMISSION_GRANTED,
         PERMISSION_REVOKED,
         ROLE_ASSIGNED,

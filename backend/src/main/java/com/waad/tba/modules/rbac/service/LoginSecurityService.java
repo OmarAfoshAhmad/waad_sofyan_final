@@ -5,6 +5,7 @@ import com.waad.tba.config.SecurityConfigurationProperties;
 import com.waad.tba.modules.rbac.entity.*;
 import com.waad.tba.modules.rbac.exception.*;
 import com.waad.tba.modules.rbac.repository.*;
+import com.waad.tba.security.audit.SecurityAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,7 @@ public class LoginSecurityService {
 
     private final UserRepository userRepository;
     private final UserLoginAttemptRepository loginAttemptRepository;
-    private final UserAuditLogRepository auditLogRepository;
+    private final SecurityAuditService securityAuditService;
     private final EmailService emailService;
     private final SecurityConfigurationProperties config;
 
@@ -45,6 +46,8 @@ public class LoginSecurityService {
             log.warn("Skipping failed login attempt persistence due to schema mismatch: {}", ex.getMessage());
         }
 
+        securityAuditService.logLoginFailure(username, ipAddress, userAgent, reason);
+
         if (user != null) {
             user.setFailedLoginCount(user.getFailedLoginCount() + 1);
 
@@ -60,10 +63,7 @@ public class LoginSecurityService {
                 }
 
                 sendAccountLockedNotification(user);
-                auditLog(user.getId(), UserAuditLog.ACTION_ACCOUNT_LOCKED,
-                        String.format("Account locked after %d failed attempts for %d minutes",
-                                user.getFailedLoginCount(), lockoutMinutes),
-                        ipAddress, userAgent, null);
+                securityAuditService.logAccountLocked(user.getId(), user.getUsername(), ipAddress);
             } else {
                 try {
                     userRepository.save(user);
@@ -109,8 +109,7 @@ public class LoginSecurityService {
             log.warn("Skipping successful-login user update due to schema mismatch: {}", ex.getMessage());
         }
 
-        auditLog(userId, UserAuditLog.ACTION_LOGIN_SUCCESS,
-                "Successful login", ipAddress, userAgent, userId);
+        securityAuditService.logLoginSuccess(userId, user.getUsername(), ipAddress, userAgent);
     }
 
     @Transactional
@@ -146,23 +145,5 @@ public class LoginSecurityService {
                 user.getFailedLoginCount());
 
         emailService.sendAccountLocked(emailData);
-    }
-
-    private void auditLog(Long userId, String action, String details,
-            String ipAddress, String userAgent, Long performedBy) {
-        UserAuditLog auditLog = UserAuditLog.builder()
-                .userId(userId)
-                .action(action)
-                .details(details)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .performedBy(performedBy)
-                .build();
-
-        try {
-            auditLogRepository.save(auditLog);
-        } catch (Exception ex) {
-            log.warn("Skipping audit log persistence due to schema mismatch: {}", ex.getMessage());
-        }
     }
 }

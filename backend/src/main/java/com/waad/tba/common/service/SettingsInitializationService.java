@@ -29,15 +29,6 @@ public class SettingsInitializationService {
     public static final String PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY = "PASSWORD_RESET_OTP_EXPIRY_MINUTES";
     public static final String PASSWORD_RESET_OTP_LENGTH_KEY = "PASSWORD_RESET_OTP_LENGTH";
 
-    public static final String AI_CLASSIFIER_API_KEY = "AI_CLASSIFIER_API_KEY";
-    public static final String AI_CLASSIFIER_MODEL = "AI_CLASSIFIER_MODEL";
-    public static final String AI_CLASSIFIER_ENDPOINT = "AI_CLASSIFIER_ENDPOINT";
-    public static final String DEFAULT_AI_CLASSIFIER_MODEL = "qwen/qwen2.5-14b-instruct:free";
-    public static final String DEFAULT_AI_CLASSIFIER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-
-    public static final String BIOBERT_API_URL = "BIOBERT_API_URL";
-    public static final String DEFAULT_BIOBERT_API_URL = "http://localhost:8000/predict";
-
     public static final String LOGO_URL_KEY = "LOGO_URL";
     public static final String FONT_FAMILY_KEY = "FONT_FAMILY";
     public static final String FONT_SIZE_BASE_KEY = "FONT_SIZE_BASE";
@@ -165,62 +156,6 @@ public class SettingsInitializationService {
                     .active(true)
                     .build());
             log.info("✅ Created default setting: {} = 6", PASSWORD_RESET_OTP_LENGTH_KEY);
-        }
-
-        if (settingRepository.findBySettingKey(AI_CLASSIFIER_API_KEY).isEmpty()) {
-            settingRepository.save(SystemSetting.builder()
-                    .settingKey(AI_CLASSIFIER_API_KEY)
-                    .settingValue("")
-                    .valueType(SystemSetting.SettingValueType.STRING)
-                    .description("API key used by AI classifier for facility price-list categorization")
-                    .category("AI")
-                    .isEditable(true)
-                    .defaultValue("")
-                    .active(true)
-                    .build());
-            log.info("✅ Created default setting: {} = <empty>", AI_CLASSIFIER_API_KEY);
-        }
-
-        if (settingRepository.findBySettingKey(AI_CLASSIFIER_MODEL).isEmpty()) {
-            settingRepository.save(SystemSetting.builder()
-                    .settingKey(AI_CLASSIFIER_MODEL)
-                    .settingValue(DEFAULT_AI_CLASSIFIER_MODEL)
-                    .valueType(SystemSetting.SettingValueType.STRING)
-                    .description("Model ID used for AI classifier requests")
-                    .category("AI")
-                    .isEditable(true)
-                    .defaultValue(DEFAULT_AI_CLASSIFIER_MODEL)
-                    .active(true)
-                    .build());
-            log.info("✅ Created default setting: {} = {}", AI_CLASSIFIER_MODEL, DEFAULT_AI_CLASSIFIER_MODEL);
-        }
-
-        if (settingRepository.findBySettingKey(AI_CLASSIFIER_ENDPOINT).isEmpty()) {
-            settingRepository.save(SystemSetting.builder()
-                    .settingKey(AI_CLASSIFIER_ENDPOINT)
-                    .settingValue(DEFAULT_AI_CLASSIFIER_ENDPOINT)
-                    .valueType(SystemSetting.SettingValueType.STRING)
-                    .description("OpenAI-compatible endpoint for AI classifier")
-                    .category("AI")
-                    .isEditable(true)
-                    .defaultValue(DEFAULT_AI_CLASSIFIER_ENDPOINT)
-                    .active(true)
-                    .build());
-            log.info("✅ Created default setting: {} = {}", AI_CLASSIFIER_ENDPOINT, DEFAULT_AI_CLASSIFIER_ENDPOINT);
-        }
-
-        if (settingRepository.findBySettingKey(BIOBERT_API_URL).isEmpty()) {
-            settingRepository.save(SystemSetting.builder()
-                    .settingKey(BIOBERT_API_URL)
-                    .settingValue(DEFAULT_BIOBERT_API_URL)
-                    .valueType(SystemSetting.SettingValueType.STRING)
-                    .description("BioBERT/ClinicalBERT Python Microservice Endpoint")
-                    .category("AI")
-                    .isEditable(true)
-                    .defaultValue(DEFAULT_BIOBERT_API_URL)
-                    .active(true)
-                    .build());
-            log.info("✅ Created default setting: {} = {}", BIOBERT_API_URL, DEFAULT_BIOBERT_API_URL);
         }
 
         ensureDefaultSetting(LOGO_URL_KEY, "", SystemSetting.SettingValueType.STRING,

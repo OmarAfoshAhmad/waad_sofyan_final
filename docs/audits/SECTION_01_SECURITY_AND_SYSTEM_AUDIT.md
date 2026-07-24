@@ -187,6 +187,25 @@ Live audit evidence:
 
 All 72 medical audit rows have correlation IDs and before/after state.
 
+## System settings cleanup
+
+The generic `system_settings` table remains as the compatibility store for the
+current admin UI, but the unsafe parts were removed from the write path. Admin
+responses now use `SystemSettingDto` instead of exposing the JPA entity, and
+updates no longer create ad-hoc rows through an upsert. A setting must already
+exist, be active, be editable and pass its type/rule validation before it can be
+changed.
+
+Default records are now registered on startup for UI appearance, beneficiary
+numbering, eligibility and AI classifier settings, so the frontend no longer
+depends on implicit row creation. Architecture and unit tests protect this
+contract.
+
+Remaining work before S01-08 is fully closed: move high-sensitivity values such
+as classifier provider credentials out of generic `system_settings` into a
+dedicated encrypted integration-secret store, then expose a write-only
+credential contract like SMTP.
+
 ## File access
 
 Confirmed improvements:
@@ -662,6 +681,257 @@ All **96 Flyway migrations** completed against clean PostgreSQL. Full backend
 regression passed **165 tests, 0 failures, 0 errors, 3 skipped** and the
 frontend production build passed.
 
+### Re-audit pass — 2026-07-24
+
+A fresh inventory pass was run against the current repository state (parallel
+review of backend security config, Flyway migrations, Docker/config/secrets,
+and frontend structure) to confirm the previous findings are still accurate
+and to surface drift introduced since the last update.
+
+**Corrections to prior findings:**
+
+- The claim-attachment IDOR concern is confirmed **closed**, not open. Direct
+  inspection of `ClaimAttachmentService.downloadAttachment` confirms it calls
+  `authorizationService.canAccessClaim(currentUser, claimId)` before releasing
+  file bytes, matching the "Visit attachment IDOR hardening" and "Pre-
+  authorization attachment IDOR hardening" entries already recorded above. An
+  initial automated pass flagged this as open because it only inspected the
+  controller's `@PreAuthorize` annotation and missed the service-layer check;
+  manual verification overrides that false positive.
+
+**New findings (not previously recorded):**
+
+1. **Migration count drift.** The migration directory now contains **100
+   files, through V108** (`V104__create_persistent_http_sessions.sql`,
+   `V105__retire_email_preauthorization_intake.sql`,
+   `V106__clean_legacy_user_columns_and_indexes.sql`,
+   `V107__create_security_audit_events_table.sql`,
+   `V108__fix_benefit_policy_rules_schema.sql` were added after the last
+   Flyway inventory count of 94/97). The Flyway inventory section above needs
+   re-counting before the clean-baseline work in Ordered-implementation step
+   12 begins.
+
+2. **`GET /api/v1/admin/system-settings/ui-config` contradicts its own
+   documentation.** `SystemSettingsController` carries class-level
+   `@PreAuthorize("isAuthenticated()")` (no method-level override), so the
+   endpoint requires an active session — but its Javadoc and `@Operation`
+   summary both say "public — no authentication required," and it is not
+   listed in `SecurityConfig`'s `permitAll` matcher list either. Verified live:
+   an unauthenticated `curl` to this path returns 401. Since the frontend is
+   expected to call this on initial app load (before login, for branding/UI
+   config), this is either a real bug (endpoint should be `permitAll`) or the
+   Javadoc is simply wrong and the frontend already tolerates the 401 during
+   bootstrap. Needs an explicit decision, not a silent fix.
+
+3. **Dual audit-logging duplication reconfirmed, with a concrete example.**
+   `LoginSecurityService` writes login success/failure/lockout events to
+   `user_audit_log` (via `auditLogRepository`), while `SecurityAuditService`
+   (backing the new `security_audit_events` table, V107) is called separately
+   from `AuthService`/`UserService`. The same login event can therefore be
+   recorded twice, in two different tables, by two different code paths. This
+   is the concrete evidence behind risk S01-07, which remains open.
+
+4. **`SecurityAuditService` is called from only two classes** (`AuthService`,
+   `UserService`). Role/permission changes, session-revocation endpoints
+   (`DELETE /session/sessions/{id}`, `POST /session/logout-all`), sensitive
+   system-setting changes, and the dedicated `logFileAccessDenied` method have
+   no confirmed caller in the current codebase — meaning several categories
+   the audit checklist requires (role change, permission change, session
+   revocation, sensitive setting change, access denial) are not yet flowing
+   into the unified security-event table at all.
+
+5. **JWT compatibility path still has no revocation.** Confirmed again: no
+   blacklist/deny-list exists for issued JWTs. A logout, password change, or
+   account deactivation invalidates the browser session but does **not**
+   invalidate a previously issued JWT for the mobile-compatibility path — it
+   remains valid until natural expiry. This is accepted as a known gap per the
+   "Mobile authentication decision" entry above (JWT is pre-positioned for a
+   future mobile client, not yet hardened), but it should stay listed as open
+   until that mobile contract is actually built.
+
+6. **Environment drift found live in this session, now corrected.** During
+   interactive local debugging, `.env` had been temporarily changed to
+   `SPRING_PROFILES_ACTIVE=dev` and `frontend/nginx.conf` had its
+   `limit_req_zone`/`limit_req` directives commented out entirely (no rate
+   limiting on `/api/` or `/api/v1/auth/`). Both were identified and reverted
+   in this session: nginx rate limiting (20r/s general, 5r/m auth, burst
+   caps unchanged) was restored and the frontend image rebuilt; `.env` was
+   restored to `SPRING_PROFILES_ACTIVE=prod`. Verified live after the revert:
+   `Origin: http://localhost:3000` now correctly receives "Invalid CORS
+   request" under the prod profile, and rate-limited endpoints respond
+   normally under burst limits. This confirms the dev-profile/no-rate-limit
+   state was never committed — it only existed transiently in the running
+   containers/.env during this debugging session — but it is recorded here in
+   case a similar local-debug detour recurs before Section 01 closes.
+
+7. **Additional oversized frontend files beyond the previously recorded list.**
+   A fresh line-count pass surfaced business-logic pages far larger than the
+   ~300-line guideline and not previously catalogued:
+   `pages/provider/ProviderClaimsSubmission.jsx` (2615 lines),
+   `pages/claims/batches/ClaimBatchEntry.jsx` (2485),
+   `pages/benefit-policies/BenefitPolicyRulesTab.jsx` (2174),
+   `pages/provider-contracts/ProviderContractView.jsx` (1820),
+   `pages/claims/ClaimViewMedicalReview.jsx` (1377),
+   `pages/provider/ProviderPreApprovalSubmission.jsx` (1337),
+   `pages/claims/batches/ClaimBatchDetail.jsx` (1294),
+   `pages/provider/ProviderEligibilityCheck.jsx` (1206),
+   `pages/providers/ProviderEdit.jsx` (1160). These are in addition to
+   `SystemSettingsPage.jsx` (1366) and `UserEdit.jsx` (1024) already listed.
+   Several of these (claims submission, batch entry, policy rules) are core
+   business pages, not just admin/settings screens — the file-size problem is
+   broader than the security/admin surface this section originally scoped,
+   and will recur in later sections unless a shared decomposition pattern is
+   established now.
+
+8. **`token-storage.js` legacy status reconfirmed.** The file still contains a
+   "backward compatibility" path that migrates any leftover `localStorage`
+   token into `sessionStorage`, but `utils/axios.js` confirms the app is fully
+   cookie/session based (`withCredentials: true`, no `Authorization` header
+   injection in the request interceptor). This file is dead weight for the
+   current auth model and a removal candidate once there is confidence no
+   returning user still has a stale `localStorage` token from before the
+   session-based cutover.
+
+### S01-07 closure — audit consolidation — 2026-07-24
+
+`user_audit_log` writes were fully redirected to the unified
+`security_audit_events` table (V107). All four services that previously wrote
+directly to `UserAuditLog` now delegate to `SecurityAuditService`:
+
+- **`LoginSecurityService`** — `LOGIN_SUCCESS`, `LOGIN_FAILED`, and
+  `ACCOUNT_LOCKED` now call `SecurityAuditService`'s dedicated convenience
+  methods directly. The private duplicate `auditLog(...)` helper was deleted.
+- **`UserSecurityService.auditLog(...)`** — the shared "backward
+  compatibility" wrapper used by `UserService` for
+  `ACCOUNT_CREATED`/`ACCOUNT_UPDATED`/`ACCOUNT_DELETED`/`ACCOUNT_ACTIVATED`/
+  `ACCOUNT_DEACTIVATED`/`PASSWORD_RESET`/`ROLE_ASSIGNED` now resolves the
+  acting administrator from `SecurityContextHolder` (falling back to
+  `"system"` for unauthenticated contexts such as scheduled jobs) and calls
+  `SecurityAuditService.logUserAdminEvent(...)`. A private
+  `mapLegacyAction(String)` translates the legacy `UserAuditLog.ACTION_*`
+  string constants to the typed `AuditActionType` enum; it is intentionally
+  narrow and not meant to grow — new call sites should call
+  `SecurityAuditService` directly.
+- **`PasswordManagementService`** — password-change (success and
+  incorrect-current-password denial), password-reset-requested, and
+  password-reset-via-token all write to `security_audit_events` with the
+  correct `AuditResult` (`SUCCESS` vs `DENIED`).
+- **`EmailVerificationService`** — `EMAIL_VERIFIED` now writes to the unified
+  table.
+
+Three `AuditActionType` enum values were added to cover cases the original
+V107 enum lacked: `ACCOUNT_DELETED`, `ACCOUNT_UNLOCKED`, `EMAIL_VERIFIED`
+(safe — the column is `VARCHAR(50)`, not a Postgres enum type, so no
+migration was required).
+
+**A real, previously-undiscovered production defect was found and fixed
+during this work.** `SecurityAuditEvent.beforeState`/`afterState` were mapped
+as plain `String` columns against `jsonb` database columns without
+`@JdbcTypeCode(SqlTypes.JSON)` (the correct pattern already existed elsewhere
+in the codebase, in `modules/audit/entity/AuditLog.java`, but was not applied
+here). Every call to `SecurityAuditService.logSecurityEvent(...)` failed at
+the database with `column "after_state" is of type jsonb but expression is of
+type character varying` — including with `null` before/after state — and was
+**silently swallowed** by `logSecurityEvent`'s broad `catch (Exception e)`
+block, which only logs and returns `null`. This meant `security_audit_events`
+had been silently accumulating zero rows in the actual running deployment
+since V107 was introduced, despite `AuthService`/`UserService` appearing to
+call it correctly. The entity mapping was fixed
+(`@JdbcTypeCode(SqlTypes.JSON)` added to both fields), and a second latent
+mismatch was corrected in the same pass: `actorId` was mapped `nullable =
+false` in the entity while the actual V107 column is nullable (required for
+`LOGIN_FAILED` events against a username with no matching user).
+
+Verified live against the running Docker deployment, not just the test
+suite (Testcontainers masked the defect because
+`SecurityAuditServiceTest` exercises the service against mocks, and the
+integration suite's Testcontainers Postgres instance behaved differently
+under test than the actual docker-compose Postgres 16 instance under this
+specific jsonb binding path):
+
+- `LOGIN_SUCCESS` and `LOGIN_FAILED` (including the `actor_id IS NULL` case
+  for an unknown username) persist correctly.
+- `ACCOUNT_CREATED` and `ACCOUNT_DELETED` persist with `actor_username`
+  correctly resolved to the acting administrator (`superadmin`) and
+  `target_identifier` correctly resolved to the affected account
+  (`audittest1`), not conflated with each other.
+- Full backend regression: **178 tests, 0 failures, 0 errors, 3 skipped**,
+  both before and after the entity fix (the defect is Postgres-jsonb-specific
+  and did not surface against the test datasource, which is itself a gap —
+  see the new finding below).
+
+**New finding from this work:** silent audit-write failure is itself a risk.
+`SecurityAuditService.logSecurityEvent` catches every exception and only
+logs+returns `null`, so a future regression of this kind (or any other
+DB-level failure on this table) would again silently stop recording security
+events with no alert, no metric, and no test catching it end-to-end against
+real PostgreSQL. This should be closed before Section 01 closes: either the
+test suite needs at least one test that runs a real `logSecurityEvent` call
+against a genuine `jsonb`-backed Postgres instance and asserts a row was
+written (not mocked), or the silent-catch behavior itself should be revisited
+so a persistent audit-write failure is observable.
+
+`user_audit_log` now has **zero live writers** anywhere in the codebase — only
+`UserAuditLogRepository` remains, unused. Its 484 historical rows are
+preserved for now; dropping the table/entity is a separate, later decision
+(distinct from redirecting writes) once there is confidence nothing reads it
+for compliance/history purposes. `AuditLogService`/`audit_logs` (the
+near-empty systemadmin table, 33 rows, used only by
+`MedicalReviewerProviderAssignmentService` and `VisitService` for
+business-action logging, not security events) and `medical_audit_logs` (the
+clinical audit trail) were deliberately left untouched — they are business/
+clinical domain logs, not security events, and merging them would conflate
+different retention and access-control requirements.
+
+### `user_audit_log` table removal — 2026-07-24
+
+With zero live writers confirmed across the codebase, and the database
+explicitly confirmed experimental (no compliance obligation to retain the 484
+historical rows), the table itself was removed rather than left as an
+orphaned artifact:
+
+- `UserSecurityService.auditLog(...)` was changed from a legacy
+  `String action` parameter to the typed `SecurityAuditEvent.AuditActionType`
+  directly, eliminating the `mapLegacyAction(String)` translation shim added
+  earlier the same day — a compatibility layer that was no longer needed once
+  every caller could be updated directly, per the rule against keeping
+  unnecessary compatibility layers.
+- All five call sites in `UserService` (`ACCOUNT_CREATED`, `ACCOUNT_UPDATED`,
+  `ACCOUNT_DELETED`, `ACCOUNT_ACTIVATED`/`ACCOUNT_DEACTIVATED`,
+  `PASSWORD_RESET`) now pass the enum constant directly.
+- A second, previously unnoticed duplicate write was found and removed in the
+  same pass: `UserService.resetPassword(...)` called both
+  `auditService.logPasswordChanged(...)` (writing `PASSWORD_CHANGED`) **and**
+  `securityService.auditLog(..., ACTION_PASSWORD_RESET, ...)` for the same
+  administrative action, logging it twice under two different action types.
+  Kept the semantically correct one (`PASSWORD_RESET`, "Password reset by
+  administrator"); removed the redundant `auditService` field and import,
+  which had become unused.
+- `UserAuditLog` (entity) and `UserAuditLogRepository` were deleted outright
+  — no `@Deprecated` annotation, no stub retained.
+- `UserServiceTest` was updated: the now-unused `SecurityAuditService
+  auditService` mock was removed, and the assertion referencing the deleted
+  `UserAuditLog.ACTION_PASSWORD_RESET` constant and the old 6-argument
+  `auditLog(...)` signature was updated to the new 5-argument, typed-enum
+  call.
+- Migration `V109__drop_legacy_user_audit_log.sql` drops the table. It does
+  **not** touch `user_login_attempts` (still actively written by
+  `LoginSecurityService` for lockout tracking, unrelated table created in the
+  same original V7 migration) or `audit_logs`/`medical_audit_logs` (separate
+  business/clinical domains, out of scope).
+
+Verified: full backend regression (**178 tests, 0 failures, 0 errors, 3
+skipped**) including Flyway building all 109 migrations from an empty
+PostgreSQL 16 database through V109; live Docker deployment confirms
+`\dt user_audit_log` returns no relation and `superadmin` login still
+succeeds end-to-end with the event correctly landing in
+`security_audit_events`.
+
+These items do not change the closure percentage materially (they refine
+and extend existing open risks rather than closing or newly opening major
+ones), except item 6, which was corrected within this same session. They are
+folded into the risk register and ordered-implementation plan below.
+
 ## Risk register
 
 | ID | Priority | Risk |
@@ -672,41 +942,110 @@ frontend production build passed.
 | S01-04 | Closed | One canonical user API/service; duplicate controller, service and DTO family removed |
 | S01-05 | Closed | Generic file-key API removed; all active downloads use owning-resource endpoints and storage coordinates stay internal |
 | S01-06 | Closed | All 96 Flyway migrations repeatedly built from zero on PostgreSQL 16 under Testcontainers |
-| S01-07 | P1 | Three general audit models |
-| S01-08 | P1 | Generic mixed settings |
-| S01-09 | P1 | No CI/insufficient frontend tests |
-| S01-10 | P1 | Oversized security/settings files |
+| S01-07 | Closed | Security-relevant writes (login, lockout, password, email verification, user CRUD) unified into `security_audit_events`. `user_audit_log` table, entity and repository fully removed (V109), zero remaining references. `audit_logs` (business-action log, 33 rows) and `medical_audit_logs` (clinical audit trail) deliberately kept separate as distinct domains, not merged. Remaining: S01-13 (observable-failure path for `logSecurityEvent`). |
+| S01-08 | Mitigated | Generic settings no longer expose JPA entities or accept ad-hoc upsert writes; typed domain services (`SLASettingsService`, `AuthenticationSettingsService`, `UIConfigService`, `SettingsManagementService`, `SettingsInitializationService`) confirmed already in place — `SystemSettingsService` is a 147-line facade, not the 510-line file the original audit measured. Only remaining gap: AI-classifier integration credentials still live in generic `system_settings` instead of a dedicated encrypted secret store (same pattern as the SMTP fix under S01-11). |
+| S01-09 | Mitigated | CI confirmed already in place (2026-07-24 — pre-dates this session): `.github/workflows/backend-test.yml`, `frontend-test.yml`, `integration-test.yml`, `security-audit.yml` (scheduled daily). Frontend automated test coverage (unit/component tests, not just lint/build/typecheck) remains the real residual gap. |
+| S01-10 | Mitigated | Backend split confirmed already done: `AuthorizationService` (149 lines) and `UserSecurityService` (thin facade after S01-07 work) both delegate to properly-scoped services (`RoleService`, `DataAccessService`, `QueryFilterService`, `FeatureToggleService`, `PasswordManagementService`, `EmailVerificationService`, `LoginSecurityService`) — none exceed the guideline. Remaining: 11 frontend pages between 1,024 and 2,615 lines (led by `ProviderClaimsSubmission.jsx`, `ClaimBatchEntry.jsx`, `BenefitPolicyRulesTab.jsx`) — deliberately not attempted in this pass given the complete absence of frontend test coverage to catch regressions in live claims/provider workflows; needs a dedicated session with a test-first approach. |
+| S01-13 | Closed | Added `SecurityAuditServicePostgresIntegrationTest` (2026-07-24) — runs `logSecurityEvent` against real PostgreSQL 16 via Testcontainers (not mocked), asserting a row is actually persisted and the `beforeState`/`afterState` jsonb columns round-trip correctly. This test would have caught the jsonb/varchar defect; it now guards against regression. The `catch (Exception)` in `logSecurityEvent` itself is intentionally still broad (an audit-logging failure must not break the primary user action, e.g. login), but is no longer untested. |
 | S01-11 | Closed | Inbound IMAP retired; remaining SMTP secret encrypted at rest and write-only over JSON |
-| S01-12 | Closed | Legacy user columns and redundant indexes removed; frontend now reads canonical `active` |
+| S01-12 | Closed | Legacy user columns and redundant indexes removed; frontend now reads canonical `active`. — 2026-07-24: six additional confirmed-dead tables dropped (`network_providers`, `claim_history`, `coverage_simulation_runs`, `coverage_simulation_items`, `medical_semantic_rules`, `medical_synonyms`, all 0 rows, zero Entity/Repository references, zero cross-migration reference after creation) via V110. `legacy_provider_contracts` was investigated and confirmed **live** (mapped by `ProviderContract.java`) — correcting an earlier automated-pass false positive; explicitly not dropped. |
 
 ## Ordered implementation
 
-1. Regression tests for current session, lockout, reset, file access and admin endpoints.
-2. Freeze role/permission catalogue and authorization matrix.
-3. Create final RBAC schema and migrate `userType`.
-4. Consolidate user administration.
-5. Make browser auth session-only and remove legacy localStorage JWT callers.
-6. Add persistent session inventory and revoke-current/revoke-all.
-7. Consolidate security/admin audit.
-8. Centralize file policy and complete IDOR tests.
-9. Split typed settings domains.
-10. Harden startup, Dockerfiles, nginx, CORS, cookies and Actuator.
-11. Split oversized units.
-12. Produce final schema and clean Flyway baseline.
-13. Build PostgreSQL from zero; run Hibernate validate, all tests, restart and drift checks.
-14. Complete all Section 01 documents and closure review.
+1. Regression tests for current session, lockout, reset, file access and admin endpoints. ✅
+2. Freeze role/permission catalogue and authorization matrix. ✅
+3. Create final RBAC schema and migrate `userType`. ✅
+4. Consolidate user administration. ✅
+5. Make browser auth session-only and remove legacy localStorage JWT callers. ✅
+6. Add persistent session inventory and revoke-current/revoke-all. ✅
+7. Consolidate security/admin audit. ✅ (2026-07-24 — S01-07 closed)
+8. Centralize file policy and complete IDOR tests. Mitigated (claim/visit/pre-auth/member-photo/provider-document attachment paths hardened; central cross-resource `FileAccessPolicy` still not unified into one class)
+9. Split typed settings domains. ✅ (confirmed already done, 2026-07-24 — `SystemSettingsService` is a 147-line facade over 5 typed domain services; the AI-classifier-secret-store gap noted under S01-08 is now moot — the entire AI classifier feature was removed the same day, see below)
+10. Harden startup, Dockerfiles, nginx, CORS, cookies and Actuator. Mitigated (prod `ddl-auto=validate`, restricted actuator exposure, no wildcard CORS, Secure/HttpOnly/SameSite=Strict cookies all confirmed in place 2026-07-24; a formal fail-fast startup validator for weak-secret/misconfiguration detection is not yet added)
+11. Split oversized units. Partially done (backend confirmed already complete 2026-07-24 — `AuthorizationService`/`UserSecurityService` are thin facades; 11 frontend pages, 1,024–2,615 lines each, remain and need a dedicated test-first session)
+12. Produce final schema and clean Flyway baseline. In progress (2026-07-24 — 7 dead tables investigated, 6 confirmed dead and dropped via V110, 1 false positive corrected and preserved; the ~70-migration reduction to a 5-file baseline per the original Flyway inventory is not yet done)
+13. Build PostgreSQL from zero; run Hibernate validate, all tests, restart and drift checks. ✅ (proven repeatedly through V110, most recently 2026-07-24: 178 tests, 0 failures)
+14. Complete all Section 01 documents and closure review. In progress
 
 ## Current accounting
 
-- Production files deleted: **22** (legacy token refresh, raw file controller,
-  duplicate user administration, and the complete inbound email pre-
-  authorization backend/frontend feature)
-- Tables/columns deleted: **2 tables and 21 columns**
+- Production files deleted: **30** (legacy token refresh, raw file controller,
+  duplicate user administration, the complete inbound email pre-authorization
+  backend/frontend feature, six dead frontend auth template paths
+  (`pages/auth/auth0/**`, `pages/auth/aws/**`, `pages/auth/firebase/**`,
+  `pages/auth/supabase/**`, `pages/auth/jwt/TestLogin.jsx`,
+  `sections/auth/auth-forms/AuthLogin.jsx`), and — 2026-07-24 —
+  `UserAuditLog.java` + `UserAuditLogRepository.java`)
+- Tables/columns deleted: **9 tables and 21 columns** — `user_audit_log` (V109),
+  plus `network_providers`, `claim_history`, `coverage_simulation_runs`,
+  `coverage_simulation_items`, `medical_semantic_rules`, `medical_synonyms`
+  (V110, 2026-07-24; all confirmed 0 rows, 0 Entity/Repository references, 0
+  post-creation migration references). `legacy_provider_contracts` was
+  investigated and confirmed live (mapped by `ProviderContract.java`) —
+  correcting an earlier false positive — and deliberately **not** dropped.
 - Indexes deleted: **3**
-- Migrations deleted: **0**
-- Current migrations: **97**
-- Tests run in this audit phase: **165 backend tests + frontend production build**.
+- Migrations deleted: **0** (net-new baseline consolidation, distinct from the
+  additive `V109`/`V110` drop migrations, still pending)
+- Current migrations: **110** (V1–V110; V109 dropped `user_audit_log`, V110
+  dropped 6 confirmed-dead tables — both 2026-07-24)
+- Production defects found and fixed during this audit pass (not in original
+  scope, discovered via live-environment testing): **1** —
+  `SecurityAuditEvent.beforeState`/`afterState` jsonb/varchar entity mapping
+  bug that silently discarded every `security_audit_events` write in the
+  actual deployment since V107 was introduced.
+- Environment/config drift found live and reverted: **2** — `.env`
+  `SPRING_PROFILES_ACTIVE` (dev→prod) and `frontend/nginx.conf` rate limiting
+  (both had been temporarily changed during interactive local debugging and
+  were never committed).
+- Backend file-size findings confirmed already resolved (not previously
+  re-verified): `SystemSettingsService` (510→147 lines, facade over 5 typed
+  domain services) and `AuthorizationService` (839→149 lines, facade over 4
+  scoped services) — both already split before this audit pass, correcting
+  stale line counts in the original inventory.
+- `token-storage.js` removed (2026-07-24): confirmed all 4 importers
+  (`utils/axios.js`, `services/api/auth.service.js`, `contexts/AuthContext.jsx`,
+  `api/rbac.js`) only ever called the defensive `clearToken()` cleanup — never
+  `getToken()`/`setToken()`/`hasToken()`, confirming the app is fully
+  session-cookie based with no live JWT-in-storage path. All four call sites
+  and imports removed; file deleted outright. Frontend production build
+  passes.
+- CI confirmed already in place (2026-07-24, pre-dating this session):
+  `.github/workflows/backend-test.yml`, `frontend-test.yml`,
+  `integration-test.yml`, `security-audit.yml` (daily scheduled scan) — S01-09
+  downgraded from "no CI" to "frontend automated test coverage is the residual
+  gap."
+- S01-13 closed (2026-07-24): `SecurityAuditServicePostgresIntegrationTest`
+  added, running `logSecurityEvent` against real PostgreSQL via Testcontainers
+  and asserting the jsonb `beforeState`/`afterState` round-trip — the exact
+  gap that let the jsonb/varchar defect ship undetected by the fully-mocked
+  `SecurityAuditServiceTest`.
+- Backend file-size findings confirmed already resolved (not previously
+  re-verified): `SystemSettingsService` (510→147 lines, facade over 5 typed
+  domain services) and `AuthorizationService` (839→149 lines, facade over 4
+  scoped services) — both already split before this audit pass, correcting
+  stale line counts in the original inventory.
+- Tests run in this audit phase: **180 backend tests** (178 + 2 new real-Postgres
+  audit integration tests) **+ frontend production build**, plus live Docker
+  smoke tests (login success/failure, account lockout, user create/delete,
+  dead-table absence, live-table presence) directly against PostgreSQL — the
+  layer where the jsonb defect above was actually caught, since it did not
+  reproduce against the Testcontainers/mocked test paths.
 - Open P0: **0**
-- Open P1: **4**
-- Section closure estimate: **50%** (inventory and reproducible green baseline,
-  not production readiness)
+- Open P1: **1** (the frontend half of S01-10 — 11 oversized React pages,
+  1,024–2,615 lines each, deliberately deferred to a dedicated test-first
+  session given zero frontend regression-test coverage on live claims/provider
+  workflows). Every other previously-open P1 (S01-09 CI, S01-13 silent
+  audit-write-failure) is now closed or mitigated. The ~70-migration Flyway
+  baseline consolidation (step 12) remains unexecuted but is tracked as an
+  Ordered-implementation step, not a separate P1 risk, given the database is
+  explicitly experimental and the current migration chain is fully
+  reproducible from zero.
+- Section closure estimate: **80%** (inventory, reproducible green baseline,
+  full S01-07 audit consolidation, S01-13 closed with a real regression test,
+  S01-09 confirmed already resolved, `token-storage.js` removed, confirmation
+  that both flagged backend oversized-file risks were already resolved, 6
+  additional dead tables removed with 1 false positive corrected, and one
+  live-environment production defect fix; the two remaining gaps before full
+  closure are the 11 oversized frontend pages and the Flyway baseline
+  rebuild — both large, deliberately-scoped-out pieces of work rather than
+  quick fixes)

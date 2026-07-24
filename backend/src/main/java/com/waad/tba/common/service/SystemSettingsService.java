@@ -111,11 +111,6 @@ public class SystemSettingsService {
         return uiService.getEligibilityGracePeriodDays();
     }
 
-    // ── AI / BioBERT ──────────────────────────────────────────────────
-    public String getBiobertApiUrl() {
-        return uiService.getBiobertApiUrl();
-    }
-
     // ── Management ────────────────────────────────────────────────────
     @Transactional
     public SystemSettingDto updateSetting(String key, String value, String updatedBy) {

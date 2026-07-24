@@ -27,6 +27,7 @@ import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.security.JwtTokenProvider;
+import com.waad.tba.security.audit.SecurityAuditService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class AuthService {
         private final ProviderRepository providerRepository;
         private final SystemSettingsService systemSettingsService;
         private final SessionManagementService sessionManagementService;
+        private final SecurityAuditService auditService;
         private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -107,6 +109,14 @@ public class AuthService {
                 }
 
                 log.info("Login successful for user: {}", user.getUsername());
+
+                // 🔐 Audit logging
+                auditService.logLoginSuccess(
+                    user.getId(),
+                    user.getUsername(),
+                    null,
+                    null
+                );
 
                 return LoginResponse.builder()
                                 .token(token)

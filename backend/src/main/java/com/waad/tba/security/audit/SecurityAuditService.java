@@ -143,6 +143,36 @@ public class SecurityAuditService {
     }
 
     /**
+     * Log a user-administration event (create/update/delete/activate/deactivate/
+     * password-reset/role-change/email-verified) where the actor is the currently
+     * authenticated administrator and the target is the affected user account.
+     * Falls back to "system" if no authenticated actor is present (e.g. scheduled jobs).
+     */
+    public void logUserAdminEvent(SecurityAuditEvent.AuditActionType actionType, Long targetUserId,
+            String targetUsername, String details, String ipAddress, String userAgent) {
+        String actorUsername = "system";
+        try {
+            org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()
+                    && !"anonymousUser".equals(authentication.getName())) {
+                actorUsername = authentication.getName();
+            }
+        } catch (Exception ignored) {
+            // keep default "system" actor
+        }
+
+        logSecurityEvent(
+                null, actorUsername,
+                actionType,
+                "USER", targetUserId, targetUsername,
+                ipAddress, userAgent,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                details,
+                null, null);
+    }
+
+    /**
      * Log account lockout after failed attempts
      */
     public void logAccountLocked(Long userId, String username, String ip) {

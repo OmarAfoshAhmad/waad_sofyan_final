@@ -139,8 +139,6 @@ const AdminMedicalAuditLogs = Loadable(lazy(() => import('pages/admin/MedicalAud
 const Settings = Loadable(lazy(() => import('pages/settings')));
 
 const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSettingsPage')));
-const FacilityPricePreparationPage = Loadable(lazy(() => import('pages/settings/FacilityPricePreparationPage')));
-const AIKeySettingsPage = Loadable(lazy(() => import('pages/settings/AIKeySettingsPage')));
 const KinshipMismatchChecker = Loadable(lazy(() => import('pages/settings/KinshipMismatchChecker')));
 const MemberDuplicatesResolver = Loadable(lazy(() => import('pages/settings/MemberDuplicatesResolver')));
 
@@ -870,22 +868,6 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <SystemSettingsPage />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'facility-price-preparation',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <FacilityPricePreparationPage />
-            </PermissionGuard>
-          )
-        },
-        {
-          path: 'ai-key',
-          element: (
-            <PermissionGuard isRouteGuard>
-              <AIKeySettingsPage />
             </PermissionGuard>
           )
         },

@@ -8,6 +8,8 @@ import com.waad.tba.modules.rbac.dto.*;
 import com.waad.tba.modules.rbac.entity.*;
 import com.waad.tba.modules.rbac.exception.*;
 import com.waad.tba.modules.rbac.repository.*;
+import com.waad.tba.security.audit.SecurityAuditEvent;
+import com.waad.tba.security.audit.SecurityAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,7 +30,7 @@ public class PasswordManagementService {
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
-    private final UserAuditLogRepository auditLogRepository;
+    private final SecurityAuditService securityAuditService;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final SecurityConfigurationProperties config;
@@ -47,8 +49,13 @@ public class PasswordManagementService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         if (!passwordEncoder.matches(dto.getCurrentPassword(), user.getPassword())) {
-            auditLog(userId, UserAuditLog.ACTION_PASSWORD_CHANGE,
-                    "Failed: Incorrect current password", ipAddress, userAgent, userId);
+            securityAuditService.logSecurityEvent(
+                    userId, user.getUsername(),
+                    SecurityAuditEvent.AuditActionType.PASSWORD_CHANGED,
+                    "USER", userId, user.getUsername(),
+                    ipAddress, userAgent,
+                    SecurityAuditEvent.AuditResult.DENIED,
+                    "Incorrect current password", null, null);
             throw new IllegalArgumentException("Current password is incorrect");
         }
 
@@ -62,8 +69,7 @@ public class PasswordManagementService {
 
         passwordResetTokenRepository.invalidateAllUserTokens(userId);
 
-        auditLog(userId, UserAuditLog.ACTION_PASSWORD_CHANGE,
-                "Success: Password changed by user", ipAddress, userAgent, userId);
+        securityAuditService.logPasswordChanged(userId, user.getUsername(), ipAddress, userAgent);
 
         sessionManagementService.revokeAll(user.getUsername());
         log.info("Password changed successfully for user ID: {}", userId);
@@ -119,8 +125,13 @@ public class PasswordManagementService {
                 resetUrl);
         emailService.sendPasswordReset(emailData);
 
-        auditLog(user.getId(), "PASSWORD_RESET_REQUESTED",
-                "Reset token generated", ipAddress, userAgent, null);
+        securityAuditService.logSecurityEvent(
+                user.getId(), user.getUsername(),
+                SecurityAuditEvent.AuditActionType.PASSWORD_RESET_REQUESTED,
+                "USER", user.getId(), user.getUsername(),
+                ipAddress, userAgent,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                "Reset token generated", null, null);
 
         log.info("Password reset email sent to: {}", dto.getEmail());
     }
@@ -157,8 +168,13 @@ public class PasswordManagementService {
         token.markAsUsed();
         passwordResetTokenRepository.save(token);
 
-        auditLog(user.getId(), UserAuditLog.ACTION_PASSWORD_RESET,
-                "Success: Password reset via token", ipAddress, userAgent, null);
+        securityAuditService.logSecurityEvent(
+                user.getId(), user.getUsername(),
+                SecurityAuditEvent.AuditActionType.PASSWORD_RESET,
+                "USER", user.getId(), user.getUsername(),
+                ipAddress, userAgent,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                "Password reset via token", null, null);
 
         log.info("Password reset successfully for user ID: {}", user.getId());
     }
@@ -182,21 +198,4 @@ public class PasswordManagementService {
         }
     }
 
-    private void auditLog(Long userId, String action, String details,
-            String ipAddress, String userAgent, Long performedBy) {
-        UserAuditLog auditLog = UserAuditLog.builder()
-                .userId(userId)
-                .action(action)
-                .details(details)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .performedBy(performedBy)
-                .build();
-
-        try {
-            auditLogRepository.save(auditLog);
-        } catch (Exception ex) {
-            log.warn("Skipping audit log persistence due to schema mismatch: {}", ex.getMessage());
-        }
-    }
 }

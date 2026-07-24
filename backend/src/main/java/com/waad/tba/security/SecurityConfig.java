@@ -95,6 +95,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         // Feature Flags — public endpoint (called before session is established)
                         .requestMatchers("/api/v1/admin/features/public").permitAll()
+                        // UI config (logo/font/system name) — public, called on app bootstrap before login
+                        .requestMatchers("/api/v1/admin/system-settings/ui-config").permitAll()
                         // Error page — Spring internal, must stay public
                         .requestMatchers("/error").permitAll()
                         // Actuator management endpoints — SUPER_ADMIN only (exposes metrics/env)

@@ -25,6 +25,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Custom Nginx configuration for SPA routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Limit worker processes to avoid resource contention under container CPU limits
+RUN sed -i 's/worker_processes  auto;/worker_processes 2;/' /etc/nginx/nginx.conf
+
 EXPOSE 80
 EXPOSE 443
 

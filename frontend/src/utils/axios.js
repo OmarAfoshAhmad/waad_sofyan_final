@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { logError, getUserFriendlyMessage, ErrorType } from 'services/errorLogger';
-import { clearToken } from 'utils/token-storage';
 import { normalizeApiError } from 'utils/api-error';
 
 // ==============================|| AXIOS CLIENT - CLEAN DOCKER VERSION ||============================== //
@@ -91,7 +90,6 @@ axiosServices.interceptors.response.use(
         console.warn('401 Unauthorized - Session expired');
       }
 
-      clearToken();
       sessionStorage.clear();
 
       window.dispatchEvent(new CustomEvent('auth:session-expired'));

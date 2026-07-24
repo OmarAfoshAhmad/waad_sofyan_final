@@ -45,6 +45,7 @@ public class SystemSettingsController {
      * GET /api/v1/admin/system-settings/ui-config
      */
     @GetMapping("/ui-config")
+    @PreAuthorize("permitAll()")
     @Operation(summary = "Get UI configuration (public)")
     public ResponseEntity<UIConfigService.UiConfigDto> getUiConfig() {
         return ResponseEntity.ok(uiConfigService.getUiConfig());

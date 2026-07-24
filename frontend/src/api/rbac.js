@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { SystemRole, isProviderRole, getPrivilegeLevel, getAssignableRoles, canModifyRole } from 'constants/rbac';
-import { clearToken } from 'utils/token-storage';
 
 /**
  * RBAC Store — Phase 5 (Static Role-Based Auth)
@@ -52,7 +51,6 @@ export const useRBACStore = create((set, get) => ({
   clear: () => {
     localStorage.removeItem(STORAGE_KEYS.ROLES);
     localStorage.removeItem(STORAGE_KEYS.USER);
-    clearToken();
     localStorage.removeItem('userPermissions');
     localStorage.removeItem('selectedEmployerId');
     localStorage.removeItem('selectedEmployerName');

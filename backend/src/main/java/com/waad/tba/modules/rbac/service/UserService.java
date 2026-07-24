@@ -16,11 +16,11 @@ import com.waad.tba.modules.rbac.dto.UserCreateDto;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 import com.waad.tba.modules.rbac.dto.UserUpdateDto;
 import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.modules.rbac.entity.UserAuditLog;
 import com.waad.tba.modules.rbac.exception.PasswordPolicyViolationException;
 import com.waad.tba.modules.rbac.mapper.UserMapper;
 import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.modules.auth.service.SessionManagementService;
+import com.waad.tba.security.audit.SecurityAuditEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -97,8 +97,8 @@ public class UserService {
         securityService.sendEmailVerification(savedUser);
         
         // Audit log
-        securityService.auditLog(savedUser.getId(), UserAuditLog.ACTION_USER_CREATED,
-                "User created: " + dto.getUsername(), null, null, null);
+        securityService.auditLog(savedUser.getId(), SecurityAuditEvent.AuditActionType.ACCOUNT_CREATED,
+                "User created: " + dto.getUsername(), null, null);
         
         log.info("User created successfully with id: {}", savedUser.getId());
         
@@ -129,9 +129,9 @@ public class UserService {
         User updatedUser = userRepository.save(user);
         
         // Audit log
-        securityService.auditLog(id, UserAuditLog.ACTION_USER_UPDATED,
+        securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_UPDATED,
                 "User updated" + (oldEmail.equals(dto.getEmail()) ? "" : ", email changed"),
-                null, null, null);
+                null, null);
         
         log.info("User updated successfully: {}", id);
         return userMapper.toResponseDto(updatedUser);
@@ -156,8 +156,8 @@ public class UserService {
         }
         
         // Audit log before deletion
-        securityService.auditLog(id, UserAuditLog.ACTION_USER_DELETED,
-                "User deleted (soft delete)", null, null, null);
+        securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_DELETED,
+                "User deleted (soft delete)", null, null);
         
         userRepository.deleteById(id);
         log.info("User deleted successfully: {}", id);
@@ -233,9 +233,11 @@ public class UserService {
         User savedUser = userRepository.save(user);
         
         // Audit log
-        String action = newStatus ? UserAuditLog.ACTION_USER_ACTIVATED : UserAuditLog.ACTION_USER_DEACTIVATED;
+        SecurityAuditEvent.AuditActionType action = newStatus
+                ? SecurityAuditEvent.AuditActionType.ACCOUNT_ACTIVATED
+                : SecurityAuditEvent.AuditActionType.ACCOUNT_DEACTIVATED;
         String details = newStatus ? "User activated" : "User deactivated";
-        securityService.auditLog(id, action, details, null, null, null);
+        securityService.auditLog(id, action, details, null, null);
         
         log.info("User {} status changed to: {}", id, newStatus ? "ACTIVE" : "INACTIVE");
         return userMapper.toResponseDto(savedUser);
@@ -256,8 +258,9 @@ public class UserService {
         user.setPasswordChangedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        securityService.auditLog(id, UserAuditLog.ACTION_PASSWORD_RESET,
-                "Password reset by administrator", null, null, null);
+        // 🔐 Audit logging (single write — administrator-initiated reset, not a self-service change)
+        securityService.auditLog(id, SecurityAuditEvent.AuditActionType.PASSWORD_RESET,
+                "Password reset by administrator", null, null);
         sessionManagementService.revokeAll(user.getUsername());
     }
 

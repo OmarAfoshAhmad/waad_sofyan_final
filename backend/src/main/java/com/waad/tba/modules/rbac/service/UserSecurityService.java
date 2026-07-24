@@ -2,8 +2,9 @@ package com.waad.tba.modules.rbac.service;
 
 import com.waad.tba.modules.rbac.dto.*;
 import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.modules.rbac.entity.UserAuditLog;
-import com.waad.tba.modules.rbac.repository.UserAuditLogRepository;
+import com.waad.tba.modules.rbac.repository.UserRepository;
+import com.waad.tba.security.audit.SecurityAuditEvent;
+import com.waad.tba.security.audit.SecurityAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +26,8 @@ public class UserSecurityService {
     private final PasswordManagementService passwordManagementService;
     private final EmailVerificationService emailVerificationService;
     private final LoginSecurityService loginSecurityService;
-    private final UserAuditLogRepository auditLogRepository;
+    private final SecurityAuditService securityAuditService;
+    private final UserRepository userRepository;
 
     // =====================================================
     // PASSWORD MANAGEMENT
@@ -122,21 +124,12 @@ public class UserSecurityService {
     // =====================================================
 
     @Transactional
-    public void auditLog(Long userId, String action, String details,
-            String ipAddress, String userAgent, Long performedBy) {
-        UserAuditLog auditLog = UserAuditLog.builder()
-                .userId(userId)
-                .action(action)
-                .details(details)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .performedBy(performedBy)
-                .build();
+    public void auditLog(Long userId, SecurityAuditEvent.AuditActionType action, String details,
+            String ipAddress, String userAgent) {
+        String targetUsername = userRepository.findById(userId)
+                .map(User::getUsername)
+                .orElse("user#" + userId);
 
-        try {
-            auditLogRepository.save(auditLog);
-        } catch (Exception ex) {
-            log.warn("Skipping audit log persistence due to schema mismatch: {}", ex.getMessage());
-        }
+        securityAuditService.logUserAdminEvent(action, userId, targetUsername, details, ipAddress, userAgent);
     }
 }

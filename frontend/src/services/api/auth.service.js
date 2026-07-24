@@ -4,16 +4,12 @@
  */
 
 import axiosClient from 'utils/axios';
-import { clearToken } from 'utils/token-storage';
 
 /**
  * Login with username/password
  * Uses session endpoint. Backend sets HttpOnly cookie.
  */
 export const login = async (credentials) => {
-  // Clear any legacy token artifacts before creating session.
-  clearToken();
-
   const response = await axiosClient.post('/auth/session/login', credentials);
   const data = response.data;
 
@@ -42,12 +38,9 @@ export const me = async () => {
 };
 
 /**
- * Logout - invalidates both JWT and HTTP session
+ * Logout - invalidates the HTTP session
  */
 export const logout = async () => {
-  // Clear local token
-  clearToken();
-
   // Clear backend session
   try {
     const response = await axiosClient.post('/auth/session/logout');

@@ -29,9 +29,6 @@ public class UIConfigService {
     public static final String WAITING_PERIOD_DAYS_DEFAULT_KEY = "WAITING_PERIOD_DAYS_DEFAULT";
     public static final String ELIGIBILITY_GRACE_PERIOD_DAYS_KEY = "ELIGIBILITY_GRACE_PERIOD_DAYS";
 
-    public static final String BIOBERT_API_URL = "BIOBERT_API_URL";
-    public static final String DEFAULT_BIOBERT_API_URL = "http://localhost:8000/predict";
-
     @Cacheable(value = "systemSettings", key = "#key")
     public String getSetting(String key, String defaultValue) {
         return settingRepository.findBySettingKey(key)
@@ -104,11 +101,6 @@ public class UIConfigService {
 
     public int getEligibilityGracePeriodDays() {
         return getSettingAsInt(ELIGIBILITY_GRACE_PERIOD_DAYS_KEY, 7);
-    }
-
-    // AI / BioBERT
-    public String getBiobertApiUrl() {
-        return getSetting(BIOBERT_API_URL, DEFAULT_BIOBERT_API_URL);
     }
 
     // Composite DTO

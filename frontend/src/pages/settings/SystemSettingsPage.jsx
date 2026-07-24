@@ -26,7 +26,6 @@ import {
   Description as ReportIcon,
   LocalHospital as ProviderPortalIcon,
   Lock as SecurityIcon,
-  Key as KeyIcon,
   Rule as RuleIcon,
   Palette as PaletteIcon,
   Preview as PreviewIcon,
@@ -47,7 +46,6 @@ import useSystemConfig from 'hooks/useSystemConfig';
 import useConfig from 'hooks/useConfig';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import EmailSettingsTab from './EmailSettingsTab';
-import AIKeySettingsPage from './AIKeySettingsPage';
 import FinancialRuleEngineTab from './FinancialRuleEngineTab';
 
 const KEYS = {
@@ -591,7 +589,6 @@ const SystemSettingsPage = () => {
           <Tab icon={<ProviderPortalIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="بوابة مقدم الخدمة" />
           <Tab icon={<MailIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات البريد" />
           <Tab icon={<PaletteIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="المظهر" />
-          <Tab icon={<KeyIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات الذكاء الاصطناعي" />
         </Tabs>
 
         <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: 'background.paper', borderRadius: '0 0 8px 8px' }}>
@@ -1343,14 +1340,6 @@ const SystemSettingsPage = () => {
             </Box>
           </TabPanel>
           {/* ===================== نهاية تبويب المظهر ===================== */}
-
-          <TabPanel value={tabValue} index={8}>
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
-                <AIKeySettingsPage embedded />
-              </Box>
-            </Box>
-          </TabPanel>
         </Box>
       </Card>
     </Box>

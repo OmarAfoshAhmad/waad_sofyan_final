@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS security_audit_events (
     event_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT fk_audit_actor FOREIGN KEY (actor_id) REFERENCES "user"(id) ON DELETE SET NULL
+    CONSTRAINT fk_audit_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Create indexes for efficient querying

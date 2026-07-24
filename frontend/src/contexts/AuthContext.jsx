@@ -21,7 +21,6 @@ import { createContext, useEffect, useState, useContext } from 'react';
 import authService from 'services/api/auth.service';
 import { useRBACStore } from 'api/rbac';
 import { openSnackbar } from 'api/snackbar';
-import { clearToken } from 'utils/token-storage';
 
 // ==============================|| AUTH STATUS ENUM ||============================== //
 
@@ -208,8 +207,6 @@ export const AuthProvider = ({ children }) => {
     setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
     useRBACStore.getState().clear();
 
-    // Clear JWT token if exists (for hybrid auth)
-    clearToken();
     sessionStorage.clear();
 
     // Notify other tabs

@@ -6,6 +6,8 @@ import com.waad.tba.modules.rbac.dto.*;
 import com.waad.tba.modules.rbac.entity.*;
 import com.waad.tba.modules.rbac.exception.*;
 import com.waad.tba.modules.rbac.repository.*;
+import com.waad.tba.security.audit.SecurityAuditEvent;
+import com.waad.tba.security.audit.SecurityAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +27,7 @@ public class EmailVerificationService {
 
     private final UserRepository userRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
-    private final UserAuditLogRepository auditLogRepository;
+    private final SecurityAuditService securityAuditService;
     private final EmailService emailService;
     private final SecurityConfigurationProperties config;
 
@@ -81,8 +83,13 @@ public class EmailVerificationService {
         token.markAsVerified();
         emailVerificationTokenRepository.save(token);
 
-        auditLog(user.getId(), UserAuditLog.ACTION_EMAIL_VERIFIED,
-                "Success: Email verified", ipAddress, userAgent, null);
+        securityAuditService.logSecurityEvent(
+                user.getId(), user.getUsername(),
+                SecurityAuditEvent.AuditActionType.EMAIL_VERIFIED,
+                "USER", user.getId(), user.getUsername(),
+                ipAddress, userAgent,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                "Email verified", null, null);
 
         log.info("Email verified successfully for user: {}", user.getEmail());
     }
@@ -127,21 +134,4 @@ public class EmailVerificationService {
         }
     }
 
-    private void auditLog(Long userId, String action, String details,
-            String ipAddress, String userAgent, Long performedBy) {
-        UserAuditLog auditLog = UserAuditLog.builder()
-                .userId(userId)
-                .action(action)
-                .details(details)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .performedBy(performedBy)
-                .build();
-
-        try {
-            auditLogRepository.save(auditLog);
-        } catch (Exception ex) {
-            log.warn("Skipping audit log persistence due to schema mismatch: {}", ex.getMessage());
-        }
-    }
 }
