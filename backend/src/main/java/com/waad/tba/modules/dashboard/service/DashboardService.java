@@ -197,10 +197,15 @@ public class DashboardService {
     public List<MonthlyTrendDto> getMembersGrowth(int months) {
         log.debug("📊 Fetching members growth for last {} months", months);
 
+        User currentUser = authorizationService.getCurrentUser();
+        Long employerId = authorizationService.resolveEmployerScope(currentUser, null);
+
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusMonths(months);
 
-        List<Object[]> results = memberRepository.getMonthlyGrowthTrends(startDate, endDate);
+        List<Object[]> results = employerId != null
+                ? memberRepository.getMonthlyGrowthTrendsByEmployer(startDate, endDate, employerId)
+                : memberRepository.getMonthlyGrowthTrends(startDate, endDate);
 
         return results.stream()
                 .map(row -> {
@@ -344,14 +349,23 @@ public class DashboardService {
             }
         }
 
-        log.debug("📊 Fetching recent activities (limit: {})", limit);
+        // SECTION_02 finding: this feed previously always merged global
+        // recent-members/recent-claims across every employer, leaking member
+        // names and diagnosis descriptions to EMPLOYER_ADMIN/DATA_ENTRY
+        // callers outside their own employer. Provider contracts remain
+        // unscoped (they are TPA<->provider agreements, not employer data).
+        Long employerId = authorizationService.resolveEmployerScope(currentUser, null);
+        log.debug("📊 Fetching recent activities (limit: {})"
+                + (employerId != null ? " for employerId=" + employerId : " (all employers)"), limit);
 
         List<RecentActivityDto> activities = new ArrayList<>();
         Pageable pageable = PageRequest.of(0, limit / 3 + 1); // Get a few from each category
 
         try {
             // Get recent members
-            List<Object[]> recentMembers = memberRepository.getRecentMembers(pageable);
+            List<Object[]> recentMembers = employerId != null
+                    ? memberRepository.getRecentMembersByEmployer(employerId, pageable)
+                    : memberRepository.getRecentMembers(pageable);
             for (Object[] row : recentMembers) {
                 Long id = row[0] != null ? ((Number) row[0]).longValue() : 0L;
                 String name = (String) row[1];
@@ -384,7 +398,9 @@ public class DashboardService {
         try {
             // Get recent claims
             // ✅ TYPE-SAFE: Using interface projection instead of Object[]
-            List<RecentClaimProjection> recentClaims = claimRepository.getRecentClaims(pageable);
+            List<RecentClaimProjection> recentClaims = employerId != null
+                    ? claimRepository.getRecentClaimsByEmployer(employerId, pageable)
+                    : claimRepository.getRecentClaims(pageable);
             for (RecentClaimProjection projection : recentClaims) {
                 Long id = projection.getId();
                 String memberName = projection.getMemberName();
@@ -516,21 +532,37 @@ public class DashboardService {
             return createEmptyStats();
         }
 
-        log.debug("📊 Dashboard showing global stats (employer filtering disabled)");
-        return getGlobalStats();
+        // SECTION_02 finding: this legacy endpoint previously always returned
+        // global totals ("employer filtering disabled"), leaking cross-tenant
+        // member/claim counts to EMPLOYER_ADMIN/PROVIDER_STAFF. It now resolves
+        // scope the same way /summary does before falling back to global counts
+        // for internal staff.
+        Long employerId = authorizationService.resolveEmployerScope(currentUser, requestedEmployerId);
+        log.debug("📊 Dashboard stats" + (employerId != null ? " for employerId=" + employerId : " (all employers)"));
+        return getScopedStats(employerId);
     }
 
     /**
-     * Get global stats (all data).
+     * Stats scoped by employer when a scope is resolved; global counts when
+     * employerId is null (internal staff with no employer restriction).
      */
-    private DashboardStatsDto getGlobalStats() {
-        long totalMembers = memberRepository.count();
-        long totalClaims = claimRepository.countActive();
-
-        long pendingClaims = claimRepository.countOpenClaims();
-        long approvedClaims = claimRepository.countApprovedClaims();
-        long rejectedClaims = claimRepository.countByStatus(
-                com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED);
+    private DashboardStatsDto getScopedStats(Long employerId) {
+        long totalMembers = employerId != null
+                ? memberRepository.countByEmployerId(employerId)
+                : memberRepository.count();
+        long totalClaims = employerId != null
+                ? claimRepository.countByMemberEmployerId(employerId)
+                : claimRepository.countActive();
+        long pendingClaims = employerId != null
+                ? claimRepository.countOpenClaimsByEmployer(employerId)
+                : claimRepository.countOpenClaims();
+        long approvedClaims = employerId != null
+                ? claimRepository.countApprovedClaimsByEmployer(employerId)
+                : claimRepository.countApprovedClaims();
+        long rejectedClaims = employerId != null
+                ? claimRepository.countByStatusAndEmployerOrgId(
+                        com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED, employerId)
+                : claimRepository.countByStatus(com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED);
 
         return DashboardStatsDto.builder()
                 .totalMembers(totalMembers)

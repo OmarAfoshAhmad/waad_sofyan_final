@@ -29,7 +29,6 @@ import java.util.List;
 @RequestMapping("/api/v1/admin/system-settings")
 @RequiredArgsConstructor
 @Tag(name = "Admin - System Settings", description = "Manage system-wide settings (SLA, configurations)")
-@PreAuthorize("isAuthenticated()")
 public class SystemSettingsController {
 
     private final SystemSettingsService systemSettingsService;

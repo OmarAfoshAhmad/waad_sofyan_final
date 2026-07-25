@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import useAuth from 'contexts/useAuth';
+import useAuth from 'hooks/useAuth';
 import { useEmployersList } from 'hooks/useEmployers';
 
 /**

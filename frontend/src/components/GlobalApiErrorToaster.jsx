@@ -7,6 +7,8 @@ export default function GlobalApiErrorToaster() {
   useEffect(() => {
     const handler = (event) => {
       const detail = event?.detail || {};
+      if (detail.status === 401 || detail.statusCode === 401) return;
+
       const message = detail.message || 'حدث خطأ غير متوقع';
 
       enqueueSnackbar(message, {

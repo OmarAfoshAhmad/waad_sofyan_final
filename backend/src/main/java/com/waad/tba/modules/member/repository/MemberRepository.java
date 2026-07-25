@@ -355,6 +355,22 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
                      @Param("endDate") java.time.LocalDate endDate);
 
        /**
+        * Employer-scoped variant of {@link #getMonthlyGrowthTrends}. Used when
+        * the caller must not see cross-employer member counts (e.g.
+        * EMPLOYER_ADMIN dashboard).
+        */
+       @Query("SELECT YEAR(m.joinDate) as year, MONTH(m.joinDate) as month, COUNT(m) as count " +
+                     "FROM Member m WHERE m.active = true " +
+                     "AND m.joinDate >= :startDate " +
+                     "AND m.joinDate <= :endDate " +
+                     "AND m.employer.id = :employerId " +
+                     "GROUP BY YEAR(m.joinDate), MONTH(m.joinDate) " +
+                     "ORDER BY year, month")
+       List<Object[]> getMonthlyGrowthTrendsByEmployer(@Param("startDate") java.time.LocalDate startDate,
+                     @Param("endDate") java.time.LocalDate endDate,
+                     @Param("employerId") Long employerId);
+
+       /**
         * Get recent members (for dashboard recent activities)
         * Returns: [id, fullName, createdAt]
         */
@@ -365,6 +381,19 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
                      "WHERE m.active = true " +
                      "ORDER BY m.createdAt DESC")
        List<Object[]> getRecentMembers(Pageable pageable);
+
+       /**
+        * Employer-scoped variant of {@link #getRecentMembers}. Used so an
+        * EMPLOYER_ADMIN's dashboard activity feed cannot show another
+        * employer's member names.
+        */
+       @Query("SELECT m.id, " +
+                     "m.fullName as name, " +
+                     "m.createdAt " +
+                     "FROM Member m " +
+                     "WHERE m.active = true AND m.employer.id = :employerId " +
+                     "ORDER BY m.createdAt DESC")
+       List<Object[]> getRecentMembersByEmployer(@Param("employerId") Long employerId, Pageable pageable);
 
        /**
         * Count members created in date range (for growth calculation)

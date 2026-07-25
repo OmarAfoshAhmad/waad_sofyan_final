@@ -1761,11 +1761,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           }}
           renderCell={renderRuleCell}
           getRowKey={(row) => row.id}
-          getRowSx={(row) => row.groupSource ? {
-            bgcolor: 'rgba(156, 39, 176, 0.07)',
-            borderInlineStart: '4px solid',
-            borderInlineStartColor: 'secondary.main'
-          } : {}}
+          getRowSx={() => ({})}
           emptyMessage={ruleSearch ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد قواعد تغطية. استخدم إدارة نسب التصنيفات أو أضف قاعدة جديدة.'}
           hover
           sortBy={sortBy}

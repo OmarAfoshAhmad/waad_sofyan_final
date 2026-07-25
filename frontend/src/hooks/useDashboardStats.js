@@ -11,8 +11,13 @@ import { useEmployerFilter } from 'contexts/EmployerFilterContext';
  *
  * @returns {Object} { summary, loading, error, refresh }
  */
+import useAuth from 'hooks/useAuth';
+
 export const useDashboardStats = (options = {}) => {
-  const { enabled = true, silentOnForbidden = true } = options;
+  const { user } = useAuth();
+  const isAuthenticated = !!user;
+  const enabled = options.enabled !== false && isAuthenticated;
+  const { silentOnForbidden = true } = options;
   const { selectedEmployerId } = useEmployerFilter();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(enabled);

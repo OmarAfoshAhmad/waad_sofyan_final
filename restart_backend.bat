@@ -9,8 +9,13 @@ REM - Starts backend with dev profile
 REM ====================================================
 
 set "PORT=8080"
-set "ROOT_DIR=%~dp0"
-set "BACKEND_DIR=%ROOT_DIR%backend"
+if exist "%~dp0pom.xml" (
+    set "BACKEND_DIR=%~dp0"
+    set "ROOT_DIR=%~dp0..\"
+) else (
+    set "ROOT_DIR=%~dp0"
+    set "BACKEND_DIR=%~dp0backend"
+)
 
 echo [1/4] Checking port %PORT%...
 set "FOUND=0"
@@ -52,8 +57,7 @@ if "%JWT_SECRET%"=="" (
 
 echo [4/4] Starting backend...
 cd /d "%BACKEND_DIR%"
-call mvn -Dmaven.test.skip=true package
-if errorlevel 1 exit /b 1
-"%JAVA_HOME%\bin\java.exe" -jar target\tba-backend-1.0.0.jar
+call mvn compile spring-boot:run -Dmaven.test.skip=true 
+
 
 endlocal

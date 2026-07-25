@@ -1,5 +1,9 @@
 package com.waad.tba.modules.claim.service;
 
+import com.waad.tba.common.file.FileAccessAuditService;
+import com.waad.tba.common.file.FileAccessAuditService.AccessOutcome;
+import com.waad.tba.common.file.FileAccessAuditService.FileAction;
+import com.waad.tba.common.file.FileAccessAuditService.ResourceType;
 import com.waad.tba.common.file.FileStorageService;
 import com.waad.tba.common.file.FileUploadResult;
 import com.waad.tba.modules.claim.entity.Claim;
@@ -42,6 +46,7 @@ public class ClaimAttachmentService {
     private final ClaimRepository claimRepository;
     private final FileStorageService fileStorageService;
     private final AuthorizationService authorizationService;
+    private final FileAccessAuditService fileAccessAuditService;
 
     /**
      * Upload an attachment for a claim
@@ -53,9 +58,6 @@ public class ClaimAttachmentService {
      */
     @Transactional
     public ClaimAttachment uploadAttachment(Long claimId, MultipartFile file, ClaimAttachmentType attachmentType) {
-        log.info("Uploading attachment for claim ID: {}, type: {}", claimId, attachmentType);
-
-        // Validate file
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File must not be empty");
         }
@@ -217,7 +219,20 @@ public class ClaimAttachmentService {
     private void assertCanAccessClaim(Long claimId) {
         var currentUser = authorizationService.requireCurrentUser();
         if (!authorizationService.canAccessClaim(currentUser, claimId)) {
+            fileAccessAuditService.logDeniedAccess(
+                ResourceType.CLAIM_ATTACHMENT,
+                FileAction.DOWNLOAD,
+                null,
+                claimId,
+                AccessOutcome.DENIED_WRONG_PROVIDER
+            );
             throw new org.springframework.security.access.AccessDeniedException("Access to claim attachment denied");
         }
+        fileAccessAuditService.logAllowedAccess(
+            ResourceType.CLAIM_ATTACHMENT,
+            FileAction.DOWNLOAD,
+            null,
+            claimId
+        );
     }
 }

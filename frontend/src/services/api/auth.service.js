@@ -27,7 +27,10 @@ export const login = async (credentials) => {
  */
 export const me = async () => {
   try {
-    const response = await axiosClient.get('/auth/session/me');
+    const response = await axiosClient.get('/auth/session/me', {
+      suppressGlobalError: true,
+      suppress401Handling: true
+    });
     return response.data;
   } catch (error) {
     if (error.response?.status === 401) {

@@ -1005,6 +1005,8 @@ public class PreAuthorizationService {
         PreAuthorization preAuth = preAuthorizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PreAuthorization not found with ID: " + id));
 
+        assertCanAccessPreAuthorization(preAuth);
+
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
 
@@ -1020,10 +1022,35 @@ public class PreAuthorizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "PreAuthorization not found with reference: " + referenceNumber));
 
+        assertCanAccessPreAuthorization(preAuth);
+
         Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
         Provider provider = providerRepository.findById(preAuth.getProviderId()).orElse(null);
 
         return mapToResponseDto(preAuth, member, provider, null);
+    }
+
+    /**
+     * Ownership guard shared by the ID/reference lookups above: internal staff
+     * see everything, provider staff only their own provider's requests,
+     * employer admins only requests for members in their own employer.
+     * Mirrors {@code PreAuthorizationAttachmentService.assertCanAccessPreAuthorization}.
+     */
+    private void assertCanAccessPreAuthorization(PreAuthorization preAuth) {
+        User currentUser = authorizationService.getCurrentUser();
+
+        boolean allowed = authorizationService.isInternalStaff(currentUser)
+                || (authorizationService.isProvider(currentUser)
+                        && currentUser.getProviderId() != null
+                        && currentUser.getProviderId().equals(preAuth.getProviderId()))
+                || (authorizationService.isEmployerAdmin(currentUser)
+                        && authorizationService.canAccessMember(currentUser, preAuth.getMemberId()));
+
+        if (!allowed) {
+            log.warn("❌ Access denied: user {} attempted to access pre-authorization {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", preAuth.getId());
+            throw new AccessDeniedException("Access to this pre-authorization is denied");
+        }
     }
 
     /**

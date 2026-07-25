@@ -191,6 +191,13 @@ public class VisitService {
     public VisitResponseDto update(Long id, VisitCreateDto dto) {
         log.info("Updating visit with id: {}", id);
 
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessVisit(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to update visit {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this visit");
+        }
+
         Visit entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Visit", "id", id));
 
@@ -212,13 +219,30 @@ public class VisitService {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Visit", "id", id);
         }
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessVisit(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to delete visit {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this visit");
+        }
+
         repository.deleteById(id);
     }
 
+    /**
+     * @deprecated unscoped — returned visits across every employer/provider to
+     *             any caller holding one of the broad legacy roles. Superseded
+     *             by {@link #findAllPaginated}, which correctly resolves the
+     *             caller's employer/provider scope. Kept only so the retired
+     *             {@code GET /api/v1/visits/search} route fails closed instead
+     *             of leaking cross-tenant data.
+     */
+    @Deprecated
     @Transactional(readOnly = true)
     public List<VisitResponseDto> search(String query) {
-        log.debug("Searching visits with query: {}", query);
-        return mapVisitsToDtos(repository.search(query));
+        throw new AccessDeniedException(
+                "This endpoint is retired. Use the scoped paginated visit search instead.");
     }
 
     @Transactional(readOnly = true)

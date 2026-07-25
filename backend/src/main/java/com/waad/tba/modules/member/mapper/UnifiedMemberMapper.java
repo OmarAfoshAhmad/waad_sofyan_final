@@ -12,11 +12,15 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * ==================== UNIFIED MEMBER ARCHITECTURE ====================
  * Mapper for unified member structure (Principal + Dependent in same table).
- * 
+ *
  * Handles mapping between:
  * - MemberCreateDto → Member Entity (Principal or Dependent)
  * - DependentMemberDto → Member Entity (Dependent only)
@@ -26,7 +30,35 @@ import com.waad.tba.modules.member.entity.Member;
  * =====================================================================
  */
 @Component
+@RequiredArgsConstructor
 public class UnifiedMemberMapper {
+
+    private final AuthorizationService authorizationService;
+
+    /**
+     * SECTION_02 HIGH finding #9: national ID and home address are masked for
+     * external provider-portal users — every read endpoint previously
+     * returned the same full PII payload to PROVIDER_STAFF as to internal
+     * staff/employer admins. Internal roles are unaffected.
+     */
+    private boolean shouldMaskSensitiveFields() {
+        User currentUser = authorizationService.getCurrentUser();
+        return authorizationService.isProvider(currentUser);
+    }
+
+    private String maskNationalNumber(String nationalNumber) {
+        if (!shouldMaskSensitiveFields()) {
+            return nationalNumber;
+        }
+        if (nationalNumber == null || nationalNumber.length() < 4) {
+            return "****";
+        }
+        return "****" + nationalNumber.substring(nationalNumber.length() - 4);
+    }
+
+    private String maskAddress(String address) {
+        return shouldMaskSensitiveFields() ? null : address;
+    }
 
     /**
      * Convert MemberCreateDto to Member entity.
@@ -179,7 +211,7 @@ public class UnifiedMemberMapper {
                 .id(entity.getId())
                 .type(entity.getType().name()) // PRINCIPAL or DEPENDENT
                 .fullName(entity.getFullName())
-                .nationalNumber(entity.getNationalNumber())
+                .nationalNumber(maskNationalNumber(entity.getNationalNumber()))
                 .cardNumber(entity.getCardNumber())
                 .barcode(entity.getBarcode()) // NULL for dependents
                 .birthDate(entity.getBirthDate())
@@ -187,7 +219,7 @@ public class UnifiedMemberMapper {
                 .maritalStatus(entity.getMaritalStatus())
                 .phone(entity.getPhone())
                 .email(entity.getEmail())
-                .address(entity.getAddress())
+                .address(maskAddress(entity.getAddress()))
                 .nationality(entity.getNationality())
                 .policyNumber(entity.getPolicyNumber())
                 .employeeNumber(entity.getEmployeeNumber())
@@ -246,7 +278,7 @@ public class UnifiedMemberMapper {
                 .id(entity.getId())
                 .relationship(entity.getRelationship())
                 .fullName(entity.getFullName())
-                .nationalNumber(entity.getNationalNumber())
+                .nationalNumber(maskNationalNumber(entity.getNationalNumber()))
                 .cardNumber(entity.getCardNumber())
                 .birthDate(entity.getBirthDate())
                 .gender(entity.getGender())

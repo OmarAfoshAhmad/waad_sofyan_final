@@ -109,6 +109,7 @@ public class VisitAttachmentController {
                 .contentType(MediaType.parseMediaType(attachment.getFileType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, 
                       FileResourceUtils.buildAttachmentContentDisposition(attachment.getOriginalFileName()))
+                .header("X-Content-Type-Options", "nosniff")
                 .contentLength(fileContent.length)
                 .body(resource);
                 
@@ -159,4 +160,3 @@ public class VisitAttachmentController {
         return ResponseEntity.ok(count);
     }
 }
-

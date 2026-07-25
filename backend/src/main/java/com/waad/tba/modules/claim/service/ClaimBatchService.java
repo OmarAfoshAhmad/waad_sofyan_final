@@ -33,9 +33,18 @@ public class ClaimBatchService {
     private final SystemSettingsService systemSettingsService;
 
     /**
-     * Search batches for a specific period, optionally filtered by employer.
+     * Search batches for a specific period, optionally filtered by employer
+     * and/or provider. Both filters are resolved server-side by the caller
+     * (see ClaimBatchController) so a provider-scoped or employer-scoped user
+     * can never see another organization's batches by omitting a filter.
      */
-    public List<ClaimBatch> findBatches(Long employerId, int year, int month) {
+    public List<ClaimBatch> findBatches(Long providerId, Long employerId, int year, int month) {
+        if (providerId != null && employerId != null) {
+            return claimBatchRepository.searchByProviderAndEmployerAndPeriod(providerId, employerId, year, month);
+        }
+        if (providerId != null) {
+            return claimBatchRepository.findByProviderIdAndBatchYearAndBatchMonth(providerId, year, month);
+        }
         if (employerId != null) {
             return claimBatchRepository.findByEmployerIdAndBatchYearAndBatchMonth(employerId, year, month);
         }

@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { claimsService } from 'services/api';
+import useAuth from 'hooks/useAuth';
 
 export const useClaimsList = (initialParams = { page: 0, size: 10 }) => {
+  const { user } = useAuth();
   const [data, setData] = useState({ content: [], totalElements: 0, page: 0, size: 10 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [params, setParams] = useState(initialParams);
 
   const fetchData = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {

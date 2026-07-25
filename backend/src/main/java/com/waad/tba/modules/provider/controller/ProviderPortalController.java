@@ -540,10 +540,10 @@ public class ProviderPortalController {
         description = "Visit not found"
     )
     public ResponseEntity<ProviderVisitResponse> getVisitById(@PathVariable("id") Long id) {
-        
+
         log.debug("📋 Provider visit details request: visitId={}", id);
-        
-        ProviderVisitResponse visit = providerVisitService.getVisitById(id);
+
+        ProviderVisitResponse visit = providerVisitService.getVisitById(id, providerContextGuard.getProviderFilter());
         
         if (!visit.getSuccess()) {
             return ResponseEntity.notFound().build();
@@ -608,8 +608,8 @@ public class ProviderPortalController {
     public ResponseEntity<ApiResponse<VisitContextDto>> getVisitContext(@PathVariable("id") Long id) {
         
         log.info("📋 [VISIT-CONTEXT] Request for visitId={}", id);
-        
-        ProviderVisitResponse visit = providerVisitService.getVisitById(id);
+
+        ProviderVisitResponse visit = providerVisitService.getVisitById(id, providerContextGuard.getProviderFilter());
         
         if (!visit.getSuccess()) {
             return ResponseEntity.notFound().build();

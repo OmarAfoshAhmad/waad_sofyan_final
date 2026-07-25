@@ -98,10 +98,14 @@ public class AuthController {
                 String username = authentication.getName();
                 userRepository.findByUsername(username).ifPresent(authService::validateRoleBindingsBeforeLogin);
 
-                // Session fixation protection: invalidate old session and create new one
-                HttpSession oldSession = httpRequest.getSession(false);
-                if (oldSession != null) {
-                        oldSession.invalidate();
+                // Session fixation protection: invalidate old session safely and create new one
+                try {
+                        HttpSession oldSession = httpRequest.getSession(false);
+                        if (oldSession != null) {
+                                oldSession.invalidate();
+                        }
+                } catch (Exception e) {
+                        log.debug("Old session already invalidated or expired, proceeding with fresh session creation");
                 }
                 HttpSession session = httpRequest.getSession(true);
 

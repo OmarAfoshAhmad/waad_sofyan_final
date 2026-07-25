@@ -86,12 +86,11 @@ axiosServices.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      if (!isSessionCheck) {
-        console.warn('401 Unauthorized - Session expired');
+      if (isSessionCheck) {
+        return Promise.reject(error);
       }
 
       sessionStorage.clear();
-
       window.dispatchEvent(new CustomEvent('auth:session-expired'));
 
       error.userMessage = getUserFriendlyMessage(error);
@@ -143,7 +142,9 @@ axiosServices.interceptors.response.use(
     const suppressGlobalError = error.config?.suppressGlobalError === true;
     const isExpected404 = status === 404 && url?.includes('/claim-batches/current');
 
-    if (!isExpected404 && !suppressGlobalError) {
+    const isUnauthenticated401 = status === 401;
+
+    if (!isExpected404 && !suppressGlobalError && !isUnauthenticated401) {
       const normalized = normalizeApiError(error);
       window.dispatchEvent(
         new CustomEvent('api:error', {

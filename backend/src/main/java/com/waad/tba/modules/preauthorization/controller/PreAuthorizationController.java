@@ -11,6 +11,8 @@ import com.waad.tba.modules.preauthorization.service.PreAuthorizationAttachmentS
 import com.waad.tba.common.file.FileResourceUtils;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.dto.PaginationResponse;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.security.AuthorizationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +53,7 @@ public class PreAuthorizationController {
     private final PreAuthorizationService preAuthorizationService;
     private final PreAuthorizationAttachmentService attachmentService;
     private final PreAuthorizationApiMapper apiMapper;
+    private final AuthorizationService authorizationService;
 
     /**
      * Allowed sort fields for pre-authorization list endpoints
@@ -520,12 +523,14 @@ public class PreAuthorizationController {
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
         
-        log.info("[API] Fetching pre-authorizations for provider {}", providerId);
-        
+        User currentUser = authorizationService.getCurrentUser();
+        Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
+        log.info("[API] Fetching pre-authorizations for provider {}", scopedProviderId);
+
         Sort.Direction direction = Sort.Direction.fromString(sortDirection);
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
-        
-        Page<PreAuthorizationResponseDto> preAuthsPage = preAuthorizationService.getPreAuthorizationsByProvider(providerId, pageable);
+
+        Page<PreAuthorizationResponseDto> preAuthsPage = preAuthorizationService.getPreAuthorizationsByProvider(scopedProviderId, pageable);
         
         return ResponseEntity.ok(PaginationResponse.of(preAuthsPage));
     }

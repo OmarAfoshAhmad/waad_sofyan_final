@@ -16,6 +16,9 @@ public interface PaymentRecordRepository extends JpaRepository<PaymentRecord, Lo
     List<PaymentRecord> findByEmployerIdAndTargetYearAndTargetMonthAndDeletedFalse(
             Long employerId, Integer targetYear, Integer targetMonth);
 
+    boolean existsByEmployerIdAndProviderIdAndReferenceNumberAndDeletedFalse(
+            Long employerId, Long providerId, String referenceNumber);
+
     @Query("SELECT p FROM PaymentRecord p WHERE p.deleted = false")
     List<PaymentRecord> findAllActivePayments();
 }

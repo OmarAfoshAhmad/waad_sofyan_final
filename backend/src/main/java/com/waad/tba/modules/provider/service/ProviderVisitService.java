@@ -299,16 +299,16 @@ public class ProviderVisitService {
      * @return ProviderVisitResponse
      */
     @Transactional(readOnly = true)
-    public ProviderVisitResponse getVisitById(Long visitId) {
+    public ProviderVisitResponse getVisitById(Long visitId, Long providerFilter) {
         Visit visit = visitRepository.findById(visitId).orElse(null);
-        
-        if (visit == null) {
+
+        if (visit == null || (providerFilter != null && !providerFilter.equals(visit.getProviderId()))) {
             return ProviderVisitResponse.builder()
                 .success(false)
                 .message("الزيارة غير موجودة")
                 .build();
         }
-        
+
         Provider provider = null;
         if (visit.getProviderId() != null) {
             provider = providerRepository.findById(visit.getProviderId()).orElse(null);

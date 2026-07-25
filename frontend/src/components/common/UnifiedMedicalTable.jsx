@@ -242,12 +242,12 @@ const UnifiedMedicalTable = ({
     label: col.label || col.headerName
   }));
 
-  // Theme colors — use CSS variables injected by AppearanceInjector for light mode
-  const headerBg = isDark ? MEDICAL_TABLE_THEME.header.dark.background : 'var(--tba-th-bg, #E0F2F1)';
-  const headerText = isDark ? MEDICAL_TABLE_THEME.header.dark.text : 'var(--tba-th-text, #004D50)';
-  const headerBorder = isDark ? theme.palette.divider : 'var(--tba-th-text, #00838F)';
-  const rowEven = isDark ? MEDICAL_TABLE_THEME.row.dark.odd : 'var(--tba-row-even, rgba(224,242,241,0.45))';
-  const rowHover = isDark ? MEDICAL_TABLE_THEME.row.dark.hover : 'var(--tba-selection, rgba(0,131,143,0.08))';
+  // Theme colors — Clean Medical Teal Standard (Image 2 style)
+  const headerBg = isDark ? '#1E3A5F' : '#FFFFFF';
+  const headerText = isDark ? '#FFFFFF' : '#0E6251';
+  const headerBorder = isDark ? theme.palette.divider : '#00796B';
+  const rowEven = isDark ? '#121212' : '#F9FBFB';
+  const rowHover = isDark ? '#2C3E50' : '#E0F2F1';
 
   // Pagination handlers
   const handlePageChange = (_, newPage) => {

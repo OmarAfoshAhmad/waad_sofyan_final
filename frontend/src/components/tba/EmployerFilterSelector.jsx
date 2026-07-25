@@ -98,7 +98,7 @@ const EmployerFilterSelector = ({
    * Load employers on mount
    */
   useEffect(() => {
-    if (isProviderUser) {
+    if (!user || isProviderUser) {
       setEmployers(showAllOption ? [{ id: 'ALL', label: 'الكل (All)', name: 'الكل' }] : []);
       setLoading(false);
       return;
@@ -146,7 +146,7 @@ const EmployerFilterSelector = ({
     };
 
     loadEmployers();
-  }, [isProviderUser, showAllOption]);
+  }, [user, isProviderUser, showAllOption]);
 
   /**
    * Sync selected value when selectedEmployerId changes

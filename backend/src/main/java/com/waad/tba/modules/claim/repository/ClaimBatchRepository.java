@@ -26,6 +26,22 @@ public interface ClaimBatchRepository extends JpaRepository<ClaimBatch, Long> {
 
     List<ClaimBatch> findByEmployerIdAndBatchYearAndBatchMonth(Long employerId, Integer batchYear, Integer batchMonth);
 
+    List<ClaimBatch> findByProviderIdAndBatchYearAndBatchMonth(Long providerId, Integer batchYear, Integer batchMonth);
+
+    @Query("""
+        SELECT b FROM ClaimBatch b
+        WHERE b.providerId = :providerId
+          AND b.employerId = :employerId
+          AND b.batchYear = :batchYear
+          AND b.batchMonth = :batchMonth
+        """)
+    List<ClaimBatch> searchByProviderAndEmployerAndPeriod(
+        @Param("providerId") Long providerId,
+        @Param("employerId") Long employerId,
+        @Param("batchYear") Integer batchYear,
+        @Param("batchMonth") Integer batchMonth
+    );
+
     boolean existsByProviderIdAndEmployerIdAndBatchYearAndBatchMonth(
         Long providerId, Long employerId, Integer batchYear, Integer batchMonth
     );

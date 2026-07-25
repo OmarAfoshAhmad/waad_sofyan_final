@@ -84,7 +84,16 @@ public class PaymentService {
             String provName = (String) row[3];
             Integer targetYear = (Integer) row[4];
             Integer targetMonth = (Integer) row[5];
-            BigDecimal totalAmount = row[6] != null ? BigDecimal.valueOf(((Number) row[6]).doubleValue()) : BigDecimal.ZERO;
+            // Route the SUM aggregate through BigDecimal directly rather than
+            // via double, which can lose precision on financial amounts.
+            BigDecimal totalAmount;
+            if (row[6] == null) {
+                totalAmount = BigDecimal.ZERO;
+            } else if (row[6] instanceof BigDecimal bd) {
+                totalAmount = bd;
+            } else {
+                totalAmount = new BigDecimal(row[6].toString());
+            }
 
             List<PaymentRecord> matchingPayments = allPayments.stream()
                 .filter(p -> p.getEmployerId().equals(empId) &&
@@ -149,7 +158,35 @@ public class PaymentService {
     public List<PaymentRecordDto> getPaymentsForSettlement(Long employerId, Long providerId, Integer year, Integer month) {
         List<PaymentRecord> payments = paymentRecordRepository.findByEmployerIdAndProviderIdAndTargetYearAndTargetMonthAndDeletedFalse(
                 employerId, providerId, year, month);
-        return payments.stream().map(this::mapToDto).collect(Collectors.toList());
+
+        // N+1 fix: every row here shares the same employerId/providerId (both
+        // are filter params), so the employer/provider name only needs to be
+        // resolved once instead of twice per row via mapToDto's per-record
+        // EntityManager queries.
+        String empName = resolveEmployerName(employerId);
+        String provName = resolveProviderName(providerId);
+
+        return payments.stream().map(p -> mapToDto(p, empName, provName)).collect(Collectors.toList());
+    }
+
+    private String resolveEmployerName(Long employerId) {
+        try {
+            Query q = entityManager.createQuery("SELECT e.name FROM Employer e WHERE e.id = :id");
+            q.setParameter("id", employerId);
+            return (String) q.getSingleResult();
+        } catch (Exception ignored) {
+            return "وثيقة #" + employerId;
+        }
+    }
+
+    private String resolveProviderName(Long providerId) {
+        try {
+            Query q = entityManager.createQuery("SELECT p.name FROM Provider p WHERE p.id = :id");
+            q.setParameter("id", providerId);
+            return (String) q.getSingleResult();
+        } catch (Exception ignored) {
+            return "مقدم خدمة #" + providerId;
+        }
     }
 
     @Transactional
@@ -163,7 +200,18 @@ public class PaymentService {
         }
 
         MonthlySettlementSummaryDto summary = summaries.get(0);
-        
+
+        // Idempotency guard: a retried/double-submitted POST with the same
+        // reference number must not create a second payment. Only enforced
+        // when a reference number was actually supplied — cash payments with
+        // no reference are unaffected.
+        if (request.getReferenceNumber() != null && !request.getReferenceNumber().isBlank()
+                && paymentRecordRepository.existsByEmployerIdAndProviderIdAndReferenceNumberAndDeletedFalse(
+                        request.getEmployerId(), request.getProviderId(), request.getReferenceNumber())) {
+            throw new BusinessRuleException(
+                    "يوجد دفعة مسجّلة مسبقاً بنفس الرقم المرجعي لهذا المزوّد: " + request.getReferenceNumber());
+        }
+
         if (!request.isOverrideLimit()) {
             if (request.getAmount().compareTo(summary.getRemainingAmount()) > 0) {
                 throw new BusinessRuleException("مبلغ الدفعة يتجاوز المتبقي. يرجى تفعيل (تجاوز الحد) إذا كان لديك الصلاحية.");
@@ -290,22 +338,10 @@ public class PaymentService {
     }
 
     private PaymentRecordDto mapToDto(PaymentRecord payment) {
-        // To fetch employerName and providerName properly, we would query them.
-        // For simplicity, we can fetch them via EntityManager or leave them null if not directly needed 
-        // because the caller usually has the context, or we can fetch them here.
-        String empName = "وثيقة #" + payment.getEmployerId();
-        String provName = "مقدم خدمة #" + payment.getProviderId();
-        
-        try {
-            Query empQ = entityManager.createQuery("SELECT e.name FROM Employer e WHERE e.id = :id");
-            empQ.setParameter("id", payment.getEmployerId());
-            empName = (String) empQ.getSingleResult();
-            
-            Query provQ = entityManager.createQuery("SELECT p.name FROM Provider p WHERE p.id = :id");
-            provQ.setParameter("id", payment.getProviderId());
-            provName = (String) provQ.getSingleResult();
-        } catch (Exception ignored) { }
+        return mapToDto(payment, resolveEmployerName(payment.getEmployerId()), resolveProviderName(payment.getProviderId()));
+    }
 
+    private PaymentRecordDto mapToDto(PaymentRecord payment, String empName, String provName) {
         return PaymentRecordDto.builder()
                 .id(payment.getId())
                 .employerId(payment.getEmployerId())

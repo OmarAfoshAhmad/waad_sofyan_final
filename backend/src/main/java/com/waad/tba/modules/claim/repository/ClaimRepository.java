@@ -534,6 +534,21 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         List<RecentClaimProjection> getRecentClaims(Pageable pageable);
 
         /**
+         * Employer-scoped variant of {@link #getRecentClaims}. Used so an
+         * EMPLOYER_ADMIN's dashboard activity feed cannot show another
+         * employer's member names/diagnoses.
+         */
+        @Query("SELECT c.id as id, " +
+                        "c.member.fullName as memberName, " +
+                        "c.diagnosisDescription as diagnosisDescription, " +
+                        "c.status as status, " +
+                        "c.createdAt as createdAt " +
+                        "FROM Claim c " +
+                        "WHERE c.active = true AND c.member.employer.id = :employerId " +
+                        "ORDER BY c.createdAt DESC")
+        List<RecentClaimProjection> getRecentClaimsByEmployer(@Param("employerId") Long employerId, Pageable pageable);
+
+        /**
          * Count claims created in date range (for growth calculation)
          */
         @Query("SELECT COUNT(c) FROM Claim c " +

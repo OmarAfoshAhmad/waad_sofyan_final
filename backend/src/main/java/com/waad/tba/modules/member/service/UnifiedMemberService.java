@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -308,6 +309,13 @@ public class UnifiedMemberService {
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
 
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to update member {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this member");
+        }
+
         // Update common fields
         mapper.updateEntityFromDto(member, dto);
 
@@ -355,6 +363,13 @@ public class UnifiedMemberService {
 
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to toggle active status of member {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this member");
+        }
 
         member.setActive(active);
         member = memberRepository.save(member);
@@ -522,6 +537,13 @@ public class UnifiedMemberService {
     public void deleteMember(Long id) {
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to delete member {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this member");
+        }
 
         // Collect IDs to check (principal + its dependents)
         List<Long> allIds = new java.util.ArrayList<>();

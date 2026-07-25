@@ -156,6 +156,17 @@ public class ProviderExcelTemplateService {
                 .build(),
 
             ExcelTemplateColumn.builder()
+                .name("initial_password")
+                .nameAr("كلمة المرور الابتدائية")
+                .type(ColumnType.TEXT)
+                .required(false)
+                .example("ChangeMe@2026")
+                .description("Optional initial password. If empty, no provider user is created automatically.")
+                .descriptionAr("اختيارية. إذا تركت فارغة لن يتم إنشاء مستخدم للمزود تلقائياً.")
+                .width(24)
+                .build(),
+
+            ExcelTemplateColumn.builder()
                 .name("network")
                 .nameAr("الشبكة")
                 .type(ColumnType.TEXT)
@@ -388,8 +399,15 @@ public class ProviderExcelTemplateService {
                                 log.error("[ProviderImport] Failed to create contract for provider: {}", provider.getId(), e);
                             }
 
-                            // 2. Create a User for the new provider
+                            // 2. Create a User for the new provider only when an explicit initial password is supplied.
                             try {
+                                String initialPassword = getCellValue(row, columnIndices.get("initial_password"));
+                                if (initialPassword == null || initialPassword.trim().isEmpty()) {
+                                    log.info("[ProviderImport] Skipped automatic user creation for provider {} because initial_password is empty",
+                                            provider.getId());
+                                    continue;
+                                }
+
                                 String name = provider.getName() != null ? provider.getName() : "";
                                 String licenseNumber = provider.getLicenseNumber() != null ? provider.getLicenseNumber() : "";
                                 String email = provider.getEmail();
@@ -405,7 +423,7 @@ public class ProviderExcelTemplateService {
                                 
                                 UserCreateDto userDto = UserCreateDto.builder()
                                         .username(username)
-                                        .password("P@123456")
+                                        .password(initialPassword.trim())
                                         .fullName(name.trim())
                                         .email(email != null && !email.trim().isEmpty() ? email.trim() : username + ".local")
                                         .userType("PROVIDER_STAFF")
@@ -474,6 +492,8 @@ public class ProviderExcelTemplateService {
             "email", "البريد الإلكتروني"));
         indices.put("username", parserService.findColumnIndex(headerRow, 
             "username", "اسم المستخدم"));
+        indices.put("initial_password", parserService.findColumnIndex(headerRow,
+            "initial_password", "كلمة المرور الابتدائية", "كلمة المرور", "password"));
         indices.put("network", parserService.findColumnIndex(headerRow, 
             "network", "الشبكة"));
         indices.put("allow_all_employers", parserService.findColumnIndex(headerRow, 

@@ -230,9 +230,14 @@ public class LocalFileStorageService implements FileStorageService {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null && authentication.isAuthenticated()) {
-                // Extract user ID from authentication
-                // This depends on your UserDetails implementation
-                return 1L; // Placeholder
+                Object principal = authentication.getPrincipal();
+                if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
+                    // Extract user ID from username via the authentication name
+                    // The actual user ID resolution happens at the service layer;
+                    // here we store the username as a traceable identifier
+                    log.debug("File upload by authenticated user: {}", userDetails.getUsername());
+                    return null; // Username is stored separately via uploadedBy field
+                }
             }
         } catch (Exception e) {
             log.warn("Could not get current user ID", e);

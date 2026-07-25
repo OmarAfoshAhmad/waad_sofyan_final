@@ -512,7 +512,12 @@
     <div class="cover-page">
       <div class="salutation">السادة:&nbsp;<span th:text="${report.providerName}">-</span></div>
 
-      <div class="body-text" th:utext="${report.introText}">
+      <!-- SECTION_02 fix: introText is an admin-configurable free-text field
+           persisted in system_settings. th:utext rendered it as raw HTML — a
+           stored-injection primitive even though only SUPER_ADMIN can write
+           it today. th:text auto-escapes; white-space:pre-line preserves the
+           line breaks admins type without allowing arbitrary markup. -->
+      <div class="body-text" style="white-space: pre-line;" th:text="${report.introText}">
         نود إفادتكم بأن المطالبات المالية المستلمة من سيادتكم وتدقيقها وفق البرامج الصحية المعتمدة بالخصوص، حيث تبيّن ما
         يلي:
       </div>

@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import com.waad.tba.common.file.FileAccessAuditService;
 import com.waad.tba.common.file.FileStorageService;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimAttachment;
@@ -29,6 +30,7 @@ class ClaimAttachmentServiceSecurityTest {
     @Mock private ClaimRepository claimRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private AuthorizationService authorizationService;
+    @Mock private FileAccessAuditService fileAccessAuditService;
 
     private ClaimAttachmentService service;
     private User currentUser;
@@ -39,7 +41,8 @@ class ClaimAttachmentServiceSecurityTest {
                 attachmentRepository,
                 claimRepository,
                 fileStorageService,
-                authorizationService);
+                authorizationService,
+                fileAccessAuditService);
         currentUser = User.builder().id(7L).username("provider-user").userType("PROVIDER_STAFF").build();
         when(authorizationService.requireCurrentUser()).thenReturn(currentUser);
     }

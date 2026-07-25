@@ -251,9 +251,19 @@ public class EligibilityContext {
      * Get days since member enrollment
      */
     public long getDaysSinceEnrollment() {
-        if (member == null || member.getStartDate() == null || serviceDate == null) {
+        if (member == null || serviceDate == null) {
             return -1;
         }
-        return java.time.temporal.ChronoUnit.DAYS.between(member.getStartDate(), serviceDate);
+        // Same fallback as WaitingPeriodRule.evaluate(): startDate is canonical,
+        // joinDate is used when startDate was never set. Keeping this in sync
+        // with that rule prevents a false SERVICE_DATE_BEFORE_COVERAGE denial
+        // for any member missing startDate but having joinDate.
+        java.time.LocalDate enrollmentDate = member.getStartDate() != null
+                ? member.getStartDate()
+                : member.getJoinDate();
+        if (enrollmentDate == null) {
+            return -1;
+        }
+        return java.time.temporal.ChronoUnit.DAYS.between(enrollmentDate, serviceDate);
     }
 }

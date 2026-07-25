@@ -389,7 +389,7 @@ export const providersService = {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await axiosClient.post(`${BASE_URL}/import/excel`, formData, {
+      const response = await axiosClient.post(`${BASE_URL}/import`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },

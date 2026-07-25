@@ -85,7 +85,7 @@ public class ClaimAttachmentController {
     @GetMapping("/{claimId}/attachments")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ClaimAttachmentDto>> getClaimAttachments(@PathVariable("claimId") Long claimId) {
-        log.info("📋 Get attachments for claim ID: {}", claimId);
+        log.info("\uD83D\uDCCB Get attachments for claim ID: {}", claimId);
         
         List<ClaimAttachment> attachments = attachmentService.getClaimAttachments(claimId);
         
@@ -126,7 +126,7 @@ public class ClaimAttachmentController {
             @PathVariable("claimId") Long claimId,
             @PathVariable("attachmentId") Long attachmentId) {
         
-        log.info("📥 Download attachment request: claimId={}, attachmentId={}", claimId, attachmentId);
+        log.info("\uD83D\uDCE5 Download attachment request: claimId={}, attachmentId={}", claimId, attachmentId);
         
         try {
             ClaimAttachment attachment = attachmentService.getAttachment(claimId, attachmentId);
@@ -152,6 +152,7 @@ public class ClaimAttachmentController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, 
                       FileResourceUtils.buildAttachmentContentDisposition(attachment.getOriginalFileName()))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store, private")
+                .header("X-Content-Type-Options", "nosniff")
                 .contentLength(fileContent.length)
                 .body(resource);
                 
@@ -203,4 +204,3 @@ public class ClaimAttachmentController {
         return ResponseEntity.ok(count);
     }
 }
-

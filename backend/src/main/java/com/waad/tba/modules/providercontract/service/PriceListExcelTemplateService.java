@@ -45,6 +45,27 @@ public class PriceListExcelTemplateService {
 
     private static final String IMPORT_RUNTIME_MARKER = "PriceListImport-v2026-04-24-01";
 
+    /**
+     * Prevents CSV/XLSX formula injection: values in this export can
+     * originate from provider-portal-submitted pricing items (service name,
+     * code, notes). If such a value starts with a formula-trigger character
+     * ('=', '+', '-', '@') Excel/LibreOffice will evaluate it as a formula
+     * when the exported file is opened, which can be abused for remote
+     * command execution or data exfiltration against whoever opens the
+     * export (typically SUPER_ADMIN/ACCOUNTANT). Prefixing with a single
+     * quote forces spreadsheet applications to treat the cell as literal text.
+     */
+    private static String sanitizeForExcel(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+            return "'" + value;
+        }
+        return value;
+    }
+
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
@@ -227,11 +248,11 @@ public class PriceListExcelTemplateService {
                     Row row = sheet.createRow(rowNum++);
                     
                     Cell c0 = row.createCell(COL_SERVICE_NAME);
-                    c0.setCellValue(item.getServiceName() != null ? item.getServiceName() : "-");
+                    c0.setCellValue(sanitizeForExcel(item.getServiceName() != null ? item.getServiceName() : "-"));
                     c0.setCellStyle(dataStyle);
 
                     Cell c1 = row.createCell(COL_SERVICE_CODE);
-                    c1.setCellValue(item.getServiceCode() != null ? item.getServiceCode() : "-");
+                    c1.setCellValue(sanitizeForExcel(item.getServiceCode() != null ? item.getServiceCode() : "-"));
                     c1.setCellStyle(dataStyle);
 
                     Cell c2 = row.createCell(COL_CONTRACT_PRICE);
@@ -256,15 +277,15 @@ public class PriceListExcelTemplateService {
                     }
                     
                     Cell c3 = row.createCell(COL_CATEGORY); // was COL_MAIN_CATEGORY but let's use what exists
-                    c3.setCellValue(mainCategory);
+                    c3.setCellValue(sanitizeForExcel(mainCategory));
                     c3.setCellStyle(dataStyle);
 
                     Cell c4 = row.createCell(COL_SUB_CATEGORY);
-                    c4.setCellValue(subCategory);
+                    c4.setCellValue(sanitizeForExcel(subCategory));
                     c4.setCellStyle(dataStyle);
 
                     Cell c5 = row.createCell(COL_NOTES);
-                    c5.setCellValue(item.getNotes() != null ? item.getNotes() : "");
+                    c5.setCellValue(sanitizeForExcel(item.getNotes() != null ? item.getNotes() : ""));
                     c5.setCellStyle(dataStyle);
                 }
                 pageNumber++;

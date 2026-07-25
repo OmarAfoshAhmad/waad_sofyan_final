@@ -31,7 +31,7 @@ public class SystemAdminController {
 
     @DeleteMapping("/reset")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Reset test data", description = "Deletes domain data: claims, visits, members, employers, insurance companies, reviewer companies. Users are preserved.")
+    @Operation(summary = "Reset test data", description = "Deletes domain data: claims, visits, members, employers. Users are preserved. Blocked outside dev/test profiles.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Test data cleared successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiError.class))),
@@ -57,7 +57,7 @@ public class SystemAdminController {
 
     @PostMapping("/seed-test-data")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Insert sample test data", description = "Inserts representative sample domain data for demo/testing (employer, member, reviewer company, insurance company, claim, visit).")
+    @Operation(summary = "Insert sample test data", description = "Not yet implemented against the current schema — currently a no-op that returns success without inserting data. Blocked outside dev/test profiles.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sample data inserted"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized", content = @Content(schema = @Schema(implementation = ApiError.class))),

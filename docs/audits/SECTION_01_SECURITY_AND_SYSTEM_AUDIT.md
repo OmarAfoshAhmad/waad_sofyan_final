@@ -932,6 +932,60 @@ and extend existing open risks rather than closing or newly opening major
 ones), except item 6, which was corrected within this same session. They are
 folded into the risk register and ordered-implementation plan below.
 
+### Facility price-preparation & AI classifier feature removal — 2026-07-24
+
+Two related experimental frontend windows were removed in full, by explicit
+product decision (not a security finding): "تجهيز قوائم أسعار المرافق
+الصحية" (Facility Price List Preparation, labeled "تجريبي"/experimental in
+the menu) and "إعداد API للذكاء الاصطناعي" (AI Classifier API Settings,
+whose own subtitle stated it existed only to feed the price-preparation
+tool). Both were investigated end-to-end before deletion:
+
+- **Frontend deleted:** `pages/settings/FacilityPricePreparationPage.jsx`
+  (849 lines) and `pages/settings/AIKeySettingsPage.jsx` (298 lines).
+- **Routes removed:** `/settings/facility-price-preparation` and
+  `/settings/ai-key`, plus their lazy-load imports in `MainRoutes.jsx`.
+- **Menu entry removed:** "تجهيز قوائم أسعار المرافق" from
+  `menu-items/components.jsx` (the AI settings page had no separate menu
+  entry — it was only reachable via direct route or embedded).
+- **Embedded usage removed:** `AIKeySettingsPage` was also mounted as tab
+  index 8 ("إعدادات الذكاء الاصطناعي") inside `SystemSettingsPage.jsx` — the
+  import, `<Tab>` header, and `<TabPanel>` block were all removed together;
+  the now-unused `KeyIcon` import was removed too.
+- **Backend settings removed:** `AI_CLASSIFIER_API_KEY`, `AI_CLASSIFIER_MODEL`,
+  `AI_CLASSIFIER_ENDPOINT`, `BIOBERT_API_URL` — constants and their
+  default-row creation blocks deleted from `SettingsInitializationService`;
+  `getBiobertApiUrl()` deleted from both `UIConfigService` (definer) and
+  `SystemSettingsService` (facade passthrough), confirmed to have zero other
+  callers before removal.
+- **Database rows removed:** migration `V111` deletes the 4 corresponding
+  `system_settings` rows outright (database is experimental; the API key
+  value was empty, no secret was discarded).
+
+**Verified NOT touched, after explicit investigation to avoid a false
+positive:** `PriceListExcelTemplateService` /
+`ProviderContractPricingExcelController` — a same-named-sounding but
+functionally unrelated, live production feature for provider-contract
+pricing Excel import/export. Confirmed via caller/entity tracing before
+any deletion.
+
+**Incidental finding, now moot:** the deleted AI classifier tool called a
+third-party AI endpoint (OpenRouter) directly from the browser using an API
+key read out of `system_settings`, i.e. a client-side credential-exposure
+pattern independent of the feature's experimental status. Recorded here only
+because the pattern (settings-sourced secret consumed by client-side
+`fetch`) should not be repeated if a similar integration is built later —
+any future AI/third-party-API integration should proxy through a backend
+endpoint that holds the credential server-side.
+
+Verified: full backend regression (**180 tests, 0 failures, 0 errors, 3
+skipped**) including Flyway building all 111 migrations from empty
+PostgreSQL 16 through V111; frontend production build passes with both
+page chunks confirmed absent from the output; live Docker deployment
+confirms the 4 settings rows are gone, the generic settings-list endpoint
+still serves correctly with the AI category now empty, and `superadmin`
+login succeeds end-to-end.
+
 ## Risk register
 
 | ID | Priority | Risk |
@@ -943,7 +997,7 @@ folded into the risk register and ordered-implementation plan below.
 | S01-05 | Closed | Generic file-key API removed; all active downloads use owning-resource endpoints and storage coordinates stay internal |
 | S01-06 | Closed | All 96 Flyway migrations repeatedly built from zero on PostgreSQL 16 under Testcontainers |
 | S01-07 | Closed | Security-relevant writes (login, lockout, password, email verification, user CRUD) unified into `security_audit_events`. `user_audit_log` table, entity and repository fully removed (V109), zero remaining references. `audit_logs` (business-action log, 33 rows) and `medical_audit_logs` (clinical audit trail) deliberately kept separate as distinct domains, not merged. Remaining: S01-13 (observable-failure path for `logSecurityEvent`). |
-| S01-08 | Mitigated | Generic settings no longer expose JPA entities or accept ad-hoc upsert writes; typed domain services (`SLASettingsService`, `AuthenticationSettingsService`, `UIConfigService`, `SettingsManagementService`, `SettingsInitializationService`) confirmed already in place — `SystemSettingsService` is a 147-line facade, not the 510-line file the original audit measured. Only remaining gap: AI-classifier integration credentials still live in generic `system_settings` instead of a dedicated encrypted secret store (same pattern as the SMTP fix under S01-11). |
+| S01-08 | Closed | Generic settings no longer expose JPA entities or accept ad-hoc upsert writes; typed domain services (`SLASettingsService`, `AuthenticationSettingsService`, `UIConfigService`, `SettingsManagementService`, `SettingsInitializationService`) confirmed already in place — `SystemSettingsService` is a 147-line facade, not the 510-line file the original audit measured. The AI-classifier-credential gap this risk originally flagged is now moot: the entire AI classifier feature (settings, frontend windows, routes) was removed outright on 2026-07-24 rather than given a dedicated encrypted secret store, since it was an experimental tool with no other consumer. |
 | S01-09 | Mitigated | CI confirmed already in place (2026-07-24 — pre-dates this session): `.github/workflows/backend-test.yml`, `frontend-test.yml`, `integration-test.yml`, `security-audit.yml` (scheduled daily). Frontend automated test coverage (unit/component tests, not just lint/build/typecheck) remains the real residual gap. |
 | S01-10 | Mitigated | Backend split confirmed already done: `AuthorizationService` (149 lines) and `UserSecurityService` (thin facade after S01-07 work) both delegate to properly-scoped services (`RoleService`, `DataAccessService`, `QueryFilterService`, `FeatureToggleService`, `PasswordManagementService`, `EmailVerificationService`, `LoginSecurityService`) — none exceed the guideline. Remaining: 11 frontend pages between 1,024 and 2,615 lines (led by `ProviderClaimsSubmission.jsx`, `ClaimBatchEntry.jsx`, `BenefitPolicyRulesTab.jsx`) — deliberately not attempted in this pass given the complete absence of frontend test coverage to catch regressions in live claims/provider workflows; needs a dedicated session with a test-first approach. |
 | S01-13 | Closed | Added `SecurityAuditServicePostgresIntegrationTest` (2026-07-24) — runs `logSecurityEvent` against real PostgreSQL 16 via Testcontainers (not mocked), asserting a row is actually persisted and the `beforeState`/`afterState` jsonb columns round-trip correctly. This test would have caught the jsonb/varchar defect; it now guards against regression. The `catch (Exception)` in `logSecurityEvent` itself is intentionally still broad (an audit-logging failure must not break the primary user action, e.g. login), but is no longer untested. |
@@ -969,25 +1023,33 @@ folded into the risk register and ordered-implementation plan below.
 
 ## Current accounting
 
-- Production files deleted: **30** (legacy token refresh, raw file controller,
+- Production files deleted: **32** (legacy token refresh, raw file controller,
   duplicate user administration, the complete inbound email pre-authorization
   backend/frontend feature, six dead frontend auth template paths
   (`pages/auth/auth0/**`, `pages/auth/aws/**`, `pages/auth/firebase/**`,
   `pages/auth/supabase/**`, `pages/auth/jwt/TestLogin.jsx`,
-  `sections/auth/auth-forms/AuthLogin.jsx`), and — 2026-07-24 —
-  `UserAuditLog.java` + `UserAuditLogRepository.java`)
+  `sections/auth/auth-forms/AuthLogin.jsx`), `UserAuditLog.java` +
+  `UserAuditLogRepository.java`, `utils/token-storage.js`, and —
+  2026-07-24 — `FacilityPricePreparationPage.jsx` + `AIKeySettingsPage.jsx`
+  (the full AI-classifier/price-preparation feature removal))
 - Tables/columns deleted: **9 tables and 21 columns** — `user_audit_log` (V109),
   plus `network_providers`, `claim_history`, `coverage_simulation_runs`,
   `coverage_simulation_items`, `medical_semantic_rules`, `medical_synonyms`
-  (V110, 2026-07-24; all confirmed 0 rows, 0 Entity/Repository references, 0
+  (V110; all confirmed 0 rows, 0 Entity/Repository references, 0
   post-creation migration references). `legacy_provider_contracts` was
   investigated and confirmed live (mapped by `ProviderContract.java`) —
   correcting an earlier false positive — and deliberately **not** dropped.
+- Settings rows deleted: **4** — `AI_CLASSIFIER_API_KEY`, `AI_CLASSIFIER_MODEL`,
+  `AI_CLASSIFIER_ENDPOINT`, `BIOBERT_API_URL` (V111), alongside their backend
+  constants, default-initialization code, and getter methods, and the two
+  frontend windows/routes/menu-entry/embedded-tab that were their only
+  consumers.
 - Indexes deleted: **3**
 - Migrations deleted: **0** (net-new baseline consolidation, distinct from the
-  additive `V109`/`V110` drop migrations, still pending)
-- Current migrations: **110** (V1–V110; V109 dropped `user_audit_log`, V110
-  dropped 6 confirmed-dead tables — both 2026-07-24)
+  additive `V109`–`V111` drop migrations, still pending)
+- Current migrations: **111** (V1–V111: V109 dropped `user_audit_log`, V110
+  dropped 6 confirmed-dead tables, V111 dropped the 4 AI-classifier settings
+  rows — all 2026-07-24)
 - Production defects found and fixed during this audit pass (not in original
   scope, discovered via live-environment testing): **1** —
   `SecurityAuditEvent.beforeState`/`afterState` jsonb/varchar entity mapping
@@ -1002,34 +1064,35 @@ folded into the risk register and ordered-implementation plan below.
   domain services) and `AuthorizationService` (839→149 lines, facade over 4
   scoped services) — both already split before this audit pass, correcting
   stale line counts in the original inventory.
-- `token-storage.js` removed (2026-07-24): confirmed all 4 importers
-  (`utils/axios.js`, `services/api/auth.service.js`, `contexts/AuthContext.jsx`,
-  `api/rbac.js`) only ever called the defensive `clearToken()` cleanup — never
+- `token-storage.js` removed: confirmed all 4 importers (`utils/axios.js`,
+  `services/api/auth.service.js`, `contexts/AuthContext.jsx`, `api/rbac.js`)
+  only ever called the defensive `clearToken()` cleanup — never
   `getToken()`/`setToken()`/`hasToken()`, confirming the app is fully
   session-cookie based with no live JWT-in-storage path. All four call sites
-  and imports removed; file deleted outright. Frontend production build
-  passes.
-- CI confirmed already in place (2026-07-24, pre-dating this session):
+  and imports removed; file deleted outright.
+- CI confirmed already in place (pre-dating this session):
   `.github/workflows/backend-test.yml`, `frontend-test.yml`,
   `integration-test.yml`, `security-audit.yml` (daily scheduled scan) — S01-09
   downgraded from "no CI" to "frontend automated test coverage is the residual
   gap."
-- S01-13 closed (2026-07-24): `SecurityAuditServicePostgresIntegrationTest`
-  added, running `logSecurityEvent` against real PostgreSQL via Testcontainers
-  and asserting the jsonb `beforeState`/`afterState` round-trip — the exact
-  gap that let the jsonb/varchar defect ship undetected by the fully-mocked
+- S01-13 closed: `SecurityAuditServicePostgresIntegrationTest` added, running
+  `logSecurityEvent` against real PostgreSQL via Testcontainers and asserting
+  the jsonb `beforeState`/`afterState` round-trip — the exact gap that let the
+  jsonb/varchar defect ship undetected by the fully-mocked
   `SecurityAuditServiceTest`.
-- Backend file-size findings confirmed already resolved (not previously
-  re-verified): `SystemSettingsService` (510→147 lines, facade over 5 typed
-  domain services) and `AuthorizationService` (839→149 lines, facade over 4
-  scoped services) — both already split before this audit pass, correcting
-  stale line counts in the original inventory.
+- Facility price-preparation & AI classifier feature removed in full (S01-08
+  closed): 2 frontend pages, 2 routes, 1 menu entry, 1 embedded settings tab,
+  4 backend settings constants/initializers/getters, 4 database rows — see
+  dedicated section above. Verified not to affect the unrelated, live
+  `PriceListExcelTemplateService`/`ProviderContractPricingExcelController`
+  provider-contract-pricing feature.
 - Tests run in this audit phase: **180 backend tests** (178 + 2 new real-Postgres
   audit integration tests) **+ frontend production build**, plus live Docker
   smoke tests (login success/failure, account lockout, user create/delete,
-  dead-table absence, live-table presence) directly against PostgreSQL — the
-  layer where the jsonb defect above was actually caught, since it did not
-  reproduce against the Testcontainers/mocked test paths.
+  dead-table absence, live-table presence, AI-settings-rows absence) directly
+  against PostgreSQL — the layer where the jsonb defect above was actually
+  caught, since it did not reproduce against the Testcontainers/mocked test
+  paths.
 - Open P0: **0**
 - Open P1: **1** (the frontend half of S01-10 — 11 oversized React pages,
   1,024–2,615 lines each, deliberately deferred to a dedicated test-first
@@ -1040,12 +1103,13 @@ folded into the risk register and ordered-implementation plan below.
   Ordered-implementation step, not a separate P1 risk, given the database is
   explicitly experimental and the current migration chain is fully
   reproducible from zero.
-- Section closure estimate: **80%** (inventory, reproducible green baseline,
+- Section closure estimate: **82%** (inventory, reproducible green baseline,
   full S01-07 audit consolidation, S01-13 closed with a real regression test,
-  S01-09 confirmed already resolved, `token-storage.js` removed, confirmation
-  that both flagged backend oversized-file risks were already resolved, 6
-  additional dead tables removed with 1 false positive corrected, and one
-  live-environment production defect fix; the two remaining gaps before full
-  closure are the 11 oversized frontend pages and the Flyway baseline
-  rebuild — both large, deliberately-scoped-out pieces of work rather than
-  quick fixes)
+  S01-09 confirmed already resolved, `token-storage.js` removed, S01-08 closed
+  via full removal of the AI-classifier/price-preparation feature,
+  confirmation that both flagged backend oversized-file risks were already
+  resolved, 6 additional dead tables removed with 1 false positive corrected,
+  and one live-environment production defect fix; the two remaining gaps
+  before full closure are the 11 oversized frontend pages and the Flyway
+  baseline rebuild — both large, deliberately-scoped-out pieces of work rather
+  than quick fixes)

@@ -511,15 +511,7 @@ public class ClaimService {
         // Phase 6: Check if status change is requested
         if (dto.getStatus() != null && dto.getStatus() != claim.getStatus()) {
 
-            // Phase 7: Attachment validation DISABLED (2026-02-24) - attachments are
-            // optional
-            // var attachmentResult = attachmentRulesService.validateForSubmission(claim,
-            // ClaimType.GENERAL);
-            // if (!attachmentResult.valid()) {
-            // throw new BusinessRuleException(
-            // "Cannot submit claim: " + attachmentResult.getErrorMessage()
-            // );
-            // }
+            // Attachment validation disabled 2026-02-24: attachments are optional.
             log.info("ℹ️ Attachment validation skipped - attachments are optional");
 
             // Phase 7: Calculate costs before APPROVED
@@ -1741,6 +1733,13 @@ public class ClaimService {
         Claim claim = claimRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
 
+        if (!authorizationService.canAccessClaim(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to delete claim {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this claim");
+        }
+        reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
+
         if (!Boolean.TRUE.equals(claim.getActive())) {
             throw new BusinessRuleException("المطالبة محذوفة مسبقاً");
         }
@@ -1814,6 +1813,13 @@ public class ClaimService {
 
         Claim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Claim", "id", id));
+
+        if (!authorizationService.canAccessClaim(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to restore claim {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this claim");
+        }
+        reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
 
         if (Boolean.TRUE.equals(claim.getActive())) {
             throw new BusinessRuleException("المطالبة ليست محذوفة");
