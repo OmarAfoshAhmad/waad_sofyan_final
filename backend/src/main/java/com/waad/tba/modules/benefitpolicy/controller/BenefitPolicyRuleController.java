@@ -151,8 +151,8 @@ public class BenefitPolicyRuleController {
         result.put("coveragePercent", coveragePercent);
         result.put("requiresPreApproval", requiresPreApproval);
         ruleOpt.ifPresent(rule -> {
-            result.put("timesLimit", rule.getTimesLimit());
-            result.put("amountLimit", rule.getAmountLimit());
+            result.put("timesLimit", null);
+            result.put("amountLimit", null);
         });
 
         return ResponseEntity.ok(ApiResponse.success("Coverage check complete", result));

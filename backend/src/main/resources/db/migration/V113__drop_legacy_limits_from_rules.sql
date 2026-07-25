@@ -1,0 +1,1 @@
+ALTER TABLE benefit_policy_rules DROP COLUMN amount_limit; ALTER TABLE benefit_policy_rules DROP COLUMN times_limit;

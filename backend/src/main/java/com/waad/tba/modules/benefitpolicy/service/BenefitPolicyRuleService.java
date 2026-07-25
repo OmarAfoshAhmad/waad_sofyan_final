@@ -394,8 +394,6 @@ public class BenefitPolicyRuleService {
                 .encounterType(parseEncounterType(dto.getEncounterType()))
                 .coveragePercent(dto.getCoveragePercent())
                 .copayPercentage(dto.getCopayPercentage())
-                .amountLimit(null)
-                .timesLimit(null)
                 .inheritanceEnabled(Boolean.TRUE.equals(dto.getInheritanceEnabled()))
                 .priority(dto.getPriority() != null ? dto.getPriority() : 100)
                 .waitingPeriodDays(dto.getWaitingPeriodDays() != null ? dto.getWaitingPeriodDays() : 0)
@@ -423,8 +421,6 @@ public class BenefitPolicyRuleService {
 
                 existingRule.setCoveragePercent(dto.getCoveragePercent());
                 existingRule.setCopayPercentage(dto.getCopayPercentage());
-                existingRule.setAmountLimit(null);
-                existingRule.setTimesLimit(null);
                 existingRule.setInheritanceEnabled(Boolean.TRUE.equals(dto.getInheritanceEnabled()));
                 existingRule.setPriority(dto.getPriority() != null ? dto.getPriority() : 100);
                 existingRule.setWaitingPeriodDays(dto.getWaitingPeriodDays() != null ? dto.getWaitingPeriodDays() : 0);
@@ -573,8 +569,6 @@ public class BenefitPolicyRuleService {
                 BenefitPolicyRuleCreateDto dto = BenefitPolicyRuleCreateDto.builder()
                         .medicalCategoryId(categoryId)
                         .coveragePercent(coveragePercent)
-                        .timesLimit(null)
-                        .amountLimit(null)
                         .active(true)
                         .requiresPreApproval(false)
                         .waitingPeriodDays(0)
@@ -699,8 +693,6 @@ public class BenefitPolicyRuleService {
         // Rule-level caps were retired by the bucket cutover; buckets are the only limit source.
         rule.setCoveragePercent(dto.getCoveragePercent());
         rule.setCopayPercentage(dto.getCopayPercentage());
-        rule.setAmountLimit(null);
-        rule.setTimesLimit(null);
         rule.setNotes(dto.getNotes());
 
         if (dto.getEncounterType() != null) {
@@ -941,8 +933,6 @@ public class BenefitPolicyRuleService {
             if (existingRuleOpt.isPresent()) {
                 BenefitPolicyRule rule = existingRuleOpt.get();
                 rule.setCoveragePercent(coveragePercent);
-                rule.setAmountLimit(null);
-                rule.setTimesLimit(null);
                 rule.setRequiresPreApproval(requiresPreApproval);
                 rule.setDeleted(false);
                 rule.setActive(true);
@@ -957,8 +947,6 @@ public class BenefitPolicyRuleService {
                         .benefitPolicy(policy)
                         .medicalCategory(category)
                         .coveragePercent(coveragePercent)
-                        .amountLimit(null)
-                        .timesLimit(null)
                         .requiresPreApproval(requiresPreApproval)
                         .waitingPeriodDays(0)
                         .active(true)
@@ -990,8 +978,8 @@ public class BenefitPolicyRuleService {
         for (BenefitPolicyRule sourceRule : sourceRules) {
             Long medicalCategoryId = sourceRule.getMedicalCategory().getId();
             Integer coveragePercent = sourceRule.getCoveragePercent();
-            Integer timesLimit = sourceRule.getTimesLimit();
-            java.math.BigDecimal amountLimit = sourceRule.getAmountLimit();
+            Integer timesLimit = null;
+            java.math.BigDecimal amountLimit = null;
             Boolean requiresPreApproval = sourceRule.isRequiresPreApproval();
 
             // Check if rule already exists for this policy and category
@@ -1002,8 +990,6 @@ public class BenefitPolicyRuleService {
             if (existingRuleOpt.isPresent()) {
                 BenefitPolicyRule rule = existingRuleOpt.get();
                 rule.setCoveragePercent(coveragePercent);
-                rule.setAmountLimit(null);
-                rule.setTimesLimit(null);
                 rule.setRequiresPreApproval(requiresPreApproval != null ? requiresPreApproval : false);
                 rule.setDeleted(false);
                 rule.setActive(true);
@@ -1019,8 +1005,6 @@ public class BenefitPolicyRuleService {
                         .encounterType(sourceRule.getEncounterType())
                         .coveragePercent(coveragePercent)
                         .copayPercentage(sourceRule.getCopayPercentage())
-                        .amountLimit(null)
-                        .timesLimit(null)
                         .inheritanceEnabled(sourceRule.isInheritanceEnabled())
                         .priority(sourceRule.getPriority())
                         .requiresPreApproval(requiresPreApproval != null ? requiresPreApproval : false)

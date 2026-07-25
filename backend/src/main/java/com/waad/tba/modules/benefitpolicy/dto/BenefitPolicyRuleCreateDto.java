@@ -41,17 +41,6 @@ public class BenefitPolicyRuleCreateDto {
     @Max(value = 100, message = "Coverage percent must be <= 100")
     private Integer coveragePercent;
 
-    /**
-     * Maximum amount limit per claim (in LYD)
-     */
-    @DecimalMin(value = "0.00", message = "Amount limit must be >= 0")
-    private BigDecimal amountLimit;
-
-    /**
-     * Maximum times this benefit can be used per period
-     */
-    @Min(value = 0, message = "Times limit must be >= 0")
-    private Integer timesLimit;
 
     /**
      * Waiting period in days before benefit is effective

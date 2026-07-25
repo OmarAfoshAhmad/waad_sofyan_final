@@ -226,10 +226,10 @@ public class ProviderClaimsService {
         String serviceName = "Service #" + serviceCategoryId;
 
         // Check amount limit
-        if (rule.getAmountLimit() != null && claimedAmount.compareTo(rule.getAmountLimit()) > 0) {
+        if (null != null && claimedAmount.compareTo(null) > 0) {
             warnings.add(String.format(
                     "⚠️ المبلغ المطلوب (%.2f د.ل) يتجاوز حد الخدمة (%.2f د.ل) لـ %s",
-                    claimedAmount, rule.getAmountLimit(), serviceName));
+                    claimedAmount, null, serviceName));
             exceeded = true;
         }
 
@@ -238,37 +238,19 @@ public class ProviderClaimsService {
         int timesRemaining = 0;
 
         // Fix after migration - serviceCategoryId is deprecated, use serviceCode
-        if (rule.getTimesLimit() != null && serviceCode != null) {
-            timesUsed = calculateTimesUsed(member.getId(), serviceCode);
-            timesRemaining = rule.getTimesLimit() - timesUsed;
-
-            log.info("🔢 Times limit check: service={}, limit={}, used={}, remaining={}",
-                    serviceName, rule.getTimesLimit(), timesUsed, timesRemaining);
-
-            if (timesUsed >= rule.getTimesLimit()) {
-                warnings.add(String.format(
-                        "❌ تم استنفاذ العدد المسموح من خدمة %s (%d مرة في السنة)",
-                        serviceName, rule.getTimesLimit()));
-                exceeded = true;
-            } else if (timesRemaining <= 2) {
-                warnings.add(String.format(
-                        "⚠️ اقتربت من الحد الأقصى لخدمة %s (متبقي %d مرة من %d)",
-                        serviceName, timesRemaining, rule.getTimesLimit()));
-            }
-        }
 
         // Build limit info with actual usage
         ProviderClaimResponse.ServiceLimitInfo limitInfo = ProviderClaimResponse.ServiceLimitInfo.builder()
                 .serviceName(serviceName)
-                .amountLimit(rule.getAmountLimit())
-                .timesLimit(rule.getTimesLimit())
+                .amountLimit(null)
+                .timesLimit(null)
                 .timesUsed(timesUsed)
                 .timesRemaining(timesRemaining)
                 .exceedsLimit(exceeded)
                 .build();
 
         log.info("🔍 Service limit check: service={}, amountLimit={}, exceeded={}",
-                serviceName, rule.getAmountLimit(), exceeded);
+                serviceName, null, exceeded);
 
         return new ServiceLimitCheck(exceeded, limitInfo, warnings);
     }

@@ -111,26 +111,6 @@ public class BenefitPolicyRule {
     private Integer coveragePercent;
 
     /**
-     * Maximum amount limit per claim/service (in LYD)
-     * If null, no specific amount limit (policy limit applies)
-     * 
-     * Example: 500.00 means max 500 LYD per service claim
-     */
-    @DecimalMin(value = "0.00", message = "Amount limit must be >= 0")
-    @Column(name = "amount_limit", precision = 15, scale = 2)
-    private BigDecimal amountLimit;
-
-    /**
-     * Maximum number of times this benefit can be used per period
-     * If null, unlimited times (within policy limits)
-     * 
-     * Example: 12 means max 12 times per year
-     */
-    @Min(value = 0, message = "Times limit must be >= 0")
-    @Column(name = "times_limit")
-    private Integer timesLimit;
-
-    /**
      * Waiting period in days before benefit becomes effective
      * If null or 0, no waiting period
      */

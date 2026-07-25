@@ -221,21 +221,11 @@ public class BenefitPolicyRuleExcelService {
 
             // Amount limit
             Cell amtCell = row.createCell(COL_AMOUNT);
-            if (rule != null && rule.getAmountLimit() != null) {
-                amtCell.setCellValue(rule.getAmountLimit().doubleValue());
-                amtCell.setCellStyle(styles.existingStyle);
-            } else {
-                amtCell.setCellStyle(styles.editableStyle);
-            }
+            amtCell.setCellStyle(styles.editableStyle);
 
             // Times limit
             Cell timesCell = row.createCell(COL_TIMES);
-            if (rule != null && rule.getTimesLimit() != null) {
-                timesCell.setCellValue(rule.getTimesLimit());
-                timesCell.setCellStyle(styles.existingStyle);
-            } else {
-                timesCell.setCellStyle(styles.editableStyle);
-            }
+            timesCell.setCellStyle(styles.editableStyle);
 
             // Waiting period
             Cell waitCell = row.createCell(COL_WAITING);
@@ -471,8 +461,6 @@ public class BenefitPolicyRuleExcelService {
                 if (existing != null) {
                     // Update
                     existing.setCoveragePercent(coveragePercent);
-                    existing.setAmountLimit(null);
-                    existing.setTimesLimit(null);
                     existing.setWaitingPeriodDays(waitingDays);
                     existing.setRequiresPreApproval(requiresPreApproval);
                     existing.setNotes(notes);
@@ -487,8 +475,6 @@ public class BenefitPolicyRuleExcelService {
                             .medicalCategory(category)
                             .coveragePercent(coveragePercent)
                             // Limits belong exclusively to linked benefit buckets.
-                            .amountLimit(null)
-                            .timesLimit(null)
                             .waitingPeriodDays(waitingDays)
                             .requiresPreApproval(requiresPreApproval)
                             .notes(notes)

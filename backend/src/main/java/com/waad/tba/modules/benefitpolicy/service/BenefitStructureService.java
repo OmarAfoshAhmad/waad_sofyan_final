@@ -195,6 +195,15 @@ public class BenefitStructureService {
         if (ruleBucketRepository.findByRuleIdAndBucketId(ruleId, request.bucketId()).isPresent()) {
             throw new BusinessRuleException("قاعدة التغطية مرتبطة مسبقًا بهذا الوعاء");
         }
+        
+        // Enforce X-OR Exclusivity: A rule can only belong to buckets of a SINGLE group
+        java.util.List<BenefitRuleBucket> existingLinks = ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId);
+        if (!existingLinks.isEmpty()) {
+            Long existingGroupId = existingLinks.get(0).getBucket().getBenefitGroup().getId();
+            if (!existingGroupId.equals(bucket.getBenefitGroup().getId())) {
+                throw new BusinessRuleException("لا يمكن ربط التصنيف بهذا الوعاء لأنه مسجل كقاعدة مفردة أو ينتمي لمجموعة أخرى. يرجى إزالة الارتباطات القديمة أولاً.");
+            }
+        }
         BenefitRuleBucket link = BenefitRuleBucket.builder().rule(rule).bucket(bucket)
                 .consumptionOrder(request.consumptionOrder() == null ? 1 : request.consumptionOrder())
                 .consumptionMode(request.consumptionMode())
@@ -208,10 +217,17 @@ public class BenefitStructureService {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicyRule", "id", ruleId));
         assertSamePolicy(policyId, rule.getBenefitPolicy().getId(), "منفعة الوثيقة");
-        BenefitRuleBucket existingLink = ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId).stream()
+        java.util.List<BenefitRuleBucket> existingLinks = ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(ruleId);
+        BenefitRuleBucket existingLink = existingLinks.stream()
                 .filter(link -> link.getBucket().getCode().startsWith("AUTO-BEN-LIMIT-"))
                 .findFirst().orElse(null);
+                
         boolean noLimit = request.amountLimit() == null && request.timesLimit() == null && request.daysLimit() == null;
+        
+        // Enforce X-OR Exclusivity: Prevent setting an individual limit if rule is part of a shared group
+        if (existingLink == null && !existingLinks.isEmpty() && !noLimit) {
+            throw new BusinessRuleException("التصنيف موجود داخل مجموعة منافع، لا يمكن تعيين سقف فردي له. يرجى إزالته من المجموعة أولاً.");
+        }
         if (noLimit) {
             if (existingLink != null) {
                 BenefitLimitBucket oldBucket = existingLink.getBucket();

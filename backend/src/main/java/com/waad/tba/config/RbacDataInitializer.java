@@ -127,6 +127,10 @@ public class RbacDataInitializer implements CommandLineRunner {
 
         String finalAdminPassword = adminPassword;
         userRepository.findByUsername("superadmin").ifPresent(user -> {
+            if (user.getPassword() != null && !user.getPassword().isBlank()) {
+                log.info("Super admin already has a password set. Skipping password sync to prevent overwriting.");
+                return;
+            }
             user.setPassword(passwordEncoder.encode(finalAdminPassword));
             user.setEmailVerified(true);
             user.unlockAccount();

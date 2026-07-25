@@ -40,8 +40,7 @@ public class BenefitPolicyRuleResponseDto {
     // Coverage settings
     private Integer coveragePercent;
     private Integer effectiveCoveragePercent; // Resolved value (including fallback)
-    private BigDecimal amountLimit;
-    private Integer timesLimit;
+
     private Integer waitingPeriodDays;
     private boolean requiresPreApproval;
 
@@ -68,8 +67,7 @@ public class BenefitPolicyRuleResponseDto {
                 .id(rule.getId())
                 .coveragePercent(rule.getCoveragePercent())
                 .effectiveCoveragePercent(rule.getEffectiveCoveragePercent())
-                .amountLimit(rule.getAmountLimit())
-                .timesLimit(rule.getTimesLimit())
+
                 .waitingPeriodDays(rule.getWaitingPeriodDays())
                 .requiresPreApproval(rule.isRequiresPreApproval())
                 .encounterType(rule.getEncounterType() != null ? rule.getEncounterType().name() : null)

@@ -47,12 +47,14 @@ import {
   LinkOff as LinkOffIcon,
   AutoAwesome as AutoAwesomeIcon,
   FileDownload as FileDownloadIcon,
-  FileUpload as FileUploadIcon
+  FileUpload as FileUploadIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 
 import MainCard from 'components/MainCard';
+import UnifiedCoverageModal from './components/UnifiedCoverageModal';
 import { UnifiedMedicalTable } from 'components/common';
 
 import {
@@ -710,12 +712,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [individualLimitDialog, setIndividualLimitDialog] = useState({
     open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD'
   });
+  const [selectedRowIds, setSelectedRowIds] = useState([]);
   // Pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(6);
   // Sort state
   const [sortBy, setSortBy] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
+
   const defaultOrderRef = useRef({ active: [], deleted: [] });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -983,6 +987,25 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setDeleteDialog({ open: true, rule });
   }, []);
 
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedRowIds.length === 0) return;
+    try {
+      if (showDeleted) {
+        await Promise.all(selectedRowIds.map((id) => hardDeletePolicyRule(policyId, id)));
+        enqueueSnackbar(`تم الحذف النهائي لـ (${selectedRowIds.length}) عناصر`, { variant: 'success' });
+      } else {
+        await Promise.all(selectedRowIds.map((id) => deletePolicyRule(policyId, id)));
+        enqueueSnackbar(`تم نقل (${selectedRowIds.length}) عناصر لسلة المحذوفات`, { variant: 'success' });
+      }
+      setSelectedRowIds([]);
+      await refetchRules();
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId] });
+      await queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
+    } catch (err) {
+      enqueueSnackbar('حدث خطأ أثناء تنفيذ الحذف المجمع', { variant: 'error' });
+    }
+  }, [selectedRowIds, showDeleted, policyId, refetchRules, queryClient, enqueueSnackbar]);
+
   const handleRestoreRule = useCallback(
     (rule) => {
       restoreMutation.mutate(rule.id);
@@ -1030,7 +1053,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // COMPUTED
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const canEdit = policyStatus === 'DRAFT';
+  const canEdit = policyStatus !== 'ARCHIVED' && policyStatus !== 'CANCELLED';
   const isLoading =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -1053,16 +1076,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // UnifiedMedicalTable column definitions
   const tableColumns = useMemo(
     () => [
-      { id: 'code', label: 'الرمز', minWidth: '7.5rem', align: 'center' },
-      { id: 'nameAr', label: 'التصنيف الطبي', minWidth: '15rem' },
-      { id: 'encounterType', label: 'السياق', minWidth: '8rem', align: 'center' },
-      { id: 'coveragePercent', label: 'قرار التغطية', minWidth: '10rem', align: 'center' },
-      { id: 'daysLimit', label: 'حد الأيام', minWidth: '7rem', align: 'center' },
-      { id: 'requiresPreApproval', label: 'موافقة مسبقة', minWidth: '7.5rem', align: 'center' },
-      { id: 'individualLimit', label: 'سقف المنفعة', minWidth: '11rem', align: 'center', sortable: false },
-      { id: 'bucketLinks', label: 'السقف أو المجموعة', minWidth: '15rem', align: 'center', sortable: false },
-      { id: 'active', label: 'نشط', minWidth: '5rem', align: 'center', sortable: false },
-      { id: 'changedAt', label: 'آخر تحديث', minWidth: '8rem', align: 'center', sortable: false }
+      { id: 'classification', label: 'التصنيف الطبي / المجموعة', sortable: true, minWidth: '20rem' },
+      { id: 'encounterType', label: 'السياق', sortable: true, minWidth: '8rem', align: 'center' },
+      { id: 'coveragePercent', label: 'نسبة التغطية', sortable: true, minWidth: '10rem', align: 'center' },
+      { id: 'daysLimit', label: 'حد الأيام', sortable: true, minWidth: '7rem', align: 'center' },
+      { id: 'timesLimit', label: 'عدد المرات', sortable: true, minWidth: '7rem', align: 'center' },
+      { id: 'amountLimit', label: 'سقف المنفعة (د.ل)', sortable: true, minWidth: '10rem', align: 'center' },
+      { id: 'requiresPreApproval', label: 'موافقة مسبقة', sortable: true, minWidth: '7.5rem', align: 'center' },
+      { id: 'active', label: 'الحالة', sortable: true, minWidth: '5rem', align: 'center' },
+      { id: 'actions', label: 'الإجراءات', sortable: false, minWidth: '5rem', align: 'center' }
     ],
     []
   );
@@ -1070,54 +1092,31 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const renderRuleCell = useCallback(
     (rule, column) => {
       switch (column.id) {
-        case 'code':
-          return (
-            <Chip
-              label={rule.code}
-              size="small"
-              variant={rule.groupSource ? 'filled' : 'outlined'}
-              color={rule.groupSource ? 'secondary' : 'default'}
-              sx={{
-                fontFamily: 'monospace',
-                fontSize: '0.72rem',
-                borderColor: rule.groupSource ? 'secondary.main' : 'primary.main',
-                color: rule.groupSource ? 'secondary.contrastText' : 'primary.main',
-                ...FIXED_RULE_CHIP_SX.code
-              }}
-            />
-          );
-        case 'nameAr':
+        case 'classification':
+          if (rule.groupSource) {
+            return (
+              <Stack spacing={0.5}>
+                <Typography variant="subtitle2" fontWeight={700} color="secondary.main">
+                  {rule.nameAr}
+                </Typography>
+                <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                  {rule.groupMembers?.map(member => (
+                    <Chip key={member.id} size="small" label={member.medicalCategoryName || member.medicalServiceName || '-'} variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                  ))}
+                </Stack>
+              </Stack>
+            );
+          }
           return (
             <Stack spacing={0.25}>
               <Typography variant="body2" fontWeight={500}>
                 {rule.nameAr}
               </Typography>
-              {rule.groupSource && <Chip size="small" color="secondary" label="مجموعة منافع" sx={{ alignSelf: 'flex-start' }} />}
-              {rule.nameEn !== '-' && (
-                <Typography variant="caption" color="text.secondary">
-                  {rule.nameEn}
-                </Typography>
-              )}
-              {rule.parentNameAr !== '-' && (
-                <Typography variant="caption" color="text.secondary">
-                  يتبع: {rule.parentNameAr}
-                </Typography>
-              )}
+              <Typography variant="caption" color="text.secondary">
+                {rule.code}
+              </Typography>
             </Stack>
           );
-        case 'coveragePercent':
-          {
-            if (rule.groupSource) return <Chip size="small" color="secondary" variant="outlined" label="سياسة مجموعة" />;
-            const value = rule.coveragePercent ?? rule.effectiveCoveragePercent;
-            const inherited = rule.coveragePercent === null || rule.coveragePercent === undefined;
-            const label = value === 0 ? 'غير مغطى' : value === 100 ? 'تغطية كاملة' : value == null ? 'غير محدد' : `تغطية جزئية ${value}%`;
-            const color = value === 0 ? 'error' : value === 100 ? 'success' : value == null ? 'default' : 'warning';
-            return (
-              <Tooltip title={inherited && value != null ? `النسبة الافتراضية للوثيقة: ${value}%` : label}>
-                <Chip label={label} size="small" color={color} variant={inherited ? 'outlined' : 'filled'} sx={FIXED_RULE_CHIP_SX.coverage} />
-              </Tooltip>
-            );
-          }
         case 'encounterType':
           return (
             <Chip
@@ -1127,60 +1126,68 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               sx={FIXED_RULE_CHIP_SX.context}
             />
           );
-        case 'bucketLinks':
-          if (structureLoadFailed) {
-            return <Chip size="small" color="warning" variant="outlined" label="تعذر التحقق من الربط" sx={FIXED_RULE_CHIP_SX.bucket} />;
+        case 'coveragePercent': {
+          let value = rule.coveragePercent ?? rule.effectiveCoveragePercent;
+          if (rule.groupSource && (value === null || value === undefined) && rule.groupMembers?.length > 0) {
+            const memberVal = rule.groupMembers.map(m => m.coveragePercent ?? m.effectiveCoveragePercent).find(v => v !== null && v !== undefined);
+            if (memberVal !== undefined) value = memberVal;
           }
-          return rule.bucketLinks.length > 0 ? (
-            <Stack spacing={0.5} alignItems="center">
-              {rule.bucketLinks.map((link) => (
-                <Tooltip key={link.id} title={`المجموعة: ${link.groupName || 'غير محددة'} — اضغط لإدارة الربط`}>
-                  <Chip
-                    size="small"
-                    icon={<LinkIcon />}
-                    color="success"
-                    variant="outlined"
-                    label={rule.groupSource
-                      ? `مبلغ: ${link.bucket?.amountLimit ?? 'بلا سقف'} | مرات: ${link.bucket?.timesLimit ?? 'بلا سقف'}`
-                      : `${link.groupName || 'مجموعة'} ← ${link.bucket?.nameAr || 'سقف'}`}
-                    onClick={onOpenStructure}
-                    sx={FIXED_RULE_CHIP_SX.bucket}
-                  />
-                </Tooltip>
-              ))}
-            </Stack>
-          ) : (
-            <Chip
-              size="small"
-              icon={<LinkOffIcon />}
-              color="error"
-              variant="outlined"
-              label="بلا سقف أو مجموعة"
-              onClick={onOpenStructure}
-              sx={FIXED_RULE_CHIP_SX.bucket}
-            />
+          if (value === null || value === undefined) {
+             value = policyDefaultCoveragePercent ?? 100;
+          }
+          const label = value == null ? 'غير محدد' : `${value}%`;
+          const color = value === 0 ? 'error' : value === 100 ? 'success' : value == null ? 'default' : 'warning';
+          return (
+            <Tooltip title={value != null ? `نسبة التغطية: ${value}%` : label}>
+              <Chip label={label} size="small" color={color} variant="filled" sx={FIXED_RULE_CHIP_SX.coverage} />
+            </Tooltip>
           );
-        case 'daysLimit':
-          return rule.daysLimitLabel || '-';
+        }
+        case 'daysLimit': {
+          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          if (!limit || limit.daysLimit == null) return '-';
+          return `${limit.daysLimit} يوم`;
+        }
+        case 'timesLimit': {
+          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          if (!limit || limit.timesLimit == null) return '-';
+          return `${limit.timesLimit} مرة`;
+        }
+        case 'amountLimit': {
+          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          if (!limit) {
+            return (
+              <Chip size="small" color="error" variant="outlined" label="بلا سقف" onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />
+            );
+          }
+          const periodMap = { 
+            'POLICY_PERIOD': 'خلال الوثيقة', 
+            'ANNUAL': 'سنوياً', 
+            'YEARLY': 'سنوياً',
+            'MONTHLY': 'شهرياً', 
+            'DAILY': 'يومياً', 
+            'PER_VISIT': 'لكل زيارة', 
+            'PER_SERVICE': 'لكل خدمة', 
+            'LIFETIME': 'مدى الحياة' 
+          };
+          const periodText = limit.periodType ? ` / ${periodMap[limit.periodType] || limit.periodType}` : '';
+          
+          if (limit.amountLimit == null) {
+             return <Chip size="small" color="info" variant="outlined" label={`بلا سقف${periodText}`} onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />;
+          }
+          return (
+             <Chip size="small" color="info" variant="outlined" label={`${limit.amountLimit} د.ل${periodText}`} onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600 }} />
+          );
+        }
         case 'requiresPreApproval':
           return rule.requiresPreApproval ? (
             <Chip label="نعم" size="small" color="warning" sx={FIXED_RULE_CHIP_SX.preApproval} />
           ) : (
             <Chip label="لا" size="small" variant="outlined" sx={FIXED_RULE_CHIP_SX.preApproval} />
           );
-        case 'individualLimit': {
-          if (rule.groupSource) return <Typography variant="caption" color="text.secondary">يُدار كسقف مشترك</Typography>;
-          const limit = rule.individualLimitLink?.bucket;
-          const label = limit
-            ? `${limit.amountLimit != null ? `${limit.amountLimit} د.ل` : ''}${limit.amountLimit != null && limit.timesLimit != null ? ' • ' : ''}${limit.timesLimit != null ? `${limit.timesLimit} مرة` : ''}${limit.daysLimit != null ? ` • ${limit.daysLimit} يوم` : ''}`
-            : 'بلا سقف فردي';
-          return <Chip size="small" color={limit ? 'info' : 'default'} variant="outlined" label={label} onClick={() => canEdit && openIndividualLimit(rule)} />;
-        }
         case 'active':
           if (rule.groupSource) return <Chip label={rule.isActive ? 'نشطة' : 'متوقفة'} size="small" color={rule.isActive ? 'secondary' : 'default'} variant="outlined" />;
-          if (rule.isDeleted) {
-            return <Chip label="في سلة المحذوفات" size="small" color="error" variant="outlined" />;
-          }
+          if (rule.isDeleted) return <Chip label="محذوفة" size="small" color="error" variant="outlined" />;
           return (
             <Tooltip title={rule.isActive ? 'إيقاف القاعدة مؤقتاً' : 'تنشيط القاعدة'}>
               <span>
@@ -1190,33 +1197,50 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   size="small"
                   disabled={!canEdit || toggleMutation.isPending}
                   sx={{
-                    '& .MuiSwitch-switchBase.Mui-checked': {
-                      color: '#0f9d76'
-                    },
-                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                      backgroundColor: '#19c18f',
-                      opacity: 1
-                    },
-                    '& .MuiSwitch-track': {
-                      backgroundColor: '#b7bfcb',
-                      opacity: 1
-                    }
+                    '& .MuiSwitch-switchBase.Mui-checked': { color: '#0f9d76' },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#19c18f', opacity: 1 },
+                    '& .MuiSwitch-track': { backgroundColor: '#b7bfcb', opacity: 1 }
                   }}
                 />
               </span>
             </Tooltip>
           );
-        case 'changedAt':
+        case 'actions':
+          if (showDeleted) {
+            return (
+              <Stack direction="row" spacing={1} justifyContent="center">
+                <Tooltip title="استعادة المنفعة">
+                  <IconButton size="small" color="success" onClick={() => handleRestoreRule(rule)} disabled={!canEdit}>
+                    <ReplayIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="حذف نهائي">
+                  <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)} disabled={!canEdit}>
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            );
+          }
           return (
-            <Typography variant="body2" color="text.secondary">
-              {rule.changedAt ? new Date(rule.changedAt).toLocaleDateString('ar-LY') : '-'}
-            </Typography>
+            <Stack direction="row" spacing={1} justifyContent="center">
+               <Tooltip title="تعديل التغطية والحدود">
+                 <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)} disabled={!canEdit}>
+                   <EditIcon fontSize="small" />
+                 </IconButton>
+               </Tooltip>
+               <Tooltip title="نقل إلى سلة المحذوفات (حذف ناعم)">
+                 <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)} disabled={!canEdit}>
+                   <DeleteIcon fontSize="small" />
+                 </IconButton>
+               </Tooltip>
+            </Stack>
           );
         default:
           return rule[column.id] ?? '-';
       }
     },
-    [handleToggleActive, onOpenStructure, structureLoadFailed, toggleMutation.isPending, canEdit, openIndividualLimit]
+    [handleToggleActive, onOpenStructure, structureLoadFailed, toggleMutation.isPending, canEdit, handleEditRule, handleDeleteRule, handleRestoreRule, openIndividualLimit, policyDefaultCoveragePercent, showDeleted]
   );
 
   const categoryMap = useMemo(() => {
@@ -1310,10 +1334,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         const buckets = (benefitStructure.buckets || []).filter((bucket) => bucket.benefitGroupId === group.id);
         const bucketIds = new Set(buckets.map((bucket) => bucket.id));
         const memberLinks = (benefitStructure.links || []).filter((link) => bucketIds.has(link.bucket?.id));
-        const memberNames = memberLinks.map((link) => {
-          const member = rules.find((rule) => rule.id === link.ruleId);
-          return member?.medicalCategoryName || member?.medicalServiceName || '';
-        }).filter(Boolean);
+        const groupMembers = memberLinks.map((link) => rules.find((rule) => rule.id === link.ruleId)).filter(Boolean);
+        const memberNames = groupMembers.map((member) => member.medicalCategoryName || member.medicalServiceName || '');
         const bucketLinks = buckets.map((bucket) => ({ id: `group-bucket-${bucket.id}`, groupName: group.nameAr, bucket }));
         const days = buckets.map((bucket) => bucket.daysLimit).filter((value) => value != null);
         return {
@@ -1322,10 +1344,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           effectiveCoveragePercent: null, requiresPreApproval: !!group.requiresPreApproval,
           bucketLinks, daysLimitLabel: days.length ? days.map((value) => `${value} يوم`).join('، ') : null,
           isLinked: bucketLinks.length > 0, isActive: group.active !== false, isDeleted: false, groupSource: true,
+          groupMembers, bucket: buckets.length > 0 ? buckets[0] : null,
           searchable: `${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`.toLowerCase(), changedAt: group.updatedAt || null
         };
       });
-    return [...benefitRows, ...groupRows];
+      
+    // X-OR Architecture Enforcement:
+    // Only show rules that are NOT in a shared group at the root level.
+    const standaloneRules = benefitRows.filter(r => r.bucketLinks.length === 0);
+    return [...standaloneRules, ...groupRows];
   }, [rules, categoryMap, structureLinksByRuleId, benefitStructure.groups, benefitStructure.buckets, benefitStructure.links]);
 
   const filterStats = useMemo(() => {
@@ -1674,6 +1701,50 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         )}
         {/* ── Filter bar ── */}
         <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap" sx={{ mb: '1.0rem' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddRule}
+            disabled={!canEdit}
+            sx={{ height: '2.5rem', fontWeight: 'bold' }}
+          >
+            إضافة منفعة / مجموعة
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="success"
+            startIcon={<FileUploadIcon />}
+            onClick={() => setTemplateDialogOpen(true)}
+            disabled={!canEdit}
+            sx={{ height: '2.5rem', fontWeight: 'bold' }}
+          >
+            استيراد المنافع (Excel / قالب)
+          </Button>
+
+          <Button
+            variant={showDeleted ? 'contained' : 'outlined'}
+            color={showDeleted ? 'error' : 'secondary'}
+            startIcon={showDeleted ? <ReplayIcon /> : <DeleteIcon />}
+            onClick={() => setShowDeleted((prev) => !prev)}
+            sx={{ height: '2.5rem', fontWeight: 'bold' }}
+          >
+            {showDeleted ? `العودة للنشطة (${activeRulesCount})` : `سلة المحذوفات (${deletedRulesCount})`}
+          </Button>
+
+          {selectedRowIds.length > 0 && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+              sx={{ height: '2.5rem', fontWeight: 'bold' }}
+            >
+              {showDeleted ? `حذف نهائي للمحدد (${selectedRowIds.length})` : `حذف ناعم للمحدد (${selectedRowIds.length})`}
+            </Button>
+          )}
+
           <Tooltip title="تحديث">
             <IconButton
               size="small"
@@ -1691,14 +1762,30 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             variant="outlined"
             sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }}
           />
-          <Chip size="small" label={`${activeRulesCount} نشطة`} color="primary" sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }} />
-          <Chip
-            size="small"
-            label={showDeleted ? `وضع العرض: المحذوفات (${deletedRulesCount})` : 'وضع العرض: النشطة/الموقوفة'}
-            color={showDeleted ? 'error' : 'primary'}
-            variant={showDeleted ? 'filled' : 'outlined'}
-            sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }}
-          />
+          {!showDeleted && (
+            <TextField
+              select
+              size="small"
+              value={filterType}
+              onChange={(e) => {
+                setFilterType(e.target.value);
+                setPage(0);
+              }}
+              sx={{ minWidth: 180, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
+            >
+              {[
+                { id: 'ALL', label: 'الكل', count: filterStats.all },
+                { id: 'UNCOVERED', label: 'غير مغطى', count: filterStats.uncovered },
+                { id: 'LINKED', label: 'ضمن مجموعة', count: filterStats.linked },
+                { id: 'UNLINKED', label: 'ليست ضمن مجموعة', count: filterStats.unlinked },
+                { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval }
+              ].map((item) => (
+                <MenuItem key={item.id} value={item.id} sx={{ fontWeight: 500 }}>
+                  {item.label} ({item.count})
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <TextField
             placeholder="بحث بالرمز أو الاسم أو النوع..."
             value={ruleSearch}
@@ -1720,33 +1807,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               ) : null
             }}
           />
-          {!showDeleted && (
-            <Stack direction="row" spacing={1} alignItems="center">
-              {[
-                { id: 'ALL', label: 'الكل', count: filterStats.all },
-                { id: 'UNCOVERED', label: 'غير مغطى', count: filterStats.uncovered },
-                { id: 'LINKED', label: 'ضمن مجموعة', count: filterStats.linked },
-                { id: 'UNLINKED', label: 'ليست ضمن مجموعة', count: filterStats.unlinked },
-                { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval }
-              ].map((item) => (
-                <Chip
-                  key={item.id}
-                  label={`${item.label} (${item.count})`}
-                  color="primary"
-                  variant={filterType === item.id ? 'filled' : 'outlined'}
-                  onClick={() => {
-                    setFilterType(item.id);
-                    setPage(0);
-                  }}
-                  sx={{ fontWeight: 600, cursor: 'pointer', height: '2.5rem', px: 0.5 }}
-                />
-              ))}
-            </Stack>
-          )}
         </Stack>
 
         {/* ── Unified Table ── */}
         <UnifiedMedicalTable
+          selectable={true}
+          selectedRows={selectedRowIds}
+          onRowSelectionChange={(newSelected) => setSelectedRowIds(newSelected)}
           columns={tableColumns}
           rows={pagedRules}
           loading={false}
@@ -1799,15 +1866,18 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           })}>حفظ السقف</Button>
         </DialogActions>
       </Dialog>
-      <RuleFormModal
+      <UnifiedCoverageModal
         open={formModal.open}
         onClose={handleFormClose}
-        onSubmit={handleFormSubmit}
+        onSuccess={() => {
+          handleFormClose();
+          refetchRules();
+          queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
+        }}
+        policyId={policyId}
+        categories={categories}
         initialData={formModal.data}
         isEdit={formModal.isEdit}
-        loading={createMutation.isPending || updateMutation.isPending}
-        categories={categories}
-        loadingCategories={loadingCategories}
         policyDefaultCoveragePercent={policyDefaultCoveragePercent}
       />
 
