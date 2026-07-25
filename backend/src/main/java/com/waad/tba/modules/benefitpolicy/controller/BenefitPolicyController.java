@@ -157,6 +157,27 @@ public class BenefitPolicyController {
         return ResponseEntity.ok(ApiResponse.success("Benefit policy retrieved", result));
     }
 
+
+    @GetMapping("/{id:\\d+}/can-edit")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','EMPLOYER_ADMIN')")
+    @Operation(summary = "Check if policy can be edited dynamically")
+    public ResponseEntity<ApiResponse<Boolean>> canEdit(@PathVariable("id") Long id) {
+        BenefitPolicyResponseDto policy = benefitPolicyService.findById(id);
+        assertEmployerScope(policy.getEmployerOrgId());
+        boolean canEdit = benefitPolicyService.canPolicyBeEdited(id);
+        return ResponseEntity.ok(ApiResponse.success("Policy editability checked", canEdit));
+    }
+
+    @GetMapping("/{id:\\d+}/usage")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','EMPLOYER_ADMIN')")
+    @Operation(summary = "Get policy usage statistics (claims/preauths count)")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getUsage(@PathVariable("id") Long id) {
+        BenefitPolicyResponseDto policy = benefitPolicyService.findById(id);
+        assertEmployerScope(policy.getEmployerOrgId());
+        java.util.Map<String, Long> usage = benefitPolicyService.getPolicyUsage(id);
+        return ResponseEntity.ok(ApiResponse.success("Policy usage statistics retrieved", usage));
+    }
+
     @GetMapping("/code/{policyCode}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','EMPLOYER_ADMIN','ACCOUNTANT','MEDICAL_REVIEWER')")
     @Operation(summary = "Get benefit policy by policy code")

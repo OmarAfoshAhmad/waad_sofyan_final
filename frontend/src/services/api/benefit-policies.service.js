@@ -56,6 +56,26 @@ export const getBenefitPolicyByCode = async (code) => {
 };
 
 /**
+ * Check if a policy can be edited dynamically
+ * @param {number} id - Policy ID
+ * @returns {Promise<boolean>} true if editable
+ */
+export const checkPolicyEditability = async (id) => {
+  const response = await axiosClient.get(`${BASE_URL}/${id}/can-edit`);
+  return unwrap(response);
+};
+
+/**
+ * Get policy usage statistics (claims/preauths)
+ * @param {number} id - Policy ID
+ * @returns {Promise<Object>} usage statistics object
+ */
+export const getPolicyUsage = async (id) => {
+  const response = await axiosClient.get(`${BASE_URL}/${id}/usage`);
+  return unwrap(response);
+};
+
+/**
  * Get benefit policies for an employer
  * Endpoint: GET /api/benefit-policies/employer/{employerOrgId}
  * @param {number} employerOrgId - Employer organization ID

@@ -216,6 +216,12 @@ const BenefitPolicyView = () => {
     refetchOnWindowFocus: 'always'
   });
 
+  const { data: isDynamicallyEditable = false } = useQuery({
+    queryKey: ['benefit-policy-editability', id],
+    queryFn: () => checkPolicyEditability(id),
+    enabled: !!id
+  });
+
   const { data: coveredMembersCount = 0, isLoading: isLoadingCount } = useQuery({
     queryKey: ['employer-members-count', policy?.employerOrgId],
     queryFn: async () => {
@@ -407,7 +413,7 @@ const BenefitPolicyView = () => {
               variant="outlined"
               color="primary"
               size="small"
-              disabled={policy?.status !== 'DRAFT'}
+              disabled={policy?.status === 'ARCHIVED' || policy?.status === 'CANCELLED' || !isDynamicallyEditable}
             >
               تعديل
             </Button>

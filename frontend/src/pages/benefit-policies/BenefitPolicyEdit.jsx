@@ -40,7 +40,7 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 
 // Services
-import { getBenefitPolicyById, updateBenefitPolicy, getBenefitPoliciesByEmployer } from 'services/api/benefit-policies.service';
+import { getBenefitPolicyById, updateBenefitPolicy, getBenefitPoliciesByEmployer, checkPolicyEditability } from 'services/api/benefit-policies.service';
 import { getEmployerSelectors } from 'services/api/employers.service';
 
 /**
@@ -113,6 +113,7 @@ const BenefitPolicyEdit = () => {
   const [loadingEmployers, setLoadingEmployers] = useState(true);
   const [generalError, setGeneralError] = useState(null);
   const [overlapWarning, setOverlapWarning] = useState(null);
+  const [isDynamicallyEditable, setIsDynamicallyEditable] = useState(true);
 
   // Fetch Policy Data
   useEffect(() => {
@@ -122,8 +123,10 @@ const BenefitPolicyEdit = () => {
       try {
         setLoadingPolicy(true);
         const data = await getBenefitPolicyById(id);
+        const editability = await checkPolicyEditability(id);
         if (mounted) {
           setPolicy(data);
+          setIsDynamicallyEditable(editability);
         }
       } catch (err) {
         console.error('Failed to fetch policy:', err);
@@ -219,6 +222,7 @@ const BenefitPolicyEdit = () => {
         perMemberLimit: values.perMemberLimit === '' ? null : parseFloat(values.perMemberLimit),
         perFamilyLimit: values.perFamilyLimit === '' ? null : parseFloat(values.perFamilyLimit),
         notes: values.notes?.trim() || null,
+        status: values.status || null,
       };
 
       await updateBenefitPolicy(id, payload);
@@ -397,8 +401,9 @@ const BenefitPolicyEdit = () => {
                         label="حالة الوثيقة"
                         name="status"
                         value={values.status}
-                        disabled
-                        helperText="غيّر الحالة من إجراءات دورة حياة الوثيقة"
+                        onChange={(e) => setFieldValue('status', e.target.value)}
+                        disabled={!isDynamicallyEditable}
+                        helperText={!isDynamicallyEditable ? "الوثيقة مرتبطة بمطالبات فعلية، لا يمكن تغيير حالتها من هنا" : "غيّر الحالة (تأكد من توافق ذلك مع دورة حياة الوثيقة)"}
                       >
                         <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>
                           مسودة (Draft)

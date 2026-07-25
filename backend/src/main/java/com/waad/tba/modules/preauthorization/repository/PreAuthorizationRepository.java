@@ -63,6 +63,13 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        long countByMemberIdAndActiveTrue(Long memberId);
 
        /**
+        * Count pre-authorizations by policy ID
+        */
+       @Query("SELECT COUNT(p) FROM PreAuthorization p WHERE p.active = true AND p.policyId = :policyId")
+       long countByPolicyId(@Param("policyId") Long policyId);
+
+
+       /**
         * Count approved pre-authorizations for member
         */
        long countByMemberIdAndStatusAndActiveTrue(Long memberId, PreAuthStatus status);

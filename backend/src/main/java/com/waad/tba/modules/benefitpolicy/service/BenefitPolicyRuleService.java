@@ -776,11 +776,11 @@ public class BenefitPolicyRuleService {
      * Permanently delete a rule
      */
     public void hardDelete(Long ruleId) {
-        if (!ruleRepository.existsById(ruleId)) {
-            throw new ResourceNotFoundException("Rule", "id", ruleId);
-        }
-        throw new BusinessRuleException(
-                "الحذف النهائي لقواعد التغطية معطل لحماية السجل المالي. استخدم الأرشفة (الحذف الناعم) بدلاً منه.");
+        BenefitPolicyRule rule = ruleRepository.findById(ruleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
+        
+        ruleRepository.delete(rule);
+        log.info("Hard deleted rule {}", ruleId);
     }
 
     /**
@@ -788,8 +788,11 @@ public class BenefitPolicyRuleService {
      */
     public void deleteAllForPolicy(Long policyId) {
         validatePolicyExists(policyId);
-        throw new BusinessRuleException(
-                "الحذف الجماعي النهائي لقواعد التغطية معطل لحماية السجل المالي. استخدم التعطيل أو الأرشفة.");
+        
+        List<BenefitPolicyRule> rules = ruleRepository.findByBenefitPolicyId(policyId);
+        ruleRepository.deleteAll(rules);
+        
+        log.info("Hard deleted {} rules for policy {}", rules.size(), policyId);
     }
 
     /**

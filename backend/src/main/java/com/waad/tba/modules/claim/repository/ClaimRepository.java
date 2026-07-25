@@ -24,6 +24,13 @@ import com.waad.tba.modules.claim.projection.FinancialSummaryByEmployerProjectio
 @Repository
 public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
+        /**
+         * Count claims linked to a specific benefit policy
+         */
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.member.benefitPolicy.id = :policyId")
+        long countByPolicyId(@Param("policyId") Long policyId);
+
+
         @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
                         "WHERE c.active = true AND c.member.id = :memberId " +
                         "AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) " +

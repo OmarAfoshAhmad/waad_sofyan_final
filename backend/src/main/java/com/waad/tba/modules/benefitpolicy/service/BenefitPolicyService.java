@@ -41,6 +41,8 @@ public class BenefitPolicyService {
     private final MemberRepository memberRepository;
     private final BenefitPolicyRuleRepository benefitPolicyRuleRepository;
     private final BenefitLimitBucketRepository benefitLimitBucketRepository;
+    private final com.waad.tba.modules.claim.repository.ClaimRepository claimRepository;
+    private final com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository preAuthorizationRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -279,6 +281,26 @@ public class BenefitPolicyService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
+     * Check if a policy can be edited dynamically based on claims and pre-auths
+     */
+    @Transactional(readOnly = true)
+    public boolean canPolicyBeEdited(Long policyId) {
+        long claimsCount = claimRepository.countByPolicyId(policyId);
+        long preAuthCount = preAuthorizationRepository.countByPolicyId(policyId);
+        return claimsCount == 0 && preAuthCount == 0;
+    }
+
+    /**
+     * Get the usage statistics of a policy (claims and preauths count)
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> getPolicyUsage(Long policyId) {
+        long claimsCount = claimRepository.countByPolicyId(policyId);
+        long preAuthCount = preAuthorizationRepository.countByPolicyId(policyId);
+        return java.util.Map.of("claimsCount", claimsCount, "preAuthCount", preAuthCount);
+    }
+
+    /**
      * Update an existing benefit policy
      */
     @Transactional
@@ -287,8 +309,9 @@ public class BenefitPolicyService {
 
         BenefitPolicy policy = benefitPolicyRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
-        if (policy.getStatus() != BenefitPolicyStatus.DRAFT) {
-            throw new BusinessRuleException("لا يمكن تعديل بيانات وثيقة بعد تفعيلها؛ أنشئ نسخة/مراجعة جديدة للحفاظ على الأثر التأميني");
+        
+        if (!canPolicyBeEdited(id)) {
+            throw new BusinessRuleException("لا يمكن تعديل بيانات هذه الوثيقة مباشرة لارتباطها بمطالبات أو موافقات مسبقة فعلية؛ يجب إنشاء إصدار جديد.");
         }
 
         // Update fields if provided
@@ -327,6 +350,13 @@ public class BenefitPolicyService {
         }
         if (dto.getExcludedCategoryCodes() != null) {
             policy.setExcludedCategoryCodes(dto.getExcludedCategoryCodes());
+        }
+        if (dto.getStatus() != null) {
+            try {
+                policy.setStatus(BenefitPolicyStatus.valueOf(dto.getStatus().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new BusinessRuleException("حالة غير صالحة: " + dto.getStatus());
+            }
         }
 
 
@@ -611,8 +641,15 @@ public class BenefitPolicyService {
     public void assertDraftConfiguration(Long policyId) {
         BenefitPolicy policy = benefitPolicyRepository.findById(policyId)
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + policyId));
-        if (policy.getStatus() != BenefitPolicyStatus.DRAFT || !policy.isActive()) {
-            throw new BusinessRuleException("إعداد قواعد ومجموعات الوثيقة متاح في حالة المسودة فقط");
+        
+        if (!policy.isActive()) {
+            throw new BusinessRuleException("الوثيقة غير نشطة");
+        }
+        
+        if (policy.getStatus() != BenefitPolicyStatus.DRAFT) {
+            if (!canPolicyBeEdited(policyId)) {
+                throw new BusinessRuleException("إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
+            }
         }
     }
 
