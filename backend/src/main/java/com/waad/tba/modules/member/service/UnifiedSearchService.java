@@ -4,6 +4,7 @@ import com.waad.tba.modules.member.dto.MemberAutocompleteDto;
 import com.waad.tba.modules.member.dto.MemberSearchDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class UnifiedSearchService {
 
     private final MemberRepository memberRepository;
     private final NameSearchService nameSearchService;
+    private final AuthorizationService authorizationService;
 
     /**
      * Main unified search method - auto-detects search type
@@ -55,8 +57,16 @@ public class UnifiedSearchService {
             return List.of();
         }
 
+        // An EMPLOYER_ADMIN must never see another employer's members just
+        // because the employerId param was omitted or spoofed — force it to
+        // their own employer. Other roles (PROVIDER_STAFF, MEDICAL_REVIEWER,
+        // SUPER_ADMIN) pass through unchanged; providers legitimately search
+        // across employers to find a patient regardless of who they work for.
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(
+                authorizationService.getCurrentUser(), employerId);
+
         String trimmedQuery = query.trim();
-        log.info("Unified search initiated for query: {}, employerId: {}", trimmedQuery, employerId);
+        log.info("Unified search initiated for query: {}, employerId: {}", trimmedQuery, scopedEmployerId);
 
         // Detect search type
         SearchType searchType = detectSearchType(trimmedQuery);
@@ -65,13 +75,13 @@ public class UnifiedSearchService {
         // Execute appropriate search
         switch (searchType) {
             case BARCODE:
-                return searchByBarcode(trimmedQuery, employerId);
+                return searchByBarcode(trimmedQuery, scopedEmployerId);
 
             case CARD_NUMBER:
-                return searchByCardNumber(trimmedQuery, employerId);
+                return searchByCardNumber(trimmedQuery, scopedEmployerId);
 
             case NAME_FUZZY:
-                return searchByName(trimmedQuery, employerId);
+                return searchByName(trimmedQuery, scopedEmployerId);
 
             default:
                 log.error("Unknown search type: {}", searchType);

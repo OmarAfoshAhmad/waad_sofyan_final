@@ -344,6 +344,13 @@ public class EmployerService {
 
         Employer employer = findEmployerById(id);
 
+        // Re-run the same contract-terms validation update() enforces —
+        // restore() previously skipped it entirely, so an employer could
+        // come back active with a contract end date before its start date,
+        // or a member limit already exceeded by members added while archived.
+        validateEmployerTerms(employer.getContractStartDate(), employer.getContractEndDate(),
+                employer.getMaxMemberLimit(), memberRepository.countByEmployerIdAndActiveTrue(id));
+
         // Restore by setting active=true
         employer.setActive(true);
         Employer updated = employerRepository.save(employer);

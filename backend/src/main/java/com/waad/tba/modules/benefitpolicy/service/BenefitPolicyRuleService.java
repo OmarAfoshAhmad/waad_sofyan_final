@@ -812,22 +812,34 @@ public class BenefitPolicyRuleService {
     }
 
     /**
-     * Delete all rules for a policy
+     * Delete all rules for a policy.
+     *
+     * Mirrors hardDelete()'s per-rule guard rather than relying solely on the
+     * DB FK to reject the whole batch: any rule referenced by a financially
+     * settled claim line (isRuleReferencedFinancially) is disabled instead of
+     * deleted, exactly like the single-rule delete() path, so one referenced
+     * rule can't block removal of the rest.
      */
     public void deleteAllForPolicy(Long policyId) {
         validatePolicyExists(policyId);
-        
+
         List<BenefitPolicyRule> rules = ruleRepository.findByBenefitPolicyId(policyId);
-        try {
-            ruleRepository.deleteAll(rules);
-            ruleRepository.flush(); // Force execution to catch constraint violations immediately
-            log.info("Hard deleted {} rules for policy {}", rules.size(), policyId);
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            log.warn("Failed to hard delete all rules for policy {} due to data integrity violation", policyId);
-            throw new BusinessRuleException(
-                com.waad.tba.common.error.ErrorCode.BUSINESS_RULE_VIOLATION,
-                "لا يمكن حذف المنافع نهائياً لارتباط بعضها بمطالبات سابقة. يُرجى الاكتفاء بإبقائها في سلة المحذوفات.");
+        int deleted = 0;
+        int disabled = 0;
+        for (BenefitPolicyRule rule : rules) {
+            if (isRuleReferencedFinancially(rule.getId())) {
+                rule.setActive(false);
+                rule.setDeleted(false);
+                ruleRepository.save(rule);
+                disabled++;
+            } else {
+                ruleRepository.delete(rule);
+                deleted++;
+            }
         }
+        ruleRepository.flush();
+        log.info("deleteAllForPolicy({}): hard deleted {} rules, disabled {} financially-referenced rules",
+                policyId, deleted, disabled);
     }
 
     /**

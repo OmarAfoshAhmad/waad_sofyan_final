@@ -125,6 +125,17 @@ public class UserService {
         String oldEmail = user.getEmail();
         userMapper.updateEntityFromDto(user, dto);
         String resolvedUserType = resolveUserType(dto.getUserType(), dto.getEmployerId(), dto.getProviderId());
+
+        // PROTECTION: demoting the last active SUPER_ADMIN would lock out all
+        // administrative access with no recovery path — delete()/toggleStatus()
+        // already refuse to touch a SUPER_ADMIN, update() must too.
+        boolean wasSuperAdmin = "SUPER_ADMIN".equals(user.getUserType());
+        boolean stillSuperAdmin = "SUPER_ADMIN".equals(resolvedUserType);
+        if (wasSuperAdmin && !stillSuperAdmin && userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN") <= 1) {
+            log.error("⛔ Attempt to demote the last active SUPER_ADMIN user: id={}, username={}", id, user.getUsername());
+            throw new IllegalArgumentException("لا يمكن تغيير دور آخر مستخدم SUPER_ADMIN نشط في النظام");
+        }
+
         applyRoleBindings(user, resolvedUserType, dto.getEmployerId(), dto.getProviderId());
         User updatedUser = userRepository.save(user);
         
@@ -266,7 +277,17 @@ public class UserService {
 
     private String resolveUserType(String requestedUserType, Long employerId, Long providerId) {
         if (requestedUserType != null && !requestedUserType.isBlank()) {
-            return requestedUserType.trim().toUpperCase(Locale.ROOT);
+            String normalized = requestedUserType.trim().toUpperCase(Locale.ROOT);
+            // A bogus/typo'd role string (e.g. "SUPERADMIN") would mint a
+            // Spring Security authority matching no @PreAuthorize expression,
+            // silently locking the account out of everything with no error
+            // at creation time — validate against the fixed role set instead.
+            boolean isKnownRole = java.util.Arrays.stream(com.waad.tba.security.rbac.SystemRole.values())
+                    .anyMatch(role -> role.name().equals(normalized));
+            if (!isKnownRole) {
+                throw new IllegalArgumentException("نوع مستخدم غير صالح: " + requestedUserType);
+            }
+            return normalized;
         }
 
         if (employerId != null && providerId != null) {

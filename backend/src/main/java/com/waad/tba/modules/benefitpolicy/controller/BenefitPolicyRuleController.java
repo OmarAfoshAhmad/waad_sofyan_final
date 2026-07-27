@@ -81,6 +81,7 @@ public class BenefitPolicyRuleController {
     public ResponseEntity<ApiResponse<BenefitPolicyRuleResponseDto>> findById(
             @PathVariable("policyId") Long policyId,
             @PathVariable("ruleId") Long ruleId) {
+        ruleService.assertBelongsToPolicy(ruleId, policyId);
         BenefitPolicyRuleResponseDto result = ruleService.findById(ruleId);
         return ResponseEntity.ok(ApiResponse.success("Rule retrieved", result));
     }

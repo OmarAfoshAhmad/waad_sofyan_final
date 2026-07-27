@@ -99,8 +99,13 @@ public class UnifiedMemberService {
         log.info("✅ Generated barcode for principal: {}", barcode);
 
         // 2. Load employer (needed for card number formula)
-        Employer employer = employerRepository.findById(dto.getEmployerId())
-                .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + dto.getEmployerId()));
+        // An EMPLOYER_ADMIN must not be able to enroll a member into a
+        // different employer by sending an arbitrary employerId — force it
+        // to their own employer regardless of what the request carries.
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(
+                authorizationService.getCurrentUser(), dto.getEmployerId());
+        Employer employer = employerRepository.findById(scopedEmployerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + scopedEmployerId));
 
         log.info("✅ Loaded employer: id={}, name={}", employer.getId(), employer.getName());
 
@@ -320,8 +325,14 @@ public class UnifiedMemberService {
         mapper.updateEntityFromDto(member, dto);
 
         if (dto.getEmployerId() != null) {
-            Employer employer = employerRepository.findById(dto.getEmployerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + dto.getEmployerId()));
+            // An EMPLOYER_ADMIN must not be able to move a member to another
+            // employer's roster (and thus another employer's policy/claims
+            // liability) by sending a different employerId; resolveEmployerScope
+            // forces it back to their own employer. Internal staff pass through
+            // unchanged and can still reassign members between employers.
+            Long scopedEmployerId = authorizationService.resolveEmployerScope(currentUser, dto.getEmployerId());
+            Employer employer = employerRepository.findById(scopedEmployerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Employer not found: " + scopedEmployerId));
             member.setEmployer(employer);
         }
 
@@ -414,6 +425,13 @@ public class UnifiedMemberService {
     public MemberViewDto getMember(Long id) {
         Member member = memberRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to read member {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this member");
+        }
 
         if (member.isPrincipal()) {
             List<Member> dependents = memberRepository.findByParentId(member.getId());
@@ -1020,6 +1038,10 @@ public class UnifiedMemberService {
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
 
+        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), principalId)) {
+            throw new AccessDeniedException("Access denied to this member");
+        }
+
         if (principal.isDependent()) {
             throw new BusinessRuleException("Member ID " + principalId + " is a Dependent, not a Principal");
         }
@@ -1041,6 +1063,10 @@ public class UnifiedMemberService {
     public long countDependents(Long principalId) {
         Member principal = memberRepository.findById(principalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Principal member not found: " + principalId));
+
+        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), principalId)) {
+            throw new AccessDeniedException("Access denied to this member");
+        }
 
         if (principal.isDependent()) {
             throw new BusinessRuleException("Member ID " + principalId + " is a Dependent, not a Principal");
@@ -1137,6 +1163,10 @@ public class UnifiedMemberService {
 
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
+
+        if (!authorizationService.canAccessMember(authorizationService.getCurrentUser(), memberId)) {
+            throw new AccessDeniedException("Access denied to this member");
+        }
 
         if (member.getStatus() == Member.MemberStatus.ACTIVE) {
             throw new BusinessRuleException("Member is already active: " + memberId);

@@ -445,7 +445,524 @@ end to end. Findings and fixes:
    provider-detail "Contracts" tab still queries the list endpoint for
    display, and removing them requires a frontend rework that's out of scope
    for this pass.
-   **Update — completed same day:** re-checked the frontend and found
+   ## Claims & coverage-rules module closure — 2026-07-27
+
+Recent development on `benefitpolicy` (coverage rules) had loosened several
+immutability guards; a research-only audit found 4 CRITICAL + several
+HIGH/MEDIUM findings, all fixed in this round with the user's explicit
+priority: **any policy that was ever financially touched — even if that
+claim/pre-auth was later cancelled — must stay permanently locked.**
+
+### 🔴 CRITICAL — all fixed
+
+1. **`ClaimRepository.countByPolicyId` / `PreAuthorizationRepository.countByPolicyId`
+   filtered `active = true`.** A cancelled claim is soft-deleted
+   (`active = false`), so cancelling the only claim against a policy made
+   `canPolicyBeEdited()` return `true` again — a live policy's annual limit,
+   dates, rules, groups, and buckets became editable/deletable. Fixed:
+   both queries now count regardless of active/cancelled status.
+2. **`BenefitPolicyService.update()`'s `dto.getStatus()` branch** let any
+   caller set policy status directly (`DRAFT→ACTIVE→TERMINATED`), bypassing
+   `activate()`'s readiness/overlap checks entirely. Fixed: the field is now
+   only accepted as a no-op (matching the current status); an actual
+   transition attempt throws, directing the caller to
+   `activate()`/`deactivate()`/`suspend()`.
+3. **`assertDraftConfiguration()` skipped the financial-linkage check
+   whenever `status == DRAFT`.** Fixed: the check now runs unconditionally —
+   status is a proxy for "has this been used," not the source of truth.
+4. **`deleteAllForPolicy()` was one all-or-nothing `deleteAll()`** with no
+   per-rule financial check (unlike its sibling `hardDelete()`), relying only
+   on the DB FK to reject the *entire* batch if any one rule was referenced.
+   Fixed: now mirrors `delete()`'s per-rule behavior — a financially
+   referenced rule is disabled instead of deleted; the rest are hard-deleted.
+
+### 🟠 HIGH — fixed
+
+5. **`assertBucketHasNoFinancialHistory` / `detachNonFinancialBucketConsumptionHistory`**
+   only treated `APPROVED/BATCHED/SETTLED` claims as "financial," so a
+   `RESERVED` consumption row for a claim still `SUBMITTED`/`UNDER_REVIEW`/
+   `NEEDS_CORRECTION`/`APPROVAL_IN_PROGRESS` was silently deleted when its
+   bucket/group was removed — freeing limit capacity for a claim still
+   in-flight. Fixed: now protects any RESERVED/COMMITTED row for a claim
+   that isn't `REJECTED` (or cancelled), not just already-approved ones.
+6. **`ClaimService.update()`'s generic status-change path allowed
+   `APPROVED → NEEDS_CORRECTION`** — a legal state-machine transition — but
+   unlike the dedicated `requestCorrection()` endpoint, it never called
+   `benefitBucketLedgerService.reverseClaim()` / `providerAccountService.debitOnClaimReversal()`.
+   Re-approving afterward would double-count both the bucket consumption and
+   the provider payment. Fixed: this specific transition is now rejected
+   from the generic path with a message pointing at
+   `POST /claims/{id}/request-correction`, eliminating the parallel path
+   instead of duplicating the reversal logic inline.
+7. **`ClaimMapper`'s "line not covered" guard only checked `status == APPROVED`**,
+   but during the real async approval flow (`ClaimReviewService.processApproval`
+   → `recalculateForApproval`) the claim's status is still
+   `APPROVAL_IN_PROGRESS` at that point — the guard never fired during actual
+   approval, only on later direct edits to an already-approved claim. This
+   meant a claim could be approved even though one of its lines maps to a
+   coverage rule disabled/changed after submission — exactly the "policy
+   terms changed mid-flight" scenario. Fixed: guard now also checks
+   `APPROVAL_IN_PROGRESS`.
+
+### 🟡 MEDIUM — fixed
+
+8. `BenefitStructureController`'s `/cleanup` allowed `MEDICAL_REVIEWER`
+   alongside `SUPER_ADMIN`, unlike every sibling mutation on the same
+   controller (already covered by the fixed `assertDraftConfiguration`, but
+   tightened for consistency).
+9. `BenefitPolicyRuleController.findById` never verified the requested rule
+   actually belongs to `{policyId}` in the URL — now calls the existing
+   `assertBelongsToPolicy()` helper (same pattern already used elsewhere).
+10. `ClaimService.getCostBreakdown` skipped its ownership check entirely when
+    `currentUser == null` instead of failing closed like its sibling
+    `getClaimByNumber`. Fixed to throw `AccessDeniedException` on null user.
+
+### Verified NOT a bug (audit false positive, corrected after tracing the call graph)
+
+The audit's finding that `ClaimMapper.toViewDto` throws on read (breaking
+`GET`/list/reports for historical claims) does not reproduce: the
+notCovered check lives in `processEngineCalculations`, called only from
+`toEntity`/`updateEntityFromDto`/`recalculateForApproval` — never from
+`toViewDto`. Viewing an already-approved claim never re-runs coverage
+evaluation.
+
+### Follow-up round — completed same day
+
+The three items originally deferred above were closed out:
+
+- **Extracted `BucketPeriodCalculator`** (new file, `benefitpolicy.service`
+  package): single source of truth for bucket period resolution, now used by
+  both `BenefitBucketLedgerService` and `BenefitBucketLimitService` instead
+  of each carrying its own copy. WEEKLY and QUARTERLY are now rolling
+  windows anchored to the policy's own `startDate` (via the same
+  `customPeriod` logic already correctly used for CUSTOM_WEEKS/CUSTOM_MONTHS),
+  not calendar-Saturday / January-quarter boundaries — a policy starting
+  2026-03-18 now resets its quarterly buckets on the 18th of Mar/Jun/Sep/Dec,
+  not Jan 1. Also fixed a consistency gap where only one of the two services
+  capped the period end date at the policy's end date. Existing test
+  `weeklyPeriodUsesSaturdayToFridayWindow` (which asserted the old, wrong,
+  calendar-anchored behavior) was rewritten to assert the correct
+  policy-start-anchored window; a new `quarterlyPeriodAnchorsToPolicyStartNotCalendarYear`
+  test was added. `BenefitStructureService.deleteGroup`'s `generatedOnly`
+  guard removal remains untouched — confirmed in-code as an intentional 2026
+  product decision, not a regression.
+- **New test**: `ClaimServiceCorrectionTransitionSecurityTest` — directly
+  exercises finding #6 (generic `updateClaim()` must reject
+  APPROVED→NEEDS_CORRECTION and never call `claimStateMachine.transition`
+  or `benefitBucketLedgerService.reverseClaim` for that path).
+- Finding #5's native-SQL predicate still has no dedicated Postgres
+  integration test — left as documented residual risk; would need
+  `PostgresIntegrationTestBase`, out of scope for this pass.
+
+**Claims & coverage-rules module: closed.** Full suite green (222+ tests, 0
+failures) after this round.
+
+## Employer module closure — 2026-07-27
+
+Audited `com.waad.tba.modules.employer` plus how `member`/`benefitpolicy`
+consume it (an employer's own module is tiny — 9 files — but several
+`UnifiedMemberService`/`UnifiedSearchService` methods it feeds into were
+missing the ownership checks their siblings had).
+
+### 🔴 CRITICAL — both fixed
+
+1. **`UnifiedMemberService.getMember` had no ownership check at all** —
+   unlike `updateMember`/`toggleActive`/`deleteMember`, all three of which
+   call `canAccessMember`. An EMPLOYER_ADMIN could walk `GET /members/1..N`
+   and read full PII (civil ID, card, barcode) of any other employer's
+   members. Fixed with the same `canAccessMember` check.
+2. **`UnifiedSearchService.search` trusted a client-supplied, optional
+   `employerId`** — omitting it (or sending another employer's id) returned
+   name/barcode/card-number matches across every employer to an
+   EMPLOYER_ADMIN caller. Fixed via `resolveEmployerScope()`, the same
+   pattern used everywhere else this session; `PROVIDER_STAFF`/
+   `MEDICAL_REVIEWER` pass through unscoped since providers legitimately
+   search across employers to find a patient.
+
+### 🟠 HIGH — all fixed
+
+3. `getDependents`/`countDependents` — same missing-check pattern, allowed
+   principal enumeration across employers.
+4. `restoreMember` — an EMPLOYER_ADMIN could reactivate a terminated member
+   belonging to a different employer, restoring their eligibility.
+5. `createPrincipalMember` accepted an arbitrary `dto.getEmployerId()` — an
+   EMPLOYER_ADMIN could enroll a member into a rival employer's roster (and
+   policy). Fixed via `resolveEmployerScope()`.
+6. `updateMember` allowed silently reassigning a member to a different
+   employer via `dto.getEmployerId()`. Fixed the same way — for an
+   EMPLOYER_ADMIN this now resolves back to their own employer (a no-op
+   given `canAccessMember` already confirmed the member is theirs); internal
+   staff can still freely reassign.
+
+### 🟡 MEDIUM — fixed
+
+7. `EmployerService.restore()` skipped the contract-terms validation that
+   `update()` enforces (end date ≥ start date, member limit ≥ current active
+   members) — an employer could come back active in an inconsistent state.
+   Now calls the same `validateEmployerTerms()`.
+8. Legacy `MemberImportController` (`/api/v1/members/legacy-import/*`, still
+   reachable despite being `@Deprecated`) had no file-size cap on any of its
+   3 upload endpoints, and leaked raw exception messages in all 3 catch
+   blocks. Added a 20MB cap (kept `.xls` support, so didn't reuse the
+   stricter `.xlsx`-only `ExcelUploadValidator`) and replaced
+   `e.getMessage()` in client-facing responses with generic text (full
+   detail stays in server logs).
+
+### Verified NOT an issue
+
+Two `UnifiedMemberController` endpoints flagged for a commented-out
+`@PreAuthorize` (PDF report export, single-member PDF) turned out to have
+their `@GetMapping` commented out too — fully unreachable dead code, not a
+live gap.
+
+### Deferred
+
+- `EmployerService.archive()`'s guard only counts `active=true` benefit
+  policies, not expired/cancelled ones with claims history — lower priority
+  than the fixes above since archiving is non-destructive and reversible
+  (unlike the coverage-rule deletions fixed earlier), but noted for
+  consistency with the "count regardless of active flag" principle.
+- `maxMemberLimit` is validated on employer edit but never enforced at
+  member-enrollment time — a real gap, deferred as a scoped follow-up rather
+  than bolted onto this pass.
+- Dead code in `EmployerService` (~120 lines: `getAll`, `getAllNonPaginated`,
+  `getAllIncludingArchived`, `getActiveEmployers`,
+  `getAllIncludingArchivedNonPaginated`, unused `normalizeAndGenerateCode`/
+  `validateCodeUniqueness`) not removed this round.
+- No uniqueness constraint on `crNumber`/`taxNumber` — two employer records
+  for the same legal entity would silently split members/claims history.
+
+### Verification
+
+New/updated tests: `UnifiedMemberServiceSecurityTest` (+4: getMember,
+getDependents, countDependents, restoreMember — 7 total),
+`UnifiedSearchServiceSecurityTest` (new, 2 tests: omitted and spoofed
+employerId both resolve to the caller's own employer). Full suite green
+after this round, verified locally with `mvn test`.
+
+**Employer module: closed** for the CRITICAL/HIGH findings; MEDIUM/LOW items
+above are documented residual debt.
+
+## Medical classifications module closure — 2026-07-27
+
+Audited `com.waad.tba.modules.medicaltaxonomy` (categories/services catalog).
+Zero tests existed for this module before this pass.
+
+### 🔴 CRITICAL — both fixed
+
+1. **No financial-linkage guard on category delete at all.** `delete()`,
+   `hardDelete()`, `bulkDelete()` in `MedicalCategoryService` had a
+   soft-delete comment literally reading "no service/specialty dependency
+   check" — a category still referenced by a `MedicalService`, a
+   `BenefitPolicyRule`, or a `ProviderContractPricingItem` could be deleted
+   (soft or hard), silently breaking coverage resolution and contract
+   pricing on the next claim. `hardDelete` in particular ran
+   `categoryRepository.deleteById(id)` with zero checks.
+   Fixed with `assertNotFinanciallyLinked()`, mirroring the pattern already
+   established in the benefitpolicy module: counts every service, coverage
+   rule, and pricing item ever pointing at the category (the underlying
+   derived-query repository methods — `countByCategoryId`,
+   `countByMedicalCategoryId` ×2 — carry no active/deleted filter, so an
+   inactive-but-still-referenced row still blocks deletion). Added
+   `countByMedicalCategoryId` to `BenefitPolicyRuleRepository` and
+   `ProviderContractPricingItemRepository` (neither had one).
+
+### 🟠 HIGH — fixed
+
+2. **Excel import's `clearOld=true` mass-deactivated every category**,
+   including ones with active financial references, with no reference
+   count and no dry-run (`MedicalCategoryExcelTemplateService`, recently
+   changed, untested). Now skips deactivating any category that
+   `isFinanciallyLinked()`, logging how many were protected.
+3. **Per-row import could silently deactivate a financially-linked category**
+   just by the sheet marking it inactive — same guard applied: a request to
+   deactivate a linked category is overridden back to active with a warning
+   logged, rather than silently honored.
+
+### 🟡 MEDIUM — fixed
+
+4. **`DATA_ENTRY` was locked out of every read endpoint** on
+   `MedicalCategoryController` (`/all`, `/{id}`, list, `/code/{code}`,
+   `/{id}/children`, `/{id}/medical-services`, `/tree`, `/root`) — including
+   the endpoint documented in its own Javadoc as "the ONLY way to retrieve
+   services for selection." Internal data-entry staff doing manual claim
+   capture had no way to resolve a category or service. Added `DATA_ENTRY`
+   to all 8 endpoints' role lists.
+5. **`getServicesByCategory` could 200-with-empty-list for a category that
+   doesn't exist at all**, not just one with no services yet (the two cases
+   were handled by the same blanket `catch (Exception)`). Split the
+   existence check out so a missing category still surfaces its real error;
+   the "no services yet → allow free-text pricing" fallback still applies
+   only to the services lookup itself.
+
+### 🟢 LOW — fixed
+
+6. **Two fully dead, unreferenced duplicate services deleted**:
+   `MedicalTaxonomyCategoryService.java` (207 lines) and
+   `MedicalCategoryExcelService.java` (301 lines) — confirmed zero callers
+   anywhere in `src/`. Notably the dead `MedicalTaxonomyCategoryService` was
+   the *only* place in the module already using `DeletionGuard` correctly;
+   the live path had none until finding #1's fix.
+
+### Verified NOT an issue
+
+- Excel upload validation (F7 in the raw audit): `openWorkbook` already
+  calls `ExcelParserService.validateExcelFile` (10MB cap, `.xlsx`/`.xls`,
+  non-empty) before parsing — weaker than the shared `ExcelUploadValidator`
+  (20MB, `.xlsx`-only) but not absent; switching to the stricter shared
+  validator would drop legitimate `.xls` support for the documented
+  "approved categories" legacy import format, so left as-is.
+- Formula-injection risk on template generation (F8 in the raw audit): grep
+  found zero `setCellValue` calls anywhere in
+  `MedicalCategoryExcelTemplateService` — template generation delegates
+  entirely to static column definitions via the shared `ExcelTemplateService`,
+  there is no user-controlled data echoed into a workbook cell in this file.
+
+### Deferred
+
+- `deletedAt`/`deletedBy` audit columns exist on `MedicalCategory` but are
+  never stamped on soft-delete (fields present, service never sets them) —
+  low priority, no financial-correctness impact, deferred.
+- Dead-but-imported DTOs (`ExcelImportResultDto` duplicate,
+  `CatalogCategoryNodeDto`, `MedicalCategoryBulkMoveDto` whose endpoint
+  unconditionally throws) not removed this round.
+- `PROVIDER_STAFF` can read `coveragePercent`/`basePrice` fields on the
+  catalog response DTOs — arguably fine for reference data, not scoped by
+  provider, not touched this round.
+
+### Verification
+
+New test: `MedicalCategoryServiceFinancialLinkageTest` (5 tests: delete/
+hardDelete/bulkDelete all rejected when linked via service, rule, or
+pricing item respectively; delete succeeds when genuinely unlinked). Full
+suite green after this round, verified locally with `mvn test`.
+
+**Medical classifications module: closed.**
+
+## Financial & claims reports closure — 2026-07-27
+
+Audited `com.waad.tba.modules.report` and the claim-report stack
+(`ReportsController`, `AdjudicationReportService`, `ProviderSettlementReportService`,
+`ProviderSettlementExcelExporter`).
+
+### 🔴 CRITICAL — cross-tenant financial disclosure — all fixed
+
+1. **`/adjudication`, `/provider-settlement` (singular), `/summary`** had no
+   employer/provider scoping mechanism at all —
+   `AdjudicationReportService` has zero employerId/providerId param, so any
+   `EMPLOYER_ADMIN`/`MEDICAL_REVIEWER` could see every employer's and every
+   provider's adjudication totals, and filter cross-tenant by a free-text
+   `providerName`. Since the service structurally cannot be scoped without a
+   larger rework, and the frontend has no page actually wired to these three
+   endpoints (confirmed by grep), restricted all three to internal finance
+   roles only (`SUPER_ADMIN`, `ACCOUNTANT`, `FINANCE_VIEWER`).
+2. **`/financial-summary`, `/settlement-summary`** trusted a free
+   `employerOrgId` param with no scope resolution — an `EMPLOYER_ADMIN`
+   omitting or spoofing it saw system-wide totals. Fixed with
+   `resolveEmployerScope()`. `PROVIDER_STAFF` was also removed from
+   `/settlement-summary` (no `providerId` param exists on this endpoint at
+   all, so a provider caller had no way to be confined to their own data —
+   confirmed the frontend "Settlement Inbox" feature this powers is an
+   internal-staff page, not provider-portal).
+3. **`/provider-settlements` (line-level) and its Excel export** used ad-hoc
+   scoping (`if (!isAdmin && currentUser.getProviderId() != null) force own id`)
+   that silently passed through the raw request `providerId` whenever the
+   caller's `providerId` was null — an unlinked `PROVIDER_STAFF` account (or
+   `EMPLOYER_ADMIN`/`MEDICAL_REVIEWER`, neither of whom have a `providerId`
+   either) fell through unrestricted. Replaced with the standard
+   `resolveProviderScope()`/`resolveEmployerScope()` pattern, which fails
+   closed (returns `null` → "provider ID required" error) instead of falling
+   through.
+4. **`/member-statement/{memberId}`** took a raw path `memberId` with no
+   check. Added a scoped check: `EMPLOYER_ADMIN` must pass
+   `canAccessMember()`; `ACCOUNTANT`/`FINANCE_VIEWER`/`MEDICAL_REVIEWER`
+   remain org-wide (matching `canAccessMember`'s own convention for internal
+   finance/review staff).
+
+### 🟠 HIGH — fixed
+
+5. **Formula injection in `ProviderSettlementExcelExporter`** — patient
+   name, insurance number, claim/pre-auth numbers, and service code/name
+   were written via raw `setCellValue` with no sanitization anywhere in this
+   file (unlike `ProviderReportExcelService`/`PriceListExcelTemplateService`,
+   already hardened in earlier passes). Added a `sanitize()` helper
+   delegating to the shared `ExcelSanitizer`, applied at both call sites
+   (line-level detail rows and claim-summary-only rows).
+6. **`FinancialConsolidationService`'s monthly consolidation query used
+   double literals (`0.0`) inside `COALESCE`** on every money column,
+   forcing Hibernate to promote the whole `SUM()` to a floating-point result
+   type even though every source column is `BigDecimal` — reintroducing
+   binary floating-point drift into employer revenue/discount totals.
+   Changed to the integer literal `0`, which keeps the aggregation in
+   `BigDecimal` end to end.
+7. **`AdjudicationReportService` mixed filtered and unfiltered counts in the
+   same report** — `approvedCount`/`settledCount` respected the caller's
+   `fromDate`/`toDate`/`providerName` filter, but `rejectedCount`/
+   `pendingCount` came from a global, unfiltered `countByStatus`/
+   `countByStatusIn` across the entire claims table regardless of the
+   report's date range or provider filter. Fixed by reusing the same
+   `findForAdjudicationReport` query with the identical filter, just scoped
+   to `REJECTED` / `[SUBMITTED, UNDER_REVIEW]` respectively.
+8. **`ProviderSettlementReportService`'s default status filter inflated
+   "amount owed to provider"** — when the caller passes no explicit
+   `statuses` (which is what the report UI does until the user picks one —
+   confirmed in `ProviderSettlementReport.jsx`), the default silently
+   included `SUBMITTED`/`UNDER_REVIEW`/`NEEDS_CORRECTION`/`REJECTED` claims
+   alongside `APPROVED`/`BATCHED`/`SETTLED`, and the totals loop sums every
+   claim returned with no per-status split — so the provider's default
+   settlement view included pending and rejected claims in their payable
+   total. Narrowed the default to `APPROVED`/`BATCHED`/`SETTLED` only (an
+   explicit caller can still request the full set).
+
+### Verification
+
+New tests: `ProviderSettlementReportServiceDefaultStatusTest` (asserts the
+default status filter excludes SUBMITTED/UNDER_REVIEW/NEEDS_CORRECTION/
+REJECTED/APPROVAL_IN_PROGRESS). Full suite green after this round, verified
+locally with `mvn test`.
+
+### Deferred (documented, not fixed this round)
+
+- **In-memory substring filtering bug** in `ProviderSettlementReportService`:
+  `claimNumber` filter uses `String.valueOf(id).contains(...)`, so filtering
+  by "1" also matches claim IDs 21, 100, 214, etc. — needs a proper indexed
+  claim-number field match, not a quick patch on the substring call.
+- **Inconsistent rounding mode** between `ProviderSettlementReportService`
+  (`HALF_EVEN`) and `CompanyProfitReportService` (`HALF_UP`) — real drift
+  risk between the two reports, deferred as its own scoped fix.
+- **Duplicate/overlapping settlement-report code paths**: `AdjudicationReportService.generateProviderSettlementReport()`,
+  `ProviderSettlementReportService.generateReport()`, and
+  `ProviderReportsController`'s provider-portal export all answer a similar
+  question with different numbers — a genuine consolidation candidate, not
+  attempted this round given the blast radius of merging three live report
+  paths.
+- **No test directory existed for `modules/report`** before this pass, and
+  still doesn't for `CompanyProfitReportService`/`ReportDataService` — only
+  the two fixes above got dedicated tests; broader coverage of this module
+  is a follow-up.
+- Oversized files (`ReportsController` ~430 lines,
+  `ProviderSettlementExcelExporter` ~620, `ProviderSettlementReportService`
+  ~465) not split.
+- `report/controller/ReportController.java`'s `catch (Exception e) { e.printStackTrace(); }`
+  and unbounded `claimIds` list (no size cap → unbounded PDF generation) not
+  fixed this round.
+
+**Financial & claims reports: CRITICAL/HIGH findings closed**; MEDIUM/LOW
+items above are documented residual debt.
+
+## Settings & permissions closure — 2026-07-27
+
+Audited `com.waad.tba.modules.rbac`, `admin.system`/`systemadmin`, and the
+common system-settings services. A prior Section 01 pass already covered
+RBAC/auth/session security broadly — this round focused on what that pass
+missed: privilege-escalation paths in user management, the production-guard
+pattern's actual coverage, and settings validation/audit.
+
+### 🟠 HIGH — fixed
+
+1. **`UserService.update()` had no SUPER_ADMIN protection at all** — unlike
+   `delete()`/`toggleStatus()`, which both refuse to touch a SUPER_ADMIN. A
+   SUPER_ADMIN (including the only one, or an attacker with a hijacked
+   super-admin session) could `PUT` the last active SUPER_ADMIN down to any
+   other role, permanently locking out all administrative access with no
+   recovery path. Added `UserRepository.countByUserTypeAndActiveTrue()` and
+   a guard: demoting a SUPER_ADMIN is blocked only when they're the last
+   active one (a second SUPER_ADMIN can still be demoted).
+2. **`requireNonProductionProfile()`'s profile check silently bypassed on a
+   comma-separated profile list** — `spring.profiles.active=prod,metrics`
+   compared the whole raw string against `"prod"` and failed the match,
+   re-opening `resetTestData()`'s `deleteAll()` on Claim/Visit/Member/Employer
+   in production. Fixed by splitting on `,` and checking each token.
+3. **`resolveUserType()` accepted any free-form string with no validation**
+   against the fixed `SystemRole` enum — a typo (`"SUPERADMIN"`) silently
+   mints a Spring Security authority matching no `@PreAuthorize` expression,
+   locking the account out of everything with no error at creation time.
+   Now validated against `SystemRole.values()`.
+4. **`ProviderUserExcelImportService` used one hardcoded shared default
+   password** (`"Aa@1234567"`, in git history) for every imported row with a
+   blank password column — a bulk import of 200 provider staff created 200
+   accounts sharing one well-known credential. Replaced with a unique
+   random password generated per row.
+
+### 🟡 MEDIUM — fixed
+
+5. **`SettingsManagementService` validation was entirely data-driven from
+   the `validation_rules` column** — a blank/null rule column meant any
+   value of the right type was accepted, so e.g. a token-expiry INTEGER
+   setting could be persisted as `-1` and served verbatim by
+   `AuthenticationSettingsService`. Added baseline invariants independent of
+   `validation_rules`: INTEGER/DECIMAL settings reject negative values,
+   STRING settings reject empty values.
+6. **No audit trail for security-relevant setting changes** —
+   `updateSetting()`/`resetToDefault()` only produced a `log.info` line,
+   unlike login/password events which go through `SecurityAuditService`.
+   Both now also write a `SETTING_CHANGED` security audit event (old value
+   → new value, actor, key).
+7. **`DELETE /admin/system/reset` had no audit trail** — a destructive wipe
+   of 4 core tables produced only `log.warn`, no forensic record surviving
+   log rotation. Now also logs a `CONFIGURATION_CHANGED` security audit
+   event before the deletion runs, with the actual authenticated actor.
+8. **`/api/v1/admin/features/public` (unauthenticated) returned the full
+   `FeatureFlagDto`** — including `roleFilters` (internal role names) and
+   `createdBy`/`updatedBy` (real admin usernames) — to anyone, regardless of
+   the `INTERNAL_`-prefix key filter (which only excludes some keys, not
+   these fields on the ones that remain). Now returns a minimal
+   `flagKey`/`enabled`-only projection. Confirmed zero frontend callers of
+   this endpoint currently exist, so this is a hardening with no UI impact.
+9. **Excel upload on `ProviderUserExcelImportService.importUsers()` had no
+   size/MIME validation** before `openWorkbook()`. Added
+   `ExcelUploadValidator.validate(file)`. Also fixed raw exception-message
+   leakage in its catch blocks (generic message to client, full detail in
+   logs) and split validation errors (meant for the caller) from unexpected
+   internal errors (logged, generic message only).
+10. **Four fully dead RBAC DTOs deleted** (`RoleCreateDto`, `RoleUpdateDto`,
+    `RoleViewDto`, `PermissionMatrixDto`) — confirmed zero references
+    anywhere; leftovers from a removed dynamic-RBAC subsystem that
+    advertised a role-CRUD API that no longer exists (roles are the static
+    `SystemRole` enum now).
+
+### Verification
+
+New tests: `UserServiceTest` (+2: reject demoting the last active
+SUPER_ADMIN, allow demoting one when another remains active — 6 total),
+`SystemAdminServiceProductionGuardTest` (+1: comma-separated profile list no
+longer bypasses the guard — 3 total). Full suite green after this round,
+verified locally with `mvn test`.
+
+### Deferred (documented, not fixed this round)
+
+- `UserService.resetPassword()` has no SUPER_ADMIN-target protection — any
+  SUPER_ADMIN can reset a peer SUPER_ADMIN's password and evict their
+  sessions. Judged to be a normal peer-admin recovery capability rather than
+  a privilege-escalation bug (unlike demoting the last admin, this doesn't
+  reduce the number of active admins), so left as-is; flagged for a product
+  decision rather than fixed unilaterally.
+- `FeatureFlagService.deleteFeatureFlag()` has no reference-in-use check —
+  a flag consumed at runtime via `isFlagEnabled(key, defaultValue)` degrades
+  gracefully to the caller's default on delete rather than breaking, so this
+  is a soft behavior change, not data loss; deferred.
+- `MEDICAL_REVIEWER` can read all system settings by category (`SystemSettingsController`)
+  — over-broad for a reviewer role but read-only; writes are already
+  correctly SUPER_ADMIN-only.
+- `SettingsManagementService.resetToDefault()`'s `@CacheEvict` key
+  inconsistency with `updateClaimSlaDays()`'s literal key (both share the
+  `systemSettings` cache name) — a real staleness risk, deferred as its own
+  scoped fix rather than a quick patch.
+- `UserService.getByUsername()` throws a raw `RuntimeException` instead of
+  `ResourceNotFoundException` — cosmetic inconsistency, not fixed.
+
+**Settings & permissions: HIGH findings closed**; MEDIUM/LOW items above are
+documented residual debt.
+
+### Verification
+
+7 new tests in `BenefitPolicyServiceTest` (financial-linkage lock survives
+cancellation, status-transition rejection, no-op status round-trip,
+`assertDraftConfiguration` unconditional check) — all passing. Full backend
+suite re-run clean after every change in this round, verified with `mvn test`
+against the local database.
+
+**Update — completed same day:** re-checked the frontend and found
    `ProviderView.jsx`'s "Contracts" tab already calls the modern
    `/provider-contracts/provider/{id}` route directly via `axiosClient`, not
    the legacy `providers.service.js#getContracts` helper (which had zero

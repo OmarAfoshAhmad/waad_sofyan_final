@@ -35,11 +35,22 @@ public class FeatureFlagController {
     @GetMapping("/public")
     @Operation(summary = "Get public feature flags (no auth required)")
     @PreAuthorize("permitAll()")
-    public ApiResponse<List<FeatureFlagDto>> getPublicFeatureFlags() {
-        List<FeatureFlagDto> publicFlags = featureFlagService.getAllFeatureFlags().stream()
+    public ApiResponse<List<PublicFeatureFlagDto>> getPublicFeatureFlags() {
+        // Only flagKey/enabled are meant for an unauthenticated caller. The
+        // full FeatureFlagDto (previously returned as-is) also carries
+        // roleFilters (internal role names), createdBy/updatedBy (real admin
+        // usernames), and description — leaking system role topology and
+        // valid usernames to anyone, unauthenticated, regardless of the
+        // "INTERNAL_" key-prefix filter (which only excludes some keys, not
+        // these fields on the ones that remain).
+        List<PublicFeatureFlagDto> publicFlags = featureFlagService.getAllFeatureFlags().stream()
                 .filter(f -> !f.getFlagKey().startsWith("INTERNAL_"))
+                .map(f -> new PublicFeatureFlagDto(f.getFlagKey(), f.getEnabled()))
                 .toList();
         return ApiResponse.success("Public feature flags retrieved", publicFlags);
+    }
+
+    public record PublicFeatureFlagDto(String flagKey, Boolean enabled) {
     }
 
     @GetMapping

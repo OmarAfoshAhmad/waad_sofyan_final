@@ -79,4 +79,41 @@ class UnifiedMemberServiceSecurityTest {
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Follow-up closure round: getMember, getDependents, countDependents and
+    // restoreMember had no ownership check at all (unlike their siblings
+    // above), letting any EMPLOYER_ADMIN read/restore another employer's
+    // member by ID. Same canAccessMember() pattern applied.
+    // ═══════════════════════════════════════════════════════════════════
+
+    @Test
+    void getMemberDeniedWhenCallerCannotAccessMember() {
+        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.getMember(500L));
+    }
+
+    @Test
+    void getDependentsDeniedWhenCallerCannotAccessPrincipal() {
+        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.getDependents(500L));
+    }
+
+    @Test
+    void countDependentsDeniedWhenCallerCannotAccessPrincipal() {
+        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.countDependents(500L));
+    }
+
+    @Test
+    void restoreMemberDeniedWhenCallerCannotAccessMember() {
+        when(authorizationService.canAccessMember(currentUser, 500L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> service.restoreMember(500L));
+
+        verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
 }

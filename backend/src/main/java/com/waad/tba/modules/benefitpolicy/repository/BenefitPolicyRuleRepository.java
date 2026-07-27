@@ -119,6 +119,13 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
    */
   List<BenefitPolicyRule> findByMedicalCategoryId(Long categoryId);
 
+  /**
+   * Count rules EVER targeting a category — including inactive/soft-deleted
+   * ones. Used to block deleting a medical category that coverage rules
+   * still reference.
+   */
+  long countByMedicalCategoryId(Long categoryId);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // COVERAGE LOOKUP QUERIES (Used by Claims/Eligibility)
   // ═══════════════════════════════════════════════════════════════════════════

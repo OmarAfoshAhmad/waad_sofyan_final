@@ -265,7 +265,17 @@ public class ClaimMapper {
                         CoverageResult result = coverageEngineService.evaluateLine(engineRequest, lineInput,
                                         batchUsageContext);
 
-                        if (claim.getStatus() == ClaimStatus.APPROVED && result.isNotCovered() && !isRejected) {
+                        // Covers two call sites: (a) a direct manual edit to an already-
+                        // APPROVED claim (updateEntityFromDto), and (b) the async
+                        // approval transition itself (recalculateForApproval), where
+                        // the claim's status is still APPROVAL_IN_PROGRESS — the final
+                        // ClaimStateMachine.transition(..., APPROVED) hasn't run yet.
+                        // Checking only APPROVED here would silently let (b) approve a
+                        // line whose coverage rule was disabled/changed after the claim
+                        // was first submitted.
+                        boolean isBeingApprovedOrAlreadyApproved = claim.getStatus() == ClaimStatus.APPROVED
+                                        || claim.getStatus() == ClaimStatus.APPROVAL_IN_PROGRESS;
+                        if (isBeingApprovedOrAlreadyApproved && result.isNotCovered() && !isRejected) {
                                 String serviceLabel = resolvedServiceName != null && !resolvedServiceName.isBlank()
                                                 ? resolvedServiceName
                                                 : (lineDto.getServiceCode() != null ? lineDto.getServiceCode() : "الخدمة");

@@ -63,9 +63,11 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        long countByMemberIdAndActiveTrue(Long memberId);
 
        /**
-        * Count pre-authorizations by policy ID
+        * Count pre-authorizations EVER linked to a policy — including
+        * cancelled/soft-deleted ones. See ClaimRepository#countByPolicyId
+        * for why cancelled records must still count toward the edit lock.
         */
-       @Query("SELECT COUNT(p) FROM PreAuthorization p WHERE p.active = true AND p.policyId = :policyId")
+       @Query("SELECT COUNT(p) FROM PreAuthorization p WHERE p.policyId = :policyId")
        long countByPolicyId(@Param("policyId") Long policyId);
 
 

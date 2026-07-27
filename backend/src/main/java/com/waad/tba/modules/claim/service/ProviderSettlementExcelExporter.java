@@ -370,15 +370,15 @@ public class ProviderSettlementExcelExporter {
                         int col = 0;
 
                         row.createCell(col++)
-                                .setCellValue(claim.getClaimNumber() != null ? claim.getClaimNumber() : "");
+                                .setCellValue(sanitize(claim.getClaimNumber()));
                         row.createCell(col++)
-                                .setCellValue(claim.getPreAuthNumber() != null ? claim.getPreAuthNumber() : "");
+                                .setCellValue(sanitize(claim.getPreAuthNumber()));
                         row.createCell(col++)
-                                .setCellValue(claim.getPatientName() != null ? claim.getPatientName() : "");
+                                .setCellValue(sanitize(claim.getPatientName()));
                         row.createCell(col++)
-                                .setCellValue(claim.getInsuranceNumber() != null ? claim.getInsuranceNumber() : "");
-                        row.createCell(col++).setCellValue(line.getServiceCode() != null ? line.getServiceCode() : "");
-                        row.createCell(col++).setCellValue(line.getServiceName() != null ? line.getServiceName() : "");
+                                .setCellValue(sanitize(claim.getInsuranceNumber()));
+                        row.createCell(col++).setCellValue(sanitize(line.getServiceCode()));
+                        row.createCell(col++).setCellValue(sanitize(line.getServiceName()));
 
                         Cell dateCell = row.createCell(col++);
                         if (line.getServiceDate() != null) {
@@ -429,12 +429,12 @@ public class ProviderSettlementExcelExporter {
                     Row row = sheet.createRow(rowNum++);
                     int col = 0;
 
-                    row.createCell(col++).setCellValue(claim.getClaimNumber() != null ? claim.getClaimNumber() : "");
+                    row.createCell(col++).setCellValue(sanitize(claim.getClaimNumber()));
                     row.createCell(col++)
-                            .setCellValue(claim.getPreAuthNumber() != null ? claim.getPreAuthNumber() : "");
-                    row.createCell(col++).setCellValue(claim.getPatientName() != null ? claim.getPatientName() : "");
+                            .setCellValue(sanitize(claim.getPreAuthNumber()));
+                    row.createCell(col++).setCellValue(sanitize(claim.getPatientName()));
                     row.createCell(col++)
-                            .setCellValue(claim.getInsuranceNumber() != null ? claim.getInsuranceNumber() : "");
+                            .setCellValue(sanitize(claim.getInsuranceNumber()));
                     row.createCell(col++).setCellValue("-"); // Service code
                     row.createCell(col++).setCellValue("إجمالي المطالبة"); // Service name
 
@@ -532,6 +532,13 @@ public class ProviderSettlementExcelExporter {
 
     private BigDecimal safe(BigDecimal value) {
         return value != null ? value : BigDecimal.ZERO;
+    }
+
+    /** Prevents Excel formula injection on user-controlled string fields
+     * (patient name, insurance number, service name, claim/pre-auth numbers)
+     * — see {@link com.waad.tba.common.excel.ExcelSanitizer}. */
+    private String sanitize(String value) {
+        return com.waad.tba.common.excel.ExcelSanitizer.sanitize(value != null ? value : "");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

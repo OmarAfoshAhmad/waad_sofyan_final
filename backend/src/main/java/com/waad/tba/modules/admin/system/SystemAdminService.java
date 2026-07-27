@@ -10,6 +10,8 @@ import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.visit.repository.VisitRepository;
+import com.waad.tba.security.audit.SecurityAuditEvent;
+import com.waad.tba.security.audit.SecurityAuditService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,12 +32,20 @@ public class SystemAdminService {
     private final VisitRepository visitRepository;
     private final MemberRepository memberRepository;
     private final EmployerRepository employerRepository;
+    private final SecurityAuditService securityAuditService;
 
     @Value("${spring.profiles.active:}")
     private String activeProfile;
 
     private void requireNonProductionProfile(String operation) {
-        if ("prod".equalsIgnoreCase(activeProfile) || "production".equalsIgnoreCase(activeProfile)) {
+        // spring.profiles.active can be a comma-separated list (e.g.
+        // "prod,metrics") — comparing the whole raw string against "prod"
+        // silently passed for any multi-profile activation, re-opening
+        // deleteAll() in production. Check each token individually.
+        boolean isProduction = activeProfile != null && java.util.Arrays.stream(activeProfile.split(","))
+                .map(String::trim)
+                .anyMatch(p -> p.equalsIgnoreCase("prod") || p.equalsIgnoreCase("production"));
+        if (isProduction) {
             log.error("⛔ Blocked destructive admin operation '{}' — active profile is '{}'", operation, activeProfile);
             throw new BusinessRuleException(
                     "هذه العملية غير متاحة في بيئة الإنتاج: " + operation);
@@ -46,6 +56,20 @@ public class SystemAdminService {
     public ApiResponse<Void> resetTestData() {
         requireNonProductionProfile("resetTestData");
         log.warn("Resetting test data (excluding RBAC tables)...");
+
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String actorUsername = auth != null ? auth.getName() : "system";
+        // A destructive database wipe must leave a queryable forensic
+        // record independent of application logs, which rotate/expire —
+        // previously this was only a log.warn line.
+        securityAuditService.logSecurityEvent(null, actorUsername,
+                SecurityAuditEvent.AuditActionType.CONFIGURATION_CHANGED,
+                "SYSTEM", null, "resetTestData", null, null,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                "Destructive test-data reset: claims, visits, members, employers deleted",
+                null, null);
+
         claimRepository.deleteAll();
         visitRepository.deleteAll();
         memberRepository.deleteAll();

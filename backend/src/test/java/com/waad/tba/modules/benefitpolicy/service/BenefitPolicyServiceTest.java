@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyCreateDto;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyResponseDto;
+import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyUpdateDto;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
@@ -46,6 +47,10 @@ class BenefitPolicyServiceTest {
     private BenefitPolicyRuleRepository benefitPolicyRuleRepository;
     @Mock
     private BenefitLimitBucketRepository benefitLimitBucketRepository;
+    @Mock
+    private com.waad.tba.modules.claim.repository.ClaimRepository claimRepository;
+    @Mock
+    private com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository preAuthorizationRepository;
 
     @InjectMocks
     private BenefitPolicyService benefitPolicyService;
@@ -207,5 +212,93 @@ class BenefitPolicyServiceTest {
         assertThat(policy.isActive()).isFalse();
         assertThat(policy.getStatus()).isEqualTo(BenefitPolicyStatus.CANCELLED);
         verify(benefitPolicyRepository).save(policy);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Regression coverage: a policy must stay permanently locked once ANY
+    // claim/pre-auth was ever created against it — including cancelled
+    // (soft-deleted) ones. Previously canPolicyBeEdited counted only
+    // active=true rows, so cancelling the one claim that existed would
+    // silently re-open a live policy's rules/limits for editing.
+    // ═══════════════════════════════════════════════════════════════════
+
+    @Test
+    void update_policyWithAnyEverLinkedClaim_isBlockedEvenIfThatClaimWasCancelled() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        // countByPolicyId now counts regardless of active/cancelled status —
+        // simulate a policy whose only claim was later cancelled.
+        when(claimRepository.countByPolicyId(10L)).thenReturn(1L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+
+        BenefitPolicyUpdateDto dto = BenefitPolicyUpdateDto.builder().name("Renamed").build();
+
+        assertThatThrownBy(() -> benefitPolicyService.update(10L, dto))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("لا يمكن تعديل");
+    }
+
+    @Test
+    void update_policyNeverLinkedToAnyClaim_isEditable() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(claimRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenAnswer(i -> i.getArgument(0));
+
+        BenefitPolicyUpdateDto dto = BenefitPolicyUpdateDto.builder().name("Renamed").build();
+
+        BenefitPolicyResponseDto result = benefitPolicyService.update(10L, dto);
+
+        assertThat(result.getName()).isEqualTo("Renamed");
+    }
+
+    @Test
+    void update_attemptingStatusTransition_isRejectedRegardlessOfLinkage() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(claimRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+
+        BenefitPolicyUpdateDto dto = BenefitPolicyUpdateDto.builder().status("ACTIVE").build();
+
+        assertThatThrownBy(() -> benefitPolicyService.update(10L, dto))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("التعديل المباشر");
+    }
+
+    @Test
+    void update_statusFieldEqualToCurrentStatus_isANoOpNotAnError() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(claimRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(benefitPolicyRepository.save(any(BenefitPolicy.class))).thenAnswer(i -> i.getArgument(0));
+
+        // policy is DRAFT in setUp(); round-tripping the same value must not throw.
+        BenefitPolicyUpdateDto dto = BenefitPolicyUpdateDto.builder().status("DRAFT").build();
+
+        BenefitPolicyResponseDto result = benefitPolicyService.update(10L, dto);
+
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void assertDraftConfiguration_blocksEvenWhenPolicyStatusIsStillDraft_ifEverFinanciallyLinked() {
+        // Financial-linkage check must be unconditional, not gated on
+        // status != DRAFT — a policy that somehow carries claim history
+        // while still marked DRAFT must not be exempted.
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(claimRepository.countByPolicyId(10L)).thenReturn(1L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+
+        assertThatThrownBy(() -> benefitPolicyService.assertDraftConfiguration(10L))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void assertDraftConfiguration_allowsWhenNeverLinked() {
+        when(benefitPolicyRepository.findById(10L)).thenReturn(Optional.of(policy));
+        when(claimRepository.countByPolicyId(10L)).thenReturn(0L);
+        when(preAuthorizationRepository.countByPolicyId(10L)).thenReturn(0L);
+
+        benefitPolicyService.assertDraftConfiguration(10L);
+        // no exception
     }
 }

@@ -29,8 +29,31 @@ public class ProviderUserExcelImportService {
     private final ProviderRepository providerRepository;
     private final UserService userService;
 
-    private static final String DEFAULT_PASSWORD = "Aa@1234567";
     private static final String PROVIDER_USERS_MODULE = "ProviderUsers";
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+
+    /**
+     * A single hardcoded default password shared by every imported row with
+     * a blank password column would mean any bulk import (e.g. 200 provider
+     * staff) creates that many accounts sharing one well-known credential —
+     * generate a unique random one per row instead.
+     */
+    private String generateRandomPassword() {
+        String upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        String lower = "abcdefghijkmnpqrstuvwxyz";
+        String digits = "23456789";
+        String symbols = "@#$%";
+        StringBuilder sb = new StringBuilder();
+        sb.append(upper.charAt(RANDOM.nextInt(upper.length())));
+        sb.append(lower.charAt(RANDOM.nextInt(lower.length())));
+        sb.append(digits.charAt(RANDOM.nextInt(digits.length())));
+        sb.append(symbols.charAt(RANDOM.nextInt(symbols.length())));
+        String all = upper + lower + digits + symbols;
+        for (int i = 0; i < 8; i++) {
+            sb.append(all.charAt(RANDOM.nextInt(all.length())));
+        }
+        return sb.toString();
+    }
 
     public byte[] generateTemplate() throws IOException {
         List<ExcelTemplateColumn> columns = getTemplateColumns();
@@ -39,6 +62,8 @@ public class ProviderUserExcelImportService {
     }
 
     public ExcelImportResult importUsers(MultipartFile file) {
+        com.waad.tba.common.excel.ExcelUploadValidator.validate(file);
+
         ExcelImportResult result = new ExcelImportResult();
         com.waad.tba.common.excel.dto.ExcelImportResult.ImportSummary summary = result.getSummary();
 
@@ -64,8 +89,9 @@ public class ProviderUserExcelImportService {
                     String providerValue = excelParserService.getCellValueAsString(row.getCell(4));
                     String password = excelParserService.getCellValueAsString(row.getCell(5));
 
-                    if (password == null || password.trim().isEmpty()) {
-                        password = DEFAULT_PASSWORD;
+                    boolean generatedPassword = password == null || password.trim().isEmpty();
+                    if (generatedPassword) {
+                        password = generateRandomPassword();
                     }
 
                     if (providerValue == null || !providerValue.contains(" - ")) {
@@ -86,11 +112,23 @@ public class ProviderUserExcelImportService {
 
                     userService.create(dto);
                     summary.setCreated(summary.getCreated() + 1);
-                } catch (Exception e) {
+                    if (generatedPassword) {
+                        log.info("Provider user '{}' created with an auto-generated password — share it with them out of band; it is not returned in the API response.", username);
+                    }
+                } catch (IllegalArgumentException e) {
+                    // Validation errors are meant for the caller (e.g. "select a
+                    // valid provider"), unlike unexpected internal exceptions below.
                     summary.setFailed(summary.getFailed() + 1);
                     result.getErrors().add(com.waad.tba.common.excel.dto.ExcelImportResult.ImportError.builder()
                             .rowNumber(rowNumber)
                             .messageAr("استيراد المستخدم: " + e.getMessage())
+                            .build());
+                } catch (Exception e) {
+                    log.error("Unexpected error importing provider user at row {}", rowNumber, e);
+                    summary.setFailed(summary.getFailed() + 1);
+                    result.getErrors().add(com.waad.tba.common.excel.dto.ExcelImportResult.ImportError.builder()
+                            .rowNumber(rowNumber)
+                            .messageAr("تعذر استيراد هذا الصف")
                             .build());
                 }
             }
@@ -99,7 +137,7 @@ public class ProviderUserExcelImportService {
             log.error("Failed to parse Excel file", e);
             result.getErrors().add(com.waad.tba.common.excel.dto.ExcelImportResult.ImportError.builder()
                     .rowNumber(0)
-                    .messageAr("فشل في قراءة الملف: " + e.getMessage())
+                    .messageAr("فشل في قراءة الملف")
                     .build());
         }
 

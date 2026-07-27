@@ -321,6 +321,16 @@ public class BenefitStructureService {
         groupRepository.delete(group);
     }
 
+    /**
+     * A bucket carries live financial exposure if it has a RESERVED/COMMITTED
+     * consumption row for any claim that hasn't been rejected or cancelled —
+     * not just claims already APPROVED/BATCHED/SETTLED. A claim that is still
+     * SUBMITTED/UNDER_REVIEW/NEEDS_CORRECTION/APPROVAL_IN_PROGRESS has
+     * already reserved capacity against this bucket; deleting the bucket out
+     * from under it would silently free that capacity for other claims to
+     * consume, then leave the original claim's later approval unaccounted
+     * for (double-consumption risk).
+     */
     private void assertBucketHasNoFinancialHistory(BenefitLimitBucket bucket) {
         Number activeFinancialCount = (Number) em.createNativeQuery("""
                 SELECT COUNT(1)
@@ -328,7 +338,7 @@ public class BenefitStructureService {
                 JOIN claims c ON c.id = bbc.claim_id
                 WHERE bbc.bucket_id = :bucketId
                   AND bbc.status IN ('RESERVED', 'COMMITTED')
-                  AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                  AND c.status <> 'REJECTED'
                   AND COALESCE(c.active, true) = true
                   AND c.deleted_at IS NULL
                 """)
@@ -341,6 +351,7 @@ public class BenefitStructureService {
         }
     }
 
+    /** Mirrors assertBucketHasNoFinancialHistory's definition of "live" — see its Javadoc. */
     private void detachNonFinancialBucketConsumptionHistory(BenefitLimitBucket bucket) {
         int removedCount = em.createNativeQuery("""
                 DELETE FROM benefit_bucket_consumptions bbc
@@ -349,7 +360,7 @@ public class BenefitStructureService {
                   AND bbc.bucket_id = :bucketId
                   AND NOT (
                     bbc.status IN ('RESERVED', 'COMMITTED')
-                    AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                    AND c.status <> 'REJECTED'
                     AND COALESCE(c.active, true) = true
                     AND c.deleted_at IS NULL
                   )

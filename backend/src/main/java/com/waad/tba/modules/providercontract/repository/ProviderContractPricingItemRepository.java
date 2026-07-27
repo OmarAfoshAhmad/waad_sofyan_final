@@ -47,6 +47,13 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
         */
        long countByContractIdAndActiveTrue(Long contractId);
 
+       /**
+        * Count pricing items EVER referencing a medical category — including
+        * inactive/soft-deleted ones. Used to block deleting a medical
+        * category that provider contract pricing still points at.
+        */
+       long countByMedicalCategoryId(Long medicalCategoryId);
+
        // ═══════════════════════════════════════════════════════════════════════════
        // FIND BY SERVICE
        // ═══════════════════════════════════════════════════════════════════════════

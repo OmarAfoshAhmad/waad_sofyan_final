@@ -39,7 +39,7 @@ public class BenefitStructureController {
     }
 
     @PostMapping("/cleanup")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MEDICAL_REVIEWER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> cleanupOrphanedData(@PathVariable Long policyId) {
         policyService.assertDraftConfiguration(policyId);
         service.cleanupOrphanedData(policyId);

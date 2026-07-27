@@ -46,6 +46,24 @@ public class MedicalCategoryService {
 
     private final MedicalCategoryRepository categoryRepository;
     private final MedicalServiceRepository serviceRepository;
+    private final com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository benefitPolicyRuleRepository;
+    private final com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository pricingItemRepository;
+
+    /**
+     * A category referenced by any medical service, benefit-policy coverage
+     * rule, or provider contract pricing item — even one that's since been
+     * deactivated or soft-deleted — represents financial history that must
+     * not be silently orphaned by deleting the category itself.
+     */
+    private void assertNotFinanciallyLinked(Long categoryId) {
+        long serviceCount = serviceRepository.countByCategoryId(categoryId);
+        long ruleCount = benefitPolicyRuleRepository.countByMedicalCategoryId(categoryId);
+        long pricingCount = pricingItemRepository.countByMedicalCategoryId(categoryId);
+        if (serviceCount > 0 || ruleCount > 0 || pricingCount > 0) {
+            throw new BusinessRuleException(
+                    "لا يمكن حذف هذا التصنيف لارتباطه بخدمات طبية أو قواعد تغطية أو أسعار عقود فعلية.");
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CREATE
@@ -212,7 +230,8 @@ public class MedicalCategoryService {
         MedicalCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Medical category not found: " + id));
 
-        // Soft delete — no service/specialty dependency check (tables not yet migrated)
+        assertNotFinanciallyLinked(id);
+
         category.setActive(false);
         category.setDeleted(true);
         categoryRepository.save(category);
@@ -228,6 +247,8 @@ public class MedicalCategoryService {
             throw new BusinessRuleException("Medical category not found: " + id);
         }
 
+        assertNotFinanciallyLinked(id);
+
         categoryRepository.deleteById(id);
 
         log.info("✅ Hard-deleted (permanent) medical category: {}", id);
@@ -239,8 +260,11 @@ public class MedicalCategoryService {
         if (ids == null || ids.isEmpty()) {
             return;
         }
-        
+
         List<MedicalCategory> categories = categoryRepository.findAllById(ids);
+        for (MedicalCategory category : categories) {
+            assertNotFinanciallyLinked(category.getId());
+        }
         for (MedicalCategory category : categories) {
             category.setActive(false);
             category.setDeleted(true);

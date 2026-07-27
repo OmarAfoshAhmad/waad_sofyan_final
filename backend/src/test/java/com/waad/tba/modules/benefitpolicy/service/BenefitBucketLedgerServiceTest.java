@@ -238,8 +238,11 @@ class BenefitBucketLedgerServiceTest {
         assertEquals(LocalDate.of(2027, 3, 31), captor.getValue().getPeriodEnd());
     }
     @Test
-    @DisplayName("الفترة الأسبوعية تحفظ أسبوع السبت إلى الجمعة حول تاريخ الخدمة")
-    void weeklyPeriodUsesSaturdayToFridayWindow() {
+    @DisplayName("الفترة الأسبوعية ترتكز على بداية الوثيقة لا على السبت التقويمي")
+    void weeklyPeriodAnchorsToPolicyStartNotCalendarSaturday() {
+        // policy starts 2026-01-01 (a Thursday); WEEKLY is a rolling 7-day
+        // window anchored to that date, not the calendar week (was
+        // previously hardcoded to Saturday-Friday regardless of policy start).
         claim.setServiceDate(LocalDate.of(2026, 7, 27));
         bucket.setPeriodType(LimitPeriodType.WEEKLY);
 
@@ -248,8 +251,30 @@ class BenefitBucketLedgerServiceTest {
         ArgumentCaptor<BenefitBucketConsumption> captor =
                 ArgumentCaptor.forClass(BenefitBucketConsumption.class);
         verify(consumptionRepository).save(captor.capture());
-        assertEquals(LocalDate.of(2026, 7, 25), captor.getValue().getPeriodStart());
-        assertEquals(LocalDate.of(2026, 7, 31), captor.getValue().getPeriodEnd());
+        assertEquals(LocalDate.of(2026, 7, 23), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2026, 7, 29), captor.getValue().getPeriodEnd());
+    }
+
+    @Test
+    @DisplayName("الفترة الربعية ترتكز على بداية الوثيقة لا على السنة الميلادية")
+    void quarterlyPeriodAnchorsToPolicyStartNotCalendarYear() {
+        // A policy starting mid-year must reset quarterly buckets every 3
+        // months from ITS start date, not from January — otherwise a
+        // policy starting 2026-03-18 would get a Q1 boundary on Jan 1
+        // that has nothing to do with when coverage actually began.
+        policy.setStartDate(LocalDate.of(2026, 3, 18));
+        policy.setEndDate(LocalDate.of(2027, 3, 17));
+        claim.setServiceDate(LocalDate.of(2026, 7, 27));
+        bucket.setPeriodType(LimitPeriodType.QUARTERLY);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        // Quarters from 2026-03-18: Q1 [03-18,06-17], Q2 [06-18,09-17] <- 07-27 falls here
+        assertEquals(LocalDate.of(2026, 6, 18), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2026, 9, 17), captor.getValue().getPeriodEnd());
     }
 
     @Test

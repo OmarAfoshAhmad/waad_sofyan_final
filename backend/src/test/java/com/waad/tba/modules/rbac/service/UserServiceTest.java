@@ -100,4 +100,48 @@ public class UserServiceTest {
         verify(userRepository, never()).save(any());
         verify(sessionManagementService, never()).revokeAll(anyString());
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Settings & permissions closure round: update() previously had no
+    // SUPER_ADMIN protection at all, unlike delete()/toggleStatus() — a
+    // SUPER_ADMIN could demote the LAST active SUPER_ADMIN account to any
+    // other role via a plain update, permanently locking out all
+    // administrative access with no recovery path.
+    // ═══════════════════════════════════════════════════════════════════
+
+    @Test
+    void updateRejectsDemotingTheLastActiveSuperAdmin() {
+        User superAdmin = User.builder().id(5L).username("superadmin")
+                .email("admin@example.com").userType("SUPER_ADMIN").active(true).build();
+        when(userRepository.findById(5L)).thenReturn(Optional.of(superAdmin));
+        lenient().when(userRepository.existsByUsernameIgnoreCase(anyString())).thenReturn(false);
+        lenient().when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        when(userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN")).thenReturn(1L);
+
+        com.waad.tba.modules.rbac.dto.UserUpdateDto dto = com.waad.tba.modules.rbac.dto.UserUpdateDto.builder()
+                .username("superadmin").email("admin@example.com").userType("DATA_ENTRY").build();
+
+        assertThrows(IllegalArgumentException.class, () -> userService.update(5L, dto));
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateAllowsDemotingASuperAdminWhenAnotherOneRemainsActive() {
+        User superAdmin = User.builder().id(5L).username("superadmin")
+                .email("admin@example.com").userType("SUPER_ADMIN").active(true).build();
+        when(userRepository.findById(5L)).thenReturn(Optional.of(superAdmin));
+        lenient().when(userRepository.existsByUsernameIgnoreCase(anyString())).thenReturn(false);
+        lenient().when(userRepository.existsByEmailIgnoreCase(anyString())).thenReturn(false);
+        when(userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN")).thenReturn(2L);
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userMapper.toResponseDto(any())).thenReturn(com.waad.tba.modules.rbac.dto.UserResponseDto.builder().build());
+
+        com.waad.tba.modules.rbac.dto.UserUpdateDto dto = com.waad.tba.modules.rbac.dto.UserUpdateDto.builder()
+                .username("superadmin").email("admin@example.com").userType("DATA_ENTRY").build();
+
+        userService.update(5L, dto);
+
+        verify(userRepository).save(any());
+    }
 }

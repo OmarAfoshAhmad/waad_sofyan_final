@@ -68,7 +68,7 @@ public class MedicalCategoryController {
     // ═══════════════════════════════════════════════════════════════════════════
 
     @GetMapping("/all")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "List all active categories", description = "Get list of all active medical categories (non-paginated)")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findAllList() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/all");
@@ -79,7 +79,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get category by ID", description = "Retrieve a medical category by its ID")
     public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findById(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}", id);
@@ -90,7 +90,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "List all categories", description = "Get paginated list of all medical categories with optional filters")
     public ResponseEntity<ApiResponse<Page<MedicalCategoryResponseDto>>> findAll(
             @Parameter(description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
@@ -122,7 +122,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/code/{code}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get category by code", description = "Retrieve a medical category by its unique code")
     public ResponseEntity<ApiResponse<MedicalCategoryResponseDto>> findByCode(@PathVariable("code") String code) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/code/{}", code);
@@ -133,7 +133,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/{id}/children")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Legacy subcategories endpoint", description = "Hierarchy is disabled; returns an empty list")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findChildren(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/children", id);
@@ -158,7 +158,7 @@ public class MedicalCategoryController {
      * Resolution
      */
     @GetMapping("/{id}/medical-services")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Get services by category (CANONICAL)", description = "Get all active medical services belonging to this category. "
             +
             "This is the canonical endpoint for service selection - services MUST be filtered by category first.")
@@ -167,13 +167,15 @@ public class MedicalCategoryController {
 
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/medical-services - Canonical service lookup", id);
 
+        // Validate the category itself exists — a genuinely missing category
+        // must still 404, not silently look like "no services yet".
+        categoryService.findById(id);
+
         List<MedicalServiceResponseDto> services;
         try {
-            // Validate category exists and get services for this category.
             // Some benefit-document classifications are valid pricing buckets even when
             // the unified service catalog has no child services yet; in that case the UI
             // must still allow free-text service pricing instead of failing with 500.
-            categoryService.findById(id);
             services = categoryService.findServicesByCategory(id);
         } catch (Exception ex) {
             log.warn("[MEDICAL-CATEGORIES] Could not load services for category {}. Returning empty list for free-text pricing. reason={}",
@@ -187,7 +189,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/tree")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Legacy category tree endpoint", description = "Hierarchy is disabled; returns a flat active category list")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> getCategoryTree() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/tree");
@@ -198,7 +200,7 @@ public class MedicalCategoryController {
     }
 
     @GetMapping("/root")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER', 'DATA_ENTRY')")
     @Operation(summary = "Legacy root categories endpoint", description = "Hierarchy is disabled; returns all active categories")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findRootCategories() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/root");

@@ -49,6 +49,8 @@ import lombok.extern.slf4j.Slf4j;
 @PreAuthorize("isAuthenticated()")
 public class MemberImportController {
 
+        private static final long MAX_UPLOAD_BYTES = 20L * 1024 * 1024; // 20MB, below the 60MB global multipart cap
+
         private final MemberExcelImportService importService;
         private final ExcelColumnMappingService columnMappingService;
         private final MemberImportLogRepository importLogRepository;
@@ -83,6 +85,10 @@ public class MemberImportController {
                                 return ResponseEntity.badRequest()
                                                 .body(ApiResponse.error("يجب رفع ملف Excel (.xlsx أو .xls)"));
                         }
+                        if (file.getSize() > MAX_UPLOAD_BYTES) {
+                                return ResponseEntity.badRequest()
+                                                .body(ApiResponse.error("حجم الملف يتجاوز الحد المسموح به (20 ميجابايت)"));
+                        }
 
                         // Detect columns and suggest mappings
                         ExcelColumnDetectionDto detection = columnMappingService.detectColumns(file);
@@ -102,9 +108,9 @@ public class MemberImportController {
                                         .body(ApiResponse.error(e.getMessage()));
 
                 } catch (Exception e) {
-                        log.error("❌ [Column Detection] Error analyzing file: {}", e.getMessage(), e);
+                        log.error("❌ [Column Detection] Error analyzing file", e);
                         return ResponseEntity.internalServerError()
-                                        .body(ApiResponse.error("خطأ في تحليل الملف: " + e.getMessage()));
+                                        .body(ApiResponse.error("خطأ في تحليل الملف"));
                 }
         }
 
@@ -143,14 +149,18 @@ public class MemberImportController {
                         return ResponseEntity.badRequest()
                                         .body(ApiResponse.error("يجب رفع ملف Excel (.xlsx أو .xls)"));
                 }
+                if (file.getSize() > MAX_UPLOAD_BYTES) {
+                        return ResponseEntity.badRequest()
+                                        .body(ApiResponse.error("حجم الملف يتجاوز الحد المسموح به (20 ميجابايت)"));
+                }
 
                 try {
                         MemberImportPreviewDto preview = importService.parseAndPreview(file, customMappings);
                         return ResponseEntity.ok(ApiResponse.success("تم تحليل الملف بنجاح", preview));
                 } catch (Exception e) {
-                        log.error("❌ Preview failed: {}", e.getMessage(), e);
+                        log.error("❌ Preview failed", e);
                         return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error("فشل تحليل الملف: " + e.getMessage()));
+                                        .body(ApiResponse.error("فشل تحليل الملف"));
                 }
         }
 
@@ -186,6 +196,15 @@ public class MemberImportController {
                         return ResponseEntity.badRequest()
                                         .body(ApiResponse.error("الملف فارغ"));
                 }
+                String executeFileName = file.getOriginalFilename();
+                if (executeFileName == null || (!executeFileName.endsWith(".xlsx") && !executeFileName.endsWith(".xls"))) {
+                        return ResponseEntity.badRequest()
+                                        .body(ApiResponse.error("يجب رفع ملف Excel (.xlsx أو .xls)"));
+                }
+                if (file.getSize() > MAX_UPLOAD_BYTES) {
+                        return ResponseEntity.badRequest()
+                                        .body(ApiResponse.error("حجم الملف يتجاوز الحد المسموح به (20 ميجابايت)"));
+                }
 
                 // Validate employer is provided
                 if (employerId == null) {
@@ -214,9 +233,9 @@ public class MemberImportController {
                         }
 
                 } catch (Exception e) {
-                        log.error("❌ Import failed: {}", e.getMessage(), e);
+                        log.error("❌ Import failed", e);
                         return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error("فشل الاستيراد: " + e.getMessage()));
+                                        .body(ApiResponse.error("فشل الاستيراد"));
                 }
         }
 

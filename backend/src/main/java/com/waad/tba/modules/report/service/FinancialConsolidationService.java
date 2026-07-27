@@ -22,12 +22,17 @@ public class FinancialConsolidationService {
 
     @Transactional(readOnly = true)
     public List<FinancialConsolidationDto> getMonthlyFinancialConsolidation(int year) {
+        // NOTE: COALESCE fallbacks use the integer literal 0, not 0.0 — a
+        // double literal here would force Hibernate to promote the whole
+        // SUM to a floating-point result type even though every source
+        // column is BigDecimal, reintroducing binary floating-point drift
+        // into money totals that this report is supposed to be authoritative on.
         String jpql = "SELECT c.member.employer.name, MONTH(c.serviceDate), " +
-                      "SUM(COALESCE(c.requestedAmount, 0.0)), " +
-                      "SUM(COALESCE(c.netProviderAmount, COALESCE(c.approvedAmount, 0.0))), " +
-                      "SUM(COALESCE(c.refusedAmount, 0.0)), " +
-                      "SUM(COALESCE(c.paidAmount, 0.0)), " +
-                      "SUM(COALESCE(c.companyDiscountAmount, 0.0)) " +
+                      "SUM(COALESCE(c.requestedAmount, 0)), " +
+                      "SUM(COALESCE(c.netProviderAmount, COALESCE(c.approvedAmount, 0))), " +
+                      "SUM(COALESCE(c.refusedAmount, 0)), " +
+                      "SUM(COALESCE(c.paidAmount, 0)), " +
+                      "SUM(COALESCE(c.companyDiscountAmount, 0)) " +
                       "FROM Claim c " +
                       "WHERE YEAR(c.serviceDate) = :year " +
                       "AND c.active = true " +

@@ -241,15 +241,19 @@ public class ProviderSettlementReportService {
                         return statuses;
                 }
 
+                // Default (no explicit filter) must only include claims that
+                // actually represent money owed to the provider — APPROVED/
+                // BATCHED/SETTLED. Previously defaulted to every status
+                // including SUBMITTED/UNDER_REVIEW/NEEDS_CORRECTION/REJECTED,
+                // so totalRequested/netProvider (which sum every claim
+                // returned with no per-status split) silently included
+                // pending and rejected claims in the provider's "amount
+                // owed" figure whenever the caller didn't pass an explicit
+                // status filter — which is what the UI does by default.
                 return List.of(
-                                ClaimStatus.SUBMITTED,
-                                ClaimStatus.UNDER_REVIEW,
-                                ClaimStatus.NEEDS_CORRECTION,
-                                ClaimStatus.APPROVAL_IN_PROGRESS,
                                 ClaimStatus.APPROVED,
                                 ClaimStatus.BATCHED,
-                                ClaimStatus.SETTLED,
-                                ClaimStatus.REJECTED);
+                                ClaimStatus.SETTLED);
         }
 
         /**

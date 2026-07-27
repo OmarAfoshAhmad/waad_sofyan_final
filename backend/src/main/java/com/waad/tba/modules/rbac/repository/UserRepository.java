@@ -17,6 +17,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Boolean existsByEmail(String email);
     Boolean existsByUsernameIgnoreCase(String username);
     Boolean existsByEmailIgnoreCase(String email);
+
+    /**
+     * Count active SUPER_ADMIN accounts — used to block demoting/deactivating
+     * the last one, which would lock out all administrative access with no
+     * recovery path.
+     */
+    long countByUserTypeAndActiveTrue(String userType);
     
     @Query("SELECT u FROM User u WHERE " +
            "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +

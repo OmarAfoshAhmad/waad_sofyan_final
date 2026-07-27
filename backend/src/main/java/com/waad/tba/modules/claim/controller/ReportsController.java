@@ -63,8 +63,14 @@ public class ReportsController {
      * - المبالغ المستقطعة (تحمل المريض)
      * - المبالغ المستحقة للدفع
      */
+    // NOTE (2026-07-27): restricted to internal finance staff. This report
+    // aggregates across ALL employers/providers with no scoping mechanism
+    // (AdjudicationReportService has no employerId/providerId scope param at
+    // all) — EMPLOYER_ADMIN/PROVIDER_STAFF/MEDICAL_REVIEWER previously saw
+    // every other tenant's adjudication totals via the free-text
+    // providerName filter.
     @GetMapping("/adjudication")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(
         summary = "تقرير التدقيق المالي",
         description = "يُظهر: المطلوب | المستقطع (تحمل المريض) | المستحق للمستشفى"
@@ -94,8 +100,10 @@ public class ReportsController {
      * تقرير التسوية لمقدم خدمة معين:
      * - المطالبات الموافق عليها والجاهزة للدفع
      */
+    // Same scoping gap as /adjudication above — restricted to internal
+    // finance staff.
     @GetMapping("/provider-settlement")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(
         summary = "تقرير تسوية مقدم الخدمة",
         description = "المطالبات الموافق عليها والجاهزة للتسوية"
@@ -123,13 +131,23 @@ public class ReportsController {
     )
     public ResponseEntity<ApiResponse<AdjudicationReportDto>> getMemberStatement(
             @PathVariable("memberId") Long memberId,
-            
+
             @Parameter(description = "تاريخ البداية (اختياري)")
             @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-            
+
             @Parameter(description = "تاريخ النهاية (اختياري)")
             @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
-        
+
+        // ACCOUNTANT/FINANCE_VIEWER/MEDICAL_REVIEWER are legitimately org-wide
+        // internal staff (matches canAccessMember's own convention elsewhere);
+        // only EMPLOYER_ADMIN must be confined to their own employer's members.
+        var currentUser = authorizationService.getCurrentUser();
+        if (authorizationService.isEmployerAdmin(currentUser)
+                && !authorizationService.canAccessMember(currentUser, memberId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("لا تملك صلاحية الوصول إلى كشف حساب هذا العضو"));
+        }
+
         // Default to current year if dates not specified
         if (fromDate == null) {
             fromDate = LocalDate.now().withDayOfYear(1);
@@ -147,8 +165,10 @@ public class ReportsController {
     /**
      * Get Summary Statistics for Dashboard.
      */
+    // Same scoping gap as /adjudication above — restricted to internal
+    // finance staff (unscoped system-wide monthly summary).
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER')")
     @Operation(
         summary = "ملخص الإحصائيات",
         description = "إحصائيات سريعة للوحة التحكم"
@@ -194,8 +214,10 @@ public class ReportsController {
             @Parameter(description = "تاريخ النهاية (اختياري)")
             @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(
+            authorizationService.getCurrentUser(), employerOrgId);
         ClaimFinancialSummaryDto summary = claimFinancialSummaryService.getFinancialSummary(
-            employerOrgId, fromDate, toDate);
+            scopedEmployerId, fromDate, toDate);
         
         return ResponseEntity.ok(ApiResponse.success("تم استرجاع الملخص المالي", summary));
     }
@@ -207,8 +229,12 @@ public class ReportsController {
      * - المطالبات الموافق عليها والجاهزة للتسوية
      * - المبالغ المعلقة للدفع
      */
+    // PROVIDER_STAFF removed (2026-07-27): this endpoint only accepts an
+    // employerOrgId filter, with no providerId scoping mechanism at all, so
+    // a provider caller previously saw every employer's AND every competing
+    // provider's settlement totals with no way to confine it to their own.
     @GetMapping("/settlement-summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_VIEWER', 'EMPLOYER_ADMIN', 'MEDICAL_REVIEWER')")
     @Operation(
         summary = "ملخص التسويات",
         description = "إجماليات للمطالبات الموافق عليها والمسددة"
@@ -216,8 +242,10 @@ public class ReportsController {
     public ResponseEntity<ApiResponse<ClaimFinancialSummaryDto>> getSettlementSummary(
             @Parameter(description = "فلتر حسب جهة العمل (اختياري)")
             @RequestParam(name = "employerOrgId", required = false) Long employerOrgId) {
-        
-        ClaimFinancialSummaryDto summary = claimFinancialSummaryService.getSettlementSummary(employerOrgId);
+
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(
+            authorizationService.getCurrentUser(), employerOrgId);
+        ClaimFinancialSummaryDto summary = claimFinancialSummaryService.getSettlementSummary(scopedEmployerId);
         
         return ResponseEntity.ok(ApiResponse.success("تم استرجاع ملخص التسويات", summary));
     }
@@ -272,29 +300,23 @@ public class ReportsController {
             @Parameter(description = "فلترة حسب المريض")
             @RequestParam(name = "memberId", required = false) Long memberId) {
         
-        // Security: PROVIDER users can only see their own provider
-        Long effectiveProviderId = providerId;
+        // Security: a PROVIDER_STAFF caller must always be forced to their own
+        // bound provider — never to a raw request param. resolveProviderScope
+        // returns null (not the requested id) for an unlinked provider account,
+        // which correctly fails the validation below instead of falling
+        // through to whatever providerId was passed.
         var currentUser = authorizationService.getCurrentUser();
-        
-        if (currentUser != null) {
-            boolean isAdmin = authorizationService.isSuperAdmin(currentUser) || 
-                             authorizationService.isInsuranceAdmin(currentUser);
-            
-            if (!isAdmin && currentUser.getProviderId() != null) {
-                // Provider user: force their own provider ID
-                effectiveProviderId = currentUser.getProviderId();
-            }
-        }
-        
-        // Validate provider ID
+        Long effectiveProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(currentUser, employerOrgId);
+
         if (effectiveProviderId == null) {
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("معرف مقدم الخدمة مطلوب"));
         }
-        
+
         ProviderSettlementReportDto report = providerSettlementReportService.generateReport(
-            effectiveProviderId, employerOrgId, fromDate, toDate, statuses, claimNumber, preAuthNumber, memberId);
-        
+            effectiveProviderId, scopedEmployerId, fromDate, toDate, statuses, claimNumber, preAuthNumber, memberId);
+
         return ResponseEntity.ok(ApiResponse.success("تم إنشاء تقرير التسوية", report));
     }
     
@@ -375,30 +397,22 @@ public class ReportsController {
         
         log.info("📊 [EXCEL-EXPORT] Export request for provider: {}", providerId);
         
-        // Security: PROVIDER users can only see their own provider
-        Long effectiveProviderId = providerId;
+        // Security: same resolveProviderScope/resolveEmployerScope pattern as
+        // the view endpoint above — a PROVIDER_STAFF caller is always forced
+        // to their own bound provider, never to the raw request param.
         var currentUser = authorizationService.getCurrentUser();
-        
-        if (currentUser != null) {
-            boolean isAdmin = authorizationService.isSuperAdmin(currentUser) || 
-                             authorizationService.isInsuranceAdmin(currentUser);
-            
-            if (!isAdmin && currentUser.getProviderId() != null) {
-                // Provider user: force their own provider ID
-                effectiveProviderId = currentUser.getProviderId();
-            }
-        }
-        
-        // Validate provider ID
+        Long effectiveProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(currentUser, employerOrgId);
+
         if (effectiveProviderId == null) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             // Generate report using SAME service as UI (no recalculation)
             ProviderSettlementReportDto report = providerSettlementReportService.generateReport(
-                effectiveProviderId, employerOrgId, fromDate, toDate, statuses, claimNumber, preAuthNumber, memberId);
-            
+                effectiveProviderId, scopedEmployerId, fromDate, toDate, statuses, claimNumber, preAuthNumber, memberId);
+
             // Export to Excel
             byte[] excelBytes = providerSettlementExcelExporter.exportToExcel(report);
             

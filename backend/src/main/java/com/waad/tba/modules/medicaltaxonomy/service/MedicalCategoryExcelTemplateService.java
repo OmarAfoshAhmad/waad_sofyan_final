@@ -43,6 +43,19 @@ public class MedicalCategoryExcelTemplateService {
     private final ExcelTemplateService templateService;
     private final ExcelParserService parserService;
     private final MedicalCategoryRepository categoryRepository;
+    private final com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository serviceRepository;
+    private final com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository benefitPolicyRuleRepository;
+    private final com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository pricingItemRepository;
+
+    /** Mirrors MedicalCategoryService#assertNotFinanciallyLinked — a category
+     * referenced by a service, coverage rule, or contract price must not be
+     * silently deactivated by a bulk import, since findByActiveTrue() feeds
+     * live coverage/pricing resolution. */
+    private boolean isFinanciallyLinked(Long categoryId) {
+        return serviceRepository.countByCategoryId(categoryId) > 0
+                || benefitPolicyRuleRepository.countByMedicalCategoryId(categoryId) > 0
+                || pricingItemRepository.countByMedicalCategoryId(categoryId) > 0;
+    }
     
     // ═══════════════════════════════════════════════════════════════════════════
     // TEMPLATE GENERATION
@@ -157,11 +170,26 @@ public class MedicalCategoryExcelTemplateService {
             }
 
             // Destructive replacement is allowed only after the entire workbook validates.
+            // Categories still referenced by a medical service, coverage rule, or
+            // contract price are never deactivated here — findByActiveTrue() feeds
+            // live coverage/pricing resolution, so silently dropping one out from
+            // under an in-force policy would be a financial-integrity bug, not a
+            // catalog cleanup.
             if (clearOld) {
-                log.info("[MedicalCategoryImport] Validation passed; deactivating old categories...");
+                log.info("[MedicalCategoryImport] Validation passed; deactivating old, unreferenced categories...");
                 List<MedicalCategory> allCategories = categoryRepository.findAll();
-                allCategories.forEach(c -> c.setActive(false));
+                int skipped = 0;
+                for (MedicalCategory c : allCategories) {
+                    if (isFinanciallyLinked(c.getId())) {
+                        skipped++;
+                        continue;
+                    }
+                    c.setActive(false);
+                }
                 categoryRepository.saveAll(allCategories);
+                if (skipped > 0) {
+                    log.warn("[MedicalCategoryImport] Skipped deactivating {} categories with active financial references", skipped);
+                }
             }
 
             Map<String, MedicalCategory> savedByCode = new HashMap<>();
@@ -171,7 +199,13 @@ public class MedicalCategoryExcelTemplateService {
                 if (created) category.setCode(parsed.code());
                 category.setName(parsed.name());
                 category.setNameAr(parsed.name());
-                category.setActive(parsed.active());
+                boolean requestedInactive = !parsed.active();
+                if (requestedInactive && !created && isFinanciallyLinked(category.getId())) {
+                    log.warn("[MedicalCategoryImport] Row for code {} requested inactive but category has active financial references; keeping active", parsed.code());
+                    category.setActive(true);
+                } else {
+                    category.setActive(parsed.active());
+                }
                 category.setDeleted(false);
                 category.setDeletedAt(null);
                 category.setDeletedBy(null);

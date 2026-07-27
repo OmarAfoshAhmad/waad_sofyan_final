@@ -3,6 +3,8 @@ package com.waad.tba.common.service;
 import com.waad.tba.common.dto.SystemSettingDto;
 import com.waad.tba.common.entity.SystemSetting;
 import com.waad.tba.common.repository.SystemSettingRepository;
+import com.waad.tba.security.audit.SecurityAuditEvent;
+import com.waad.tba.security.audit.SecurityAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -20,6 +22,7 @@ import java.util.Locale;
 public class SettingsManagementService {
 
     private final SystemSettingRepository settingRepository;
+    private final SecurityAuditService securityAuditService;
 
     public static final String CLAIM_SLA_DAYS_KEY = "CLAIM_SLA_DAYS";
 
@@ -63,12 +66,23 @@ public class SettingsManagementService {
             throw new IllegalStateException("System setting is not editable: " + key);
         }
 
+        String oldValue = setting.getSettingValue();
         String normalizedValue = normalizeAndValidateValue(setting, value);
         setting.setSettingValue(normalizedValue);
         setting.setUpdatedBy(updatedBy);
 
         SystemSetting saved = settingRepository.save(setting);
         log.info("⚙️ Setting {} updated by {}", key, updatedBy);
+
+        // Security-relevant setting changes (password-reset policy, SLA,
+        // auth/feature-affecting keys) previously produced only this log
+        // line — no queryable audit record, unlike login/password events.
+        securityAuditService.logSecurityEvent(null, updatedBy,
+                SecurityAuditEvent.AuditActionType.SETTING_CHANGED,
+                "SYSTEM_SETTING", null, key, null, null,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                oldValue + " -> " + normalizedValue, null, null);
+
         return SystemSettingDto.from(saved);
     }
 
@@ -114,16 +128,35 @@ public class SettingsManagementService {
 
         log.info("🔄 Setting {} reset to default by {}: {} → {}",
                 key, updatedBy, oldValue, setting.getDefaultValue());
+
+        securityAuditService.logSecurityEvent(null, updatedBy,
+                SecurityAuditEvent.AuditActionType.SETTING_CHANGED,
+                "SYSTEM_SETTING", null, key, null, null,
+                SecurityAuditEvent.AuditResult.SUCCESS,
+                "reset to default: " + oldValue + " -> " + setting.getDefaultValue(), null, null);
     }
 
     private String normalizeAndValidateValue(SystemSetting setting, String value) {
         String normalized = value != null ? value.trim() : "";
         SystemSetting.SettingValueType valueType = setting.getValueType();
 
+        // Baseline invariants that must hold regardless of whether this
+        // setting's `validation_rules` column happens to be populated — a
+        // blank/null validation_rules previously meant "accept anything",
+        // so e.g. PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = -1 or 0 was
+        // persisted and served verbatim by AuthenticationSettingsService.
+        if (valueType == SystemSetting.SettingValueType.STRING && normalized.isEmpty()) {
+            throw new IllegalArgumentException("Setting " + setting.getSettingKey() + " cannot be empty");
+        }
         if (valueType == SystemSetting.SettingValueType.INTEGER) {
-            parseInteger(setting.getSettingKey(), normalized);
+            if (parseInteger(setting.getSettingKey(), normalized) < 0) {
+                throw new IllegalArgumentException("Setting " + setting.getSettingKey() + " must not be negative");
+            }
         } else if (valueType == SystemSetting.SettingValueType.DECIMAL) {
             parseDecimal(setting.getSettingKey(), normalized);
+            if (new java.math.BigDecimal(normalized).signum() < 0) {
+                throw new IllegalArgumentException("Setting " + setting.getSettingKey() + " must not be negative");
+            }
         } else if (valueType == SystemSetting.SettingValueType.BOOLEAN) {
             normalized = normalized.toLowerCase(Locale.ROOT);
             if (!"true".equals(normalized) && !"false".equals(normalized)) {

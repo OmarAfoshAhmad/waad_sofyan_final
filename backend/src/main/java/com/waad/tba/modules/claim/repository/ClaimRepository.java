@@ -25,9 +25,14 @@ import com.waad.tba.modules.claim.projection.FinancialSummaryByEmployerProjectio
 public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
         /**
-         * Count claims linked to a specific benefit policy
+         * Count claims EVER linked to a specific benefit policy — including
+         * cancelled/soft-deleted ones (c.active = false). Used to permanently
+         * gate direct edits/deletes on a policy's rules/groups/buckets: a
+         * cancelled claim still represents a financial event that happened
+         * under this policy's configuration, so it must not become editable
+         * again just because the claim was later voided.
          */
-        @Query("SELECT COUNT(c) FROM Claim c WHERE c.active = true AND c.member.benefitPolicy.id = :policyId")
+        @Query("SELECT COUNT(c) FROM Claim c WHERE c.member.benefitPolicy.id = :policyId")
         long countByPolicyId(@Param("policyId") Long policyId);
 
 

@@ -145,9 +145,14 @@ public class AdjudicationReportService {
         long settledCount = claims.stream()
             .filter(c -> c.getStatus() == ClaimStatus.SETTLED)
             .count();
-        long rejectedCount = claimRepository.countByStatus(ClaimStatus.REJECTED);
-        long pendingCount = claimRepository.countByStatusIn(
-            List.of(ClaimStatus.SUBMITTED, ClaimStatus.UNDER_REVIEW));
+        // Must respect the same fromDate/toDate/providerName filter as
+        // approvedCount/settledCount above — a global unfiltered count here
+        // previously mixed system-wide rejected/pending totals into a
+        // date-ranged report.
+        long rejectedCount = claimRepository.findForAdjudicationReport(
+            List.of(ClaimStatus.REJECTED), fromDate, toDate, providerName).size();
+        long pendingCount = claimRepository.findForAdjudicationReport(
+            List.of(ClaimStatus.SUBMITTED, ClaimStatus.UNDER_REVIEW), fromDate, toDate, providerName).size();
         
         AdjudicationReportDto report = AdjudicationReportDto.builder()
             .fromDate(fromDate)

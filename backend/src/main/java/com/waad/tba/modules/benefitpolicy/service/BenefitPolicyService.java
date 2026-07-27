@@ -352,13 +352,22 @@ public class BenefitPolicyService {
             policy.setExcludedCategoryCodes(dto.getExcludedCategoryCodes());
         }
         if (dto.getStatus() != null) {
+            BenefitPolicyStatus requestedStatus;
             try {
-                policy.setStatus(BenefitPolicyStatus.valueOf(dto.getStatus().toUpperCase()));
+                requestedStatus = BenefitPolicyStatus.valueOf(dto.getStatus().toUpperCase());
             } catch (IllegalArgumentException e) {
                 throw new BusinessRuleException("حالة غير صالحة: " + dto.getStatus());
             }
+            // Status changes must go through activate()/deactivate()/suspend(),
+            // which enforce readiness checks, overlap locking, and valid
+            // transition rules — setting status directly here would bypass
+            // all of that. The edit form round-trips the current status, so
+            // only reject an actual transition attempt; a no-op value is fine.
+            if (requestedStatus != policy.getStatus()) {
+                throw new BusinessRuleException(
+                        "لا يمكن تغيير حالة الوثيقة من خلال التعديل المباشر؛ استخدم عمليات التفعيل/الإيقاف/التعليق المخصصة.");
+            }
         }
-
 
         // Handle date changes with validation
         LocalDate newStartDate = dto.getStartDate() != null ? dto.getStartDate() : policy.getStartDate();
@@ -641,15 +650,22 @@ public class BenefitPolicyService {
     public void assertDraftConfiguration(Long policyId) {
         BenefitPolicy policy = benefitPolicyRepository.findById(policyId)
                 .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + policyId));
-        
+
         if (!policy.isActive()) {
             throw new BusinessRuleException("الوثيقة غير نشطة");
         }
-        
-        if (policy.getStatus() != BenefitPolicyStatus.DRAFT) {
-            if (!canPolicyBeEdited(policyId)) {
-                throw new BusinessRuleException("إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
-            }
+
+        // Financial-linkage check applies unconditionally, not just when
+        // status != DRAFT: a policy's status is a proxy for "has it been
+        // used," not the source of truth. Gating only on status would let a
+        // policy that somehow carries claim/pre-auth history while still
+        // marked DRAFT bypass the lock entirely. canPolicyBeEdited() counts
+        // claims/pre-auths regardless of their current (even cancelled)
+        // status, so once a policy has ever been financially touched, its
+        // rules/groups/buckets become permanently immutable — matching the
+        // original behavior before this check was narrowed.
+        if (!canPolicyBeEdited(policyId)) {
+            throw new BusinessRuleException("إعداد قواعد ومجموعات الوثيقة متاح فقط للوثائق التي لم يصدر عليها أي مطالبات أو موافقات مسبقة فعلية.");
         }
     }
 

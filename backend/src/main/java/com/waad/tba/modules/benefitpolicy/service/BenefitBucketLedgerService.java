@@ -227,68 +227,8 @@ public class BenefitBucketLedgerService {
     }
 
     private Period period(BenefitLimitBucket bucket, BenefitPolicy policy, LocalDate date) {
-        LimitPeriodType periodType = bucket.getPeriodType() != null
-                ? bucket.getPeriodType()
-                : LimitPeriodType.ANNUAL;
-        return switch (periodType) {
-            case PER_SERVICE, PER_VISIT, DAILY -> new Period(date, date);
-            case WEEKLY -> new Period(date.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SATURDAY)),
-                    date.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SATURDAY)).plusDays(6));
-            case MONTHLY -> new Period(date.withDayOfMonth(1), date.with(TemporalAdjusters.lastDayOfMonth()));
-            case QUARTERLY -> {
-                int quarterStartMonth = ((date.getMonthValue() - 1) / 3) * 3 + 1;
-                LocalDate start = LocalDate.of(date.getYear(), quarterStartMonth, 1);
-                yield new Period(start, start.plusMonths(3).minusDays(1));
-            }
-            case ANNUAL -> new Period(LocalDate.of(date.getYear(), 1, 1), LocalDate.of(date.getYear(), 12, 31));
-            case MULTI_YEAR_POLICY -> {
-                int years = bucket.getPeriodValue() == null ? 1 : Math.max(1, bucket.getPeriodValue());
-                long elapsed = Math.max(0, ChronoUnit.YEARS.between(policy.getStartDate(), date));
-                LocalDate start = policy.getStartDate().plusYears((elapsed / years) * years);
-                LocalDate end = start.plusYears(years).minusDays(1);
-                if (policy.getEndDate() != null && end.isAfter(policy.getEndDate())) end = policy.getEndDate();
-                yield new Period(start, end);
-            }
-            case CUSTOM_DAYS -> customPeriod(policy, date, bucket.getPeriodValue(), ChronoUnit.DAYS);
-            case CUSTOM_WEEKS -> customPeriod(policy, date, bucket.getPeriodValue(), ChronoUnit.WEEKS);
-            case CUSTOM_MONTHS -> customPeriod(policy, date, bucket.getPeriodValue(), ChronoUnit.MONTHS);
-            case CUSTOM_YEARS -> customPeriod(policy, date, bucket.getPeriodValue(), ChronoUnit.YEARS);
-            case POLICY_PERIOD -> policy != null && policy.getStartDate() != null
-                    ? new Period(policy.getStartDate(), policy.getEndDate())
-                    : new Period(LocalDate.of(date.getYear(), 1, 1), LocalDate.of(date.getYear(), 12, 31));
-            case LIFETIME -> new Period(LocalDate.of(1900, 1, 1), null);
-        };
-    }
-
-    private Period customPeriod(BenefitPolicy policy, LocalDate date, Integer periodValue, ChronoUnit unit) {
-        LocalDate anchor = policy != null && policy.getStartDate() != null
-                ? policy.getStartDate()
-                : LocalDate.of(date.getYear(), 1, 1);
-        int value = periodValue == null ? 1 : Math.max(1, periodValue);
-        long elapsed = Math.max(0, switch (unit) {
-            case DAYS -> ChronoUnit.DAYS.between(anchor, date);
-            case WEEKS -> ChronoUnit.WEEKS.between(anchor, date);
-            case MONTHS -> ChronoUnit.MONTHS.between(anchor, date);
-            case YEARS -> ChronoUnit.YEARS.between(anchor, date);
-            default -> throw new IllegalArgumentException("Unsupported custom period unit: " + unit);
-        });
-        long periods = elapsed / value;
-        LocalDate start = switch (unit) {
-            case DAYS -> anchor.plusDays(periods * value);
-            case WEEKS -> anchor.plusWeeks(periods * value);
-            case MONTHS -> anchor.plusMonths(periods * value);
-            case YEARS -> anchor.plusYears(periods * value);
-            default -> throw new IllegalArgumentException("Unsupported custom period unit: " + unit);
-        };
-        LocalDate end = switch (unit) {
-            case DAYS -> start.plusDays(value).minusDays(1);
-            case WEEKS -> start.plusWeeks(value).minusDays(1);
-            case MONTHS -> start.plusMonths(value).minusDays(1);
-            case YEARS -> start.plusYears(value).minusDays(1);
-            default -> throw new IllegalArgumentException("Unsupported custom period unit: " + unit);
-        };
-        if (policy != null && policy.getEndDate() != null && end.isAfter(policy.getEndDate())) end = policy.getEndDate();
-        return new Period(start, end);
+        BucketPeriodCalculator.Period resolved = BucketPeriodCalculator.resolve(bucket, policy, date);
+        return new Period(resolved.start(), resolved.end());
     }
 
     private record Period(LocalDate start, LocalDate end) {}

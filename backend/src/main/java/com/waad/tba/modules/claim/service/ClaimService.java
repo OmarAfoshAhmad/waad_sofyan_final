@@ -511,6 +511,20 @@ public class ClaimService {
         // Phase 6: Check if status change is requested
         if (dto.getStatus() != null && dto.getStatus() != claim.getStatus()) {
 
+            // APPROVED -> NEEDS_CORRECTION is a financial reversal (benefit
+            // bucket consumption + provider credit must be unwound), not a
+            // plain status flip. requestCorrection() is the single path that
+            // does this correctly; letting this generic update() perform the
+            // same transition without reversing the ledger would let the
+            // claim be re-approved later with a fresh calculationVersion,
+            // double-counting both the bucket consumption and the provider
+            // payment. Reject it here rather than duplicating the reversal
+            // logic inline.
+            if (previousStatus == ClaimStatus.APPROVED && dto.getStatus() == ClaimStatus.NEEDS_CORRECTION) {
+                throw new BusinessRuleException(
+                        "لا يمكن إعادة فتح مطالبة معتمدة للتصحيح من خلال التعديل المباشر؛ استخدم /claims/{id}/request-correction لعكس الأثر المالي أولاً.");
+            }
+
             // Attachment validation disabled 2026-02-24: attachments are optional.
             log.info("ℹ️ Attachment validation skipped - attachments are optional");
 
@@ -1075,7 +1089,10 @@ public class ClaimService {
     @Transactional(readOnly = true)
     public CostCalculationService.CostBreakdown getCostBreakdown(Long id) {
         User currentUser = authorizationService.getCurrentUser();
-        if (currentUser != null && !authorizationService.canAccessClaim(currentUser, id)) {
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+        if (!authorizationService.canAccessClaim(currentUser, id)) {
             throw new AccessDeniedException("Access denied to this claim's cost breakdown");
         }
 
