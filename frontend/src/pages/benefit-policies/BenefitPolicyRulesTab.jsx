@@ -37,7 +37,6 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Replay as ReplayIcon,
-  Category as CategoryIcon,
   MedicalServices as ServiceIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
@@ -46,6 +45,7 @@ import {
   Link as LinkIcon,
   LinkOff as LinkOffIcon,
   AutoAwesome as AutoAwesomeIcon,
+  Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
   FileUpload as FileUploadIcon,
   Edit as EditIcon
@@ -71,7 +71,13 @@ import {
   downloadPolicyRulesTemplate,
   importPolicyRulesFromExcel
 } from 'services/api/benefit-policy-rules.service';
-import { getBenefitStructure, upsertIndividualBenefitLimit } from 'services/api/benefit-structure.service';
+import {
+  getBenefitStructure,
+  upsertIndividualBenefitLimit,
+  deleteBenefitGroup,
+  downloadBenefitStructureTemplate,
+  importBenefitStructure
+} from 'services/api/benefit-structure.service';
 import { getMedicalCategories } from 'services/api/medical-categories.service';
 import { lookupMedicalServices } from 'services/api/medical-services.service';
 import { getBenefitPoliciesSelector, checkPolicyEditability } from 'services/api/benefit-policies.service';
@@ -703,11 +709,12 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // Modal states
   const [formModal, setFormModal] = useState({ open: false, data: null, isEdit: false });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, rule: null });
-  const [bulkDeleteDialog, setBulkDeleteDialog] = useState({ open: false, validIds: [] });
+  const [bulkDeleteDialog, setBulkDeleteDialog] = useState({ open: false, validIds: [], groupIds: [] });
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [ruleSearch, setRuleSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
-  const [showDeleted, setShowDeleted] = useState(false);
+  const [contextFilter, setContextFilter] = useState('ALL');
+  const [viewMode, setViewMode] = useState('ACTIVE'); // 'ACTIVE', 'DELETED' (trash includes soft-deleted and disabled)
   const [categoryCoverageInputs, setCategoryCoverageInputs] = useState({});
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
@@ -889,14 +896,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const handleDownloadTemplate = useCallback(async () => {
     setDownloadingTemplate(true);
     try {
-      const blob = await downloadPolicyRulesTemplate(policyId);
-      const url = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `قواعد_التغطية_وثيقة_${policyId}.xlsx`;
-      link.click();
-      URL.revokeObjectURL(url);
-      enqueueSnackbar('تم تحميل قالب الاستيراد بنجاح', { variant: 'success' });
+      await downloadBenefitStructureTemplate(policyId);
+      enqueueSnackbar('تم تحميل قالب المنافع والمجموعات القياسي بنجاح', { variant: 'success' });
     } catch (err) {
       enqueueSnackbar(err?.response?.data?.message || 'فشل تحميل القالب', { variant: 'error' });
     } finally {
@@ -912,13 +913,32 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setImporting(true);
     setImportResult(null);
     try {
-      const result = await importPolicyRulesFromExcel(policyId, importFile, clearOld);
-      setImportResult(result);
-      if (result?.success) {
-        enqueueSnackbar(result.messageAr || 'تم الاستيراد بنجاح', { variant: 'success' });
-        await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true });
+      const result = await importBenefitStructure(policyId, importFile, false, clearOld ? 'REPLACE' : 'MERGE');
+      const adaptedResult = {
+        success: !result?.errors?.length,
+        messageAr: result?.errors?.length ? 'اكتمل الاستيراد مع أخطاء' : 'تم استيراد المنافع والمجموعات بنجاح',
+        summary: {
+          totalRows: (result?.rules || 0) + (result?.groups || 0),
+          created: result?.created || 0,
+          updated: result?.updated || 0,
+          rejected: result?.errors?.length || 0
+        },
+        errors: (result?.errors || []).map((message, index) => ({
+          rowNumber: index + 1,
+          fieldName: 'ملف المنافع',
+          value: '—',
+          messageAr: message
+        }))
+      };
+      setImportResult(adaptedResult);
+      if (adaptedResult.success) {
+        enqueueSnackbar(adaptedResult.messageAr, { variant: 'success' });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true }),
+          queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] })
+        ]);
       } else {
-        enqueueSnackbar(result?.messageAr || 'اكتمل الاستيراد مع أخطاء', { variant: 'warning' });
+        enqueueSnackbar(adaptedResult.messageAr, { variant: 'warning' });
       }
     } catch (err) {
       const msg = err?.response?.data?.message || 'فشل الاستيراد';
@@ -927,7 +947,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     } finally {
       setImporting(false);
     }
-  }, [importFile, policyId, enqueueSnackbar, queryClient]);
+  }, [importFile, policyId, clearOld, enqueueSnackbar, queryClient]);
 
   const handleOpenTemplateDialog = async () => {
     setTemplateDialogOpen(true);
@@ -989,17 +1009,46 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setDeleteDialog({ open: true, rule });
   }, []);
 
+  const handleDeleteGroup = useCallback((rule) => {
+    const groupId = Number(String(rule.id).replace('group-', ''));
+    if (Number.isNaN(groupId)) {
+      enqueueSnackbar('تعذر تحديد رقم المجموعة للحذف', { variant: 'error' });
+      return;
+    }
+    const memberIds = (rule.groupMembers || [])
+      .map((member) => member.id)
+      .filter((id) => id !== undefined && id !== null);
+    setBulkDeleteDialog({ open: true, validIds: [...new Set(memberIds)], groupIds: [groupId] });
+  }, [enqueueSnackbar]);
+
+  const handleEditGroup = useCallback((rule) => {
+    setFormModal({ open: true, data: rule, isEdit: true });
+  }, []);
+
+  const invalidateRulesAndStructure = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId], exact: true }),
+      queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] })
+    ]);
+  }, [queryClient, policyId]);
+
   const handleBulkDelete = useCallback(async () => {
     if (selectedRowIds.length === 0) return;
 
     let validIds = [];
+    let groupIds = [];
     selectedRowIds.forEach(id => {
       const strId = String(id);
       if (strId.startsWith('group-')) {
         const groupId = parseInt(strId.replace('group-', ''), 10);
-        const buckets = (benefitStructure.buckets || []).filter(b => b.benefitGroupId === groupId);
-        const bucketIds = new Set(buckets.map(b => b.id));
-        const links = (benefitStructure.links || []).filter(l => bucketIds.has(l.bucket?.id));
+        if (!Number.isNaN(groupId)) groupIds.push(groupId);
+        const buckets = (benefitStructure.buckets || []).filter(b => Number(b.benefitGroupId) === Number(groupId));
+        const bucketIds = new Set(buckets.map(b => Number(b.id)));
+        const links = (benefitStructure.links || []).filter((link) => {
+          const linkBucketId = link.bucket?.id ?? link.bucketId ?? link.benefitBucketId;
+          const linkGroupId = link.bucket?.benefitGroupId ?? link.benefitGroupId;
+          return bucketIds.has(Number(linkBucketId)) || Number(linkGroupId) === Number(groupId);
+        });
         links.forEach(l => {
           if (l.ruleId) validIds.push(l.ruleId);
         });
@@ -1012,39 +1061,50 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     
     // Filter out undefined just in case
     validIds = validIds.filter(id => id !== undefined && id !== null);
+    groupIds = [...new Set(groupIds)].filter(id => id !== undefined && id !== null);
 
-    if (validIds.length === 0) {
-      enqueueSnackbar(`الرجاء تحديد قواعد فعلية للحذف. المحدد: ${JSON.stringify(selectedRowIds)}`, { variant: 'warning' });
+    if (validIds.length === 0 && groupIds.length === 0) {
+      enqueueSnackbar('الرجاء تحديد قواعد أو مجموعات فعلية للحذف', { variant: 'warning' });
       return;
     }
 
-    setBulkDeleteDialog({ open: true, validIds });
+    setBulkDeleteDialog({ open: true, validIds, groupIds });
   }, [selectedRowIds, benefitStructure, enqueueSnackbar]);
 
   const handleBulkDeleteConfirm = useCallback(async () => {
-    const { validIds } = bulkDeleteDialog;
-    if (!validIds || validIds.length === 0) return;
-    
+    const { validIds = [], groupIds = [] } = bulkDeleteDialog;
+    if (validIds.length === 0 && groupIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      if (showDeleted) {
-        await Promise.all(validIds.map((id) => hardDeletePolicyRule(policyId, id)));
-        enqueueSnackbar(`تم الحذف النهائي لـ (${validIds.length}) عناصر`, { variant: 'success' });
+      if (viewMode === 'DELETED') {
+        const hardDeleteIds = validIds.filter((id) => {
+          const rule = rules.find((item) => String(item.id) === String(id));
+          const deletedRaw = rule?.deleted;
+          return rule?.hardDeleteAllowed === true || rule?.hardDeleteAllowed === 1 || rule?.hardDeleteAllowed === '1' || String(rule?.hardDeleteAllowed).toLowerCase() === 'true';
+        });
+        const skipped = validIds.length - hardDeleteIds.length;
+        if (hardDeleteIds.length === 0 && groupIds.length === 0) {
+          enqueueSnackbar('لا توجد قواعد محذوفة قابلة للحذف النهائي؛ المطالبات المالية الفعّالة أو المنافع المعطلة مالياً تم تخطيها', { variant: 'warning' });
+          return;
+        }
+        await Promise.all(hardDeleteIds.map((id) => hardDeletePolicyRule(policyId, id)));
+        await Promise.all(groupIds.map((id) => deleteBenefitGroup(policyId, id)));
+        enqueueSnackbar(`تم الحذف النهائي لـ (${hardDeleteIds.length}) قاعدة و(${groupIds.length}) مجموعة${skipped ? `، وتخطي (${skipped}) معطلة مالياً` : ''}`, { variant: 'success' });
       } else {
         await Promise.all(validIds.map((id) => deletePolicyRule(policyId, id)));
-        enqueueSnackbar(`تم نقل (${validIds.length}) عناصر لسلة المحذوفات`, { variant: 'success' });
+        await Promise.all(groupIds.map((id) => deleteBenefitGroup(policyId, id)));
+        enqueueSnackbar(`تم نقل (${validIds.length}) قاعدة لسلة المحذوفات وحذف (${groupIds.length}) مجموعة/وعاء فارغ`, { variant: 'success' });
       }
       setSelectedRowIds([]);
       await refetchRules();
-      await queryClient.invalidateQueries({ queryKey: ['benefit-policy-rules', policyId] });
-      await queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
+      await invalidateRulesAndStructure();
     } catch (err) {
-      enqueueSnackbar('حدث خطأ أثناء تنفيذ الحذف المجمع', { variant: 'error' });
+      enqueueSnackbar(err?.response?.data?.message || 'حدث خطأ أثناء تنفيذ الحذف المجمع', { variant: 'error' });
     } finally {
       setIsBulkDeleting(false);
-      setBulkDeleteDialog({ open: false, validIds: [] });
+      setBulkDeleteDialog({ open: false, validIds: [], groupIds: [] });
     }
-  }, [bulkDeleteDialog, showDeleted, policyId, refetchRules, queryClient, enqueueSnackbar]);
+  }, [bulkDeleteDialog, viewMode, policyId, refetchRules, invalidateRulesAndStructure, enqueueSnackbar, rules]);
 
   const handleRestoreRule = useCallback(
     (rule) => {
@@ -1077,13 +1137,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
   const handleDeleteConfirm = useCallback(() => {
     if (deleteDialog.rule) {
-      if (showDeleted) {
+      if (viewMode === 'DELETED' && deleteDialog.rule.hardDeleteAllowed === true) {
         hardDeleteMutation.mutate(deleteDialog.rule.id);
       } else {
         deleteMutation.mutate(deleteDialog.rule.id);
       }
     }
-  }, [deleteDialog.rule, deleteMutation, hardDeleteMutation, showDeleted]);
+  }, [deleteDialog.rule, deleteMutation, hardDeleteMutation, viewMode]);
 
   const handleDeleteCancel = useCallback(() => {
     setDeleteDialog({ open: false, rule: null });
@@ -1112,7 +1172,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // reset page when search changes
   useEffect(() => {
     setPage(0);
-  }, [ruleSearch, showDeleted]);
+  }, [ruleSearch, viewMode, filterType, contextFilter]);
 
   const handleSort = useCallback((columnId, direction) => {
     setSortBy(columnId);
@@ -1129,6 +1189,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       { id: 'daysLimit', label: 'حد الأيام', sortable: true, minWidth: '7rem', align: 'center' },
       { id: 'timesLimit', label: 'عدد المرات', sortable: true, minWidth: '7rem', align: 'center' },
       { id: 'amountLimit', label: 'سقف المنفعة (د.ل)', sortable: true, minWidth: '10rem', align: 'center' },
+      { id: 'limitPeriod', label: 'مدة السقف', sortable: true, minWidth: '9rem', align: 'center' },
       { id: 'requiresPreApproval', label: 'موافقة مسبقة', sortable: true, minWidth: '7.5rem', align: 'center' },
       { id: 'active', label: 'الحالة', sortable: true, minWidth: '5rem', align: 'center' },
       { id: 'actions', label: 'الإجراءات', sortable: false, minWidth: '5rem', align: 'center' }
@@ -1150,7 +1211,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   {rule.groupMembers?.filter(member => {
                     const deletedRaw = member.deleted;
                     const rIsDeleted = deletedRaw === true || deletedRaw === 1 || deletedRaw === '1' || String(deletedRaw).toLowerCase() === 'true';
-                    return showDeleted ? true : !rIsDeleted;
+                    return viewMode === 'DELETED' ? true : !rIsDeleted;
                   }).map(member => (
                     <Chip key={member.id} size="small" label={member.medicalCategoryName || member.medicalServiceName || '-'} variant="outlined" sx={{ fontSize: '0.7rem' }} />
                   ))}
@@ -1211,23 +1272,40 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               <Chip size="small" color="error" variant="outlined" label="بلا سقف" onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />
             );
           }
-          const periodMap = { 
-            'POLICY_PERIOD': 'خلال الوثيقة', 
-            'ANNUAL': 'سنوياً', 
-            'YEARLY': 'سنوياً',
-            'MONTHLY': 'شهرياً', 
-            'DAILY': 'يومياً', 
-            'PER_VISIT': 'لكل زيارة', 
-            'PER_SERVICE': 'لكل خدمة', 
-            'LIFETIME': 'مدى الحياة' 
-          };
-          const periodText = limit.periodType ? ` / ${periodMap[limit.periodType] || limit.periodType}` : '';
-          
           if (limit.amountLimit == null) {
-             return <Chip size="small" color="info" variant="outlined" label={`بلا سقف${periodText}`} onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />;
+             return <Chip size="small" color="info" variant="outlined" label="بلا سقف" onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />;
           }
           return (
-             <Chip size="small" color="info" variant="outlined" label={`${limit.amountLimit} د.ل${periodText}`} onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600 }} />
+             <Chip size="small" color="info" variant="outlined" label={`${limit.amountLimit} د.ل`} onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600 }} />
+          );
+        }
+        case 'limitPeriod': {
+          const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
+          if (!limit) return '-';
+          const periodMap = {
+            POLICY_PERIOD: 'خلال الوثيقة',
+            ANNUAL: 'سنوياً',
+            YEARLY: 'سنوياً',
+            MONTHLY: 'شهرياً',
+            DAILY: 'يومياً',
+            PER_VISIT: 'لكل زيارة',
+            PER_SERVICE: 'لكل خدمة',
+            LIFETIME: 'مدى الحياة'
+          };
+          let label = periodMap[limit.periodType] || limit.periodType || 'غير محددة';
+          if (limit.periodType === 'MULTI_YEAR_POLICY') {
+            const years = Number(limit.periodValue || 1);
+            label = years === 2 ? 'كل سنتين' : years === 1 ? 'سنوياً' : `كل ${years} سنوات`;
+          }
+          return (
+            <Chip
+              size="small"
+              color="default"
+              variant="outlined"
+              label={label}
+              onClick={() => canEdit && openIndividualLimit(rule)}
+              sx={{ cursor: canEdit ? 'pointer' : 'default' }}
+            />
           );
         }
         case 'requiresPreApproval':
@@ -1239,6 +1317,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         case 'active':
           if (rule.groupSource) return <Chip label={rule.isActive ? 'نشطة' : 'متوقفة'} size="small" color={rule.isActive ? 'secondary' : 'default'} variant="outlined" />;
           if (rule.isDeleted) return <Chip label="محذوفة" size="small" color="error" variant="outlined" />;
+          if (viewMode === 'DELETED' && rule.isActive === false) return <Chip label="معطلة مالياً" size="small" color="warning" variant="outlined" />;
           return (
             <Tooltip title={rule.isActive ? 'إيقاف القاعدة مؤقتاً' : 'تنشيط القاعدة'}>
               <span>
@@ -1259,31 +1338,47 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         case 'actions':
           if (rule.groupSource) {
             return (
-              <Tooltip title="تعديل أو حذف المجموعة يتم من هيكل المنافع">
-                <Box display="inline-block">
-                  <IconButton size="small" disabled>
+              <Stack direction="row" spacing={1} justifyContent="center">
+                <Tooltip title="تعديل المجموعة">
+                  <span>
+                  <IconButton size="small" onClick={() => handleEditGroup(rule)} disabled={!canEdit}>
                      <EditIcon fontSize="small" />
                   </IconButton>
-                  <IconButton size="small" disabled>
+                  </span>
+                </Tooltip>
+                <Tooltip title={viewMode === 'DELETED' ? 'حذف نهائي للمجموعة/الأوعية' : 'حذف المجموعة/الأوعية مع نقل منافعها للسلة'}>
+                  <span>
+                  <IconButton size="small" color="error" onClick={() => handleDeleteGroup(rule)} disabled={!canEdit}>
                      <DeleteIcon fontSize="small" />
                   </IconButton>
-                </Box>
-              </Tooltip>
+                  </span>
+                </Tooltip>
+              </Stack>
             );
           }
-          if (showDeleted) {
+          if (viewMode === 'DELETED') {
             return (
               <Stack direction="row" spacing={1} justifyContent="center">
-                <Tooltip title="استعادة المنفعة">
+                <Tooltip title={rule.isDeleted ? 'استعادة المنفعة' : 'تفعيل المنفعة المعطلة'}>
                   <IconButton size="small" color="success" onClick={() => handleRestoreRule(rule)} disabled={!canEdit}>
                     <ReplayIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="حذف نهائي">
-                  <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)} disabled={!canEdit}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                {rule.hardDeleteAllowed === true ? (
+                  <Tooltip title="حذف نهائي">
+                    <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)} disabled={!canEdit}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <Tooltip title="الحذف النهائي غير متاح للمنافع المعطلة مالياً">
+                    <span>
+                      <IconButton size="small" disabled>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
               </Stack>
             );
           }
@@ -1305,7 +1400,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           return rule[column.id] ?? '-';
       }
     },
-    [handleToggleActive, onOpenStructure, structureLoadFailed, toggleMutation.isPending, canEdit, handleEditRule, handleDeleteRule, handleRestoreRule, openIndividualLimit, policyDefaultCoveragePercent, showDeleted]
+    [handleToggleActive, onOpenStructure, structureLoadFailed, toggleMutation.isPending, canEdit, handleEditRule, handleDeleteRule, handleRestoreRule, handleDeleteGroup, handleEditGroup, openIndividualLimit, policyDefaultCoveragePercent, viewMode]
   );
 
   const categoryMap = useMemo(() => {
@@ -1359,6 +1454,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const changedAt = rule.updatedAt || rule.lastModifiedAt || rule.modifiedAt || rule.createdAt || null;
       const bucketLinks = structureLinksByRuleId.get(rule.id) || [];
       const individualLimitLink = bucketLinks.find((link) => link.aggregationMode === 'INDIVIDUAL' || String(link.groupCode || '').startsWith('AUTO-BEN-')) || null;
+      const individualLimit = individualLimitLink?.bucket || null;
       const groupBucketLinks = bucketLinks.filter((link) => link !== individualLimitLink);
       const linkSearch = groupBucketLinks.map((link) => `${link.groupName || ''} ${link.bucket?.nameAr || ''}`).join(' ');
       const linkedDaysLimits = bucketLinks
@@ -1385,6 +1481,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         changedAt,
         bucketLinks: groupBucketLinks,
         individualLimitLink,
+        amountLimit: individualLimit?.amountLimit ?? null,
+        timesLimit: individualLimit?.timesLimit ?? null,
+        limitPeriod: individualLimit?.periodType ?? null,
+        limitPeriodValue: individualLimit?.periodValue ?? null,
         daysLimit: uniqueDaysLimits.length > 0 ? Math.min(...uniqueDaysLimits) : null,
         daysLimitLabel,
         isLinked: bucketLinks.length > 0,
@@ -1396,13 +1496,18 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     const groupRows = (benefitStructure.groups || [])
       .filter((group) => !String(group.code || '').startsWith('AUTO-BEN-'))
       .map((group) => {
-        const buckets = (benefitStructure.buckets || []).filter((bucket) => bucket.benefitGroupId === group.id);
-        const bucketIds = new Set(buckets.map((bucket) => bucket.id));
-        const memberLinks = (benefitStructure.links || []).filter((link) => bucketIds.has(link.bucket?.id));
+        const buckets = (benefitStructure.buckets || []).filter((bucket) => Number(bucket.benefitGroupId) === Number(group.id));
+        const bucketIds = new Set(buckets.map((bucket) => Number(bucket.id)));
+        const memberLinks = (benefitStructure.links || []).filter((link) => {
+          const linkBucketId = link.bucket?.id ?? link.bucketId ?? link.benefitBucketId;
+          const linkGroupId = link.bucket?.benefitGroupId ?? link.benefitGroupId;
+          return bucketIds.has(Number(linkBucketId)) || Number(linkGroupId) === Number(group.id);
+        });
         const groupMembers = memberLinks.map((link) => rules.find((rule) => rule.id === link.ruleId)).filter(Boolean);
         const memberNames = groupMembers.map((member) => member.medicalCategoryName || member.medicalServiceName || '');
         const bucketLinks = buckets.map((bucket) => ({ id: `group-bucket-${bucket.id}`, groupName: group.nameAr, bucket }));
         const days = buckets.map((bucket) => bucket.daysLimit).filter((value) => value != null);
+        const primaryBucket = buckets.length > 0 ? buckets[0] : null;
         const allMembersDeleted = groupMembers.length > 0 && groupMembers.every(m => {
           const d = m.deleted;
           return d === true || d === 1 || d === '1' || String(d).toLowerCase() === 'true';
@@ -1413,8 +1518,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           typeLabel: 'مجموعة منافع', encounterType: group.contextType, coveragePercent: null,
           effectiveCoveragePercent: null, requiresPreApproval: !!group.requiresPreApproval,
           bucketLinks, daysLimitLabel: days.length ? days.map((value) => `${value} يوم`).join('، ') : null,
-          isLinked: bucketLinks.length > 0, isActive: group.active !== false, isDeleted: allMembersDeleted, groupSource: true,
-          groupMembers, bucket: buckets.length > 0 ? buckets[0] : null,
+          amountLimit: primaryBucket?.amountLimit ?? null, timesLimit: primaryBucket?.timesLimit ?? null,
+          limitPeriod: primaryBucket?.periodType ?? null, limitPeriodValue: primaryBucket?.periodValue ?? null,
+          isLinked: memberLinks.length > 0 || bucketLinks.length > 0, isActive: group.active !== false, isDeleted: allMembersDeleted, groupSource: true,
+          groupMembers, bucket: primaryBucket,
           searchable: `${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`.toLowerCase(), changedAt: group.updatedAt || null
         };
       });
@@ -1426,38 +1533,41 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   }, [rules, categoryMap, structureLinksByRuleId, benefitStructure.groups, benefitStructure.buckets, benefitStructure.links]);
 
   const filterStats = useMemo(() => {
-    const activeRules = normalizedRules.filter((r) => !r.isDeleted);
+    const activeRules = normalizedRules.filter((r) => !r.isDeleted && r.isActive !== false);
     return {
       all: activeRules.length,
-      uncovered: activeRules.filter((rule) => (rule.coveragePercent ?? rule.effectiveCoveragePercent) === 0).length,
-      linked: structureLoaded ? activeRules.filter((rule) => rule.isLinked).length : 0,
-      unlinked: structureLoaded ? activeRules.filter((rule) => !rule.isLinked).length : 0,
-      preApproval: activeRules.filter((rule) => rule.requiresPreApproval === true).length
+      groups: activeRules.filter((rule) => rule.groupSource).length,
+      individuals: activeRules.filter((rule) => !rule.groupSource).length,
+      outpatient: activeRules.filter((rule) => rule.encounterType === 'OUTPATIENT').length,
+      inpatient: activeRules.filter((rule) => rule.encounterType === 'INPATIENT').length,
+      any: activeRules.filter((rule) => !rule.encounterType || rule.encounterType === 'ANY').length
     };
-  }, [normalizedRules, structureLoaded]);
+  }, [normalizedRules]);
 
   const filteredRules = useMemo(() => {
     const query = ruleSearch.trim().toLowerCase();
-    let statusFiltered = normalizedRules.filter((rule) => (showDeleted ? rule.isDeleted : !rule.isDeleted));
+    let statusFiltered = normalizedRules.filter((rule) => {
+      if (viewMode === 'DELETED') return rule.isDeleted || rule.isActive === false;
+      return !rule.isDeleted && rule.isActive !== false;
+    });
 
-    if (!showDeleted && filterType !== 'ALL') {
-      if (filterType === 'UNCOVERED') {
-        statusFiltered = statusFiltered.filter((r) => (r.coveragePercent ?? r.effectiveCoveragePercent) === 0);
-      } else if (filterType === 'LINKED') {
-        statusFiltered = statusFiltered.filter((r) => r.isLinked);
-      } else if (filterType === 'UNLINKED') {
-        statusFiltered = statusFiltered.filter((r) => !r.isLinked);
-      } else if (filterType === 'PRE_APPROVAL') {
-        statusFiltered = statusFiltered.filter((r) => r.requiresPreApproval === true);
-      }
+    if (filterType === 'GROUP') {
+      statusFiltered = statusFiltered.filter((r) => r.groupSource);
+    } else if (filterType === 'INDIVIDUAL') {
+      statusFiltered = statusFiltered.filter((r) => !r.groupSource);
+    }
+
+    if (contextFilter !== 'ALL') {
+      statusFiltered = statusFiltered.filter((r) => (r.encounterType || 'ANY') === contextFilter);
     }
 
     const filtered = !query ? statusFiltered : statusFiltered.filter((rule) => rule.searchable.includes(query));
 
     // Default ordering: keep visual order stable unless user explicitly sorts.
     if (!sortBy) {
-      const modeKey = showDeleted ? 'deleted' : 'active';
+      const modeKey = viewMode.toLowerCase();
       const previousOrder = defaultOrderRef.current[modeKey] || [];
+      if (!defaultOrderRef.current['disabled']) defaultOrderRef.current['disabled'] = [];
       const currentIds = filtered.map((rule) => rule.id);
       const currentIdSet = new Set(currentIds);
 
@@ -1479,7 +1589,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       if (bVal == null) return -1;
 
       // numeric fields
-      if (['coveragePercent', 'daysLimit'].includes(sortBy)) {
+      if (['coveragePercent', 'daysLimit', 'timesLimit', 'amountLimit', 'limitPeriodValue'].includes(sortBy)) {
         aVal = Number(aVal);
         bVal = Number(bVal);
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
@@ -1489,15 +1599,17 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const cmp = String(aVal).localeCompare(String(bVal), 'ar');
       return sortDirection === 'asc' ? cmp : -cmp;
     });
-  }, [normalizedRules, ruleSearch, sortBy, sortDirection, showDeleted, filterType]);
+  }, [normalizedRules, ruleSearch, sortBy, sortDirection, viewMode, filterType, contextFilter]);
 
   const pagedRules = useMemo(
     () => filteredRules.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
     [filteredRules, page, rowsPerPage]
   );
 
-  const activeRulesCount = useMemo(() => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive).length, [normalizedRules]);
+  const activeRulesCount = useMemo(() => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive !== false).length, [normalizedRules]);
+  const disabledRulesCount = useMemo(() => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive === false).length, [normalizedRules]);
   const deletedRulesCount = useMemo(() => normalizedRules.filter((rule) => rule.isDeleted).length, [normalizedRules]);
+  const trashRulesCount = useMemo(() => normalizedRules.filter((rule) => rule.isDeleted || rule.isActive === false).length, [normalizedRules]);
 
   const categoryRulesByCategoryId = useMemo(() => {
     const map = new Map();
@@ -1692,7 +1804,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           قواعد التغطية التفصيلية
       ═══════════════════════════════════════════════════════════════════ */}
       <MainCard
-        key={showDeleted ? 'rules-mode-deleted' : 'rules-mode-active'}
+        key={`rules-mode-${viewMode}`}
         sx={{ minHeight: 'calc(100vh - 310px)', display: 'flex', flexDirection: 'column' }}
         title={
           <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
@@ -1707,45 +1819,61 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         secondary={
           canEdit && (
             <Stack direction="row" spacing={1}>
-              <Tooltip title="إدارة نسب التغطية حسب التصنيف">
+              {onOpenStructure && (
+                <Tooltip title="إدارة المجموعات والأوعية والروابط">
+                  <IconButton
+                    color="success"
+                    onClick={onOpenStructure}
+                    sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                  >
+                    <LinkIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              <Tooltip title={downloadingTemplate ? 'جاري تنزيل القالب...' : 'تنزيل القالب القياسي للمنافع والمجموعات'}>
+                <span>
                 <IconButton
                   color="primary"
-                  onClick={() => setCategoryCoverageModalOpen(true)}
+                  onClick={handleDownloadTemplate}
+                  disabled={!canEdit || downloadingTemplate}
                   sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
                 >
-                  <CategoryIcon fontSize="small" />
+                  {downloadingTemplate ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon fontSize="small" />}
                 </IconButton>
-              </Tooltip>
-              
-              <Tooltip title={showDeleted ? `عرض النشطة (${activeRulesCount})` : `عرض المحذوفات (${deletedRulesCount})`}>
-                <IconButton
-                  onClick={() => setShowDeleted((prev) => !prev)}
-                  sx={{
-                    border: '1px solid',
-                    borderColor: showDeleted ? 'error.main' : 'divider',
-                    width: '2.25rem',
-                    height: '2.25rem',
-                    borderRadius: 1,
-                    color: showDeleted ? 'error.main' : 'action.active'
-                  }}
-                >
-                  {showDeleted ? <ReplayIcon fontSize="small" /> : <DeleteIcon fontSize="small" />}
-                </IconButton>
+                </span>
               </Tooltip>
 
-              <Tooltip title="استيراد الوثيقة وإدارة المجموعات والأوعية والروابط">
+              <Tooltip title="استيراد جماعي للمنافع والتغطيات من Excel">
+                <span>
                 <IconButton
                   color="success"
-                  onClick={onOpenStructure}
-                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                  onClick={() => setImportDialogOpen(true)}
+                  disabled={!canEdit}
+                  sx={{ border: '1px solid', borderColor: 'success.main', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
                 >
-                  <LinkIcon fontSize="small" />
+                  <FileUploadIcon fontSize="small" />
+                </IconButton>
+                </span>
+              </Tooltip>
+
+              <Tooltip title="سلة المحذوفات">
+                <IconButton
+                  color={viewMode === 'DELETED' ? 'error' : 'default'}
+                  onClick={() => {
+                    setViewMode((current) => (current === 'DELETED' ? 'ACTIVE' : 'DELETED'));
+                    setPage(0);
+                  }}
+                  sx={{ border: '1px solid', borderColor: viewMode === 'DELETED' ? 'error.main' : 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                >
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
 
-              <Tooltip title="إضافة قاعدة">
+              <Tooltip title="إضافة منفعة / مجموعة">
                 <IconButton
                   onClick={handleAddRule}
+                  disabled={!canEdit}
                   sx={{
                     border: '1px solid',
                     borderColor: 'primary.main',
@@ -1778,91 +1906,14 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         
         {/* ── Filter bar ── */}
         <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap" sx={{ mb: '1.0rem' }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleAddRule}
-            disabled={!canEdit}
-            sx={{ height: '2.5rem', fontWeight: 'bold' }}
-          >
-            إضافة منفعة / مجموعة
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="success"
-            startIcon={<FileUploadIcon />}
-            onClick={() => setTemplateDialogOpen(true)}
-            disabled={!canEdit}
-            sx={{ height: '2.5rem', fontWeight: 'bold' }}
-          >
-            استيراد المنافع (Excel / قالب)
-          </Button>
-
-          <Button
-            variant={showDeleted ? 'contained' : 'outlined'}
-            color={showDeleted ? 'error' : 'secondary'}
-            startIcon={showDeleted ? <ReplayIcon /> : <DeleteIcon />}
-            onClick={() => setShowDeleted((prev) => !prev)}
-            sx={{ height: '2.5rem', fontWeight: 'bold' }}
-          >
-            {showDeleted ? `العودة للنشطة (${activeRulesCount})` : `سلة المحذوفات (${deletedRulesCount})`}
-          </Button>
-
-          {selectedRowIds.length > 0 && (
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={handleBulkDelete}
-              sx={{ height: '2.5rem', fontWeight: 'bold' }}
-            >
-              {showDeleted ? `حذف نهائي للمحدد (${selectedRowIds.length})` : `حذف ناعم للمحدد (${selectedRowIds.length})`}
-            </Button>
-          )}
-
-          <Tooltip title="تحديث">
-            <IconButton
-              size="small"
-              onClick={() => refetchRules()}
-              color="primary"
-              sx={{ border: '1px solid', borderColor: 'divider', width: '2.5rem', height: '2.5rem' }}
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
           <Chip
             size="small"
-            label={`${normalizedRules.length} قاعدة`}
-            color="primary"
+            label={`${viewMode === 'DELETED' ? trashRulesCount : activeRulesCount} قاعدة`}
+            color={viewMode === 'DELETED' ? 'error' : 'primary'}
             variant="outlined"
             sx={{ height: '2.5rem', px: 0.5, fontWeight: 600 }}
           />
-          {!showDeleted && (
-            <TextField
-              select
-              size="small"
-              value={filterType}
-              onChange={(e) => {
-                setFilterType(e.target.value);
-                setPage(0);
-              }}
-              sx={{ minWidth: 180, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
-            >
-              {[
-                { id: 'ALL', label: 'الكل', count: filterStats.all },
-                { id: 'UNCOVERED', label: 'غير مغطى', count: filterStats.uncovered },
-                { id: 'LINKED', label: 'ضمن مجموعة', count: filterStats.linked },
-                { id: 'UNLINKED', label: 'ليست ضمن مجموعة', count: filterStats.unlinked },
-                { id: 'PRE_APPROVAL', label: 'موافقة مسبقة', count: filterStats.preApproval }
-              ].map((item) => (
-                <MenuItem key={item.id} value={item.id} sx={{ fontWeight: 500 }}>
-                  {item.label} ({item.count})
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
+
           <TextField
             placeholder="بحث بالرمز أو الاسم أو النوع..."
             value={ruleSearch}
@@ -1884,6 +1935,74 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               ) : null
             }}
           />
+
+          <TextField
+            select
+            size="small"
+            value={contextFilter}
+            onChange={(e) => {
+              setContextFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 170, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
+          >
+            <MenuItem value="ALL" sx={{ fontWeight: 500 }}>
+              كل السياقات ({filterStats.all})
+            </MenuItem>
+            <MenuItem value="OUTPATIENT" sx={{ fontWeight: 500 }}>
+              عيادات خارجية ({filterStats.outpatient})
+            </MenuItem>
+            <MenuItem value="INPATIENT" sx={{ fontWeight: 500 }}>
+              إيواء ({filterStats.inpatient})
+            </MenuItem>
+            <MenuItem value="ANY" sx={{ fontWeight: 500 }}>
+              عام ({filterStats.any})
+            </MenuItem>
+          </TextField>
+
+          {selectedRowIds.length > 0 && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+              sx={{ height: '2.5rem', fontWeight: 'bold' }}
+            >
+              {viewMode === 'DELETED' ? `حذف نهائي للمحذوف فقط (${selectedRowIds.length})` : `نقل للسلة (${selectedRowIds.length})`}
+            </Button>
+          )}
+
+          <TextField
+            select
+            size="small"
+            value={filterType}
+            onChange={(e) => {
+              setFilterType(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 170, '& .MuiOutlinedInput-root': { height: '2.5rem' } }}
+          >
+            {[
+              { id: 'ALL', label: 'الكل', count: filterStats.all },
+              { id: 'GROUP', label: 'مجموعة منافع', count: filterStats.groups },
+              { id: 'INDIVIDUAL', label: 'منفعة فردية', count: filterStats.individuals }
+            ].map((item) => (
+              <MenuItem key={item.id} value={item.id} sx={{ fontWeight: 500 }}>
+                {item.label} ({item.count})
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <Tooltip title="تحديث">
+            <IconButton
+              size="small"
+              onClick={() => refetchRules()}
+              color="primary"
+              sx={{ border: '1px solid', borderColor: 'divider', width: '2.5rem', height: '2.5rem' }}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
 
         {/* ── Unified Table ── */}
@@ -1965,17 +2084,17 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         onConfirm={handleDeleteConfirm}
         onCancel={handleDeleteCancel}
         loading={deleteMutation.isPending || hardDeleteMutation.isPending}
-        hardDeleteMode={showDeleted}
+        hardDeleteMode={viewMode === 'DELETED' && deleteDialog.rule?.hardDeleteAllowed === true}
       />
 
       {/* Bulk Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         open={bulkDeleteDialog.open}
-        ruleName={`العناصر المحددة (${bulkDeleteDialog.validIds?.length || 0})`}
+        ruleName={`العناصر المحددة (${(bulkDeleteDialog.validIds?.length || 0) + (bulkDeleteDialog.groupIds?.length || 0)})`}
         onConfirm={handleBulkDeleteConfirm}
-        onCancel={() => setBulkDeleteDialog({ open: false, validIds: [] })}
+        onCancel={() => setBulkDeleteDialog({ open: false, validIds: [], groupIds: [] })}
         loading={isBulkDeleting}
-        hardDeleteMode={showDeleted}
+        hardDeleteMode={viewMode === 'DELETED'}
       />
 
       {/* Category Coverage Modal */}
@@ -2013,7 +2132,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         <DialogTitle>
           <Stack direction="row" alignItems="center" spacing={1}>
             <FileUploadIcon color="info" />
-            <Typography variant="h5">استيراد قواعد التغطية من Excel</Typography>
+            <Typography variant="h5">استيراد جماعي للمنافع والتغطيات من Excel</Typography>
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
@@ -2023,13 +2142,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 تعليمات الاستيراد:
               </Typography>
               <ol style={{ margin: 0, paddingRight: '1.2rem' }}>
-                <li>حمّل قالب Excel أولاً بالضغط على «تحميل قالب Excel» أدناه</li>
-                <li>عبّئ نسب التغطية والسقوف في الأعمدة القابلة للتعديل</li>
-                <li>ارفع الملف هنا — القواعد الجديدة تُضاف والموجودة تُحدَّث تلقائياً</li>
+                <li>حمّل القالب القياسي للمنافع والمجموعات أولاً.</li>
+                <li>املأ ورقة «المنافع» للمنافع الفردية، وورقة «المجموعات» للسقوف المشتركة.</li>
+                <li>ارفع الملف هنا — سيتم إنشاء/تحديث القواعد والمجموعات والأوعية دفعة واحدة.</li>
               </ol>
               <Alert severity="warning" sx={{ mt: 1 }}>
-                هذه النافذة تقبل قالب <strong>قواعد_التغطية</strong> فقط. ملفات <strong>استيراد_اسم الوثيقة</strong> الخاصة
-                بالأوعية تُرفع من تبويب «مجموعات المنافع والسقوف» عبر «فحص الملف».
+                هذه النافذة تقبل القالب الجديد فقط: <strong>المنافع</strong> و <strong>المجموعات</strong>. لا تستخدم قالب
+                <strong> قواعد_التغطية</strong> القديم هنا.
               </Alert>
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-start' }}>
                 <Button
@@ -2089,12 +2208,12 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   control={<Checkbox checked={clearOld} onChange={(e) => setClearOld(e.target.checked)} color="error" />}
                   label={
                     <Typography variant="body2" color="error.main" fontWeight="bold">
-                      مسح القواعد القديمة والبدء بنظافة
+                      استبدال شامل للقواعد والمجموعات الحالية
                     </Typography>
                   }
                 />
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4 }}>
-                  سيتم مسح جميع قواعد التغطية الحالية للوثيقة، والاعتماد كلياً على القواعد المرفوعة في الملف. (لا يمكن التراجع عن هذا الإجراء)
+                  سيتم استبدال إعدادات التغطية الحالية للوثيقة بالملف المرفوع حسب قواعد الاستيراد الآمن في الخلفية.
                 </Typography>
               </Box>
             )}
@@ -2128,7 +2247,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 <Typography variant="caption" color="error" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
                   تفاصيل الأخطاء:
                 </Typography>
-                <Table size="small" stickyHeader aria-label="تفاصيل أخطاء استيراد قواعد التغطية">
+                <Table size="small" stickyHeader aria-label="تفاصيل أخطاء استيراد المنافع والتغطيات">
                   <TableHead><TableRow>
                     <TableCell>الصف</TableCell><TableCell>الحقل</TableCell><TableCell>القيمة المرفوضة</TableCell>
                     <TableCell>سبب الرفض</TableCell><TableCell>كيفية المعالجة</TableCell>
@@ -2321,7 +2440,7 @@ BenefitPolicyRulesTab.propTypes = {
   policyId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   policyStatus: PropTypes.string,
   policyDefaultCoveragePercent: PropTypes.number,
-  onOpenStructure: PropTypes.func.isRequired
+  onOpenStructure: PropTypes.func
 };
 
 export default BenefitPolicyRulesTab;

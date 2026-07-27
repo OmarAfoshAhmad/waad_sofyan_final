@@ -54,6 +54,10 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
    */
   long countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(Long policyId);
 
+  long countByBenefitPolicyIdAndDeletedTrue(Long policyId);
+
+  long countByBenefitPolicyIdAndDeletedFalseAndActiveFalse(Long policyId);
+
   /**
    * Backward-compatible alias: count active non-deleted rules
    */
@@ -198,3 +202,4 @@ public interface BenefitPolicyRuleRepository extends JpaRepository<BenefitPolicy
   @Query("UPDATE BenefitPolicyRule r SET r.active = false WHERE r.benefitPolicy.id = :policyId AND r.deleted = false")
   int deactivateAllForPolicy(@Param("policyId") Long policyId);
 }
+

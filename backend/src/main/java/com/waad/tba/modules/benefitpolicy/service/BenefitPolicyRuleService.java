@@ -60,7 +60,7 @@ public class BenefitPolicyRuleService {
         validatePolicyExists(policyId);
         return ruleRepository.findByBenefitPolicyId(policyId)
                 .stream()
-                .map(BenefitPolicyRuleResponseDto::fromEntity)
+                .map(this::toResponseDto)
                 .toList();
     }
 
@@ -72,7 +72,7 @@ public class BenefitPolicyRuleService {
         validatePolicyExists(policyId);
         Page<BenefitPolicyRule> rulesPage = ruleRepository.findByBenefitPolicyId(policyId, pageable);
         List<BenefitPolicyRuleResponseDto> dtoList = rulesPage.getContent().stream()
-                .map(BenefitPolicyRuleResponseDto::fromEntity)
+                .map(this::toResponseDto)
                 .collect(Collectors.toList());
         return new PageImpl<>(dtoList, pageable, rulesPage.getTotalElements());
     }
@@ -85,7 +85,7 @@ public class BenefitPolicyRuleService {
         validatePolicyExists(policyId);
         return ruleRepository.findByBenefitPolicyIdAndDeletedFalseAndActiveTrue(policyId)
                 .stream()
-                .map(BenefitPolicyRuleResponseDto::fromEntity)
+                .map(this::toResponseDto)
                 .toList();
     }
 
@@ -96,7 +96,7 @@ public class BenefitPolicyRuleService {
     public BenefitPolicyRuleResponseDto findById(Long ruleId) {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
-        return BenefitPolicyRuleResponseDto.fromEntity(rule);
+        return toResponseDto(rule);
     }
 
     /**
@@ -107,7 +107,7 @@ public class BenefitPolicyRuleService {
         validatePolicyExists(policyId);
         return ruleRepository.findCategoryRulesForPolicy(policyId)
                 .stream()
-                .map(BenefitPolicyRuleResponseDto::fromEntity)
+                .map(this::toResponseDto)
                 .toList();
     }
 
@@ -131,7 +131,7 @@ public class BenefitPolicyRuleService {
         validatePolicyExists(policyId);
         return ruleRepository.findByBenefitPolicyIdAndDeletedFalseAndRequiresPreApprovalTrue(policyId)
                 .stream()
-                .map(BenefitPolicyRuleResponseDto::fromEntity)
+                .map(this::toResponseDto)
                 .toList();
     }
 
@@ -751,6 +751,13 @@ public class BenefitPolicyRuleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
 
         rule.setActive(false);
+        if (isRuleReferencedFinancially(ruleId)) {
+            rule.setDeleted(false);
+            ruleRepository.save(rule);
+            log.info("Disabled financially referenced rule {} instead of soft deleting", ruleId);
+            return;
+        }
+
         rule.setDeleted(true);
         ruleRepository.save(rule);
 
@@ -778,9 +785,30 @@ public class BenefitPolicyRuleService {
     public void hardDelete(Long ruleId) {
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rule", "id", ruleId));
+
+        if (!rule.isDeleted()) {
+            throw new BusinessRuleException(
+                com.waad.tba.common.error.ErrorCode.BUSINESS_RULE_VIOLATION,
+                "لا يمكن الحذف النهائي إلا للمنافع المحذوفة فعلياً. المنافع المعطلة مالياً تبقى في سلة المحذوفات ولا تُحذف نهائياً.");
+        }
+
+        if (isRuleReferencedFinancially(ruleId)) {
+            throw new BusinessRuleException(
+                    com.waad.tba.common.error.ErrorCode.BUSINESS_RULE_VIOLATION,
+                    "لا يمكن حذف المنفعة نهائياً لارتباطها بمطالبات أو سجلات مالية سابقة.");
+        }
         
-        ruleRepository.delete(rule);
-        log.info("Hard deleted rule {}", ruleId);
+        try {
+            detachNonFinancialClaimLineReferences(ruleId);
+            ruleRepository.delete(rule);
+            ruleRepository.flush(); // Force execution to catch constraint violations immediately
+            log.info("Hard deleted rule {}", ruleId);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.warn("Failed to hard delete rule {} due to data integrity violation", ruleId);
+            throw new BusinessRuleException(
+                com.waad.tba.common.error.ErrorCode.BUSINESS_RULE_VIOLATION,
+                "لا يمكن حذف المنفعة نهائياً لارتباطها بمطالبات سابقة. يُرجى الاكتفاء بإبقائها في سلة المحذوفات.");
+        }
     }
 
     /**
@@ -790,9 +818,16 @@ public class BenefitPolicyRuleService {
         validatePolicyExists(policyId);
         
         List<BenefitPolicyRule> rules = ruleRepository.findByBenefitPolicyId(policyId);
-        ruleRepository.deleteAll(rules);
-        
-        log.info("Hard deleted {} rules for policy {}", rules.size(), policyId);
+        try {
+            ruleRepository.deleteAll(rules);
+            ruleRepository.flush(); // Force execution to catch constraint violations immediately
+            log.info("Hard deleted {} rules for policy {}", rules.size(), policyId);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.warn("Failed to hard delete all rules for policy {} due to data integrity violation", policyId);
+            throw new BusinessRuleException(
+                com.waad.tba.common.error.ErrorCode.BUSINESS_RULE_VIOLATION,
+                "لا يمكن حذف المنافع نهائياً لارتباط بعضها بمطالبات سابقة. يُرجى الاكتفاء بإبقائها في سلة المحذوفات.");
+        }
     }
 
     /**
@@ -808,6 +843,49 @@ public class BenefitPolicyRuleService {
     // ═══════════════════════════════════════════════════════════════════════════
     // VALIDATION HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    private BenefitPolicyRuleResponseDto toResponseDto(BenefitPolicyRule rule) {
+        BenefitPolicyRuleResponseDto dto = BenefitPolicyRuleResponseDto.fromEntity(rule);
+        dto.setHardDeleteAllowed(rule.isDeleted() && !isRuleReferencedFinancially(rule.getId()));
+        return dto;
+    }
+
+    private boolean isRuleReferencedFinancially(Long ruleId) {
+        Number claimLineCount = (Number) em.createNativeQuery(
+                """
+                SELECT COUNT(1)
+                FROM claim_lines cl
+                JOIN claims c ON c.id = cl.claim_id
+                WHERE cl.applied_rule_id = :ruleId
+                  AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                  AND COALESCE(c.active, true) = true
+                  AND c.deleted_at IS NULL
+                """)
+                .setParameter("ruleId", ruleId)
+                .getSingleResult();
+        return claimLineCount != null && claimLineCount.longValue() > 0;
+    }
+
+    private void detachNonFinancialClaimLineReferences(Long ruleId) {
+        int detachedCount = em.createNativeQuery(
+                """
+                UPDATE claim_lines cl
+                SET applied_rule_id = NULL
+                FROM claims c
+                WHERE cl.claim_id = c.id
+                  AND cl.applied_rule_id = :ruleId
+                  AND NOT (
+                    c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                    AND COALESCE(c.active, true) = true
+                    AND c.deleted_at IS NULL
+                  )
+                """)
+                .setParameter("ruleId", ruleId)
+                .executeUpdate();
+        if (detachedCount > 0) {
+            log.info("Detached {} non-financial claim line references before hard deleting rule {}", detachedCount, ruleId);
+        }
+    }
 
     private void validatePolicyExists(Long policyId) {
         if (!policyRepository.existsById(policyId)) {
@@ -846,6 +924,18 @@ public class BenefitPolicyRuleService {
     @Transactional(readOnly = true)
     public long countActiveByPolicy(Long policyId) {
         return ruleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(policyId);
+    }
+
+    public long countDeletedByPolicy(Long policyId) {
+        return ruleRepository.countByBenefitPolicyIdAndDeletedTrue(policyId);
+    }
+
+    public long countDisabledByPolicy(Long policyId) {
+        return ruleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveFalse(policyId);
+    }
+
+    public long countTrashByPolicy(Long policyId) {
+        return countDeletedByPolicy(policyId) + countDisabledByPolicy(policyId);
     }
 
     /**
@@ -1032,3 +1122,4 @@ public class BenefitPolicyRuleService {
         }
     }
 }
+

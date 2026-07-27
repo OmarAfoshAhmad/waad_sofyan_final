@@ -55,9 +55,22 @@ public class BenefitPolicyRuleResponseDto {
     private String notes;
     private boolean active;
     private boolean deleted;
+    private String lifecycleStatus;
+    private boolean restoreAllowed;
+    private boolean hardDeleteAllowed;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private static String resolveLifecycleStatus(BenefitPolicyRule rule) {
+        if (rule.isDeleted()) {
+            return "DELETED";
+        }
+        if (!rule.isActive()) {
+            return "DISABLED";
+        }
+        return "ACTIVE";
+    }
 
     /**
      * Factory method to create DTO from entity
@@ -77,6 +90,9 @@ public class BenefitPolicyRuleResponseDto {
                 .notes(rule.getNotes())
                 .active(rule.isActive())
                 .deleted(rule.isDeleted())
+                .lifecycleStatus(resolveLifecycleStatus(rule))
+                .restoreAllowed(rule.isDeleted() || !rule.isActive())
+                .hardDeleteAllowed(rule.isDeleted())
                 .createdAt(rule.getCreatedAt())
                 .updatedAt(rule.getUpdatedAt())
                 .label(rule.getLabel());
@@ -100,3 +116,4 @@ public class BenefitPolicyRuleResponseDto {
         return builder.build();
     }
 }
+

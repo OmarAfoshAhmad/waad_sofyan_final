@@ -6,12 +6,14 @@ import com.waad.tba.modules.benefitpolicy.dto.BenefitStructureDtos.*;
 import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional
 public class BenefitStructureService {
     private final BenefitPolicyRepository policyRepository;
@@ -20,6 +22,7 @@ public class BenefitStructureService {
     private final BenefitLimitBucketRepository bucketRepository;
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
+    private final jakarta.persistence.EntityManager em;
 
     @Transactional(readOnly = true)
     public StructureResponse getStructure(Long policyId) {
@@ -276,6 +279,19 @@ public class BenefitStructureService {
         return bucketResponse(bucket);
     }
 
+    public void toggleGroupActive(Long policyId, Long groupId) {
+        BenefitGroup group = groupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("BenefitGroup", "id", groupId));
+        assertSamePolicy(policyId, group.getPolicy().getId(), "مجموعة المنفعة");
+        group.setActive(!group.isActive());
+        groupRepository.save(group);
+        
+        bucketRepository.findByBenefitGroupId(groupId).forEach(bucket -> {
+            bucket.setActive(group.isActive());
+            bucketRepository.save(bucket);
+        });
+    }
+
     public void deleteBucket(Long policyId, Long bucketId) {
         BenefitLimitBucket bucket = bucketRepository.findById(bucketId)
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitLimitBucket", "id", bucketId));
@@ -287,6 +303,7 @@ public class BenefitStructureService {
             throw new BusinessRuleException("لا يمكن حذف الوعاء قبل فك جميع روابط قواعد التغطية منه");
         }
         assertBucketHasNoFinancialHistory(bucket);
+        detachNonFinancialBucketConsumptionHistory(bucket);
         bucketRepository.delete(bucket);
     }
 
@@ -295,24 +312,131 @@ public class BenefitStructureService {
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitGroup", "id", groupId));
         assertSamePolicy(policyId, group.getPolicy().getId(), "مجموعة المنفعة");
         List<BenefitLimitBucket> buckets = bucketRepository.findByBenefitGroupId(groupId);
-        boolean generatedOnly = buckets.stream().allMatch(bucket -> bucket.getCode().startsWith("AUTO-GRP-"));
-        if (!generatedOnly) {
-            throw new BusinessRuleException("لا يمكن حذف المجموعة قبل حذف جميع السقوف المتقدمة التابعة لها");
-        }
+        // Removed generatedOnly check to allow deleting any group since the Advanced Limits UI is merged
         buckets.forEach(this::assertBucketHasNoFinancialHistory);
         for (BenefitLimitBucket bucket : buckets) {
             ruleBucketRepository.deleteAll(ruleBucketRepository.findByBucketId(bucket.getId()));
+            detachNonFinancialBucketConsumptionHistory(bucket);
             bucketRepository.delete(bucket);
         }
         groupRepository.delete(group);
     }
 
     private void assertBucketHasNoFinancialHistory(BenefitLimitBucket bucket) {
-        if (consumptionRepository.existsByBucketId(bucket.getId())) {
+        Number activeFinancialCount = (Number) em.createNativeQuery("""
+                SELECT COUNT(1)
+                FROM benefit_bucket_consumptions bbc
+                JOIN claims c ON c.id = bbc.claim_id
+                WHERE bbc.bucket_id = :bucketId
+                  AND bbc.status IN ('RESERVED', 'COMMITTED')
+                  AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                  AND COALESCE(c.active, true) = true
+                  AND c.deleted_at IS NULL
+                """)
+                .setParameter("bucketId", bucket.getId())
+                .getSingleResult();
+        if (activeFinancialCount != null && activeFinancialCount.longValue() > 0) {
             throw new BusinessRuleException(
                     "لا يمكن حذف المنفعة أو المجموعة لوجود سجل استهلاك مالي مرتبط بها. يمكن تعطيلها مع الاحتفاظ بالسجل التاريخي: "
                             + bucket.getNameAr());
         }
+    }
+
+    private void detachNonFinancialBucketConsumptionHistory(BenefitLimitBucket bucket) {
+        int removedCount = em.createNativeQuery("""
+                DELETE FROM benefit_bucket_consumptions bbc
+                USING claims c
+                WHERE bbc.claim_id = c.id
+                  AND bbc.bucket_id = :bucketId
+                  AND NOT (
+                    bbc.status IN ('RESERVED', 'COMMITTED')
+                    AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                    AND COALESCE(c.active, true) = true
+                    AND c.deleted_at IS NULL
+                  )
+                """)
+                .setParameter("bucketId", bucket.getId())
+                .executeUpdate();
+        if (removedCount > 0) {
+            log.info("Removed {} non-financial bucket consumption rows before deleting bucket {}", removedCount, bucket.getId());
+        }
+    }
+
+    /**
+     * Reset the policy benefit structure:
+     * 1. Soft-delete all active rules (safe — preserves claim history)
+     * 2. Run cleanup to hard-delete orphaned links, rules without claims, empty buckets/groups
+     */
+    @Transactional
+    public int resetPolicyStructure(Long policyId) {
+        requirePolicy(policyId);
+
+        // Step 1: Soft-delete all active rules for this policy
+        int softDeletedRules = em.createNativeQuery(
+                "UPDATE benefit_policy_rules SET deleted = true, active = false " +
+                "WHERE benefit_policy_id = :policyId AND deleted = false")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        // Step 1.5: Soft-delete all groups and buckets to clear the UI from remaining structures
+        em.createNativeQuery(
+                "UPDATE benefit_groups SET active = false WHERE policy_id = :policyId AND active = true")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        em.createNativeQuery(
+                "UPDATE benefit_limit_buckets SET active = false WHERE policy_id = :policyId AND active = true")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        // Step 2: Run full cleanup on the now-soft-deleted data
+        cleanupOrphanedData(policyId);
+
+        return softDeletedRules;
+    }
+
+    @Transactional
+    public void cleanupOrphanedData(Long policyId) {
+        requirePolicy(policyId);
+        
+        em.createNativeQuery("DELETE FROM benefit_rule_buckets brb " +
+                "USING benefit_policy_rules bpr " +
+                "WHERE brb.rule_id = bpr.id " +
+                "AND bpr.benefit_policy_id = :policyId " +
+                "AND bpr.deleted = true")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        em.createNativeQuery("DELETE FROM benefit_policy_rules bpr " +
+                "WHERE bpr.benefit_policy_id = :policyId " +
+                "AND bpr.deleted = true " +
+                "AND NOT EXISTS (SELECT 1 FROM claim_lines cl WHERE cl.applied_rule_id = bpr.id)")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        // Delete child buckets (or buckets without children) first
+        em.createNativeQuery("DELETE FROM benefit_limit_buckets b " +
+                "WHERE b.policy_id = :policyId " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_rule_buckets brb WHERE brb.bucket_id = b.id) " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_bucket_consumptions bbc WHERE bbc.bucket_id = b.id) " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_limit_buckets child WHERE child.parent_bucket_id = b.id)")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        // Delete parent buckets that are now empty (because their orphaned children were deleted above)
+        em.createNativeQuery("DELETE FROM benefit_limit_buckets b " +
+                "WHERE b.policy_id = :policyId " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_rule_buckets brb WHERE brb.bucket_id = b.id) " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_bucket_consumptions bbc WHERE bbc.bucket_id = b.id) " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_limit_buckets child WHERE child.parent_bucket_id = b.id)")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
+
+        em.createNativeQuery("DELETE FROM benefit_groups g " +
+                "WHERE g.policy_id = :policyId " +
+                "AND NOT EXISTS (SELECT 1 FROM benefit_limit_buckets b WHERE b.benefit_group_id = g.id)")
+                .setParameter("policyId", policyId)
+                .executeUpdate();
     }
 
     public void deleteLink(Long policyId, Long linkId) {

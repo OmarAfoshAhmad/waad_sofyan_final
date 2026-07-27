@@ -1,0 +1,79 @@
+[
+  {
+    "file": "__جدول منافع حجر الماس 1- نسخة.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 4,
+    "tables": 4,
+    "output": "tmp\\coverage_extracted\\__جدول منافع حجر الماس 1- نسخة.json"
+  },
+  {
+    "file": "__جدول منافع وعد المعماري - نسخة.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 4,
+    "tables": 4,
+    "output": "tmp\\coverage_extracted\\__جدول منافع وعد المعماري - نسخة.json"
+  },
+  {
+    "file": "الاسمنت.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 0,
+    "tables": 0,
+    "output": "tmp\\coverage_extracted\\الاسمنت.json"
+  },
+  {
+    "file": "توسيالي22.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 0,
+    "tables": 0,
+    "output": "tmp\\coverage_extracted\\توسيالي22.json"
+  },
+  {
+    "file": "جدول منافع اركاديا.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 4,
+    "tables": 4,
+    "output": "tmp\\coverage_extracted\\جدول منافع اركاديا.json"
+  },
+  {
+    "file": "جدول منافع المجموعة القابضة - نسخة.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 4,
+    "tables": 9,
+    "output": "tmp\\coverage_extracted\\جدول منافع المجموعة القابضة - نسخة.json"
+  },
+  {
+    "file": "جدول منافع المنطقة الحرة جليانة.docx",
+    "type": "docx",
+    "paragraphs_or_pages": 2,
+    "tables": 1,
+    "output": "tmp\\coverage_extracted\\جدول منافع المنطقة الحرة جليانة.json"
+  },
+  {
+    "file": "جدول منافع توسيالي (اجانب).docx",
+    "type": "docx",
+    "paragraphs_or_pages": 2,
+    "tables": 4,
+    "output": "tmp\\coverage_extracted\\جدول منافع توسيالي (اجانب).json"
+  },
+  {
+    "file": "جدول منافع رواق.docx",
+    "type": "docx",
+    "paragraphs_or_pages": 2,
+    "tables": 4,
+    "output": "tmp\\coverage_extracted\\جدول منافع رواق.json"
+  },
+  {
+    "file": "جدول منافع مصلحة الجمارك.pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 4,
+    "tables": 22,
+    "output": "tmp\\coverage_extracted\\جدول منافع مصلحة الجمارك.json"
+  },
+  {
+    "file": "جدول منافع وثيقة اوزون (1).pdf",
+    "type": "pdf",
+    "paragraphs_or_pages": 4,
+    "tables": 6,
+    "output": "tmp\\coverage_extracted\\جدول منافع وثيقة اوزون (1).json"
+  }
+]

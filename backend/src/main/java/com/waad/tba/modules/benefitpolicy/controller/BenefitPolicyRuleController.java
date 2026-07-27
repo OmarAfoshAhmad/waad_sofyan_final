@@ -396,12 +396,19 @@ public class BenefitPolicyRuleController {
 
         long total = ruleService.countByPolicy(policyId);
         long active = ruleService.countActiveByPolicy(policyId);
+        long deleted = ruleService.countDeletedByPolicy(policyId);
+        long disabled = ruleService.countDisabledByPolicy(policyId);
+        long trash = deleted + disabled;
 
         Map<String, Long> counts = Map.of(
                 "total", total,
                 "active", active,
-                "inactive", total - active);
+                "deleted", deleted,
+                "disabled", disabled,
+                "trash", trash,
+                "inactive", trash);
 
         return ResponseEntity.ok(ApiResponse.success("Rule counts", counts));
     }
 }
+

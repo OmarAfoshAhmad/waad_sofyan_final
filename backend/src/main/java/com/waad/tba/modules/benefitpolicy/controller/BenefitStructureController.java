@@ -38,6 +38,22 @@ public class BenefitStructureController {
                 .body(importService.createSimplifiedTemplate());
     }
 
+    @PostMapping("/cleanup")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<Void>> cleanupOrphanedData(@PathVariable Long policyId) {
+        policyService.assertDraftConfiguration(policyId);
+        service.cleanupOrphanedData(policyId);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/reset")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Integer>> resetStructure(@PathVariable Long policyId) {
+        policyService.assertDraftConfiguration(policyId);
+        int deleted = service.resetPolicyStructure(policyId);
+        return ResponseEntity.ok(ApiResponse.success("تم إعادة تهيئة هيكل المنافع. القواعد المُعطَّلة: " + deleted, deleted));
+    }
+
     @PostMapping("/groups")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<GroupResponse>> createGroup(@PathVariable Long policyId,
@@ -52,6 +68,14 @@ public class BenefitStructureController {
             @PathVariable Long groupId, @Valid @RequestBody GroupRequest request) {
         policyService.assertDraftConfiguration(policyId);
         return ResponseEntity.ok(ApiResponse.success(service.updateGroup(policyId, groupId, request)));
+    }
+
+    @PutMapping("/groups/{groupId}/active")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> toggleGroupActive(@PathVariable Long policyId, @PathVariable Long groupId) {
+        policyService.assertDraftConfiguration(policyId);
+        service.toggleGroupActive(policyId, groupId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PostMapping("/buckets")

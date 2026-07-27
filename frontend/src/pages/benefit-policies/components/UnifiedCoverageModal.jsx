@@ -20,8 +20,8 @@ import {
   Grid
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { createPolicyRule, updatePolicyRule } from 'services/api/benefit-policy-rules.service';
-import { createBenefitGroup, upsertIndividualBenefitLimit } from 'services/api/benefit-structure.service';
+import { createPolicyRule, updatePolicyRule, deletePolicyRule } from 'services/api/benefit-policy-rules.service';
+import { createBenefitGroup, updateBenefitGroup, upsertIndividualBenefitLimit } from 'services/api/benefit-structure.service';
 
 const UnifiedCoverageModal = ({
   open,
@@ -38,6 +38,7 @@ const UnifiedCoverageModal = ({
 
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [groupName, setGroupName] = useState('');
+  const [groupNameTouched, setGroupNameTouched] = useState(false);
   
   const [encounterType, setEncounterType] = useState('ANY');
   const [coveragePercent, setCoveragePercent] = useState('');
@@ -48,15 +49,28 @@ const UnifiedCoverageModal = ({
   const [amountLimit, setAmountLimit] = useState('');
   const [timesLimit, setTimesLimit] = useState('');
   const [daysLimit, setDaysLimit] = useState('');
-  const [periodType, setPeriodType] = useState('YEARLY');
+  const [periodType, setPeriodType] = useState('ANNUAL');
 
   const isGroup = selectedCategories.length > 1;
+
+  const buildSuggestedGroupName = (items) => {
+    const names = items
+      .map((item) => (item.nameAr || item.name || item.code || '').trim())
+      .filter(Boolean);
+
+    if (names.length <= 2) {
+      return names.join(' و ');
+    }
+
+    return `${names.slice(0, -1).join('، ')} و ${names[names.length - 1]}`;
+  };
 
   useEffect(() => {
     const defaultCoverage = policyDefaultCoveragePercent !== undefined && policyDefaultCoveragePercent !== null ? String(policyDefaultCoveragePercent) : '';
     if (open && initialData) {
       if (initialData.groupSource || initialData.type === 'GROUP') {
          setGroupName(initialData.nameAr || '');
+         setGroupNameTouched(Boolean(initialData.nameAr));
          setEncounterType(initialData.encounterType || initialData.contextType || 'ANY');
          if (initialData.groupMembers || initialData.rules) {
            const members = initialData.groupMembers || initialData.rules;
@@ -68,9 +82,11 @@ const UnifiedCoverageModal = ({
              setAmountLimit(bucket.amountLimit ?? '');
              setTimesLimit(bucket.timesLimit ?? '');
              setDaysLimit(bucket.daysLimit ?? '');
-             setPeriodType(bucket.periodType ?? 'YEARLY');
+             setPeriodType(bucket.periodType ?? 'ANNUAL');
          }
       } else {
+         setGroupName('');
+         setGroupNameTouched(false);
          const cat = categories.find(c => c.id === initialData.medicalCategoryId || c.id === initialData.categoryId);
          if (cat) setSelectedCategories([cat]);
          setEncounterType(initialData.encounterType || 'ANY');
@@ -84,17 +100,18 @@ const UnifiedCoverageModal = ({
              setAmountLimit(limit.amountLimit ?? '');
              setTimesLimit(limit.timesLimit ?? '');
              setDaysLimit(limit.daysLimit ?? '');
-             setPeriodType(limit.periodType ?? 'YEARLY');
+             setPeriodType(limit.periodType ?? 'ANNUAL');
          } else {
              setAmountLimit('');
              setTimesLimit('');
              setDaysLimit('');
-             setPeriodType('YEARLY');
+             setPeriodType('ANNUAL');
          }
       }
     } else if (open && !initialData) {
       setSelectedCategories([]);
       setGroupName('');
+      setGroupNameTouched(false);
       setEncounterType('ANY');
       setCoveragePercent(defaultCoverage);
       setRequiresPreApproval(false);
@@ -103,9 +120,21 @@ const UnifiedCoverageModal = ({
       setAmountLimit('');
       setTimesLimit('');
       setDaysLimit('');
-      setPeriodType('YEARLY');
+      setPeriodType('ANNUAL');
     }
   }, [open, initialData, categories, policyDefaultCoveragePercent]);
+
+  const handleCategoriesChange = (e, newValue) => {
+    setSelectedCategories(newValue);
+
+    if (newValue.length > 1 && (!groupNameTouched || !groupName.trim())) {
+      setGroupName(buildSuggestedGroupName(newValue));
+    }
+
+    if (newValue.length <= 1 && !groupNameTouched) {
+      setGroupName('');
+    }
+  };
 
   const handleSubmit = async () => {
     if (selectedCategories.length === 0) {
@@ -125,7 +154,7 @@ const UnifiedCoverageModal = ({
         const parsedDays = daysLimit !== '' ? Number(daysLimit) : null;
         const hasLimits = parsedAmount !== null || parsedTimes !== null || parsedDays !== null;
 
-        if (!initialData.groupSource) {
+        if (!initialData.groupSource && !initialData.isGroup) {
           await updatePolicyRule(policyId, initialData.id, {
             coveragePercent: coveragePercent !== '' ? Number(coveragePercent) : null,
             waitingPeriodDays: waitingPeriodDays,
@@ -134,14 +163,72 @@ const UnifiedCoverageModal = ({
             notes: notes
           });
 
-          if (hasLimits) {
-            await upsertIndividualBenefitLimit(policyId, initialData.id, {
-              amountLimit: parsedAmount,
-              timesLimit: parsedTimes,
-              daysLimit: parsedDays,
-              periodType: periodType
-            });
+          await upsertIndividualBenefitLimit(policyId, initialData.id, {
+            amountLimit: parsedAmount,
+            timesLimit: parsedTimes,
+            daysLimit: parsedDays,
+            periodType: periodType
+          });
+        } else {
+          // Edit Group Mode
+          const groupId = initialData.id.toString().replace('group-', '');
+          const existingMembersList = initialData.groupMembers || initialData.rules || [];
+          const selectedCatIds = selectedCategories.map((c) => Number(c.id));
+
+          // Clean up rules for categories removed from the group
+          const removedMembers = existingMembersList.filter((m) => {
+            const catId = m.medicalCategoryId || m.categoryId;
+            return catId && !selectedCatIds.includes(Number(catId));
+          });
+
+          for (const member of removedMembers) {
+            if (member.id) {
+              try {
+                await deletePolicyRule(policyId, member.id);
+              } catch (e) {
+                console.warn('Failed to delete removed group rule:', e);
+              }
+            }
           }
+
+          const rulePromises = selectedCategories.map((cat) => {
+            const existingMember = existingMembersList.find(
+              (m) => Number(m.medicalCategoryId || m.categoryId) === Number(cat.id)
+            );
+            if (existingMember && existingMember.id) {
+              return updatePolicyRule(policyId, existingMember.id, {
+                coveragePercent: coveragePercent !== '' ? Number(coveragePercent) : null,
+                waitingPeriodDays: waitingPeriodDays,
+                requiresPreApproval: requiresPreApproval,
+                encounterType: encounterType,
+                notes: notes
+              }).then(() => existingMember.id);
+            } else {
+              return createPolicyRule(policyId, {
+                medicalCategoryId: cat.id,
+                medicalServiceId: null,
+                coveragePercent: coveragePercent !== '' ? Number(coveragePercent) : null,
+                waitingPeriodDays: waitingPeriodDays,
+                requiresPreApproval: requiresPreApproval,
+                encounterType: encounterType,
+                notes: notes
+              }).then((res) => res.id);
+            }
+          });
+
+          const ruleIds = await Promise.all(rulePromises);
+
+          await updateBenefitGroup(policyId, groupId, {
+            nameAr: groupName,
+            contextType: encounterType,
+            aggregationMode: initialData.aggregationMode || 'SHARED',
+            amountLimit: parsedAmount,
+            timesLimit: parsedTimes,
+            daysLimit: parsedDays,
+            periodType: periodType,
+            active: initialData.isActive !== false,
+            ruleIds: ruleIds
+          });
         }
         enqueueSnackbar('تم تحديث البيانات بنجاح', { variant: 'success' });
         onSuccess();
@@ -172,13 +259,12 @@ const UnifiedCoverageModal = ({
           nameAr: groupName,
           code: null,
           contextType: encounterType,
-          aggregationMode: 'SHARED_LIMIT',
+          aggregationMode: 'SHARED',
           active: true,
           amountLimit: parsedAmount,
           timesLimit: parsedTimes,
           daysLimit: parsedDays,
           periodType: periodType,
-          countingMethod: 'FIFO',
           ruleIds: ruleIds
         });
       } else {
@@ -220,7 +306,7 @@ const UnifiedCoverageModal = ({
               multiple
               options={categories}
               value={selectedCategories}
-              onChange={(e, newValue) => setSelectedCategories(newValue)}
+              onChange={handleCategoriesChange}
               getOptionLabel={(option) => option.nameAr || option.name || option.code}
               isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
               renderTags={(value, getTagProps) =>
@@ -247,10 +333,13 @@ const UnifiedCoverageModal = ({
               <TextField
                 label="اسم المجموعة *"
                 value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
+                onChange={(e) => {
+                  setGroupNameTouched(true);
+                  setGroupName(e.target.value);
+                }}
                 fullWidth
                 required
-                helperText="أدخل اسماً يصف هذه المجموعة (مثال: الولادة الطبيعية والقيصرية)"
+                helperText="يُقترح تلقائياً من أسماء التصنيفات المختارة وبنفس ترتيبها، ويمكنك تعديله يدوياً."
               />
             </Grid>
           )}

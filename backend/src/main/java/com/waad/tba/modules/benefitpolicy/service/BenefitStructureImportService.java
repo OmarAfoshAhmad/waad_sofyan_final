@@ -136,17 +136,21 @@ public class BenefitStructureImportService {
     }
 
     private void assertImportAllowed(BenefitPolicy policy) {
-        if (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.DRAFT && policy.isActive()) {
+        if (!policy.isActive()) {
+            throw new BusinessRuleException("لا يمكن اعتماد الاستيراد إلا لوثيقة فعالة؛ فعّل الوثيقة أولاً أو اجعلها مسودة فعالة");
+        }
+        if (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.DRAFT) {
             return;
         }
         boolean emptyStructure = ruleRepository.countByBenefitPolicyId(policy.getId()) == 0
                 && groupRepository.countByPolicyId(policy.getId()) == 0
                 && bucketRepository.countByPolicyId(policy.getId()) == 0
                 && linkRepository.countByRuleBenefitPolicyId(policy.getId()) == 0;
-        if (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.ACTIVE && policy.isActive() && emptyStructure) {
+        if (emptyStructure && (policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.ACTIVE
+                || policy.getStatus() == BenefitPolicy.BenefitPolicyStatus.SUSPENDED)) {
             return;
         }
-        throw new BusinessRuleException("لا يمكن اعتماد الاستيراد إلا لمسودة، أو كتهيئة أولى لوثيقة نشطة لا تحتوي إعدادات تغطية بعد");
+        throw new BusinessRuleException("لا يمكن اعتماد الاستيراد إلا لمسودة، أو كتهيئة أولى لوثيقة نشطة/موقوفة لا تحتوي إعدادات تغطية بعد");
     }
 
     private Parsed parse(MultipartFile file) {
@@ -208,27 +212,29 @@ public class BenefitStructureImportService {
                 String safe = category == null ? "ROW" + n : category.trim();
                 String groupCode = "AUTO-BEN-" + safe + "-" + context;
                 String bucketCode = "AUTO-BEN-LIMIT-" + safe + "-" + context;
-                p.groups.add(new GroupRow(groupCode, text(row, 1) == null ? safe : text(row, 1), context, AggregationMode.INDIVIDUAL, bool(row, 11, true), n));
-                p.buckets.add(new BucketRow(bucketCode, text(row, 1) == null ? safe : text(row, 1), groupCode, context,
+                String limitName = autoLimitName(text(row, 1), safe, context);
+                p.groups.add(new GroupRow(groupCode, limitName, context, AggregationMode.INDIVIDUAL, bool(row, 11, true), n));
+                p.buckets.add(new BucketRow(bucketCode, limitName, groupCode, context,
                         amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD), 1,
                         enumOrDefault(CountingMethod.class, row, 10, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
                         null, false, bool(row, 11, true), n));
                 p.links.add(new LinkRow(category, context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
             }
         });
-        if (workbook.getSheet("المجموعات") == null) return;
-        read(workbook, "المجموعات", 10, (row, n) -> {
-            String code = text(row, 0); EncounterType context = enumValue(EncounterType.class, row, 2, n);
-            boolean active = bool(row, 9, true); String bucketCode = "AUTO-GRP-" + code;
-            p.groups.add(new GroupRow(code, text(row, 1), context, AggregationMode.SHARED, active, n));
-            p.buckets.add(new BucketRow(bucketCode, text(row, 1), code, context, decimal(row, 4), integer(row, 5), integer(row, 6),
-                    enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD), 1,
-                    enumOrDefault(CountingMethod.class, row, 8, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
-                    null, true, active, n));
-            String members = text(row, 3);
-            if (members != null) for (String member : members.split("[,،]"))
-                if (!member.isBlank()) p.links.add(new LinkRow(member.trim(), context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
-        });
+        if (workbook.getSheet("المجموعات") != null) {
+            read(workbook, "المجموعات", 10, (row, n) -> {
+                String code = text(row, 0); EncounterType context = enumValue(EncounterType.class, row, 2, n);
+                boolean active = bool(row, 9, true); String bucketCode = "AUTO-GRP-" + code;
+                p.groups.add(new GroupRow(code, text(row, 1), context, AggregationMode.SHARED, active, n));
+                p.buckets.add(new BucketRow(bucketCode, text(row, 1), code, context, decimal(row, 4), integer(row, 5), integer(row, 6),
+                        enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD), 1,
+                        enumOrDefault(CountingMethod.class, row, 8, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
+                        null, true, active, n));
+                String members = text(row, 3);
+                if (members != null) for (String member : members.split("[,،]"))
+                    if (!member.isBlank()) p.links.add(new LinkRow(member.trim(), context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
+            });
+        }
     }
 
     private List<String> validate(Long policyId, Parsed p) {
@@ -465,6 +471,17 @@ public class BenefitStructureImportService {
     private <E extends Enum<E>> E enumOrDefault(Class<E> type, Row row, int i, int n, E fallback) { E value=enumValue(type,row,i,n); return value==null?fallback:value; }
     private boolean blank(String value) { return value == null || value.isBlank(); }
     private String normalizedCode(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
+    private String autoLimitName(String name, String fallback, EncounterType context) {
+        String base = blank(name) ? fallback : name;
+        return base + " - " + switch (context) {
+            case INPATIENT -> "إيواء";
+            case OUTPATIENT -> "عيادات خارجية";
+            case EMERGENCY -> "طوارئ";
+            case SPECIAL -> "خاص";
+            case OPERATING_ROOM -> "عمليات";
+            case ANY -> "عام";
+        };
+    }
 
     private interface RowConsumer { void accept(Row row, int number); }
     private record RuleRow(String categoryCode,String categoryName,EncounterType context,Integer coverage,BigDecimal copay,Integer waitingDays,boolean preApproval,Integer priority,String notes,boolean active,int row){}

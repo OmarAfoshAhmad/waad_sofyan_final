@@ -1,0 +1,56 @@
+[
+  {
+    "source": "الاسمنت.json",
+    "rows": 0,
+    "review": 1,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_الاسمنت.xlsx"
+  },
+  {
+    "source": "توسيالي22.json",
+    "rows": 0,
+    "review": 1,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_توسيالي22.xlsx"
+  },
+  {
+    "source": "جدول منافع اركاديا.json",
+    "rows": 21,
+    "review": 11,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع اركاديا.xlsx"
+  },
+  {
+    "source": "جدول منافع المجموعة القابضة - نسخة.json",
+    "rows": 17,
+    "review": 17,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع المجموعة القابضة - نسخة.xlsx"
+  },
+  {
+    "source": "جدول منافع المنطقة الحرة جليانة.json",
+    "rows": 37,
+    "review": 8,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع المنطقة الحرة جليانة.xlsx"
+  },
+  {
+    "source": "جدول منافع توسيالي (اجانب).json",
+    "rows": 23,
+    "review": 2,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع توسيالي (اجانب).xlsx"
+  },
+  {
+    "source": "جدول منافع رواق.json",
+    "rows": 30,
+    "review": 6,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع رواق.xlsx"
+  },
+  {
+    "source": "جدول منافع مصلحة الجمارك.json",
+    "rows": 16,
+    "review": 22,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع مصلحة الجمارك.xlsx"
+  },
+  {
+    "source": "جدول منافع وثيقة اوزون (1).json",
+    "rows": 16,
+    "review": 4,
+    "output": "tmp\\generated_coverage_imports\\استيراد_منافع_جدول منافع وثيقة اوزون (1).xlsx"
+  }
+]

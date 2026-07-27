@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -48,12 +48,14 @@ import {
   activateBenefitPolicy,
   suspendBenefitPolicy,
   cancelBenefitPolicy,
-  deleteBenefitPolicy
+  deleteBenefitPolicy,
+  checkPolicyEditability
 } from 'services/api/benefit-policies.service';
 import { countMembers } from 'services/api/unified-members.service';
+import { getPolicyRules } from 'services/api/benefit-policy-rules.service';
+import { getBenefitStructure } from 'services/api/benefit-structure.service';
 
 import BenefitPolicyRulesTab from './BenefitPolicyRulesTab';
-import BenefitStructureTab from './BenefitStructureTab';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STATUS CONFIGURATION
@@ -215,6 +217,56 @@ const BenefitPolicyView = () => {
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always'
   });
+
+  // Calculate actual active rules count to handle soft-deleted rules properly
+  const { data: rulesList = [] } = useQuery({
+    queryKey: ['benefit-policy-rules', id],
+    queryFn: () => getPolicyRules(id),
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always'
+  });
+
+  const { data: benefitStructure = {} } = useQuery({
+    queryKey: ['benefit-structure', id],
+    queryFn: () => getBenefitStructure(id),
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always'
+  });
+  
+  const activeRulesCount = useMemo(() => {
+    const isTruthy = (value) => value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
+    const isActiveRecord = (record) => !isTruthy(record?.deleted) && !isTruthy(record?.isDeleted) && record?.active !== false && record?.isActive !== false;
+
+    const groups = Array.isArray(benefitStructure?.groups) ? benefitStructure.groups : [];
+    const links = Array.isArray(benefitStructure?.links) ? benefitStructure.links : [];
+
+    const activeSharedGroups = groups.filter((group) => {
+      const source = group?.sourceType || group?.groupSource || group?.source;
+      return isActiveRecord(group) && source !== 'AUTO_BENEFIT_LIMIT' && source !== 'AUTO';
+    });
+    const activeSharedGroupIds = new Set(activeSharedGroups.map((group) => Number(group?.id)).filter(Boolean));
+
+    const groupedRuleIds = new Set(
+      links
+        .filter((link) => {
+          const groupId = link?.bucket?.benefitGroupId || link?.benefitGroupId || link?.groupId;
+          return activeSharedGroupIds.has(Number(groupId));
+        })
+        .map((link) => Number(link?.ruleId || link?.benefitPolicyRuleId || link?.rule?.id))
+        .filter(Boolean)
+    );
+
+    const activeStandaloneRules = rulesList.filter((rule) => {
+      const ruleId = Number(rule?.id);
+      return isActiveRecord(rule) && !groupedRuleIds.has(ruleId);
+    });
+
+    return activeSharedGroups.length + activeStandaloneRules.length;
+  }, [rulesList, benefitStructure]);
 
   const { data: isDynamicallyEditable = false } = useQuery({
     queryKey: ['benefit-policy-editability', id],
@@ -481,8 +533,7 @@ const BenefitPolicyView = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: '0.5rem', mt: -3 }}>
         <Tabs value={activeTab} onChange={handleTabChange} textColor="primary" indicatorColor="primary">
           <Tab icon={<InfoIcon />} iconPosition="start" label="نظرة عامة" />
-          <Tab icon={<RuleIcon />} iconPosition="start" label={`قواعد التغطية (${policy?.rulesCount || 0})`} />
-          <Tab icon={<StructureIcon />} iconPosition="start" label="مجموعات المنافع" />
+          <Tab icon={<RuleIcon />} iconPosition="start" label={`قواعد التغطية (${activeRulesCount})`} />
         </Tabs>
       </Box>
 
@@ -531,7 +582,7 @@ const BenefitPolicyView = () => {
               <Divider sx={{ my: '1.0rem' }} />
               <DetailRow 
                 label="عدد القواعد" 
-                value={policy?.rulesCount || 0} 
+                value={activeRulesCount} 
                 icon={RuleIcon}
               />
               <DetailRow 
@@ -595,10 +646,8 @@ const BenefitPolicyView = () => {
           policyId={id}
           policyStatus={policy?.status}
           policyDefaultCoveragePercent={policy?.defaultCoveragePercent}
-          onOpenStructure={() => setActiveTab(2)}
         />
       )}
-      {activeTab === 2 && <BenefitStructureTab policyId={id} policyStatus={policy?.status} />}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog

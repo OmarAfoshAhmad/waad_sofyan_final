@@ -62,6 +62,7 @@ public class BenefitPolicyRuleExcelService {
 
     private final BenefitPolicyRepository policyRepository;
     private final BenefitPolicyRuleRepository ruleRepository;
+    private final jakarta.persistence.EntityManager em;
     private final MedicalCategoryRepository categoryRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -302,9 +303,13 @@ public class BenefitPolicyRuleExcelService {
                 .orElseThrow(() -> new BusinessRuleException("الوثيقة غير موجودة: " + policyId));
 
         if (clearOld) {
-            log.info("[BPRuleExcel] Clearing old rules for policy={}", policyId);
+            log.info("[BPRuleExcel] Safely moving old rules out of active scope for policy={}", policyId);
             List<BenefitPolicyRule> existingRules = ruleRepository.findByBenefitPolicyId(policyId);
-            ruleRepository.deleteAll(existingRules);
+            for (BenefitPolicyRule rule : existingRules) {
+                rule.setActive(false);
+                rule.setDeleted(!isRuleReferencedFinancially(rule.getId()));
+            }
+            ruleRepository.saveAll(existingRules);
         }
 
         try (XSSFWorkbook wb = new XSSFWorkbook(file.getInputStream())) {
@@ -510,6 +515,22 @@ public class BenefitPolicyRuleExcelService {
     // ═══════════════════════════════════════════════════════════════════════════
     // HELPERS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    private boolean isRuleReferencedFinancially(Long ruleId) {
+        Number claimLineCount = (Number) em.createNativeQuery(
+                """
+                SELECT COUNT(1)
+                FROM claim_lines cl
+                JOIN claims c ON c.id = cl.claim_id
+                WHERE cl.applied_rule_id = :ruleId
+                  AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                  AND COALESCE(c.active, true) = true
+                  AND c.deleted_at IS NULL
+                """)
+                .setParameter("ruleId", ruleId)
+                .getSingleResult();
+        return claimLineCount != null && claimLineCount.longValue() > 0;
+    }
 
     private String getCellString(Row row, int colIdx) {
         Cell cell = row.getCell(colIdx, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);

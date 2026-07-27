@@ -5,6 +5,12 @@ const unwrap = (response) => response.data?.data || response.data;
 export const getBenefitStructure = async (policyId) =>
   unwrap(await axiosClient.get(`/benefit-policies/${policyId}/structure`));
 
+export const cleanupBenefitStructure = async (policyId) =>
+  unwrap(await axiosClient.post(`/benefit-policies/${policyId}/structure/cleanup`));
+
+export const resetBenefitStructure = async (policyId) =>
+  unwrap(await axiosClient.post(`/benefit-policies/${policyId}/structure/reset`));
+
 export const createBenefitGroup = async (policyId, payload) =>
   unwrap(await axiosClient.post(`/benefit-policies/${policyId}/structure/groups`, payload));
 
@@ -25,6 +31,9 @@ export const deleteLimitBucket = async (policyId, bucketId) =>
 
 export const deleteBenefitGroup = async (policyId, groupId) =>
   unwrap(await axiosClient.delete(`/benefit-policies/${policyId}/structure/groups/${groupId}`));
+
+export const toggleBenefitGroupActive = async (policyId, groupId) =>
+  unwrap(await axiosClient.put(`/benefit-policies/${policyId}/structure/groups/${groupId}/active`));
 
 export const deleteRuleBucketLink = async (policyId, linkId) =>
   unwrap(await axiosClient.delete(`/benefit-policies/${policyId}/structure/links/${linkId}`));
