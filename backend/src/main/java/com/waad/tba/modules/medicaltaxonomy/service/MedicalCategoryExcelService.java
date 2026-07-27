@@ -23,8 +23,9 @@ import java.util.Map;
 /**
  * Service for importing Medical Categories from Excel files
  * 
- * Expected Excel format (New Standard):
- * | code | name | parent_code | active |
+ * Expected Excel format (Canonical Standard):
+ * | code | name | active |
+ * Legacy parent_code columns are accepted but ignored.
  * 
  * Also supports legacy format:
  * | code | nameAr | active |
@@ -116,8 +117,6 @@ public class MedicalCategoryExcelService {
         if (name == null || name.trim().isEmpty()) {
             name = getCellValueAsString(row, columnMap.get("nameAr"));
         }
-        // Support parent category
-        String parentCode = getCellValueAsString(row, columnMap.get("parentCode"));
         Boolean active = getCellValueAsBoolean(row, columnMap.get("active"));
 
         if (code == null || code.trim().isEmpty()) {
@@ -126,17 +125,7 @@ public class MedicalCategoryExcelService {
         if (name == null || name.trim().isEmpty()) {
             throw new BusinessRuleException("اسم التصنيف (name) مطلوب");
         }
-
-        // Resolve parent if provided
-        Long parentId = null;
-        if (parentCode != null && !parentCode.trim().isEmpty()) {
-            MedicalCategory parent = categoryRepository.findByCode(parentCode.trim()).orElse(null);
-            if (parent != null) {
-                parentId = parent.getId();
-            } else {
-                log.warn("[MedicalCategoryExcel] Row {}: Parent code '{}' not found, creating as root", rowNum, parentCode);
-            }
-        }
+        Long parentId = null; // canonical flat taxonomy; legacy parent_code ignored
 
         MedicalCategory existingCategory = categoryRepository.findByCode(code.trim()).orElse(null);
 
@@ -184,7 +173,7 @@ public class MedicalCategoryExcelService {
             else if (columnName.equals("namear") || columnName.equals("name_ar") || columnName.equals("الاسم بالعربية")) {
                 columnMap.put("nameAr", cell.getColumnIndex());
             } 
-            // Parent code column (for hierarchy)
+            // Legacy parent_code column is accepted but ignored.
             else if (columnName.equals("parent_code") || columnName.equals("parentcode") || columnName.equals("رمز التصنيف الأب") || columnName.equals("الأب")) {
                 columnMap.put("parentCode", cell.getColumnIndex());
             }
@@ -309,3 +298,4 @@ public class MedicalCategoryExcelService {
         return msg.toString();
     }
 }
+

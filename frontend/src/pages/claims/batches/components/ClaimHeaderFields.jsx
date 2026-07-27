@@ -206,7 +206,7 @@ export const ClaimHeaderFields = ({
               value={alternativeContext}
               onChange={(e) => {
                 const isFullCoverage = e.target.value === 'FULL_COVERAGE';
-                const newEncounterType = isFullCoverage ? 'OUTPATIENT' : 'INPATIENT';
+                const newEncounterType = isFullCoverage ? 'OUTPATIENT' : e.target.value;
                 setEncounterType(newEncounterType);
                 setFullCoverage(isFullCoverage);
                 setIsDirty(true);
@@ -246,3 +246,4 @@ export const ClaimHeaderFields = ({
     </Box>
   );
 };
+

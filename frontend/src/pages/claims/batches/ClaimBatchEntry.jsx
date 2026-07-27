@@ -71,7 +71,9 @@ import {
   Edit as EditIcon,
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
-  MedicalServices as MedicalServicesIcon
+  MedicalServices as MedicalServicesIcon,
+  LocalHospital as InpatientIcon,
+  Healing as OutpatientIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -102,6 +104,29 @@ import { failedCoverageResult } from './hooks/coverageContract.mjs';
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
 import { ClaimLineRow } from './components/ClaimLineRow';
 import { ClaimTotalsFooter } from './components/ClaimTotalsFooter';
+
+const CLAIM_SERVICE_CONTEXTS = new Set(['OUTPATIENT', 'INPATIENT', 'ANY']);
+
+const normalizeClaimServiceContext = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  return CLAIM_SERVICE_CONTEXTS.has(normalized) ? normalized : 'ANY';
+};
+
+const getServiceContext = (service) =>
+  normalizeClaimServiceContext(
+    service?.encounterType ??
+      service?.defaultEncounterType ??
+      service?.serviceEncounterType ??
+      service?.pricingEncounterType ??
+      service?.contextType ??
+      service?.context
+  );
+
+const isServiceAllowedForClaimContext = (service, claimEncounterType) => {
+  const claimContext = normalizeClaimServiceContext(claimEncounterType || 'OUTPATIENT');
+  const serviceContext = getServiceContext(service);
+  return serviceContext === 'ANY' || serviceContext === claimContext;
+};
 
 // ── أسماء الشهور ─────────────────────────────────────────────────────────────
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -235,9 +260,10 @@ export default function ClaimBatchEntry() {
   const [recoveryDialog, setRecoveryDialog] = useState({ open: false, serverDraft: null, localDraft: null });
 
   // Generic confirmation dialog
-  const [actionConfirm, setActionConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
+  const [actionConfirm, setActionConfirm] = useState({ open: false, title: '', message: '', onConfirm: null, severity: 'warning' });
   const closeActionConfirm = () => setActionConfirm((prev) => ({ ...prev, open: false }));
-  const triggerConfirm = (title, message, onConfirm) => setActionConfirm({ open: true, title, message, onConfirm });
+  const triggerConfirm = (title, message, onConfirm, severity = 'error') =>
+    setActionConfirm({ open: true, title, message, onConfirm, severity });
 
   const currentUserRole = (() => {
     try {
@@ -348,8 +374,7 @@ export default function ClaimBatchEntry() {
   const [customServiceDialogOpen, setCustomServiceDialogOpen] = useState(false);
   const [activeLineIdForCustomService, setActiveLineIdForCustomService] = useState(null);
   const [customServiceData, setCustomServiceData] = useState({
-    mainCategoryId: '',
-    subCategoryId: '',
+    categoryId: '',
     serviceName: '',
     serviceCode: '',
     contractPrice: ''
@@ -359,8 +384,7 @@ export default function ClaimBatchEntry() {
 
   const handleOpenCustomServiceDialog = (lineId) => {
     setCustomServiceData({
-      mainCategoryId: '',
-      subCategoryId: '',
+      categoryId: '',
       serviceName: '',
       serviceCode: '',
       contractPrice: ''
@@ -376,21 +400,15 @@ export default function ClaimBatchEntry() {
   };
 
   const handleCustomServiceDataChange = (field, value) => {
-    setCustomServiceData((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'mainCategoryId') {
-        next.subCategoryId = '';
-      }
-      return next;
-    });
+    setCustomServiceData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmitCustomService = async () => {
     setCustomServiceError(null);
 
     // Validation
-    if (!customServiceData.mainCategoryId) {
-      setCustomServiceError('يرجى اختيار التصنيف الرئيسي');
+    if (!customServiceData.categoryId) {
+      setCustomServiceError('يرجى اختيار التصنيف الطبي الموحد');
       return;
     }
     if (!customServiceData.serviceName.trim()) {
@@ -405,8 +423,7 @@ export default function ClaimBatchEntry() {
 
     setAddingCustomService(true);
     try {
-      // Determine final category id (subCategory if chosen, else mainCategory)
-      const finalCategoryId = customServiceData.subCategoryId || customServiceData.mainCategoryId;
+      const finalCategoryId = customServiceData.categoryId;
 
       // Auto-generate service code if not provided
       const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
@@ -922,9 +939,9 @@ export default function ClaimBatchEntry() {
     return list;
   }, [memberResults, member]);
 
-  const serviceOptions = useMemo(() => {
+  const contractedServiceOptionsRaw = useMemo(() => {
     const items = Array.isArray(contractedRaw) ? contractedRaw : contractedRaw?.items || [];
-    const mapped = items.map((s) => {
+    return items.map((s) => {
       const code = s.serviceCode || s.code || '';
       const name = s.serviceName || s.name || '';
       const normalizedCategoryId =
@@ -943,11 +960,14 @@ export default function ClaimBatchEntry() {
         s.effectiveCategory?.nameAr ??
         s.effectiveCategory?.name ??
         null;
+      const normalizedEncounterType = getServiceContext(s);
       return {
         ...s,
         label: `${code ? '[' + code + '] ' : ''}${name}`,
         serviceName: name,
         serviceCode: code,
+        encounterType: normalizedEncounterType,
+        defaultEncounterType: normalizedEncounterType,
         categoryId: normalizedCategoryId,
         serviceCategoryId: normalizedCategoryId,
         medicalCategoryId: normalizedCategoryId,
@@ -958,6 +978,11 @@ export default function ClaimBatchEntry() {
         contractPrice: s.contractPrice || 0
       };
     });
+  }, [contractedRaw]);
+
+  const serviceOptions = useMemo(() => {
+    const mappedCodes = new Set(contractedServiceOptionsRaw.map((item) => item.serviceCode).filter(Boolean));
+
 
     const generalOptions = [
       {
@@ -967,6 +992,8 @@ export default function ClaimBatchEntry() {
         serviceName: 'دواء عام / General Medication',
         label: '[GEN-MEDICATION] دواء عام / General Medication',
         contractPrice: 0,
+        encounterType: 'OUTPATIENT',
+        defaultEncounterType: 'OUTPATIENT',
         categoryId: null
       },
       {
@@ -976,12 +1003,15 @@ export default function ClaimBatchEntry() {
         serviceName: 'خدمة طبية عامة / General Medical Service',
         label: '[GEN-MEDICAL-SERVICE] خدمة طبية عامة / General Medical Service',
         contractPrice: 0,
+        encounterType: 'OUTPATIENT',
+        defaultEncounterType: 'OUTPATIENT',
         categoryId: null
       }
-    ];
+    ].filter((item) => !mappedCodes.has(item.serviceCode));
 
-    return [...generalOptions, ...mapped];
-  }, [contractedRaw]);
+
+    return [...contractedServiceOptionsRaw, ...generalOptions].filter((item) => isServiceAllowedForClaimContext(item, encounterType));
+  }, [contractedServiceOptionsRaw, encounterType]);
 
   const batchContent = useMemo(
     () => batchData?.data?.items ?? batchData?.items ?? batchData?.data?.content ?? batchData?.content ?? [],
@@ -1131,9 +1161,39 @@ export default function ClaimBatchEntry() {
     setIsDirty(true);
   }, []);
   const removeLine = useCallback((idx) => {
-    setLines((p) => (p.length === 1 ? [newLine()] : p.filter((_, i) => i !== idx)));
-    setIsDirty(true);
-  }, []);
+    const targetLine = lines[idx];
+    const serviceLabel = targetLine?.serviceName || targetLine?.service?.serviceName || targetLine?.serviceCode || `البند رقم ${idx + 1}`;
+    triggerConfirm('تأكيد حذف البند', `هل تريد حذف بند الخدمة «${serviceLabel}»؟ سيتم إخراجه من حساب المطالبة.`, () => {
+      setLines((p) => (p.length === 1 ? [newLine()] : p.filter((_, i) => i !== idx)));
+      setIsDirty(true);
+    });
+  }, [lines]);
+
+  const incompatibleContextLines = useMemo(
+    () =>
+      lines
+        .map((line, index) => ({ line, index }))
+        .filter(({ line }) => line?.service && !isServiceAllowedForClaimContext(line.service, encounterType)),
+    [lines, encounterType]
+  );
+
+  const contractedContextCounts = useMemo(() => {
+    return contractedServiceOptionsRaw.reduce(
+      (acc, service) => {
+        acc.total += 1;
+        const serviceContext = getServiceContext(service);
+        if (serviceContext === 'INPATIENT') {
+          acc.inpatient += 1;
+        } else if (serviceContext === 'OUTPATIENT') {
+          acc.outpatient += 1;
+        } else {
+          acc.any += 1;
+        }
+        return acc;
+      },
+      { total: 0, outpatient: 0, inpatient: 0, any: 0 }
+    );
+  }, [contractedServiceOptionsRaw]);
 
   const totals = useMemo(() => {
     return lines.reduce(
@@ -1356,6 +1416,17 @@ export default function ClaimBatchEntry() {
       return;
     }
 
+    const uncoveredLines = lines.filter(
+      (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+    );
+    if (!isClaimRejected && uncoveredLines.length > 0) {
+      enqueueSnackbar('لا يمكن اعتماد مطالبة تحتوي خدمات غير مغطاة. غيّر سياق المطالبة أو ارفض البند/المطالبة بسبب واضح.', {
+        variant: 'error',
+        autoHideDuration: 7000
+      });
+      return;
+    }
+
     setShowValidationErrors(false);
 
     // تحققات إضافية لأسعار الخدمات
@@ -1462,9 +1533,9 @@ export default function ClaimBatchEntry() {
           quantity: parseInt(l.quantity) || 1,
           unitPrice: parseFloat(l.unitPrice) || 0,
           refusedAmount: parseFloat(l.refusedAmount) || 0,
-          rejected: l.rejected || false,
-          rejectionReason: l.rejectionReason || null,
-          manualRefusedAmount: parseFloat(l.manualRefusedAmount) || 0
+          rejected: isClaimRejected ? true : l.rejected || false,
+          rejectionReason: isClaimRejected ? effectiveRejectionReason : l.rejectionReason || null,
+          manualRefusedAmount: isClaimRejected ? 0 : parseFloat(l.manualRefusedAmount) || 0
         }))
       };
 
@@ -1810,6 +1881,21 @@ export default function ClaimBatchEntry() {
 
             <Divider />
 
+            {incompatibleContextLines.length > 0 && (
+              <Alert
+                severity="warning"
+                sx={{
+                  mx: '1.25rem',
+                  mt: 1,
+                  mb: 0,
+                  alignItems: 'center',
+                  '& .MuiAlert-message': { width: '100%', textAlign: 'right' }
+                }}
+              >
+                توجد {incompatibleContextLines.length} خدمة مختارة لا تتبع سياق المطالبة الحالي. لن تظهر هذه الخدمات ضمن قائمة الاختيار لهذا السياق، وسيتم احتسابها حسب قواعد التغطية المطابقة فقط.
+              </Alert>
+            )}
+
             <Box
               sx={{
                 flexShrink: 0,
@@ -1832,6 +1918,62 @@ export default function ClaimBatchEntry() {
                   label={`${lines.length} بند`}
                   sx={{ fontWeight: 400, fontSize: '0.75rem', borderColor: alpha(theme.palette.primary.main, 0.3) }}
                 />
+                <Chip
+                  size="small"
+                  icon={<MedicalServicesIcon sx={{ fontSize: '0.95rem !important' }} />}
+                  label={`إجمالي الخدمات ${contractedContextCounts.total}`}
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: '0.72rem',
+                    color: theme.palette.primary.dark,
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    borderColor: alpha(theme.palette.primary.main, 0.4),
+                    '& .MuiChip-icon': { color: theme.palette.primary.main }
+                  }}
+                  variant="outlined"
+                />
+                <Chip
+                  size="small"
+                  icon={<OutpatientIcon sx={{ fontSize: '0.95rem !important' }} />}
+                  label={`عيادات خارجية ${contractedContextCounts.outpatient}`}
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    color: theme.palette.success.dark,
+                    bgcolor: alpha(theme.palette.success.main, 0.1),
+                    borderColor: alpha(theme.palette.success.main, 0.35),
+                    '& .MuiChip-icon': { color: theme.palette.success.main }
+                  }}
+                  variant="outlined"
+                />
+                <Chip
+                  size="small"
+                  icon={<InpatientIcon sx={{ fontSize: '0.95rem !important' }} />}
+                  label={`إيواء ${contractedContextCounts.inpatient}`}
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '0.72rem',
+                    color: theme.palette.info.dark,
+                    bgcolor: alpha(theme.palette.info.main, 0.1),
+                    borderColor: alpha(theme.palette.info.main, 0.35),
+                    '& .MuiChip-icon': { color: theme.palette.info.main }
+                  }}
+                  variant="outlined"
+                />
+                {contractedContextCounts.any > 0 && (
+                  <Chip
+                    size="small"
+                    label={`تغطية عامة ${contractedContextCounts.any}`}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.72rem',
+                      color: theme.palette.warning.dark,
+                      bgcolor: alpha(theme.palette.warning.main, 0.12),
+                      borderColor: alpha(theme.palette.warning.main, 0.4)
+                    }}
+                    variant="outlined"
+                  />
+                )}
               </Stack>
               <Box>
                 <Tooltip title="إظهار/إخفاء الأعمدة">
@@ -2064,6 +2206,9 @@ export default function ClaimBatchEntry() {
               saving={saving}
               isDirty={isDirty}
               coveragePending={lines.some((line) => (line.service || line.serviceName) && !line.rejected && line.coveragePending)}
+              hasUncoveredLines={lines.some(
+                (line) => (line.service || line.serviceName) && !line.rejected && (line.notCovered || (Number(line.coveragePercent) || 0) <= 0)
+              )}
               setIsClaimRejected={setIsClaimRejected}
               setIsDirty={setIsDirty}
               setRejectionInput={setRejectionInput}
@@ -2347,14 +2492,14 @@ export default function ClaimBatchEntry() {
 
       {/* Generic Action Confirmation */}
       <Dialog open={actionConfirm.open} onClose={closeActionConfirm}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WarningIcon color="warning" />
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: `${actionConfirm.severity || 'error'}.main` }}>
+          <WarningIcon color={actionConfirm.severity || 'error'} />
           {actionConfirm.title}
         </DialogTitle>
         <DialogContent>
           <Typography>{actionConfirm.message}</Typography>
         </DialogContent>
-        <DialogActions sx={{ p: 2, bgcolor: '#f8f9fa' }}>
+        <DialogActions sx={{ p: 2, bgcolor: (theme) => alpha(theme.palette[actionConfirm.severity || 'error'].main, 0.06) }}>
           <Button onClick={closeActionConfirm} color="inherit">
             تراجع
           </Button>
@@ -2364,7 +2509,7 @@ export default function ClaimBatchEntry() {
               closeActionConfirm();
             }}
             variant="contained"
-            color="primary"
+            color={actionConfirm.severity || 'error'}
           >
             متابعة العملية
           </Button>
@@ -2385,46 +2530,35 @@ export default function ClaimBatchEntry() {
               </Alert>
             )}
 
-            {/* Main Category */}
-            <FormControl fullWidth required>
-              <InputLabel id="custom-service-main-cat-label">التصنيف الرئيسي *</InputLabel>
-              <Select
-                labelId="custom-service-main-cat-label"
-                value={customServiceData.mainCategoryId || ''}
-                onChange={(e) => handleCustomServiceDataChange('mainCategoryId', e.target.value)}
-                label="التصنيف الرئيسي *"
-              >
-                {medicalCategories
-                  .filter((c) => !c.parentId)
-                  .map((cat) => (
-                    <MenuItem key={cat.id} value={cat.id}>
-                      {cat.name} ({cat.code})
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
-
-            {/* Sub-Category */}
-            <FormControl fullWidth disabled={!customServiceData.mainCategoryId}>
-              <InputLabel id="custom-service-sub-cat-label">التصنيف الفرعي</InputLabel>
-              <Select
-                labelId="custom-service-sub-cat-label"
-                value={customServiceData.subCategoryId || ''}
-                onChange={(e) => handleCustomServiceDataChange('subCategoryId', e.target.value)}
-                label="التصنيف الفرعي"
-              >
-                <MenuItem value="">
-                  <em>بلا تصنيف فرعي (استخدام الرئيسي)</em>
-                </MenuItem>
-                {medicalCategories
-                  .filter((c) => c.parentId && String(c.parentId) === String(customServiceData.mainCategoryId))
-                  .map((cat) => (
-                    <MenuItem key={cat.id} value={cat.id}>
-                      {cat.name} ({cat.code})
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              fullWidth
+              options={medicalCategories}
+              value={medicalCategories.find((cat) => String(cat.id) === String(customServiceData.categoryId)) || null}
+              onChange={(event, newValue) => handleCustomServiceDataChange('categoryId', newValue?.id || '')}
+              getOptionLabel={(option) => `${option.nameAr || option.name || ''}${option.code ? ` (${option.code})` : ''}`}
+              isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      {option.nameAr || option.name || ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.code || '-'}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  required
+                  label="التصنيف الطبي الموحد"
+                  placeholder="اختر التصنيف المعتمد للقواعد والتغطية..."
+                  helperText="هذا التصنيف هو المرجع الوحيد للتغطية والسقوف؛ لا يوجد تصنيف رئيسي/فرعي في النظام الحديث."
+                />
+              )}
+            />
 
             {/* Service Name */}
             <TextField
@@ -2473,7 +2607,7 @@ export default function ClaimBatchEntry() {
             variant="contained"
             onClick={handleSubmitCustomService}
             disabled={
-              addingCustomService || !customServiceData.mainCategoryId || !customServiceData.serviceName || !customServiceData.contractPrice
+              addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName || !customServiceData.contractPrice
             }
           >
             {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة وحفظ لقائمة الأسعار'}
@@ -2483,3 +2617,4 @@ export default function ClaimBatchEntry() {
     </Box>
   );
 }
+

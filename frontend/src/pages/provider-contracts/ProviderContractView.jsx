@@ -311,8 +311,7 @@ const ProviderContractView = () => {
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [pricingForm, setPricingForm] = useState({
     medicalServiceId: null,
-    mainCategoryId: null,
-    medicalCategoryId: null,
+    categoryId: null,
     basePrice: '',
     contractPrice: '',
     discountPercent: '',
@@ -385,7 +384,7 @@ const ProviderContractView = () => {
 
   useEffect(() => {
     const fetchServices = async () => {
-      const categoryId = pricingForm.mainCategoryId?.id;
+      const categoryId = pricingForm.categoryId?.id;
       if (!categoryId) {
         setAvailableServices([]);
         setServicesLoadError('');
@@ -404,7 +403,7 @@ const ProviderContractView = () => {
       }
     };
     fetchServices();
-  }, [pricingForm.mainCategoryId]);
+  }, [pricingForm.categoryId]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // MUTATIONS
@@ -592,8 +591,7 @@ const ProviderContractView = () => {
       setServiceInputValue('');
       setPricingForm({
         medicalServiceId: null,
-        mainCategoryId: null,
-        medicalCategoryId: null,
+        categoryId: null,
         basePrice: '',
         contractPrice: '',
         discountPercent: '',
@@ -716,8 +714,7 @@ const ProviderContractView = () => {
   const handleOpenAddPricing = useCallback(() => {
     setPricingForm({
       medicalServiceId: null,
-      mainCategoryId: null,
-      medicalCategoryId: null,
+      categoryId: null,
       basePrice: '',
       contractPrice: '',
       discountPercent: contract?.discountPercent ?? '',
@@ -729,7 +726,7 @@ const ProviderContractView = () => {
   }, [contract?.discountPercent]);
 
   const handleAddPricingSubmit = useCallback(async () => {
-    const effectiveCategoryId = pricingForm.mainCategoryId?.id;
+    const effectiveCategoryId = pricingForm.categoryId?.id;
     if (!effectiveCategoryId || !pricingForm.contractPrice) return;
 
     const selectedService = pricingForm.medicalServiceId;
@@ -761,8 +758,7 @@ const ProviderContractView = () => {
 
       setPricingForm({
         medicalServiceId: item.medicalService || null,
-        mainCategoryId: catObj || null,
-        medicalCategoryId: null,
+        categoryId: catObj || null,
         basePrice: item.basePrice ?? '',
         contractPrice: item.contractPrice ?? '',
         discountPercent: item.discountPercent ?? '',
@@ -778,7 +774,7 @@ const ProviderContractView = () => {
 
     updatePricingMutation.mutate({
       medicalServiceId: pricingForm.medicalServiceId?.id || null,
-      medicalCategoryId: pricingForm.mainCategoryId?.id || null,
+      medicalCategoryId: pricingForm.categoryId?.id || null,
       basePrice: parseFloat(pricingForm.contractPrice), // BasePrice becomes ContractPrice
       contractPrice: parseFloat(pricingForm.contractPrice),
       notes: pricingForm.notes
@@ -1136,7 +1132,7 @@ const ProviderContractView = () => {
                   </TableCell>
                   <TableCell sx={{ width: '7.5rem' }}>كود الخدمة</TableCell>
                   <TableCell sx={{ minWidth: '15.625rem' }}>اسم الخدمة</TableCell>
-                  <TableCell sx={{ minWidth: '18rem' }}>التصنيف التأميني</TableCell>
+                  <TableCell sx={{ minWidth: '18rem' }}>التصنيف الطبي الموحد</TableCell>
                   <TableCell align="right" sx={{ width: '7.5rem' }}>
                     سعر العقد
                   </TableCell>
@@ -1425,7 +1421,7 @@ const ProviderContractView = () => {
         <DialogTitle>إضافة خدمة طبية للتسعير</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: '1.5rem' }}>
-            اختر التصنيف التأميني الذي سيحكم التغطية، ثم اختر خدمة من القاموس إن وجدت أو اكتب اسم الخدمة يدويًا.
+            اختر التصنيف الطبي الموحد الذي سيحكم التغطية والسقوف، ثم اختر خدمة من القاموس إن وجدت أو اكتب اسم الخدمة يدويًا.
           </DialogContentText>
           <Stack spacing={3}>
             <Autocomplete
@@ -1433,21 +1429,20 @@ const ProviderContractView = () => {
               sx={{ width: '100%' }}
               options={medicalCategories}
               getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
-              value={pricingForm.mainCategoryId}
+              value={pricingForm.categoryId}
               onChange={(e, newValue) => {
                 setPricingForm({
                   ...pricingForm,
-                  mainCategoryId: newValue,
-                  medicalCategoryId: null,
+                  categoryId: newValue,
                   medicalServiceId: null
                 });
                 setServiceInputValue('');
                 setServicesLoadError('');
               }}
-              renderInput={(params) => <TextField {...params} label="التصنيف التأميني *" required fullWidth />}
+              renderInput={(params) => <TextField {...params} label="التصنيف الطبي الموحد *" required fullWidth />}
             />
 
-            {pricingForm.mainCategoryId && (
+            {pricingForm.categoryId && (
               <Autocomplete
                 fullWidth
                 freeSolo
@@ -1553,7 +1548,7 @@ const ProviderContractView = () => {
             onClick={handleAddPricingSubmit}
             variant="contained"
             disabled={
-              !pricingForm.mainCategoryId ||
+              !pricingForm.categoryId ||
               !(pricingForm.medicalServiceId || serviceInputValue?.trim()) ||
               !pricingForm.contractPrice ||
               addPricingMutation.isLoading
@@ -1581,15 +1576,14 @@ const ProviderContractView = () => {
                   sx={{ width: '100%' }}
                   options={medicalCategories}
                   getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
-                  value={pricingForm.mainCategoryId}
+                  value={pricingForm.categoryId}
                   onChange={(e, newValue) => {
                     setPricingForm({
-                      ...pricingForm,
-                      mainCategoryId: newValue,
-                      medicalCategoryId: null
+                    ...pricingForm,
+                      categoryId: newValue
                     });
                   }}
-                  renderInput={(params) => <TextField {...params} label="التصنيف التأميني" fullWidth placeholder="اختر للتغيير" />}
+                  renderInput={(params) => <TextField {...params} label="التصنيف الطبي الموحد" fullWidth placeholder="اختر للتغيير" />}
                 />
               </Grid>
             </Grid>

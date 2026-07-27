@@ -53,17 +53,13 @@ public class MedicalTaxonomyCategoryService {
 
         // Validate parent category (if provided)
         String parentName = null;
-        if (dto.getParentId() != null) {
-            MedicalCategory parent = categoryRepository.findActiveById(dto.getParentId())
-                    .orElseThrow(() -> new BusinessRuleException("Parent category not found or inactive: " + dto.getParentId()));
-            parentName = parent.getName();
-        }
+        // Legacy parent input ignored; taxonomy is flat.
 
         // Create entity
         MedicalCategory category = MedicalCategory.builder()
                 .code(dto.getCode())
                 .name(dto.getName())
-                .parentId(dto.getParentId())
+                .parentId(null)
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .build();
 
@@ -110,61 +106,13 @@ public class MedicalTaxonomyCategoryService {
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
-
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> findChildren(Long parentId) {
-        log.debug("Finding children of category: {}", parentId);
-        return categoryRepository.findActiveChildrenByParentId(parentId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        return List.of();
     }
-
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> getCategoryTree() {
-        log.debug("Building category tree");
-
-        // Get all active categories
-        List<MedicalCategory> allCategories = categoryRepository.findByActiveTrue();
-
-        // Build parent name map for efficient lookup
-        Map<Long, String> parentNames = allCategories.stream()
-                .collect(Collectors.toMap(MedicalCategory::getId, MedicalCategory::getName));
-
-        // ── عدد الخدمات لكل تصنيف (bulk query بدلاً من N+1) ──────────────────
-        List<Long> categoryIds = allCategories.stream()
-                .map(MedicalCategory::getId)
-                .collect(Collectors.toList());
-
-        Map<Long, Long> serviceCountMap = categoryIds.stream()
-                .collect(Collectors.toMap(
-                        id -> id,
-                        serviceRepository::countActiveByCategoryId
-                ));
-        // ──────────────────────────────────────────────────────────────────────
-
-        // Convert to DTOs مع تمرير serviceCount
-        List<MedicalCategoryResponseDto> allDtos = allCategories.stream()
-                .map(cat -> toDto(cat,
-                        parentNames.get(cat.getParentId()),
-                        serviceCountMap.getOrDefault(cat.getId(), 0L)))
-                .collect(Collectors.toList());
-
-        // Build hierarchy
-        Map<Long, List<MedicalCategoryResponseDto>> childrenMap = allDtos.stream()
-                .filter(dto -> dto.getParentId() != null)
-                .collect(Collectors.groupingBy(MedicalCategoryResponseDto::getParentId));
-
-        // Attach children + childrenCount to parents
-        allDtos.forEach(dto -> {
-            List<MedicalCategoryResponseDto> kids = childrenMap.getOrDefault(dto.getId(), new ArrayList<>());
-            dto.setChildren(kids);
-            dto.setChildrenCount(kids.size());
-        });
-
-        // Return only root categories
-        return allDtos.stream()
-                .filter(dto -> dto.getParentId() == null)
-                .collect(Collectors.toList());
+        return categoryRepository.findByActiveTrue().stream().map(this::toDto).collect(Collectors.toList());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -182,18 +130,8 @@ public class MedicalTaxonomyCategoryService {
         if (dto.getName() != null) {
             category.setName(dto.getName());
         }
-        if (dto.getParentId() != null) {
-            // Validate parent category exists and is active
-            categoryRepository.findActiveById(dto.getParentId())
-                    .orElseThrow(() -> new BusinessRuleException("Parent category not found or inactive: " + dto.getParentId()));
-            
-            // Prevent circular reference
-            if (dto.getParentId().equals(id)) {
-                throw new BusinessRuleException("Category cannot be its own parent");
-            }
-            
-            category.setParentId(dto.getParentId());
-        }
+        // Legacy parent input ignored; taxonomy is flat.
+        category.setParentId(null);
         if (dto.getActive() != null) {
             category.setActive(dto.getActive());
         }
@@ -251,18 +189,14 @@ public class MedicalTaxonomyCategoryService {
     }
 
     private MedicalCategoryResponseDto toDto(MedicalCategory category, String parentName, long serviceCount) {
-        if (parentName == null && category.getParentId() != null) {
-            parentName = categoryRepository.findById(category.getParentId())
-                    .map(MedicalCategory::getName)
-                    .orElse(null);
-        }
+        parentName = null;
 
         return MedicalCategoryResponseDto.builder()
                 .id(category.getId())
                 .code(category.getCode())
                 .name(category.getName())
-                .parentId(category.getParentId())
-                .parentName(parentName)
+                .parentId(null)
+                .parentName(null)
                 .active(category.isActive())
                 .serviceCount(serviceCount)
                 .createdAt(category.getCreatedAt())
@@ -270,3 +204,4 @@ public class MedicalTaxonomyCategoryService {
                 .build();
     }
 }
+

@@ -34,9 +34,7 @@ import java.util.List;
  * 4. PUT /api/medical-categories/{id} - Update category
  * 5. DELETE /api/medical-categories/{id} - Soft delete
  * 6. GET /api/medical-categories/code/{code} - Get by code
- * 7. GET /api/medical-categories/{id}/children - Get subcategories
- * 8. GET /api/medical-categories/tree - Get hierarchy tree
- * 9. GET /api/medical-categories/root - Get root categories
+ * 7. Legacy hierarchy endpoints return flat/empty compatibility responses.
  */
 @Slf4j
 @RestController
@@ -99,7 +97,7 @@ public class MedicalCategoryController {
             @Parameter(description = "Page size") @RequestParam(name = "size", defaultValue = "20") int size,
             @Parameter(description = "Sort field") @RequestParam(name = "sortBy", defaultValue = "id") String sortBy,
             @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir,
-            @Parameter(description = "Filter by parent category ID") @RequestParam(name = "parentId", required = false) Long parentId,
+            @Parameter(description = "Legacy ignored filter; categories are flat") @RequestParam(name = "parentId", required = false) Long parentId,
             @Parameter(description = "Filter by active status") @RequestParam(name = "active", required = false) Boolean active,
             @Parameter(description = "Search by name or code") @RequestParam(name = "search", required = false) String search) {
 
@@ -112,7 +110,7 @@ public class MedicalCategoryController {
             case "name", "nameAr", "nameEn", "code", "id", "active", "createdAt", "updatedAt" -> sortBy;
             case "categoryNameAr" -> "nameAr";
             case "categoryNameEn" -> "nameEn";
-            case "parentName" -> "parentId"; // Map complex UI fields to base fields
+            case "parentName" -> "name"; // Legacy hierarchy removed
             default -> "id"; // Default fallback
         };
 
@@ -136,7 +134,7 @@ public class MedicalCategoryController {
 
     @GetMapping("/{id}/children")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
-    @Operation(summary = "Get subcategories", description = "Get all direct children of a category")
+    @Operation(summary = "Legacy subcategories endpoint", description = "Hierarchy is disabled; returns an empty list")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findChildren(@PathVariable("id") Long id) {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/{}/children", id);
 
@@ -190,7 +188,7 @@ public class MedicalCategoryController {
 
     @GetMapping("/tree")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
-    @Operation(summary = "Get category tree", description = "Get full hierarchical tree of all categories")
+    @Operation(summary = "Legacy category tree endpoint", description = "Hierarchy is disabled; returns a flat active category list")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> getCategoryTree() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/tree");
 
@@ -201,7 +199,7 @@ public class MedicalCategoryController {
 
     @GetMapping("/root")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
-    @Operation(summary = "Get root categories", description = "Get all root categories (parentId = null)")
+    @Operation(summary = "Legacy root categories endpoint", description = "Hierarchy is disabled; returns all active categories")
     public ResponseEntity<ApiResponse<List<MedicalCategoryResponseDto>>> findRootCategories() {
         log.info("[MEDICAL-CATEGORIES] GET /api/medical-categories/root");
 
@@ -261,7 +259,7 @@ public class MedicalCategoryController {
 
     @PatchMapping("/bulk/move")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Bulk move categories", description = "Move multiple categories to a new parent")
+    @Operation(summary = "Legacy bulk move endpoint", description = "Disabled: categories are a flat canonical list")
     public ResponseEntity<ApiResponse<Void>> bulkMove(@Valid @RequestBody MedicalCategoryBulkMoveDto dto) {
         log.info("[MEDICAL-CATEGORIES] PATCH /api/medical-categories/bulk/move - count={}, newParent={}", 
             dto.getIds() != null ? dto.getIds().size() : 0, dto.getNewParentId());

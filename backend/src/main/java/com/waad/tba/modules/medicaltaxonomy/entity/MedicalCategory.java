@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * Medical Category Entity (Reference Data)
  *
- * Hierarchical classification of medical services.
+ * Canonical flat classification of medical services.
  * Scope: Pure reference data — no coverage, claim, or provider logic here.
  */
 @Entity
@@ -44,14 +44,19 @@ public class MedicalCategory {
     @Column(name = "name_en", length = 200)
     private String nameEn;
 
-    /** Parent category ID — NULL means root category. */
+    /**
+     * @deprecated Legacy hierarchy column retained only for backward-compatible schema reads.
+     *             New code must keep it null and must not use it for business logic.
+     */
+    @Deprecated
     @Column(name = "parent_id")
     private Long parentId;
 
     /**
-     * Multi-root association for cross-context categories.
-     * Allows a category (e.g. Lab) to belong to multiple roots (OP, IP, etc.)
+     * @deprecated Legacy hierarchy/cross-root association retained only so older schemas
+     *             can boot. New code keeps it empty and does not use it.
      */
+    @Deprecated
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "medical_category_roots", joinColumns = @JoinColumn(name = "category_id"), inverseJoinColumns = @JoinColumn(name = "root_id"))
     @Builder.Default

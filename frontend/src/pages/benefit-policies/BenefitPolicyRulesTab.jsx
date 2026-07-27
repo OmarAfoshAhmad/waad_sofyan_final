@@ -719,7 +719,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
   const [individualLimitDialog, setIndividualLimitDialog] = useState({
-    open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD'
+    open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD', periodValue: '1'
   });
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   // Pagination state
@@ -857,7 +857,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     onSuccess: async () => {
       enqueueSnackbar('تم حفظ سقف المنفعة الفردي', { variant: 'success' });
       await queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
-      setIndividualLimitDialog({ open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD' });
+      setIndividualLimitDialog({ open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD', periodValue: '1' });
     },
     onError: (err) => enqueueSnackbar(err.response?.data?.message || 'تعذر حفظ سقف المنفعة', { variant: 'error' })
   });
@@ -866,7 +866,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     const bucket = rule.individualLimitLink?.bucket;
     setIndividualLimitDialog({
       open: true, rule, amountLimit: bucket?.amountLimit ?? '', timesLimit: bucket?.timesLimit ?? '',
-      daysLimit: bucket?.daysLimit ?? '', periodType: bucket?.periodType || 'POLICY_PERIOD'
+      daysLimit: bucket?.daysLimit ?? '', periodType: bucket?.periodType || 'POLICY_PERIOD', periodValue: String(bucket?.periodValue ?? 1)
     });
   }, []);
 
@@ -1293,9 +1293,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             LIFETIME: 'مدى الحياة'
           };
           let label = periodMap[limit.periodType] || limit.periodType || 'غير محددة';
-          if (limit.periodType === 'MULTI_YEAR_POLICY') {
-            const years = Number(limit.periodValue || 1);
-            label = years === 2 ? 'كل سنتين' : years === 1 ? 'سنوياً' : `كل ${years} سنوات`;
+          const value = Number(limit.periodValue || 1);
+          if (limit.periodType === 'MULTI_YEAR_POLICY' || limit.periodType === 'CUSTOM_YEARS') {
+            label = value === 2 ? 'كل سنتين' : value === 1 ? 'سنوياً' : `كل ${value} سنوات`;
+          } else if (limit.periodType === 'CUSTOM_MONTHS') {
+            label = value === 1 ? 'شهرياً' : `كل ${value} أشهر`;
+          } else if (limit.periodType === 'CUSTOM_WEEKS') {
+            label = value === 1 ? 'أسبوعياً' : `كل ${value} أسابيع`;
+          } else if (limit.periodType === 'CUSTOM_DAYS') {
+            label = value === 1 ? 'يومياً' : `كل ${value} أيام`;
           }
           return (
             <Chip
@@ -2044,7 +2050,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="number" label="حد المرات" value={individualLimitDialog.timesLimit} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, timesLimit: e.target.value }))} inputProps={{ min: 0, step: 1 }} /></Grid>
             <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="number" label="حد الأيام" value={individualLimitDialog.daysLimit} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, daysLimit: e.target.value }))} inputProps={{ min: 0, step: 1 }} /></Grid>
             <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth select label="المدة الزمنية" value={individualLimitDialog.periodType} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, periodType: e.target.value }))}>
-              <MenuItem value="POLICY_PERIOD">مدة الوثيقة</MenuItem><MenuItem value="ANNUAL">سنوي</MenuItem><MenuItem value="PER_VISIT">لكل زيارة</MenuItem><MenuItem value="LIFETIME">مدى الحياة</MenuItem>
+              <MenuItem value="PER_SERVICE">لكل خدمة</MenuItem><MenuItem value="PER_VISIT">لكل زيارة</MenuItem><MenuItem value="DAILY">يومي</MenuItem><MenuItem value="WEEKLY">أسبوعي</MenuItem><MenuItem value="MONTHLY">شهري</MenuItem><MenuItem value="QUARTERLY">ربع سنوي</MenuItem><MenuItem value="ANNUAL">سنوي</MenuItem><MenuItem value="CUSTOM_DAYS">كل عدد أيام</MenuItem><MenuItem value="CUSTOM_WEEKS">كل عدد أسابيع</MenuItem><MenuItem value="CUSTOM_MONTHS">كل عدد أشهر</MenuItem><MenuItem value="CUSTOM_YEARS">كل عدد سنوات</MenuItem><MenuItem value="POLICY_PERIOD">مدة الوثيقة</MenuItem><MenuItem value="LIFETIME">مدى الحياة</MenuItem>
             </TextField></Grid>
           </Grid>
         </DialogContent>
@@ -2057,6 +2063,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               timesLimit: individualLimitDialog.timesLimit === '' ? null : Number(individualLimitDialog.timesLimit),
               daysLimit: individualLimitDialog.daysLimit === '' ? null : Number(individualLimitDialog.daysLimit),
               periodType: individualLimitDialog.periodType,
+              periodValue: individualLimitDialog.periodValue === '' ? 1 : Math.max(1, Number(individualLimitDialog.periodValue)),
               countingMethod: 'EACH_UNIT'
             }
           })}>حفظ السقف</Button>
@@ -2444,3 +2451,4 @@ BenefitPolicyRulesTab.propTypes = {
 };
 
 export default BenefitPolicyRulesTab;
+

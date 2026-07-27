@@ -419,8 +419,7 @@ export default function ProviderClaimsSubmission() {
   const [customServiceDialogOpen, setCustomServiceDialogOpen] = useState(false);
   const [activeLineIdForCustomService, setActiveLineIdForCustomService] = useState(null);
   const [customServiceData, setCustomServiceData] = useState({
-    mainCategoryId: '',
-    subCategoryId: '',
+    categoryId: '',
     serviceName: '',
     serviceCode: '',
     contractPrice: ''
@@ -430,24 +429,17 @@ export default function ProviderClaimsSubmission() {
 
   const handleOpenCustomServiceDialog = (lineId) => {
     const line = claimLines.find((l) => l.id === lineId);
-    let initialMainCategoryId = '';
-    let initialSubCategoryId = '';
+    let initialCategoryId = '';
 
     if (line && line.medicalCategoryId) {
       const category = medicalCategories.find((c) => normalizeId(c.id) === normalizeId(line.medicalCategoryId));
       if (category) {
-        if (category.parentId) {
-          initialMainCategoryId = normalizeId(category.parentId);
-          initialSubCategoryId = normalizeId(category.id);
-        } else {
-          initialMainCategoryId = normalizeId(category.id);
-        }
+        initialCategoryId = normalizeId(category.id);
       }
     }
 
     setCustomServiceData({
-      mainCategoryId: initialMainCategoryId,
-      subCategoryId: initialSubCategoryId,
+      categoryId: initialCategoryId,
       serviceName: '',
       serviceCode: '',
       contractPrice: ''
@@ -463,21 +455,15 @@ export default function ProviderClaimsSubmission() {
   };
 
   const handleCustomServiceDataChange = (field, value) => {
-    setCustomServiceData((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'mainCategoryId') {
-        next.subCategoryId = '';
-      }
-      return next;
-    });
+    setCustomServiceData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmitCustomService = async () => {
     setCustomServiceError(null);
 
     // Validation
-    if (!customServiceData.mainCategoryId) {
-      setCustomServiceError('يرجير اختيار التصنيف الرئيسي');
+    if (!customServiceData.categoryId) {
+      setCustomServiceError('يرجى اختيار التصنيف الطبي الموحد');
       return;
     }
     if (!customServiceData.serviceName.trim()) {
@@ -492,8 +478,7 @@ export default function ProviderClaimsSubmission() {
 
     setAddingCustomService(true);
     try {
-      // Determine final category id (subCategory if chosen, else mainCategory)
-      const finalCategoryId = customServiceData.subCategoryId || customServiceData.mainCategoryId;
+      const finalCategoryId = customServiceData.categoryId;
 
       // Auto-generate service code if not provided
       const finalServiceCode = customServiceData.serviceCode.trim() || `SRV-${Date.now().toString().slice(-6)}`;
@@ -1622,46 +1607,35 @@ export default function ProviderClaimsSubmission() {
               </Alert>
             )}
 
-            {/* Main Category */}
-            <FormControl fullWidth required>
-              <InputLabel id="custom-service-main-cat-label">التصنيف الرئيسي *</InputLabel>
-              <Select
-                labelId="custom-service-main-cat-label"
-                value={customServiceData.mainCategoryId || ''}
-                onChange={(e) => handleCustomServiceDataChange('mainCategoryId', e.target.value)}
-                label="التصنيف الرئيسي *"
-              >
-                {medicalCategories
-                  .filter((c) => !c.parentId)
-                  .map((cat) => (
-                    <MenuItem key={cat.id} value={cat.id}>
-                      {cat.name} ({cat.code})
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
-
-            {/* Sub-Category */}
-            <FormControl fullWidth disabled={!customServiceData.mainCategoryId}>
-              <InputLabel id="custom-service-sub-cat-label">التصنيف الفرعي</InputLabel>
-              <Select
-                labelId="custom-service-sub-cat-label"
-                value={customServiceData.subCategoryId || ''}
-                onChange={(e) => handleCustomServiceDataChange('subCategoryId', e.target.value)}
-                label="التصنيف الفرعي"
-              >
-                <MenuItem value="">
-                  <em>بلا تصنيف فرعي (استخدام الرئيسي)</em>
-                </MenuItem>
-                {medicalCategories
-                  .filter((c) => c.parentId && normalizeId(c.parentId) === normalizeId(customServiceData.mainCategoryId))
-                  .map((cat) => (
-                    <MenuItem key={cat.id} value={cat.id}>
-                      {cat.name} ({cat.code})
-                    </MenuItem>
-                  ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              fullWidth
+              options={medicalCategories}
+              value={medicalCategories.find((cat) => normalizeId(cat.id) === normalizeId(customServiceData.categoryId)) || null}
+              onChange={(event, newValue) => handleCustomServiceDataChange('categoryId', newValue?.id || '')}
+              getOptionLabel={(option) => `${option.nameAr || option.name || ''}${option.code ? ` (${option.code})` : ''}`}
+              isOptionEqualToValue={(option, value) => normalizeId(option.id) === normalizeId(value.id)}
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      {option.nameAr || option.name || ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.code || '-'}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  required
+                  label="التصنيف الطبي الموحد"
+                  placeholder="اختر التصنيف المعتمد للقواعد والتغطية..."
+                  helperText="هذا التصنيف هو المرجع الوحيد للتغطية والسقوف؛ لا يوجد تصنيف رئيسي/فرعي في النظام الحديث."
+                />
+              )}
+            />
 
             {/* Service Name */}
             <TextField
@@ -1710,7 +1684,7 @@ export default function ProviderClaimsSubmission() {
             variant="contained"
             onClick={handleSubmitCustomService}
             disabled={
-              addingCustomService || !customServiceData.mainCategoryId || !customServiceData.serviceName || !customServiceData.contractPrice
+              addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName || !customServiceData.contractPrice
             }
           >
             {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة وحفظ لقائمة الأسعار'}

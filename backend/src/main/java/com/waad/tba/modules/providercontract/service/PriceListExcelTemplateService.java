@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
  *
  * Template columns:
  * service_name (required) | service_code | contract_price
- * main_category | sub_category | notes
+ * medical_category_code | medical_category_name | notes
  */
 @Slf4j
 @Service
@@ -141,14 +141,14 @@ public class PriceListExcelTemplateService {
             cell3.setCellValue("contract_price / سعر العقد");
             cell3.setCellStyle(headerStyle);
 
-            // category (optional)
+            // medical_category_code (required for accurate coverage)
             Cell cell4 = headerRow.createCell(COL_CATEGORY);
-            cell4.setCellValue("main_category / التصنيف الرئيسي");
+            cell4.setCellValue("medical_category_code / كود التصنيف الطبي");
             cell4.setCellStyle(headerStyle);
 
-            // sub_category (optional)
+            // medical_category_name (optional display/helper)
             Cell cellSub = headerRow.createCell(COL_SUB_CATEGORY);
-            cellSub.setCellValue("sub_category / البند (التصنيف الفرعي)");
+            cellSub.setCellValue("medical_category_name / اسم التصنيف الطبي");
             cellSub.setCellStyle(headerStyle);
 
             // notes (optional)
@@ -172,11 +172,11 @@ public class PriceListExcelTemplateService {
             ex3.setCellStyle(exampleStyle);
 
             Cell ex4 = exampleRow.createCell(COL_CATEGORY);
-            ex4.setCellValue("عيادات خارجية");
+            ex4.setCellValue("CAT-DIAGNOSTIC");
             ex4.setCellStyle(exampleStyle);
 
             Cell exSub = exampleRow.createCell(COL_SUB_CATEGORY);
-            exSub.setCellValue("كشوفات استشارية");
+            exSub.setCellValue("الكشوفات الطبية");
             exSub.setCellStyle(exampleStyle);
 
             Cell ex6 = exampleRow.createCell(COL_NOTES);
@@ -229,7 +229,7 @@ public class PriceListExcelTemplateService {
 
             // Header row
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"service_name / اسم الخدمة", "service_code / الكود", "contract_price / سعر العقد", "main_category / التصنيف الرئيسي", "sub_category / البند (التصنيف الفرعي)", "notes / ملاحظات"};
+            String[] headers = {"service_name / اسم الخدمة", "service_code / الكود", "contract_price / سعر العقد", "medical_category_code / كود التصنيف الطبي", "medical_category_name / اسم التصنيف الطبي", "notes / ملاحظات"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -261,27 +261,22 @@ public class PriceListExcelTemplateService {
                     }
                     c2.setCellStyle(dataStyle);
 
-                    String mainCategory = "-";
-                    String subCategory = "-";
+                    String categoryCode = "-";
+                    String categoryName = "-";
                     if (item.getMedicalCategory() != null) {
                         MedicalCategory cat = item.getMedicalCategory();
-                        if (cat.getParentId() != null) {
-                            MedicalCategory parent = medicalCategoryRepository.findById(cat.getParentId()).orElse(null);
-                            mainCategory = parent != null ? parent.getName() : "-";
-                            subCategory = cat.getName();
-                        } else {
-                            mainCategory = cat.getName();
-                        }
+                        categoryCode = cat.getCode() != null ? cat.getCode() : "-";
+                        categoryName = displayCategoryName(cat);
                     } else if (item.getCategoryName() != null) {
-                        mainCategory = item.getCategoryName();
+                        categoryName = item.getCategoryName();
                     }
                     
-                    Cell c3 = row.createCell(COL_CATEGORY); // was COL_MAIN_CATEGORY but let's use what exists
-                    c3.setCellValue(sanitizeForExcel(mainCategory));
+                    Cell c3 = row.createCell(COL_CATEGORY);
+                    c3.setCellValue(sanitizeForExcel(categoryCode));
                     c3.setCellStyle(dataStyle);
 
                     Cell c4 = row.createCell(COL_SUB_CATEGORY);
-                    c4.setCellValue(sanitizeForExcel(subCategory));
+                    c4.setCellValue(sanitizeForExcel(categoryName));
                     c4.setCellStyle(dataStyle);
 
                     Cell c5 = row.createCell(COL_NOTES);
@@ -339,7 +334,7 @@ public class PriceListExcelTemplateService {
 
         sheet.createRow(rowNum++).createCell(0).setCellValue("1. العمود الإلزامي الوحيد: service_name (اسم الخدمة)");
         sheet.createRow(rowNum++).createCell(0).setCellValue(
-                "2. الأعمدة الاختيارية: service_code (الكود)، category (التصنيف)، sub_category (الفرعي)، notes (ملاحظات)");
+                "2. الأعمدة الاختيارية: service_code (الكود)، medical_category_code (كود التصنيف الطبي)، medical_category_name (اسم التصنيف الطبي)، notes (ملاحظات)");
         sheet.createRow(rowNum++).createCell(0).setCellValue(
                 "3. إذا كان الكود موجوداً في اسم الخدمة (مثل WE-001)، سيتعرف عليه النظام تلقائياً حتى بدون عمود الكود");
         sheet.createRow(rowNum++).createCell(0)
@@ -628,7 +623,15 @@ public class PriceListExcelTemplateService {
                     || value.contains("السعر") || value.equals("price")) {
                 indices.put("contract_price", i);
             }
-            // category/classification detection
+            // unified medical category detection (modern template)
+            else if (value.contains("medical_category_code") || value.contains("category_code")
+                    || value.contains("كود التصنيف") || value.contains("رمز التصنيف")) {
+                indices.put("medical_category_code", i);
+            } else if (value.contains("medical_category_name") || value.contains("category_name")
+                    || value.contains("اسم التصنيف الطبي") || value.contains("التصنيف الطبي الموحد")) {
+                indices.put("medical_category_name", i);
+            }
+            // legacy category/classification detection (kept for old provider files)
             else if (value.contains("main_category") || value.contains("التصنيف الرئيسي")) {
                 indices.put("main_category", i);
             } else if (value.contains("sub_category") || value.contains("التصنيف الفرعي") || value.equals("البند")
@@ -726,8 +729,18 @@ public class PriceListExcelTemplateService {
         if (maxContractPrice == null)
             maxContractPrice = contractPrice;
 
+        String rawCategoryCode = null;
+        Integer categoryCodeIdx = columnIndices.get("medical_category_code");
+        if (categoryCodeIdx != null) {
+            rawCategoryCode = getCellStringValue(row.getCell(categoryCodeIdx));
+            if (rawCategoryCode != null)
+                rawCategoryCode = truncate(rawCategoryCode.trim(), 80);
+        }
+
         String rawCategoryName = null;
-        Integer categoryIdx = columnIndices.get("main_category");
+        Integer categoryIdx = columnIndices.get("medical_category_name");
+        if (categoryIdx == null)
+            categoryIdx = columnIndices.get("main_category");
         if (categoryIdx == null)
             categoryIdx = columnIndices.get("provider_category");
         if (categoryIdx != null) {
@@ -744,18 +757,14 @@ public class PriceListExcelTemplateService {
                 rawSubCategoryName = truncate(rawSubCategoryName.trim(), 255);
         }
 
-        MedicalCategory resolvedCategory = resolveMedicalCategory(rawCategoryName, rawSubCategoryName);
+        MedicalCategory resolvedCategory = resolveMedicalCategory(rawCategoryCode, rawCategoryName, rawSubCategoryName);
 
         String categoryName = rawCategoryName;
         String subCategoryName = rawSubCategoryName;
 
         if (resolvedCategory != null) {
-            subCategoryName = resolvedCategory.getParentId() != null ? displayCategoryName(resolvedCategory) : null;
-            categoryName = resolvedCategory.getParentId() != null
-                    ? medicalCategoryRepository.findById(resolvedCategory.getParentId())
-                            .map(this::displayCategoryName)
-                            .orElse(displayCategoryName(resolvedCategory))
-                    : displayCategoryName(resolvedCategory);
+            categoryName = displayCategoryName(resolvedCategory);
+            subCategoryName = null;
         } else if (categoryName == null) {
             categoryName = subCategoryName;
         }
@@ -964,18 +973,25 @@ public class PriceListExcelTemplateService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Resolves a MedicalCategory from the sub-category name first, then main
-     * category name.
+     * Resolves a MedicalCategory using the modern unified category code first.
+     * Legacy main/sub category names remain supported only as a compatibility
+     * fallback for old provider files.
      */
-    private MedicalCategory resolveMedicalCategory(String rawCategoryName, String rawSubCategoryName) {
-        if (rawSubCategoryName != null && !rawSubCategoryName.isBlank()) {
-            MedicalCategory subCategory = findCategoryByCodeOrName(rawSubCategoryName);
-            if (subCategory != null) {
-                return subCategory;
+    private MedicalCategory resolveMedicalCategory(String rawCategoryCode, String rawCategoryName, String rawSubCategoryName) {
+        if (rawCategoryCode != null && !rawCategoryCode.isBlank()) {
+            MedicalCategory byCode = findCategoryByCodeOrName(rawCategoryCode);
+            if (byCode != null) {
+                return byCode;
             }
         }
         if (rawCategoryName != null && !rawCategoryName.isBlank()) {
-            return findCategoryByCodeOrName(rawCategoryName);
+            MedicalCategory byName = findCategoryByCodeOrName(rawCategoryName);
+            if (byName != null) {
+                return byName;
+            }
+        }
+        if (rawSubCategoryName != null && !rawSubCategoryName.isBlank()) {
+            return findCategoryByCodeOrName(rawSubCategoryName);
         }
         return null;
     }

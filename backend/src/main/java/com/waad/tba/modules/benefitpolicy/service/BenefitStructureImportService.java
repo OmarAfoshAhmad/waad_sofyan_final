@@ -39,10 +39,10 @@ public class BenefitStructureImportService {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet benefits = workbook.createSheet("المنافع");
             writeHeader(benefits, "كود التصنيف", "اسم المنفعة", "السياق", "نسبة التغطية", "نسبة التحمل",
-                    "موافقة مسبقة", "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "طريقة العد", "نشط");
+                    "موافقة مسبقة", "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد", "نشط");
             Sheet groups = workbook.createSheet("المجموعات");
             writeHeader(groups, "كود المجموعة", "اسم المجموعة", "السياق", "أكواد المنافع مفصولة بفاصلة",
-                    "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "طريقة العد", "نشط");
+                    "السقف المالي", "حد المرات", "حد الأيام", "الفترة", "قيمة الفترة", "طريقة العد", "نشط");
             Sheet instructions = workbook.createSheet("تعليمات");
             String[][] notes = {
                     {"الحقل", "التوضيح"},
@@ -57,13 +57,15 @@ public class BenefitStructureImportService {
             }
             addListValidation(benefits, 2, "OUTPATIENT", "INPATIENT", "ANY");
             addListValidation(benefits, 5, "نعم", "لا");
-            addListValidation(benefits, 9, "POLICY_PERIOD", "ANNUAL", "PER_VISIT", "PER_SERVICE", "LIFETIME");
-            addListValidation(benefits, 10, "EACH_UNIT", "EACH_LINE", "PER_DAY", "PER_VISIT");
-            addListValidation(benefits, 11, "نعم", "لا");
+            addListValidation(benefits, 9, "PER_SERVICE", "PER_VISIT", "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY",
+                    "ANNUAL", "CUSTOM_DAYS", "CUSTOM_WEEKS", "CUSTOM_MONTHS", "CUSTOM_YEARS", "POLICY_PERIOD", "LIFETIME");
+            addListValidation(benefits, 11, "EACH_UNIT", "EACH_LINE", "PER_DAY", "PER_VISIT");
+            addListValidation(benefits, 12, "نعم", "لا");
             addListValidation(groups, 2, "OUTPATIENT", "INPATIENT", "ANY");
-            addListValidation(groups, 7, "POLICY_PERIOD", "ANNUAL", "PER_VISIT", "PER_SERVICE", "LIFETIME");
-            addListValidation(groups, 8, "EACH_UNIT", "EACH_LINE", "PER_DAY", "PER_VISIT");
-            addListValidation(groups, 9, "نعم", "لا");
+            addListValidation(groups, 7, "PER_SERVICE", "PER_VISIT", "DAILY", "WEEKLY", "MONTHLY", "QUARTERLY",
+                    "ANNUAL", "CUSTOM_DAYS", "CUSTOM_WEEKS", "CUSTOM_MONTHS", "CUSTOM_YEARS", "POLICY_PERIOD", "LIFETIME");
+            addListValidation(groups, 9, "EACH_UNIT", "EACH_LINE", "PER_DAY", "PER_VISIT");
+            addListValidation(groups, 10, "نعم", "لا");
             for (Sheet sheet : List.of(benefits, groups)) {
                 sheet.createFreezePane(0, 1);
                 for (int i = 0; i < sheet.getRow(0).getLastCellNum(); i++) sheet.autoSizeColumn(i);
@@ -167,19 +169,19 @@ public class BenefitStructureImportService {
                 return p;
             }
             read(workbook, "Rules", 10, (row, n) -> p.rules.add(new RuleRow(
-                    text(row, 0), text(row, 1), enumValue(EncounterType.class, row, 2, n),
+                    text(row, 0), text(row, 1), benefitContext(row, 2, n),
                     integer(row, 3), decimal(row, 4), integer(row, 5), bool(row, 6, false),
                     integer(row, 7, 100), text(row, 8), bool(row, 9, true), n)));
             read(workbook, "Groups", 5, (row, n) -> p.groups.add(new GroupRow(
-                    text(row, 0), text(row, 1), enumValue(EncounterType.class, row, 2, n),
+                    text(row, 0), text(row, 1), benefitContext(row, 2, n),
                     enumValue(AggregationMode.class, row, 3, n), bool(row, 4, true), n)));
             read(workbook, "Buckets", 14, (row, n) -> p.buckets.add(new BucketRow(
-                    text(row, 0), text(row, 1), text(row, 2), enumValue(EncounterType.class, row, 3, n),
+                    text(row, 0), text(row, 1), text(row, 2), benefitContext(row, 3, n),
                     decimal(row, 4), integer(row, 5), integer(row, 6), enumValue(LimitPeriodType.class, row, 7, n), integer(row, 8, 1),
                     enumValue(CountingMethod.class, row, 9, n), enumValue(ConsumptionBasis.class, row, 10, n),
                     text(row, 11), bool(row, 12, false), bool(row, 13, true), n)));
             read(workbook, "Links", 6, (row, n) -> p.links.add(new LinkRow(
-                    text(row, 0), enumValue(EncounterType.class, row, 1, n), text(row, 2),
+                    text(row, 0), benefitContext(row, 1, n), text(row, 2),
                     integer(row, 3, 1), enumValue(ConsumptionMode.class, row, 4, n), bool(row, 5, true), n)));
             Sheet special = workbook.getSheet("SpecialBenefits");
             if (special != null) read(workbook, "SpecialBenefits", 11, (row, n) -> p.specials.add(new SpecialRow(
@@ -202,33 +204,41 @@ public class BenefitStructureImportService {
     }
 
     private void parseSimplified(Workbook workbook, Parsed p) {
+        boolean benefitsHasPeriodValue = "قيمة الفترة".equals(text(workbook.getSheet("المنافع").getRow(0), 10));
         read(workbook, "المنافع", 12, (row, n) -> {
             String category = text(row, 0);
-            EncounterType context = enumValue(EncounterType.class, row, 2, n);
+            EncounterType context = benefitContext(row, 2, n);
+            int countingColumn = benefitsHasPeriodValue ? 11 : 10;
+            int activeColumn = benefitsHasPeriodValue ? 12 : 11;
             p.rules.add(new RuleRow(category, text(row, 1), context, integer(row, 3, 100), decimal(row, 4), 0,
-                    bool(row, 5, false), 100, "استيراد مبسط", bool(row, 11, true), n));
+                    bool(row, 5, false), 100, "استيراد مبسط", bool(row, activeColumn, true), n));
             BigDecimal amount = decimal(row, 6); Integer times = integer(row, 7); Integer days = integer(row, 8);
             if (amount != null || times != null || days != null) {
                 String safe = category == null ? "ROW" + n : category.trim();
                 String groupCode = "AUTO-BEN-" + safe + "-" + context;
                 String bucketCode = "AUTO-BEN-LIMIT-" + safe + "-" + context;
                 String limitName = autoLimitName(text(row, 1), safe, context);
-                p.groups.add(new GroupRow(groupCode, limitName, context, AggregationMode.INDIVIDUAL, bool(row, 11, true), n));
+                p.groups.add(new GroupRow(groupCode, limitName, context, AggregationMode.INDIVIDUAL, bool(row, activeColumn, true), n));
                 p.buckets.add(new BucketRow(bucketCode, limitName, groupCode, context,
-                        amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD), 1,
-                        enumOrDefault(CountingMethod.class, row, 10, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
-                        null, false, bool(row, 11, true), n));
+                        amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD),
+                        benefitsHasPeriodValue ? integer(row, 10, 1) : 1,
+                        enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
+                        null, false, bool(row, activeColumn, true), n));
                 p.links.add(new LinkRow(category, context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
             }
         });
         if (workbook.getSheet("المجموعات") != null) {
+            boolean groupsHasPeriodValue = "قيمة الفترة".equals(text(workbook.getSheet("المجموعات").getRow(0), 8));
             read(workbook, "المجموعات", 10, (row, n) -> {
-                String code = text(row, 0); EncounterType context = enumValue(EncounterType.class, row, 2, n);
-                boolean active = bool(row, 9, true); String bucketCode = "AUTO-GRP-" + code;
+                String code = text(row, 0); EncounterType context = benefitContext(row, 2, n);
+                int countingColumn = groupsHasPeriodValue ? 9 : 8;
+                int activeColumn = groupsHasPeriodValue ? 10 : 9;
+                boolean active = bool(row, activeColumn, true); String bucketCode = "AUTO-GRP-" + code;
                 p.groups.add(new GroupRow(code, text(row, 1), context, AggregationMode.SHARED, active, n));
                 p.buckets.add(new BucketRow(bucketCode, text(row, 1), code, context, decimal(row, 4), integer(row, 5), integer(row, 6),
-                        enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD), 1,
-                        enumOrDefault(CountingMethod.class, row, 8, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
+                        enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD),
+                        groupsHasPeriodValue ? integer(row, 8, 1) : 1,
+                        enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
                         null, true, active, n));
                 String members = text(row, 3);
                 if (members != null) for (String member : members.split("[,،]"))
@@ -274,8 +284,8 @@ public class BenefitStructureImportService {
                 errors.add("Buckets صف " + b.row + ": group_code «" + b.groupCode + "» غير موجود في ورقة Groups");
             if (!blank(b.parentCode) && !bucketCodes.contains(b.parentCode))
                 errors.add("Buckets صف " + b.row + ": الوعاء الأب غير موجود " + b.parentCode);
-            if (b.period == LimitPeriodType.MULTI_YEAR_POLICY && (b.periodValue == null || b.periodValue < 2))
-                errors.add("Buckets صف " + b.row + ": الدورة متعددة السنوات تتطلب period_value أكبر من 1");
+            if (requiresPeriodValue(b.period) && (b.periodValue == null || b.periodValue < 2))
+                errors.add("Buckets صف " + b.row + ": مدة السقف المخصصة تتطلب period_value أكبر من 1");
             if (b.amount != null && b.amount.signum() < 0) errors.add("Buckets صف " + b.row + ": السقف المالي لا يقبل قيمة سالبة");
             if (b.times != null && b.times < 0) errors.add("Buckets صف " + b.row + ": حد المرات لا يقبل قيمة سالبة");
             if (b.days != null && b.days < 0) errors.add("Buckets صف " + b.row + ": حد الأيام لا يقبل قيمة سالبة");
@@ -469,17 +479,29 @@ public class BenefitStructureImportService {
     private boolean bool(Row row, int i, boolean fallback) { String v=text(row,i); if(v==null)return fallback; return Set.of("TRUE","YES","1","نعم","صح").contains(v.toUpperCase()); }
     private <E extends Enum<E>> E enumValue(Class<E> type, Row row, int i, int n) { String v=text(row,i); if(v==null)return null; try{return Enum.valueOf(type,v.toUpperCase());}catch(Exception e){throw new BusinessRuleException("قيمة غير صحيحة في الصف "+n+": "+v);} }
     private <E extends Enum<E>> E enumOrDefault(Class<E> type, Row row, int i, int n, E fallback) { E value=enumValue(type,row,i,n); return value==null?fallback:value; }
+    private EncounterType benefitContext(Row row, int i, int n) {
+        EncounterType value = enumValue(EncounterType.class, row, i, n);
+        if (value == EncounterType.OUTPATIENT || value == EncounterType.INPATIENT || value == EncounterType.ANY) {
+            return value;
+        }
+        throw new BusinessRuleException("سياق غير مسموح لقواعد التغطية في الصف " + n + ": " + value + "؛ المسموح فقط OUTPATIENT أو INPATIENT أو ANY");
+    }
     private boolean blank(String value) { return value == null || value.isBlank(); }
     private String normalizedCode(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
+    private boolean requiresPeriodValue(LimitPeriodType periodType) {
+        if (periodType == null) return false;
+        return switch (periodType) {
+            case MULTI_YEAR_POLICY, CUSTOM_DAYS, CUSTOM_WEEKS, CUSTOM_MONTHS, CUSTOM_YEARS -> true;
+            default -> false;
+        };
+    }
     private String autoLimitName(String name, String fallback, EncounterType context) {
         String base = blank(name) ? fallback : name;
         return base + " - " + switch (context) {
             case INPATIENT -> "إيواء";
             case OUTPATIENT -> "عيادات خارجية";
-            case EMERGENCY -> "طوارئ";
-            case SPECIAL -> "خاص";
-            case OPERATING_ROOM -> "عمليات";
             case ANY -> "عام";
+            default -> "عام";
         };
     }
 

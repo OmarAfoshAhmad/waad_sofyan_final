@@ -14,7 +14,6 @@ import lombok.NoArgsConstructor;
  * Field Mapping:
  * - Frontend: categoryCode → Backend: code
  * - Frontend: name → Backend: name (unified)
- * - Frontend: parentCategoryId → Backend: parentId
  */
 @Data
 @Builder
@@ -38,8 +37,10 @@ public class MedicalCategoryCreateDto {
     private String name;
 
     /**
-     * Parent category ID (null for root categories)
+     * @deprecated Medical categories are now canonical flat reference data.
+     *             This field is accepted for backward compatibility and ignored.
      */
+    @Deprecated
     @JsonAlias({ "parentCategoryId", "parentId" })
     private Long parentId;
 
@@ -68,8 +69,9 @@ public class MedicalCategoryCreateDto {
     private java.math.BigDecimal coveragePercent;
 
     /**
-     * Multiple parent root IDs for cross-context support (Phase 10)
+     * @deprecated Legacy hierarchy/cross-root field. Accepted and ignored.
      */
+    @Deprecated
     @com.fasterxml.jackson.annotation.JsonAlias({ "multiParentIds", "rootIds" })
     private java.util.List<Long> multiParentIds;
 }

@@ -29,8 +29,10 @@ public class MedicalCategoryUpdateDto {
     private String name;
 
     /**
-     * Parent category ID (null to make root category)
+     * @deprecated Medical categories are canonical flat reference data.
+     *             Accepted for backward compatibility and ignored.
      */
+    @Deprecated
     @JsonAlias({ "parentCategoryId", "parentId" })
     private Long parentId;
 
@@ -56,14 +58,15 @@ public class MedicalCategoryUpdateDto {
     private java.math.BigDecimal coveragePercent;
 
     /**
-     * Multiple parent root IDs for cross-context support (Phase 10)
+     * @deprecated Legacy hierarchy/cross-root field. Accepted and ignored.
      */
+    @Deprecated
     @com.fasterxml.jackson.annotation.JsonAlias({ "multiParentIds", "rootIds" })
     private java.util.List<Long> multiParentIds;
 
     /**
-     * When true, explicitly clears the parent (converts sub-category to root).
-     * Use this when parentId is intentionally being set to null.
+     * @deprecated Legacy hierarchy field. Accepted and ignored.
      */
+    @Deprecated
     private Boolean clearParent;
 }

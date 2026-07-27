@@ -71,7 +71,7 @@ public class BenefitStructureService {
                     .periodType(request.periodType() == null
                             ? com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.POLICY_PERIOD
                             : request.periodType())
-                    .periodValue(1)
+                    .periodValue(request.periodValue() == null ? 1 : request.periodValue())
                     .countingMethod(request.countingMethod() == null
                             ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT
                             : request.countingMethod())
@@ -108,6 +108,7 @@ public class BenefitStructureService {
         List<Long> ruleIds = request.ruleIds() == null ? List.of() : request.ruleIds().stream()
                 .filter(Objects::nonNull).distinct().toList();
         if (ruleIds.size() < 2) throw new BusinessRuleException("مجموعة المنافع يجب أن تضم منفعتين على الأقل");
+        validatePeriodValue(request.periodType(), request.periodValue());
 
         group.setNameAr(name);
         group.setContextType(request.contextType());
@@ -119,7 +120,7 @@ public class BenefitStructureService {
                 .filter(item -> item.getCode().startsWith("AUTO-GRP-"))
                 .findFirst().orElseGet(() -> BenefitLimitBucket.builder()
                         .policy(group.getPolicy()).benefitGroup(group).code("AUTO-GRP-" + group.getCode())
-                        .periodValue(1).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                        .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
                         .build());
         bucket.setNameAr(name);
         bucket.setContextType(request.contextType());
@@ -160,10 +161,7 @@ public class BenefitStructureService {
     }
 
     public BucketResponse createBucket(Long policyId, BucketRequest request) {
-        if (request.periodType() == com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.MULTI_YEAR_POLICY
-                && (request.periodValue() == null || request.periodValue() < 2)) {
-            throw new BusinessRuleException("الدورة متعددة السنوات تتطلب عدد سنوات أكبر من سنة واحدة");
-        }
+        validatePeriodValue(request.periodType(), request.periodValue());
         BenefitPolicy policy = requirePolicy(policyId);
         String code = request.code().trim();
         String name = request.nameAr().trim();
@@ -217,6 +215,7 @@ public class BenefitStructureService {
     }
 
     public BucketResponse upsertIndividualLimit(Long policyId, Long ruleId, IndividualLimitRequest request) {
+        validatePeriodValue(request.periodType(), request.periodValue());
         BenefitPolicyRule rule = ruleRepository.findById(ruleId)
                 .orElseThrow(() -> new ResourceNotFoundException("BenefitPolicyRule", "id", ruleId));
         assertSamePolicy(policyId, rule.getBenefitPolicy().getId(), "منفعة الوثيقة");
@@ -252,7 +251,7 @@ public class BenefitStructureService {
             group = groupRepository.save(group);
             bucket = BenefitLimitBucket.builder().policy(rule.getBenefitPolicy()).benefitGroup(group)
                     .code("AUTO-BEN-LIMIT-RULE-" + ruleId).nameAr(rule.getLabel()).contextType(rule.getEncounterType())
-                    .periodValue(1).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
                     .shared(false).active(true).build();
         } else {
             bucket = existingLink.getBucket();
@@ -453,6 +452,16 @@ public class BenefitStructureService {
     private void assertSamePolicy(Long expected, Long actual, String label) {
         if (!Objects.equals(expected, actual)) throw new BusinessRuleException(label + " لا يتبع الوثيقة المحددة");
     }
+    private void validatePeriodValue(com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType periodType, Integer periodValue) {
+        if (periodType == null) return;
+        boolean requiresCustomValue = switch (periodType) {
+            case MULTI_YEAR_POLICY, CUSTOM_DAYS, CUSTOM_WEEKS, CUSTOM_MONTHS, CUSTOM_YEARS -> true;
+            default -> false;
+        };
+        if (requiresCustomValue && (periodValue == null || periodValue < 2)) {
+            throw new BusinessRuleException("مدة السقف المخصصة تتطلب قيمة أكبر من 1");
+        }
+    }
     private GroupResponse groupResponse(BenefitGroup g) {
         return new GroupResponse(g.getId(), g.getCode(), g.getNameAr(), g.getContextType(), g.getAggregationMode(),
                 g.getCoveragePercent(), g.getCopayPercentage(), g.isRequiresPreApproval(), g.getNotes(), g.getSourceClause(), g.isActive());
@@ -464,3 +473,8 @@ public class BenefitStructureService {
                 b.isShared(), b.isActive());
     }
 }
+
+
+
+
+

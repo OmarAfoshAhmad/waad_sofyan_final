@@ -20,8 +20,12 @@ public class MedicalCategoryResponseDto {
     private Long id;
     private String code;
     private String name;
+    /** @deprecated Always null. Categories are canonical flat reference data. */
+    @Deprecated
     private Long parentId;
-    private String parentName; // For UX - display parent category name
+    /** @deprecated Always null. Categories are canonical flat reference data. */
+    @Deprecated
+    private String parentName;
     private String context; // Clinical care-setting: INPATIENT, OUTPATIENT, OPERATING_ROOM, EMERGENCY,
                             // SPECIAL, ANY
     private java.util.List<String> contexts;
@@ -30,11 +34,15 @@ public class MedicalCategoryResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // For multi-context support
+    /** @deprecated Always empty. Legacy multi-parent hierarchy removed. */
+    @Deprecated
     private java.util.List<Long> multiParentIds;
+    /** @deprecated Always empty. Legacy multi-parent hierarchy removed. */
+    @Deprecated
     private java.util.List<String> multiParentNames;
 
-    // For tree/hierarchy responses
+    /** @deprecated Always empty. Category tree hierarchy removed. */
+    @Deprecated
     private List<MedicalCategoryResponseDto> children;
 
     /**
@@ -44,9 +52,8 @@ public class MedicalCategoryResponseDto {
     @Builder.Default
     private long serviceCount = 0L;
 
-    /**
-     * عدد التصنيفات الفرعية المباشرة.
-     */
+    /** @deprecated Always 0. Category hierarchy removed. */
+    @Deprecated
     @Builder.Default
     private int childrenCount = 0;
 }

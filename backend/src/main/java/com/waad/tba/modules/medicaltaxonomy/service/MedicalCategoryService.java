@@ -33,9 +33,8 @@ import java.util.stream.Collectors;
  * 
  * Business Rules:
  * 1. Code must be unique and immutable
- * 2. Parent category must exist and be active
- * 3. Cannot create circular references
- * 4. Cannot delete category with active services
+ * 2. Categories are canonical flat reference data; parent/multi-parent hierarchy is ignored
+ * 3. Cannot delete category with active services
  */
 @Slf4j
 @Service
@@ -56,31 +55,18 @@ public class MedicalCategoryService {
     public MedicalCategoryResponseDto create(MedicalCategoryCreateDto dto) {
         String normalizedName = dto.getName() == null ? null : dto.getName().trim();
         log.info("Creating medical category with auto-generated code");
-
-        // Validate parent category (if provided)
+        // Legacy parent/multi-parent inputs are intentionally ignored.
         String parentName = null;
-        if (dto.getParentId() != null) {
-            MedicalCategory parent = categoryRepository.findActiveById(dto.getParentId())
-                    .orElseThrow(() -> new BusinessRuleException(
-                            "Parent category not found or inactive: " + dto.getParentId()));
-            parentName = parent.getName();
-        }
 
         // Create entity
         MedicalCategory category = MedicalCategory.builder()
                 .name(normalizedName)
-                .parentId(dto.getParentId())
+                .parentId(null)
                 .active(dto.getActive() != null ? dto.getActive() : true)
                 .contexts(parseContexts(dto.getContexts(), dto.getContext()))
                 .coveragePercent(dto.getCoveragePercent())
                 .build();
-
-        // Handle multi-parents (Roots)
-        if (dto.getMultiParentIds() != null && !dto.getMultiParentIds().isEmpty()) {
-            java.util.Set<MedicalCategory> roots = new java.util.HashSet<>(
-                    categoryRepository.findAllById(dto.getMultiParentIds()));
-            category.setRoots(roots);
-        }
+        category.getRoots().clear();
 
         // Generate unique code server-side in CAT001 format (ignore any client code)
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -128,22 +114,17 @@ public class MedicalCategoryService {
         return categoryRepository.findAll(pageable)
                 .map(this::toDto);
     }
-
     @Transactional(readOnly = true)
     public Page<MedicalCategoryResponseDto> findAll(Pageable pageable, Long parentId) {
-        log.debug("Finding all medical categories, page: {}, parentId: {}", pageable.getPageNumber(), parentId);
-        if (parentId != null) {
-            return categoryRepository.findByParentId(parentId, pageable)
-                    .map(this::toDto);
-        }
-        return categoryRepository.findAll(pageable)
-                .map(this::toDto);
+        log.debug("Finding all medical categories, page: {}. Legacy parentId ignored.", pageable.getPageNumber());
+        return categoryRepository.findAll(pageable).map(this::toDto);
     }
 
     @Transactional(readOnly = true)
     public Page<MedicalCategoryResponseDto> findAll(Pageable pageable, Long parentId, Boolean active, String search) {
-        log.debug("Finding medical categories - page: {}, parentId: {}, active: {}, search: {}",
-                pageable.getPageNumber(), parentId, active, search);
+
+        log.debug("Finding medical categories - page: {}, active: {}, search: {}. Legacy parentId ignored.",
+                pageable.getPageNumber(), active, search);
         String searchParam = (search != null && !search.isBlank()) ? search.trim().toLowerCase() : null;
         Specification<MedicalCategory> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -153,9 +134,6 @@ public class MedicalCategoryService {
                         cb.like(cb.lower(root.get("name")), pattern),
                         cb.like(cb.lower(root.get("code")), pattern)));
             }
-            if (parentId != null) {
-                predicates.add(cb.equal(root.get("parentId"), parentId));
-            }
             if (active != null) {
                 predicates.add(cb.equal(root.get("active"), active));
             }
@@ -163,21 +141,16 @@ public class MedicalCategoryService {
         };
         return categoryRepository.findAll(spec, pageable).map(this::toDto);
     }
-
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> findRootCategories() {
-        log.debug("Finding root categories");
-        return categoryRepository.findRootCategories().stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        log.debug("Finding root categories requested; returning all active flat categories");
+        return findAllList();
     }
 
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> findChildren(Long parentId) {
-        log.debug("Finding children of category: {}", parentId);
-        return categoryRepository.findActiveChildrenByParentId(parentId).stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+        log.debug("Legacy children lookup requested for category {}; hierarchy is disabled", parentId);
+        return List.of();
     }
 
     @Transactional(readOnly = true)
@@ -187,37 +160,10 @@ public class MedicalCategoryService {
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
-
     @Transactional(readOnly = true)
     public List<MedicalCategoryResponseDto> getCategoryTree() {
-        log.debug("Building category tree");
-
-        // Get all active categories
-        List<MedicalCategory> allCategories = categoryRepository.findByActiveTrue();
-
-        // Build parent map for efficient lookup
-        Map<Long, String> parentNames = allCategories.stream()
-                .collect(Collectors.toMap(MedicalCategory::getId, MedicalCategory::getName));
-
-        // Convert to DTOs
-        List<MedicalCategoryResponseDto> allDtos = allCategories.stream()
-                .map(cat -> toDto(cat, parentNames.get(cat.getParentId())))
-                .collect(Collectors.toList());
-
-        // Build hierarchy
-        Map<Long, List<MedicalCategoryResponseDto>> childrenMap = allDtos.stream()
-                .filter(dto -> dto.getParentId() != null)
-                .collect(Collectors.groupingBy(MedicalCategoryResponseDto::getParentId));
-
-        // Attach children to parents
-        allDtos.forEach(dto -> {
-            dto.setChildren(childrenMap.getOrDefault(dto.getId(), new ArrayList<>()));
-        });
-
-        // Return only root categories
-        return allDtos.stream()
-                .filter(dto -> dto.getParentId() == null)
-                .collect(Collectors.toList());
+        log.debug("Category tree requested; returning flat active category list for backward compatibility");
+        return findAllList();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -235,25 +181,11 @@ public class MedicalCategoryService {
         if (dto.getName() != null) {
             category.setName(dto.getName());
         }
-
-        // Handle parent update
-        if (Boolean.TRUE.equals(dto.getClearParent())) {
-            // Explicitly converting to root category
-            category.setParentId(null);
-        } else if (dto.getParentId() != null) {
-            // Validate parent category exists and is active
-            categoryRepository.findActiveById(dto.getParentId())
-                    .orElseThrow(() -> new BusinessRuleException(
-                            "Parent category not found or inactive: " + dto.getParentId()));
-
-            // Prevent circular reference
-            if (dto.getParentId().equals(id)) {
-                throw new BusinessRuleException("Category cannot be its own parent");
-            }
-
-            category.setParentId(dto.getParentId());
-        }
+        // Legacy parent/multi-parent update inputs are intentionally ignored.
+        category.setParentId(null);
+        category.getRoots().clear();
         if (dto.getActive() != null) {
+
             category.setActive(dto.getActive());
         }
         if (dto.getContexts() != null || dto.getContext() != null) {
@@ -261,12 +193,6 @@ public class MedicalCategoryService {
         }
         if (dto.getCoveragePercent() != null) {
             category.setCoveragePercent(dto.getCoveragePercent());
-        }
-
-        if (dto.getMultiParentIds() != null) {
-            java.util.Set<MedicalCategory> roots = new java.util.HashSet<>(
-                    categoryRepository.findAllById(dto.getMultiParentIds()));
-            category.setRoots(roots);
         }
 
         category = categoryRepository.save(category);
@@ -322,30 +248,9 @@ public class MedicalCategoryService {
         categoryRepository.saveAll(categories);
         log.info("✅ Bulk deleted {} medical categories", categories.size());
     }
-
     @Transactional
     public void bulkMove(MedicalCategoryBulkMoveDto dto) {
-        log.info("Bulk moving medical categories {} to new parent {}", dto.getIds(), dto.getNewParentId());
-        if (dto.getIds() == null || dto.getIds().isEmpty()) {
-            return;
-        }
-
-        if (dto.getNewParentId() != null) {
-            categoryRepository.findActiveById(dto.getNewParentId())
-                    .orElseThrow(() -> new BusinessRuleException(
-                            "Parent category not found or inactive: " + dto.getNewParentId()));
-        }
-
-        List<MedicalCategory> categories = categoryRepository.findAllById(dto.getIds());
-        for (MedicalCategory category : categories) {
-            if (dto.getNewParentId() != null && dto.getNewParentId().equals(category.getId())) {
-                throw new BusinessRuleException("Category cannot be its own parent: " + category.getId());
-            }
-            category.setParentId(dto.getNewParentId());
-        }
-        
-        categoryRepository.saveAll(categories);
-        log.info("✅ Bulk moved {} medical categories", categories.size());
+        throw new BusinessRuleException("تم إلغاء نقل التصنيفات داخل شجرة؛ التصنيفات الطبية أصبحت قائمة موحدة مسطحة.");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -431,27 +336,21 @@ public class MedicalCategoryService {
     private MedicalCategoryResponseDto toDto(MedicalCategory category) {
         return toDto(category, null);
     }
-
     private MedicalCategoryResponseDto toDto(MedicalCategory category, String parentName) {
-        if (parentName == null && category.getParentId() != null) {
-            parentName = categoryRepository.findById(category.getParentId())
-                    .map(MedicalCategory::getName)
-                    .orElse(null);
-        }
-
         return MedicalCategoryResponseDto.builder()
                 .id(category.getId())
                 .code(category.getCode())
                 .name(category.getName())
-                .parentId(category.getParentId())
-                .parentName(parentName)
+                .parentId(null)
+                .parentName(null)
                 .context(!category.getContexts().isEmpty() ? category.getContexts().iterator().next().name() : "ANY")
                 .contexts(category.getContexts().stream().map(Enum::name).sorted().collect(Collectors.toList()))
                 .active(category.isActive())
                 .coveragePercent(category.getCoveragePercent())
-                .multiParentIds(category.getRoots().stream().map(MedicalCategory::getId).collect(Collectors.toList()))
-                .multiParentNames(
-                        category.getRoots().stream().map(MedicalCategory::getName).collect(Collectors.toList()))
+                .multiParentIds(List.of())
+                .multiParentNames(List.of())
+                .children(List.of())
+                .childrenCount(0)
                 .createdAt(category.getCreatedAt())
                 .updatedAt(category.getUpdatedAt())
                 .build();

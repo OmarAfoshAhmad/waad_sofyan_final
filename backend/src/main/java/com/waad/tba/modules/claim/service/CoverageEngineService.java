@@ -406,11 +406,14 @@ public class CoverageEngineService {
     }
 
     private long requestedTimes(CountingMethod method, ClaimLineInput line, BatchUsageAccumulator acc) {
-        return switch (method) {
-            case EACH_UNIT -> Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
-            case PER_VISIT, PER_DAY -> acc.addedCount == 0 ? 1 : 0;
-            case EACH_LINE -> 1;
-        };
+        CountingMethod effectiveMethod = method != null ? method : CountingMethod.EACH_LINE;
+        if (effectiveMethod == CountingMethod.EACH_UNIT) {
+            return Math.max(1, line.getQuantity() == null ? 1 : line.getQuantity());
+        }
+        if (effectiveMethod == CountingMethod.PER_VISIT || effectiveMethod == CountingMethod.PER_DAY) {
+            return acc.addedCount == 0 ? 1 : 0;
+        }
+        return 1;
     }
 
     private BigDecimal basisAmount(ConsumptionBasis basis, BigDecimal gross, int coveragePercent) {

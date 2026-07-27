@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Optional;
 import java.math.BigDecimal;
 
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +46,8 @@ class BenefitStructureServiceTest {
     @Mock BenefitLimitBucketRepository bucketRepository;
     @Mock BenefitRuleBucketRepository linkRepository;
     @Mock BenefitBucketConsumptionRepository consumptionRepository;
+        @Mock EntityManager em;
+    @Mock Query financialHistoryQuery;
     @InjectMocks BenefitStructureService service;
 
     private BenefitPolicy policy;
@@ -50,6 +55,10 @@ class BenefitStructureServiceTest {
     @BeforeEach
     void setUp() {
         policy = BenefitPolicy.builder().id(10L).build();
+        org.mockito.Mockito.lenient().when(em.createNativeQuery(org.mockito.ArgumentMatchers.anyString())).thenReturn(financialHistoryQuery);
+        org.mockito.Mockito.lenient().when(financialHistoryQuery.setParameter(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(financialHistoryQuery);
+        org.mockito.Mockito.lenient().when(financialHistoryQuery.getSingleResult()).thenReturn(1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "em", em);
     }
 
     @Test
@@ -71,7 +80,7 @@ class BenefitStructureServiceTest {
         when(ruleRepository.findById(102L)).thenReturn(Optional.of(second));
 
         service.createGroup(10L, new GroupRequest("GRP-TEST", "مجموعة اختبار", EncounterType.OUTPATIENT,
-                AggregationMode.SHARED, true, null, null, null, LimitPeriodType.POLICY_PERIOD, null,
+                AggregationMode.SHARED, true, null, null, null, LimitPeriodType.POLICY_PERIOD, 1, null,
                 List.of(101L, 102L)));
 
         ArgumentCaptor<BenefitLimitBucket> bucket = ArgumentCaptor.forClass(BenefitLimitBucket.class);
@@ -95,7 +104,7 @@ class BenefitStructureServiceTest {
         });
 
         service.upsertIndividualLimit(10L, 101L, new IndividualLimitRequest(
-                new BigDecimal("5000"), 20, null, LimitPeriodType.POLICY_PERIOD, null));
+                new BigDecimal("5000"), 20, null, LimitPeriodType.POLICY_PERIOD, 1, null));
 
         ArgumentCaptor<BenefitLimitBucket> bucket = ArgumentCaptor.forClass(BenefitLimitBucket.class);
         verify(bucketRepository).save(bucket.capture());
@@ -112,7 +121,7 @@ class BenefitStructureServiceTest {
         when(bucketRepository.findById(30L)).thenReturn(Optional.of(bucket));
         when(bucketRepository.findByParentBucketId(30L)).thenReturn(List.of());
         when(linkRepository.existsByBucketId(30L)).thenReturn(false);
-        when(consumptionRepository.existsByBucketId(30L)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(consumptionRepository.existsByBucketId(30L)).thenReturn(true);
 
         assertThatThrownBy(() -> service.deleteBucket(10L, 30L))
                 .hasMessageContaining("سجل استهلاك مالي");
@@ -126,7 +135,7 @@ class BenefitStructureServiceTest {
                 .benefitGroup(group).code("AUTO-GRP-TEST").nameAr("مجموعة مستهلكة").build();
         when(groupRepository.findById(20L)).thenReturn(Optional.of(group));
         when(bucketRepository.findByBenefitGroupId(20L)).thenReturn(List.of(bucket));
-        when(consumptionRepository.existsByBucketId(30L)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(consumptionRepository.existsByBucketId(30L)).thenReturn(true);
 
         assertThatThrownBy(() -> service.deleteGroup(10L, 20L))
                 .hasMessageContaining("سجل استهلاك مالي");
@@ -134,3 +143,10 @@ class BenefitStructureServiceTest {
         verify(groupRepository, org.mockito.Mockito.never()).delete(any());
     }
 }
+
+
+
+
+
+
+

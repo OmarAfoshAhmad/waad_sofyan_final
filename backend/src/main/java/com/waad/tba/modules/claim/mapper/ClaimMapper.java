@@ -3,6 +3,7 @@ package com.waad.tba.modules.claim.mapper;
 import com.waad.tba.modules.claim.dto.*;
 import com.waad.tba.modules.claim.dto.engine.*;
 import com.waad.tba.modules.claim.entity.*;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
@@ -238,6 +239,13 @@ public class ClaimMapper {
                                 }
                         }
 
+                        boolean claimRejected = claim.getStatus() == ClaimStatus.REJECTED;
+                        String effectiveLineRejectionReason = lineDto.getRejectionReason() != null
+                                        && !lineDto.getRejectionReason().isBlank()
+                                                        ? lineDto.getRejectionReason()
+                                                        : claim.getReviewerComment();
+                        boolean isRejected = claimRejected || Boolean.TRUE.equals(lineDto.getRejected());
+
                         ClaimLineInput lineInput = ClaimLineInput.builder()
                                         .lineId(String.valueOf(lines.size()))
                                         .serviceId(resolvedPricingItemId)
@@ -247,17 +255,24 @@ public class ClaimMapper {
                                         .contractPrice(resolvedUnitPrice)
                                         .quantity(quantity)
                                         .manualRefusedAmount(lineDto.getManualRefusedAmount())
-                                        .manualRefusalReason(lineDto.getRejectionReason() != null
-                                                        && !lineDto.getRejectionReason().isBlank()
-                                                                        ? lineDto.getRejectionReason()
+                                        .manualRefusalReason(effectiveLineRejectionReason != null
+                                                        && !effectiveLineRejectionReason.isBlank()
+                                                                        ? effectiveLineRejectionReason
                                                                         : lineDto.getManualRefusalReason())
-                                        .rejected(Boolean.TRUE.equals(lineDto.getRejected()))
+                                        .rejected(isRejected)
                                         .build();
 
                         CoverageResult result = coverageEngineService.evaluateLine(engineRequest, lineInput,
                                         batchUsageContext);
 
-                        boolean isRejected = Boolean.TRUE.equals(lineDto.getRejected());
+                        if (claim.getStatus() == ClaimStatus.APPROVED && result.isNotCovered() && !isRejected) {
+                                String serviceLabel = resolvedServiceName != null && !resolvedServiceName.isBlank()
+                                                ? resolvedServiceName
+                                                : (lineDto.getServiceCode() != null ? lineDto.getServiceCode() : "الخدمة");
+                                throw new BusinessRuleException(
+                                                "لا يمكن اعتماد مطالبة تحتوي خدمة غير مغطاة: " + serviceLabel
+                                                                + ". غيّر سياق المطالبة أو ارفض البند/المطالبة بسبب واضح.");
+                        }
                         BigDecimal manualRefused = lineDto.getManualRefusedAmount() != null
                                         ? lineDto.getManualRefusedAmount()
                                         : BigDecimal.ZERO;
@@ -339,9 +354,9 @@ public class ClaimMapper {
                                                         ? 100 - result.getCoveragePercent()
                                                         : 0)
                                         .manualRefusedAmount(manualRefused)
-                                        .manualRefusalReason(lineDto.getRejectionReason() != null
-                                                        && !lineDto.getRejectionReason().isBlank()
-                                                                        ? lineDto.getRejectionReason()
+                                        .manualRefusalReason(effectiveLineRejectionReason != null
+                                                        && !effectiveLineRejectionReason.isBlank()
+                                                                        ? effectiveLineRejectionReason
                                                                         : lineDto.getManualRefusalReason())
                                         .unitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
                                         .totalPrice(result.getEffectiveTotal())
@@ -357,9 +372,9 @@ public class ClaimMapper {
                                                         : priceExcess)
                                         .limitRefused(isRejected ? BigDecimal.ZERO : maxZero(result.getLimitRefused()))
                                         .rejected(isRejected)
-                                        .rejectionReason(lineDto.getRejectionReason() != null
-                                                        && !lineDto.getRejectionReason().isBlank()
-                                                                        ? lineDto.getRejectionReason()
+                                        .rejectionReason(effectiveLineRejectionReason != null
+                                                        && !effectiveLineRejectionReason.isBlank()
+                                                                        ? effectiveLineRejectionReason
                                                                         : (isRejected ? "مرفوض كلياً من قبل المراجع"
                                                                                         : result.getRefusalReason()))
                                         .approvedQuantity(finalPayable.compareTo(BigDecimal.ZERO) > 0 ? quantity : 0)

@@ -70,7 +70,7 @@ export function useCoverageLogic({
 
     const code = line?.serviceCode || line?.service?.serviceCode || line?.service?.code;
     if (code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE') {
-      const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG' : 'CAT-DIAGNOSTIC';
+      const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG-GENERAL' : 'CAT-DIAGNOSTIC';
       const foundCat = medicalCategories?.find((c) => c.code === targetCode);
       if (foundCat) {
         serviceOwnCategoryId = foundCat.id;
@@ -106,7 +106,7 @@ export function useCoverageLogic({
         null;
       const code = service?.serviceCode || service?.code;
       if (code === 'GEN-MEDICATION' || code === 'GEN-MEDICAL-SERVICE') {
-        const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG' : 'CAT-DIAGNOSTIC';
+        const targetCode = code === 'GEN-MEDICATION' ? 'CAT-DRUG-GENERAL' : 'CAT-DIAGNOSTIC';
         const foundCat = medicalCategories?.find((c) => c.code === targetCode);
         if (foundCat) {
           serviceOwnCategoryId = foundCat.id;
@@ -190,7 +190,8 @@ export function useCoverageLogic({
       serviceDate,
       fullCoverage,
       encounterType,
-      onCoverageError
+      onCoverageError,
+      medicalCategories
     ]
   );
 
@@ -295,7 +296,8 @@ export function useCoverageLogic({
       currentClaimId,
       recompute,
       fullCoverage,
-      onCoverageError
+      onCoverageError,
+      medicalCategories
     ]
   );
 

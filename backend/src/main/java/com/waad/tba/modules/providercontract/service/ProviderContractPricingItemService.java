@@ -427,6 +427,7 @@ public class ProviderContractPricingItemService {
                         .contractPrice(p.getContractPrice())
                         .basePrice(p.getBasePrice())
                         .discountPercent(p.getDiscountPercent())
+                        .encounterType(p.getEncounterType() != null ? p.getEncounterType().name() : "ANY")
                         .requiresPreAuth(false)
                         .build())
                 .collect(Collectors.toList());
@@ -473,6 +474,7 @@ public class ProviderContractPricingItemService {
                             .contractPrice(p.getContractPrice())
                             .basePrice(p.getBasePrice())
                             .discountPercent(p.getDiscountPercent())
+                            .encounterType(p.getEncounterType() != null ? p.getEncounterType().name() : "ANY")
                             .requiresPreAuth(false)
                             .mapped(p.getMedicalCategory() != null)
                             .build();
@@ -627,6 +629,7 @@ public class ProviderContractPricingItemService {
         private BigDecimal contractPrice;
         private BigDecimal basePrice;
         private BigDecimal discountPercent;
+        private String encounterType;
         private Boolean requiresPreAuth;
         private Boolean mapped;
     }

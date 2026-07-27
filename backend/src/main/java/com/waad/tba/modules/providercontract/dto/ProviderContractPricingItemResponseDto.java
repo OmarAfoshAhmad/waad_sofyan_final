@@ -53,6 +53,7 @@ public class ProviderContractPricingItemResponseDto {
     private BigDecimal contractPrice;
     private BigDecimal discountPercent;
     private BigDecimal savingsAmount;
+    private String encounterType;
 
     // Unit and currency
     private String unit;
@@ -138,6 +139,7 @@ public class ProviderContractPricingItemResponseDto {
                 .contractPrice(entity.getContractPrice())
                 .discountPercent(entity.getDiscountPercent())
                 .savingsAmount(entity.getSavingsAmount())
+                .encounterType(entity.getEncounterType() != null ? entity.getEncounterType().name() : "ANY")
                 .unit(entity.getUnit())
                 .currency(entity.getCurrency())
                 .effectiveFrom(entity.getEffectiveFrom())

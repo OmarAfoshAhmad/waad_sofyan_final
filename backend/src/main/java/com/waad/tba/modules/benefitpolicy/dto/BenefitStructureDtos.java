@@ -19,6 +19,7 @@ public final class BenefitStructureDtos {
             @Min(0) Integer timesLimit,
             @Min(0) Integer daysLimit,
             LimitPeriodType periodType,
+            @Min(1) Integer periodValue,
             CountingMethod countingMethod,
             List<Long> ruleIds) {}
 
@@ -57,6 +58,7 @@ public final class BenefitStructureDtos {
             @Min(0) Integer timesLimit,
             @Min(0) Integer daysLimit,
             LimitPeriodType periodType,
+            @Min(1) Integer periodValue,
             CountingMethod countingMethod) {}
 
     public record RuleBucketResponse(Long id, Long ruleId, BucketResponse bucket,
@@ -66,3 +68,5 @@ public final class BenefitStructureDtos {
     public record StructureResponse(List<GroupResponse> groups, List<BucketResponse> buckets,
                                     List<RuleBucketResponse> links) {}
 }
+
+

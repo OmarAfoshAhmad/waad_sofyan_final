@@ -237,4 +237,55 @@ class BenefitBucketLedgerServiceTest {
         assertEquals(LocalDate.of(2025, 4, 1), captor.getValue().getPeriodStart());
         assertEquals(LocalDate.of(2027, 3, 31), captor.getValue().getPeriodEnd());
     }
+    @Test
+    @DisplayName("الفترة الأسبوعية تحفظ أسبوع السبت إلى الجمعة حول تاريخ الخدمة")
+    void weeklyPeriodUsesSaturdayToFridayWindow() {
+        claim.setServiceDate(LocalDate.of(2026, 7, 27));
+        bucket.setPeriodType(LimitPeriodType.WEEKLY);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(LocalDate.of(2026, 7, 25), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2026, 7, 31), captor.getValue().getPeriodEnd());
+    }
+
+    @Test
+    @DisplayName("الفترة المخصصة بالأشهر ترتكز على بداية الوثيقة")
+    void customMonthsPeriodAnchorsToPolicyStart() {
+        policy.setStartDate(LocalDate.of(2026, 3, 18));
+        policy.setEndDate(LocalDate.of(2027, 3, 17));
+        claim.setServiceDate(LocalDate.of(2026, 7, 27));
+        bucket.setPeriodType(LimitPeriodType.CUSTOM_MONTHS);
+        bucket.setPeriodValue(6);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(LocalDate.of(2026, 3, 18), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2026, 9, 17), captor.getValue().getPeriodEnd());
+    }
+
+    @Test
+    @DisplayName("الفترة المخصصة بالسنوات تدعم سقف كل خمس سنوات")
+    void customYearsPeriodSupportsFiveYearLimit() {
+        policy.setStartDate(LocalDate.of(2026, 3, 18));
+        policy.setEndDate(LocalDate.of(2036, 3, 17));
+        claim.setServiceDate(LocalDate.of(2030, 4, 1));
+        bucket.setPeriodType(LimitPeriodType.CUSTOM_YEARS);
+        bucket.setPeriodValue(5);
+
+        service.commitClaim(20L);
+
+        ArgumentCaptor<BenefitBucketConsumption> captor =
+                ArgumentCaptor.forClass(BenefitBucketConsumption.class);
+        verify(consumptionRepository).save(captor.capture());
+        assertEquals(LocalDate.of(2026, 3, 18), captor.getValue().getPeriodStart());
+        assertEquals(LocalDate.of(2031, 3, 17), captor.getValue().getPeriodEnd());
+    }
 }
+

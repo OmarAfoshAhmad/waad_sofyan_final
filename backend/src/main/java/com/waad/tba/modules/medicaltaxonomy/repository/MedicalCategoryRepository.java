@@ -17,7 +17,7 @@ import java.util.Optional;
  * 
  * Supports:
  * - CRUD operations
- * - Hierarchical queries (parent-child relationships)
+ * - Legacy hierarchy queries retained for backward compatibility only
  * - Code-based lookups
  * - Active/inactive filtering
  */
@@ -70,7 +70,7 @@ public interface MedicalCategoryRepository
         Page<MedicalCategory> findByActiveTrue(Pageable pageable);
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // HIERARCHY QUERIES
+        // LEGACY HIERARCHY QUERIES (do not use in new business logic)
         // ═══════════════════════════════════════════════════════════════════════════
 
         /**

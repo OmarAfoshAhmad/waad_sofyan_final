@@ -8,6 +8,7 @@ export const ClaimTotalsFooter = ({
   saving,
   isDirty,
   coveragePending,
+  hasUncoveredLines,
   setIsClaimRejected,
   setIsDirty,
   setRejectionInput,
@@ -22,6 +23,7 @@ export const ClaimTotalsFooter = ({
   const activeLines = (lines || []).filter((l) => l.service || l.serviceName);
   const allLinesRejected = activeLines.length > 0 && activeLines.every((l) => l.rejected);
   const showRejected = isClaimRejected || allLinesRejected;
+  const requiresClaimRejection = !showRejected && hasUncoveredLines;
   const netApproved = totals.total - totals.refused;
 
   return (
@@ -39,12 +41,18 @@ export const ClaimTotalsFooter = ({
     >
       <Button
         variant="contained"
-        color={showRejected ? 'error' : 'primary'}
-        onClick={() => handleSave(true)}
+        color={showRejected || requiresClaimRejection ? 'error' : 'primary'}
+        onClick={() => {
+          if (requiresClaimRejection) {
+            openRejectDialog('claim');
+            return;
+          }
+          handleSave(true);
+        }}
         disabled={saving || !isDirty || coveragePending}
         sx={{ px: '2.0rem', fontWeight: 600 }}
       >
-        {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : t('claimEntry.saveAndAdd')}
+        {saving ? t('claimEntry.saving') : showRejected ? 'حفظ (مرفوضة)' : requiresClaimRejection ? 'رفض وحفظ المطالبة' : t('claimEntry.saveAndAdd')}
       </Button>
 
       {!isClaimRejected && !allLinesRejected ? (
@@ -78,6 +86,17 @@ export const ClaimTotalsFooter = ({
             <WarnIcon sx={{ fontSize: '1rem' }} />
             <Typography variant="caption" color="error.main" fontWeight={600} sx={{ fontSize: '0.78rem' }}>
               جميع البنود مرفوضة
+            </Typography>
+          </Box>
+        </Tooltip>
+      )}
+
+      {!showRejected && hasUncoveredLines && (
+        <Tooltip title="لا يمكن اعتماد مطالبة تحتوي بنداً غير مغطى. غيّر السياق أو ارفض البند/المطالبة." arrow>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'error.main' }}>
+            <WarnIcon sx={{ fontSize: '1rem' }} />
+            <Typography variant="caption" color="error.main" fontWeight={700} sx={{ fontSize: '0.78rem' }}>
+              يوجد بند غير مغطى — الحفظ معتمد ممنوع
             </Typography>
           </Box>
         </Tooltip>

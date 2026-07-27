@@ -50,6 +50,7 @@ const UnifiedCoverageModal = ({
   const [timesLimit, setTimesLimit] = useState('');
   const [daysLimit, setDaysLimit] = useState('');
   const [periodType, setPeriodType] = useState('ANNUAL');
+  const [periodValue, setPeriodValue] = useState('1');
 
   const isGroup = selectedCategories.length > 1;
 
@@ -83,6 +84,7 @@ const UnifiedCoverageModal = ({
              setTimesLimit(bucket.timesLimit ?? '');
              setDaysLimit(bucket.daysLimit ?? '');
              setPeriodType(bucket.periodType ?? 'ANNUAL');
+             setPeriodValue(String(bucket.periodValue ?? 1));
          }
       } else {
          setGroupName('');
@@ -101,6 +103,7 @@ const UnifiedCoverageModal = ({
              setTimesLimit(limit.timesLimit ?? '');
              setDaysLimit(limit.daysLimit ?? '');
              setPeriodType(limit.periodType ?? 'ANNUAL');
+             setPeriodValue(String(limit.periodValue ?? 1));
          } else {
              setAmountLimit('');
              setTimesLimit('');
@@ -153,6 +156,7 @@ const UnifiedCoverageModal = ({
         const parsedTimes = timesLimit !== '' ? Number(timesLimit) : null;
         const parsedDays = daysLimit !== '' ? Number(daysLimit) : null;
         const hasLimits = parsedAmount !== null || parsedTimes !== null || parsedDays !== null;
+        const parsedPeriodValue = periodValue !== '' ? Math.max(1, Number(periodValue)) : 1;
 
         if (!initialData.groupSource && !initialData.isGroup) {
           await updatePolicyRule(policyId, initialData.id, {
@@ -252,6 +256,7 @@ const UnifiedCoverageModal = ({
       const parsedTimes = timesLimit !== '' ? Number(timesLimit) : null;
       const parsedDays = daysLimit !== '' ? Number(daysLimit) : null;
       const hasLimits = parsedAmount !== null || parsedTimes !== null || parsedDays !== null;
+      const parsedPeriodValue = periodValue !== '' ? Math.max(1, Number(periodValue)) : 1;
 
       if (isGroup) {
         const ruleIds = createdRules.map(r => r.id);
@@ -417,15 +422,34 @@ const UnifiedCoverageModal = ({
               value={periodType}
               onChange={(e) => setPeriodType(e.target.value)}
             >
-              <MenuItem value="MONTHLY">شهرياً (Monthly)</MenuItem>
-              <MenuItem value="ANNUAL">سنوياً (Annual)</MenuItem>
-              <MenuItem value="POLICY_PERIOD">خلال الوثيقة (Per Policy)</MenuItem>
-              <MenuItem value="PER_VISIT">لكل زيارة (Per Visit)</MenuItem>
-              <MenuItem value="PER_SERVICE">لكل خدمة (Per Service)</MenuItem>
-              <MenuItem value="DAILY">يومياً (Daily)</MenuItem>
-              <MenuItem value="LIFETIME">مدى الحياة (Lifetime)</MenuItem>
+              <MenuItem value="PER_SERVICE">لكل خدمة</MenuItem>
+              <MenuItem value="PER_VISIT">لكل زيارة</MenuItem>
+              <MenuItem value="DAILY">يومياً</MenuItem>
+              <MenuItem value="WEEKLY">أسبوعياً</MenuItem>
+              <MenuItem value="MONTHLY">شهرياً</MenuItem>
+              <MenuItem value="QUARTERLY">ربع سنوي</MenuItem>
+              <MenuItem value="ANNUAL">سنوياً</MenuItem>
+              <MenuItem value="CUSTOM_DAYS">كل عدد أيام مخصص</MenuItem>
+              <MenuItem value="CUSTOM_WEEKS">كل عدد أسابيع مخصص</MenuItem>
+              <MenuItem value="CUSTOM_MONTHS">كل عدد أشهر مخصص</MenuItem>
+              <MenuItem value="CUSTOM_YEARS">كل عدد سنوات مخصص</MenuItem>
+              <MenuItem value="POLICY_PERIOD">خلال الوثيقة</MenuItem>
+              <MenuItem value="LIFETIME">مدى الحياة</MenuItem>
             </TextField>
           </Grid>
+          {['CUSTOM_DAYS', 'CUSTOM_WEEKS', 'CUSTOM_MONTHS', 'CUSTOM_YEARS', 'MULTI_YEAR_POLICY'].includes(periodType) && (
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                label="قيمة مدة السقف"
+                type="number"
+                value={periodValue}
+                onChange={(e) => setPeriodValue(e.target.value)}
+                fullWidth
+                inputProps={{ min: 2, step: 1 }}
+                helperText="مثال: 2 = كل سنتين، 5 = كل خمس سنوات، 3 = كل ثلاثة أشهر/أسابيع حسب النوع"
+              />
+            </Grid>
+          )}
         </Grid>
       </DialogContent>
       <DialogActions>
@@ -457,3 +481,5 @@ UnifiedCoverageModal.propTypes = {
 };
 
 export default UnifiedCoverageModal;
+
+

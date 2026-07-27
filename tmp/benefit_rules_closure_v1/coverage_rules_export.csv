@@ -1,0 +1,68 @@
+policy_code,policy_name,status,category_code,category_name,encounter_type,coverage_percent,copay_percentage,requires_pre_approval,active,deleted,amount_limit,times_limit,days_limit,period_type,period_value,counting_method
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-AMBULANCE,الإسعاف المحلي,EMERGENCY,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-ANESTHESIA,نفقات التخدير,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-CCU,عناية القلب,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DAY-CARE,العلاج والرعاية اليومية,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DENT-EMERG,علاج الأسنان الطارئ للمريض داخل المستشفى,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DENT-IMPLANT,زراعة الأسنان,OUTPATIENT,50,50.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DENT-ORTHO,تقويم الأسنان,OUTPATIENT,50,50.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DENT-PROSTHO,تركيبات الأسنان,OUTPATIENT,50,50.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DENT-ROUTINE,علاج الأسنان الروتيني,OUTPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DIAGNOSTIC,الكشوفات الطبية,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DIALYSIS,الغسيل الكلوي,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DME,الأجهزة والمعدات الطبية وفق تقرير الطبيب المختص,OUTPATIENT,75,25.00,f,t,f,1500.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DRUG-GENERAL,أدوية الصرف العام,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-DRUG-GENERAL,أدوية الصرف العام,OUTPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-EVAC-COMPANION,تكلفة مرافق واحد للشخص الذي تم إخلاؤه طبياً,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-EYE-EXAM,كشوفات العيون,OUTPATIENT,75,25.00,f,t,f,500.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-FAMILY-TRAVEL,سفر أحد أفراد العائلة في حالة الإخلاء الطبي,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-HOME-NURSING,التمريض المنزلي أو رعاية النقاهة بعد الخروج,SPECIAL,75,25.00,f,t,f,1000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-ICU,العناية الفائقة,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-IMG-ADV,التصوير بالرنين المغناطيسي والمقطعي والطبقي,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-IMG-ADV,التصوير بالرنين المغناطيسي والمقطعي والطبقي,OUTPATIENT,75,25.00,f,t,f,1500.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-IMG-DIAG,الأشعة والصور التشخيصية,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-IMG-DIAG,الأشعة والصور التشخيصية,OUTPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-LAB,التحاليل الطبية والمختبرات,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-LAB,التحاليل الطبية والمختبرات,OUTPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-MAT-COMP,مضاعفات الحمل والولادة,INPATIENT,75,25.00,f,t,f,1500.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-MAT-CS,الولادة القيصرية,INPATIENT,75,25.00,f,t,f,4000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-MAT-NORMAL,الولادة الطبيعية,INPATIENT,75,25.00,f,t,f,4000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-MED-EVAC,الإخلاء الطبي,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-MED-SUP,المستلزمات الطبية,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-ONCOLOGY,علاج الأورام,INPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-OPT,النظارات الطبية,OUTPATIENT,75,25.00,f,t,f,500.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PHYSIO,العلاج الطبيعي,INPATIENT,75,25.00,f,t,f,10000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PHYSIO,العلاج الطبيعي,OUTPATIENT,75,25.00,f,t,f,,20,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PRACT-FEE,رسوم الأطباء والجراحين والمستشارين والممارسين,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PRACT-FEE,رسوم الأطباء والجراحين والمستشارين والممارسين,OUTPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PSYCH-DRUG,أدوية الطب النفسي,INPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PSYCH-SESS,جلسات الطب النفسي,INPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-PSYCH-SESS,جلسات الطب النفسي,OUTPATIENT,75,25.00,f,t,f,3000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-ROOM,الإيواء في غرفة خاصة أو قسم,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-SURG-MAT,المعدات والمواد الجراحية,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-SURGERY,العمليات الجراحية الصغرى للمرضى خارج المستشفى,OUTPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-TRANSPLANT,زرع الأعضاء,INPATIENT,75,25.00,f,t,f,,,,,,
+POL-2026-001,وثيقة جليانة,SUSPENDED,CAT-WORK-INJURY,علاج إصابات العمل,INPATIENT,75,25.00,f,t,f,25000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-CARDIAC-SURGERY,عمليات القلب والشرايين,INPATIENT,100,0.00,t,t,f,20000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-CARDIO-CHECKUP,فحوصات وتخطيطات القلب,OUTPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-CCU,عناية القلب,INPATIENT,75,25.00,t,t,f,30000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-DENT-PROSTHO,تركيبات الأسنان,OUTPATIENT,80,20.00,t,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-DIAGNOSTIC,الكشوفات الطبية,OUTPATIENT,100,0.00,f,t,f,600.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-DRUG-CHRONIC,أدوية الأمراض المزمنة,OUTPATIENT,100,0.00,t,t,f,300.00,,,MONTHLY,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-DRUG-GENERAL,أدوية الصرف العام,OUTPATIENT,100,0.00,f,t,f,600.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-ENDOSCOPY,المناظير,OUTPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-EVAC-COMPANION,تكلفة مرافق واحد للشخص الذي تم إخلاؤه طبياً,INPATIENT,100,0.00,t,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-FERTILITY-DRUG,أدوية أمراض الخصوبة والعقم,OUTPATIENT,100,0.00,t,t,f,5000.00,,,CUSTOM_YEARS,3,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-HEARING-AID,السماعات الطبية,OUTPATIENT,100,0.00,t,t,f,5000.00,1,,CUSTOM_YEARS,5,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-ICU,العناية الفائقة,INPATIENT,75,25.00,t,t,f,30000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-IMG-ADV,التصوير بالرنين المغناطيسي والمقطعي والطبقي,OUTPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-IMG-DIAG,الأشعة والصور التشخيصية,OUTPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-LAB,التحاليل الطبية والمختبرات,OUTPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-OPT,النظارات الطبية,OUTPATIENT,100,0.00,t,t,f,500.00,1,,CUSTOM_YEARS,2,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-PHYSIO,العلاج الطبيعي,INPATIENT,100,0.00,t,t,f,,70,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-ROOM,الإيواء في غرفة خاصة أو قسم,INPATIENT,75,25.00,t,t,f,15000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-SPEECH-THERAPY,جلسات علاج النطق للأطفال حتى سن 16 عاماً,OUTPATIENT,100,0.00,t,t,f,,70,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-STIMULANT-DRUG,المنشطات والأدوية المرتبطة بها,OUTPATIENT,100,0.00,t,t,f,6000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-SURGERY,العمليات الجراحية الصغرى للمرضى خارج المستشفى,INPATIENT,100,0.00,t,t,f,15000.00,,,ANNUAL,1,EACH_UNIT
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-SURGERY,العمليات الجراحية الصغرى للمرضى خارج المستشفى,OUTPATIENT,100,0.00,f,t,f,,,,,,
+POL-2026-005,مصرف الوحدة,ACTIVE,CAT-THERAPEUTIC-INJ,الحقن العلاجية,OUTPATIENT,100,0.00,t,t,f,3000.00,4,,ANNUAL,1,EACH_UNIT
