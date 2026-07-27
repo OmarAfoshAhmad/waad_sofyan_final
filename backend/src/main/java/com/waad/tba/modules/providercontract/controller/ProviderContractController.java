@@ -31,6 +31,7 @@ import com.waad.tba.modules.providercontract.dto.ProviderContractUpdateDto;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.providercontract.service.ProviderContractService;
+import com.waad.tba.security.AuthorizationService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -61,6 +62,7 @@ public class ProviderContractController {
 
     private final ProviderContractService contractService;
     private final ProviderContractPricingItemService pricingService;
+    private final AuthorizationService authorizationService;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CONTRACT CRUD ENDPOINTS
@@ -71,8 +73,8 @@ public class ProviderContractController {
      * List all contracts (paginated)
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
-    @Operation(summary = "List all contracts", description = "Get paginated list of all provider contracts")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    @Operation(summary = "List all contracts", description = "Get paginated list of all provider contracts. Internal TPA staff only — contracts hold cross-provider negotiated rates.")
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> getAll(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
@@ -236,9 +238,10 @@ public class ProviderContractController {
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractCategoryDto>>> getContractedCategories(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
 
-        log.debug("REST request to get contracted categories for provider: {}", providerId);
+        Long scopedProviderId = authorizationService.resolveProviderScope(authorizationService.getCurrentUser(), providerId);
+        log.debug("REST request to get contracted categories for provider: {}", scopedProviderId);
         List<ProviderContractPricingItemService.ContractCategoryDto> result = pricingService
-                .findCategoriesByProvider(providerId);
+                .findCategoriesByProvider(scopedProviderId);
         return ResponseEntity.ok(ApiResponse.success("Contracted categories retrieved", result));
     }
 
@@ -257,9 +260,10 @@ public class ProviderContractController {
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId,
             @Parameter(description = "Category ID") @PathVariable("categoryId") Long categoryId) {
 
-        log.debug("REST request to get contracted services for provider: {}, category: {}", providerId, categoryId);
+        Long scopedProviderId = authorizationService.resolveProviderScope(authorizationService.getCurrentUser(), providerId);
+        log.debug("REST request to get contracted services for provider: {}, category: {}", scopedProviderId, categoryId);
         List<ProviderContractPricingItemService.ContractServiceDto> result = pricingService
-                .findServicesByProviderAndCategory(providerId, categoryId);
+                .findServicesByProviderAndCategory(scopedProviderId, categoryId);
         return ResponseEntity.ok(ApiResponse.success("Contracted services retrieved", result));
     }
 
@@ -274,9 +278,10 @@ public class ProviderContractController {
     public ResponseEntity<ApiResponse<List<ProviderContractPricingItemService.ContractServiceDto>>> getAllContractedServices(
             @Parameter(description = "Provider ID") @PathVariable("providerId") Long providerId) {
 
-        log.debug("REST request to get all contracted services for provider: {}", providerId);
+        Long scopedProviderId = authorizationService.resolveProviderScope(authorizationService.getCurrentUser(), providerId);
+        log.debug("REST request to get all contracted services for provider: {}", scopedProviderId);
         List<ProviderContractPricingItemService.ContractServiceDto> result = pricingService
-                .findAllServicesByProvider(providerId);
+                .findAllServicesByProvider(scopedProviderId);
         return ResponseEntity.ok(ApiResponse.success("All contracted services retrieved", result));
     }
 

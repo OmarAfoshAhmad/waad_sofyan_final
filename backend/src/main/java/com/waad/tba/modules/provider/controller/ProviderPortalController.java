@@ -380,7 +380,7 @@ public class ProviderPortalController {
             
             ProviderClaimResponse errorResponse = ProviderClaimResponse.builder()
                 .success(false)
-                .message("خطأ في رفع المرفقات: " + e.getMessage())
+                .message("حدث خطأ أثناء رفع المرفقات")
                 .build();
             
             return ResponseEntity.badRequest().body(errorResponse);
@@ -804,7 +804,7 @@ public class ProviderPortalController {
                 .providerId(providerId)
                 .serviceCode(serviceCode)
                 .hasContract(false)
-                .message("Unable to retrieve price: " + e.getMessage())
+                .message("Unable to retrieve price")
                 .build();
             return ResponseEntity.ok(ApiResponse.success(fallback));
         }
@@ -864,7 +864,7 @@ public class ProviderPortalController {
             ));
         } catch (Exception e) {
             log.error("[PROVIDER-PORTAL] Error fetching allowed employers: {}", e.getMessage(), e);
-            return ResponseEntity.ok(ApiResponse.error("Unable to fetch allowed employers: " + e.getMessage()));
+            return ResponseEntity.ok(ApiResponse.error("Unable to fetch allowed employers"));
         }
     }
     
@@ -947,7 +947,7 @@ public class ProviderPortalController {
                 MyContractResponseDto.builder()
                     .providerId(providerId)
                     .hasActiveContract(false)
-                    .errorMessage(e.getMessage())
+                    .errorMessage("تعذر جلب بيانات العقد")
                     .build()
             ));
         }
@@ -1363,9 +1363,12 @@ public class ProviderPortalController {
                 .build();
             
             return ResponseEntity.ok(ApiResponse.success("Pricing item added successfully", mappedDto));
-        } catch (Exception e) {
-            log.error("[PROVIDER-PORTAL] Error adding contract pricing: {}", e.getMessage(), e);
+        } catch (com.waad.tba.common.exception.BusinessRuleException e) {
+            log.warn("[PROVIDER-PORTAL] Contract pricing rejected: {}", e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("[PROVIDER-PORTAL] Error adding contract pricing", e);
+            return ResponseEntity.badRequest().body(ApiResponse.error("تعذر إضافة بند التسعير"));
         }
     }
     

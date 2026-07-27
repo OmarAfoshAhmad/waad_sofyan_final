@@ -125,6 +125,11 @@ public class ProviderController {
     @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'ACCOUNTANT', 'DATA_ENTRY', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     public ResponseEntity<ApiResponse<ProviderViewDto>> getProvider(@PathVariable("id") Long id) {
+        var currentUser = authorizationService.getCurrentUser();
+        if (authorizationService.isProvider(currentUser) && !authorizationService.canAccessProvider(currentUser, id)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Provider users can only view their own provider record");
+        }
         ProviderViewDto provider = providerService.getProvider(id);
         return ResponseEntity.ok(ApiResponse.success("Provider retrieved successfully", provider));
     }
@@ -319,115 +324,13 @@ public class ProviderController {
     }
 
     // ==================== PROVIDER CONTRACT ENDPOINTS ====================
-
-    /**
-     * Create a new provider contract
-     */
-    @PostMapping("/{id}/contracts")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<ProviderContractResponseDto>> createContract(
-            @PathVariable("id") Long id,
-            @Valid @RequestBody ProviderContractCreateDto dto) {
-
-        log.info("[PROVIDER-CONTRACTS] POST /api/providers/{}/contracts", id);
-
-        ProviderContractResponseDto contract = providerContractService.createContract(id, dto);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Provider contract created successfully", contract));
-    }
-
-    /**
-     * Update an existing provider contract
-     */
-    @PutMapping("/{id}/contracts/{contractId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<ProviderContractResponseDto>> updateContract(
-            @PathVariable("id") Long id,
-            @PathVariable("contractId") Long contractId,
-            @Valid @RequestBody ProviderContractUpdateDto dto) {
-
-        log.info("[PROVIDER-CONTRACTS] PUT /api/providers/{}/contracts/{}", id, contractId);
-
-        ProviderContractResponseDto contract = providerContractService.updateContract(id, contractId, dto);
-
-        return ResponseEntity.ok(ApiResponse.success("Provider contract updated successfully", contract));
-    }
-
-    /**
-     * Delete a provider contract (soft delete)
-     */
-    @DeleteMapping("/{id}/contracts/{contractId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteContract(
-            @PathVariable("id") Long id,
-            @PathVariable("contractId") Long contractId) {
-
-        log.info("[PROVIDER-CONTRACTS] DELETE /api/providers/{}/contracts/{}", id, contractId);
-
-        providerContractService.deleteContract(id, contractId);
-
-        return ResponseEntity.ok(ApiResponse.<Void>success("Provider contract deleted successfully", null));
-    }
-
-    /**
-     * Get all contracts for a provider (paginated)
-     */
-    @GetMapping("/{id}/contracts")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<PaginationResponse<ProviderContractResponseDto>> getProviderContracts(
-            @PathVariable("id") Long id,
-            @RequestParam(name = "activeOnly", defaultValue = "true") boolean activeOnly,
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size,
-            @RequestParam(name = "sortBy", defaultValue = "effectiveFrom") String sortBy,
-            @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
-
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts?activeOnly={}&page={}&size={}",
-                id, activeOnly, page, size);
-
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                page, size,
-                sortDir.equalsIgnoreCase("ASC")
-                        ? org.springframework.data.domain.Sort.by(sortBy).ascending()
-                        : org.springframework.data.domain.Sort.by(sortBy).descending());
-
-        Page<ProviderContractResponseDto> contracts = providerContractService.getProviderContracts(
-                id, activeOnly, pageable);
-
-        return ResponseEntity.ok(PaginationResponse.of(contracts));
-    }
-
-    /**
-     * Get currently effective contracts for a provider
-     */
-    @GetMapping("/{id}/contracts/current")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'ACCOUNTANT')")
-    public ResponseEntity<ApiResponse<List<ProviderContractResponseDto>>> getCurrentContracts(
-            @PathVariable("id") Long id) {
-
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/current", id);
-
-        List<ProviderContractResponseDto> contracts = providerContractService.getCurrentlyEffectiveContracts(id);
-
-        return ResponseEntity.ok(ApiResponse.success(contracts));
-    }
-
-    /**
-     * Get contract by ID
-     */
-    @GetMapping("/{id}/contracts/{contractId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<ProviderContractResponseDto>> getContractById(
-            @PathVariable("id") Long id,
-            @PathVariable("contractId") Long contractId) {
-
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/{}", id, contractId);
-
-        ProviderContractResponseDto contract = providerContractService.getContractById(id, contractId);
-
-        return ResponseEntity.ok(ApiResponse.success(contract));
-    }
+    //
+    // NOTE (2026-07-27): the legacy_provider_contracts-backed CRUD and list
+    // endpoints were removed entirely — confirmed zero frontend callers and
+    // zero live data (0 rows) before deletion. All contract management now
+    // goes through /api/v1/provider-contracts (the modern module). What
+    // remains here (getEffectivePrice, getServicesRequiringPreAuth) reads
+    // exclusively from the modern provider_contract_pricing_items table.
 
     /**
      * Get effective price for a service on a specific date
@@ -445,19 +348,6 @@ public class ProviderController {
         EffectivePriceResponseDto price = providerContractService.getEffectivePrice(id, serviceCode, date);
 
         return ResponseEntity.ok(ApiResponse.success(price));
-    }
-
-    /**
-     * Get count of active contracts
-     */
-    @GetMapping("/{id}/contracts/count")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<ApiResponse<Long>> getContractCount(@PathVariable("id") Long id) {
-        log.info("[PROVIDER-CONTRACTS] GET /api/providers/{}/contracts/count", id);
-
-        long count = providerContractService.countActiveContracts(id);
-
-        return ResponseEntity.ok(ApiResponse.success(count));
     }
 
     /**
@@ -597,8 +487,9 @@ public class ProviderController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'EMPLOYER_ADMIN')")
     public ResponseEntity<ApiResponse<List<ProviderViewDto>>> getProvidersByEmployer(
             @PathVariable("employerId") Long employerId) {
-        log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", employerId);
-        List<ProviderViewDto> providers = providerService.getProvidersByEmployer(employerId);
+        Long scopedEmployerId = authorizationService.resolveEmployerScope(authorizationService.getCurrentUser(), employerId);
+        log.info("[PROVIDER] GET /api/v1/providers/by-employer/{}", scopedEmployerId);
+        List<ProviderViewDto> providers = providerService.getProvidersByEmployer(scopedEmployerId);
 
         // ═══════════════════════════════════════════════════════════════════════════
         // MEDICAL REVIEWER ISOLATION (Phase 11)

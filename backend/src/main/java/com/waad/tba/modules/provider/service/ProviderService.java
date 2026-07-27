@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.guard.DeletionGuard;
-import com.waad.tba.modules.provider.repository.ProviderContractRepository;
 
 import com.waad.tba.modules.provider.dto.AllowedEmployerDto;
 import com.waad.tba.modules.provider.dto.ProviderCreateDto;
@@ -42,7 +41,6 @@ public class ProviderService {
     private final ProviderRepository providerRepository;
     private final ProviderMapper providerMapper;
     private final EmployerRepository employerRepository;
-    private final ProviderContractRepository providerContractRepository;
     private final com.waad.tba.modules.providercontract.repository.ProviderContractRepository newProviderContractRepository;
     private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
 
@@ -155,7 +153,7 @@ public class ProviderService {
                 .orElseThrow(() -> new BusinessRuleException("مقدم الخدمة غير موجود: " + id));
 
         DeletionGuard.of("مقدم الخدمة")
-                .check("عقود نشطة", providerContractRepository.countByProviderIdAndActive(id, true))
+                .check("عقود نشطة", newProviderContractRepository.findByProviderIdAndActiveTrue(id).size())
                 .throwIfBlocked("أنهِ العقود النشطة المرتبطة بمقدم الخدمة أولاً.");
 
         provider.setActive(false);
@@ -190,9 +188,8 @@ public class ProviderService {
             throw new BusinessRuleException("لا يمكن الحذف النهائي قبل النقل إلى سجل المحذوفات أولاً.");
         }
 
-        // Prevent hard delete while legacy contracts still exist.
-        if (providerContractRepository.countByProviderIdAndActive(id, true) > 0
-                || providerContractRepository.countByProviderIdAndActive(id, false) > 0) {
+        // Prevent hard delete while contracts still exist.
+        if (!newProviderContractRepository.findByProviderId(id).isEmpty()) {
             throw new BusinessRuleException("لا يمكن الحذف النهائي لوجود عقود مرتبطة بمقدم الخدمة.");
         }
 

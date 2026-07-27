@@ -100,13 +100,14 @@ public class ProviderVisitService {
         User currentUser = userRepository.findByUsername(providerUsername).orElse(null);
         if (currentUser != null && currentUser.getProviderId() != null) {
             providerId = currentUser.getProviderId();
-            log.info("🏥 Resolved provider from user context: user={}, providerId={}", 
+            log.info("🏥 Resolved provider from user context: user={}, providerId={}",
                      providerUsername, providerId);
-        } else {
-             // Fallback to request if no user context or user has no providerId
-             providerId = request.getProviderId();
-             log.info("⚠️ No provider found in user context for '{}', using request providerId: {}", 
-                     providerUsername, providerId);
+        } else if (currentUser != null && "SUPER_ADMIN".equals(currentUser.getUserType())) {
+            // Only a SUPER_ADMIN override may specify an arbitrary providerId; a
+            // PROVIDER_STAFF account with no providerId bound must never fall back
+            // to a client-supplied value (would let it register visits as any provider).
+            providerId = request.getProviderId();
+            log.info("⚠️ SUPER_ADMIN override: using request providerId {} for visit registration", providerId);
         }
 
         if (providerId != null) {

@@ -197,7 +197,7 @@ public class ProviderReportExcelService {
 
     private void setTextCell(Row row, int col, String value, CellStyle style) {
         Cell cell = row.createCell(col);
-        cell.setCellValue(value != null ? value : "-");
+        cell.setCellValue(com.waad.tba.common.excel.ExcelSanitizer.sanitize(value != null ? value : "-"));
         cell.setCellStyle(style);
     }
 

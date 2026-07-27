@@ -56,14 +56,7 @@ public class PriceListExcelTemplateService {
      * quote forces spreadsheet applications to treat the cell as literal text.
      */
     private static String sanitizeForExcel(String value) {
-        if (value == null || value.isEmpty()) {
-            return value;
-        }
-        char first = value.charAt(0);
-        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
-            return "'" + value;
-        }
-        return value;
+        return com.waad.tba.common.excel.ExcelSanitizer.sanitize(value);
     }
 
     private final ProviderContractRepository contractRepository;

@@ -98,18 +98,6 @@ public class ProviderContractService {
     }
 
     /**
-     * Get all contracts for a provider
-     */
-    @Transactional(readOnly = true)
-    public List<ProviderContractResponseDto> findByProvider(Long providerId) {
-        log.debug("Finding contracts for provider: {}", providerId);
-        return contractRepository.findByProviderIdAndActiveTrue(providerId)
-                .stream()
-                .map(ProviderContractResponseDto::fromEntity)
-                .collect(Collectors.toList());
-    }
-
-    /**
      * Get contracts for a provider (paginated)
      */
     @Transactional(readOnly = true)
@@ -128,18 +116,6 @@ public class ProviderContractService {
         return contractRepository.findActiveContractByProvider(providerId)
                 .map(ProviderContractResponseDto::fromEntity)
                 .orElse(null);
-    }
-
-    /**
-     * Get contracts by status
-     */
-    @Transactional(readOnly = true)
-    public List<ProviderContractResponseDto> findByStatus(ContractStatus status) {
-        log.debug("Finding contracts with status: {}", status);
-        return contractRepository.findByStatusAndActiveTrue(status)
-                .stream()
-                .map(ProviderContractResponseDto::fromEntity)
-                .collect(Collectors.toList());
     }
 
     /**

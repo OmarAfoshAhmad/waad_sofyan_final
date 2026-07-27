@@ -1,7 +1,6 @@
 package com.waad.tba.modules.providercontract.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
-import com.waad.tba.common.excel.dto.ExcelImportResult;
 import com.waad.tba.modules.medicaltaxonomy.dto.ExcelImportResultDto;
 import com.waad.tba.modules.providercontract.dto.BulkImportResultDto;
 import com.waad.tba.modules.providercontract.dto.PricingImportConfirmRequest;
@@ -148,8 +147,9 @@ public class ProviderContractPricingExcelController {
             @Parameter(description = "Excel template file", required = true)
             @RequestParam("file") MultipartFile file
     ) {
+        com.waad.tba.common.excel.ExcelUploadValidator.validate(file);
         log.info("[PriceListImport] Preview request for contract: {}", contractId);
-        
+
         PricingImportPreviewDto result = importService.importForPreview(contractId, file);
         
         return ResponseEntity.ok(ApiResponse.success("تم استخراج قائمة الأسعار، يرجى المراجعة", result));
@@ -201,8 +201,9 @@ public class ProviderContractPricingExcelController {
             @Parameter(description = "Excel template file", required = true)
             @RequestParam("file") MultipartFile file
     ) {
+        com.waad.tba.common.excel.ExcelUploadValidator.validate(file);
         log.info("[PriceListImport] Legacy Import request for contract: {}", contractId);
-        
+
         ExcelImportResultDto result = importService.importFromExcel(contractId, file);
         
         return ResponseEntity.ok(ApiResponse.success(result.getMessage(), result));
@@ -248,10 +249,7 @@ public class ProviderContractPricingExcelController {
         log.info("[BulkImport] Request received, file={}, size={} bytes",
                 file.getOriginalFilename(), file.getSize());
 
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("الملف فارغ"));
-        }
+        com.waad.tba.common.excel.ExcelUploadValidator.validate(file);
 
         BulkImportResultDto result = bulkImportService.importFromClassifiedExcel(file);
 

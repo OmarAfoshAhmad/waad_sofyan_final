@@ -337,47 +337,6 @@ export const providersService = {
   },
 
   /**
-   * Get provider contracts with automatic pagination
-   * @param {number} providerId - Provider ID
-   * @returns {Promise<Array>} List of all provider contracts
-   */
-  getContracts: async (providerId) => {
-    try {
-      if (!providerId) throw new Error('معرف المزود مطلوب');
-
-      const allContracts = [];
-      let page = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await axiosClient.get(`${BASE_URL}/${providerId}/contracts`, {
-          params: { page, size: 1000 }
-        });
-
-        const data = unwrap(response);
-
-        // Handle different response formats
-        if (data?.content && Array.isArray(data.content)) {
-          allContracts.push(...data.content);
-          hasMore = !data.last && data.content.length > 0;
-          page++;
-        } else if (Array.isArray(data)) {
-          allContracts.push(...data);
-          hasMore = false;
-        } else {
-          hasMore = false;
-        }
-      }
-
-      console.log(`✅ Fetched ${allContracts.length} contracts for provider ${providerId}`);
-      return allContracts;
-    } catch (error) {
-      console.error(`❌ Error fetching contracts for provider ${providerId}:`, error);
-      throw handleProviderErrors(error);
-    }
-  },
-
-  /**
    * Upload Excel file to import providers
    * @param {File} file - Excel file
    * @returns {Promise<Object>} Import result

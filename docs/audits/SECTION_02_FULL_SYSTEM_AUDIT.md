@@ -311,3 +311,166 @@ CRITICAL/HIGH tranche — the part with genuine security/financial/legal
 exposure — is done. Finishing the section in full (all 19 modules, all
 MEDIUM findings, all oversized files) is multiple further sessions of work
 at the same depth as this one.
+
+## Technical-debt cleanup round — 2026-07-26/27
+
+Two sweeps prior to the provider/contracts closure below:
+
+- **MEDIUM fixes**: N+1 in `PaymentService.getPaymentsForSettlement` (batched
+  employer/provider name resolution instead of per-row), a `double`-routed
+  `BigDecimal` conversion in `getMonthlySettlementSummaries`, stored-HTML
+  injection in `claim-report.html` (`th:utext` → `th:text`), missing
+  production-environment guard on `SystemAdminService.resetTestData()` /
+  `seedSampleData()` (now throws `BusinessRuleException` outside dev/test via
+  `requireNonProductionProfile()`).
+- **Dead-code removal**: `ModuleAccessService`/`Controller`/`Dto`/`Entity`/
+  `Repository` (fully unconsulted CRUD feature, 0 rows) deleted with
+  `V112__drop_unused_module_access_table.sql`; frontend dead files
+  (`pages/members/unified-index.js`, two duplicate `medical-catalog.service.js`
+  files, `contexts/useAuth.js` after consolidating onto `hooks/useAuth.js`)
+  removed; duplicated commented-out pseudocode block in `ClaimService.java`
+  cleaned up.
+- **Investigated, confirmed NOT dead** (methodological near-miss caught before
+  deletion): `common.email.EmailService` — a naive grep for the
+  fully-qualified name found zero hits, but it's used via a wildcard import
+  (`import com.waad.tba.common.email.*;`) in 3 rbac services. Left in place;
+  the fact that it coexists with a separate, also-live `core.email.EmailService`
+  is real architectural duplication, documented as deferred debt, not fixed.
+
+All 214 backend tests passed after this round; rebuilt and verified live in
+Docker at the time.
+
+## Provider & provider-contracts module closure — 2026-07-27
+
+User request: close the file on the provider/contracts module specifically —
+"no patching, clean and secure solutions only." A dedicated audit agent
+surveyed `com.waad.tba.modules.provider` and `com.waad.tba.modules.providercontract`
+end to end. Findings and fixes:
+
+### 🔴 CRITICAL — IDOR — both CLOSED
+
+1. **`ProviderContractPricingItemService` category/service lookups exposed
+   competitor pricing.** `GET /provider-contracts/provider/{providerId}/categories`,
+   `.../categories/{categoryId}/services`, and `.../services` took `providerId`
+   straight from the path with `PROVIDER_STAFF` in the allowed roles and no
+   ownership check — any provider-staff account could walk `providerId=1..N`
+   and read every other provider's full contracted price list (`contractPrice`,
+   `basePrice`, `discountPercent`, service names). Fixed: the controller now
+   resolves `providerId` through `AuthorizationService.resolveProviderScope()`
+   before delegating, the same pattern used everywhere else in this codebase.
+   Test: `ProviderContractControllerSecurityTest` (3 tests).
+
+2. **`ProviderContractController.getAll` (`GET /provider-contracts`) had no
+   scoping at all** — `contractService.findAll()` is a plain
+   `findByActiveTrue(pageable)`, yet `PROVIDER_STAFF` and `EMPLOYER_ADMIN` were
+   both in the allowed-roles list, so either could page through every
+   provider's contract data (rates, terms). Fixed by removing those two roles
+   from this admin-only listing endpoint (contracts hold cross-provider
+   negotiated rates; internal TPA staff only). No frontend caller relied on
+   provider/employer access to this endpoint.
+
+### 🟠 HIGH — IDOR — both CLOSED
+
+3. **`ProviderController.getProvider(id)` (`GET /providers/{id}`)** let any
+   `PROVIDER_STAFF` user read another provider's full record (contacts,
+   license/tax numbers) — no ownership check, unlike sibling endpoints in the
+   same controller. Fixed using the existing `canAccessProvider()` check
+   (already implemented in `DataAccessService`, just never wired here). Test:
+   `ProviderControllerSecurityTest` (2 tests).
+
+4. **`ProviderController.getProvidersByEmployer` (`GET /providers/by-employer/{employerId}`)**
+   had no employer scoping — an `EMPLOYER_ADMIN` could enumerate other
+   employers' provider networks. Fixed via `resolveEmployerScope()`.
+
+5. **`ProviderVisitService.registerVisit` fell back to a client-supplied
+   `request.getProviderId()` whenever the caller had no `providerId` bound,
+   regardless of role.** A misconfigured/unlinked `PROVIDER_STAFF` account
+   could register a visit — and everything downstream (claims) — against an
+   arbitrary provider. The fallback is now restricted to a genuine
+   `SUPER_ADMIN` override; every other unlinked caller is rejected outright.
+   Test: `ProviderVisitServiceRegisterVisitSecurityTest` (2 tests).
+
+### 🟡 MEDIUM — CLOSED
+
+6. **Excel formula injection in provider report exports.**
+   `ProviderReportExcelService.setTextCell` wrote member names/notes to XLSX
+   cells unsanitized — a payload starting with `=`, `+`, `-`, `@` etc. would
+   execute as a formula when the file is opened, in claim/pre-auth/visit
+   reports reachable by `PROVIDER_STAFF`. `PriceListExcelTemplateService` had
+   already been hardened for this in an earlier pass; the sanitizer was
+   extracted to a shared `common.excel.ExcelSanitizer` and applied here too
+   (removes the duplication instead of copy-pasting a second private method).
+
+7. **No file-size/extension validation on the four price-list Excel upload
+   endpoints** (`preview`, `import`, `import/confirm` request body only,
+   `bulk-import`) — only an empty-file check existed. A malformed or oversized
+   file would only be caught by the 60MB global multipart cap, and non-Excel
+   files were fed straight into Apache POI. Added a shared
+   `common.excel.ExcelUploadValidator` (20MB per-file cap, `.xlsx` extension
+   check) applied at all four call sites. (Endpoints are `SUPER_ADMIN`/
+   `ACCOUNTANT`-only, so this is defense-in-depth rather than a public-facing
+   gap.)
+
+8. **Raw exception messages returned to clients** in `ProviderPortalController`
+   (attachment upload failure, price lookup, allowed-employers lookup,
+   my-contract lookup, contract-pricing add) — stack-trace/internal detail
+   leakage to a `PROVIDER_STAFF` client. Replaced with generic
+   user-facing messages while keeping full detail in server logs;
+   `BusinessRuleException` messages (legitimate validation errors, e.g.
+   duplicate pricing) are still surfaced since those are meant for the caller.
+
+### 🏗️ Architecture — resolved, not just documented
+
+9. **Two parallel, genuinely divergent provider-contract systems.**
+   `provider.entity.ProviderContract` (`legacy_provider_contracts`, flat
+   provider+serviceCode+price rows) and `providercontract.entity.ProviderContract`
+   (`provider_contracts` + `provider_contract_pricing_items`, header + line
+   items, employer-scoped) both existed live. Deeper investigation found the
+   actual financial pricing engine (`getEffectivePrice`, called from
+   `ClaimMapper`, `PreAuthorizationService`, and the provider portal price
+   lookup) **already reads exclusively from the modern
+   `provider_contract_pricing_items` table** — but the legacy service's
+   `createContract`/`updateContract`/`deleteContract` (exposed at
+   `POST/PUT/DELETE /providers/{id}/contracts`) still wrote into
+   `legacy_provider_contracts`, a table nothing in the pricing path ever
+   reads. Any contract created through those endpoints was **silently
+   invisible to real claim/pre-auth pricing** — exactly the kind of
+   multi-path financial disagreement risk flagged as unacceptable.
+   Confirmed via direct DB query that both tables currently hold 0 rows
+   (no production data), making this the correct moment to close the gap
+   with zero migration risk. Fix: removed the three legacy write
+   methods/endpoints entirely; all contract creation now goes through the
+   modern module (`/api/v1/provider-contracts`). Read-only legacy endpoints
+   (list/current/byId/count) were left in place since the frontend's
+   provider-detail "Contracts" tab still queries the list endpoint for
+   display, and removing them requires a frontend rework that's out of scope
+   for this pass.
+   **Update — completed same day:** re-checked the frontend and found
+   `ProviderView.jsx`'s "Contracts" tab already calls the modern
+   `/provider-contracts/provider/{id}` route directly via `axiosClient`, not
+   the legacy `providers.service.js#getContracts` helper (which had zero
+   callers anywhere — confirmed by grep). With that cleared, the full
+   retirement was completed: removed the four remaining legacy read
+   endpoints from `ProviderController` (list/current/byId/count), deleted
+   `provider.entity.ProviderContract`, `provider.repository.ProviderContractRepository`,
+   and the three now-orphaned `provider.dto.ProviderContract{Create,Update,Response}Dto`
+   classes, dropped `legacy_provider_contracts` via
+   `V119__drop_legacy_provider_contracts.sql`, removed the dead
+   `providers.service.js#getContracts` frontend function, and repointed
+   `ProviderService`'s deactivate/hard-delete guards (which checked
+   `legacy_provider_contracts` row counts) onto the modern
+   `provider_contracts` repository so the safety check stays meaningful.
+   `ProviderContractService` (provider package) is now a thin pricing-lookup
+   class only (`getEffectivePrice`, `getServicesRequiringPreAuth`) with no
+   dependency on the legacy repository at all. Two parallel provider-contract
+   systems are now one.
+
+### Verification
+
+New tests: `ProviderContractControllerSecurityTest` (3),
+`ProviderControllerSecurityTest` (2),
+`ProviderVisitServiceRegisterVisitSecurityTest` (2) — 7 new regression tests,
+all passing alongside the full existing suite (verified with `mvn test`
+against the local database per updated project convention — Docker
+deployment deferred to the pre-production stage rather than rebuilt after
+every change).
