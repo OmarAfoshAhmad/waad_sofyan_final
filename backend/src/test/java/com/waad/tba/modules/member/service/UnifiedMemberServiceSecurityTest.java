@@ -3,6 +3,7 @@ package com.waad.tba.modules.member.service;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.security.AuthorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,12 +11,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +41,9 @@ class UnifiedMemberServiceSecurityTest {
     @Mock
     private AuthorizationService authorizationService;
 
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
     @InjectMocks
     private UnifiedMemberService service;
 
@@ -49,7 +57,7 @@ class UnifiedMemberServiceSecurityTest {
         member = Member.builder().id(500L).build();
 
         when(authorizationService.getCurrentUser()).thenReturn(currentUser);
-        when(memberRepository.findById(500L)).thenReturn(Optional.of(member));
+        lenient().when(memberRepository.findById(500L)).thenReturn(Optional.of(member));
     }
 
     @Test
@@ -115,5 +123,24 @@ class UnifiedMemberServiceSecurityTest {
         assertThrows(AccessDeniedException.class, () -> service.restoreMember(500L));
 
         verify(memberRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void hardDeleteDeniedWhenCallerIsNotSuperAdminEvenIfServiceIsCalledDirectly() {
+        assertThrows(AccessDeniedException.class, () -> service.hardDeleteMember(500L));
+
+        verify(memberRepository, never()).delete(org.mockito.ArgumentMatchers.any(Member.class));
+    }
+
+    @Test
+    void hardDeleteBlockedWhenMemberHasFinancialOrMedicalFootprint() {
+        currentUser.setUserType("SUPER_ADMIN");
+        when(memberRepository.findByParentId(500L)).thenReturn(java.util.List.of());
+        when(jdbcTemplate.queryForObject(anyString(), eq(Long.class)))
+                .thenReturn(1L, 0L, 0L, 0L, 0L);
+
+        assertThrows(BusinessRuleException.class, () -> service.hardDeleteMember(500L));
+
+        verify(memberRepository, never()).delete(org.mockito.ArgumentMatchers.any(Member.class));
     }
 }

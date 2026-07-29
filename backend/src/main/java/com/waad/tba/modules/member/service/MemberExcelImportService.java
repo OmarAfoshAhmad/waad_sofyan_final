@@ -301,12 +301,8 @@ public class MemberExcelImportService {
                 mapper.mapColumnToField(colName, i, fieldToColumnIndex, new HashMap<>());
             }
 
-            Map<String, Member> memberCache = new HashMap<>();
-            for (Member m : memberRepository.findAll()) {
-                if (m.getCardNumber() != null) {
-                    memberCache.put(m.getCardNumber().trim().toUpperCase(), m);
-                }
-            }
+            Map<String, Member> memberCache = loadExistingMembersForImport(sheet, resolvedHeaderRowNumber,
+                    physicalLastRow, fieldToColumnIndex);
 
             for (int rowIndex = resolvedHeaderRowNumber + 1; rowIndex <= physicalLastRow; rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
@@ -476,6 +472,62 @@ public class MemberExcelImportService {
             memberRepository.deleteMembersByIds(principalsToDelete);
             log.info("🧹 Deleted {} principal members in bulk", principalsToDelete.size());
         }
+    }
+
+    private Map<String, Member> loadExistingMembersForImport(
+            Sheet sheet,
+            int resolvedHeaderRowNumber,
+            int physicalLastRow,
+            Map<String, Integer> fieldToColumnIndex) {
+
+        Set<String> relevantCardNumbers = new HashSet<>();
+        for (int rowIndex = resolvedHeaderRowNumber + 1; rowIndex <= physicalLastRow; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null || parser.isEmptyRow(row)) {
+                continue;
+            }
+
+            String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
+            String normalizedCard = normalizeCardKey(cardNumber);
+            if (normalizedCard != null) {
+                relevantCardNumbers.add(normalizedCard);
+
+                CardInfo cardInfo = parseCardNumber(cardNumber);
+                String normalizedParentCard = normalizeCardKey(cardInfo.parentCardNumber);
+                if (normalizedParentCard != null) {
+                    relevantCardNumbers.add(normalizedParentCard);
+                }
+            }
+        }
+
+        Map<String, Member> memberCache = new HashMap<>();
+        if (relevantCardNumbers.isEmpty()) {
+            return memberCache;
+        }
+
+        List<String> cards = new ArrayList<>(relevantCardNumbers);
+        final int chunkSize = 1000;
+        for (int start = 0; start < cards.size(); start += chunkSize) {
+            int end = Math.min(start + chunkSize, cards.size());
+            List<Member> existingMembers = memberRepository.findByCardNumberUpperIn(cards.subList(start, end));
+            for (Member member : existingMembers) {
+                String key = normalizeCardKey(member.getCardNumber());
+                if (key != null) {
+                    memberCache.put(key, member);
+                }
+            }
+        }
+
+        log.info("📦 Preloaded {} existing members for import from {} relevant card numbers",
+                memberCache.size(), relevantCardNumbers.size());
+        return memberCache;
+    }
+
+    private String normalizeCardKey(String cardNumber) {
+        if (cardNumber == null || cardNumber.isBlank()) {
+            return null;
+        }
+        return cardNumber.trim().toUpperCase();
     }
 
     public static class CardInfo {

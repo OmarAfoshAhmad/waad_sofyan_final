@@ -22,6 +22,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 
@@ -45,6 +46,7 @@ public class MemberExcelExportService {
     private final MemberRepository memberRepository;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final long DIRECT_EXPORT_MAX_ROWS = 50_000;
 
     /**
      * Export members to Excel with optional filters
@@ -67,6 +69,14 @@ public class MemberExcelExportService {
 
         // Build specification for filtering
         Specification<Member> spec = buildSpecification(searchQuery, employerId, benefitPolicyId, includeDeleted);
+
+        long exportCount = memberRepository.count(spec);
+        if (exportCount > DIRECT_EXPORT_MAX_ROWS) {
+            throw new BusinessRuleException(
+                    "نتيجة التصدير كبيرة جداً (" + exportCount + " مستفيد). "
+                            + "يرجى تضييق الفلتر حسب جهة العمل أو الوثيقة أو البحث. "
+                            + "الحد الأقصى للتصدير المباشر هو " + DIRECT_EXPORT_MAX_ROWS + " مستفيد.");
+        }
 
         // Fetch data
         List<Member> members = memberRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "id"));

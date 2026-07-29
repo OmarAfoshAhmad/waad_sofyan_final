@@ -173,6 +173,13 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        List<String> findAllCardNumbers();
 
        /**
+        * Find existing members by normalized card numbers.
+        * Used by Excel imports to avoid loading the entire members table into memory.
+        */
+       @Query("SELECT m FROM Member m WHERE UPPER(m.cardNumber) IN :cardNumbers")
+       List<Member> findByCardNumberUpperIn(@Param("cardNumbers") java.util.Collection<String> cardNumbers);
+
+       /**
         * Find all members by employer organization ID
         */
        List<Member> findByEmployerId(Long employerOrgId);

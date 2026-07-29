@@ -1185,12 +1185,23 @@ public class UnifiedMemberService {
     /**
      * Permanently delete a member (hard delete).
      * Warning: This cannot be undone!
+     *
+     * Production rule:
+     * Hard delete is allowed only for members with no financial/medical footprint.
+     * Claims, visits, pre-authorizations, eligibility checks and benefit-bucket
+     * consumptions are audit evidence and must never be physically removed through
+     * the member screen.
      * 
      * @param memberId Member ID
      */
     @Transactional
     public void hardDeleteMember(Long memberId) {
         log.warn("⚠️ HARD DELETE member: memberId={}", memberId);
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null || !"SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType())) {
+            throw new AccessDeniedException("Only SUPER_ADMIN can permanently delete members");
+        }
 
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
@@ -1206,15 +1217,27 @@ public class UnifiedMemberService {
         String idList = allIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
         log.warn("⚠️ Cascade hard delete for member IDs: {}", idList);
 
-        // Delete in correct FK order (RESTRICT constraints must be removed first)
-        String claimsSubquery = "(SELECT id FROM claims WHERE member_id IN (" + idList + "))";
-        // claim_audit_logs.claim_id REFERENCES claims(id) ON DELETE RESTRICT
-        jdbcTemplate.update("DELETE FROM claim_audit_logs WHERE claim_id IN " + claimsSubquery);
-        // settlement_batch_items was dropped by V117 — no cleanup needed here
-        jdbcTemplate.update("DELETE FROM claims WHERE member_id IN (" + idList + ")");
-        jdbcTemplate.update("DELETE FROM preauthorization_requests WHERE member_id IN (" + idList + ")");
-        jdbcTemplate.update("DELETE FROM visits WHERE member_id IN (" + idList + ")");
-        jdbcTemplate.update("DELETE FROM eligibility_checks WHERE member_id IN (" + idList + ")");
+        long claimsCount = jdbcTemplate
+                .queryForObject("SELECT COUNT(*) FROM claims WHERE member_id IN (" + idList + ")", Long.class);
+        long preAuthCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM preauthorization_requests WHERE member_id IN (" + idList + ")", Long.class);
+        long visitsCount = jdbcTemplate
+                .queryForObject("SELECT COUNT(*) FROM visits WHERE member_id IN (" + idList + ")", Long.class);
+        long eligibilityChecksCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM eligibility_checks WHERE member_id IN (" + idList + ")", Long.class);
+        long bucketConsumptionsCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM benefit_bucket_consumptions WHERE member_id IN (" + idList + ")", Long.class);
+
+        if (claimsCount > 0 || preAuthCount > 0 || visitsCount > 0
+                || eligibilityChecksCount > 0 || bucketConsumptionsCount > 0) {
+            String details = String.format(
+                    "مطالبات: %d، موافقات مسبقة: %d، زيارات: %d، فحوص أهلية: %d، استهلاك سقوف: %d",
+                    claimsCount, preAuthCount, visitsCount, eligibilityChecksCount, bucketConsumptionsCount);
+            throw new BusinessRuleException(
+                    "لا يمكن حذف المستفيد نهائياً لوجود أثر مالي أو طبي مرتبط به (" + details + "). "
+                            + "استخدم الإيقاف/الأرشفة للحفاظ على سلامة السجل المالي والتدقيقي.");
+        }
+
         jdbcTemplate.update("DELETE FROM member_policy_assignments WHERE member_id IN (" + idList + ")");
         jdbcTemplate.update("DELETE FROM member_deductibles WHERE member_id IN (" + idList + ")");
 

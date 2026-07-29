@@ -104,6 +104,11 @@ import { failedCoverageResult } from './hooks/coverageContract.mjs';
 import { ClaimHeaderFields } from './components/ClaimHeaderFields';
 import { ClaimLineRow } from './components/ClaimLineRow';
 import { ClaimTotalsFooter } from './components/ClaimTotalsFooter';
+import { RecoveryDialog } from './components/RecoveryDialog';
+import { RejectClaimDialog } from './components/RejectClaimDialog';
+import { ConfirmDeleteClaimDialog } from './components/ConfirmDeleteClaimDialog';
+import { ActionConfirmDialog } from './components/ActionConfirmDialog';
+import { CustomServiceDialog } from './components/CustomServiceDialog';
 
 const CLAIM_SERVICE_CONTEXTS = new Set(['OUTPATIENT', 'INPATIENT', 'ANY']);
 
@@ -2225,395 +2230,69 @@ export default function ClaimBatchEntry() {
         </Box>
       </Box>
 
-      <Dialog open={recoveryDialog.open} onClose={dismissRecovery} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>استرجاع المسودة</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            تم العثور على بيانات محفوظة لهذه الدفعة. هل تريد استكمال الإدخال من المسودة؟
-          </Typography>
-          {recoveryDialog.serverDraft?.data && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              توجد مسودة محفوظة على الخادم.
-            </Typography>
-          )}
-          {recoveryDialog.localDraft?.data && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              توجد نسخة احتياطية على هذا الجهاز.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          {recoveryDialog.serverDraft?.data && (
-            <Button onClick={restoreServerDraft} variant="contained">
-              استكمال من المسودة
-            </Button>
-          )}
-          {recoveryDialog.localDraft?.data && (
-            <Button onClick={restoreLocalDraft} variant="outlined">
-              استرجاع من الجهاز
-            </Button>
-          )}
-          <Button onClick={dismissRecovery} color="inherit">
-            تجاهل
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <RecoveryDialog
+        recoveryDialog={recoveryDialog}
+        onRestoreServer={restoreServerDraft}
+        onRestoreLocal={restoreLocalDraft}
+        onDismiss={dismissRecovery}
+      />
 
-      <Dialog
+      <RejectClaimDialog
         open={rejectDialogOpen}
         onClose={() => setRejectDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: '0.375rem' } }}
-      >
-        <DialogTitle sx={{ fontWeight: 700, color: 'error.main', pb: 1 }}>
-          {rejectType === 'claim' ? 'رفض المطالبة — تحديد السبب' : 'رفض البند — تحديد السبب'}
-        </DialogTitle>
-        <DialogContent sx={{ pt: '0.75rem !important' }}>
-          {/* نوع الرفض — للبند فقط */}
-          {rejectType === 'line' && (
-            <Box sx={{ mb: 2 }}>
-              <RadioGroup
-                row
-                value={rejectionMode}
-                onChange={(e) => {
-                  setRejectionMode(e.target.value);
-                  setManualRefusedAmountInput('');
-                }}
-              >
-                <FormControlLabel
-                  value="full"
-                  control={<Radio size="small" color="error" />}
-                  label={<Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>رفض كلي (حصة الشركة كاملاً)</Typography>}
-                />
-                <FormControlLabel
-                  value="partial"
-                  control={<Radio size="small" color="warning" />}
-                  label={<Typography sx={{ fontSize: '0.85rem', fontWeight: 600 }}>رفض جزئي (تحديد مبلغ)</Typography>}
-                />
-              </RadioGroup>
+        rejectType={rejectType}
+        rejectIdx={rejectIdx}
+        lines={lines}
+        rejectionMode={rejectionMode}
+        onRejectionModeChange={(value) => {
+          setRejectionMode(value);
+          setManualRefusedAmountInput('');
+        }}
+        manualRefusedAmountInput={manualRefusedAmountInput}
+        onManualRefusedAmountChange={setManualRefusedAmountInput}
+        rejectionReasons={rejectionReasons}
+        rejectionInput={rejectionInput}
+        onRejectionInputChange={setRejectionInput}
+        isSavingNewReason={isSavingNewReason}
+        onSaveNewReason={saveNewReason}
+        editingReasonId={editingReasonId}
+        editingReasonText={editingReasonText}
+        onEditingReasonTextChange={setEditingReasonText}
+        onStartEditReason={(reason) => {
+          setEditingReasonId(reason.id);
+          setEditingReasonText(reason.reasonText);
+        }}
+        onSaveEditedReason={saveEditedReason}
+        onCancelEditReason={() => {
+          setEditingReasonId(null);
+          setEditingReasonText('');
+        }}
+        isDeletingReasonId={isDeletingReasonId}
+        onDeleteReason={deleteReason}
+        showReasonsList={showReasonsList}
+        onToggleReasonsList={() => setShowReasonsList((v) => !v)}
+        onConfirm={confirmRejection}
+      />
 
-              {rejectionMode === 'partial' && (
-                <TextField
-                  fullWidth
-                  size="small"
-                  type="number"
-                  label={`مبلغ الرفض من حصة الشركة (الحد الأقصى: ${(lines[rejectIdx]?.byCompany ?? 0).toFixed(2)} د.ل)`}
-                  value={manualRefusedAmountInput}
-                  onChange={(e) => setManualRefusedAmountInput(e.target.value)}
-                  inputProps={{ min: 0.01, max: lines[rejectIdx]?.byCompany ?? 0, step: 0.01 }}
-                  helperText="يُطبَّق على حصة الشركة فقط — حصة المستفيد لا تتأثر"
-                  error={parseFloat(manualRefusedAmountInput) > (lines[rejectIdx]?.byCompany ?? 0)}
-                  sx={{ mt: 1.5 }}
-                  autoFocus
-                />
-              )}
-            </Box>
-          )}
+      <ConfirmDeleteClaimDialog
+        confirmDeleteId={confirmDeleteId}
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={confirmDeleteClaim}
+      />
 
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-            اختر سبباً من القائمة أو اكتب سبباً جديداً
-          </Typography>
-          <Autocomplete
-            freeSolo
-            options={rejectionReasons.map((r) => r.reasonText)}
-            value={rejectionInput}
-            onChange={(_, val) => setRejectionInput(val || '')}
-            onInputChange={(_, val) => setRejectionInput(val)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                autoFocus={rejectType === 'claim' || rejectionMode === 'full'}
-                fullWidth
-                size="small"
-                label="سبب الرفض"
-                placeholder="اختر أو اكتب سبباً..."
-                error={!rejectionInput?.trim()}
-              />
-            )}
-            noOptionsText="لا توجد أسباب — اكتب سبباً جديداً"
-          />
-          {rejectionInput?.trim() && !rejectionReasons.some((r) => r.reasonText === rejectionInput.trim()) && (
-            <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                سبب جديد — يمكنك حفظه في القائمة:
-              </Typography>
-              <Button
-                size="small"
-                startIcon={isSavingNewReason ? <CircularProgress size={12} /> : <AddReasonIcon sx={{ fontSize: '0.9rem' }} />}
-                onClick={saveNewReason}
-                disabled={isSavingNewReason}
-                sx={{ fontSize: '0.75rem', textTransform: 'none' }}
-              >
-                حفظ في القائمة
-              </Button>
-            </Box>
-          )}
+      <ActionConfirmDialog actionConfirm={actionConfirm} onClose={closeActionConfirm} />
 
-          {/* قائمة الأسباب المحفوظة مع تعديل وحذف */}
-          <Box sx={{ mt: 2, borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
-            <Button
-              size="small"
-              endIcon={
-                <ExpandMoreIcon sx={{ fontSize: '0.9rem', transform: showReasonsList ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
-              }
-              onClick={() => setShowReasonsList((v) => !v)}
-              sx={{ fontSize: '0.75rem', textTransform: 'none', color: 'text.secondary', p: 0 }}
-            >
-              إدارة قائمة الأسباب المحفوظة ({rejectionReasons.length})
-            </Button>
-            {showReasonsList && (
-              <Box sx={{ mt: 1, maxHeight: '13rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                {rejectionReasons.map((r) => (
-                  <Box
-                    key={r.id}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
-                      px: 1,
-                      py: 0.4,
-                      borderRadius: '0.25rem',
-                      bgcolor: editingReasonId === r.id ? 'action.selected' : 'action.hover'
-                    }}
-                  >
-                    {editingReasonId === r.id ? (
-                      <>
-                        <TextField
-                          size="small"
-                          variant="standard"
-                          fullWidth
-                          value={editingReasonText}
-                          onChange={(e) => setEditingReasonText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEditedReason();
-                            if (e.key === 'Escape') {
-                              setEditingReasonId(null);
-                              setEditingReasonText('');
-                            }
-                          }}
-                          autoFocus
-                          inputProps={{ style: { fontSize: '0.8rem', textAlign: 'right' } }}
-                        />
-                        <Tooltip title="حفظ التعديل" arrow>
-                          <IconButton size="small" color="success" onClick={saveEditedReason}>
-                            <CheckIcon sx={{ fontSize: '0.9rem' }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="إلغاء" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setEditingReasonId(null);
-                              setEditingReasonText('');
-                            }}
-                          >
-                            <CancelIcon sx={{ fontSize: '0.9rem' }} />
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    ) : (
-                      <>
-                        <Typography
-                          variant="caption"
-                          sx={{ flexGrow: 1, fontSize: '0.8rem', cursor: 'pointer' }}
-                          onClick={() => setRejectionInput(r.reasonText)}
-                        >
-                          {r.reasonText}
-                        </Typography>
-                        <Tooltip title="تعديل" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setEditingReasonId(r.id);
-                              setEditingReasonText(r.reasonText);
-                            }}
-                          >
-                            <EditIcon sx={{ fontSize: '0.85rem', color: 'text.secondary' }} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="حذف" arrow>
-                          <IconButton size="small" color="error" disabled={isDeletingReasonId === r.id} onClick={() => deleteReason(r.id)}>
-                            {isDeletingReasonId === r.id ? <CircularProgress size={12} /> : <DeleteIcon sx={{ fontSize: '0.85rem' }} />}
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    )}
-                  </Box>
-                ))}
-                {rejectionReasons.length === 0 && (
-                  <Typography variant="caption" color="text.disabled" sx={{ px: 1 }}>
-                    لا توجد أسباب محفوظة
-                  </Typography>
-                )}
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: '1.0rem', gap: 1 }}>
-          <Button onClick={() => setRejectDialogOpen(false)} color="inherit">
-            إلغاء
-          </Button>
-          <Button
-            onClick={confirmRejection}
-            variant="contained"
-            color={rejectionMode === 'partial' ? 'warning' : 'error'}
-            disabled={
-              !rejectionInput?.trim() ||
-              (rejectionMode === 'partial' &&
-                rejectType === 'line' &&
-                (!manualRefusedAmountInput ||
-                  parseFloat(manualRefusedAmountInput) <= 0 ||
-                  parseFloat(manualRefusedAmountInput) > (lines[rejectIdx]?.byCompany ?? 0) + 0.001))
-            }
-          >
-            {rejectionMode === 'partial' && rejectType === 'line' ? 'تأكيد الرفض الجزئي' : 'تأكيد الرفض'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 600, color: 'error.main' }}>تأكيد إلغاء المطالبة</DialogTitle>
-        <DialogContent>
-          <Typography>هل أنت متأكد من رغبتك في إلغاء المطالبة رقم #{confirmDeleteId}؟</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            سيتم استرجاع الأموال لسقف العضو تلقائياً.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: '1.0rem' }}>
-          <Button onClick={() => setConfirmDeleteId(null)} color="inherit">
-            تراجع
-          </Button>
-          <Button onClick={confirmDeleteClaim} variant="contained" color="error">
-            تأكيد الإلغاء
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Generic Action Confirmation */}
-      <Dialog open={actionConfirm.open} onClose={closeActionConfirm}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: `${actionConfirm.severity || 'error'}.main` }}>
-          <WarningIcon color={actionConfirm.severity || 'error'} />
-          {actionConfirm.title}
-        </DialogTitle>
-        <DialogContent>
-          <Typography>{actionConfirm.message}</Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, bgcolor: (theme) => alpha(theme.palette[actionConfirm.severity || 'error'].main, 0.06) }}>
-          <Button onClick={closeActionConfirm} color="inherit">
-            تراجع
-          </Button>
-          <Button
-            onClick={() => {
-              actionConfirm.onConfirm();
-              closeActionConfirm();
-            }}
-            variant="contained"
-            color={actionConfirm.severity || 'error'}
-          >
-            متابعة العملية
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Custom Service Pricing Addition Dialog */}
-      <Dialog open={customServiceDialogOpen} onClose={handleCloseCustomServiceDialog} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MedicalServicesIcon color="primary" />
-          إضافة خدمة طبية جديدة لقائمة الأسعار
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={3} sx={{ mt: 1 }}>
-            {customServiceError && (
-              <Alert severity="error" onClose={() => setCustomServiceError(null)}>
-                {customServiceError}
-              </Alert>
-            )}
-
-            <Autocomplete
-              fullWidth
-              options={medicalCategories}
-              value={medicalCategories.find((cat) => String(cat.id) === String(customServiceData.categoryId)) || null}
-              onChange={(event, newValue) => handleCustomServiceDataChange('categoryId', newValue?.id || '')}
-              getOptionLabel={(option) => `${option.nameAr || option.name || ''}${option.code ? ` (${option.code})` : ''}`}
-              isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
-              renderOption={(props, option) => (
-                <li {...props} key={option.id}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                    <Typography variant="body2" fontWeight={700}>
-                      {option.nameAr || option.name || ''}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {option.code || '-'}
-                    </Typography>
-                  </Box>
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  required
-                  label="التصنيف الطبي الموحد"
-                  placeholder="اختر التصنيف المعتمد للقواعد والتغطية..."
-                  helperText="هذا التصنيف هو المرجع الوحيد للتغطية والسقوف؛ لا يوجد تصنيف رئيسي/فرعي في النظام الحديث."
-                />
-              )}
-            />
-
-            {/* Service Name */}
-            <TextField
-              fullWidth
-              required
-              label="اسم الخدمة الطبية"
-              placeholder="مثال: كشف طبيب عام، تحليل دم كامل..."
-              value={customServiceData.serviceName}
-              onChange={(e) => handleCustomServiceDataChange('serviceName', e.target.value)}
-            />
-
-            {/* Service Code */}
-            <TextField
-              fullWidth
-              label="رمز الخدمة (تلقائي/اختياري)"
-              placeholder="سيتم إنشاؤه تلقائياً إذا ترك فارغاً"
-              value={customServiceData.serviceCode}
-              onChange={(e) => handleCustomServiceDataChange('serviceCode', e.target.value)}
-              helperText="رمز فريد للخدمة (مثل: SRV-01, LAB-05)"
-            />
-
-            {/* Price */}
-            <TextField
-              fullWidth
-              required
-              type="number"
-              label="السعر التعاقدي (دينار ليبي)"
-              placeholder="0.00"
-              value={customServiceData.contractPrice}
-              onChange={(e) => handleCustomServiceDataChange('contractPrice', e.target.value)}
-              InputProps={{
-                endAdornment: (
-                  <Typography variant="body2" color="text.secondary">
-                    LYD
-                  </Typography>
-                )
-              }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={handleCloseCustomServiceDialog} disabled={addingCustomService}>
-            إلغاء
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmitCustomService}
-            disabled={
-              addingCustomService || !customServiceData.categoryId || !customServiceData.serviceName || !customServiceData.contractPrice
-            }
-          >
-            {addingCustomService ? <CircularProgress size={24} color="inherit" /> : 'إضافة وحفظ لقائمة الأسعار'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CustomServiceDialog
+        open={customServiceDialogOpen}
+        onClose={handleCloseCustomServiceDialog}
+        medicalCategories={medicalCategories}
+        customServiceData={customServiceData}
+        customServiceError={customServiceError}
+        addingCustomService={addingCustomService}
+        onFieldChange={handleCustomServiceDataChange}
+        onClearError={() => setCustomServiceError(null)}
+        onSubmit={handleSubmitCustomService}
+      />
     </Box>
   );
 }
