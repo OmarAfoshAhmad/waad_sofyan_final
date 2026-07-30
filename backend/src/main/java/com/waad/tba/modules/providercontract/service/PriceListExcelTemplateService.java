@@ -5,6 +5,9 @@ import com.waad.tba.common.excel.dto.ExcelImportResult.ImportError;
 import com.waad.tba.common.excel.dto.ExcelImportResult.ImportError.ErrorType;
 import com.waad.tba.common.excel.dto.ExcelImportResult.ImportSummary;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.medicaldictionary.dto.MedicalDictionarySuggestionRequest;
+import com.waad.tba.modules.medicaldictionary.enums.DictionarySuggestionSource;
+import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryService;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
@@ -62,6 +65,7 @@ public class PriceListExcelTemplateService {
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
+    private final MedicalDictionaryService medicalDictionaryService;
     private final PlatformTransactionManager transactionManager;
 
     private static final String SHEET_NAME = "Pricing_Template";
@@ -758,7 +762,11 @@ public class PriceListExcelTemplateService {
         if (resolvedCategory != null) {
             categoryName = displayCategoryName(resolvedCategory);
             subCategoryName = null;
-        } else if (categoryName == null) {
+        } else {
+            registerDictionarySuggestionForUnclassifiedService(serviceName, rawCategoryName, rawSubCategoryName, contract.getId(), rowNum);
+        }
+
+        if (resolvedCategory == null && categoryName == null) {
             categoryName = subCategoryName;
         }
 
@@ -780,6 +788,27 @@ public class PriceListExcelTemplateService {
                 .notes(notes)
                 .active(true)
                 .build();
+    }
+
+    private void registerDictionarySuggestionForUnclassifiedService(
+            String serviceName,
+            String rawCategoryName,
+            String rawSubCategoryName,
+            Long contractId,
+            int rowNum) {
+        if (serviceName == null || serviceName.isBlank()) return;
+        try {
+            MedicalDictionarySuggestionRequest suggestion = new MedicalDictionarySuggestionRequest();
+            suggestion.setOriginalText(serviceName);
+            suggestion.setSource(DictionarySuggestionSource.PRICE_LIST_IMPORT);
+            suggestion.setConfidence(40);
+            suggestion.setSourceReference("provider-contract:" + contractId + ";row:" + rowNum);
+            medicalDictionaryService.createSuggestion(suggestion);
+            log.info("[PriceListImport] Registered dictionary suggestion for unclassified service '{}' (category='{}', sub='{}')",
+                    serviceName, rawCategoryName, rawSubCategoryName);
+        } catch (Exception ex) {
+            log.warn("[PriceListImport] Could not register dictionary suggestion for '{}': {}", serviceName, ex.getMessage());
+        }
     }
 
     /**
@@ -1067,3 +1096,4 @@ public class PriceListExcelTemplateService {
         return text.length() <= maxLen ? text : text.substring(0, maxLen);
     }
 }
+
