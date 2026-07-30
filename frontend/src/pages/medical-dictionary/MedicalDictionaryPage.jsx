@@ -9,6 +9,8 @@ import {
   CircularProgress,
   Divider,
   Grid,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -23,6 +25,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
+import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
 const statusColor = {
   APPROVED: 'success',
@@ -44,6 +47,13 @@ export default function MedicalDictionaryPage() {
   const [error, setError] = useState('');
   const [suggestionsPage, setSuggestionsPage] = useState(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [createForm, setCreateForm] = useState({
+    canonicalName: '',
+    medicalCategoryId: '',
+    status: 'APPROVED',
+    defaultConfidence: 85
+  });
 
   const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
   const suggestions = useMemo(() => getItems(suggestionsPage), [suggestionsPage]);
@@ -73,10 +83,20 @@ export default function MedicalDictionaryPage() {
     }
   }, []);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const result = await getAllMedicalCategories();
+      setCategories(Array.isArray(result) ? result : []);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر تحميل التصنيفات الطبية');
+    }
+  }, []);
+
   useEffect(() => {
     loadEntries();
     loadSuggestions();
-  }, [loadEntries, loadSuggestions]);
+    loadCategories();
+  }, [loadEntries, loadSuggestions, loadCategories]);
 
   const handleSearch = () => setAppliedQuery(query.trim());
 
@@ -106,6 +126,25 @@ export default function MedicalDictionaryPage() {
       await loadSuggestions();
     } catch (err) {
       setError(err?.response?.data?.message || 'تعذر رفض الاقتراح');
+    }
+  };
+
+  const handleCreateEntry = async () => {
+    if (!createForm.canonicalName.trim() || !createForm.medicalCategoryId) {
+      setError('أدخل الاسم الموحد واختر التصنيف الطبي');
+      return;
+    }
+    setError('');
+    try {
+      await medicalDictionaryService.createDictionaryEntry({
+        ...createForm,
+        medicalCategoryId: Number(createForm.medicalCategoryId),
+        defaultConfidence: Number(createForm.defaultConfidence)
+      });
+      setCreateForm({ canonicalName: '', medicalCategoryId: '', status: 'APPROVED', defaultConfidence: 85 });
+      await loadEntries();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر إنشاء سجل القاموس');
     }
   };
 
@@ -140,6 +179,54 @@ export default function MedicalDictionaryPage() {
         <Alert severity="info" icon={<PsychologyAltIcon />}>
           القاموس يقترح التصنيف التأميني فقط. التغطية، النسبة، السقوف، والمرفوض تبقى من اختصاص محرك التغطية.
         </Alert>
+
+        <Card>
+          <CardContent>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+              إضافة اسم موحد للقاموس
+            </Typography>
+            <Grid container spacing={1.5} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="الاسم الموحد"
+                  value={createForm.canonicalName}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, canonicalName: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Select
+                  fullWidth
+                  displayEmpty
+                  value={createForm.medicalCategoryId}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, medicalCategoryId: e.target.value }))}
+                >
+                  <MenuItem value="">اختر التصنيف الطبي</MenuItem>
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.id}>
+                      {category.name || category.nameAr} — {category.code}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="الثقة %"
+                  value={createForm.defaultConfidence}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, defaultConfidence: e.target.value }))}
+                  inputProps={{ min: 0, max: 100 }}
+                />
+              </Grid>
+              <Grid item xs={6} md={2}>
+                <Button fullWidth variant="contained" onClick={handleCreateEntry}>
+                  إضافة
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
 
         <Grid container spacing={2}>
           <Grid item xs={12} md={7}>
