@@ -115,6 +115,7 @@ const BenefitPolicyEdit = Loadable(lazy(() => import('pages/benefit-policies/Ben
 const MedicalCategoriesPage = Loadable(lazy(() => import('pages/medical-categories')));
 const MedicalCategoryCreate = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryCreate')));
 const MedicalCategoryEdit = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryEdit')));
+const MedicalDictionaryPage = Loadable(lazy(() => import('pages/medical-dictionary')));
 
 // ==============================|| LAZY LOADING - DOCUMENTS ||============================== //
 
@@ -599,6 +600,15 @@ const MainRoutes = {
       ]
     },
 
+    // Medical Dictionary — synonym/search memory for classification suggestions only
+    {
+      path: 'medical-dictionary',
+      element: (
+        <PermissionGuard isRouteGuard>
+          <MedicalDictionaryPage />
+        </PermissionGuard>
+      )
+    },
     // Benefit Packages Module - Wrapped with TableRefreshLayout
     {
       path: 'benefit-packages',

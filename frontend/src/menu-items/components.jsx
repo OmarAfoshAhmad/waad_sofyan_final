@@ -20,7 +20,8 @@ import {
   Folder as FolderIcon,
   VerifiedUser as VerifiedUserIcon,
   History as HistoryIcon,
-  AccountBalanceWallet as AccountBalanceWalletIcon
+  AccountBalanceWallet as AccountBalanceWalletIcon,
+  MenuBook as MenuBookIcon
 } from '@mui/icons-material';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -595,6 +596,21 @@ const menuItem = [
         chip: {
           label: '✅',
           color: 'success',
+          size: 'small'
+        }
+      },
+      {
+        id: 'medical-dictionary',
+        title: 'القاموس الطبي',
+        titleEn: 'Medical Dictionary',
+        type: 'item',
+        url: '/medical-dictionary',
+        icon: MenuBookIcon,
+        resource: 'medical_catalog',
+        action: 'view',
+        chip: {
+          label: '🧠',
+          color: 'info',
           size: 'small'
         }
       },

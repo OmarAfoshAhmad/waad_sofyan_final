@@ -1,0 +1,239 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Divider,
+  Grid,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
+} from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
+import medicalDictionaryService from 'services/api/medical-dictionary.service';
+
+const statusColor = {
+  APPROVED: 'success',
+  DRAFT: 'warning',
+  DISABLED: 'default',
+  REJECTED: 'error'
+};
+
+const getItems = (page) => page?.content || page?.items || page?.data || [];
+
+export default function MedicalDictionaryPage() {
+  const [query, setQuery] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [entriesPage, setEntriesPage] = useState(null);
+  const [matchText, setMatchText] = useState('');
+  const [matches, setMatches] = useState([]);
+  const [matching, setMatching] = useState(false);
+  const [error, setError] = useState('');
+
+  const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
+
+  const loadEntries = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await medicalDictionaryService.searchDictionaryEntries({ query: appliedQuery, page: 0, size: 25 });
+      setEntriesPage(result);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر تحميل القاموس الطبي');
+    } finally {
+      setLoading(false);
+    }
+  }, [appliedQuery]);
+
+  useEffect(() => {
+    loadEntries();
+  }, [loadEntries]);
+
+  const handleSearch = () => setAppliedQuery(query.trim());
+
+  const handleMatch = async () => {
+    if (!matchText.trim()) return;
+    setMatching(true);
+    setError('');
+    try {
+      const result = await medicalDictionaryService.matchMedicalDictionary(matchText.trim());
+      setMatches(Array.isArray(result) ? result : []);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر اختبار المطابقة');
+    } finally {
+      setMatching(false);
+    }
+  };
+
+  return (
+    <Box sx={{ p: 3 }} dir="rtl">
+      <Stack spacing={3}>
+        <Box>
+          <Typography variant="h3" sx={{ fontWeight: 800 }}>
+            القاموس الطبي
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 1 }}>
+            ذاكرة تصنيف داخلية تتعلم من قوائم الأسعار وتعديلات المراجعين. لا تعتمد قرارًا ماليًا وحدها.
+          </Typography>
+        </Box>
+
+        {error && <Alert severity="error">{error}</Alert>}
+
+        <Alert severity="info" icon={<PsychologyAltIcon />}>
+          القاموس يقترح التصنيف التأميني فقط. التغطية، النسبة، السقوف، والمرفوض تبقى من اختصاص محرك التغطية.
+        </Alert>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={7}>
+            <Card>
+              <CardContent>
+                <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+                  البحث في الاسم الموحد والمرادفات
+                </Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                  <TextField
+                    fullWidth
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    placeholder="ابحث: MRI، رنين، تحليل CBC، علاج طبيعي..."
+                  />
+                  <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch}>
+                    بحث
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={5}>
+            <Card>
+              <CardContent>
+                <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+                  اختبار مطابقة نص خدمة
+                </Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                  <TextField
+                    fullWidth
+                    value={matchText}
+                    onChange={(e) => setMatchText(e.target.value)}
+                    placeholder="مثال: رنين مغناطيسي للركبة"
+                  />
+                  <Button variant="outlined" onClick={handleMatch} disabled={matching}>
+                    {matching ? <CircularProgress size={20} /> : 'طابق'}
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {matches.length > 0 && (
+          <Card>
+            <CardContent>
+              <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+                نتائج المطابقة المقترحة
+              </Typography>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                {matches.map((m) => (
+                  <Chip
+                    key={`${m.entryId}-${m.matchType}-${m.matchedText}`}
+                    color={m.confidence >= 90 ? 'success' : m.confidence >= 80 ? 'warning' : 'default'}
+                    label={`${m.canonicalName} ← ${m.medicalCategoryCode} (${m.confidence}%)`}
+                    variant="outlined"
+                  />
+                ))}
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardContent>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+              <Box>
+                <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                  السجلات المعتمدة والمقترحة
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  تظهر المرادفات أمامك لأنها جزء من قرار المطابقة وليست صندوقًا أسود.
+                </Typography>
+              </Box>
+              {loading && <CircularProgress size={24} />}
+            </Stack>
+
+            <Divider sx={{ mb: 2 }} />
+
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>الاسم الموحد</TableCell>
+                    <TableCell>التصنيف</TableCell>
+                    <TableCell>الحالة</TableCell>
+                    <TableCell>الثقة</TableCell>
+                    <TableCell>المرادفات</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!loading && entries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        لا توجد نتائج بعد. ابدأ بإضافة سجلات القاموس أو اربطه باستيراد قوائم الأسعار.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {entries.map((entry) => (
+                    <TableRow key={entry.id} hover>
+                      <TableCell sx={{ fontWeight: 700 }}>{entry.canonicalName}</TableCell>
+                      <TableCell>
+                        <Stack spacing={0.25}>
+                          <Typography>{entry.medicalCategoryName}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {entry.medicalCategoryCode}
+                          </Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Chip size="small" color={statusColor[entry.status] || 'default'} label={entry.status} />
+                      </TableCell>
+                      <TableCell>{entry.defaultConfidence}%</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
+                          {(entry.synonyms || []).length === 0 && <Typography color="text.secondary">لا توجد مرادفات</Typography>}
+                          {(entry.synonyms || []).map((syn) => (
+                            <Chip
+                              key={syn.id}
+                              size="small"
+                              icon={<LocalOfferIcon />}
+                              variant={syn.active ? 'outlined' : 'filled'}
+                              color={syn.active ? 'primary' : 'default'}
+                              label={syn.synonym}
+                            />
+                          ))}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </Stack>
+    </Box>
+  );
+}
