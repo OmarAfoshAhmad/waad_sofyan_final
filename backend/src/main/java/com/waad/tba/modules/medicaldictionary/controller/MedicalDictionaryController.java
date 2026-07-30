@@ -78,4 +78,20 @@ public class MedicalDictionaryController {
     public ResponseEntity<ApiResponse<MedicalDictionarySuggestionResponse>> createSuggestion(@Valid @RequestBody MedicalDictionarySuggestionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("تم تسجيل اقتراح تعلم للقاموس الطبي", service.createSuggestion(request)));
     }
+    @PostMapping("/suggestions/{suggestionId}/approve")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<MedicalDictionarySuggestionResponse>> approveSuggestion(
+            @PathVariable Long suggestionId,
+            @Valid @RequestBody MedicalDictionarySuggestionReviewRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("تم اعتماد اقتراح القاموس الطبي", service.approveSuggestion(suggestionId, request)));
+    }
+
+    @PostMapping("/suggestions/{suggestionId}/reject")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<MedicalDictionarySuggestionResponse>> rejectSuggestion(
+            @PathVariable Long suggestionId,
+            @Valid @RequestBody MedicalDictionarySuggestionReviewRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("تم رفض اقتراح القاموس الطبي", service.rejectSuggestion(suggestionId, request)));
+    }
 }
+

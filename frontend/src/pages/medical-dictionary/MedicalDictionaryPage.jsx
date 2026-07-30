@@ -42,8 +42,11 @@ export default function MedicalDictionaryPage() {
   const [matches, setMatches] = useState([]);
   const [matching, setMatching] = useState(false);
   const [error, setError] = useState('');
+  const [suggestionsPage, setSuggestionsPage] = useState(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
+  const suggestions = useMemo(() => getItems(suggestionsPage), [suggestionsPage]);
 
   const loadEntries = useCallback(async () => {
     setLoading(true);
@@ -58,11 +61,53 @@ export default function MedicalDictionaryPage() {
     }
   }, [appliedQuery]);
 
+  const loadSuggestions = useCallback(async () => {
+    setSuggestionsLoading(true);
+    try {
+      const result = await medicalDictionaryService.listDictionarySuggestions({ status: 'PENDING', page: 0, size: 20 });
+      setSuggestionsPage(result);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر تحميل اقتراحات القاموس');
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadEntries();
-  }, [loadEntries]);
+    loadSuggestions();
+  }, [loadEntries, loadSuggestions]);
 
   const handleSearch = () => setAppliedQuery(query.trim());
+
+  const handleApproveSuggestion = async (suggestion) => {
+    setError('');
+    try {
+      await medicalDictionaryService.approveDictionarySuggestion(suggestion.id, {
+        targetEntryId: suggestion.suggestedEntryId || null,
+        targetCategoryId: suggestion.suggestedCategoryId || null,
+        canonicalName: suggestion.suggestedEntryId ? null : suggestion.originalText,
+        approveAsSynonym: Boolean(suggestion.suggestedEntryId),
+        reviewNote: 'اعتماد من شاشة القاموس الطبي'
+      });
+      await loadSuggestions();
+      await loadEntries();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر اعتماد الاقتراح');
+    }
+  };
+
+  const handleRejectSuggestion = async (suggestion) => {
+    setError('');
+    try {
+      await medicalDictionaryService.rejectDictionarySuggestion(suggestion.id, {
+        reviewNote: 'رفض من شاشة القاموس الطبي'
+      });
+      await loadSuggestions();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر رفض الاقتراح');
+    }
+  };
 
   const handleMatch = async () => {
     if (!matchText.trim()) return;
@@ -160,6 +205,70 @@ export default function MedicalDictionaryPage() {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardContent>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+              <Box>
+                <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                  اقتراحات تحتاج مراجعة
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  هذه الاقتراحات تأتي لاحقًا من قوائم الأسعار أو تعديلات المراجعين. اعتمادها يحولها لذاكرة قابلة للبحث، لا لقرار مالي.
+                </Typography>
+              </Box>
+              {suggestionsLoading && <CircularProgress size={22} />}
+            </Stack>
+
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>النص الأصلي</TableCell>
+                    <TableCell>المصدر</TableCell>
+                    <TableCell>التصنيف/السجل المقترح</TableCell>
+                    <TableCell>الثقة</TableCell>
+                    <TableCell>الإجراء</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!suggestionsLoading && suggestions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        لا توجد اقتراحات معلقة حاليًا.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {suggestions.map((suggestion) => (
+                    <TableRow key={suggestion.id} hover>
+                      <TableCell sx={{ fontWeight: 700 }}>{suggestion.originalText}</TableCell>
+                      <TableCell>{suggestion.source}</TableCell>
+                      <TableCell>
+                        <Stack spacing={0.25}>
+                          <Typography>{suggestion.suggestedEntryName || suggestion.suggestedCategoryName || 'غير محدد'}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {suggestion.suggestedCategoryCode || '-'}
+                          </Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{suggestion.confidence == null ? '-' : `${suggestion.confidence}%`}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1}>
+                          <Button size="small" variant="contained" color="success" onClick={() => handleApproveSuggestion(suggestion)}>
+                            اعتماد
+                          </Button>
+                          <Button size="small" variant="outlined" color="error" onClick={() => handleRejectSuggestion(suggestion)}>
+                            رفض
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent>

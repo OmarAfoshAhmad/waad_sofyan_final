@@ -39,6 +39,16 @@ export const createDictionarySuggestion = async (payload) => {
   return unwrap(response);
 };
 
+export const approveDictionarySuggestion = async (suggestionId, payload) => {
+  const response = await axiosClient.post(`${BASE_URL}/suggestions/${suggestionId}/approve`, payload);
+  return unwrap(response);
+};
+
+export const rejectDictionarySuggestion = async (suggestionId, payload) => {
+  const response = await axiosClient.post(`${BASE_URL}/suggestions/${suggestionId}/reject`, payload);
+  return unwrap(response);
+};
+
 export default {
   searchDictionaryEntries,
   createDictionaryEntry,
@@ -46,5 +56,7 @@ export default {
   toggleDictionarySynonym,
   matchMedicalDictionary,
   listDictionarySuggestions,
-  createDictionarySuggestion
+  createDictionarySuggestion,
+  approveDictionarySuggestion,
+  rejectDictionarySuggestion
 };

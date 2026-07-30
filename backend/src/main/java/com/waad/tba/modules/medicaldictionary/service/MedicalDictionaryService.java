@@ -155,6 +155,89 @@ public class MedicalDictionaryService {
         return suggestionRepository.findByStatus(status, pageable).map(this::toSuggestionResponse);
     }
 
+    @Transactional
+    public MedicalDictionarySuggestionResponse approveSuggestion(Long suggestionId, MedicalDictionarySuggestionReviewRequest request) {
+        MedicalDictionarySuggestion suggestion = suggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new IllegalArgumentException("اقتراح القاموس غير موجود"));
+        if (suggestion.getStatus() != DictionarySuggestionStatus.PENDING) {
+            throw new IllegalArgumentException("لا يمكن مراجعة اقتراح تمت معالجته سابقاً");
+        }
+
+        MedicalDictionaryEntry targetEntry = resolveTargetEntryForApproval(suggestion, request);
+        if (request.isApproveAsSynonym()) {
+            createSynonymIfMissing(targetEntry, suggestion.getOriginalText());
+            suggestion.setStatus(DictionarySuggestionStatus.MERGED);
+        } else {
+            suggestion.setStatus(DictionarySuggestionStatus.APPROVED);
+        }
+        suggestion.setSuggestedEntry(targetEntry);
+        suggestion.setSuggestedCategory(targetEntry.getMedicalCategory());
+        suggestion.setReviewNote(request.getReviewNote());
+        suggestion.setReviewedAt(LocalDateTime.now());
+        return toSuggestionResponse(suggestionRepository.save(suggestion));
+    }
+
+    @Transactional
+    public MedicalDictionarySuggestionResponse rejectSuggestion(Long suggestionId, MedicalDictionarySuggestionReviewRequest request) {
+        MedicalDictionarySuggestion suggestion = suggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new IllegalArgumentException("اقتراح القاموس غير موجود"));
+        if (suggestion.getStatus() != DictionarySuggestionStatus.PENDING) {
+            throw new IllegalArgumentException("لا يمكن مراجعة اقتراح تمت معالجته سابقاً");
+        }
+        suggestion.setStatus(DictionarySuggestionStatus.REJECTED);
+        suggestion.setReviewNote(request.getReviewNote());
+        suggestion.setReviewedAt(LocalDateTime.now());
+        return toSuggestionResponse(suggestionRepository.save(suggestion));
+    }
+
+    private MedicalDictionaryEntry resolveTargetEntryForApproval(MedicalDictionarySuggestion suggestion,
+                                                                 MedicalDictionarySuggestionReviewRequest request) {
+        if (request.getTargetEntryId() != null) {
+            return entryRepository.findById(request.getTargetEntryId())
+                    .orElseThrow(() -> new IllegalArgumentException("سجل القاموس المستهدف غير موجود"));
+        }
+        if (suggestion.getSuggestedEntry() != null) return suggestion.getSuggestedEntry();
+
+        Long categoryId = request.getTargetCategoryId() != null ? request.getTargetCategoryId()
+                : suggestion.getSuggestedCategory() == null ? null : suggestion.getSuggestedCategory().getId();
+        if (categoryId == null) throw new IllegalArgumentException("يجب تحديد التصنيف أو سجل قاموس مستهدف للاعتماد");
+
+        MedicalCategory category = medicalCategoryRepository.findActiveById(categoryId)
+                .orElseThrow(() -> new IllegalArgumentException("التصنيف المستهدف غير موجود أو غير نشط"));
+        String canonicalName = request.getCanonicalName() == null || request.getCanonicalName().isBlank()
+                ? suggestion.getOriginalText()
+                : request.getCanonicalName();
+        String normalizedName = normalizer.normalize(canonicalName);
+        if (entryRepository.existsByNormalizedCanonicalName(normalizedName)) {
+            throw new IllegalArgumentException("يوجد سجل قاموس بنفس الاسم الموحد؛ اعتمد الاقتراح كمرادف بدلاً من إنشاء سجل جديد");
+        }
+
+        MedicalDictionaryEntry entry = MedicalDictionaryEntry.builder()
+                .canonicalName(canonicalName.trim())
+                .normalizedCanonicalName(normalizedName)
+                .medicalCategory(category)
+                .status(DictionaryEntryStatus.APPROVED)
+                .defaultConfidence(suggestion.getConfidence() == null ? 80 : suggestion.getConfidence())
+                .approvedAt(LocalDateTime.now())
+                .notes("تم إنشاؤه من اقتراح: " + suggestion.getSource())
+                .build();
+        return entryRepository.save(entry);
+    }
+
+    private void createSynonymIfMissing(MedicalDictionaryEntry entry, String synonymText) {
+        String normalized = normalizer.normalize(synonymText);
+        if (normalized.isBlank() || synonymRepository.existsByNormalizedSynonym(normalized)) return;
+        MedicalDictionarySynonym synonym = MedicalDictionarySynonym.builder()
+                .entry(entry)
+                .synonym(synonymText.trim())
+                .normalizedSynonym(normalized)
+                .synonymType(com.waad.tba.modules.medicaldictionary.enums.DictionarySynonymType.COMMON)
+                .language("ar")
+                .active(true)
+                .build();
+        synonymRepository.save(synonym);
+    }
+
     private Integer score(String query, String candidate, Integer fallback) {
         if (candidate == null || candidate.isBlank()) return 0;
         if (candidate.equals(query)) return 100;
@@ -214,3 +297,4 @@ public class MedicalDictionaryService {
                 .build();
     }
 }
+
