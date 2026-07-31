@@ -382,7 +382,11 @@ const ProviderCreate = () => {
 
   const linkExistingAccount = async (providerId, userId) => {
     try {
-      await usersService.updateUser(userId, { providerId });
+      await usersService.updateUserPatch(userId, {
+        userType: 'PROVIDER_STAFF',
+        providerId,
+        employerId: null
+      });
       enqueueSnackbar('تم ربط المستخدم بنجاح', { variant: 'success' });
     } catch (error) {
       console.error('User linking error:', error);

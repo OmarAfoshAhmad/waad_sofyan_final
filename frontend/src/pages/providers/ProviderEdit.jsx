@@ -411,7 +411,7 @@ const ProviderEdit = () => {
 
     try {
       setLoadingUser(true);
-      await usersService.updateUser(activeUser.id, { providerId: null });
+      await usersService.updateUserPatch(activeUser.id, { userType: 'DATA_ENTRY', providerId: null, employerId: null });
       enqueueSnackbar('تم فك الارتباط بنجاح', { variant: 'success' });
       setActiveUser(null);
       setUnlinkDialog({ open: false, confirmationText: '' });
@@ -432,7 +432,11 @@ const ProviderEdit = () => {
 
     try {
       setLoadingUser(true);
-      await usersService.updateUser(selectedUserToLink.id, { providerId: id });
+      await usersService.updateUserPatch(selectedUserToLink.id, {
+        userType: 'PROVIDER_STAFF',
+        providerId: Number(id),
+        employerId: null
+      });
 
       if (currentUser?.id === selectedUserToLink.id) {
         try {

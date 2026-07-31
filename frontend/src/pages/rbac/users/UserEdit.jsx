@@ -847,6 +847,7 @@ const UserEdit = () => {
 
       // Prepare update payload
       const payload = {
+        username: form.username.trim(),
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone?.trim() || null,

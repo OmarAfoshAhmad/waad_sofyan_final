@@ -46,6 +46,37 @@ export const usersService = {
   },
 
   /**
+   * Safely update part of a user.
+   *
+   * Backend PUT /admin/users/{id} currently validates a full UserUpdateDto
+   * (username, fullName, email). Provider linking screens often need to update
+   * only providerId/employerId, so this helper first loads the current user and
+   * sends a complete payload to avoid accidental validation failures or data loss.
+   */
+  updateUserPatch: async (id, patchData = {}) => {
+    const currentResponse = await axiosServices.get(`${BASE_URL}/${id}`);
+    const current = currentResponse?.data?.data || currentResponse?.data || {};
+    const merged = {
+      username: current.username,
+      fullName: current.fullName || current.username,
+      email: current.email,
+      phone: current.phone || null,
+      active: current.active !== false,
+      userType: current.role || current.userType || 'DATA_ENTRY',
+      employerId: current.employerId ?? null,
+      providerId: current.providerId ?? null,
+      canViewClaims: current.canViewClaims,
+      canViewVisits: current.canViewVisits,
+      canViewReports: current.canViewReports,
+      canViewMembers: current.canViewMembers,
+      canViewBenefitPolicies: current.canViewBenefitPolicies,
+      ...patchData
+    };
+
+    return axiosServices.put(`${BASE_URL}/${id}`, merged);
+  },
+
+  /**
    * Update user
    * PUT /api/admin/users/{id}
    */
