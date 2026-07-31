@@ -19,6 +19,7 @@ public class MedicalDictionaryEntryResponse {
     private DictionaryEntryStatus status;
     private Integer defaultConfidence;
     private String notes;
+    private long synonymCount;
     private List<MedicalDictionarySynonymResponse> synonyms;
     private LocalDateTime approvedAt;
     private LocalDateTime createdAt;

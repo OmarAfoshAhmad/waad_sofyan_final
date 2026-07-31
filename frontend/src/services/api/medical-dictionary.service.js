@@ -19,6 +19,11 @@ export const addDictionarySynonym = async (entryId, payload) => {
   return unwrap(response);
 };
 
+export const listDictionarySynonyms = async (entryId, params = {}) => {
+  const response = await axiosClient.get(`${BASE_URL}/entries/${entryId}/synonyms`, { params });
+  return normalizePaginatedResponse(response);
+};
+
 export const toggleDictionarySynonym = async (synonymId) => {
   const response = await axiosClient.patch(`${BASE_URL}/synonyms/${synonymId}/toggle`);
   return unwrap(response);
@@ -53,6 +58,7 @@ export default {
   searchDictionaryEntries,
   createDictionaryEntry,
   addDictionarySynonym,
+  listDictionarySynonyms,
   toggleDictionarySynonym,
   matchMedicalDictionary,
   listDictionarySuggestions,

@@ -8,7 +8,9 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Drawer,
   Grid,
+  IconButton,
   MenuItem,
   Select,
   Stack,
@@ -26,6 +28,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
 import SyncAltIcon from '@mui/icons-material/SyncAlt';
+import CloseIcon from '@mui/icons-material/Close';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
@@ -52,6 +56,9 @@ export default function MedicalDictionaryPage() {
   const [categories, setCategories] = useState([]);
   const [synonymForms, setSynonymForms] = useState({});
   const [savingSynonymId, setSavingSynonymId] = useState(null);
+  const [synonymDrawerEntry, setSynonymDrawerEntry] = useState(null);
+  const [synonymsPage, setSynonymsPage] = useState(null);
+  const [synonymsLoading, setSynonymsLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     canonicalName: '',
     medicalCategoryId: '',
@@ -61,6 +68,7 @@ export default function MedicalDictionaryPage() {
 
   const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
   const suggestions = useMemo(() => getItems(suggestionsPage), [suggestionsPage]);
+  const drawerSynonyms = useMemo(() => getItems(synonymsPage), [synonymsPage]);
   const entriesTotal = entriesPage?.total || entriesPage?.totalElements || entries.length;
 
   const loadEntries = useCallback(async () => {
@@ -171,6 +179,21 @@ export default function MedicalDictionaryPage() {
     setSynonymForms((prev) => ({ ...prev, [entryId]: value }));
   };
 
+  const loadEntrySynonyms = useCallback(async (entry) => {
+    if (!entry?.id) return;
+    setSynonymDrawerEntry(entry);
+    setSynonymsLoading(true);
+    setError('');
+    try {
+      const result = await medicalDictionaryService.listDictionarySynonyms(entry.id, { page: 0, size: 100 });
+      setSynonymsPage(result);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر تحميل مرادفات السجل');
+    } finally {
+      setSynonymsLoading(false);
+    }
+  }, []);
+
   const handleAddSynonym = async (entryId) => {
     const synonym = (synonymForms[entryId] || '').trim();
     if (!synonym) return;
@@ -186,6 +209,9 @@ export default function MedicalDictionaryPage() {
       });
       setSynonymForms((prev) => ({ ...prev, [entryId]: '' }));
       await loadEntries();
+      if (synonymDrawerEntry?.id === entryId) {
+        await loadEntrySynonyms(synonymDrawerEntry);
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'تعذر إضافة المرادف');
     } finally {
@@ -198,7 +224,9 @@ export default function MedicalDictionaryPage() {
     setError('');
     try {
       await medicalDictionaryService.toggleDictionarySynonym(synonym.id);
-      await loadEntries();
+      if (synonymDrawerEntry) {
+        await loadEntrySynonyms(synonymDrawerEntry);
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'تعذر تغيير حالة المرادف');
     } finally {
@@ -494,46 +522,16 @@ export default function MedicalDictionaryPage() {
                       </TableCell>
                       <TableCell>{entry.defaultConfidence}%</TableCell>
                       <TableCell>
-                        <Stack spacing={1}>
-                          <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
-                            {(entry.synonyms || []).length === 0 && <Typography color="text.secondary">لا توجد مرادفات</Typography>}
-                            {(entry.synonyms || []).map((syn) => (
-                              <Tooltip
-                                key={syn.id}
-                                title={syn.active ? 'اضغط لتعطيل هذا المرادف مؤقتًا' : 'اضغط لإعادة تفعيل هذا المرادف'}
-                              >
-                                <Chip
-                                  size="small"
-                                  icon={<LocalOfferIcon />}
-                                  onClick={() => handleToggleSynonym(syn)}
-                                  variant={syn.active ? 'outlined' : 'filled'}
-                                  color={syn.active ? 'primary' : 'default'}
-                                  label={`${syn.synonym}${syn.active ? '' : ' — معطل'}`}
-                                  sx={{ cursor: 'pointer' }}
-                                />
-                              </Tooltip>
-                            ))}
-                          </Stack>
-                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                            <TextField
-                              size="small"
-                              fullWidth
-                              placeholder="أضف مرادفًا لهذا الاسم..."
-                              value={synonymForms[entry.id] || ''}
-                              onChange={(e) => handleSynonymFormChange(entry.id, e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleAddSynonym(entry.id)}
-                            />
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<SyncAltIcon />}
-                              disabled={savingSynonymId === entry.id}
-                              onClick={() => handleAddSynonym(entry.id)}
-                              sx={{ minWidth: 120 }}
-                            >
-                              إضافة مرادف
-                            </Button>
-                          </Stack>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip size="small" icon={<LocalOfferIcon />} color="primary" variant="outlined" label={`${entry.synonymCount || 0} مرادف`} />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<VisibilityIcon />}
+                            onClick={() => loadEntrySynonyms(entry)}
+                          >
+                            إدارة
+                          </Button>
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -543,6 +541,78 @@ export default function MedicalDictionaryPage() {
             </TableContainer>
           </CardContent>
         </Card>
+
+        <Drawer
+          anchor="left"
+          open={Boolean(synonymDrawerEntry)}
+          onClose={() => setSynonymDrawerEntry(null)}
+          PaperProps={{ sx: { width: { xs: '100%', sm: 560 }, p: 2 } }}
+        >
+          <Stack spacing={2} dir="rtl">
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+              <Box>
+                <Typography variant="h4" sx={{ fontWeight: 800 }}>
+                  مرادفات الاسم الموحد
+                </Typography>
+                <Typography color="text.secondary">{synonymDrawerEntry?.canonicalName}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {synonymDrawerEntry?.medicalCategoryCode} — {synonymDrawerEntry?.medicalCategoryName}
+                </Typography>
+              </Box>
+              <IconButton onClick={() => setSynonymDrawerEntry(null)}>
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="أضف مرادفًا لهذا الاسم..."
+                value={synonymForms[synonymDrawerEntry?.id] || ''}
+                onChange={(e) => handleSynonymFormChange(synonymDrawerEntry?.id, e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSynonym(synonymDrawerEntry?.id)}
+              />
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<SyncAltIcon />}
+                disabled={!synonymDrawerEntry?.id || savingSynonymId === synonymDrawerEntry?.id}
+                onClick={() => handleAddSynonym(synonymDrawerEntry?.id)}
+                sx={{ minWidth: 140 }}
+              >
+                إضافة مرادف
+              </Button>
+            </Stack>
+
+            <Divider />
+
+            {synonymsLoading ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CircularProgress size={20} />
+                <Typography color="text.secondary">جاري تحميل المرادفات...</Typography>
+              </Stack>
+            ) : drawerSynonyms.length === 0 ? (
+              <Alert severity="info">لا توجد مرادفات لهذا السجل بعد.</Alert>
+            ) : (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                {drawerSynonyms.map((syn) => (
+                  <Tooltip key={syn.id} title={syn.active ? 'اضغط لتعطيل هذا المرادف مؤقتًا' : 'اضغط لإعادة تفعيل هذا المرادف'}>
+                    <Chip
+                      size="small"
+                      icon={<LocalOfferIcon />}
+                      onClick={() => handleToggleSynonym(syn)}
+                      variant={syn.active ? 'outlined' : 'filled'}
+                      color={syn.active ? 'primary' : 'default'}
+                      label={`${syn.synonym}${syn.active ? '' : ' — معطل'}`}
+                      sx={{ cursor: 'pointer' }}
+                    />
+                  </Tooltip>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        </Drawer>
       </Stack>
     </Box>
   );

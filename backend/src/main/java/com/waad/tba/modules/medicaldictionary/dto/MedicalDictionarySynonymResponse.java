@@ -8,6 +8,7 @@ import lombok.Data;
 @Builder
 public class MedicalDictionarySynonymResponse {
     private Long id;
+    private Long entryId;
     private String synonym;
     private String normalizedSynonym;
     private DictionarySynonymType synonymType;

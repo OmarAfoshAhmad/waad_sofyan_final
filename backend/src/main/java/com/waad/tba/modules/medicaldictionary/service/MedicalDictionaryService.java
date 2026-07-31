@@ -68,7 +68,15 @@ public class MedicalDictionaryService {
         } else {
             entries = entryRepository.searchByTextAndStatus(q, status, pageable);
         }
-        return entries.map(this::toEntryResponse);
+        return entries.map(this::toEntrySummaryResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MedicalDictionarySynonymResponse> listSynonyms(Long entryId, Pageable pageable) {
+        if (!entryRepository.existsById(entryId)) {
+            throw new IllegalArgumentException("سجل القاموس غير موجود");
+        }
+        return synonymRepository.findByEntry_Id(entryId, pageable).map(this::toSynonymResponse);
     }
 
     @Transactional(readOnly = true)
@@ -287,7 +295,27 @@ public class MedicalDictionaryService {
                 .status(entry.getStatus())
                 .defaultConfidence(entry.getDefaultConfidence())
                 .notes(entry.getNotes())
+                .synonymCount(entry.getSynonyms().size())
                 .synonyms(entry.getSynonyms().stream().map(this::toSynonymResponse).toList())
+                .approvedAt(entry.getApprovedAt())
+                .createdAt(entry.getCreatedAt())
+                .updatedAt(entry.getUpdatedAt())
+                .build();
+    }
+
+    private MedicalDictionaryEntryResponse toEntrySummaryResponse(MedicalDictionaryEntry entry) {
+        return MedicalDictionaryEntryResponse.builder()
+                .id(entry.getId())
+                .canonicalName(entry.getCanonicalName())
+                .normalizedCanonicalName(entry.getNormalizedCanonicalName())
+                .medicalCategoryId(entry.getMedicalCategory().getId())
+                .medicalCategoryCode(entry.getMedicalCategory().getCode())
+                .medicalCategoryName(entry.getMedicalCategory().getName())
+                .status(entry.getStatus())
+                .defaultConfidence(entry.getDefaultConfidence())
+                .notes(entry.getNotes())
+                .synonymCount(synonymRepository.countByEntry_Id(entry.getId()))
+                .synonyms(List.of())
                 .approvedAt(entry.getApprovedAt())
                 .createdAt(entry.getCreatedAt())
                 .updatedAt(entry.getUpdatedAt())
@@ -297,6 +325,7 @@ public class MedicalDictionaryService {
     private MedicalDictionarySynonymResponse toSynonymResponse(MedicalDictionarySynonym synonym) {
         return MedicalDictionarySynonymResponse.builder()
                 .id(synonym.getId())
+                .entryId(synonym.getEntry().getId())
                 .synonym(synonym.getSynonym())
                 .normalizedSynonym(synonym.getNormalizedSynonym())
                 .synonymType(synonym.getSynonymType())

@@ -51,6 +51,16 @@ public class MedicalDictionaryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("تمت إضافة المرادف", service.addSynonym(entryId, request)));
     }
 
+    @GetMapping("/entries/{entryId}/synonyms")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<Page<MedicalDictionarySynonymResponse>>> listSynonyms(
+            @PathVariable Long entryId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.ASC, "synonym"));
+        return ResponseEntity.ok(ApiResponse.success(service.listSynonyms(entryId, pageable)));
+    }
+
     @PatchMapping("/synonyms/{synonymId}/toggle")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<MedicalDictionarySynonymResponse>> toggleSynonym(@PathVariable Long synonymId) {
