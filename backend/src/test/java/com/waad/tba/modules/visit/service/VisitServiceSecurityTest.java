@@ -14,8 +14,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -76,5 +78,22 @@ class VisitServiceSecurityTest {
     @Test
     void deprecatedSearchIsRetiredAndFailsClosed() {
         assertThrows(AccessDeniedException.class, () -> visitService.search("anything"));
+    }
+
+    @Test
+    void findByMemberDeniedWhenCallerCannotAccessMember() {
+        when(authorizationService.canAccessMember(currentUser, 88L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> visitService.findByMember(88L));
+
+        verify(repository, never()).findByMemberIdAndActiveTrue(88L);
+    }
+
+    @Test
+    void findByMemberAllowedReturnsEmptyListWhenNoVisits() {
+        when(authorizationService.canAccessMember(currentUser, 88L)).thenReturn(true);
+        when(repository.findByMemberIdAndActiveTrue(88L)).thenReturn(List.of());
+
+        assertTrue(visitService.findByMember(88L).isEmpty());
     }
 }

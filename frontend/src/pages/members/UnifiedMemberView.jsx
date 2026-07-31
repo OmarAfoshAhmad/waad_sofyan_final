@@ -62,7 +62,11 @@ import {
   PersonAdd as PersonAddIcon,
   Print as PrintIcon,
   QrCode as QrCodeIcon,
-  RestoreFromTrash as RestoreFromTrashIcon
+  RestoreFromTrash as RestoreFromTrashIcon,
+  History as HistoryIcon,
+  LocalHospital as VisitIcon,
+  ReceiptLong as ClaimIcon,
+  FactCheck as PreAuthIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TablePagination } from '@mui/material';
@@ -85,6 +89,59 @@ import {
 import { openSnackbar } from 'api/snackbar';
 
 import { RELATIONSHIP_AR } from './member.shared';
+import api from 'utils/axios';
+
+const unwrapApi = (response) => response?.data?.data ?? response?.data ?? response;
+
+const toArray = (payload) => {
+  const value = unwrapApi(payload);
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.content)) return value.content;
+  if (Array.isArray(value?.data)) return value.data;
+  return [];
+};
+
+const formatMoney = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${numeric.toFixed(2)} د.ل` : '-';
+};
+
+const statusLabel = (status) =>
+  ({
+    APPROVED: 'معتمد',
+    REJECTED: 'مرفوض',
+    PENDING: 'معلق',
+    SUBMITTED: 'مرسل',
+    RESUBMITTED: 'معاد إرساله',
+    UNDER_REVIEW: 'قيد المراجعة',
+    APPROVAL_IN_PROGRESS: 'قيد الاعتماد',
+    ACKNOWLEDGED: 'تم الاطلاع',
+    NEEDS_CORRECTION: 'يحتاج تصحيح',
+    CANCELLED: 'ملغى',
+    EXPIRED: 'منتهي',
+    USED: 'مستخدم',
+    REGISTERED: 'مسجلة',
+    IN_PROGRESS: 'قيد التنفيذ',
+    COMPLETED: 'مكتملة',
+    CLOSED: 'مغلقة'
+  })[status] || status || '-';
+
+const statusColor = (status) =>
+  ({
+    APPROVED: 'success',
+    COMPLETED: 'success',
+    CLOSED: 'success',
+    REJECTED: 'error',
+    CANCELLED: 'error',
+    EXPIRED: 'error',
+    UNDER_REVIEW: 'warning',
+    APPROVAL_IN_PROGRESS: 'warning',
+    NEEDS_CORRECTION: 'warning',
+    PENDING: 'info',
+    SUBMITTED: 'info',
+    RESUBMITTED: 'info'
+  })[status] || 'default';
 
 /**
  * Unified Member View Component
@@ -103,6 +160,10 @@ const UnifiedMemberView = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedDependent, setSelectedDependent] = useState(null); // null = Add Mode
   const [showDeleted, setShowDeleted] = useState(false);
+  const [medicalHistory, setMedicalHistory] = useState(null);
+  const [medicalHistoryLoading, setMedicalHistoryLoading] = useState(false);
+  const [medicalHistoryError, setMedicalHistoryError] = useState(null);
+  const medicalTabIndex = member?.type === MEMBER_TYPES.PRINCIPAL ? 2 : 1;
 
   // Pagination
   const [pg, setPg] = useState(0);
@@ -129,6 +190,12 @@ const UnifiedMemberView = () => {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (member?.id && tabValue === medicalTabIndex && !medicalHistory && !medicalHistoryLoading) {
+      fetchMedicalHistory();
+    }
+  }, [member?.id, tabValue, medicalTabIndex, medicalHistory, medicalHistoryLoading]);
+
   const fetchMemberData = async () => {
     setLoading(true);
     try {
@@ -146,6 +213,70 @@ const UnifiedMemberView = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchMedicalHistory = async () => {
+    setMedicalHistoryLoading(true);
+    setMedicalHistoryError(null);
+
+    const sources = await Promise.allSettled([
+      api.get(`/visits/member/${id}`),
+      api.get(`/claims/member/${id}`),
+      api.get(`/pre-authorizations/member/${id}`, { params: { page: 0, size: 100, sortBy: 'createdAt', sortDirection: 'DESC' } })
+    ]);
+
+    const [visitsResult, claimsResult, preAuthsResult] = sources;
+    const visits = visitsResult.status === 'fulfilled' ? toArray(visitsResult.value) : [];
+    const claims = claimsResult.status === 'fulfilled' ? toArray(claimsResult.value) : [];
+    const preAuths = preAuthsResult.status === 'fulfilled' ? toArray(preAuthsResult.value) : [];
+
+    const failures = sources.filter((item) => item.status === 'rejected');
+    if (failures.length > 0) {
+      setMedicalHistoryError('تعذر تحميل بعض مصادر السجل الطبي، وتم عرض البيانات المتاحة فقط.');
+      console.warn('Partial medical history load failure:', failures);
+    }
+
+    const events = [
+      ...visits.map((visit) => ({
+        id: `visit-${visit.id}`,
+        type: 'visit',
+        typeLabel: 'زيارة',
+        icon: <VisitIcon fontSize="small" />,
+        date: visit.visitDate || visit.createdAt,
+        reference: visit.visitNumber || visit.id,
+        provider: visit.providerName || visit.provider?.name || '-',
+        description: visit.diagnosisDescription || visit.reason || visit.notes || 'زيارة طبية',
+        status: visit.status,
+        amount: null
+      })),
+      ...claims.map((claim) => ({
+        id: `claim-${claim.id}`,
+        type: 'claim',
+        typeLabel: 'مطالبة',
+        icon: <ClaimIcon fontSize="small" />,
+        date: claim.serviceDate || claim.claimDate || claim.createdAt,
+        reference: claim.claimNumber || claim.referenceNumber || claim.id,
+        provider: claim.providerName || claim.provider?.name || '-',
+        description: claim.diagnosisDescription || claim.diagnosis || 'مطالبة طبية',
+        status: claim.status,
+        amount: claim.totalAmount ?? claim.claimedAmount ?? claim.approvedAmount
+      })),
+      ...preAuths.map((preAuth) => ({
+        id: `preauth-${preAuth.id}`,
+        type: 'preauth',
+        typeLabel: 'موافقة',
+        icon: <PreAuthIcon fontSize="small" />,
+        date: preAuth.requestDate || preAuth.createdAt,
+        reference: preAuth.preAuthNumber || preAuth.referenceNumber || preAuth.id,
+        provider: preAuth.providerName || preAuth.provider?.name || '-',
+        description: preAuth.serviceName || preAuth.diagnosisDescription || 'موافقة مسبقة',
+        status: preAuth.status,
+        amount: preAuth.requestedAmount ?? preAuth.approvedAmount
+      }))
+    ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    setMedicalHistory({ visits, claims, preAuths, events });
+    setMedicalHistoryLoading(false);
   };
 
   const handleTabChange = (event, newValue) => {
@@ -324,6 +455,7 @@ const UnifiedMemberView = () => {
           >
             <Tab label="بيانات المستفيد" icon={<PersonIcon />} iconPosition="start" />
             {isPrincipal && <Tab label={`التابعون (${dependents.length})`} icon={<FamilyRestroomIcon />} iconPosition="start" />}
+            <Tab label="السجل الطبي" icon={<HistoryIcon />} iconPosition="start" />
           </Tabs>
         </Box>
 
@@ -561,7 +693,7 @@ const UnifiedMemberView = () => {
           </div>
 
           {/* Tab 1: Dependents (Principal Only) */}
-          <div role="tabpanel" hidden={tabValue !== 1}>
+          <div role="tabpanel" hidden={!isPrincipal || tabValue !== 1}>
             {tabValue === 1 && isPrincipal && (
               <Stack spacing={3}>
                 {/* Header Actions */}
@@ -716,6 +848,128 @@ const UnifiedMemberView = () => {
                     </>
                   )}
                 </Box>
+              </Stack>
+            )}
+          </div>
+
+          {/* Medical History */}
+          <div role="tabpanel" hidden={tabValue !== medicalTabIndex}>
+            {tabValue === medicalTabIndex && (
+              <Stack spacing={2}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                  <Paper variant="outlined" sx={{ p: 2, flex: 1, bgcolor: 'primary.lighter' }}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <VisitIcon color="primary" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          الزيارات
+                        </Typography>
+                        <Typography variant="h5" fontWeight="bold" color="primary.main">
+                          {medicalHistory?.visits?.length ?? 0}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                  <Paper variant="outlined" sx={{ p: 2, flex: 1, bgcolor: 'success.lighter' }}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <ClaimIcon color="success" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          المطالبات
+                        </Typography>
+                        <Typography variant="h5" fontWeight="bold" color="success.main">
+                          {medicalHistory?.claims?.length ?? 0}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                  <Paper variant="outlined" sx={{ p: 2, flex: 1, bgcolor: 'warning.lighter' }}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <PreAuthIcon color="warning" />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          الموافقات
+                        </Typography>
+                        <Typography variant="h5" fontWeight="bold" color="warning.main">
+                          {medicalHistory?.preAuths?.length ?? 0}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                </Stack>
+
+                {medicalHistoryError && <Alert severity="warning">{medicalHistoryError}</Alert>}
+
+                <Paper variant="outlined">
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      السجل الطبي الموحد
+                    </Typography>
+                    <Chip
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      label={`${medicalHistory?.events?.length ?? 0} حركة`}
+                    />
+                  </Stack>
+
+                  {medicalHistoryLoading ? (
+                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                      <CircularProgress size={28} />
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        جارِ تحميل السجل الطبي...
+                      </Typography>
+                    </Box>
+                  ) : !medicalHistory?.events?.length ? (
+                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                      <HistoryIcon color="disabled" sx={{ fontSize: 44, mb: 1 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        لا توجد زيارات أو مطالبات أو موافقات مسجلة لهذا المستفيد.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell align="center">النوع</TableCell>
+                            <TableCell align="center">التاريخ</TableCell>
+                            <TableCell align="center">المرجع</TableCell>
+                            <TableCell align="right">الوصف</TableCell>
+                            <TableCell align="center">مقدم الخدمة</TableCell>
+                            <TableCell align="center">الحالة</TableCell>
+                            <TableCell align="center">المبلغ</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {medicalHistory.events.map((event) => (
+                            <TableRow key={event.id} hover>
+                              <TableCell align="center">
+                                <Chip icon={event.icon} label={event.typeLabel} size="small" variant="outlined" color="primary" />
+                              </TableCell>
+                              <TableCell align="center">{event.date ? dayjs(event.date).format('YYYY/MM/DD') : '-'}</TableCell>
+                              <TableCell align="center">
+                                <Typography variant="caption" fontFamily="monospace">
+                                  {event.reference || '-'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Typography variant="body2" fontWeight="medium">
+                                  {event.description}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="center">{event.provider}</TableCell>
+                              <TableCell align="center">
+                                <Chip label={statusLabel(event.status)} size="small" color={statusColor(event.status)} />
+                              </TableCell>
+                              <TableCell align="center">{formatMoney(event.amount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </Paper>
               </Stack>
             )}
           </div>

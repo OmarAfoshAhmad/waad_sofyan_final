@@ -147,6 +147,25 @@ public class VisitService {
         return mapper.toResponseDto(entity, provider != null ? provider.getName() : null, extraData);
     }
 
+    @Transactional(readOnly = true)
+    public List<VisitResponseDto> findByMember(Long memberId) {
+        log.debug("📋 Finding visits for member: {}", memberId);
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+
+        if (!authorizationService.canAccessMember(currentUser, memberId)) {
+            log.warn("❌ Access denied: user {} attempted to access visits for member {}",
+                    currentUser.getUsername(), memberId);
+            throw new AccessDeniedException("Access denied to this member's visits");
+        }
+
+        List<Visit> visits = repository.findByMemberIdAndActiveTrue(memberId);
+        return mapVisitsToDtos(visits);
+    }
+
     @Transactional
     public VisitResponseDto create(VisitCreateDto dto) {
         log.info("📝 Creating new visit for member id: {}", dto.getMemberId());

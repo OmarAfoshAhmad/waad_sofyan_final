@@ -65,6 +65,15 @@ public class VisitController {
                 return ResponseEntity.ok(ApiResponse.success(dto));
         }
 
+        @GetMapping("/member/{memberId}")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
+        @Operation(summary = "Get visits by member", description = "Returns active visit records for a specific member.")
+        public ResponseEntity<ApiResponse<List<VisitResponseDto>>> getByMember(
+                        @Parameter(name = "memberId", description = "Member ID", required = true) @PathVariable("memberId") Long memberId) {
+                List<VisitResponseDto> visits = service.findByMember(memberId);
+                return ResponseEntity.ok(ApiResponse.success(visits));
+        }
+
         @PostMapping
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY')")
         @Operation(summary = "Create visit", description = "Creates a new visit record. If providerId is specified, the provider must have an active contract with the member's company.")
