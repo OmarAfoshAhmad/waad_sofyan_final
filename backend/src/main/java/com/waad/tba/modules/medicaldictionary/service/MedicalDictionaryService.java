@@ -137,6 +137,21 @@ public class MedicalDictionaryService {
         MedicalCategory category = request.getSuggestedCategoryId() == null ? null : medicalCategoryRepository.findActiveById(request.getSuggestedCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("التصنيف المقترح غير موجود أو غير نشط"));
 
+        if (category != null) {
+            var existingPending = suggestionRepository.findFirstByNormalizedOriginalTextAndSuggestedCategory_IdAndStatus(
+                    normalized,
+                    category.getId(),
+                    DictionarySuggestionStatus.PENDING);
+            if (existingPending.isPresent()) {
+                MedicalDictionarySuggestion existing = existingPending.get();
+                if (entry != null) existing.setSuggestedEntry(entry);
+                existing.setSource(request.getSource());
+                existing.setConfidence(maxConfidence(existing.getConfidence(), request.getConfidence()));
+                existing.setSourceReference(request.getSourceReference());
+                return toSuggestionResponse(suggestionRepository.save(existing));
+            }
+        }
+
         MedicalDictionarySuggestion suggestion = MedicalDictionarySuggestion.builder()
                 .originalText(request.getOriginalText().trim())
                 .normalizedOriginalText(normalized)
@@ -147,6 +162,12 @@ public class MedicalDictionaryService {
                 .sourceReference(request.getSourceReference())
                 .build();
         return toSuggestionResponse(suggestionRepository.save(suggestion));
+    }
+
+    private Integer maxConfidence(Integer current, Integer incoming) {
+        if (current == null) return incoming;
+        if (incoming == null) return current;
+        return Math.max(current, incoming);
     }
 
     @Transactional(readOnly = true)
