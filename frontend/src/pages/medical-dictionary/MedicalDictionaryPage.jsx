@@ -61,6 +61,7 @@ export default function MedicalDictionaryPage() {
 
   const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
   const suggestions = useMemo(() => getItems(suggestionsPage), [suggestionsPage]);
+  const entriesTotal = entriesPage?.total || entriesPage?.totalElements || entries.length;
 
   const loadEntries = useCallback(async () => {
     setLoading(true);
@@ -315,6 +316,48 @@ export default function MedicalDictionaryPage() {
             </Card>
           </Grid>
         </Grid>
+
+        <Card>
+          <CardContent>
+            <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" spacing={2}>
+              <Box>
+                <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                  القاموس الموحد المحمّل
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  هذه بيانات القاموس المستوردة من أداة التصنيف. تظهر النتائج المفصلة مع المرادفات في جدول السجلات بالأسفل.
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                <Chip color="primary" label={`${entriesTotal} اسم موحد`} />
+                <Chip color="success" variant="outlined" label={`${entries.length} ظاهر حالياً`} />
+              </Stack>
+            </Stack>
+
+            <Divider sx={{ my: 2 }} />
+
+            {loading ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CircularProgress size={20} />
+                <Typography color="text.secondary">جاري تحميل بيانات القاموس...</Typography>
+              </Stack>
+            ) : entries.length === 0 ? (
+              <Alert severity="warning">لا تظهر نتائج في الصفحة الحالية. جرّب البحث عن اسم خدمة أو تأكد من تطبيق seed القاموس.</Alert>
+            ) : (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                {entries.slice(0, 12).map((entry) => (
+                  <Chip
+                    key={entry.id}
+                    icon={<LocalOfferIcon />}
+                    color={entry.status === 'APPROVED' ? 'success' : 'default'}
+                    variant="outlined"
+                    label={`${entry.canonicalName} — ${entry.medicalCategoryCode}`}
+                  />
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
 
         {matches.length > 0 && (
           <Card>
