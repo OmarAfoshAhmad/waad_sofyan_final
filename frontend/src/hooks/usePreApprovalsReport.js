@@ -64,7 +64,7 @@ export const DEFAULT_FILTERS = {
  * @param {Object} options.filters - Filter criteria
  * @returns {Object} Pre-approvals data, loading states, error, and utilities
  */
-export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAULT_FILTERS } = {}) => {
+export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAULT_FILTERS, page = 0, size = 25 } = {}) => {
   const [preApprovals, setPreApprovals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -84,14 +84,30 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
 
     try {
       const params = {
-        size: 9999 // Fetch all for client-side filtering
+        page,
+        size,
+        sortBy: 'createdAt',
+        sortDirection: 'DESC'
       };
 
       if (employerId) {
         params.employerId = employerId;
       }
 
-      // Provider filtering is done client-side for better compatibility
+      if (filters.statuses?.length === 1) {
+        params.status = filters.statuses[0];
+      }
+
+      if (filters.dateFrom) {
+        params.dateFrom = filters.dateFrom;
+      }
+
+      if (filters.dateTo) {
+        params.dateTo = filters.dateTo;
+      }
+
+      // Provider/member free-text filtering remains client-side for the current
+      // server page until backend scoping and indexed joins are finalized.
       // ⚠️ FIXED: Use /v1/pre-authorizations to match Backend API
       const response = await axiosClient.get('/pre-authorizations', { params });
       const data = unwrap(response);
@@ -135,7 +151,7 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
     } finally {
       setLoading(false);
     }
-  }, [employerId]);
+  }, [employerId, filters.dateFrom, filters.dateTo, filters.statuses, page, size]);
 
   /**
    * Initial fetch and refetch on employerId change
@@ -158,7 +174,8 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
       });
     }
 
-    // Filter by status (multi-select)
+    // Filter by status (multi-select). A single status is already filtered by DB;
+    // keep this for multi-status and defensive consistency.
     if (filters.statuses && filters.statuses.length > 0) {
       result = result.filter((pa) => filters.statuses.includes(pa.status));
     }
@@ -169,7 +186,7 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
       result = result.filter((pa) => pa.memberName.toLowerCase().includes(search));
     }
 
-    // Filter by date range (from)
+    // Date range is applied by DB; keep local guard for current page consistency.
     if (filters.dateFrom) {
       const fromDate = new Date(filters.dateFrom);
       fromDate.setHours(0, 0, 0, 0);
@@ -196,7 +213,7 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
     // Data
     preApprovals: filteredPreApprovals,
     allPreApprovals: preApprovals,
-    totalCount: filteredPreApprovals.length,
+    totalCount: pagination.totalElements || filteredPreApprovals.length,
     totalFetched: preApprovals.length,
 
     // State

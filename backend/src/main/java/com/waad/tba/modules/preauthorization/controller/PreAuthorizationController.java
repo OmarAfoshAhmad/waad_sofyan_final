@@ -395,7 +395,10 @@ public class PreAuthorizationController {
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
-            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection) {
+            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "dateFrom", required = false) java.time.LocalDate dateFrom,
+            @RequestParam(name = "dateTo", required = false) java.time.LocalDate dateTo) {
         
         log.info("[API v1] Fetching all pre-authorizations, page: {}, size: {}", page, size);
         
@@ -406,9 +409,17 @@ public class PreAuthorizationController {
         }
         
         Sort.Direction direction = Sort.Direction.fromString(sortDirection);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 200), Sort.by(direction, sortBy));
         
-        Page<PreAuthorizationResponseDto> internalPage = preAuthorizationService.getAllPreAuthorizations(pageable);
+        PreAuthStatus parsedStatus = null;
+        if (status != null && !status.isBlank()) {
+            parsedStatus = PreAuthStatus.valueOf(status.trim().toUpperCase());
+        }
+
+        Page<PreAuthorizationResponseDto> internalPage =
+                parsedStatus != null || dateFrom != null || dateTo != null
+                        ? preAuthorizationService.getOperationalReport(parsedStatus, dateFrom, dateTo, pageable)
+                        : preAuthorizationService.getAllPreAuthorizations(pageable);
         
         // Convert to API response
         PreAuthorizationListResponse response = apiMapper.toListResponse(internalPage);

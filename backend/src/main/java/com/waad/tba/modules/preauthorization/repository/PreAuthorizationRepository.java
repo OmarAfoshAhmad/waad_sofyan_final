@@ -335,4 +335,26 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
 
        @Query("SELECT DISTINCT p.memberId FROM PreAuthorization p WHERE p.memberId IN :memberIds AND p.active = true")
        List<Long> findMemberIdsWithPreAuths(@Param("memberIds") java.util.Collection<Long> memberIds);
+
+       /**
+        * Scalable operational report query.
+        * Optional filters are applied in the database so reports do not fetch a huge
+        * client-side slice and then filter in the browser.
+        */
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true " +
+                     "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
+                     "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true " +
+                     "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
+                     "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)")
+       Page<PreAuthorization> findForOperationalReport(
+                     @Param("status") PreAuthStatus status,
+                     @Param("dateFrom") LocalDate dateFrom,
+                     @Param("dateTo") LocalDate dateTo,
+                     Pageable pageable);
 }

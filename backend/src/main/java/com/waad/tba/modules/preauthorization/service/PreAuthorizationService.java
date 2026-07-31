@@ -1062,6 +1062,20 @@ public class PreAuthorizationService {
     }
 
     /**
+     * Get pre-authorizations for operational reports with database-side filters.
+     */
+    @Transactional(readOnly = true)
+    public Page<PreAuthorizationResponseDto> getOperationalReport(
+            PreAuthStatus status,
+            LocalDate dateFrom,
+            LocalDate dateTo,
+            Pageable pageable) {
+        Page<PreAuthorization> preAuths = preAuthorizationRepository.findForOperationalReport(
+                status, dateFrom, dateTo, pageable);
+        return preAuths.map(this::mapToResponseDtoLight);
+    }
+
+    /**
      * Get pre-authorizations by member
      */
     @Transactional(readOnly = true)

@@ -131,7 +131,9 @@ const PreApprovalsTable = ({ preApprovals, loading, totalCount, page, rowsPerPag
     return [...preApprovals].sort(getComparator(sortBy, sortDirection));
   }, [preApprovals, sortBy, sortDirection]);
 
-  const paginatedRows = sortedRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  // Rows are already paginated by the backend. Do not slice again, otherwise
+  // page 2+ would become empty because the current page only contains its own rows.
+  const paginatedRows = sortedRows;
 
   const handleSort = (columnId, direction) => {
     setSortBy(columnId);

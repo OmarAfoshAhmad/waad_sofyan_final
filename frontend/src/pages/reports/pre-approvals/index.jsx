@@ -76,7 +76,9 @@ const PreApprovalsReport = () => {
   const { preApprovals, totalCount, totalFetched, loading, error, pagination, refetch } = usePreApprovalsReport({
     employerId: effectiveEmployerId,
     providerId: selectedProviderId,
-    filters
+    filters,
+    page,
+    size: rowsPerPage
   });
 
   // Check if we have partial data
