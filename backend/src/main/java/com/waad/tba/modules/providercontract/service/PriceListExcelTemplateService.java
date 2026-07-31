@@ -5,6 +5,7 @@ import com.waad.tba.common.excel.dto.ExcelImportResult.ImportError;
 import com.waad.tba.common.excel.dto.ExcelImportResult.ImportError.ErrorType;
 import com.waad.tba.common.excel.dto.ExcelImportResult.ImportSummary;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.medicaldictionary.dto.MedicalDictionaryMatchResponse;
 import com.waad.tba.modules.medicaldictionary.dto.MedicalDictionarySuggestionRequest;
 import com.waad.tba.modules.medicaldictionary.enums.DictionarySuggestionSource;
 import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryService;
@@ -45,6 +46,8 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class PriceListExcelTemplateService {
+
+    private static final int DICTIONARY_REVIEW_HINT_CONFIDENCE_THRESHOLD = 70;
 
     private static final String IMPORT_RUNTIME_MARKER = "PriceListImport-v2026-04-24-01";
 
@@ -803,12 +806,30 @@ public class PriceListExcelTemplateService {
             suggestion.setSource(DictionarySuggestionSource.PRICE_LIST_IMPORT);
             suggestion.setConfidence(40);
             suggestion.setSourceReference("provider-contract:" + contractId + ";row:" + rowNum);
+
+            bestDictionaryMatch(serviceName).ifPresent(match -> {
+                suggestion.setSuggestedEntryId(match.getEntryId());
+                suggestion.setSuggestedCategoryId(match.getMedicalCategoryId());
+                suggestion.setConfidence(match.getConfidence());
+            });
+
             medicalDictionaryService.createSuggestion(suggestion);
             log.info("[PriceListImport] Registered dictionary suggestion for unclassified service '{}' (category='{}', sub='{}')",
                     serviceName, rawCategoryName, rawSubCategoryName);
         } catch (Exception ex) {
             log.warn("[PriceListImport] Could not register dictionary suggestion for '{}': {}", serviceName, ex.getMessage());
         }
+    }
+
+    private Optional<MedicalDictionaryMatchResponse> bestDictionaryMatch(String serviceName) {
+        if (medicalDictionaryService == null || serviceName == null || serviceName.isBlank()) {
+            return Optional.empty();
+        }
+
+        return medicalDictionaryService.match(serviceName).stream()
+                .filter(match -> match.getConfidence() != null)
+                .filter(match -> match.getConfidence() >= DICTIONARY_REVIEW_HINT_CONFIDENCE_THRESHOLD)
+                .findFirst();
     }
 
     /**
