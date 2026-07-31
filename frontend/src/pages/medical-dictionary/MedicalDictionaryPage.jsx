@@ -14,6 +14,8 @@ import {
   MenuItem,
   Select,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -59,6 +61,7 @@ export default function MedicalDictionaryPage() {
   const [synonymDrawerEntry, setSynonymDrawerEntry] = useState(null);
   const [synonymsPage, setSynonymsPage] = useState(null);
   const [synonymsLoading, setSynonymsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('dictionary');
   const [createForm, setCreateForm] = useState({
     canonicalName: '',
     medicalCategoryId: '',
@@ -253,6 +256,22 @@ export default function MedicalDictionaryPage() {
         </Alert>
 
         <Card>
+          <Tabs
+            value={activeTab}
+            onChange={(_, value) => setActiveTab(value)}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab value="dictionary" label={`القاموس (${entriesTotal})`} />
+            <Tab value="match" label="اختبار المطابقة" />
+            <Tab value="suggestions" label={`اقتراحات المراجعة (${suggestions.length})`} />
+          </Tabs>
+        </Card>
+
+        {activeTab === 'dictionary' && (
+          <Stack spacing={3}>
+        <Card>
           <CardContent>
             <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
               إضافة اسم موحد للقاموس
@@ -300,50 +319,25 @@ export default function MedicalDictionaryPage() {
           </CardContent>
         </Card>
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={7}>
-            <Card>
-              <CardContent>
-                <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
-                  البحث في الاسم الموحد والمرادفات
-                </Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                  <TextField
-                    fullWidth
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="ابحث: MRI، رنين، تحليل CBC، علاج طبيعي..."
-                  />
-                  <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch}>
-                    بحث
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={5}>
-            <Card>
-              <CardContent>
-                <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
-                  اختبار مطابقة نص خدمة
-                </Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                  <TextField
-                    fullWidth
-                    value={matchText}
-                    onChange={(e) => setMatchText(e.target.value)}
-                    placeholder="مثال: رنين مغناطيسي للركبة"
-                  />
-                  <Button variant="outlined" onClick={handleMatch} disabled={matching}>
-                    {matching ? <CircularProgress size={20} /> : 'طابق'}
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <Card>
+          <CardContent>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+              البحث في الاسم الموحد والمرادفات
+            </Typography>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+              <TextField
+                fullWidth
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder="ابحث: MRI، رنين، تحليل CBC، علاج طبيعي..."
+              />
+              <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSearch}>
+                بحث
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent>
@@ -387,6 +381,34 @@ export default function MedicalDictionaryPage() {
           </CardContent>
         </Card>
 
+          </Stack>
+        )}
+
+        {activeTab === 'match' && (
+          <Stack spacing={3}>
+            <Card>
+              <CardContent>
+                <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+                  اختبار مطابقة نص خدمة
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  اكتب اسم خدمة كما يرد من المرفق الطبي لترى أفضل تصنيف مقترح من القاموس. النتيجة هنا لا تعتمد أي مبلغ مالياً.
+                </Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                  <TextField
+                    fullWidth
+                    value={matchText}
+                    onChange={(e) => setMatchText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleMatch()}
+                    placeholder="مثال: رنين مغناطيسي للركبة"
+                  />
+                  <Button variant="contained" onClick={handleMatch} disabled={matching}>
+                    {matching ? <CircularProgress size={20} /> : 'طابق'}
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+
         {matches.length > 0 && (
           <Card>
             <CardContent>
@@ -406,7 +428,10 @@ export default function MedicalDictionaryPage() {
             </CardContent>
           </Card>
         )}
+          </Stack>
+        )}
 
+        {activeTab === 'suggestions' && (
         <Card>
           <CardContent>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
@@ -470,7 +495,9 @@ export default function MedicalDictionaryPage() {
             </TableContainer>
           </CardContent>
         </Card>
+        )}
 
+        {activeTab === 'dictionary' && (
         <Card>
           <CardContent>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
@@ -541,6 +568,7 @@ export default function MedicalDictionaryPage() {
             </TableContainer>
           </CardContent>
         </Card>
+        )}
 
         <Drawer
           anchor="left"
