@@ -92,6 +92,7 @@ import benefitPoliciesService from 'services/api/benefit-policies.service';
 import * as medicalCategoriesService from 'services/api/medical-categories.service';
 import providerContractsService from 'services/api/provider-contracts.service';
 import claimBatchesService from 'services/api/claim-batches.service';
+import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { claimRejectionReasonsService } from 'services/api/claim-rejection-reasons.service';
 import systemSettingsService from 'services/api/systemSettings.service';
 import { normalizeApiError, runWithRetry } from 'utils/api-error';
@@ -1174,6 +1175,45 @@ export default function ClaimBatchEntry() {
     });
   }, [lines]);
 
+  const sendLineToMedicalDictionary = useCallback(
+    async (idx) => {
+      const line = lines[idx];
+      const serviceName = (line?.serviceName || line?.service?.serviceName || line?.service?.name || '').trim();
+      const categoryId =
+        line?.appliedCategoryId ??
+        line?.serviceCategoryId ??
+        line?.categoryId ??
+        line?.service?.serviceCategoryId ??
+        line?.service?.categoryId ??
+        line?.service?.medicalCategoryId ??
+        null;
+
+      if (!serviceName) {
+        enqueueSnackbar('لا يمكن إرسال بند بلا اسم خدمة إلى القاموس الطبي', { variant: 'warning' });
+        return;
+      }
+
+      if (!categoryId) {
+        enqueueSnackbar('لا يمكن إرسال البند للقاموس قبل توفر تصنيف طبي مقترح', { variant: 'warning' });
+        return;
+      }
+
+      try {
+        await medicalDictionaryService.createDictionarySuggestion({
+          originalText: serviceName,
+          suggestedCategoryId: Number(categoryId),
+          source: 'CLAIM_REVIEW',
+          confidence: 90,
+          sourceReference: `claim:${editingClaimId || 'draft'};line:${idx + 1}`
+        });
+        enqueueSnackbar('تم إرسال البند للقاموس الطبي كاقتراح مراجعة دون التأثير على الحساب المالي', { variant: 'success' });
+      } catch (err) {
+        enqueueSnackbar(err?.response?.data?.message || 'تعذر إرسال البند للقاموس الطبي', { variant: 'error' });
+      }
+    },
+    [editingClaimId, enqueueSnackbar, lines]
+  );
+
   const incompatibleContextLines = useMemo(
     () =>
       lines
@@ -2184,6 +2224,7 @@ export default function ClaimBatchEntry() {
                       visibleColumns={visibleColumns}
                       triggerConfirm={triggerConfirm}
                       onOpenCustomServiceDialog={() => handleOpenCustomServiceDialog(line.id)}
+                      onSendToDictionary={sendLineToMedicalDictionary}
                     />
                   ))}
                   <TableRow>

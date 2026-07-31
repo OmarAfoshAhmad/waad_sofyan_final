@@ -27,7 +27,8 @@ import {
   Delete as DeleteIcon,
   WarningAmber as WarningIcon,
   Add as AddIcon,
-  MedicalServices as MedicalServicesIcon
+  MedicalServices as MedicalServicesIcon,
+  MenuBook as DictionaryIcon
 } from '@mui/icons-material';
 
 const inlineSx = {
@@ -55,7 +56,8 @@ export const ClaimLineRow = ({
     patientShare: true
   },
   triggerConfirm,
-  onOpenCustomServiceDialog
+  onOpenCustomServiceDialog,
+  onSendToDictionary
 }) => {
   const priceRefused = parseFloat(line.priceRefused) || 0;
   const limitRefused = parseFloat(line.limitRefused) || 0;
@@ -364,6 +366,20 @@ export const ClaimLineRow = ({
         </TableCell>
         <TableCell align="left">
           <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
+            {onSendToDictionary && (
+              <Tooltip title="إرسال اسم الخدمة والتصنيف الحالي للقاموس الطبي كاقتراح مراجعة غير مالي" arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    disabled={!line.serviceName && !line.service?.serviceName && !line.service?.name}
+                    onClick={() => onSendToDictionary(idx)}
+                  >
+                    <DictionaryIcon sx={{ fontSize: '0.9375rem' }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
             <Tooltip title={line.rejected ? 'إلغاء الرفض الكلي' : line.manualRefusedAmount > 0 ? 'إلغاء الرفض الجزئي' : 'رفض البند'} arrow>
               <IconButton
                 size="small"
