@@ -25,6 +25,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 
 const normalizeText = (value) => (value == null ? '' : String(value).trim());
@@ -123,12 +124,34 @@ const exportRows = (items) => {
   XLSX.writeFile(workbook, 'تصنيف_قائمة_أسعار_بالقاموس.xlsx');
 };
 
+const downloadTemplate = () => {
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet([
+    {
+      service_code: 'SRV-001',
+      service_name: 'مثال: تحليل CBC',
+      contract_price: 25,
+      notes: 'اختياري'
+    },
+    {
+      service_code: 'SRV-002',
+      service_name: 'مثال: رنين مغناطيسي',
+      contract_price: 900,
+      notes: 'اختياري'
+    }
+  ]);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'price_list');
+  XLSX.writeFile(workbook, 'قالب_تنظيم_قائمة_الأسعار.xlsx');
+};
+
 export default function PriceListClassifierPage() {
   const [fileName, setFileName] = useState('');
   const [rawRows, setRawRows] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
 
   const items = result?.items || [];
@@ -146,6 +169,7 @@ export default function PriceListClassifierPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     setError('');
+    setSuccess('');
     setResult(null);
     setFileName(file.name);
 
@@ -166,6 +190,7 @@ export default function PriceListClassifierPage() {
     if (!rawRows.length) return;
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       const response = await medicalDictionaryService.classifyPriceListWithDictionary({ rows: rawRows });
       setResult(response);
@@ -173,6 +198,37 @@ export default function PriceListClassifierPage() {
       setError(err?.response?.data?.message || 'فشل تصنيف قائمة الأسعار بالقاموس');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const promoteReviewRowsToDictionarySuggestions = async () => {
+    const reviewRows = items.filter((item) => item.status !== 'HIGH_CONFIDENCE');
+    if (!reviewRows.length) {
+      setSuccess('لا توجد خدمات تحتاج ترحيل للاقتراحات.');
+      return;
+    }
+
+    setPromoting(true);
+    setError('');
+    setSuccess('');
+    try {
+      let created = 0;
+      for (const item of reviewRows) {
+        await medicalDictionaryService.createDictionarySuggestion({
+          originalText: item.serviceName,
+          suggestedEntryId: item.bestMatch?.entryId || null,
+          suggestedCategoryId: item.bestMatch?.medicalCategoryId || null,
+          source: 'PRICE_LIST_IMPORT',
+          confidence: item.bestMatch?.confidence || 0,
+          sourceReference: `${fileName || 'price-list'} | ${item.sourceSheet || '-'} | row ${item.rowNumber || '-'}`
+        });
+        created += 1;
+      }
+      setSuccess(`تم ترحيل ${created} خدمة إلى اقتراحات القاموس للمراجعة، بدون اعتماد تلقائي.`);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'فشل ترحيل الخدمات إلى اقتراحات القاموس');
+    } finally {
+      setPromoting(false);
     }
   };
 
@@ -205,6 +261,9 @@ export default function PriceListClassifierPage() {
                 <Button component="label" variant="contained" startIcon={<CloudUploadIcon />} fullWidth>
                   اختيار ملف Excel
                   <input hidden type="file" accept=".xlsx,.xls" onChange={handleFile} />
+                </Button>
+                <Button sx={{ mt: 1 }} variant="outlined" startIcon={<FileDownloadIcon />} onClick={downloadTemplate} fullWidth>
+                  تحميل قالب قياسي
                 </Button>
                 {fileName && <Chip sx={{ mt: 2 }} label={fileName} variant="outlined" />}
               </CardContent>
@@ -259,6 +318,7 @@ export default function PriceListClassifierPage() {
 
         {loading && <LinearProgress />}
         {error && <Alert severity="error">{error}</Alert>}
+        {success && <Alert severity="success">{success}</Alert>}
 
         {result && (
           <Card>
@@ -283,13 +343,26 @@ export default function PriceListClassifierPage() {
 
               <Divider sx={{ my: 2 }} />
 
-              <TextField
-                fullWidth
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="بحث داخل النتائج: اسم الخدمة، التصنيف، الكود، الحالة..."
-                sx={{ mb: 2 }}
-              />
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+                <TextField
+                  fullWidth
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="بحث داخل النتائج: اسم الخدمة، التصنيف، الكود، الحالة..."
+                />
+                <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={downloadTemplate}>
+                  قالب Excel
+                </Button>
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={promoting ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
+                  disabled={!items.some((item) => item.status !== 'HIGH_CONFIDENCE') || promoting}
+                  onClick={promoteReviewRowsToDictionarySuggestions}
+                >
+                  ترحيل للمراجعة
+                </Button>
+              </Stack>
 
               <TableContainer sx={{ maxHeight: 620 }}>
                 <Table stickyHeader size="small">
