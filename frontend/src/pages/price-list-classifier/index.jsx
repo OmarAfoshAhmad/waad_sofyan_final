@@ -137,47 +137,64 @@ const exportRows = (items) => {
   XLSX.writeFile(workbook, 'تصنيف_قائمة_أسعار_بالقاموس.xlsx');
 };
 
-const exportProviderContractReadyRows = (items) => {
+const appendCategoriesLookupSheet = (workbook, categories = []) => {
+  const lookup = categories.map((category) => ({
+    medical_category_id: category.id,
+    medical_category_code: category.code || '',
+    medical_category_name: category.nameAr || category.name || '',
+    medical_category_name_en: category.nameEn || ''
+  }));
+  const worksheet = XLSX.utils.json_to_sheet(lookup);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'التصنيفات المتاحة');
+};
+
+const exportProviderContractReadyRows = (items, categories = []) => {
   const acceptedItems = items.filter((item) => getEffectiveCategory(item)?.medicalCategoryId);
   const data = acceptedItems.map((item) => ({
-    service_code: item.serviceCode || '',
     service_name: item.bestMatch?.canonicalName || item.serviceName,
-    original_service_name: item.serviceName,
-    medical_category_id: getEffectiveCategory(item)?.medicalCategoryId || '',
+    service_code: item.serviceCode || '',
+    contract_price: item.price ?? '',
     medical_category_code: getEffectiveCategory(item)?.medicalCategoryCode || '',
     medical_category_name: getEffectiveCategory(item)?.medicalCategoryName || '',
-    contract_price: item.price ?? '',
-    base_price: item.price ?? '',
-    classification_confidence: item.bestMatch?.confidence ?? '',
-    review_status: getEffectiveStatusLabel(item),
-    manual_override: item.manualCategory ? 'YES' : 'NO',
-    source_sheet: item.sourceSheet,
-    source_row: item.rowNumber
+    notes: [
+      item.serviceName && item.bestMatch?.canonicalName && item.serviceName !== item.bestMatch.canonicalName ? `الأصل: ${item.serviceName}` : '',
+      `الثقة: ${item.bestMatch?.confidence ?? '-'}`,
+      `الحالة: ${getEffectiveStatusLabel(item)}`,
+      `المصدر: ${item.sourceSheet || '-'} صف ${item.rowNumber || '-'}`
+    ]
+      .filter(Boolean)
+      .join(' | ')
   }));
 
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'provider_contract_import');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Pricing_Template');
+  appendCategoriesLookupSheet(workbook, categories);
   XLSX.writeFile(workbook, 'قائمة_أسعار_جاهزة_مبدئياً_لعقد_مقدم_خدمة.xlsx');
 };
 
-const downloadTemplate = () => {
+const downloadTemplate = (categories = []) => {
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet([
     {
-      service_code: 'SRV-001',
       service_name: 'مثال: تحليل CBC',
+      service_code: 'SRV-001',
       contract_price: 25,
+      medical_category_code: 'CAT-LAB',
+      medical_category_name: 'التحاليل الطبية والمختبرات',
       notes: 'اختياري'
     },
     {
-      service_code: 'SRV-002',
       service_name: 'مثال: رنين مغناطيسي',
+      service_code: 'SRV-002',
       contract_price: 900,
+      medical_category_code: 'CAT-IMG-ADV',
+      medical_category_name: 'التصوير بالرنين المغناطيسي والمقطعي والطبقي',
       notes: 'اختياري'
     }
   ]);
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'price_list');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Pricing_Template');
+  appendCategoriesLookupSheet(workbook, categories);
   XLSX.writeFile(workbook, 'قالب_تنظيم_قائمة_الأسعار.xlsx');
 };
 
@@ -408,7 +425,7 @@ export default function PriceListClassifierPage() {
                   اختيار ملف Excel
                   <input hidden type="file" accept=".xlsx,.xls" onChange={handleFile} />
                 </Button>
-                <Button sx={{ mt: 1 }} variant="outlined" startIcon={<FileDownloadIcon />} onClick={downloadTemplate} fullWidth>
+                <Button sx={{ mt: 1 }} variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)} fullWidth>
                   تحميل قالب قياسي
                 </Button>
                 {fileName && <Chip sx={{ mt: 2 }} label={fileName} variant="outlined" />}
@@ -463,7 +480,7 @@ export default function PriceListClassifierPage() {
                   color="success"
                   startIcon={<FileDownloadIcon />}
                   disabled={!items.some((item) => item.bestMatch?.medicalCategoryId)}
-                  onClick={() => exportProviderContractReadyRows(items)}
+                  onClick={() => exportProviderContractReadyRows(items, categories)}
                   fullWidth
                 >
                   تصدير للعقود
@@ -520,7 +537,7 @@ export default function PriceListClassifierPage() {
                   <MenuItem value="NEEDS_REVIEW">تحتاج مراجعة</MenuItem>
                   <MenuItem value="UNKNOWN">غير معروف</MenuItem>
                 </Select>
-                <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={downloadTemplate}>
+                <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)}>
                   قالب Excel
                 </Button>
                 <Button
@@ -528,7 +545,7 @@ export default function PriceListClassifierPage() {
                   color="success"
                   startIcon={<FileDownloadIcon />}
                   disabled={!items.some((item) => item.bestMatch?.medicalCategoryId)}
-                  onClick={() => exportProviderContractReadyRows(items)}
+                  onClick={() => exportProviderContractReadyRows(items, categories)}
                 >
                   تصدير للعقود
                 </Button>
