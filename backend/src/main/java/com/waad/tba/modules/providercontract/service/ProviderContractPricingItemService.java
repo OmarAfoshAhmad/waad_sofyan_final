@@ -213,6 +213,7 @@ public class ProviderContractPricingItemService {
         if (contractPrice == null || contractPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessRuleException("Contract price must be greater than zero");
         }
+        BigDecimal maxContractPrice = normalizeMaxContractPrice(contractPrice, dto.getMaxContractPrice());
 
         // Build entity (MedicalService FK removed in V229)
         ProviderContractPricingItem item = ProviderContractPricingItem.builder()
@@ -223,6 +224,7 @@ public class ProviderContractPricingItemService {
                 .serviceName(dto.getServiceName())
                 .basePrice(basePrice)
                 .contractPrice(contractPrice)
+                .maxContractPrice(maxContractPrice)
                 .effectiveFrom(dto.getEffectiveFrom() != null ? dto.getEffectiveFrom() : java.time.LocalDate.now())
                 .effectiveTo(dto.getEffectiveTo())
                 .notes(dto.getNotes())
@@ -234,6 +236,16 @@ public class ProviderContractPricingItemService {
 
         log.info("Added pricing item {} to contract: {}", item.getId(), contract.getContractCode());
         return ProviderContractPricingItemResponseDto.fromEntity(item);
+    }
+
+    private BigDecimal normalizeMaxContractPrice(BigDecimal minContractPrice, BigDecimal maxContractPrice) {
+        if (maxContractPrice == null || maxContractPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return minContractPrice;
+        }
+        if (minContractPrice != null && maxContractPrice.compareTo(minContractPrice) < 0) {
+            throw new BusinessRuleException("الحد الأعلى للسعر التعاقدي لا يجوز أن يكون أقل من الحد الأدنى");
+        }
+        return maxContractPrice;
     }
 
     /**
@@ -288,6 +300,12 @@ public class ProviderContractPricingItemService {
                 throw new BusinessRuleException("Contract price must be greater than zero");
             }
             item.setContractPrice(dto.getContractPrice());
+        }
+        if (dto.getMaxContractPrice() != null) {
+            item.setMaxContractPrice(normalizeMaxContractPrice(item.getContractPrice(), dto.getMaxContractPrice()));
+        } else if (item.getMaxContractPrice() != null && item.getContractPrice() != null
+                && item.getMaxContractPrice().compareTo(item.getContractPrice()) < 0) {
+            item.setMaxContractPrice(item.getContractPrice());
         }
         if (dto.getEffectiveFrom() != null) {
             item.setEffectiveFrom(dto.getEffectiveFrom());
@@ -425,6 +443,7 @@ public class ProviderContractPricingItemService {
                         .categoryId(categoryId)
                         .categoryName(p.getMedicalCategory().getName())
                         .contractPrice(p.getContractPrice())
+                        .maxContractPrice(p.getMaxContractPrice())
                         .basePrice(p.getBasePrice())
                         .discountPercent(p.getDiscountPercent())
                         .encounterType(p.getEncounterType() != null ? p.getEncounterType().name() : "ANY")
@@ -472,6 +491,7 @@ public class ProviderContractPricingItemService {
                             .categoryId(resolvedCategoryId)
                             .categoryName(resolvedCategoryName)
                             .contractPrice(p.getContractPrice())
+                            .maxContractPrice(p.getMaxContractPrice())
                             .basePrice(p.getBasePrice())
                             .discountPercent(p.getDiscountPercent())
                             .encounterType(p.getEncounterType() != null ? p.getEncounterType().name() : "ANY")
@@ -627,6 +647,7 @@ public class ProviderContractPricingItemService {
         private Long categoryId;
         private String categoryName;
         private BigDecimal contractPrice;
+        private BigDecimal maxContractPrice;
         private BigDecimal basePrice;
         private BigDecimal discountPercent;
         private String encounterType;

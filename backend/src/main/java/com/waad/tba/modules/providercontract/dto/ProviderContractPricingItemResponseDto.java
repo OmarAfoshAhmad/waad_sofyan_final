@@ -51,6 +51,7 @@ public class ProviderContractPricingItemResponseDto {
     // Pricing
     private BigDecimal basePrice;
     private BigDecimal contractPrice;
+    private BigDecimal maxContractPrice;
     private BigDecimal discountPercent;
     private BigDecimal savingsAmount;
     private String encounterType;
@@ -137,6 +138,7 @@ public class ProviderContractPricingItemResponseDto {
                 .effectiveCategory(effectiveCategoryDto)
                 .basePrice(entity.getBasePrice())
                 .contractPrice(entity.getContractPrice())
+                .maxContractPrice(entity.getMaxContractPrice())
                 .discountPercent(entity.getDiscountPercent())
                 .savingsAmount(entity.getSavingsAmount())
                 .encounterType(entity.getEncounterType() != null ? entity.getEncounterType().name() : "ANY")

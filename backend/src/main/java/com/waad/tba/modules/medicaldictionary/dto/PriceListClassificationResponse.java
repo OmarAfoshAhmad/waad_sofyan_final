@@ -30,6 +30,9 @@ public class PriceListClassificationResponse {
         private String serviceCode;
         private String serviceName;
         private BigDecimal price;
+        private BigDecimal minPrice;
+        private BigDecimal maxPrice;
+        private String priceLabel;
         private String status;
         private String statusLabel;
         private MedicalDictionaryMatchResponse bestMatch;

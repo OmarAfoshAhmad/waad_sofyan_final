@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * ClaimLine DTO (CANONICAL REBUILD 2026-01-16)
@@ -67,6 +68,14 @@ public class ClaimLineDto {
      * Service category name
      */
     private String serviceCategoryName;
+
+    private Long originalServiceCategoryId;
+    private String originalServiceCategoryName;
+    private Boolean classificationReviewed;
+    private String classificationReviewSource;
+    private Long classificationReviewedBy;
+    private LocalDateTime classificationReviewedAt;
+    private String classificationReviewNote;
 
     /**
      * Unit price from Provider Contract (READ-ONLY)

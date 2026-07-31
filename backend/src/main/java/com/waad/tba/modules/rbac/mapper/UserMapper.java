@@ -18,6 +18,13 @@ public class UserMapper {
                 .phone(user.getPhone())
                 .active(user.getActive())
                 .role(user.getUserType() != null ? user.getUserType() : "DATA_ENTRY")
+                .employerId(user.getEmployerId())
+                .providerId(user.getProviderId())
+                .canViewClaims(user.getCanViewClaims())
+                .canViewVisits(user.getCanViewVisits())
+                .canViewReports(user.getCanViewReports())
+                .canViewMembers(user.getCanViewMembers())
+                .canViewBenefitPolicies(user.getCanViewBenefitPolicies())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
@@ -61,6 +68,21 @@ public class UserMapper {
         }
         if (dto.getProviderId() != null) {
             user.setProviderId(dto.getProviderId());
+        }
+        if (dto.getCanViewClaims() != null) {
+            user.setCanViewClaims(dto.getCanViewClaims());
+        }
+        if (dto.getCanViewVisits() != null) {
+            user.setCanViewVisits(dto.getCanViewVisits());
+        }
+        if (dto.getCanViewReports() != null) {
+            user.setCanViewReports(dto.getCanViewReports());
+        }
+        if (dto.getCanViewMembers() != null) {
+            user.setCanViewMembers(dto.getCanViewMembers());
+        }
+        if (dto.getCanViewBenefitPolicies() != null) {
+            user.setCanViewBenefitPolicies(dto.getCanViewBenefitPolicies());
         }
     }
 }

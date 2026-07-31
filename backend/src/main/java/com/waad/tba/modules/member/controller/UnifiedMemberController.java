@@ -116,6 +116,9 @@ import java.util.Map;
 @PreAuthorize("isAuthenticated()")
 public class UnifiedMemberController {
 
+        private static final int DEFAULT_PAGE_SIZE = 20;
+        private static final int MAX_PAGE_SIZE = 200;
+
         private final UnifiedMemberService unifiedMemberService;
         private final UnifiedSearchService unifiedSearchService;
         private final MemberFinancialSummaryService financialSummaryService;
@@ -442,8 +445,7 @@ public class UnifiedMemberController {
                 log.info("Retrieving all Members: page={}, size={}, employerId={}, status={}, type={}",
                                 page, size, employerId, status, type);
 
-                Sort.Direction sortDirection = Sort.Direction.fromString(direction != null ? direction : "DESC");
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+                Pageable pageable = safePageRequest(page, size, sort, direction);
 
                 Page<MemberViewDto> members = unifiedMemberService.getAllMembers(
                                 pageable, employerId, status, type);
@@ -530,8 +532,7 @@ public class UnifiedMemberController {
                 String searchNameAr = (fullName != null && !fullName.trim().isEmpty()) ? fullName : nameAr;
                 String searchNameEn = (fullName != null && !fullName.trim().isEmpty()) ? fullName : nameEn;
 
-                Sort.Direction sortDirection = Sort.Direction.fromString(direction != null ? direction : "DESC");
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+                Pageable pageable = safePageRequest(page, size, sort, direction);
 
                 Page<MemberViewDto> results = unifiedMemberService.searchMembers(
                                 searchNameAr, searchNameEn, civilId, barcode, cardNumber,
@@ -540,6 +541,14 @@ public class UnifiedMemberController {
                 log.info("Search completed: found {} results", results.getTotalElements());
 
                 return ResponseEntity.ok(results);
+        }
+
+        private Pageable safePageRequest(int page, int size, String sort, String direction) {
+                int safePage = Math.max(0, page);
+                int safeSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+                String safeSort = sort == null || sort.isBlank() ? "id" : sort;
+                Sort.Direction safeDirection = Sort.Direction.fromString(direction != null ? direction : "DESC");
+                return PageRequest.of(safePage, safeSize, Sort.by(safeDirection, safeSort));
         }
 
         /**

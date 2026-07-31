@@ -70,10 +70,6 @@ public class AuthorizationService {
         return roleService.isSuperAdmin(user);
     }
 
-    public boolean isInsuranceAdmin(User user) {
-        return roleService.isInsuranceAdmin(user);
-    }
-
     public boolean isEmployerAdmin(User user) {
         return roleService.isEmployerAdmin(user);
     }
@@ -88,6 +84,14 @@ public class AuthorizationService {
 
     public boolean isDataEntry(User user) {
         return roleService.isDataEntry(user);
+    }
+
+    public boolean canAccessInternalOperations(User user) {
+        return roleService.canAccessInternalOperations(user);
+    }
+
+    public boolean isFinancialUser(User user) {
+        return roleService.isFinancialUser(user);
     }
 
     public boolean isInternalStaff(User user) {

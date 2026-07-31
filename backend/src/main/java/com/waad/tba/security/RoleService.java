@@ -15,13 +15,6 @@ public class RoleService {
         return "SUPER_ADMIN".equals(user.getUserType());
     }
 
-    public boolean isInsuranceAdmin(User user) {
-        if (user == null || user.getUserType() == null) {
-            return false;
-        }
-        return "SUPER_ADMIN".equals(user.getUserType()) || "ACCOUNTANT".equals(user.getUserType());
-    }
-
     public boolean isEmployerAdmin(User user) {
         if (user == null || user.getUserType() == null) {
             return false;
@@ -50,7 +43,18 @@ public class RoleService {
         return "DATA_ENTRY".equals(user.getUserType());
     }
 
+    public boolean isFinancialUser(User user) {
+        if (user == null || user.getUserType() == null) {
+            return false;
+        }
+        return "ACCOUNTANT".equals(user.getUserType()) || "FINANCE_VIEWER".equals(user.getUserType());
+    }
+
+    public boolean canAccessInternalOperations(User user) {
+        return isSuperAdmin(user) || isReviewer(user) || isDataEntry(user);
+    }
+
     public boolean isInternalStaff(User user) {
-        return isSuperAdmin(user) || isInsuranceAdmin(user) || isReviewer(user) || isDataEntry(user);
+        return canAccessInternalOperations(user) || isFinancialUser(user);
     }
 }

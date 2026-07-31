@@ -65,7 +65,8 @@ const MedicalAuditLogs = () => {
     data: logData,
     isPending: isLoading,
     refetch,
-    isFetching
+    isFetching,
+    error: loadError
   } = useQuery({
     queryKey: ['medical-audit-logs', tableState.page, tableState.pageSize, claimId, correlationId],
     queryFn: () =>
@@ -137,11 +138,19 @@ const MedicalAuditLogs = () => {
   };
 
   const getActionColor = (action) => {
-    if (action.includes('VOID') || action.includes('DELETE')) return 'error';
-    if (action.includes('APPROVE')) return 'success';
-    if (action.includes('CREATE')) return 'primary';
-    if (action.includes('REJECT')) return 'warning';
+    const value = String(action || '');
+    if (value.includes('VOID') || value.includes('DELETE')) return 'error';
+    if (value.includes('APPROVE')) return 'success';
+    if (value.includes('CREATE')) return 'primary';
+    if (value.includes('REJECT')) return 'warning';
     return 'default';
+  };
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '—';
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString('ar-LY');
   };
 
   const logs = logData?.items || [];
@@ -198,6 +207,12 @@ const MedicalAuditLogs = () => {
           </Stack>
         </CardContent>
       </MainCard>
+
+      {loadError && (
+        <Alert severity="error">
+          {loadError?.message || 'تعذر تحميل سجل التدقيق الطبي. تحقق من صلاحيات المستخدم أو اتصال الخادم.'}
+        </Alert>
+      )}
 
       <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
         {isFetching && <LinearProgress sx={{ height: 2 }} />}
@@ -259,7 +274,7 @@ const MedicalAuditLogs = () => {
                       <Checkbox checked={isItemSelected} />
                     </TableCell>
                     <TableCell align="right" dir="ltr" sx={{ fontSize: '0.8rem' }}>
-                      {new Date(log.timestamp).toLocaleString('ar-LY')}
+                      {formatTimestamp(log.timestamp)}
                     </TableCell>
                     <TableCell align="right">
                       <Chip

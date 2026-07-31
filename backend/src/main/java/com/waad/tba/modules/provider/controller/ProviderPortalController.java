@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.modules.provider.dto.EffectivePriceResponseDto;
 import com.waad.tba.modules.provider.dto.ProviderClaimRequest;
 import com.waad.tba.modules.provider.dto.ProviderClaimResponse;
@@ -82,6 +83,7 @@ public class ProviderPortalController {
     @Qualifier("providerContractModuleService")
     private final com.waad.tba.modules.providercontract.service.ProviderContractService modernContractService;
     private final ProviderContractPricingItemService pricingItemService;
+    private final FeatureGuard featureGuard;
     
     // For medical categories (used in claims/pre-approval forms)
     private final com.waad.tba.modules.medicaltaxonomy.service.MedicalCategoryService medicalCategoryService;
@@ -258,6 +260,9 @@ public class ProviderPortalController {
     )
     public ResponseEntity<ProviderClaimResponse> submitClaim(
             @Valid @RequestBody ProviderClaimRequest request) {
+
+        featureGuard.requireProviderPortal();
+        featureGuard.requireDirectClaimSubmission();
         
         String provider = authorizationService.getCurrentUser() != null 
             ? authorizationService.getCurrentUser().getUsername() 
@@ -349,6 +354,9 @@ public class ProviderPortalController {
     public ResponseEntity<ProviderClaimResponse> submitClaimWithAttachments(
             @RequestPart("claim") String claimJson,
             @RequestPart(value = "files", required = false) MultipartFile[] files) {
+
+        featureGuard.requireProviderPortal();
+        featureGuard.requireDirectClaimSubmission();
         
         String provider = authorizationService.getCurrentUser() != null 
             ? authorizationService.getCurrentUser().getUsername() 
@@ -1051,6 +1059,7 @@ public class ProviderPortalController {
                         .categoryCode(categoryCode)
                         .categoryName(categoryName)
                         .contractPrice(item.getContractPrice())
+                        .maxContractPrice(item.getMaxContractPrice())
                         .currency(item.getCurrency())
                         .effectiveFrom(item.getEffectiveFrom())
                         .effectiveTo(item.getEffectiveTo())
@@ -1184,6 +1193,7 @@ public class ProviderPortalController {
                         .serviceName(serviceName)
                         .categoryName(categoryName)
                         .contractPrice(item.getContractPrice())
+                        .maxContractPrice(item.getMaxContractPrice())
                         .currency(item.getCurrency())
                         .effectiveFrom(item.getEffectiveFrom())
                         .effectiveTo(item.getEffectiveTo())
@@ -1248,6 +1258,7 @@ public class ProviderPortalController {
         private String categoryCode;
         private String categoryName;
         private java.math.BigDecimal contractPrice;
+        private java.math.BigDecimal maxContractPrice;
         private String currency;
         private LocalDate effectiveFrom;
         private LocalDate effectiveTo;
@@ -1355,6 +1366,7 @@ public class ProviderPortalController {
                 .categoryCode(categoryCode)
                 .categoryName(categoryName)
                 .contractPrice(pricingItem.getContractPrice())
+                .maxContractPrice(pricingItem.getMaxContractPrice())
                 .currency(pricingItem.getCurrency())
                 .effectiveFrom(pricingItem.getEffectiveFrom())
                 .effectiveTo(pricingItem.getEffectiveTo())

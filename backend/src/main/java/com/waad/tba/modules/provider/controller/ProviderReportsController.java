@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.provider.dto.ProviderClaimReportDto;
 import com.waad.tba.modules.provider.dto.ProviderPreAuthReportDto;
@@ -59,6 +60,7 @@ public class ProviderReportsController {
     private final ProviderReportsService reportsService;
     private final ProviderReportExcelService providerReportExcelService;
     private final ProviderContextGuard providerContextGuard;
+    private final FeatureGuard featureGuard;
 
     private static final DateTimeFormatter FILE_TS_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
@@ -88,6 +90,7 @@ public class ProviderReportsController {
             @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
+        featureGuard.requireProviderPortal();
 
         log.info("📊 [PROVIDER-REPORTS] Claims report requested: provider={}, fromDate={}, toDate={}, status={}",
                 providerId, fromDate, toDate, status);
@@ -134,6 +137,7 @@ public class ProviderReportsController {
             @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
+        featureGuard.requireProviderPortal();
 
         log.info("📊 [PROVIDER-REPORTS] Pre-auth report requested: provider={}, fromDate={}, toDate={}",
                 providerId, fromDate, toDate);
@@ -171,6 +175,7 @@ public class ProviderReportsController {
             @Parameter(description = "Sort direction") @RequestParam(name = "sortDir", defaultValue = "DESC") String sortDir) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
+        featureGuard.requireProviderPortal();
 
         log.info("📊 [PROVIDER-REPORTS] Visits report requested: provider={}, fromDate={}, toDate={}",
                 providerId, fromDate, toDate);
@@ -194,6 +199,7 @@ public class ProviderReportsController {
             @RequestParam(name = "memberBarcode", required = false) String memberBarcode) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
+        featureGuard.requireProviderPortal();
 
         ClaimStatus claimStatus = null;
         if (status != null && !status.isBlank()) {
@@ -232,6 +238,7 @@ public class ProviderReportsController {
             @RequestParam(name = "memberBarcode", required = false) String memberBarcode) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
+        featureGuard.requireProviderPortal();
 
         List<ProviderPreAuthReportDto> reportRows = reportsService.getPreAuthReport(
                 providerId,
@@ -261,6 +268,7 @@ public class ProviderReportsController {
             @RequestParam(name = "memberBarcode", required = false) String memberBarcode) {
 
         Long providerId = providerContextGuard.getRequiredProviderIdStrict();
+        featureGuard.requireProviderPortal();
 
         List<ProviderVisitReportDto> reportRows = reportsService.getVisitsReport(
                 providerId,

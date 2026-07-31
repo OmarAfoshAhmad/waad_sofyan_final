@@ -15,6 +15,8 @@ public interface MedicalDictionaryEntryRepository extends JpaRepository<MedicalD
 
     boolean existsByNormalizedCanonicalName(String normalizedCanonicalName);
 
+    Optional<MedicalDictionaryEntry> findFirstByNormalizedCanonicalName(String normalizedCanonicalName);
+
     @EntityGraph(attributePaths = {"medicalCategory", "synonyms"})
     @Query("SELECT e FROM MedicalDictionaryEntry e LEFT JOIN FETCH e.synonyms LEFT JOIN FETCH e.medicalCategory WHERE e.id = :id")
     Optional<MedicalDictionaryEntry> findWithSynonymsById(@Param("id") Long id);

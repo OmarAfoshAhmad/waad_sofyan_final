@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -9,6 +9,7 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Grid,
   LinearProgress,
   MenuItem,
@@ -23,6 +24,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import Checkbox from '@mui/material/Checkbox';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
@@ -31,6 +33,8 @@ import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+
+const loadXlsx = async () => import('xlsx');
 
 const normalizeText = (value) => (value == null ? '' : String(value).trim());
 const numericPattern = /^[\d\s.,]+$/;
@@ -57,6 +61,42 @@ const parseNumber = (value) => {
   if (!text) return null;
   const number = Number(text);
   return Number.isFinite(number) ? number : null;
+};
+
+const parsePriceRange = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { min: value, max: value, label: value };
+  }
+
+  const raw = normalizeText(value);
+  if (!raw) return { min: null, max: null, label: '' };
+
+  const normalized = raw
+    .replace(/,/g, '')
+    .replace(/[–—−]/g, '-')
+    .replace(/\b(to)\b/gi, '-')
+    .replace(/إلى|الى|لغاية|حتى|من/gi, '-')
+    .replace(/[^\d.\-\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const numbers = normalized
+    .split(/[\s-]+/)
+    .map((part) => Number(part))
+    .filter((number) => Number.isFinite(number) && number > 0);
+
+  if (!numbers.length) {
+    const single = parseNumber(raw);
+    return single == null ? { min: null, max: null, label: raw } : { min: single, max: single, label: single };
+  }
+
+  const min = Math.min(...numbers);
+  const max = Math.max(...numbers);
+  return {
+    min,
+    max,
+    label: min === max ? min : `${min}-${max}`
+  };
 };
 
 const isLikelyServiceName = (value) => {
@@ -94,7 +134,11 @@ const detectColumns = (rows) => {
         serviceCol = index;
       } else if (
         priceCol === -1 &&
-        (value.includes('contract_price') || value.includes('unit_price') || value.includes('سعر العقد') || value === 'السعر' || value.includes('السعر'))
+        (value.includes('contract_price') ||
+          value.includes('unit_price') ||
+          value.includes('سعر العقد') ||
+          value === 'السعر' ||
+          value.includes('السعر'))
       ) {
         priceCol = index;
       } else if (codeCol === -1 && (value.includes('service_code') || value === 'الكود' || value.includes('الكود الأصلي'))) {
@@ -117,7 +161,7 @@ const extractRowsByDetectedColumns = (sheetRows, sheetName, columns) => {
     const serviceName = normalizeText(row[columns.serviceCol]);
     if (!isLikelyServiceName(serviceName)) continue;
 
-    const price = columns.priceCol >= 0 ? parseNumber(row[columns.priceCol]) : null;
+    const priceRange = columns.priceCol >= 0 ? parsePriceRange(row[columns.priceCol]) : { min: null, max: null, label: '' };
     const serviceCode = columns.codeCol >= 0 ? normalizeText(row[columns.codeCol]) : '';
 
     rows.push({
@@ -125,7 +169,10 @@ const extractRowsByDetectedColumns = (sheetRows, sheetName, columns) => {
       sourceSheet: sheetName,
       serviceName,
       serviceCode,
-      price
+      price: priceRange.min,
+      minPrice: priceRange.min,
+      maxPrice: priceRange.max,
+      priceLabel: priceRange.label
     });
   }
   return rows;
@@ -138,13 +185,11 @@ const extractRowsByConservativeFallback = (sheetRows, sheetName) => {
     if (!cells.some(Boolean)) return;
 
     const priceCandidates = cells
-      .map((value, index) => ({ value, index, price: parseNumber(value) }))
-      .filter((cell) => cell.price != null && cell.price > 0);
+      .map((value, index) => ({ value, index, range: parsePriceRange(value) }))
+      .filter((cell) => cell.range?.min != null && cell.range.min > 0);
     if (!priceCandidates.length) return;
 
-    const serviceCandidates = cells
-      .map((value, index) => ({ value, index }))
-      .filter((cell) => isLikelyServiceName(cell.value));
+    const serviceCandidates = cells.map((value, index) => ({ value, index })).filter((cell) => isLikelyServiceName(cell.value));
     if (!serviceCandidates.length) return;
 
     const service = serviceCandidates.reduce((best, current) => {
@@ -164,13 +209,16 @@ const extractRowsByConservativeFallback = (sheetRows, sheetName) => {
       sourceSheet: sheetName,
       serviceName: service.value,
       serviceCode: '',
-      price: nearestPrice?.price ?? null
+      price: nearestPrice?.range?.min ?? null,
+      minPrice: nearestPrice?.range?.min ?? null,
+      maxPrice: nearestPrice?.range?.max ?? null,
+      priceLabel: nearestPrice?.range?.label ?? ''
     });
   });
   return rows;
 };
 
-const extractRowsFromWorkbook = (workbook) => {
+const extractRowsFromWorkbook = (workbook, XLSX) => {
   const rows = [];
 
   workbook.SheetNames.forEach((sheetName) => {
@@ -206,18 +254,176 @@ const getEffectiveCategory = (item) => item.manualCategory || item.bestMatch;
 
 const getEffectiveStatusLabel = (item) => (item.manualCategory ? 'مراجع يدوياً' : item.statusLabel);
 
+const getCanonicalExportName = (item) => item.bestMatch?.canonicalName || '';
+const getProviderServiceName = (item) => item.serviceName || item.bestMatch?.canonicalName || '';
+
+const getPriceMin = (item) => {
+  const candidates = [item.minPrice, item.price].map(Number).filter((value) => Number.isFinite(value) && value > 0);
+  return candidates.length ? Math.min(...candidates) : null;
+};
+
+const getPriceMax = (item) => {
+  const candidates = [item.maxPrice, item.minPrice, item.price].map(Number).filter((value) => Number.isFinite(value) && value > 0);
+  return candidates.length ? Math.max(...candidates) : null;
+};
+
+const hasPriceRange = (item) => {
+  const min = getPriceMin(item);
+  const max = getPriceMax(item);
+  return min != null && max != null && Number(max) > Number(min);
+};
+
+const formatContractPrice = (min, max) => {
+  if (min == null) return '';
+  if (max == null || Number(max) === Number(min)) return min;
+  return `${min}-${max}`;
+};
+
+const normalizeMergeKeyPart = (value) =>
+  normalizeText(value)
+    .toLowerCase()
+    .replace(/[ـًٌٍَُِّْ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const buildContractReadyRows = (items) => {
+  const acceptedItems = items.filter((item) => getEffectiveCategory(item)?.medicalCategoryId);
+  const groups = new Map();
+
+  acceptedItems.forEach((item) => {
+    const effectiveCategory = getEffectiveCategory(item);
+    const providerServiceName = getProviderServiceName(item);
+    const canonicalServiceName = getCanonicalExportName(item);
+    const key = [
+      normalizeMergeKeyPart(providerServiceName),
+      effectiveCategory?.medicalCategoryCode || effectiveCategory?.medicalCategoryId || ''
+    ].join('|');
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        service_name: providerServiceName,
+        service_code: item.serviceCode || '',
+        canonical_service_name: canonicalServiceName,
+        minPrice: getPriceMin(item),
+        maxPrice: getPriceMax(item),
+        medical_category_code: effectiveCategory?.medicalCategoryCode || '',
+        medical_category_name: effectiveCategory?.medicalCategoryName || '',
+        providerCodes: new Set(),
+        canonicalNames: new Set(),
+        sourceRefs: [],
+        sourceKeys: [],
+        rawStatuses: new Set(),
+        confidenceValues: [],
+        statuses: new Set()
+      });
+    }
+
+    const group = groups.get(key);
+    const min = getPriceMin(item);
+    const max = getPriceMax(item);
+    if (min != null) group.minPrice = group.minPrice == null ? min : Math.min(group.minPrice, min);
+    if (max != null) group.maxPrice = group.maxPrice == null ? max : Math.max(group.maxPrice, max);
+    if (item.serviceCode) group.providerCodes.add(item.serviceCode);
+    if (canonicalServiceName) group.canonicalNames.add(canonicalServiceName);
+    if (!group.service_code && item.serviceCode) group.service_code = item.serviceCode;
+    group.sourceRefs.push(`${item.sourceSheet || '-'} صف ${item.rowNumber || '-'}`);
+    group.sourceKeys.push(rowKey(item));
+    if (item.status) group.rawStatuses.add(item.status);
+    if (item.bestMatch?.confidence != null) group.confidenceValues.push(item.bestMatch.confidence);
+    group.statuses.add(getEffectiveStatusLabel(item));
+  });
+
+  const resolveMergedStatus = (rawStatuses) => {
+    const statuses = new Set(rawStatuses || []);
+    if (statuses.has('UNKNOWN')) return 'UNKNOWN';
+    if (statuses.has('NEEDS_REVIEW')) return 'NEEDS_REVIEW';
+    if (statuses.has('HIGH_CONFIDENCE')) return 'HIGH_CONFIDENCE';
+    return 'HIGH_CONFIDENCE';
+  };
+
+  const statusLabel = {
+    HIGH_CONFIDENCE: 'ثقة عالية',
+    NEEDS_REVIEW: 'تحتاج مراجعة',
+    UNKNOWN: 'غير معروف'
+  };
+
+  return Array.from(groups.values()).map((group) => {
+    const rawStatuses = Array.from(group.rawStatuses);
+    const displayStatus = resolveMergedStatus(rawStatuses);
+    return {
+      sourceKeys: group.sourceKeys,
+      rawStatuses,
+      display_status: displayStatus,
+      display_status_label: statusLabel[displayStatus] || displayStatus,
+      confidence: group.confidenceValues.length ? Math.max(...group.confidenceValues) : null,
+      service_name: group.service_name,
+      service_code: group.service_code,
+      canonical_service_name: group.canonical_service_name || Array.from(group.canonicalNames)[0] || '',
+      contract_price: formatContractPrice(group.minPrice, group.maxPrice),
+      medical_category_code: group.medical_category_code,
+      medical_category_name: group.medical_category_name,
+      notes: [
+        group.providerCodes.size > 1 ? `أكواد المرفق المرتبطة: ${Array.from(group.providerCodes).join('، ')}` : '',
+        group.canonicalNames.size > 1 ? `أسماء موحدة مقترحة: ${Array.from(group.canonicalNames).join('، ')}` : '',
+        group.canonicalNames.size === 1 ? `الاسم الموحد: ${Array.from(group.canonicalNames)[0]}` : '',
+        group.minPrice != null && group.maxPrice != null && group.minPrice !== group.maxPrice
+          ? `مجال سعري من التكرارات/المصدر: ${group.minPrice}-${group.maxPrice}`
+          : '',
+        group.confidenceValues.length ? `أعلى ثقة: ${Math.max(...group.confidenceValues)}` : '',
+        `الحالة: ${Array.from(group.statuses).join('، ')}`,
+        `المصادر: ${group.sourceRefs.join(' | ')}`
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    };
+  });
+};
+
+const buildContractRowsWithoutMerge = (items) =>
+  items
+    .filter((item) => getEffectiveCategory(item)?.medicalCategoryId)
+    .map((item) => {
+      const effectiveCategory = getEffectiveCategory(item);
+      const min = getPriceMin(item);
+      const max = getPriceMax(item);
+      const canonicalServiceName = getCanonicalExportName(item);
+      return {
+        sourceKeys: [rowKey(item)],
+        rawStatuses: item.status ? [item.status] : [],
+        display_status: item.status || 'HIGH_CONFIDENCE',
+        display_status_label: getEffectiveStatusLabel(item),
+        confidence: item.bestMatch?.confidence ?? null,
+        service_name: getProviderServiceName(item),
+        service_code: item.serviceCode || '',
+        canonical_service_name: canonicalServiceName,
+        contract_price: formatContractPrice(min, max),
+        medical_category_code: effectiveCategory?.medicalCategoryCode || '',
+        medical_category_name: effectiveCategory?.medicalCategoryName || '',
+        notes: [
+          canonicalServiceName ? `الاسم الموحد: ${canonicalServiceName}` : '',
+          min != null && max != null && min !== max ? `مجال سعري من المصدر: ${min}-${max}` : '',
+          item.bestMatch?.confidence != null ? `الثقة: ${item.bestMatch.confidence}` : '',
+          `الحالة: ${getEffectiveStatusLabel(item)}`,
+          `المصدر: ${item.sourceSheet || '-'} صف ${item.rowNumber || '-'}`
+        ]
+          .filter(Boolean)
+          .join(' | ')
+      };
+    });
+
 const buildSummary = (items) => ({
   total: items.length,
   highConfidence: items.filter((item) => item.status === 'HIGH_CONFIDENCE').length,
   needsReview: items.filter((item) => item.status === 'NEEDS_REVIEW').length,
   unknown: items.filter((item) => item.status === 'UNKNOWN').length,
-  duplicateNames: items.filter((item) => item.duplicateName).length
+  duplicateNames: items.filter((item) => item.duplicateName).length,
+  rangedPrices: items.filter((item) => hasPriceRange(item)).length
 });
 
 const saveClassificationSession = (session) => {
   try {
     localStorage.setItem(CLASSIFICATION_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString() }));
-  } catch (err) {
+  } catch {
     // Local persistence is a convenience; classification must continue even if storage quota is full.
   }
 };
@@ -226,7 +432,7 @@ const loadClassificationSession = () => {
   try {
     const raw = localStorage.getItem(CLASSIFICATION_SESSION_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch (err) {
+  } catch {
     return null;
   }
 };
@@ -234,17 +440,21 @@ const loadClassificationSession = () => {
 const clearClassificationSession = () => {
   try {
     localStorage.removeItem(CLASSIFICATION_SESSION_KEY);
-  } catch (err) {
+  } catch {
     // ignore
   }
 };
 
-const exportRows = (items) => {
+const exportRows = async (items) => {
+  const XLSX = await loadXlsx();
   const data = items.map((item) => ({
     sheet: item.sourceSheet,
     row_number: item.rowNumber,
-    original_service_name: item.serviceName,
-    original_price: item.price ?? '',
+    provider_service_code: item.serviceCode || '',
+    provider_service_name: item.serviceName,
+    original_price: item.priceLabel || (item.price ?? ''),
+    min_price: getPriceMin(item) ?? '',
+    max_price: getPriceMax(item) ?? '',
     classification_status: getEffectiveStatusLabel(item),
     confidence: item.bestMatch?.confidence ?? '',
     canonical_name: item.bestMatch?.canonicalName ?? '',
@@ -261,7 +471,7 @@ const exportRows = (items) => {
   XLSX.writeFile(workbook, 'تصنيف_قائمة_أسعار_بالقاموس.xlsx');
 };
 
-const appendCategoriesLookupSheet = (workbook, categories = []) => {
+const appendCategoriesLookupSheet = (XLSX, workbook, categories = []) => {
   const lookup = categories.map((category) => ({
     medical_category_id: category.id,
     medical_category_code: category.code || '',
@@ -272,32 +482,22 @@ const appendCategoriesLookupSheet = (workbook, categories = []) => {
   XLSX.utils.book_append_sheet(workbook, worksheet, 'التصنيفات المتاحة');
 };
 
-const exportProviderContractReadyRows = (items, categories = []) => {
-  const acceptedItems = items.filter((item) => getEffectiveCategory(item)?.medicalCategoryId);
-  const data = acceptedItems.map((item) => ({
-    service_name: item.bestMatch?.canonicalName || item.serviceName,
-    service_code: item.serviceCode || '',
-    contract_price: item.price ?? '',
-    medical_category_code: getEffectiveCategory(item)?.medicalCategoryCode || '',
-    medical_category_name: getEffectiveCategory(item)?.medicalCategoryName || '',
-    notes: [
-      item.serviceName && item.bestMatch?.canonicalName && item.serviceName !== item.bestMatch.canonicalName ? `الأصل: ${item.serviceName}` : '',
-      `الثقة: ${item.bestMatch?.confidence ?? '-'}`,
-      `الحالة: ${getEffectiveStatusLabel(item)}`,
-      `المصدر: ${item.sourceSheet || '-'} صف ${item.rowNumber || '-'}`
-    ]
-      .filter(Boolean)
-      .join(' | ')
-  }));
+const stripInternalContractRowFields = (rows = []) =>
+  rows.map(({ sourceKeys, rawStatuses, display_status, display_status_label, confidence, ...row }) => row);
+
+const exportProviderContractReadyRows = async (items, categories = [], mergeDuplicates = true) => {
+  const XLSX = await loadXlsx();
+  const data = stripInternalContractRowFields(mergeDuplicates ? buildContractReadyRows(items) : buildContractRowsWithoutMerge(items));
 
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(data);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Pricing_Template');
-  appendCategoriesLookupSheet(workbook, categories);
+  appendCategoriesLookupSheet(XLSX, workbook, categories);
   XLSX.writeFile(workbook, 'قائمة_أسعار_جاهزة_مبدئياً_لعقد_مقدم_خدمة.xlsx');
 };
 
-const downloadTemplate = (categories = []) => {
+const downloadTemplate = async (categories = []) => {
+  const XLSX = await loadXlsx();
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet([
     {
@@ -318,7 +518,7 @@ const downloadTemplate = (categories = []) => {
     }
   ]);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Pricing_Template');
-  appendCategoriesLookupSheet(workbook, categories);
+  appendCategoriesLookupSheet(XLSX, workbook, categories);
   XLSX.writeFile(workbook, 'قالب_تنظيم_قائمة_الأسعار.xlsx');
 };
 
@@ -334,23 +534,63 @@ export default function PriceListClassifierPage() {
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [priceFilter, setPriceFilter] = useState('ALL');
+  const [mergeDuplicatesForContracts, setMergeDuplicatesForContracts] = useState(true);
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [sessionInfo, setSessionInfo] = useState(null);
 
-  const items = result?.items || [];
+  const items = useMemo(() => result?.items || [], [result?.items]);
   const manualReviewedCount = items.filter((item) => item.manualCategory).length;
-  const synonymReadyCount = items.filter((item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName).length;
+  const synonymReadyCount = items.filter(
+    (item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName
+  ).length;
+  const mergedContractRows = useMemo(() => buildContractReadyRows(items), [items]);
+  const unmergedContractRows = useMemo(() => buildContractRowsWithoutMerge(items), [items]);
+  const contractDisplayRows = mergeDuplicatesForContracts ? mergedContractRows : unmergedContractRows;
+  const filteredMergedContractRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return contractDisplayRows.filter((row) => {
+      if (statusFilter !== 'ALL' && row.display_status !== statusFilter) return false;
+      const priceRange = parsePriceRange(row.contract_price);
+      const isRange = priceRange.min != null && priceRange.max != null && Number(priceRange.max) > Number(priceRange.min);
+      if (priceFilter === 'RANGE' && !isRange) return false;
+      if (priceFilter === 'SINGLE' && (isRange || priceRange.min == null)) return false;
+      if (priceFilter === 'MISSING' && priceRange.min != null) return false;
+      if (!q) return true;
+      return [
+        row.service_code,
+        row.service_name,
+        row.canonical_service_name,
+        row.medical_category_code,
+        row.medical_category_name,
+        row.notes
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [contractDisplayRows, search, statusFilter, priceFilter]);
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
       if (statusFilter !== 'ALL' && item.status !== statusFilter) return false;
+      if (priceFilter === 'RANGE' && !hasPriceRange(item)) return false;
+      if (priceFilter === 'SINGLE' && (hasPriceRange(item) || getPriceMin(item) == null)) return false;
+      if (priceFilter === 'MISSING' && getPriceMin(item) != null) return false;
       if (!q) return true;
-      return [item.serviceName, item.bestMatch?.canonicalName, item.bestMatch?.medicalCategoryCode, item.bestMatch?.medicalCategoryName, item.statusLabel]
+      return [
+        item.serviceCode,
+        item.serviceName,
+        item.bestMatch?.canonicalName,
+        item.bestMatch?.medicalCategoryCode,
+        item.bestMatch?.medicalCategoryName,
+        item.statusLabel,
+        item.sourceSheet
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [items, search, statusFilter]);
+  }, [items, search, statusFilter, priceFilter]);
 
   useEffect(() => {
     let mounted = true;
@@ -389,16 +629,23 @@ export default function PriceListClassifierPage() {
     if (session.status === 'COMPLETED') {
       setSuccess(`تم استرجاع آخر نتيجة محفوظة: ${session.done || 0} خدمة مصنفة.`);
     } else if ((session.done || 0) > 0) {
-      setSuccess(`تم استرجاع جلسة تصنيف غير مكتملة: ${session.done} من ${session.total || session.rawRows.length}. يمكنك المتابعة من نفس النقطة.`);
+      setSuccess(
+        `تم استرجاع جلسة تصنيف غير مكتملة: ${session.done} من ${session.total || session.rawRows.length}. يمكنك المتابعة من نفس النقطة.`
+      );
     }
   }, []);
 
   const applyManualCategory = (item, categoryId) => {
+    applyManualCategoryByKeys([rowKey(item)], categoryId);
+  };
+
+  const applyManualCategoryByKeys = (keys, categoryId) => {
     const category = categories.find((entry) => String(entry.id) === String(categoryId));
+    const targetKeys = new Set(keys || []);
     setResult((previous) => {
       if (!previous) return previous;
       const nextItems = previous.items.map((row) => {
-        if (rowKey(row) !== rowKey(item)) return row;
+        if (!targetKeys.has(rowKey(row))) return row;
         if (!category) {
           const { manualCategory, ...rest } = row;
           return rest;
@@ -431,9 +678,10 @@ export default function PriceListClassifierPage() {
     setFileName(file.name);
 
     try {
+      const XLSX = await loadXlsx();
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
-      const rows = extractRowsFromWorkbook(workbook);
+      const rows = extractRowsFromWorkbook(workbook, XLSX);
       setRawRows(rows);
       saveClassificationSession({
         status: 'READY',
@@ -448,7 +696,7 @@ export default function PriceListClassifierPage() {
       if (!rows.length) {
         setError('لم أجد خدمات قابلة للتصنيف داخل الملف. تحقق من بنية الأعمدة أو جرّب قالباً أوضح.');
       }
-    } catch (err) {
+    } catch {
       setError('تعذر قراءة ملف Excel. تأكد من أن الملف xlsx أو xls صالح.');
     }
   };
@@ -558,7 +806,9 @@ export default function PriceListClassifierPage() {
   };
 
   const approveMatchedRowsAsSynonyms = async () => {
-    const synonymRows = items.filter((item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName);
+    const synonymRows = items.filter(
+      (item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName
+    );
     if (!synonymRows.length) {
       setSuccess('لا توجد صفوف مرتبطة باسم موحد يمكن اعتمادها كمرادفات.');
       return;
@@ -578,12 +828,12 @@ export default function PriceListClassifierPage() {
             language: /[A-Za-z]/.test(item.serviceName) ? 'en' : 'ar'
           });
           approved += 1;
-        } catch (err) {
+        } catch {
           skipped += 1;
         }
       }
       setSuccess(`تم اعتماد ${approved} مرادف للقاموس. تم تخطي ${skipped} صف غالباً لأنها مرادفات موجودة مسبقاً.`);
-    } catch (err) {
+    } catch {
       setError('فشل اعتماد المرادفات من نتائج قائمة الأسعار');
     } finally {
       setApprovingSynonyms(false);
@@ -635,7 +885,13 @@ export default function PriceListClassifierPage() {
                   اختيار ملف Excel
                   <input hidden type="file" accept=".xlsx,.xls" onChange={handleFile} />
                 </Button>
-                <Button sx={{ mt: 1 }} variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)} fullWidth>
+                <Button
+                  sx={{ mt: 1 }}
+                  variant="outlined"
+                  startIcon={<FileDownloadIcon />}
+                  onClick={() => downloadTemplate(categories)}
+                  fullWidth
+                >
                   تحميل قالب قياسي
                 </Button>
                 {fileName && <Chip sx={{ mt: 2 }} label={fileName} variant="outlined" />}
@@ -660,7 +916,9 @@ export default function PriceListClassifierPage() {
                   onClick={classifyRows}
                   fullWidth
                 >
-                  {(classificationProgress?.done || 0) > 0 && (classificationProgress?.done || 0) < rawRows.length ? 'متابعة التصنيف' : 'تصنيف الخدمات'}
+                  {(classificationProgress?.done || 0) > 0 && (classificationProgress?.done || 0) < rawRows.length
+                    ? 'متابعة التصنيف'
+                    : 'تصنيف الخدمات'}
                 </Button>
               </CardContent>
             </Card>
@@ -690,7 +948,7 @@ export default function PriceListClassifierPage() {
                   color="success"
                   startIcon={<FileDownloadIcon />}
                   disabled={!items.some((item) => item.bestMatch?.medicalCategoryId)}
-                  onClick={() => exportProviderContractReadyRows(items, categories)}
+                  onClick={() => exportProviderContractReadyRows(items, categories, mergeDuplicatesForContracts)}
                   fullWidth
                 >
                   تصدير للعقود
@@ -704,14 +962,18 @@ export default function PriceListClassifierPage() {
           <LinearProgress
             variant={classificationProgress?.total ? 'determinate' : 'indeterminate'}
             value={
-              classificationProgress?.total ? Math.min(100, Math.round(((classificationProgress.done || 0) / classificationProgress.total) * 100)) : undefined
+              classificationProgress?.total
+                ? Math.min(100, Math.round(((classificationProgress.done || 0) / classificationProgress.total) * 100))
+                : undefined
             }
           />
         )}
         {classificationProgress && (
           <Typography variant="body2" color="text.secondary">
             التقدم الحقيقي: {classificationProgress.done} من {classificationProgress.total}
-            {classificationProgress.total ? ` (${Math.round(((classificationProgress.done || 0) / classificationProgress.total) * 100)}%)` : ''}
+            {classificationProgress.total
+              ? ` (${Math.round(((classificationProgress.done || 0) / classificationProgress.total) * 100)}%)`
+              : ''}
           </Typography>
         )}
         {error && <Alert severity="error">{error}</Alert>}
@@ -720,7 +982,12 @@ export default function PriceListClassifierPage() {
         {result && (
           <Card>
             <CardContent>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={2}
+                alignItems={{ xs: 'stretch', md: 'center' }}
+                justifyContent="space-between"
+              >
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 900 }}>
                     نتيجة التصنيف
@@ -735,6 +1002,9 @@ export default function PriceListClassifierPage() {
                   <Chip color="warning" label={`تحتاج مراجعة ${result.summary?.needsReview || 0}`} />
                   <Chip color="error" label={`غير معروف ${result.summary?.unknown || 0}`} />
                   <Chip color="info" label={`مكرر ${result.summary?.duplicateNames || 0}`} />
+                  <Chip color="warning" variant="outlined" label={`أسعار بمجال ${result.summary?.rangedPrices || 0}`} />
+                  <Chip color="success" variant="outlined" label={`جاهز للعقود ${contractDisplayRows.length}`} />
+                  <Chip color="success" variant="outlined" label={`بعد الدمج ${mergedContractRows.length}`} />
                   <Chip color="secondary" label={`مراجع يدوياً ${manualReviewedCount}`} />
                   <Chip color="primary" label={`جاهز كمرادف ${synonymReadyCount}`} />
                 </Stack>
@@ -747,13 +1017,30 @@ export default function PriceListClassifierPage() {
                   fullWidth
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="بحث داخل النتائج: اسم الخدمة، التصنيف، الكود، الحالة..."
+                  placeholder="بحث: كود المرفق، اسم خدمة المرفق، الاسم الموحد، التصنيف، الحالة..."
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={mergeDuplicatesForContracts}
+                      onChange={(event) => setMergeDuplicatesForContracts(event.target.checked)}
+                      color="success"
+                    />
+                  }
+                  label="دمج التكرارات"
+                  sx={{ minWidth: 170, m: 0 }}
                 />
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} sx={{ minWidth: 190 }}>
                   <MenuItem value="ALL">كل النتائج</MenuItem>
                   <MenuItem value="HIGH_CONFIDENCE">ثقة عالية</MenuItem>
                   <MenuItem value="NEEDS_REVIEW">تحتاج مراجعة</MenuItem>
                   <MenuItem value="UNKNOWN">غير معروف</MenuItem>
+                </Select>
+                <Select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} sx={{ minWidth: 190 }}>
+                  <MenuItem value="ALL">كل الأسعار</MenuItem>
+                  <MenuItem value="RANGE">أسعار بمجال</MenuItem>
+                  <MenuItem value="SINGLE">سعر مفرد</MenuItem>
+                  <MenuItem value="MISSING">بدون سعر</MenuItem>
                 </Select>
                 <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)}>
                   قالب Excel
@@ -763,7 +1050,7 @@ export default function PriceListClassifierPage() {
                   color="success"
                   startIcon={<FileDownloadIcon />}
                   disabled={!items.some((item) => item.bestMatch?.medicalCategoryId)}
-                  onClick={() => exportProviderContractReadyRows(items, categories)}
+                  onClick={() => exportProviderContractReadyRows(items, categories, mergeDuplicatesForContracts)}
                 >
                   تصدير للعقود
                 </Button>
@@ -792,7 +1079,7 @@ export default function PriceListClassifierPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>#</TableCell>
-                      <TableCell>الخدمة الأصلية</TableCell>
+                      <TableCell>خدمة المرفق</TableCell>
                       <TableCell>السعر</TableCell>
                       <TableCell>الحالة</TableCell>
                       <TableCell>الثقة</TableCell>
@@ -803,59 +1090,130 @@ export default function PriceListClassifierPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredItems.map((item, index) => (
-                      <TableRow key={`${item.sourceSheet}-${item.rowNumber}-${index}`} hover>
-                        <TableCell>{item.rowNumber}</TableCell>
-                        <TableCell>
-                          <Stack spacing={0.25}>
-                            <Typography sx={{ fontWeight: 700 }}>{item.serviceName}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.sourceSheet}
-                            </Typography>
-                          </Stack>
-                        </TableCell>
-                        <TableCell>{item.price ?? '-'}</TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            color={item.manualCategory ? 'secondary' : statusColor[item.status] || 'default'}
-                            label={getEffectiveStatusLabel(item)}
-                          />
-                        </TableCell>
-                        <TableCell>{item.bestMatch?.confidence ?? '-'}</TableCell>
-                        <TableCell>{item.bestMatch?.canonicalName ?? '-'}</TableCell>
-                        <TableCell>
-                          {getEffectiveCategory(item) ? (
-                            <Stack spacing={0.25}>
-                              <Typography>{getEffectiveCategory(item).medicalCategoryName}</Typography>
+                    {mergeDuplicatesForContracts
+                      ? filteredMergedContractRows.map((row, index) => (
+                          <TableRow key={`${row.service_code || '-'}-${row.service_name}-${row.medical_category_code}-${index}`} hover>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>
+                              <Stack spacing={0.25}>
+                                <Typography sx={{ fontWeight: 700 }}>{row.service_name}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {row.service_code ? `كود المرفق: ${row.service_code} • ` : ''}
+                                  {row.sourceKeys?.length > 1 ? `مدموج من ${row.sourceKeys.length} صفوف` : 'صف واحد'}
+                                </Typography>
+                              </Stack>
+                            </TableCell>
+                            <TableCell>{row.contract_price || '-'}</TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                                <Chip
+                                  size="small"
+                                  color={statusColor[row.display_status] || 'default'}
+                                  label={row.display_status_label || '-'}
+                                />
+                                {row.sourceKeys?.length > 1 && <Chip size="small" color="info" variant="outlined" label="مدموج" />}
+                              </Stack>
+                            </TableCell>
+                            <TableCell>{row.confidence ?? '-'}</TableCell>
+                            <TableCell>{row.canonical_service_name || '-'}</TableCell>
+                            <TableCell>
+                              <Stack spacing={0.25}>
+                                <Typography>{row.medical_category_name || '-'}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {row.medical_category_code || '-'}
+                                </Typography>
+                              </Stack>
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 240 }}>
+                              <Autocomplete
+                                size="small"
+                                options={categories}
+                                disabled={categoriesLoading}
+                                value={categories.find((category) => category.code === row.medical_category_code) || null}
+                                onChange={(event, category) => applyManualCategoryByKeys(row.sourceKeys || [], category?.id || '')}
+                                getOptionLabel={(category) =>
+                                  category ? `${category.nameAr || category.name || ''}${category.code ? ` (${category.code})` : ''}` : ''
+                                }
+                                isOptionEqualToValue={(option, value) => option.id === value.id}
+                                filterOptions={(options, state) => {
+                                  const query = state.inputValue.trim().toLowerCase();
+                                  if (!query) return options;
+                                  return options.filter((category) =>
+                                    [category.code, category.name, category.nameAr, category.nameEn]
+                                      .filter(Boolean)
+                                      .some((value) => String(value).toLowerCase().includes(query))
+                                  );
+                                }}
+                                renderInput={(params) => <TextField {...params} placeholder="ابحث في التصنيفات..." />}
+                              />
+                            </TableCell>
+                            <TableCell>
                               <Typography variant="caption" color="text.secondary">
-                                {getEffectiveCategory(item).medicalCategoryCode}
+                                {row.notes || '-'}
                               </Typography>
-                            </Stack>
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 240 }}>
-                          <Select
-                            size="small"
-                            fullWidth
-                            displayEmpty
-                            value={item.manualCategory?.medicalCategoryId || ''}
-                            disabled={categoriesLoading}
-                            onChange={(event) => applyManualCategory(item, event.target.value)}
-                          >
-                            <MenuItem value="">بدون تعديل يدوي</MenuItem>
-                            {categories.map((category) => (
-                              <MenuItem key={category.id} value={category.id}>
-                                {category.name} ({category.code})
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </TableCell>
-                        <TableCell>{item.duplicateName ? <Chip size="small" color="info" label="اسم مكرر" /> : '-'}</TableCell>
-                      </TableRow>
-                    ))}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      : filteredItems.map((item, index) => (
+                          <TableRow key={`${item.sourceSheet}-${item.rowNumber}-${index}`} hover>
+                            <TableCell>{item.rowNumber}</TableCell>
+                            <TableCell>
+                              <Stack spacing={0.25}>
+                                <Typography sx={{ fontWeight: 700 }}>{item.serviceName}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {item.serviceCode ? `كود المرفق: ${item.serviceCode} • ` : ''}
+                                  {item.sourceSheet}
+                                </Typography>
+                              </Stack>
+                            </TableCell>
+                            <TableCell>{item.priceLabel || formatContractPrice(getPriceMin(item), getPriceMax(item)) || '-'}</TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                color={item.manualCategory ? 'secondary' : statusColor[item.status] || 'default'}
+                                label={getEffectiveStatusLabel(item)}
+                              />
+                            </TableCell>
+                            <TableCell>{item.bestMatch?.confidence ?? '-'}</TableCell>
+                            <TableCell>{item.bestMatch?.canonicalName ?? '-'}</TableCell>
+                            <TableCell>
+                              {getEffectiveCategory(item) ? (
+                                <Stack spacing={0.25}>
+                                  <Typography>{getEffectiveCategory(item).medicalCategoryName}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {getEffectiveCategory(item).medicalCategoryCode}
+                                  </Typography>
+                                </Stack>
+                              ) : (
+                                '-'
+                              )}
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 240 }}>
+                              <Autocomplete
+                                size="small"
+                                options={categories}
+                                disabled={categoriesLoading}
+                                value={categories.find((category) => category.id === item.manualCategory?.medicalCategoryId) || null}
+                                onChange={(event, category) => applyManualCategory(item, category?.id || '')}
+                                getOptionLabel={(category) =>
+                                  category ? `${category.nameAr || category.name || ''}${category.code ? ` (${category.code})` : ''}` : ''
+                                }
+                                isOptionEqualToValue={(option, value) => option.id === value.id}
+                                filterOptions={(options, state) => {
+                                  const query = state.inputValue.trim().toLowerCase();
+                                  if (!query) return options;
+                                  return options.filter((category) =>
+                                    [category.code, category.name, category.nameAr, category.nameEn]
+                                      .filter(Boolean)
+                                      .some((value) => String(value).toLowerCase().includes(query))
+                                  );
+                                }}
+                                renderInput={(params) => <TextField {...params} placeholder="ابحث في التصنيفات..." />}
+                              />
+                            </TableCell>
+                            <TableCell>{item.duplicateName ? <Chip size="small" color="info" label="اسم مكرر" /> : '-'}</TableCell>
+                          </TableRow>
+                        ))}
                   </TableBody>
                 </Table>
               </TableContainer>

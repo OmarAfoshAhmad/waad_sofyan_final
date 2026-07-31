@@ -1,6 +1,5 @@
 import axiosClient from 'utils/axios';
 import { createErrorHandler } from 'utils/api-error-handler';
-import { normalizePaginatedResponse } from 'utils/api-response-normalizer';
 
 const BASE_URL = '/reviewer/preauths';
 
@@ -21,10 +20,14 @@ export const reviewerPreAuthService = {
       const queryParams = new URLSearchParams();
       if (params.filterStatus) queryParams.append('filterStatus', params.filterStatus);
       if (params.hasVariance) queryParams.append('hasVariance', params.hasVariance);
+      if (params.page) queryParams.append('page', params.page);
+      if (params.size) queryParams.append('size', params.size);
+      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+      if (params.sortDir) queryParams.append('sortDir', params.sortDir);
 
       const url = queryParams.toString() ? `${BASE_URL}/inbox?${queryParams.toString()}` : `${BASE_URL}/inbox`;
       const response = await axiosClient.get(url);
-      
+
       // Temporary fallback until backend getInbox is fully implemented, we unwrap the data
       const data = unwrap(response);
       return Array.isArray(data) ? { items: data, total: data.length, page: 1, size: data.length } : data;

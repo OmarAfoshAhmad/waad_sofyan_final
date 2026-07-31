@@ -45,7 +45,7 @@ import lombok.extern.slf4j.Slf4j;
  * 
  * SECURITY (2026-01-16):
  * - EMPLOYER_ADMIN: Automatically filtered to their employer's policies only
- * - SUPER_ADMIN/INSURANCE_ADMIN: No automatic filter (can see all)
+ * - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
  * 
  * Endpoints:
  * - GET /api/benefit-policies - List all (paginated)

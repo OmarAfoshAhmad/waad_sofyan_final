@@ -4,6 +4,7 @@ import com.waad.tba.modules.claim.dto.ClaimBatchResponse;
 import com.waad.tba.modules.claim.entity.ClaimBatch;
 import com.waad.tba.modules.claim.service.ClaimBatchService;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class ClaimBatchController {
 
     private final ClaimBatchService claimBatchService;
     private final AuthorizationService authorizationService;
+    private final FeatureGuard featureGuard;
 
     /**
      * READ-ONLY: Returns existing batch for provider+employer+period.
@@ -44,6 +46,8 @@ public class ClaimBatchController {
             @RequestParam Long employerId,
             @RequestParam int year,
             @RequestParam int month) {
+
+        featureGuard.requireBatchClaims();
 
         User currentUser = authorizationService.getCurrentUser();
         Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
@@ -67,6 +71,8 @@ public class ClaimBatchController {
             @RequestParam Long employerId,
             @RequestParam int year,
             @RequestParam int month) {
+
+        featureGuard.requireBatchClaims();
 
         User currentUser = authorizationService.getCurrentUser();
         Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);
@@ -93,6 +99,8 @@ public class ClaimBatchController {
             @RequestParam(required = false) Long employerId,
             @RequestParam int year,
             @RequestParam int month) {
+
+        featureGuard.requireBatchClaims();
 
         User currentUser = authorizationService.getCurrentUser();
         Long scopedProviderId = authorizationService.resolveProviderScope(currentUser, providerId);

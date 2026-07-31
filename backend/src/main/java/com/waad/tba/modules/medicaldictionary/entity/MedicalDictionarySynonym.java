@@ -52,6 +52,37 @@ public class MedicalDictionarySynonym {
     @Builder.Default
     private Long usageCount = 0L;
 
+    @Column(name = "lifecycle_status", nullable = false, length = 30)
+    @Builder.Default
+    private String lifecycleStatus = "REVIEWER_APPROVED";
+
+    @Column(name = "learned_from_source", length = 50)
+    private String learnedFromSource;
+
+    @Column(name = "source_reference", length = 200)
+    private String sourceReference;
+
+    @Column(name = "approved_by")
+    private Long approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    @Column(name = "locked_by")
+    private Long lockedBy;
+
+    @Column(name = "locked_at")
+    private LocalDateTime lockedAt;
+
+    @Column(name = "disabled_by")
+    private Long disabledBy;
+
+    @Column(name = "disabled_at")
+    private LocalDateTime disabledAt;
+
+    @Column(name = "governance_note", length = 1000)
+    private String governanceNote;
+
     @Column(name = "created_by")
     private Long createdBy;
 

@@ -145,6 +145,7 @@ const newLine = () => ({
   quantity: 1,
   unitPrice: 0,
   contractPrice: 0,
+  maxContractPrice: 0,
   byCompany: 0,
   byEmployee: 0,
   refusalTypes: '',
@@ -264,6 +265,11 @@ export default function ClaimBatchEntry() {
   const [draftVersion, setDraftVersion] = useState(null);
   const [draftBatchId, setDraftBatchId] = useState(null);
   const [recoveryDialog, setRecoveryDialog] = useState({ open: false, serverDraft: null, localDraft: null });
+  const [classificationReview, setClassificationReview] = useState({
+    open: false,
+    lineIndex: null,
+    selectedCategoryId: ''
+  });
 
   // Generic confirmation dialog
   const [actionConfirm, setActionConfirm] = useState({ open: false, title: '', message: '', onConfirm: null, severity: 'warning' });
@@ -429,6 +435,11 @@ export default function ClaimBatchEntry() {
 
     setAddingCustomService(true);
     try {
+      if (!providerId || Number.isNaN(Number(providerId))) {
+        setCustomServiceError('لا يمكن إضافة خدمة قبل تحديد مقدم الخدمة/العقد بشكل صحيح');
+        return;
+      }
+
       const finalCategoryId = customServiceData.categoryId;
 
       // Auto-generate service code if not provided
@@ -446,7 +457,7 @@ export default function ClaimBatchEntry() {
       };
 
       // Call the modified backend endpoint, passing the active providerId from search params
-      const response = await axiosClient.post(`/provider/my-contract/pricing?providerId=${providerId}`, payload);
+      const response = await axiosClient.post(`/provider/my-contract/pricing?providerId=${Number(providerId)}`, payload);
       const createdItem = response.data?.data || response.data;
 
       const newServiceId = createdItem.medicalServiceId || createdItem.serviceId || createdItem.id;
@@ -459,6 +470,7 @@ export default function ClaimBatchEntry() {
         categoryId: Number(finalCategoryId),
         label: `[${finalServiceCode}] ${payload.serviceName}`,
         contractPrice: priceNum,
+        maxContractPrice: priceNum,
         price: priceNum
       };
 
@@ -477,7 +489,8 @@ export default function ClaimBatchEntry() {
                 serviceName: payload.serviceName,
                 serviceCode: finalServiceCode,
                 unitPrice: priceNum,
-                contractPrice: priceNum
+                contractPrice: priceNum,
+                maxContractPrice: priceNum
               };
 
               return {
@@ -493,7 +506,13 @@ export default function ClaimBatchEntry() {
       enqueueSnackbar('تمت إضافة الخدمة وتحديدها بنجاح', { variant: 'success' });
     } catch (err) {
       console.error('Failed to add custom service pricing:', err);
-      setCustomServiceError(err?.response?.data?.message || 'فشل في حفظ الخدمة الجديدة في قائمة أسعار مقدم الخدمة. تأكد من صحة البيانات.');
+      const apiMessage =
+        err?.response?.data?.messageAr ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.userMessage ||
+        err?.message;
+      setCustomServiceError(apiMessage || 'فشل في حفظ الخدمة الجديدة في قائمة أسعار مقدم الخدمة. تأكد من صحة البيانات.');
     } finally {
       setAddingCustomService(false);
     }
@@ -717,6 +736,7 @@ export default function ClaimBatchEntry() {
           );
           // سعر العقد الحي من بيانات العقد — 65 بدلاً من 70 المدخل
           const cp = svc ? svc.contractPrice || 0 : 0;
+          const maxCp = svc ? svc.maxContractPrice || cp : l.maxContractPrice || l.contractPrice || cp || 0;
 
           // السعر المُدخل = requestedUnitPrice إذا متوفر، وإلا unitPrice
           const enteredPrice = l.requestedUnitPrice != null ? parseFloat(l.requestedUnitPrice) || 0 : parseFloat(l.unitPrice) || 0;
@@ -729,7 +749,9 @@ export default function ClaimBatchEntry() {
             categoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
             serviceCategoryId: l.appliedCategoryId ?? l.serviceCategoryId ?? null,
             serviceCategoryName: l.appliedCategoryName ?? l.serviceCategoryName ?? null,
-            label: `${lineCode ? '[' + lineCode + '] ' : ''}${lineName || ''}`
+            label: `${lineCode ? '[' + lineCode + '] ' : ''}${lineName || ''}`,
+            contractPrice: cp,
+            maxContractPrice: maxCp
           };
           const line = {
             id:
@@ -744,7 +766,8 @@ export default function ClaimBatchEntry() {
             serviceCategoryName: l.appliedCategoryName ?? l.serviceCategoryName ?? serviceObj.serviceCategoryName ?? null,
             quantity: l.quantity ?? l.requestedQuantity ?? l.approvedQuantity ?? 1,
             unitPrice: enteredPrice,
-            contractPrice: cp,
+            contractPrice: maxCp,
+            maxContractPrice: maxCp,
             coveragePercent: l.coveragePercent,
             usageDetails:
               Number(l.benefitLimit) > 0 || Number(l.timesLimit) > 0
@@ -981,7 +1004,8 @@ export default function ClaimBatchEntry() {
         serviceCategoryName: normalizedCategoryName,
         medicalCategoryName: normalizedCategoryName,
         pricingItemId: s.pricingItemId,
-        contractPrice: s.contractPrice || 0
+        contractPrice: s.contractPrice || 0,
+        maxContractPrice: s.maxContractPrice || s.contractPrice || 0
       };
     });
   }, [contractedRaw]);
@@ -998,6 +1022,7 @@ export default function ClaimBatchEntry() {
         serviceName: 'دواء عام / General Medication',
         label: '[GEN-MEDICATION] دواء عام / General Medication',
         contractPrice: 0,
+        maxContractPrice: 0,
         encounterType: 'OUTPATIENT',
         defaultEncounterType: 'OUTPATIENT',
         categoryId: null
@@ -1009,6 +1034,7 @@ export default function ClaimBatchEntry() {
         serviceName: 'خدمة طبية عامة / General Medical Service',
         label: '[GEN-MEDICAL-SERVICE] خدمة طبية عامة / General Medical Service',
         contractPrice: 0,
+        maxContractPrice: 0,
         encounterType: 'OUTPATIENT',
         defaultEncounterType: 'OUTPATIENT',
         categoryId: null
@@ -1034,7 +1060,17 @@ export default function ClaimBatchEntry() {
     (idx, patch) => {
       const affectsCoverage =
         patch.coveragePending !== false &&
-        ['quantity', 'unitPrice', 'rejected', 'manualRefusedAmount'].some((key) => key in patch);
+        [
+          'quantity',
+          'unitPrice',
+          'rejected',
+          'manualRefusedAmount',
+          'medicalCategoryId',
+          'serviceCategoryId',
+          'categoryId',
+          'medicalCategoryName',
+          'serviceCategoryName'
+        ].some((key) => key in patch);
       setLines((prev) => {
         const n = [...prev];
         n[idx] = {
@@ -1063,7 +1099,7 @@ export default function ClaimBatchEntry() {
   const handleServiceChange = useCallback(
     async (idx, val) => {
       if (!val) {
-        updateLine(idx, { service: null, serviceName: '', serviceCode: '', unitPrice: 0, contractPrice: 0 });
+        updateLine(idx, { service: null, serviceName: '', serviceCode: '', unitPrice: 0, contractPrice: 0, maxContractPrice: 0 });
         return;
       }
 
@@ -1101,6 +1137,7 @@ export default function ClaimBatchEntry() {
       }
 
       const price = svc?.contractPrice ?? 0;
+      const maxPrice = svc?.maxContractPrice ?? price;
       const resolvedCategoryId =
         svc.categoryId ??
         svc.serviceCategoryId ??
@@ -1128,7 +1165,8 @@ export default function ClaimBatchEntry() {
         serviceCategoryId: resolvedCategoryId,
         serviceCategoryName: resolvedCategoryName,
         unitPrice: price,
-        contractPrice: price,
+        contractPrice: maxPrice,
+        maxContractPrice: maxPrice,
         ...cov
       });
     },
@@ -1175,18 +1213,56 @@ export default function ClaimBatchEntry() {
     });
   }, [lines]);
 
+  const resolveLineCategoryId = useCallback((line) => {
+    return (
+      line?.appliedCategoryId ??
+      line?.serviceCategoryId ??
+      line?.medicalCategoryId ??
+      line?.categoryId ??
+      line?.service?.serviceCategoryId ??
+      line?.service?.categoryId ??
+      line?.service?.medicalCategoryId ??
+      line?.service?.medicalCategory?.id ??
+      line?.service?.effectiveCategory?.id ??
+      null
+    );
+  }, []);
+
+  const resolveCategoryLabel = useCallback(
+    (categoryId) => {
+      const category = medicalCategories.find((entry) => String(entry.id) === String(categoryId));
+      if (!category) return null;
+      return {
+        id: category.id,
+        code: category.code || '',
+        name: category.nameAr || category.name || category.nameEn || ''
+      };
+    },
+    [medicalCategories]
+  );
+
+  const openClassificationReviewDialog = useCallback(
+    (idx) => {
+      const line = lines[idx];
+      const currentCategoryId = resolveLineCategoryId(line);
+      setClassificationReview({
+        open: true,
+        lineIndex: idx,
+        selectedCategoryId: currentCategoryId ? String(currentCategoryId) : ''
+      });
+    },
+    [lines, resolveLineCategoryId]
+  );
+
+  const closeClassificationReviewDialog = useCallback(() => {
+    setClassificationReview({ open: false, lineIndex: null, selectedCategoryId: '' });
+  }, []);
+
   const sendLineToMedicalDictionary = useCallback(
-    async (idx) => {
+    async (idx, categoryIdOverride = null) => {
       const line = lines[idx];
       const serviceName = (line?.serviceName || line?.service?.serviceName || line?.service?.name || '').trim();
-      const categoryId =
-        line?.appliedCategoryId ??
-        line?.serviceCategoryId ??
-        line?.categoryId ??
-        line?.service?.serviceCategoryId ??
-        line?.service?.categoryId ??
-        line?.service?.medicalCategoryId ??
-        null;
+      const categoryId = categoryIdOverride || resolveLineCategoryId(line);
 
       if (!serviceName) {
         enqueueSnackbar('لا يمكن إرسال بند بلا اسم خدمة إلى القاموس الطبي', { variant: 'warning' });
@@ -1206,12 +1282,69 @@ export default function ClaimBatchEntry() {
           confidence: 90,
           sourceReference: `claim:${editingClaimId || 'draft'};line:${idx + 1}`
         });
-        enqueueSnackbar('تم إرسال البند للقاموس الطبي كاقتراح مراجعة دون التأثير على الحساب المالي', { variant: 'success' });
+
+        enqueueSnackbar('تم إرسال التصنيف المعدّل إلى سجل مراجعة القاموس للاعتماد الدائم لاحقاً', { variant: 'success' });
       } catch (err) {
         enqueueSnackbar(err?.response?.data?.message || 'تعذر إرسال البند للقاموس الطبي', { variant: 'error' });
       }
     },
-    [editingClaimId, enqueueSnackbar, lines]
+    [editingClaimId, enqueueSnackbar, lines, resolveLineCategoryId]
+  );
+
+  const approveClassificationForLine = useCallback(async () => {
+    const idx = classificationReview.lineIndex;
+    if (idx == null || idx < 0) return;
+    const selected = resolveCategoryLabel(classificationReview.selectedCategoryId);
+    if (!selected?.id) {
+      enqueueSnackbar('اختر التصنيف الطبي قبل الاعتماد', { variant: 'warning' });
+      return;
+    }
+
+    updateLine(idx, {
+      medicalCategoryId: selected.id,
+      serviceCategoryId: selected.id,
+      categoryId: selected.id,
+      medicalCategoryCode: selected.code,
+      medicalCategoryName: selected.name,
+      serviceCategoryName: selected.name,
+      coveragePending: true
+    });
+
+    await sendLineToMedicalDictionary(idx, selected.id);
+    closeClassificationReviewDialog();
+    enqueueSnackbar('تم اعتماد تصنيف البند لهذه المطالبة فقط، وسُجل كاقتراح دائم ينتظر اعتماد رئيس القسم', { variant: 'success' });
+  }, [
+    classificationReview.lineIndex,
+    classificationReview.selectedCategoryId,
+    closeClassificationReviewDialog,
+    enqueueSnackbar,
+    resolveCategoryLabel,
+    sendLineToMedicalDictionary,
+    updateLine
+  ]);
+
+  const sendClassificationToReviewQueue = useCallback(async () => {
+    const idx = classificationReview.lineIndex;
+    if (idx == null || idx < 0) return;
+    const selectedCategoryId = classificationReview.selectedCategoryId || resolveLineCategoryId(lines[idx]);
+    await sendLineToMedicalDictionary(idx, selectedCategoryId);
+    closeClassificationReviewDialog();
+  }, [
+    classificationReview.lineIndex,
+    classificationReview.selectedCategoryId,
+    closeClassificationReviewDialog,
+    lines,
+    resolveLineCategoryId,
+    sendLineToMedicalDictionary
+  ]);
+
+  const activeClassificationLine = classificationReview.lineIndex != null ? lines[classificationReview.lineIndex] : null;
+  const activeClassificationCategory = resolveCategoryLabel(classificationReview.selectedCategoryId || resolveLineCategoryId(activeClassificationLine));
+  const currentClassificationCategory = resolveCategoryLabel(resolveLineCategoryId(activeClassificationLine));
+
+  const categoriesForReview = useMemo(
+    () => medicalCategories.filter((category) => category.active !== false && category.deleted !== true),
+    [medicalCategories]
   );
 
   const incompatibleContextLines = useMemo(
@@ -2224,7 +2357,7 @@ export default function ClaimBatchEntry() {
                       visibleColumns={visibleColumns}
                       triggerConfirm={triggerConfirm}
                       onOpenCustomServiceDialog={() => handleOpenCustomServiceDialog(line.id)}
-                      onSendToDictionary={sendLineToMedicalDictionary}
+                      onOpenClassificationReview={openClassificationReviewDialog}
                     />
                   ))}
                   <TableRow>
@@ -2270,6 +2403,90 @@ export default function ClaimBatchEntry() {
           </Paper>
         </Box>
       </Box>
+
+      <Dialog open={classificationReview.open} onClose={closeClassificationReviewDialog} fullWidth maxWidth="sm" dir="rtl">
+        <DialogTitle sx={{ fontWeight: 900 }}>مراجعة تصنيف بند الخدمة</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="info">
+              هذا القرار يخص التصنيف التأميني للبند فقط. الحساب المالي النهائي يبقى من اختصاص محرك التغطية بعد إعادة الحساب.
+            </Alert>
+
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                الخدمة
+              </Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                {activeClassificationLine?.serviceName || activeClassificationLine?.service?.serviceName || activeClassificationLine?.service?.name || '-'}
+              </Typography>
+              {(activeClassificationLine?.serviceCode || activeClassificationLine?.service?.serviceCode) && (
+                <Typography variant="caption" color="text.secondary">
+                  كود المرفق: {activeClassificationLine?.serviceCode || activeClassificationLine?.service?.serviceCode}
+                </Typography>
+              )}
+            </Box>
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Chip
+                variant="outlined"
+                color="primary"
+                label={`التصنيف الحالي: ${
+                  currentClassificationCategory
+                    ? `${currentClassificationCategory.name}${currentClassificationCategory.code ? ` (${currentClassificationCategory.code})` : ''}`
+                    : 'غير محدد'
+                }`}
+                sx={{ justifyContent: 'flex-start', fontWeight: 700 }}
+              />
+              {activeClassificationLine?.classificationReviewed && (
+                <Chip color="success" variant="outlined" label="تمت مراجعته داخل المطالبة" sx={{ fontWeight: 700 }} />
+              )}
+            </Stack>
+
+            <Autocomplete
+              options={categoriesForReview}
+              value={categoriesForReview.find((category) => String(category.id) === String(classificationReview.selectedCategoryId)) || null}
+              onChange={(_, category) =>
+                setClassificationReview((prev) => ({
+                  ...prev,
+                  selectedCategoryId: category?.id ? String(category.id) : ''
+                }))
+              }
+              getOptionLabel={(category) =>
+                category ? `${category.nameAr || category.name || category.nameEn || ''}${category.code ? ` (${category.code})` : ''}` : ''
+              }
+              isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+              filterOptions={(options, state) => {
+                const query = state.inputValue.trim().toLowerCase();
+                if (!query) return options;
+                return options.filter((category) =>
+                  [category.code, category.name, category.nameAr, category.nameEn]
+                    .filter(Boolean)
+                    .some((value) => String(value).toLowerCase().includes(query))
+                );
+              }}
+              renderInput={(params) => <TextField {...params} label="تغيير التصنيف عند الحاجة" placeholder="ابحث باسم التصنيف أو الكود..." />}
+            />
+
+            {activeClassificationCategory && (
+              <Alert severity="success" variant="outlined">
+                سيتم اعتماد: {activeClassificationCategory.name}
+                {activeClassificationCategory.code ? ` (${activeClassificationCategory.code})` : ''}، وتسجيل القرار على سطر المطالبة ثم إعادة احتساب التغطية.
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, py: 2 }}>
+          <Button onClick={closeClassificationReviewDialog}>إبقاء كما هو</Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" color="warning" onClick={sendClassificationToReviewQueue}>
+              إرسال لقائمة المراجعة
+            </Button>
+            <Button variant="contained" color="primary" onClick={approveClassificationForLine} disabled={!classificationReview.selectedCategoryId}>
+              اعتماد التصنيف
+            </Button>
+          </Stack>
+        </DialogActions>
+      </Dialog>
 
       <RecoveryDialog
         recoveryDialog={recoveryDialog}

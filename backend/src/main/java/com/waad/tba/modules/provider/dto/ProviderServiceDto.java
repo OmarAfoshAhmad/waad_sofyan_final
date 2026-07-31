@@ -22,6 +22,7 @@ public class ProviderServiceDto {
     private String categoryCode;
     private String categoryName;
     private BigDecimal contractPrice;
+    private BigDecimal maxContractPrice;
     private String currency;
     private Boolean requiresPA;
 }

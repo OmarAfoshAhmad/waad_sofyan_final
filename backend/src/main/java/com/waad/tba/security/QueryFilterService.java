@@ -23,8 +23,8 @@ public class QueryFilterService {
             return null;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("🔓 getEmployerFilterForUser: user={} is INSURANCE_ADMIN - NO FILTER", user.getUsername());
+        if (roleService.canAccessInternalOperations(user) || roleService.isFinancialUser(user)) {
+            log.debug("🔓 getEmployerFilterForUser: user={} is internal/financial role - NO FILTER", user.getUsername());
             return null;
         }
 
@@ -53,8 +53,8 @@ public class QueryFilterService {
             return null;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("🔓 getProviderFilterForUser: user={} is INSURANCE_ADMIN - NO FILTER", user.getUsername());
+        if (roleService.canAccessInternalOperations(user) || roleService.isFinancialUser(user)) {
+            log.debug("🔓 getProviderFilterForUser: user={} is internal/financial role - NO FILTER", user.getUsername());
             return null;
         }
 

@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 /**
  * DTO for REVIEWER actions on pre-authorizations.
  * 
- * SECURITY: This DTO can ONLY be used by REVIEWER and INSURANCE_ADMIN roles.
+ * SECURITY: This DTO can ONLY be used by MEDICAL_REVIEWER and SUPER_ADMIN roles.
  * Reviewers can ONLY change status, add comments, and set approved amount.
  * They CANNOT modify pre-auth data fields.
  * 

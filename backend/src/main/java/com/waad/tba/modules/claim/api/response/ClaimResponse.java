@@ -359,6 +359,13 @@ public class ClaimResponse {
         private String medicalServiceCode;
         private Long serviceCategoryId;
         private String serviceCategoryName;
+        private Long originalServiceCategoryId;
+        private String originalServiceCategoryName;
+        private Boolean classificationReviewed;
+        private String classificationReviewSource;
+        private Long classificationReviewedBy;
+        private LocalDateTime classificationReviewedAt;
+        private String classificationReviewNote;
         private Integer quantity;
 
         /**

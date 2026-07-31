@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 /**
  * API Request: Review Pre-Authorization
  * 
- * SECURITY: For REVIEWER and INSURANCE_ADMIN only.
+ * SECURITY: For MEDICAL_REVIEWER and SUPER_ADMIN only.
  * Reviewers can ONLY change status, add comments, and set approved amount.
  * 
  * @since Provider Portal Security Fix (Phase 3)

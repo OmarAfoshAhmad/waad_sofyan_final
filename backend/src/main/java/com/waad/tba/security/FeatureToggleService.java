@@ -18,7 +18,7 @@ public class FeatureToggleService {
             return false;
         }
 
-        if (roleService.isSuperAdmin(user) || roleService.isInsuranceAdmin(user)) {
+        if (roleService.isSuperAdmin(user)) {
             log.debug("✅ FeatureCheck: user={} feature=VIEW_MEMBERS result=ALLOWED (admin role)", user.getUsername());
             return true;
         }
@@ -50,7 +50,7 @@ public class FeatureToggleService {
             return false;
         }
 
-        if (roleService.isSuperAdmin(user) || roleService.isInsuranceAdmin(user)) {
+        if (roleService.isSuperAdmin(user)) {
             log.debug("✅ FeatureCheck: user={} feature=VIEW_BENEFIT_POLICIES result=ALLOWED (admin role)", user.getUsername());
             return true;
         }

@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,5 +77,13 @@ class UnifiedSearchServiceSecurityTest {
         service.search("Ahmed", 999L);
 
         verify(memberRepository).searchByEmployerId("Ahmed", 10L);
+    }
+
+    @Test
+    void shortTextSearchDoesNotHitRepositoryOnLargeMemberTables() {
+        service.search("Ah", null);
+
+        verify(memberRepository, never()).searchByEmployerId("Ah", 10L);
+        verify(memberRepository, never()).search("Ah");
     }
 }

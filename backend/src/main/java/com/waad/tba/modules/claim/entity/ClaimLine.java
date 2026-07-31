@@ -9,6 +9,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * ClaimLine Entity (CANONICAL REBUILD 2026-01-16)
@@ -98,6 +99,28 @@ public class ClaimLine {
      */
     @Column(name = "service_category_name", length = 200)
     private String serviceCategoryName;
+
+    @Column(name = "original_service_category_id")
+    private Long originalServiceCategoryId;
+
+    @Column(name = "original_service_category_name", length = 200)
+    private String originalServiceCategoryName;
+
+    @Column(name = "classification_reviewed", nullable = false)
+    @Builder.Default
+    private Boolean classificationReviewed = false;
+
+    @Column(name = "classification_review_source", length = 50)
+    private String classificationReviewSource;
+
+    @Column(name = "classification_reviewed_by")
+    private Long classificationReviewedBy;
+
+    @Column(name = "classification_reviewed_at")
+    private LocalDateTime classificationReviewedAt;
+
+    @Column(name = "classification_review_note", length = 1000)
+    private String classificationReviewNote;
 
     // ==================== APPLIED COVERAGE RESOLUTION ====================
 

@@ -57,7 +57,7 @@ export const ClaimLineRow = ({
   },
   triggerConfirm,
   onOpenCustomServiceDialog,
-  onSendToDictionary
+  onOpenClassificationReview
 }) => {
   const priceRefused = parseFloat(line.priceRefused) || 0;
   const limitRefused = parseFloat(line.limitRefused) || 0;
@@ -72,6 +72,23 @@ export const ClaimLineRow = ({
       .filter(Boolean)
       .join(' — ') ||
     'تجاوز السعر التعاقدي و/أو سقف المنفعة';
+  const categoryName =
+    line.medicalCategoryName ||
+    line.serviceCategoryName ||
+    line.service?.medicalCategoryName ||
+    line.service?.categoryName ||
+    line.service?.medicalCategory?.nameAr ||
+    line.service?.medicalCategory?.name ||
+    line.service?.effectiveCategory?.nameAr ||
+    line.service?.effectiveCategory?.name ||
+    '';
+  const categoryCode =
+    line.medicalCategoryCode ||
+    line.service?.medicalCategoryCode ||
+    line.service?.categoryCode ||
+    line.service?.medicalCategory?.code ||
+    line.service?.effectiveCategory?.code ||
+    '';
 
   return (
     <Fragment>
@@ -157,6 +174,28 @@ export const ClaimLineRow = ({
                 >
                   خدمة غير متوفرة؟ أضفها هنا
                 </Button>
+              </Box>
+            )}
+            {(categoryName || categoryCode) && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  label={`${categoryName || 'تصنيف طبي'}${categoryCode ? ` (${categoryCode})` : ''}`}
+                  sx={{
+                    maxWidth: '100%',
+                    height: 22,
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    bgcolor: alpha(theme.palette.primary.main, 0.06),
+                    '& .MuiChip-label': {
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }
+                  }}
+                />
               </Box>
             )}
           </Stack>
@@ -366,14 +405,14 @@ export const ClaimLineRow = ({
         </TableCell>
         <TableCell align="left">
           <Stack direction="row" spacing={0} justifyContent="flex-start" sx={{ '& .MuiIconButton-root': { p: 0.5 } }}>
-            {onSendToDictionary && (
-              <Tooltip title="إرسال اسم الخدمة والتصنيف الحالي للقاموس الطبي كاقتراح مراجعة غير مالي" arrow>
+            {onOpenClassificationReview && (
+              <Tooltip title="مراجعة/اعتماد تصنيف البند أو إرساله لقائمة مراجعة القاموس" arrow>
                 <span>
                   <IconButton
                     size="small"
                     color="primary"
                     disabled={!line.serviceName && !line.service?.serviceName && !line.service?.name}
-                    onClick={() => onSendToDictionary(idx)}
+                    onClick={() => onOpenClassificationReview(idx)}
                   >
                     <DictionaryIcon sx={{ fontSize: '0.9375rem' }} />
                   </IconButton>

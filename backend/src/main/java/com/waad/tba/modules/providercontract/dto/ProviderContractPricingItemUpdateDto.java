@@ -44,6 +44,12 @@ public class ProviderContractPricingItemUpdateDto {
     private BigDecimal contractPrice;
 
     /**
+     * Optional upper bound for ranged pricing.
+     */
+    @DecimalMin(value = "0.00", message = "Max contract price must be >= 0")
+    private BigDecimal maxContractPrice;
+
+    /**
      * Unit of service
      */
     @Size(max = 50)

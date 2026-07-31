@@ -27,6 +27,9 @@ public class PriceListClassificationRequest {
 
         private String serviceCode;
         private BigDecimal price;
+        private BigDecimal minPrice;
+        private BigDecimal maxPrice;
+        private String priceLabel;
         private String sourceSheet;
     }
 }

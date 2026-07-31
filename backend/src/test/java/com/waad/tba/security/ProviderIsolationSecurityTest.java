@@ -90,8 +90,8 @@ class ProviderIsolationSecurityTest {
     @DisplayName("Provider A staff CAN access Provider A claim")
     void testProviderCanAccessOwnClaim() {
         when(roleService.isSuperAdmin(providerAUser)).thenReturn(false);
-        when(roleService.isInsuranceAdmin(providerAUser)).thenReturn(false);
-        when(roleService.isReviewer(providerAUser)).thenReturn(false);
+        when(roleService.canAccessInternalOperations(providerAUser)).thenReturn(false);
+        when(roleService.isFinancialUser(providerAUser)).thenReturn(false);
         when(roleService.isProvider(providerAUser)).thenReturn(true);
         when(claimRepository.findById(5001L)).thenReturn(Optional.of(providerAClaim));
 
@@ -103,8 +103,8 @@ class ProviderIsolationSecurityTest {
     @DisplayName("Provider B staff CANNOT access Provider A claim (Cross-provider IDOR prevention)")
     void testProviderB_CannotAccess_ProviderA_Claim() {
         when(roleService.isSuperAdmin(providerBUser)).thenReturn(false);
-        when(roleService.isInsuranceAdmin(providerBUser)).thenReturn(false);
-        when(roleService.isReviewer(providerBUser)).thenReturn(false);
+        when(roleService.canAccessInternalOperations(providerBUser)).thenReturn(false);
+        when(roleService.isFinancialUser(providerBUser)).thenReturn(false);
         when(roleService.isProvider(providerBUser)).thenReturn(true);
         when(claimRepository.findById(5001L)).thenReturn(Optional.of(providerAClaim));
 
@@ -116,8 +116,8 @@ class ProviderIsolationSecurityTest {
     @DisplayName("Unlinked Provider staff CANNOT access any claim")
     void testUnlinkedProviderUser_CannotAccess_Claim() {
         when(roleService.isSuperAdmin(unlinkedProviderUser)).thenReturn(false);
-        when(roleService.isInsuranceAdmin(unlinkedProviderUser)).thenReturn(false);
-        when(roleService.isReviewer(unlinkedProviderUser)).thenReturn(false);
+        when(roleService.canAccessInternalOperations(unlinkedProviderUser)).thenReturn(false);
+        when(roleService.isFinancialUser(unlinkedProviderUser)).thenReturn(false);
         when(roleService.isProvider(unlinkedProviderUser)).thenReturn(true);
         when(claimRepository.findById(5001L)).thenReturn(Optional.of(providerAClaim));
 
@@ -129,7 +129,7 @@ class ProviderIsolationSecurityTest {
     @DisplayName("Provider B staff CANNOT access Provider A visit")
     void testProviderB_CannotAccess_ProviderA_Visit() {
         when(roleService.isSuperAdmin(providerBUser)).thenReturn(false);
-        when(roleService.isInsuranceAdmin(providerBUser)).thenReturn(false);
+        when(roleService.canAccessInternalOperations(providerBUser)).thenReturn(false);
         when(roleService.isProvider(providerBUser)).thenReturn(true);
         when(visitRepository.findById(7001L)).thenReturn(Optional.of(providerAVisit));
 

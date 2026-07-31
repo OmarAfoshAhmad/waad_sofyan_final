@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class UnifiedSearchService {
 
+    private static final int MIN_TEXT_SEARCH_LENGTH = 3;
+
     private final MemberRepository memberRepository;
     private final NameSearchService nameSearchService;
     private final AuthorizationService authorizationService;
@@ -153,6 +155,11 @@ public class UnifiedSearchService {
      */
     private List<MemberSearchDto> searchByName(String name, Long employerId) {
         log.info("Executing stable name search for: {}, employerId: {}", name, employerId);
+
+        if (name == null || name.trim().length() < MIN_TEXT_SEARCH_LENGTH) {
+            log.info("Skipping member text search shorter than {} characters", MIN_TEXT_SEARCH_LENGTH);
+            return List.of();
+        }
 
         // Use the robust search method with JOIN FETCH to prevent 500 errors (LazyInitialization)
         // This method also searches by civilId and cardNumber as fallback

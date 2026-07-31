@@ -16,6 +16,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -219,6 +220,8 @@ public class MemberExcelImportService {
 
     @org.springframework.transaction.annotation.Transactional
     public void clearOldMembersForFile(MultipartFile file, Long employerId, Integer headerRowNumber) {
+        assertCurrentUserCanClearOldMembers();
+
         if (employerId != null) {
             clearOldMembers(employerId);
         } else {
@@ -471,6 +474,13 @@ public class MemberExcelImportService {
         if (!principalsToDelete.isEmpty()) {
             memberRepository.deleteMembersByIds(principalsToDelete);
             log.info("🧹 Deleted {} principal members in bulk", principalsToDelete.size());
+        }
+    }
+
+    private void assertCurrentUserCanClearOldMembers() {
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null || !"SUPER_ADMIN".equalsIgnoreCase(currentUser.getUserType())) {
+            throw new AccessDeniedException("Only SUPER_ADMIN can clear old members during import");
         }
     }
 

@@ -19,6 +19,13 @@ public class UserResponseDto {
     private String phone;
     private Boolean active;
     private String role;
+    private Long employerId;
+    private Long providerId;
+    private Boolean canViewClaims;
+    private Boolean canViewVisits;
+    private Boolean canViewReports;
+    private Boolean canViewMembers;
+    private Boolean canViewBenefitPolicies;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

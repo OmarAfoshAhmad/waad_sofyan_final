@@ -269,6 +269,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <skipTests>false</skipTests>
+                    <!-- Mockito inline on Java 21 needs self-attach enabled on this Windows JDK. -->
+                    <argLine>-Djdk.attach.allowAttachSelf=true</argLine>
                 </configuration>
             </plugin>
 

@@ -12,25 +12,14 @@ import {
   IconButton,
   Tooltip,
   Alert,
-  Card,
-  CardContent,
-  Typography,
-  Grid,
   Stack,
-  Divider,
-  Table,
-  TableBody,
-  TableRow,
-  TableCell,
   CircularProgress
 } from '@mui/material';
 import {
-  CheckCircle as ApproveIcon,
   Cancel as RejectIcon,
   Visibility as ViewIcon,
   Refresh as RefreshIcon,
   Assignment as PreApprovalIcon,
-  MedicalServices as MedicalIcon,
   PlayArrow as StartReviewIcon
 } from '@mui/icons-material';
 import MainCard from 'components/MainCard';

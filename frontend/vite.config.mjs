@@ -85,7 +85,10 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules')) {
               const is = (pkg) => id.includes(`/${pkg}/`) || id.includes(`\\${pkg}\\`);
 
-              // ExcelJS is the only truly standalone chunk (large, no React dependency)
+              if (is('axios')) {
+                return 'http';
+              }
+              // ExcelJS is a standalone chunk; keep it out of vendor because it is used only by import/export flows.
               if (is('exceljs')) {
                 return 'excel';
               }
@@ -121,8 +124,7 @@ export default defineConfig(({ mode }) => {
               if (is('material-react-table')) {
                 return 'mrt';
               }
-              // EVERYTHING ELSE from node_modules goes into vendor.
-              // Keep React + MUI ecosystem in vendor to avoid brittle init ordering.
+              // Everything else from node_modules goes into vendor.
               return 'vendor';
             }
           }

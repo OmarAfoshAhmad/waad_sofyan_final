@@ -66,6 +66,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SuppressWarnings("deprecation")
 public class UnifiedMemberService {
 
+    private static final int MIN_MEMBER_TEXT_SEARCH_LENGTH = 3;
+
     private final MemberRepository memberRepository;
     private final EmployerRepository employerRepository;
     private final BenefitPolicyRepository benefitPolicyRepository;
@@ -657,7 +659,7 @@ public class UnifiedMemberService {
      * 
      *         SECURITY (2026-01-16):
      *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
-     *         - SUPER_ADMIN/INSURANCE_ADMIN: No automatic filter (can see all)
+     *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
      */
     @Transactional(readOnly = true)
     public Page<MemberViewDto> getAllMembers(
@@ -856,7 +858,7 @@ public class UnifiedMemberService {
      * 
      *         SECURITY (2026-01-16):
      *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
-     *         - SUPER_ADMIN/INSURANCE_ADMIN: No automatic filter (can see all)
+     *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
      */
     @Transactional(readOnly = true)
     public Page<MemberViewDto> searchMembers(
@@ -874,6 +876,14 @@ public class UnifiedMemberService {
 
         log.info("Searching members: nameAr={}, civilId={}, barcode={}, cardNumber={}",
                 nameAr, civilId, barcode, cardNumber);
+
+        boolean hasNameSearch = hasText(nameAr) || hasText(nameEn);
+        boolean hasExactIdentifierSearch = hasText(civilId) || hasText(barcode) || hasText(cardNumber);
+        if (hasNameSearch && !hasExactIdentifierSearch
+                && isShortTextSearch(nameAr) && isShortTextSearch(nameEn)) {
+            log.info("Skipping member name search shorter than {} characters", MIN_MEMBER_TEXT_SEARCH_LENGTH);
+            return Page.empty(pageable);
+        }
 
         // ═══════════════════════════════════════════════════════════════════════════
         // EMPLOYER_ADMIN SECURITY FILTER (2026-01-16)
@@ -1147,6 +1157,15 @@ public class UnifiedMemberService {
                     "Access to member photo denied");
         }
         return member;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean isShortTextSearch(String value) {
+        return value == null || value.trim().isEmpty()
+                || value.trim().length() < MIN_MEMBER_TEXT_SEARCH_LENGTH;
     }
 
     // ==================== RESTORE & HARD DELETE ====================

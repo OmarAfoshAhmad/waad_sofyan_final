@@ -338,26 +338,6 @@ export const preApprovalsService = {
   },
 
   /**
-   * Get pending pre-approvals for inbox (with pagination)
-   * @param {Object} params - Pagination params {page, size, sortBy, sortDir}
-   * @returns {Promise<Object>} Paginated pending pre-approvals {items, total, page, size}
-   */
-  getPending: async (params = {}) => {
-    try {
-      const queryParams = new URLSearchParams();
-      if (params.page) queryParams.append('page', params.page);
-      if (params.size) queryParams.append('size', params.size);
-      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
-      if (params.sortDir) queryParams.append('sortDir', params.sortDir);
-
-      const response = await axiosClient.get(`${BASE_URL}/inbox/pending?${queryParams.toString()}`);
-      return normalizePaginatedResponse(response);
-    } catch (error) {
-      throw handlePreApprovalErrors(error);
-    }
-  },
-
-  /**
    * Get pre-approvals by member
    * @param {number} memberId - Member ID
    * @returns {Promise<Array>} List of pre-approvals for member

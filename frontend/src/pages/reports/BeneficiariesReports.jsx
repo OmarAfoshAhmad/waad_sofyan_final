@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import axiosClient from 'utils/axios';
 import { useQuery } from '@tanstack/react-query';
 import { useReactToPrint } from 'react-to-print';
@@ -64,7 +64,7 @@ import CircularLoader from 'components/CircularLoader';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
 // API
-import { getAllMembers } from 'services/api/unified-members.service';
+import { searchMembers } from 'services/api/unified-members.service';
 import { claimsService } from 'services/api/claims.service';
 import useTableState from 'hooks/useTableState';
 import { formatCurrency } from 'utils/formatters';
@@ -109,6 +109,8 @@ const BusinessIcon = (props) => (
 // COMPONENT: BeneficiariesReports
 // ============================================================================
 
+const MIN_BENEFICIARY_REPORT_SEARCH_LENGTH = 3;
+
 const BeneficiariesReports = () => {
   const theme = useTheme();
   const printRef = useRef();
@@ -126,6 +128,7 @@ const BeneficiariesReports = () => {
 
   const [activeFilters, setActiveFilters] = useState({});
   const [liveSearch, setLiveSearch] = useState(''); // Live search for instant filtering
+  const [debouncedLiveSearch, setDebouncedLiveSearch] = useState('');
 
   // Single View State
   const [viewMode, setViewMode] = useState('TABLE'); // 'TABLE' | 'SINGLE' | 'PRINT_PREVIEW'
@@ -188,6 +191,7 @@ const BeneficiariesReports = () => {
     setSelectedEmployerId(null);
     setActiveFilters({});
     setLiveSearch('');
+    setDebouncedLiveSearch('');
     setPage(0);
     tableState.setPage(0);
     setViewMode('TABLE');
@@ -275,7 +279,9 @@ const BeneficiariesReports = () => {
     if (activeFilters.employerId) params.append('employerId', activeFilters.employerId);
     if (activeFilters.cardStatus && activeFilters.cardStatus !== 'ALL') params.append('status', activeFilters.cardStatus);
     if (activeFilters.memberType && activeFilters.memberType !== 'ALL') params.append('type', activeFilters.memberType);
-    if (activeFilters.search) params.append('searchQuery', activeFilters.search);
+    if (activeFilters.search && activeFilters.search.trim().length >= MIN_BENEFICIARY_REPORT_SEARCH_LENGTH) {
+      params.append('searchQuery', activeFilters.search.trim());
+    }
 
     try {
       const response = await axiosClient.get(`/unified-members/export/excel?${params.toString()}`, {
@@ -295,9 +301,21 @@ const BeneficiariesReports = () => {
   };
 
   // --- Data Fetching ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedLiveSearch(liveSearch);
+      setPage(0);
+      tableState.setPage(0);
+    }, 400);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSearch]);
+
+  const effectiveReportSearch = debouncedLiveSearch.trim().length >= MIN_BENEFICIARY_REPORT_SEARCH_LENGTH ? debouncedLiveSearch.trim() : '';
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['beneficiaries-report', page, rowsPerPage, orderBy, order, activeFilters, liveSearch],
+    queryKey: ['beneficiaries-report', page, rowsPerPage, orderBy, order, activeFilters, effectiveReportSearch],
     queryFn: async () => {
       const params = {
         page: page, // Backend uses 0-based pagination
@@ -322,7 +340,7 @@ const BeneficiariesReports = () => {
 
       // Map Filters
       if (activeFilters.employerId) {
-        params.organizationId = activeFilters.employerId;
+        params.employerId = activeFilters.employerId;
       }
       if (activeFilters.cardStatus && activeFilters.cardStatus !== 'ALL') {
         params.status = activeFilters.cardStatus;
@@ -330,11 +348,11 @@ const BeneficiariesReports = () => {
       if (activeFilters.memberType && activeFilters.memberType !== 'ALL') {
         params.type = activeFilters.memberType;
       }
-      if (liveSearch && liveSearch.trim()) {
-        params.fullName = liveSearch.trim();
+      if (effectiveReportSearch) {
+        params.fullName = effectiveReportSearch;
       }
 
-      const response = await getAllMembers(params);
+      const response = await searchMembers(params);
 
       // Map Spring Page response to expected format
       return {
@@ -637,6 +655,11 @@ const BeneficiariesReports = () => {
                   placeholder="بحث فوري بالاسم، رقم البطاقة، الهوية، الباركود..."
                   value={liveSearch}
                   onChange={handleLiveSearchChange}
+                  helperText={
+                    liveSearch.trim() && liveSearch.trim().length < MIN_BENEFICIARY_REPORT_SEARCH_LENGTH
+                      ? `أدخل ${MIN_BENEFICIARY_REPORT_SEARCH_LENGTH} أحرف على الأقل للبحث`
+                      : ' '
+                  }
                   sx={{ minWidth: '20.0rem' }}
                   InputProps={{
                     startAdornment: (

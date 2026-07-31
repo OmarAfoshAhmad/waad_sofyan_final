@@ -134,10 +134,11 @@ export const usersService = {
    * TbaDataTable expects: { items: [], total: N }
    */
   getUsersTable: async (params) => {
-    const { page = 1, size = 20, sortBy = 'id', sortDir = 'asc', search = '' } = params || {};
+    const { page = 1, size = 20, sortBy = 'id', sortDir = 'asc', search = '', role = '' } = params || {};
     // Backend paginate uses 0-based page, frontend sends 1-based
-    const response = await axiosServices.get(`${BASE_URL}/paginate`, {
-      params: { page: Math.max(0, page - 1), size, sortBy, sortDir, search }
+    const endpoint = search || role ? `${BASE_URL}/search/paginate` : `${BASE_URL}/paginate`;
+    const response = await axiosServices.get(endpoint, {
+      params: { page: Math.max(0, page - 1), size, sortBy, sortDir, query: search, role }
     });
     // Unwrap ApiResponse and transform Spring Page to TbaDataTable format
     const pageData = response?.data?.data || response?.data || {};

@@ -16,6 +16,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ByNameBeneficiarySearchStrategy implements BeneficiarySearchStrategy {
 
+    private static final int MIN_TEXT_SEARCH_LENGTH = 3;
+
     private final MemberRepository memberRepository;
 
     @Override
@@ -26,6 +28,9 @@ public class ByNameBeneficiarySearchStrategy implements BeneficiarySearchStrateg
     @Override
     public List<Member> search(String value, Long employerId, Member.MemberStatus status, int size) {
         String normalized = value.trim().toLowerCase();
+        if (normalized.length() < MIN_TEXT_SEARCH_LENGTH) {
+            return List.of();
+        }
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();

@@ -339,7 +339,7 @@ public class ReportsController {
         
         boolean isAdmin = currentUser != null && (
             authorizationService.isSuperAdmin(currentUser) || 
-            authorizationService.isInsuranceAdmin(currentUser)
+            authorizationService.isFinancialUser(currentUser)
         );
         
         List<ProviderSettlementReportService.ProviderInfo> providers = 

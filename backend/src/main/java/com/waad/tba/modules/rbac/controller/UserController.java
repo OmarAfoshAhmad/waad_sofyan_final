@@ -44,7 +44,7 @@ import lombok.RequiredArgsConstructor;
  * User Management Controller
  * 
  * RBAC HARDENING (2026-01-13):
- * - User management requires INSURANCE_ADMIN or SUPER_ADMIN
+ * - User management requires SUPER_ADMIN
  * - Role hierarchy enforced in service layer
  * - SUPER_ADMIN protection on delete/update operations
  * 
@@ -56,6 +56,10 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "RBAC - Users", description = "APIs for managing users and their roles/permissions")
 @PreAuthorize("hasRole('SUPER_ADMIN')")
 public class UserController {
+
+        private static final int DEFAULT_PAGE_SIZE = 10;
+        private static final int MAX_PAGE_SIZE = 100;
+        private static final int LEGACY_LIST_SIZE_LIMIT = 500;
 
         private final UserService userService;
         private final com.waad.tba.modules.rbac.service.ProviderUserExcelImportService providerUserExcelImportService;
@@ -71,7 +75,7 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal Server Error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class)))
         })
         public ResponseEntity<ApiResponse<List<UserResponseDto>>> getAllUsers() {
-                List<UserResponseDto> users = userService.findAll();
+                List<UserResponseDto> users = userService.findAllPaginated(PageRequest.of(0, LEGACY_LIST_SIZE_LIMIT)).getContent();
                 return ResponseEntity.ok(ApiResponse.success(users));
         }
 
@@ -90,7 +94,7 @@ public class UserController {
         }
 
         @PostMapping
-        @Operation(summary = "Create user", description = "Creates a new user. INSURANCE_ADMIN can create users except SUPER_ADMIN.")
+        @Operation(summary = "Create user", description = "Creates a new user. Only SUPER_ADMIN can manage users.")
         @ApiResponses({
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "User created successfully"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request payload", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.waad.tba.common.error.ApiError.class))),
@@ -143,7 +147,18 @@ public class UserController {
         })
         public ResponseEntity<ApiResponse<List<UserResponseDto>>> searchUsers(
                         @Parameter(name = "query", description = "Search query", required = true) @RequestParam(name = "query") String query) {
-                List<UserResponseDto> users = userService.search(query);
+                List<UserResponseDto> users = userService.searchPaginated(query, PageRequest.of(0, MAX_PAGE_SIZE)).getContent();
+                return ResponseEntity.ok(ApiResponse.success(users));
+        }
+
+        @GetMapping("/search/paginate")
+        @Operation(summary = "Search users with pagination", description = "Search users by query string with a capped page size.")
+        public ResponseEntity<ApiResponse<Page<UserResponseDto>>> searchUsersPaginated(
+                        @Parameter(name = "query", description = "Search query") @RequestParam(name = "query", required = false) String query,
+                        @Parameter(name = "role", description = "Role filter") @RequestParam(name = "role", required = false) String role,
+                        @Parameter(name = "page", description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
+                        @Parameter(name = "size", description = "Page size") @RequestParam(name = "size", defaultValue = "10") int size) {
+                Page<UserResponseDto> users = userService.searchPaginated(query, role, safePageRequest(page, size));
                 return ResponseEntity.ok(ApiResponse.success(users));
         }
 
@@ -157,7 +172,7 @@ public class UserController {
         public ResponseEntity<ApiResponse<Page<UserResponseDto>>> getUsersPaginated(
                         @Parameter(name = "page", description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
                         @Parameter(name = "size", description = "Page size") @RequestParam(name = "size", defaultValue = "10") int size) {
-                Page<UserResponseDto> users = userService.findAllPaginated(PageRequest.of(page, size));
+                Page<UserResponseDto> users = userService.findAllPaginated(safePageRequest(page, size));
                 return ResponseEntity.ok(ApiResponse.success(users));
         }
 
@@ -245,6 +260,12 @@ public class UserController {
                         @Parameter(name = "file", description = "Excel file containing provider users", required = true) @RequestParam("file") MultipartFile file) {
                 ExcelImportResult result = providerUserExcelImportService.importUsers(file);
                 return ResponseEntity.ok(ApiResponse.success("تم استيراد المستخدمين بنجاح", result));
+        }
+
+        private PageRequest safePageRequest(int page, int size) {
+                int safePage = Math.max(page, 0);
+                int safeSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
+                return PageRequest.of(safePage, safeSize);
         }
 }
 

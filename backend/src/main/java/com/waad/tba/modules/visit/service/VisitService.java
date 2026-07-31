@@ -99,7 +99,7 @@ public class VisitService {
         }
 
         List<Visit> visits;
-        if (authorizationService.isSuperAdmin(currentUser) || authorizationService.isInsuranceAdmin(currentUser)) {
+        if (authorizationService.canAccessInternalOperations(currentUser)) {
             visits = repository.findAll();
         } else if (authorizationService.isEmployerAdmin(currentUser)) {
             Long employerId = authorizationService.getEmployerFilterForUser(currentUser);
@@ -426,7 +426,7 @@ public class VisitService {
      * ARCHITECTURAL RULES (HARDENED 2026-01-16):
      * - PROVIDER users: providerId ALWAYS comes from ProviderContextGuard (session)
      * ANY providerId from request is IGNORED to prevent data leakage
-     * - SUPER_ADMIN/INSURANCE_ADMIN: can set any providerId (REQUIRED)
+     * - Internal operations users: can set any providerId (REQUIRED)
      * - providerId is REQUIRED for all visits
      * 
      * @param dto         The visit creation DTO
@@ -459,16 +459,15 @@ public class VisitService {
 
             log.info("🔒 PROVIDER {} creating visit with their providerId: {} (enforced by ProviderContextGuard)",
                     currentUser.getUsername(), userProviderId);
-        } else if (authorizationService.isSuperAdmin(currentUser)
-                || authorizationService.isInsuranceAdmin(currentUser)) {
-            // SUPER_ADMIN and INSURANCE_ADMIN can set any provider but MUST provide
+        } else if (authorizationService.canAccessInternalOperations(currentUser)) {
+            // Internal operations users can set any provider but MUST provide
             // providerId
             if (dto.getProviderId() == null) {
                 throw new IllegalArgumentException(
-                        "يجب تحديد مقدم الخدمة للمستخدمين الإداريين / Provider ID is required for admin users");
+                        "يجب تحديد مقدم الخدمة للمستخدمين الداخليين / Provider ID is required for internal users");
             }
 
-            log.info("🔓 ADMIN user {} creating visit - any providerId allowed", currentUser.getUsername());
+            log.info("🔓 Internal user {} creating visit - any providerId allowed", currentUser.getUsername());
 
             // Validate provider exists
             providerRepository.findById(dto.getProviderId())

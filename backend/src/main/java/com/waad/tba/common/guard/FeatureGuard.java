@@ -63,6 +63,22 @@ public class FeatureGuard {
         }
     }
 
+    /**
+     * Guard access to monthly batch claim intake.
+     *
+     * Unlike the provider-portal guard, this applies to internal staff too. When
+     * operations decides to move fully to provider-portal intake, the old batch
+     * entry surface must disappear and its API must fail closed.
+     */
+    public void requireBatchClaims() {
+        if (!isBatchClaimsEnabled()) {
+            log.warn("🚫 [FEATURE-GUARD] Blocked claim-batches access (flag disabled).");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "نظام دفعات المطالبات معطل حالياً. يرجى استخدام بوابة مقدم الخدمة لاستقبال المطالبات.");
+        }
+    }
+
     /** DB-first check with yml fallback */
     public boolean isProviderPortalEnabled() {
         return featureFlagService.isFlagEnabled(FLAG_PROVIDER_PORTAL, flags.isProviderPortalEnabled());

@@ -255,11 +255,20 @@ const FormSection = ({ children, highlighted = false }) => (
 /**
  * Contract Price Chip
  */
-const ContractPriceChip = ({ loading, price, hasContract, error }) => {
+const ContractPriceChip = ({ loading, price, maxPrice, hasContract, error }) => {
   if (loading) return <CircularProgress size={16} />;
   if (error) return <Chip label={error} color="error" size="small" />;
   if (!hasContract) return <Chip label={LABELS.noContract} color="warning" size="small" />;
-  return <Chip icon={<LockIcon fontSize="small" />} label={formatCurrency(price)} color="success" size="small" sx={{ fontWeight: 600 }} />;
+  const hasRange = Number(maxPrice || 0) > Number(price || 0);
+  return (
+    <Chip
+      icon={<LockIcon fontSize="small" />}
+      label={hasRange ? `${formatCurrency(price)} - ${formatCurrency(maxPrice)}` : formatCurrency(price)}
+      color={hasRange ? 'info' : 'success'}
+      size="small"
+      sx={{ fontWeight: 600 }}
+    />
+  );
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -846,6 +855,7 @@ export default function ProviderClaimsSubmission() {
           line.totalAmount ??
           selectedService?.price ??
           0;
+        const maxContractPrice = selectedService?.maxPrice || line.maxContractPrice || line.contractPrice || unitPrice;
 
         return {
           id: index + 1,
@@ -862,6 +872,7 @@ export default function ProviderClaimsSubmission() {
           serviceCode: line.serviceCode || line.medicalServiceCode || line.medicalService?.code || selectedService?.code || '',
           quantity: line.quantity || 1,
           unitPrice,
+          maxContractPrice,
           hasContract: true,
           loadingPrice: false,
           priceError: null,
@@ -965,6 +976,7 @@ export default function ProviderClaimsSubmission() {
             categoryCode: item.categoryCode || item.effectiveCategory?.code || item.medicalCategory?.code || '',
             requiresPA: requiresPreApproval,
             price: item.contractPrice,
+            maxPrice: item.maxContractPrice || item.contractPrice,
             basePrice: item.basePrice,
             contractId: item.contractId,
             hasContract: item.hasContract !== false
@@ -1059,6 +1071,7 @@ export default function ProviderClaimsSubmission() {
               ? {
                   ...line,
                   unitPrice: cachedService.price,
+                  maxContractPrice: cachedService.maxPrice || cachedService.price,
                   hasContract: true,
                   loadingPrice: false,
                   priceError: null
@@ -1082,6 +1095,7 @@ export default function ProviderClaimsSubmission() {
                 ? {
                     ...line,
                     unitPrice: priceData.contractPrice,
+                    maxContractPrice: priceData.maxContractPrice || priceData.contractPrice,
                     hasContract: true,
                     loadingPrice: false
                   }
@@ -1137,6 +1151,7 @@ export default function ProviderClaimsSubmission() {
         serviceCode: '',
         quantity: 1,
         unitPrice: 0,
+        maxContractPrice: 0,
         hasContract: false,
         loadingPrice: false,
         priceError: null,
@@ -1168,6 +1183,7 @@ export default function ProviderClaimsSubmission() {
                 serviceName: '',
                 serviceCode: '',
                 unitPrice: 0,
+                maxContractPrice: 0,
                 hasContract: false,
                 filteredServices: [],
                 priceError: null
@@ -1239,6 +1255,7 @@ export default function ProviderClaimsSubmission() {
               serviceName: service.name,
               serviceCode: service.code,
               unitPrice: hasContractPrice ? service.price : 0,
+              maxContractPrice: hasContractPrice ? service.maxPrice || service.price : 0,
               hasContract: hasContractPrice,
               loadingPrice: false,
               priceError: hasContractPrice ? null : LABELS.noContract,
@@ -2050,6 +2067,7 @@ export default function ProviderClaimsSubmission() {
                             <ContractPriceChip
                               loading={line.loadingPrice}
                               price={line.unitPrice}
+                              maxPrice={line.maxContractPrice}
                               hasContract={line.hasContract}
                               error={line.priceError}
                             />

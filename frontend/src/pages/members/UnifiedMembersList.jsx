@@ -88,6 +88,9 @@ import {
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
 
+const MIN_MEMBER_SEARCH_LENGTH = 3;
+const MAX_SELECT_ALL_MEMBERS = 5000;
+
 /**
  * Unified Members List Component
  */
@@ -113,6 +116,7 @@ const UnifiedMembersList = () => {
   // Filters
   const [showDeleted, setShowDeleted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     organizationId: '',
     type: '',
@@ -143,10 +147,16 @@ const UnifiedMembersList = () => {
   // ════════════════════════════════════════════════════════════════════════
   // DATA FETCHING
   // ════════════════════════════════════════════════════════════════════════
+  const getEffectiveSearchTerm = () => {
+    const trimmed = debouncedSearchTerm.trim();
+    return trimmed.length >= MIN_MEMBER_SEARCH_LENGTH ? trimmed : '';
+  };
+
   const fetchMembers = async () => {
     setLoading(true);
     try {
-      const hasSearch = !!searchTerm.trim();
+      const effectiveSearchTerm = getEffectiveSearchTerm();
+      const hasSearch = !!effectiveSearchTerm;
       const params = {
         page,
         size: rowsPerPage,
@@ -156,7 +166,7 @@ const UnifiedMembersList = () => {
         ...(filters.organizationId && { employerId: filters.organizationId }),
         ...(filters.type && { type: filters.type }),
         ...(filters.status && { status: filters.status }),
-        ...(hasSearch && { fullName: searchTerm.trim() })
+        ...(hasSearch && { fullName: effectiveSearchTerm })
       };
 
       const response = await searchMembers(params);
@@ -187,9 +197,18 @@ const UnifiedMembersList = () => {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setPage(0);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
     fetchMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, filters, searchTerm, sortBy, sortDirection, showDeleted]);
+  }, [page, rowsPerPage, filters, debouncedSearchTerm, sortBy, sortDirection, showDeleted]);
 
   // ════════════════════════════════════════════════════════════════════════
   // HANDLERS
@@ -208,6 +227,7 @@ const UnifiedMembersList = () => {
   const handleResetFilters = () => {
     setFilters({ organizationId: '', type: '', status: '' });
     setSearchTerm('');
+    setDebouncedSearchTerm('');
     setPage(0);
   };
 
@@ -266,9 +286,18 @@ const UnifiedMembersList = () => {
   const handleSelectAllClick = async (event) => {
     if (event.target.checked) {
       if (totalCount > members.length) {
+        if (totalCount > MAX_SELECT_ALL_MEMBERS) {
+          enqueueSnackbar(
+            `عدد النتائج كبير (${totalCount}). يرجى تضييق البحث أو الفلاتر قبل تحديد الكل.`,
+            { variant: 'warning' }
+          );
+          event.target.checked = false;
+          return;
+        }
         enqueueSnackbar('جاري تحديد جميع السجلات المطابقة...', { variant: 'info' });
         try {
-          const hasSearch = !!searchTerm.trim();
+          const effectiveSearchTerm = getEffectiveSearchTerm();
+          const hasSearch = !!effectiveSearchTerm;
           const params = {
             page: 0,
             size: totalCount > 0 ? totalCount : 100000,
@@ -278,7 +307,7 @@ const UnifiedMembersList = () => {
             ...(filters.organizationId && { employerId: filters.organizationId }),
             ...(filters.type && { type: filters.type }),
             ...(filters.status && { status: filters.status }),
-            ...(hasSearch && { fullName: searchTerm.trim() })
+            ...(hasSearch && { fullName: effectiveSearchTerm })
           };
           const response = await searchMembers(params);
           const pageData = response?.data || response;
@@ -726,6 +755,11 @@ const UnifiedMembersList = () => {
               placeholder="بحث بالاسم أو رقم البطاقة..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              helperText={
+                searchTerm.trim() && searchTerm.trim().length < MIN_MEMBER_SEARCH_LENGTH
+                  ? `أدخل ${MIN_MEMBER_SEARCH_LENGTH} أحرف على الأقل للبحث`
+                  : ' '
+              }
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">

@@ -151,7 +151,7 @@ public class PreAuthorizationController {
     }
 
     /**
-     * Review pre-authorization (for REVIEWER and INSURANCE_ADMIN).
+     * Review pre-authorization (for MEDICAL_REVIEWER and SUPER_ADMIN).
      * SECURITY: Reviewers can ONLY change status/comment/approvedAmount.
      * 
      * @since Provider Portal Security Fix (Phase 3)

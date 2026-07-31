@@ -170,11 +170,11 @@ public class ProviderContextGuard {
             return userProviderId;
         }
 
-        // ADMIN users: Must provide a providerId
-        if (authorizationService.isSuperAdmin(currentUser) || authorizationService.isInsuranceAdmin(currentUser)) {
+        // Internal operations users: Must provide a providerId
+        if (authorizationService.canAccessInternalOperations(currentUser)) {
             if (requestedProviderId == null) {
                 throw new IllegalArgumentException(
-                    "يجب تحديد مقدم الخدمة للمستخدمين الإداريين / Provider ID is required for admin users"
+                    "يجب تحديد مقدم الخدمة للمستخدمين الداخليين / Provider ID is required for internal users"
                 );
             }
             return requestedProviderId;
@@ -202,8 +202,8 @@ public class ProviderContextGuard {
             return false;
         }
 
-        // SUPER_ADMIN and INSURANCE_ADMIN can create for any provider
-        if (authorizationService.isSuperAdmin(currentUser) || authorizationService.isInsuranceAdmin(currentUser)) {
+        // Internal operations users can create for any provider
+        if (authorizationService.canAccessInternalOperations(currentUser)) {
             return true;
         }
 
@@ -228,8 +228,8 @@ public class ProviderContextGuard {
             return null;
         }
 
-        // SUPER_ADMIN and INSURANCE_ADMIN see all data
-        if (authorizationService.isSuperAdmin(currentUser) || authorizationService.isInsuranceAdmin(currentUser)) {
+        // Internal operations/financial users see all provider-scoped data when allowed by endpoint/service role checks.
+        if (authorizationService.canAccessInternalOperations(currentUser) || authorizationService.isFinancialUser(currentUser)) {
             return null;
         }
 
@@ -251,11 +251,10 @@ public class ProviderContextGuard {
     }
 
     /**
-     * التحقق السريع: هل المستخدم الحالي هو ADMIN (SUPER_ADMIN أو INSURANCE_ADMIN)؟
+     * التحقق السريع: هل المستخدم الحالي مستخدم داخلي تشغيلي؟
      */
     public boolean isCurrentUserAdmin() {
         User currentUser = authorizationService.getCurrentUser();
-        return currentUser != null && 
-            (authorizationService.isSuperAdmin(currentUser) || authorizationService.isInsuranceAdmin(currentUser));
+        return currentUser != null && authorizationService.canAccessInternalOperations(currentUser);
     }
 }

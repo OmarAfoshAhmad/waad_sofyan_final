@@ -143,5 +143,89 @@ public class UserServiceTest {
         userService.update(5L, dto);
 
         verify(userRepository).save(any());
+        verify(sessionManagementService).revokeAll("superadmin");
+    }
+
+    @Test
+    void updateRejectsDeactivatingTheLastActiveSuperAdmin() {
+        User superAdmin = User.builder().id(5L).username("superadmin")
+                .email("admin@example.com").userType("SUPER_ADMIN").active(true).build();
+        when(userRepository.findById(5L)).thenReturn(Optional.of(superAdmin));
+        when(userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN")).thenReturn(1L);
+
+        com.waad.tba.modules.rbac.dto.UserUpdateDto dto = com.waad.tba.modules.rbac.dto.UserUpdateDto.builder()
+                .username("superadmin").email("admin@example.com").userType("SUPER_ADMIN").active(false).build();
+
+        assertThrows(IllegalArgumentException.class, () -> userService.update(5L, dto));
+
+        verify(userRepository, never()).save(any());
+        verify(sessionManagementService, never()).revokeAll(anyString());
+    }
+
+    @Test
+    void deleteSoftDeletesNonSuperAdminAndRevokesSessions() {
+        User user = User.builder().id(9L).username("provider-user")
+                .email("provider@example.com").userType("PROVIDER_STAFF").providerId(44L).active(true).build();
+        when(userRepository.findById(9L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        userService.delete(9L);
+
+        assertFalse(user.getActive());
+        verify(userRepository).save(user);
+        verify(userRepository, never()).deleteById(anyLong());
+        verify(sessionManagementService).revokeAll("provider-user");
+        verify(securityService).auditLog(
+                eq(9L),
+                eq(SecurityAuditEvent.AuditActionType.ACCOUNT_DELETED),
+                contains("soft delete"), isNull(), isNull());
+    }
+
+    @Test
+    void toggleStatusRevokesSessionsWhenStatusChanges() {
+        User user = User.builder().id(10L).username("reviewer")
+                .email("reviewer@example.com").userType("MEDICAL_REVIEWER").active(true).build();
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userMapper.toResponseDto(any())).thenReturn(com.waad.tba.modules.rbac.dto.UserResponseDto.builder().build());
+
+        userService.toggleStatus(10L);
+
+        assertFalse(user.getActive());
+        verify(sessionManagementService).revokeAll("reviewer");
+    }
+
+    @Test
+    void updateRevokesSessionsWhenEmployerFeaturePermissionChanges() {
+        User employerUser = User.builder().id(11L).username("employer-admin")
+                .email("employer@example.com")
+                .userType("EMPLOYER_ADMIN")
+                .employerId(100L)
+                .active(true)
+                .canViewMembers(true)
+                .build();
+        when(userRepository.findById(11L)).thenReturn(Optional.of(employerUser));
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userMapper.toResponseDto(any())).thenReturn(com.waad.tba.modules.rbac.dto.UserResponseDto.builder().build());
+        doAnswer(inv -> {
+            User target = inv.getArgument(0);
+            com.waad.tba.modules.rbac.dto.UserUpdateDto dto = inv.getArgument(1);
+            target.setEmail(dto.getEmail());
+            target.setCanViewMembers(dto.getCanViewMembers());
+            return null;
+        }).when(userMapper).updateEntityFromDto(any(), any());
+
+        com.waad.tba.modules.rbac.dto.UserUpdateDto dto = com.waad.tba.modules.rbac.dto.UserUpdateDto.builder()
+                .username("employer-admin")
+                .email("employer@example.com")
+                .userType("EMPLOYER_ADMIN")
+                .employerId(100L)
+                .active(true)
+                .canViewMembers(false)
+                .build();
+
+        userService.update(11L, dto);
+
+        verify(sessionManagementService).revokeAll("employer-admin");
     }
 }

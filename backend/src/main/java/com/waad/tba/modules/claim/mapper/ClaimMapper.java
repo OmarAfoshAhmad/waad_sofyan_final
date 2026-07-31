@@ -19,13 +19,16 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractReposito
 import com.waad.tba.modules.claim.service.CoverageEngineService;
 import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
+import com.waad.tba.security.AuthorizationService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.BeanUtils;
+import org.springframework.security.access.AccessDeniedException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +54,7 @@ public class ClaimMapper {
         private final ProviderContractRepository providerContractRepository;
         private final ClaimBatchRepository claimBatchRepository;
         private final CoverageEngineService coverageEngineService;
+        private final AuthorizationService authorizationService;
 
         private static final BigDecimal HUNDRED = new BigDecimal("100.00");
         private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -145,6 +149,7 @@ public class ClaimMapper {
                         BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice()
                                         : BigDecimal.ZERO;
                         BigDecimal resolvedUnitPrice = null;
+                        BigDecimal resolvedMaxUnitPrice = null;
                         Long resolvedPricingItemId = lineDto.getPricingItemId();
                         String codeToLookup = lineDto.getServiceCode();
                         String resolvedServiceName = lineDto.getServiceName();
@@ -185,6 +190,9 @@ public class ClaimMapper {
 
                                 if (priceResponse.isHasContract() && priceResponse.getContractPrice() != null) {
                                         resolvedUnitPrice = priceResponse.getContractPrice();
+                                        resolvedMaxUnitPrice = priceResponse.getMaxContractPrice() != null
+                                                        ? priceResponse.getMaxContractPrice()
+                                                        : priceResponse.getContractPrice();
                                         resolvedPricingItemId = priceResponse.getPricingItemId();
                                 }
                         }
@@ -193,12 +201,24 @@ public class ClaimMapper {
                                 resolvedUnitPrice = matchedPricingItem.getContractPrice() != null
                                                 ? matchedPricingItem.getContractPrice()
                                                 : enteredUnitPrice;
+                                resolvedMaxUnitPrice = matchedPricingItem.getMaxContractPrice() != null
+                                                ? matchedPricingItem.getMaxContractPrice()
+                                                : resolvedUnitPrice;
                         }
 
                         if (resolvedUnitPrice == null && resolvedPricingItemId != null) {
-                                resolvedUnitPrice = pricingItemRepository.findById(resolvedPricingItemId)
-                                                .map(item -> item.getContractPrice())
-                                                .orElse(enteredUnitPrice);
+                                ProviderContractPricingItem resolvedItem = pricingItemRepository.findById(resolvedPricingItemId)
+                                                .orElse(null);
+                                if (resolvedItem != null) {
+                                        resolvedUnitPrice = resolvedItem.getContractPrice() != null
+                                                        ? resolvedItem.getContractPrice()
+                                                        : enteredUnitPrice;
+                                        resolvedMaxUnitPrice = resolvedItem.getMaxContractPrice() != null
+                                                        ? resolvedItem.getMaxContractPrice()
+                                                        : resolvedUnitPrice;
+                                } else {
+                                        resolvedUnitPrice = enteredUnitPrice;
+                                }
                         }
 
                         Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
@@ -208,18 +228,38 @@ public class ClaimMapper {
                         BigDecimal lineRequestedTotal = requestedUnitPrice.multiply(BigDecimal.valueOf(quantity));
 
                         Long pricingItemCategoryId = null;
+                        String pricingItemCategoryName = null;
                         if (matchedPricingItem != null && matchedPricingItem.getMedicalCategory() != null) {
                                 pricingItemCategoryId = matchedPricingItem.getMedicalCategory().getId();
+                                pricingItemCategoryName = matchedPricingItem.getMedicalCategory().getNameAr() != null
+                                                ? matchedPricingItem.getMedicalCategory().getNameAr()
+                                                : matchedPricingItem.getMedicalCategory().getName();
                         } else if (resolvedPricingItemId != null) {
-                                pricingItemCategoryId = pricingItemRepository.findById(resolvedPricingItemId)
-                                                .map(item -> item.getMedicalCategory() != null
-                                                                ? item.getMedicalCategory().getId()
-                                                                : null)
+                                ProviderContractPricingItem resolvedItem = pricingItemRepository.findById(resolvedPricingItemId)
                                                 .orElse(null);
+                                if (resolvedItem != null && resolvedItem.getMedicalCategory() != null) {
+                                        pricingItemCategoryId = resolvedItem.getMedicalCategory().getId();
+                                        pricingItemCategoryName = resolvedItem.getMedicalCategory().getNameAr() != null
+                                                        ? resolvedItem.getMedicalCategory().getNameAr()
+                                                        : resolvedItem.getMedicalCategory().getName();
+                                }
                         }
 
-                        Long serviceCatIdForCoverage = pricingItemCategoryId != null ? pricingItemCategoryId
-                                        : catalogCategoryId;
+                        var currentUser = authorizationService.getCurrentUser();
+                        boolean canOverrideClassification = currentUser != null
+                                        && (authorizationService.isSuperAdmin(currentUser)
+                                                        || authorizationService.isReviewer(currentUser)
+                                                        || authorizationService.canAccessInternalOperations(currentUser));
+                        Long requestedCategoryOverride = lineDto.getServiceCategoryId();
+                        boolean hasCategoryOverride = requestedCategoryOverride != null
+                                        && pricingItemCategoryId != null
+                                        && !Objects.equals(requestedCategoryOverride, pricingItemCategoryId);
+                        if (hasCategoryOverride && !canOverrideClassification) {
+                                throw new AccessDeniedException("لا تملك صلاحية تغيير التصنيف التأميني لبند المطالبة");
+                        }
+
+                        Long serviceCatIdForCoverage = hasCategoryOverride ? requestedCategoryOverride
+                                        : (pricingItemCategoryId != null ? pricingItemCategoryId : catalogCategoryId);
                         String serviceCatName = lineDto.getServiceCategoryName();
                         if (serviceCatName == null && matchedPricingItem != null
                                         && matchedPricingItem.getMedicalCategory() != null) {
@@ -238,6 +278,11 @@ public class ClaimMapper {
                                         serviceCatName = optionalCat.get().getName();
                                 }
                         }
+                        if (serviceCatName == null && serviceCatIdForCoverage != null) {
+                                serviceCatName = medicalCategoryRepository.findById(serviceCatIdForCoverage)
+                                                .map(cat -> cat.getNameAr() != null ? cat.getNameAr() : cat.getName())
+                                                .orElse(null);
+                        }
 
                         boolean claimRejected = claim.getStatus() == ClaimStatus.REJECTED;
                         String effectiveLineRejectionReason = lineDto.getRejectionReason() != null
@@ -245,6 +290,9 @@ public class ClaimMapper {
                                                         ? lineDto.getRejectionReason()
                                                         : claim.getReviewerComment();
                         boolean isRejected = claimRejected || Boolean.TRUE.equals(lineDto.getRejected());
+                        BigDecimal contractCapForEngine = resolvedMaxUnitPrice != null
+                                        ? resolvedMaxUnitPrice
+                                        : resolvedUnitPrice;
 
                         ClaimLineInput lineInput = ClaimLineInput.builder()
                                         .lineId(String.valueOf(lines.size()))
@@ -252,7 +300,7 @@ public class ClaimMapper {
                                         .categoryId(serviceCatIdForCoverage)
                                         .serviceCategoryId(serviceCatIdForCoverage)
                                         .enteredUnitPrice(requestedUnitPrice)
-                                        .contractPrice(resolvedUnitPrice)
+                                        .contractPrice(contractCapForEngine)
                                         .quantity(quantity)
                                         .manualRefusedAmount(lineDto.getManualRefusedAmount())
                                         .manualRefusalReason(effectiveLineRejectionReason != null
@@ -346,6 +394,15 @@ public class ClaimMapper {
                                         .pricingItemId(resolvedPricingItemId)
                                         .serviceCategoryId(serviceCatIdForCoverage)
                                         .serviceCategoryName(serviceCatName)
+                                        .originalServiceCategoryId(pricingItemCategoryId)
+                                        .originalServiceCategoryName(pricingItemCategoryName)
+                                        .classificationReviewed(hasCategoryOverride)
+                                        .classificationReviewSource(hasCategoryOverride ? "CLAIM_REVIEWER" : null)
+                                        .classificationReviewedBy(hasCategoryOverride ? currentUser.getId() : null)
+                                        .classificationReviewedAt(hasCategoryOverride ? LocalDateTime.now() : null)
+                                        .classificationReviewNote(hasCategoryOverride
+                                                        ? "Reviewer changed claim line category before coverage calculation"
+                                                        : null)
                                         .appliedCategoryId(result.getResolvedCategoryId())
                                         .appliedCategoryName(result.getResolvedCategoryId() != null
                                                         ? medicalCategoryRepository
@@ -546,6 +603,13 @@ public class ClaimMapper {
                                         .serviceName(line.getServiceName())
                                         .serviceCategoryId(line.getServiceCategoryId())
                                         .serviceCategoryName(line.getServiceCategoryName())
+                                        .originalServiceCategoryId(line.getOriginalServiceCategoryId())
+                                        .originalServiceCategoryName(line.getOriginalServiceCategoryName())
+                                        .classificationReviewed(line.getClassificationReviewed())
+                                        .classificationReviewSource(line.getClassificationReviewSource())
+                                        .classificationReviewedBy(line.getClassificationReviewedBy())
+                                        .classificationReviewedAt(line.getClassificationReviewedAt())
+                                        .classificationReviewNote(line.getClassificationReviewNote())
                                         .quantity(line.getQuantity())
                                         .unitPrice(line.getRequestedUnitPrice() != null
                                                         ? line.getRequestedUnitPrice()
@@ -646,6 +710,13 @@ public class ClaimMapper {
                                 .serviceName(line.getServiceName())
                                 .serviceCategoryId(line.getServiceCategoryId())
                                 .serviceCategoryName(line.getServiceCategoryName())
+                                .originalServiceCategoryId(line.getOriginalServiceCategoryId())
+                                .originalServiceCategoryName(line.getOriginalServiceCategoryName())
+                                .classificationReviewed(line.getClassificationReviewed())
+                                .classificationReviewSource(line.getClassificationReviewSource())
+                                .classificationReviewedBy(line.getClassificationReviewedBy())
+                                .classificationReviewedAt(line.getClassificationReviewedAt())
+                                .classificationReviewNote(line.getClassificationReviewNote())
                                 .appliedCategoryId(line.getAppliedCategoryId())
                                 .appliedCategoryName(line.getAppliedCategoryName())
                                 .quantity(line.getQuantity())

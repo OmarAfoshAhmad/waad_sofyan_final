@@ -36,8 +36,8 @@ export default function Navigation() {
   const { flags } = useSystemConfig();
 
   const menuItems = useMemo(() => {
-    return { items: filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED) };
-  }, [role, flags.PROVIDER_PORTAL_ENABLED]);
+    return { items: filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED) };
+  }, [role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED]);
 
   const isHorizontal = state.menuOrientation === MenuOrientation.HORIZONTAL && !downLG;
 

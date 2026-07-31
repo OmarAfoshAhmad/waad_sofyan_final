@@ -454,9 +454,10 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         * @param searchPattern Search pattern with wildcards (e.g., "%احمد%")
         * @return List of members ordered by full name
         */
-       @Query("SELECT m FROM Member m " +
-                     "WHERE LOWER(m.fullName) LIKE LOWER(:searchPattern) " +
-                     "ORDER BY m.fullName ASC")
+       @Query(value = "SELECT * FROM members m " +
+                     "WHERE LOWER(m.full_name) LIKE LOWER(:searchPattern) " +
+                     "ORDER BY m.full_name ASC " +
+                     "LIMIT 10", nativeQuery = true)
        List<Member> searchByNamePattern(@Param("searchPattern") String searchPattern);
 
        // ═══════════════════════════════════════════════════════════════════════════

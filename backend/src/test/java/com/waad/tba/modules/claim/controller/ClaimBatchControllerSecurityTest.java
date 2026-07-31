@@ -4,6 +4,7 @@ import com.waad.tba.modules.claim.dto.ClaimBatchResponse;
 import com.waad.tba.modules.claim.entity.ClaimBatch;
 import com.waad.tba.modules.claim.service.ClaimBatchService;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.security.AuthorizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,9 @@ class ClaimBatchControllerSecurityTest {
     @Mock
     private AuthorizationService authorizationService;
 
+    @Mock
+    private FeatureGuard featureGuard;
+
     @InjectMocks
     private ClaimBatchController controller;
 
@@ -59,6 +63,7 @@ class ClaimBatchControllerSecurityTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
         // The service must never be called with the attacker-supplied providerId
+        verify(featureGuard).requireBatchClaims();
         verify(claimBatchService).getExistingBatch(251L, 10L, 2026, 7);
     }
 
@@ -73,6 +78,7 @@ class ClaimBatchControllerSecurityTest {
 
         controller.openOrGetBatch(999L, 10L, 2026, 7);
 
+        verify(featureGuard).requireBatchClaims();
         verify(claimBatchService).createBatch(251L, 10L, 2026, 7);
     }
 
@@ -86,6 +92,7 @@ class ClaimBatchControllerSecurityTest {
 
         controller.getBatches(null, null, 2026, 7);
 
+        verify(featureGuard).requireBatchClaims();
         assertThat(providerCaptor.getValue())
                 .as("a PROVIDER_STAFF caller must never be able to list ALL providers' batches")
                 .isEqualTo(251L);

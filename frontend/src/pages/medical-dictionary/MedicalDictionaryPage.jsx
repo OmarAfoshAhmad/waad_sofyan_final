@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -11,8 +12,6 @@ import {
   Drawer,
   Grid,
   IconButton,
-  MenuItem,
-  Select,
   Stack,
   Tab,
   Tabs,
@@ -36,13 +35,21 @@ import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
 const statusColor = {
+  PENDING: 'warning',
   APPROVED: 'success',
+  MERGED: 'success',
   DRAFT: 'warning',
   DISABLED: 'default',
   REJECTED: 'error'
 };
 
 const getItems = (page) => page?.content || page?.items || page?.data || [];
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('ar-LY');
+};
 
 export default function MedicalDictionaryPage() {
   const [query, setQuery] = useState('');
@@ -55,6 +62,9 @@ export default function MedicalDictionaryPage() {
   const [error, setError] = useState('');
   const [suggestionsPage, setSuggestionsPage] = useState(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [changeLogPage, setChangeLogPage] = useState(null);
+  const [changeLogLoading, setChangeLogLoading] = useState(false);
+  const [suggestionCategoryOverrides, setSuggestionCategoryOverrides] = useState({});
   const [categories, setCategories] = useState([]);
   const [synonymForms, setSynonymForms] = useState({});
   const [savingSynonymId, setSavingSynonymId] = useState(null);
@@ -74,6 +84,7 @@ export default function MedicalDictionaryPage() {
 
   const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
   const suggestions = useMemo(() => getItems(suggestionsPage), [suggestionsPage]);
+  const changeLog = useMemo(() => getItems(changeLogPage), [changeLogPage]);
   const drawerSynonyms = useMemo(() => getItems(synonymsPage), [synonymsPage]);
   const synonymSearchResults = useMemo(() => getItems(synonymSearchPage), [synonymSearchPage]);
   const entriesTotal = entriesPage?.total || entriesPage?.totalElements || entries.length;
@@ -103,6 +114,18 @@ export default function MedicalDictionaryPage() {
     }
   }, []);
 
+  const loadChangeLog = useCallback(async () => {
+    setChangeLogLoading(true);
+    try {
+      const result = await medicalDictionaryService.listDictionarySuggestions({ page: 0, size: 100 });
+      setChangeLogPage(result);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر تحميل سجل تغييرات القاموس');
+    } finally {
+      setChangeLogLoading(false);
+    }
+  }, []);
+
   const loadCategories = useCallback(async () => {
     try {
       const result = await getAllMedicalCategories();
@@ -115,22 +138,26 @@ export default function MedicalDictionaryPage() {
   useEffect(() => {
     loadEntries();
     loadSuggestions();
+    loadChangeLog();
     loadCategories();
-  }, [loadEntries, loadSuggestions, loadCategories]);
+  }, [loadEntries, loadSuggestions, loadChangeLog, loadCategories]);
 
   const handleSearch = () => setAppliedQuery(query.trim());
 
   const handleApproveSuggestion = async (suggestion) => {
     setError('');
     try {
+      const overrideCategoryId = suggestionCategoryOverrides[suggestion.id];
+      const categoryChanged = overrideCategoryId && String(overrideCategoryId) !== String(suggestion.suggestedCategoryId || '');
       await medicalDictionaryService.approveDictionarySuggestion(suggestion.id, {
-        targetEntryId: suggestion.suggestedEntryId || null,
-        targetCategoryId: suggestion.suggestedCategoryId || null,
-        canonicalName: suggestion.suggestedEntryId ? null : suggestion.originalText,
-        approveAsSynonym: Boolean(suggestion.suggestedEntryId),
+        targetEntryId: categoryChanged ? null : suggestion.suggestedEntryId || null,
+        targetCategoryId: Number(overrideCategoryId || suggestion.suggestedCategoryId || 0) || null,
+        canonicalName: categoryChanged || !suggestion.suggestedEntryId ? suggestion.originalText : null,
+        approveAsSynonym: !categoryChanged && Boolean(suggestion.suggestedEntryId),
         reviewNote: 'اعتماد من شاشة القاموس الطبي'
       });
       await loadSuggestions();
+      await loadChangeLog();
       await loadEntries();
     } catch (err) {
       setError(err?.response?.data?.message || 'تعذر اعتماد الاقتراح');
@@ -144,6 +171,7 @@ export default function MedicalDictionaryPage() {
         reviewNote: 'رفض من شاشة القاموس الطبي'
       });
       await loadSuggestions();
+      await loadChangeLog();
     } catch (err) {
       setError(err?.response?.data?.message || 'تعذر رفض الاقتراح');
     }
@@ -198,6 +226,34 @@ export default function MedicalDictionaryPage() {
       setError(err?.response?.data?.message || 'تعذر البحث في المرادفات');
     } finally {
       setSynonymSearchLoading(false);
+    }
+  };
+
+  const handleRollbackLearnedSuggestion = async (suggestion) => {
+    setError('');
+    try {
+      const result = await medicalDictionaryService.searchDictionarySynonyms({
+        query: suggestion.originalText,
+        activeOnly: true,
+        page: 0,
+        size: 20
+      });
+      const exactMatch = getItems(result).find(
+        (item) => String(item.synonym || '').trim() === String(suggestion.originalText || '').trim()
+      );
+
+      if (!exactMatch?.synonymId) {
+        setError('لا يمكن التراجع تلقائياً لأنني لم أجد مرادفاً نشطاً مطابقاً نصياً لهذا القرار. لم يتم تغيير أي قاعدة.');
+        return;
+      }
+
+      await medicalDictionaryService.toggleDictionarySynonym(exactMatch.synonymId);
+      await loadChangeLog();
+      if (synonymSearchQuery.trim()) {
+        await handleSynonymSearch();
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر التراجع عن قاعدة القاموس المتعلمة');
     }
   };
 
@@ -290,6 +346,7 @@ export default function MedicalDictionaryPage() {
             <Tab value="synonyms" label="بحث المرادفات" />
             <Tab value="match" label="اختبار المطابقة" />
             <Tab value="suggestions" label={`اقتراحات المراجعة (${suggestions.length})`} />
+            <Tab value="change-log" label={`سجل التغييرات (${changeLogPage?.total || changeLog.length})`} />
           </Tabs>
         </Card>
 
@@ -310,19 +367,26 @@ export default function MedicalDictionaryPage() {
                 />
               </Grid>
               <Grid item xs={12} md={4}>
-                <Select
+                <Autocomplete
                   fullWidth
-                  displayEmpty
-                  value={createForm.medicalCategoryId}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, medicalCategoryId: e.target.value }))}
-                >
-                  <MenuItem value="">اختر التصنيف الطبي</MenuItem>
-                  {categories.map((category) => (
-                    <MenuItem key={category.id} value={category.id}>
-                      {category.name || category.nameAr} — {category.code}
-                    </MenuItem>
-                  ))}
-                </Select>
+                  options={categories}
+                  value={categories.find((category) => String(category.id) === String(createForm.medicalCategoryId)) || null}
+                  onChange={(event, category) => setCreateForm((prev) => ({ ...prev, medicalCategoryId: category?.id || '' }))}
+                  getOptionLabel={(category) =>
+                    category ? `${category.nameAr || category.name || ''}${category.code ? ` (${category.code})` : ''}` : ''
+                  }
+                  isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+                  filterOptions={(options, state) => {
+                    const query = state.inputValue.trim().toLowerCase();
+                    if (!query) return options;
+                    return options.filter((category) =>
+                      [category.code, category.name, category.nameAr, category.nameEn]
+                        .filter(Boolean)
+                        .some((value) => String(value).toLowerCase().includes(query))
+                    );
+                  }}
+                  renderInput={(params) => <TextField {...params} label="التصنيف الطبي" placeholder="ابحث بالاسم أو الكود..." />}
+                />
               </Grid>
               <Grid item xs={6} md={2}>
                 <TextField
@@ -526,7 +590,14 @@ export default function MedicalDictionaryPage() {
                             </Stack>
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={item.synonymType || 'COMMON'} variant="outlined" />
+                            <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
+                              <Chip size="small" label={item.synonymType || 'COMMON'} variant="outlined" />
+                              {item.learnedFromSource === 'CLAIM_REVIEW' && (
+                                <Chip size="small" color="success" variant="outlined" label="تعلم من مطالبة" />
+                              )}
+                              {item.lifecycleStatus === 'LOCKED' && <Chip size="small" color="primary" label="مثبت" />}
+                              {item.lifecycleStatus === 'DISABLED' && <Chip size="small" color="default" label="معطل" />}
+                            </Stack>
                           </TableCell>
                           <TableCell>{item.usageCount || 0}</TableCell>
                         </TableRow>
@@ -583,6 +654,34 @@ export default function MedicalDictionaryPage() {
                           <Typography variant="caption" color="text.secondary">
                             {suggestion.suggestedCategoryCode || '-'}
                           </Typography>
+                          <Autocomplete
+                            size="small"
+                            options={categories}
+                            value={
+                              categories.find(
+                                (category) =>
+                                  String(category.id) ===
+                                  String(suggestionCategoryOverrides[suggestion.id] || suggestion.suggestedCategoryId || '')
+                              ) || null
+                            }
+                            onChange={(event, category) =>
+                              setSuggestionCategoryOverrides((prev) => ({ ...prev, [suggestion.id]: category?.id || '' }))
+                            }
+                            getOptionLabel={(category) =>
+                              category ? `${category.nameAr || category.name || ''}${category.code ? ` (${category.code})` : ''}` : ''
+                            }
+                            isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+                            filterOptions={(options, state) => {
+                              const query = state.inputValue.trim().toLowerCase();
+                              if (!query) return options;
+                              return options.filter((category) =>
+                                [category.code, category.name, category.nameAr, category.nameEn]
+                                  .filter(Boolean)
+                                  .some((value) => String(value).toLowerCase().includes(query))
+                              );
+                            }}
+                            renderInput={(params) => <TextField {...params} label="تغيير التصنيف قبل الاعتماد" />}
+                          />
                         </Stack>
                       </TableCell>
                       <TableCell>{suggestion.confidence == null ? '-' : `${suggestion.confidence}%`}</TableCell>
@@ -603,6 +702,137 @@ export default function MedicalDictionaryPage() {
             </TableContainer>
           </CardContent>
         </Card>
+        )}
+
+        {activeTab === 'change-log' && (
+          <Card>
+            <CardContent>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                    سجل تغييرات القاموس
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    هنا ترى كل ما دخل القاموس من المطالبات وقوائم الأسعار: المعلّق، المعتمد، المدموج، والمرفوض مع تواريخ المراجعة.
+                  </Typography>
+                </Box>
+                {changeLogLoading && <CircularProgress size={22} />}
+              </Stack>
+
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                اعتماد أو رفض رئيس القسم هنا يؤثر على تعلم القاموس للمستقبل فقط. المطالبات المحفوظة لا يعاد فتح حسابها تلقائياً إلا إذا عدّلها المراجع وأعاد حفظها.
+              </Alert>
+
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>النص الأصلي</TableCell>
+                      <TableCell>المصدر</TableCell>
+                      <TableCell>الحالة</TableCell>
+                      <TableCell>التصنيف/السجل</TableCell>
+                      <TableCell>الثقة</TableCell>
+                      <TableCell>تاريخ الإدخال</TableCell>
+                      <TableCell>تاريخ القرار</TableCell>
+                      <TableCell>الإجراء</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {!changeLogLoading && changeLog.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} align="center">
+                          لا توجد تغييرات مسجلة حتى الآن.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {changeLog.map((suggestion) => {
+                      const isPending = suggestion.status === 'PENDING';
+                      return (
+                        <TableRow key={suggestion.id} hover>
+                          <TableCell sx={{ fontWeight: 700 }}>{suggestion.originalText}</TableCell>
+                          <TableCell>{suggestion.source || '-'}</TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              color={statusColor[suggestion.status] || 'default'}
+                              variant={isPending ? 'filled' : 'outlined'}
+                              label={suggestion.status || '-'}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Stack spacing={0.25}>
+                              <Typography>{suggestion.suggestedEntryName || suggestion.suggestedCategoryName || 'غير محدد'}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {suggestion.suggestedCategoryCode || '-'}
+                              </Typography>
+                              {isPending && (
+                                <Autocomplete
+                                  size="small"
+                                  options={categories}
+                                  value={
+                                    categories.find(
+                                      (category) =>
+                                        String(category.id) ===
+                                        String(suggestionCategoryOverrides[suggestion.id] || suggestion.suggestedCategoryId || '')
+                                    ) || null
+                                  }
+                                  onChange={(event, category) =>
+                                    setSuggestionCategoryOverrides((prev) => ({ ...prev, [suggestion.id]: category?.id || '' }))
+                                  }
+                                  getOptionLabel={(category) =>
+                                    category ? `${category.nameAr || category.name || ''}${category.code ? ` (${category.code})` : ''}` : ''
+                                  }
+                                  isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+                                  filterOptions={(options, state) => {
+                                    const query = state.inputValue.trim().toLowerCase();
+                                    if (!query) return options;
+                                    return options.filter((category) =>
+                                      [category.code, category.name, category.nameAr, category.nameEn]
+                                        .filter(Boolean)
+                                        .some((value) => String(value).toLowerCase().includes(query))
+                                    );
+                                  }}
+                                  renderInput={(params) => <TextField {...params} label="تغيير التصنيف" />}
+                                />
+                              )}
+                            </Stack>
+                          </TableCell>
+                          <TableCell>{suggestion.confidence == null ? '-' : `${suggestion.confidence}%`}</TableCell>
+                          <TableCell>{formatDateTime(suggestion.createdAt)}</TableCell>
+                          <TableCell>{formatDateTime(suggestion.reviewedAt)}</TableCell>
+                          <TableCell>
+                            {isPending ? (
+                              <Stack direction="row" spacing={1}>
+                                <Button size="small" variant="contained" color="success" onClick={() => handleApproveSuggestion(suggestion)}>
+                                  اعتماد دائم
+                                </Button>
+                                <Button size="small" variant="outlined" color="error" onClick={() => handleRejectSuggestion(suggestion)}>
+                                  رفض
+                                </Button>
+                              </Stack>
+                            ) : suggestion.status === 'MERGED' || suggestion.status === 'APPROVED' ? (
+                              <Stack spacing={0.75}>
+                                <Button size="small" variant="outlined" color="warning" onClick={() => handleRollbackLearnedSuggestion(suggestion)}>
+                                  تراجع عن التعلم
+                                </Button>
+                                <Typography variant="caption" color="text.secondary">
+                                  يوقف استخدام المرادف مستقبلاً ولا يغير مطالبات محفوظة.
+                                </Typography>
+                              </Stack>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                لا يوجد إجراء مطلوب.
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
         )}
 
         {activeTab === 'dictionary' && (
@@ -740,7 +970,9 @@ export default function MedicalDictionaryPage() {
                       onClick={() => handleToggleSynonym(syn)}
                       variant={syn.active ? 'outlined' : 'filled'}
                       color={syn.active ? 'primary' : 'default'}
-                      label={`${syn.synonym}${syn.active ? '' : ' — معطل'}`}
+                      label={`${syn.synonym}${syn.learnedFromSource === 'CLAIM_REVIEW' ? ' — تعلم من مطالبة' : ''}${
+                        syn.lifecycleStatus === 'LOCKED' ? ' — مثبت' : syn.active ? '' : ' — معطل'
+                      }`}
                       sx={{ cursor: 'pointer' }}
                     />
                   </Tooltip>

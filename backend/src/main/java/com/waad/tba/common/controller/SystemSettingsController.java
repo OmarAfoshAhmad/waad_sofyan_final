@@ -20,7 +20,7 @@ import java.util.List;
  * System Settings Admin Controller.
  * 
  * Provides endpoints for managing system-wide configurable settings.
- * Restricted to SUPER_ADMIN and INSURANCE_ADMIN roles.
+ * Restricted to SUPER_ADMIN and explicitly authorized system roles.
  * 
  * @since Phase 1 - SLA Implementation
  */

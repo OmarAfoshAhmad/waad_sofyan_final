@@ -96,7 +96,13 @@ export const getMember = async (id) => {
  */
 export const getAllMembers = async (params = {}) => {
   try {
-    const response = await api.get(UNIFIED_MEMBERS_BASE_URL, { params });
+    const normalizedParams = { ...params };
+    if (normalizedParams.organizationId && !normalizedParams.employerId) {
+      normalizedParams.employerId = normalizedParams.organizationId;
+      delete normalizedParams.organizationId;
+    }
+
+    const response = await api.get(UNIFIED_MEMBERS_BASE_URL, { params: normalizedParams });
     return response.data;
   } catch (error) {
     console.error('Error fetching members:', error);
@@ -133,7 +139,13 @@ export const countMembers = async (filters = {}) => {
  */
 export const searchMembers = async (criteria = {}) => {
   try {
-    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/search`, { params: criteria });
+    const normalizedCriteria = { ...criteria };
+    if (normalizedCriteria.organizationId && !normalizedCriteria.employerId) {
+      normalizedCriteria.employerId = normalizedCriteria.organizationId;
+      delete normalizedCriteria.organizationId;
+    }
+
+    const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/search`, { params: normalizedCriteria });
     return response.data;
   } catch (error) {
     console.error('Error searching members:', error);
@@ -174,7 +186,7 @@ export const unifiedSearch = async (query, employerId = null) => {
       }
 
       if (employerId) {
-        criteria.organizationId = employerId;
+        criteria.employerId = employerId;
       }
 
       // Call searchMembers (GET /unified-members/search) which uses LIKE %...%

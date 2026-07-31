@@ -34,8 +34,8 @@ public class DataAccessService {
             return true;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("✅ canAccessMember: ALLOWED - user={} is INSURANCE_ADMIN", user.getUsername());
+        if (roleService.canAccessInternalOperations(user)) {
+            log.debug("✅ canAccessMember: ALLOWED - user={} is internal operations role", user.getUsername());
             return true;
         }
 
@@ -76,13 +76,8 @@ public class DataAccessService {
             return true;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("✅ canAccessClaim: ALLOWED - user={} is INSURANCE_ADMIN", user.getUsername());
-            return true;
-        }
-
-        if (roleService.isReviewer(user)) {
-            log.debug("✅ canAccessClaim: ALLOWED - user={} is REVIEWER", user.getUsername());
+        if (roleService.canAccessInternalOperations(user) || roleService.isFinancialUser(user)) {
+            log.debug("✅ canAccessClaim: ALLOWED - user={} is internal/financial role", user.getUsername());
             return true;
         }
 
@@ -138,8 +133,8 @@ public class DataAccessService {
             return true;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("✅ canAccessVisit: ALLOWED - user={} is INSURANCE_ADMIN", user.getUsername());
+        if (roleService.canAccessInternalOperations(user)) {
+            log.debug("✅ canAccessVisit: ALLOWED - user={} is internal operations role", user.getUsername());
             return true;
         }
 
@@ -195,8 +190,8 @@ public class DataAccessService {
             return true;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("✅ canAccessProvider: ALLOWED - user={} is INSURANCE_ADMIN", user.getUsername());
+        if (roleService.canAccessInternalOperations(user)) {
+            log.debug("✅ canAccessProvider: ALLOWED - user={} is internal operations role", user.getUsername());
             return true;
         }
 
@@ -229,8 +224,8 @@ public class DataAccessService {
             return true;
         }
 
-        if (roleService.isInsuranceAdmin(user)) {
-            log.debug("✅ canModifyClaim: ALLOWED - user={} is INSURANCE_ADMIN", user.getUsername());
+        if (roleService.canAccessInternalOperations(user)) {
+            log.debug("✅ canModifyClaim: ALLOWED - user={} is internal operations role", user.getUsername());
             return true;
         }
 

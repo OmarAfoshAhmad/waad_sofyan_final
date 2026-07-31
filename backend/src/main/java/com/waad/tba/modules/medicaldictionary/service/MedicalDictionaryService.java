@@ -11,6 +11,7 @@ import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionarySugges
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionarySynonymRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -33,6 +35,7 @@ public class MedicalDictionaryService {
     private final MedicalDictionarySuggestionRepository suggestionRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
     private final MedicalDictionaryNormalizer normalizer;
+    private final AuthorizationService authorizationService;
 
     @Transactional
     public MedicalDictionaryEntryResponse createEntry(MedicalDictionaryEntryRequest request) {
@@ -95,12 +98,13 @@ public class MedicalDictionaryService {
         if (q.isBlank()) return List.of();
 
         List<MedicalDictionaryMatchResponse> synonymMatches = synonymRepository.searchActiveSynonyms(q).stream()
+                .filter(s -> s.getEntry() != null && s.getEntry().getMedicalCategory() != null)
                 .map(s -> MedicalDictionaryMatchResponse.builder()
                         .entryId(s.getEntry().getId())
                         .canonicalName(s.getEntry().getCanonicalName())
-                        .medicalCategoryId(s.getEntry().getMedicalCategory().getId())
-                        .medicalCategoryCode(s.getEntry().getMedicalCategory().getCode())
-                        .medicalCategoryName(s.getEntry().getMedicalCategory().getName())
+                        .medicalCategoryId(categoryId(s.getEntry().getMedicalCategory()))
+                        .medicalCategoryCode(categoryCode(s.getEntry().getMedicalCategory()))
+                        .medicalCategoryName(categoryName(s.getEntry().getMedicalCategory()))
                         .matchedText(s.getSynonym())
                         .matchType("SYNONYM")
                         .confidence(score(q, s.getNormalizedSynonym(), s.getEntry().getDefaultConfidence()))
@@ -109,12 +113,13 @@ public class MedicalDictionaryService {
 
         List<MedicalDictionaryMatchResponse> entryMatches = entryRepository.searchByTextAndStatus(q, DictionaryEntryStatus.APPROVED, Pageable.ofSize(20))
                 .stream()
+                .filter(e -> e.getMedicalCategory() != null)
                 .map(e -> MedicalDictionaryMatchResponse.builder()
                         .entryId(e.getId())
                         .canonicalName(e.getCanonicalName())
-                        .medicalCategoryId(e.getMedicalCategory().getId())
-                        .medicalCategoryCode(e.getMedicalCategory().getCode())
-                        .medicalCategoryName(e.getMedicalCategory().getName())
+                        .medicalCategoryId(categoryId(e.getMedicalCategory()))
+                        .medicalCategoryCode(categoryCode(e.getMedicalCategory()))
+                        .medicalCategoryName(categoryName(e.getMedicalCategory()))
                         .matchedText(e.getCanonicalName())
                         .matchType("CANONICAL")
                         .confidence(score(q, e.getNormalizedCanonicalName(), e.getDefaultConfidence()))
@@ -170,6 +175,9 @@ public class MedicalDictionaryService {
                 .serviceCode(row.getServiceCode())
                 .serviceName(row.getServiceName())
                 .price(row.getPrice())
+                .minPrice(row.getMinPrice() != null ? row.getMinPrice() : row.getPrice())
+                .maxPrice(row.getMaxPrice() != null ? row.getMaxPrice() : (row.getMinPrice() != null ? row.getMinPrice() : row.getPrice()))
+                .priceLabel(row.getPriceLabel())
                 .status(status)
                 .statusLabel(statusLabel(status))
                 .bestMatch(best)
@@ -217,6 +225,16 @@ public class MedicalDictionaryService {
         MedicalDictionarySynonym synonym = synonymRepository.findById(synonymId)
                 .orElseThrow(() -> new IllegalArgumentException("المرادف غير موجود"));
         synonym.setActive(!synonym.isActive());
+        var currentUser = authorizationService.getCurrentUser();
+        if (synonym.isActive()) {
+            synonym.setLifecycleStatus(synonym.getLockedAt() != null ? "LOCKED" : "REVIEWER_APPROVED");
+            synonym.setDisabledBy(null);
+            synonym.setDisabledAt(null);
+        } else {
+            synonym.setLifecycleStatus("DISABLED");
+            synonym.setDisabledBy(currentUser == null ? null : currentUser.getId());
+            synonym.setDisabledAt(LocalDateTime.now());
+        }
         return toSynonymResponse(synonymRepository.save(synonym));
     }
 
@@ -279,7 +297,7 @@ public class MedicalDictionaryService {
 
         MedicalDictionaryEntry targetEntry = resolveTargetEntryForApproval(suggestion, request);
         if (request.isApproveAsSynonym()) {
-            createSynonymIfMissing(targetEntry, suggestion.getOriginalText());
+            createSynonymIfMissing(targetEntry, suggestion.getOriginalText(), suggestion);
             suggestion.setStatus(DictionarySuggestionStatus.MERGED);
         } else {
             suggestion.setStatus(DictionarySuggestionStatus.APPROVED);
@@ -322,8 +340,9 @@ public class MedicalDictionaryService {
                 ? suggestion.getOriginalText()
                 : request.getCanonicalName();
         String normalizedName = normalizer.normalize(canonicalName);
-        if (entryRepository.existsByNormalizedCanonicalName(normalizedName)) {
-            throw new IllegalArgumentException("يوجد سجل قاموس بنفس الاسم الموحد؛ اعتمد الاقتراح كمرادف بدلاً من إنشاء سجل جديد");
+        Optional<MedicalDictionaryEntry> existingCanonical = entryRepository.findFirstByNormalizedCanonicalName(normalizedName);
+        if (existingCanonical.isPresent()) {
+            return existingCanonical.get();
         }
 
         MedicalDictionaryEntry entry = MedicalDictionaryEntry.builder()
@@ -338,9 +357,10 @@ public class MedicalDictionaryService {
         return entryRepository.save(entry);
     }
 
-    private void createSynonymIfMissing(MedicalDictionaryEntry entry, String synonymText) {
+    private void createSynonymIfMissing(MedicalDictionaryEntry entry, String synonymText, MedicalDictionarySuggestion suggestion) {
         String normalized = normalizer.normalize(synonymText);
         if (normalized.isBlank() || synonymRepository.existsByNormalizedSynonym(normalized)) return;
+        var currentUser = authorizationService.getCurrentUser();
         MedicalDictionarySynonym synonym = MedicalDictionarySynonym.builder()
                 .entry(entry)
                 .synonym(synonymText.trim())
@@ -348,6 +368,12 @@ public class MedicalDictionaryService {
                 .synonymType(com.waad.tba.modules.medicaldictionary.enums.DictionarySynonymType.COMMON)
                 .language("ar")
                 .active(true)
+                .lifecycleStatus("REVIEWER_APPROVED")
+                .learnedFromSource(suggestion == null || suggestion.getSource() == null ? "CLAIM_REVIEW" : suggestion.getSource().name())
+                .sourceReference(suggestion == null ? null : suggestion.getSourceReference())
+                .approvedBy(currentUser == null ? null : currentUser.getId())
+                .approvedAt(LocalDateTime.now())
+                .governanceNote("تعلم مراقب من تعديل/اعتماد مراجع")
                 .build();
         synonymRepository.save(synonym);
     }
@@ -360,18 +386,19 @@ public class MedicalDictionaryService {
     }
 
     private MedicalDictionaryEntryResponse toEntryResponse(MedicalDictionaryEntry entry) {
+        MedicalCategory category = entry.getMedicalCategory();
         return MedicalDictionaryEntryResponse.builder()
                 .id(entry.getId())
                 .canonicalName(entry.getCanonicalName())
                 .normalizedCanonicalName(entry.getNormalizedCanonicalName())
-                .medicalCategoryId(entry.getMedicalCategory().getId())
-                .medicalCategoryCode(entry.getMedicalCategory().getCode())
-                .medicalCategoryName(entry.getMedicalCategory().getName())
+                .medicalCategoryId(categoryId(category))
+                .medicalCategoryCode(categoryCode(category))
+                .medicalCategoryName(categoryName(category))
                 .status(entry.getStatus())
                 .defaultConfidence(entry.getDefaultConfidence())
                 .notes(entry.getNotes())
-                .synonymCount(entry.getSynonyms().size())
-                .synonyms(entry.getSynonyms().stream().map(this::toSynonymResponse).toList())
+                .synonymCount(entry.getSynonyms() == null ? 0 : entry.getSynonyms().size())
+                .synonyms(entry.getSynonyms() == null ? List.of() : entry.getSynonyms().stream().map(this::toSynonymResponse).toList())
                 .approvedAt(entry.getApprovedAt())
                 .createdAt(entry.getCreatedAt())
                 .updatedAt(entry.getUpdatedAt())
@@ -379,13 +406,14 @@ public class MedicalDictionaryService {
     }
 
     private MedicalDictionaryEntryResponse toEntrySummaryResponse(MedicalDictionaryEntry entry) {
+        MedicalCategory category = entry.getMedicalCategory();
         return MedicalDictionaryEntryResponse.builder()
                 .id(entry.getId())
                 .canonicalName(entry.getCanonicalName())
                 .normalizedCanonicalName(entry.getNormalizedCanonicalName())
-                .medicalCategoryId(entry.getMedicalCategory().getId())
-                .medicalCategoryCode(entry.getMedicalCategory().getCode())
-                .medicalCategoryName(entry.getMedicalCategory().getName())
+                .medicalCategoryId(categoryId(category))
+                .medicalCategoryCode(categoryCode(category))
+                .medicalCategoryName(categoryName(category))
                 .status(entry.getStatus())
                 .defaultConfidence(entry.getDefaultConfidence())
                 .notes(entry.getNotes())
@@ -407,12 +435,22 @@ public class MedicalDictionaryService {
                 .language(synonym.getLanguage())
                 .active(synonym.isActive())
                 .usageCount(synonym.getUsageCount())
+                .lifecycleStatus(synonym.getLifecycleStatus())
+                .learnedFromSource(synonym.getLearnedFromSource())
+                .sourceReference(synonym.getSourceReference())
+                .approvedBy(synonym.getApprovedBy())
+                .approvedAt(synonym.getApprovedAt())
+                .lockedBy(synonym.getLockedBy())
+                .lockedAt(synonym.getLockedAt())
+                .disabledBy(synonym.getDisabledBy())
+                .disabledAt(synonym.getDisabledAt())
+                .governanceNote(synonym.getGovernanceNote())
                 .build();
     }
 
     private MedicalDictionarySynonymSearchResponse toSynonymSearchResponse(MedicalDictionarySynonym synonym) {
         MedicalDictionaryEntry entry = synonym.getEntry();
-        MedicalCategory category = entry.getMedicalCategory();
+        MedicalCategory category = entry == null ? null : entry.getMedicalCategory();
         return MedicalDictionarySynonymSearchResponse.builder()
                 .synonymId(synonym.getId())
                 .synonym(synonym.getSynonym())
@@ -421,11 +459,17 @@ public class MedicalDictionaryService {
                 .language(synonym.getLanguage())
                 .active(synonym.isActive())
                 .usageCount(synonym.getUsageCount())
-                .entryId(entry.getId())
-                .canonicalName(entry.getCanonicalName())
-                .medicalCategoryId(category.getId())
-                .medicalCategoryCode(category.getCode())
-                .medicalCategoryName(category.getName())
+                .entryId(entry == null ? null : entry.getId())
+                .canonicalName(entry == null ? null : entry.getCanonicalName())
+                .medicalCategoryId(categoryId(category))
+                .medicalCategoryCode(categoryCode(category))
+                .medicalCategoryName(categoryName(category))
+                .lifecycleStatus(synonym.getLifecycleStatus())
+                .learnedFromSource(synonym.getLearnedFromSource())
+                .approvedBy(synonym.getApprovedBy())
+                .approvedAt(synonym.getApprovedAt())
+                .disabledBy(synonym.getDisabledBy())
+                .disabledAt(synonym.getDisabledAt())
                 .build();
     }
 
@@ -440,7 +484,7 @@ public class MedicalDictionaryService {
                 .suggestedEntryName(entry == null ? null : entry.getCanonicalName())
                 .suggestedCategoryId(category == null ? null : category.getId())
                 .suggestedCategoryCode(category == null ? null : category.getCode())
-                .suggestedCategoryName(category == null ? null : category.getName())
+                .suggestedCategoryName(categoryName(category))
                 .source(suggestion.getSource())
                 .status(suggestion.getStatus())
                 .confidence(suggestion.getConfidence())
@@ -449,6 +493,22 @@ public class MedicalDictionaryService {
                 .createdAt(suggestion.getCreatedAt())
                 .reviewedAt(suggestion.getReviewedAt())
                 .build();
+    }
+
+    private Long categoryId(MedicalCategory category) {
+        return category == null ? null : category.getId();
+    }
+
+    private String categoryCode(MedicalCategory category) {
+        return category == null ? null : category.getCode();
+    }
+
+    private String categoryName(MedicalCategory category) {
+        if (category == null) return "غير محدد";
+        if (category.getName() != null && !category.getName().isBlank()) return category.getName();
+        if (category.getNameAr() != null && !category.getNameAr().isBlank()) return category.getNameAr();
+        if (category.getCode() != null && !category.getCode().isBlank()) return category.getCode();
+        return "غير محدد";
     }
 }
 

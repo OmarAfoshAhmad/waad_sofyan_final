@@ -290,7 +290,6 @@ public class PreAuthReviewService {
         // التحقق من الصلاحية
         User currentUser = authorizationService.getCurrentUser();
         if (!authorizationService.isReviewer(currentUser)
-                && !authorizationService.isInsuranceAdmin(currentUser)
                 && !authorizationService.isSuperAdmin(currentUser)) {
             throw new AccessDeniedException("فقط المراجعون يمكنهم اتخاذ قرارات على الموافقات");
         }

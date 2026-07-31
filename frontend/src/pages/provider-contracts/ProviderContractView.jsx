@@ -167,6 +167,18 @@ const getOptionalMedicalCategoryLabel = (item) =>
   item?.service?.category?.name ||
   null;
 
+const getMedicalCategoryOptionLabel = (option) => `${option?.code || ''} - ${option?.nameAr || option?.name || ''}`.trim();
+
+const filterMedicalCategoryOptions = (options, state) => {
+  const query = (state.inputValue || '').trim().toLowerCase();
+  if (!query) return options;
+  return options.filter((option) =>
+    [option.code, option.nameAr, option.name, option.nameEn]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+  );
+};
+
 /**
  * Get category hierarchy names
  */
@@ -1428,7 +1440,8 @@ const ProviderContractView = () => {
               fullWidth
               sx={{ width: '100%' }}
               options={medicalCategories}
-              getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
+              getOptionLabel={getMedicalCategoryOptionLabel}
+              filterOptions={filterMedicalCategoryOptions}
               value={pricingForm.categoryId}
               onChange={(e, newValue) => {
                 setPricingForm({
@@ -1575,7 +1588,8 @@ const ProviderContractView = () => {
                   fullWidth
                   sx={{ width: '100%' }}
                   options={medicalCategories}
-                  getOptionLabel={(option) => `${option.code || ''} - ${option.nameAr || option.name || ''}`}
+                  getOptionLabel={getMedicalCategoryOptionLabel}
+                  filterOptions={filterMedicalCategoryOptions}
                   value={pricingForm.categoryId}
                   onChange={(e, newValue) => {
                     setPricingForm({
@@ -1776,7 +1790,8 @@ const ProviderContractView = () => {
           <Autocomplete
             fullWidth
             options={medicalCategories || []}
-            getOptionLabel={(option) => option.nameAr || option.name || option.code || ''}
+            getOptionLabel={getMedicalCategoryOptionLabel}
+            filterOptions={filterMedicalCategoryOptions}
             value={medicalCategories?.find((c) => c.id === bulkCategoryForm.categoryId) || null}
             onChange={(event, newValue) => {
               setBulkCategoryForm({ categoryId: newValue?.id || null });

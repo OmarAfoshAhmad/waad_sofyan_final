@@ -310,6 +310,13 @@ public class ClaimApiMapper {
                                 .medicalServiceCode(dto.getServiceCode()) // Maps to serviceCode
                                 .serviceCategoryId(dto.getServiceCategoryId())
                                 .serviceCategoryName(dto.getServiceCategoryName())
+                                .originalServiceCategoryId(dto.getOriginalServiceCategoryId())
+                                .originalServiceCategoryName(dto.getOriginalServiceCategoryName())
+                                .classificationReviewed(dto.getClassificationReviewed())
+                                .classificationReviewSource(dto.getClassificationReviewSource())
+                                .classificationReviewedBy(dto.getClassificationReviewedBy())
+                                .classificationReviewedAt(dto.getClassificationReviewedAt())
+                                .classificationReviewNote(dto.getClassificationReviewNote())
                                 .quantity(dto.getQuantity())
                                 .unitPrice(dto.getUnitPrice())
                                 .totalPrice(dto.getTotalPrice())

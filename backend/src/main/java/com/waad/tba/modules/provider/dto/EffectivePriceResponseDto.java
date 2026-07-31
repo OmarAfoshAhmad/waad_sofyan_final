@@ -62,6 +62,11 @@ public class EffectivePriceResponseDto {
     private BigDecimal contractPrice;
 
     /**
+     * Optional upper bound for ranged pricing.
+     */
+    private BigDecimal maxContractPrice;
+
+    /**
      * Currency
      */
     private String currency;

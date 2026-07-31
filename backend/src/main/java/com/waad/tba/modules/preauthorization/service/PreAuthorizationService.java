@@ -383,7 +383,7 @@ public class PreAuthorizationService {
     }
 
     /**
-     * Review pre-authorization (for REVIEWER and INSURANCE_ADMIN only).
+     * Review pre-authorization (for MEDICAL_REVIEWER and SUPER_ADMIN only).
      * SECURITY: Reviewers can ONLY change status/comment/approvedAmount.
      * 
      * @param id         PreAuth ID
@@ -410,7 +410,6 @@ public class PreAuthorizationService {
         }
         User currentUser = authorizationService.getCurrentUser();
         if (!authorizationService.isReviewer(currentUser) &&
-                !authorizationService.isInsuranceAdmin(currentUser) &&
                 !authorizationService.isSuperAdmin(currentUser)) {
             throw new AccessDeniedException("Only reviewers can perform review actions");
         }
@@ -1375,7 +1374,7 @@ public class PreAuthorizationService {
      * Rules (HARDENED 2026-01-16):
      * - PROVIDER users: providerId ALWAYS comes from ProviderContextGuard (session)
      * ANY providerId from request is IGNORED to prevent data leakage
-     * - SUPER_ADMIN/INSURANCE_ADMIN can set any providerId
+     * - Internal operations users can set any providerId
      * - Other users can set any providerId
      * 
      * @param dto         The pre-authorization creation DTO
@@ -1408,10 +1407,9 @@ public class PreAuthorizationService {
 
             log.info("🔒 PROVIDER {} creating pre-auth with their providerId: {} (enforced by ProviderContextGuard)",
                     currentUser.getUsername(), userProviderId);
-        } else if (authorizationService.isSuperAdmin(currentUser)
-                || authorizationService.isInsuranceAdmin(currentUser)) {
-            // SUPER_ADMIN and INSURANCE_ADMIN can set any provider
-            log.info("🔓 ADMIN user {} creating pre-auth - any providerId allowed", currentUser.getUsername());
+        } else if (authorizationService.canAccessInternalOperations(currentUser)) {
+            // Internal operations users can set any provider
+            log.info("🔓 Internal user {} creating pre-auth - any providerId allowed", currentUser.getUsername());
         }
         // Other roles: no restriction on providerId
     }

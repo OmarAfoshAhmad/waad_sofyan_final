@@ -82,11 +82,11 @@ public class ProviderUserExcelImportService {
                 summary.setTotalRows(summary.getTotalRows() + 1);
 
                 try {
-                    String username = excelParserService.getCellValueAsString(row.getCell(0));
-                    String fullName = excelParserService.getCellValueAsString(row.getCell(1));
-                    String email = excelParserService.getCellValueAsString(row.getCell(2));
+                    String username = requireCell(row, 0, "اسم المستخدم");
+                    String fullName = requireCell(row, 1, "الاسم الكامل");
+                    String email = requireCell(row, 2, "البريد الإلكتروني");
                     String phone = excelParserService.getCellValueAsString(row.getCell(3));
-                    String providerValue = excelParserService.getCellValueAsString(row.getCell(4));
+                    String providerValue = requireCell(row, 4, "المرفق الصحي");
                     String password = excelParserService.getCellValueAsString(row.getCell(5));
 
                     boolean generatedPassword = password == null || password.trim().isEmpty();
@@ -98,7 +98,18 @@ public class ProviderUserExcelImportService {
                         throw new IllegalArgumentException("يجب اختيار المرفق الصحي من القائمة المنسدلة");
                     }
 
-                    Long providerId = Long.parseLong(providerValue.split(" - ")[0].trim());
+                    Long providerId;
+                    try {
+                        providerId = Long.parseLong(providerValue.split(" - ")[0].trim());
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("صيغة المرفق الصحي غير صحيحة، يجب اختيارها من القائمة المنسدلة");
+                    }
+
+                    Provider provider = providerRepository.findById(providerId)
+                            .orElseThrow(() -> new IllegalArgumentException("المرفق الصحي غير موجود: " + providerId));
+                    if (!Boolean.TRUE.equals(provider.getActive())) {
+                        throw new IllegalArgumentException("المرفق الصحي غير نشط: " + provider.getName());
+                    }
 
                     UserCreateDto dto = UserCreateDto.builder()
                             .username(username)
@@ -151,8 +162,16 @@ public class ProviderUserExcelImportService {
         columns.add(ExcelTemplateColumn.builder().name("email").nameAr("البريد الإلكتروني").required(true).example("ex: ahmed@provider.com").type(ExcelTemplateColumn.ColumnType.TEXT).build());
         columns.add(ExcelTemplateColumn.builder().name("phone").nameAr("رقم الهاتف").required(false).example("ex: 0500000000").type(ExcelTemplateColumn.ColumnType.TEXT).build());
         columns.add(ExcelTemplateColumn.builder().name("provider").nameAr("المرفق الصحي").required(true).example("اختر من القائمة").type(ExcelTemplateColumn.ColumnType.TEXT).build());
-        columns.add(ExcelTemplateColumn.builder().name("password").nameAr("كلمة المرور").required(false).example("يترك فارغاً لتعيين الكلمة الافتراضية").type(ExcelTemplateColumn.ColumnType.TEXT).build());
+        columns.add(ExcelTemplateColumn.builder().name("password").nameAr("كلمة المرور").required(false).example("اتركه فارغاً لتوليد كلمة مرور عشوائية آمنة").type(ExcelTemplateColumn.ColumnType.TEXT).build());
         return columns;
+    }
+
+    private String requireCell(org.apache.poi.ss.usermodel.Row row, int cellIndex, String label) {
+        String value = excelParserService.getCellValueAsString(row.getCell(cellIndex));
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException("الحقل مطلوب: " + label);
+        }
+        return value.trim();
     }
 
     private List<ExcelLookupData> getLookupData() {

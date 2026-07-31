@@ -123,21 +123,51 @@ public class UserService {
         }
 
         String oldEmail = user.getEmail();
-        userMapper.updateEntityFromDto(user, dto);
+        String oldUsername = user.getUsername();
+        String oldUserType = user.getUserType();
+        Long oldEmployerId = user.getEmployerId();
+        Long oldProviderId = user.getProviderId();
+        Boolean oldActive = user.getActive();
+        Boolean oldCanViewClaims = user.getCanViewClaims();
+        Boolean oldCanViewVisits = user.getCanViewVisits();
+        Boolean oldCanViewReports = user.getCanViewReports();
+        Boolean oldCanViewMembers = user.getCanViewMembers();
+        Boolean oldCanViewBenefitPolicies = user.getCanViewBenefitPolicies();
+
         String resolvedUserType = resolveUserType(dto.getUserType(), dto.getEmployerId(), dto.getProviderId());
 
-        // PROTECTION: demoting the last active SUPER_ADMIN would lock out all
-        // administrative access with no recovery path — delete()/toggleStatus()
-        // already refuse to touch a SUPER_ADMIN, update() must too.
-        boolean wasSuperAdmin = "SUPER_ADMIN".equals(user.getUserType());
+        // PROTECTION: never allow update() to bypass status/demotion protections.
+        boolean wasSuperAdmin = "SUPER_ADMIN".equals(oldUserType);
         boolean stillSuperAdmin = "SUPER_ADMIN".equals(resolvedUserType);
-        if (wasSuperAdmin && !stillSuperAdmin && userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN") <= 1) {
+        boolean requestedDeactivate = Boolean.FALSE.equals(dto.getActive()) && Boolean.TRUE.equals(oldActive);
+        boolean lastActiveSuperAdmin = wasSuperAdmin && userRepository.countByUserTypeAndActiveTrue("SUPER_ADMIN") <= 1;
+
+        if (wasSuperAdmin && !stillSuperAdmin && lastActiveSuperAdmin) {
             log.error("⛔ Attempt to demote the last active SUPER_ADMIN user: id={}, username={}", id, user.getUsername());
             throw new IllegalArgumentException("لا يمكن تغيير دور آخر مستخدم SUPER_ADMIN نشط في النظام");
         }
 
+        if (wasSuperAdmin && requestedDeactivate && lastActiveSuperAdmin) {
+            log.error("⛔ Attempt to deactivate the last active SUPER_ADMIN user through update(): id={}, username={}", id, user.getUsername());
+            throw new IllegalArgumentException("لا يمكن تعطيل آخر مستخدم SUPER_ADMIN نشط في النظام");
+        }
+
+        userMapper.updateEntityFromDto(user, dto);
+
         applyRoleBindings(user, resolvedUserType, dto.getEmployerId(), dto.getProviderId());
         User updatedUser = userRepository.save(user);
+
+        if (requiresSessionRevocation(oldUserType, updatedUser.getUserType())
+                || requiresSessionRevocation(oldEmployerId, updatedUser.getEmployerId())
+                || requiresSessionRevocation(oldProviderId, updatedUser.getProviderId())
+                || requiresSessionRevocation(oldActive, updatedUser.getActive())
+                || requiresSessionRevocation(oldCanViewClaims, updatedUser.getCanViewClaims())
+                || requiresSessionRevocation(oldCanViewVisits, updatedUser.getCanViewVisits())
+                || requiresSessionRevocation(oldCanViewReports, updatedUser.getCanViewReports())
+                || requiresSessionRevocation(oldCanViewMembers, updatedUser.getCanViewMembers())
+                || requiresSessionRevocation(oldCanViewBenefitPolicies, updatedUser.getCanViewBenefitPolicies())) {
+            sessionManagementService.revokeAll(oldUsername);
+        }
         
         // Audit log
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_UPDATED,
@@ -152,10 +182,6 @@ public class UserService {
     public void delete(Long id) {
         log.info("Deleting user with id: {}", id);
         
-        if (!userRepository.existsById(id)) {
-            throw new ResourceNotFoundException("User", "id", id);
-        }
-        
         User user = userRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
         
@@ -166,12 +192,19 @@ public class UserService {
             throw new IllegalArgumentException("Cannot delete SUPER_ADMIN user");
         }
         
-        // Audit log before deletion
+        if (Boolean.FALSE.equals(user.getActive())) {
+            log.info("User already inactive, treating delete as idempotent soft-delete: {}", id);
+        }
+
+        user.setActive(false);
+        userRepository.save(user);
+        sessionManagementService.revokeAll(user.getUsername());
+
+        // Audit log before logical deletion
         securityService.auditLog(id, SecurityAuditEvent.AuditActionType.ACCOUNT_DELETED,
                 "User deleted (soft delete)", null, null);
-        
-        userRepository.deleteById(id);
-        log.info("User deleted successfully: {}", id);
+
+        log.info("User soft-deleted successfully: {}", id);
     }
 
     @Transactional(readOnly = true)
@@ -214,6 +247,25 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public Page<UserResponseDto> searchPaginated(String query, Pageable pageable) {
+        log.debug("Searching users with pagination, query: {}", query);
+        if (query == null || query.isBlank()) {
+            return findAllPaginated(pageable);
+        }
+        return userRepository.searchUsers(query.trim(), pageable)
+                .map(userMapper::toResponseDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UserResponseDto> searchPaginated(String query, String role, Pageable pageable) {
+        log.debug("Searching users with pagination, query: {}, role: {}", query, role);
+        String normalizedQuery = query == null ? "" : query.trim();
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        return userRepository.searchUsersFiltered(normalizedQuery, normalizedRole, pageable)
+                .map(userMapper::toResponseDto);
+    }
+
+    @Transactional(readOnly = true)
     public User findByUsernameOrEmail(String identifier) {
         return userRepository.findByUsernameOrEmail(identifier, identifier)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with identifier: " + identifier));
@@ -242,6 +294,7 @@ public class UserService {
         boolean newStatus = !Boolean.TRUE.equals(user.getActive());
         user.setActive(newStatus);
         User savedUser = userRepository.save(user);
+        sessionManagementService.revokeAll(user.getUsername());
         
         // Audit log
         SecurityAuditEvent.AuditActionType action = newStatus
@@ -329,5 +382,9 @@ public class UserService {
 
         user.setEmployerId(null);
         user.setProviderId(null);
+    }
+
+    private boolean requiresSessionRevocation(Object oldValue, Object newValue) {
+        return !java.util.Objects.equals(oldValue, newValue);
     }
 }

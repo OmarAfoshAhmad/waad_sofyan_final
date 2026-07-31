@@ -100,6 +100,7 @@ const UsersList = () => {
 
   // Search
   const [searchTerm, setSearchTerm] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
 
   // Toggle Status Dialog
   const [toggleDialog, setToggleDialog] = useState({ open: false, user: null });
@@ -114,35 +115,20 @@ const UsersList = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, rowsPerPage, roleFilter]);
+  }, [page, rowsPerPage, roleFilter, appliedSearch]);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const users = await usersService.getAllUsers();
+      const result = await usersService.getUsersTable({
+        page: page + 1,
+        size: rowsPerPage,
+        search: appliedSearch,
+        role: roleFilter || ''
+      });
 
-      // Filter by role if provided in URL
-      let filtered = users;
-      if (roleFilter) {
-        filtered = users.filter((u) => u.roles?.some((r) => r.name === roleFilter));
-      }
-
-      // Client-side filtering by search term
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        filtered = filtered.filter(
-          (u) =>
-            u.username?.toLowerCase().includes(term) || u.fullName?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term)
-        );
-      }
-
-      // Client-side pagination
-      const total = filtered.length;
-      const start = page * rowsPerPage;
-      const paginated = filtered.slice(start, start + rowsPerPage);
-
-      setUsers(paginated);
-      setTotalElements(total);
+      setUsers(result.items || []);
+      setTotalElements(result.total || 0);
     } catch (error) {
       console.error('Error fetching users:', error);
       openSnackbar({
@@ -158,7 +144,7 @@ const UsersList = () => {
 
   const handleSearch = () => {
     setPage(0);
-    fetchUsers();
+    setAppliedSearch(searchTerm.trim());
   };
 
   const handleSearchKeyDown = (e) => {
@@ -276,8 +262,8 @@ const UsersList = () => {
                   variant="outlined"
                   onClick={() => {
                     setSearchTerm('');
+                    setAppliedSearch('');
                     setPage(0);
-                    fetchUsers();
                   }}
                 >
                   إعادة تعيين
