@@ -63,9 +63,37 @@ public class PreAuthReviewController {
         org.springframework.data.domain.Sort.Direction direction = org.springframework.data.domain.Sort.Direction.fromString(sortDir);
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(Math.max(0, page - 1), size, org.springframework.data.domain.Sort.by(direction, sortBy));
         
-        org.springframework.data.domain.Page<com.waad.tba.modules.preauthorization.dto.PreAuthorizationResponseDto> pageResult = preAuthService.getPendingInbox(pageable);
+        org.springframework.data.domain.Page<com.waad.tba.modules.preauthorization.dto.PreAuthorizationResponseDto> pageResult =
+                preAuthService.getInboxByStatuses(resolveInboxStatuses(filterStatus), pageable);
         
         return ResponseEntity.ok(ApiResponse.success(apiMapper.toListResponse(pageResult)));
+    }
+
+    private List<PreAuthStatus> resolveInboxStatuses(String filterStatus) {
+        if (filterStatus == null || filterStatus.isBlank()
+                || "ALL".equalsIgnoreCase(filterStatus)
+                || "OPEN".equalsIgnoreCase(filterStatus)) {
+            return List.of(
+                    PreAuthStatus.SUBMITTED,
+                    PreAuthStatus.RESUBMITTED,
+                    PreAuthStatus.PENDING,
+                    PreAuthStatus.UNDER_REVIEW,
+                    PreAuthStatus.INFO_REQUESTED,
+                    PreAuthStatus.NEEDS_CORRECTION);
+        }
+
+        try {
+            return List.of(PreAuthStatus.valueOf(filterStatus.trim().toUpperCase()));
+        } catch (IllegalArgumentException ex) {
+            log.warn("Ignoring unsupported pre-authorization inbox filterStatus={}", filterStatus);
+            return List.of(
+                    PreAuthStatus.SUBMITTED,
+                    PreAuthStatus.RESUBMITTED,
+                    PreAuthStatus.PENDING,
+                    PreAuthStatus.UNDER_REVIEW,
+                    PreAuthStatus.INFO_REQUESTED,
+                    PreAuthStatus.NEEDS_CORRECTION);
+        }
     }
 
     // ── بدء المراجعة ─────────────────────────────────────────────────────────

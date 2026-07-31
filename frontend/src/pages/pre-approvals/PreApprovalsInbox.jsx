@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -13,14 +13,18 @@ import {
   Tooltip,
   Alert,
   Stack,
-  CircularProgress
+  CircularProgress,
+  Typography,
+  MenuItem,
+  InputAdornment
 } from '@mui/material';
 import {
   Cancel as RejectIcon,
   Visibility as ViewIcon,
   Refresh as RefreshIcon,
   Assignment as PreApprovalIcon,
-  PlayArrow as StartReviewIcon
+  PlayArrow as StartReviewIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import MainCard from 'components/MainCard';
 import { ModernPageHeader } from 'components/tba';
@@ -43,6 +47,8 @@ const PreApprovalsInbox = () => {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [totalRows, setTotalRows] = useState(0);
+  const [filterStatus, setFilterStatus] = useState('OPEN');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // SSE Context
   const { inboxRefreshTrigger } = useReviewer();
@@ -66,7 +72,10 @@ const PreApprovalsInbox = () => {
       // Using new reviewer service
       const response = await reviewerPreAuthService.getInbox({
         page: page + 1,
-        size: pageSize
+        size: pageSize,
+        filterStatus,
+        sortBy: 'createdAt',
+        sortDir: 'DESC'
       });
       setPreApprovals(response.items || []);
       setTotalRows(response.total || 0);
@@ -76,7 +85,7 @@ const PreApprovalsInbox = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [filterStatus, page, pageSize]);
 
   useEffect(() => {
     fetchPreApprovals();
@@ -158,6 +167,51 @@ const PreApprovalsInbox = () => {
     }
     return null;
   };
+
+  const statusOptions = [
+    { value: 'OPEN', label: 'كل المفتوحة' },
+    { value: 'PENDING', label: 'معلقة' },
+    { value: 'SUBMITTED', label: 'مقدمة' },
+    { value: 'RESUBMITTED', label: 'معاد تقديمها' },
+    { value: 'UNDER_REVIEW', label: 'قيد المراجعة' },
+    { value: 'INFO_REQUESTED', label: 'بانتظار معلومات' },
+    { value: 'NEEDS_CORRECTION', label: 'تحتاج تصحيح' }
+  ];
+
+  const filteredRows = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return preApprovals;
+    return preApprovals.filter((item) =>
+      [
+        item.referenceNumber,
+        item.memberName,
+        item.memberFullName,
+        item.providerName,
+        item.serviceName,
+        item.diagnosisDescription,
+        item.status
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
+    );
+  }, [preApprovals, searchTerm]);
+
+  const pageStats = useMemo(() => {
+    const stats = {
+      open: preApprovals.length,
+      pending: 0,
+      underReview: 0,
+      correction: 0,
+      urgent: 0
+    };
+    preApprovals.forEach((item) => {
+      if (['PENDING', 'SUBMITTED', 'RESUBMITTED'].includes(item.status)) stats.pending += 1;
+      if (item.status === 'UNDER_REVIEW') stats.underReview += 1;
+      if (['INFO_REQUESTED', 'NEEDS_CORRECTION'].includes(item.status)) stats.correction += 1;
+      if (['EMERGENCY', 'URGENT'].includes(item.priority)) stats.urgent += 1;
+    });
+    return stats;
+  }, [preApprovals]);
 
   // DataGrid columns (CANONICAL - follows Backend DTO exactly)
   const columns = [
@@ -285,14 +339,62 @@ const PreApprovalsInbox = () => {
       )}
 
       <MainCard>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }} sx={{ mb: 2 }}>
+          <Chip color="primary" variant="outlined" label={`المعروض: ${filteredRows.length}`} />
+          <Chip color="warning" variant="outlined" label={`بانتظار البدء: ${pageStats.pending}`} />
+          <Chip color="info" variant="outlined" label={`قيد المراجعة: ${pageStats.underReview}`} />
+          <Chip color="secondary" variant="outlined" label={`تصحيح/معلومات: ${pageStats.correction}`} />
+          <Chip color={pageStats.urgent > 0 ? 'error' : 'default'} variant="outlined" label={`عاجلة: ${pageStats.urgent}`} />
+        </Stack>
+
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
+          <TextField
+            select
+            label="حالة الصندوق"
+            value={filterStatus}
+            onChange={(event) => {
+              setFilterStatus(event.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: { xs: '100%', md: 220 } }}
+          >
+            {statusOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            fullWidth
+            label="بحث داخل النتائج"
+            placeholder="رقم الموافقة، المستفيد، مقدم الخدمة، الخدمة..."
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              )
+            }}
+          />
+        </Stack>
+
+        {filteredRows.length === 0 && !loading && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography fontWeight={700}>لا توجد موافقات مطابقة حاليًا.</Typography>
+            <Typography variant="body2">جرّب تغيير حالة الصندوق أو مسح البحث. الصندوق يعرض الطلبات المفتوحة فقط.</Typography>
+          </Alert>
+        )}
+
         <Box sx={{ minHeight: '25.0rem', width: '100%' }}>
           <DataGrid
             autoHeight
-            rows={preApprovals}
+            rows={filteredRows}
             columns={columns}
             loading={loading}
             paginationMode="server"
-            rowCount={totalRows}
+            rowCount={searchTerm.trim() ? filteredRows.length : totalRows}
             paginationModel={{ page, pageSize }}
             onPaginationModelChange={(model) => {
               setPage(model.page);

@@ -1166,16 +1166,29 @@ public class PreAuthorizationService {
 
         // CANONICAL: the inbox is an operational queue, not only a PENDING list.
         // Keep all non-terminal records that still need reviewer/provider follow-up.
-        List<PreAuthStatus> inboxStatuses = List.of(
+        return getInboxByStatuses(List.of(
                 PreAuthStatus.SUBMITTED,
                 PreAuthStatus.RESUBMITTED,
                 PreAuthStatus.PENDING,
                 PreAuthStatus.UNDER_REVIEW,
                 PreAuthStatus.INFO_REQUESTED,
-                PreAuthStatus.NEEDS_CORRECTION);
+                PreAuthStatus.NEEDS_CORRECTION), pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PreAuthorizationResponseDto> getInboxByStatuses(List<PreAuthStatus> inboxStatuses, Pageable pageable) {
+        List<PreAuthStatus> resolvedStatuses = inboxStatuses == null || inboxStatuses.isEmpty()
+                ? List.of(
+                        PreAuthStatus.SUBMITTED,
+                        PreAuthStatus.RESUBMITTED,
+                        PreAuthStatus.PENDING,
+                        PreAuthStatus.UNDER_REVIEW,
+                        PreAuthStatus.INFO_REQUESTED,
+                        PreAuthStatus.NEEDS_CORRECTION)
+                : inboxStatuses;
 
         Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusIn(
-                inboxStatuses,
+                resolvedStatuses,
                 pageable);
 
         log.info("[SERVICE] Found {} pre-authorizations in inbox (Total Elements), Content Size: {}", preAuths.getTotalElements(), preAuths.getContent().size());
