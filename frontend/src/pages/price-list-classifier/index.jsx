@@ -11,6 +11,8 @@ import {
   Divider,
   Grid,
   LinearProgress,
+  MenuItem,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -103,6 +105,8 @@ const statusColor = {
   UNKNOWN: 'error'
 };
 
+const CLASSIFICATION_BATCH_SIZE = 500;
+
 const exportRows = (items) => {
   const data = items.map((item) => ({
     sheet: item.sourceSheet,
@@ -122,6 +126,28 @@ const exportRows = (items) => {
   const worksheet = XLSX.utils.json_to_sheet(data);
   XLSX.utils.book_append_sheet(workbook, worksheet, 'classified_price_list');
   XLSX.writeFile(workbook, 'تصنيف_قائمة_أسعار_بالقاموس.xlsx');
+};
+
+const exportProviderContractReadyRows = (items) => {
+  const acceptedItems = items.filter((item) => item.bestMatch?.medicalCategoryId);
+  const data = acceptedItems.map((item) => ({
+    service_code: item.serviceCode || '',
+    service_name: item.bestMatch?.canonicalName || item.serviceName,
+    original_service_name: item.serviceName,
+    medical_category_code: item.bestMatch?.medicalCategoryCode || '',
+    medical_category_name: item.bestMatch?.medicalCategoryName || '',
+    contract_price: item.price ?? '',
+    base_price: item.price ?? '',
+    classification_confidence: item.bestMatch?.confidence ?? '',
+    review_status: item.statusLabel,
+    source_sheet: item.sourceSheet,
+    source_row: item.rowNumber
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'provider_contract_import');
+  XLSX.writeFile(workbook, 'قائمة_أسعار_جاهزة_مبدئياً_لعقد_مقدم_خدمة.xlsx');
 };
 
 const downloadTemplate = () => {
@@ -149,21 +175,24 @@ export default function PriceListClassifierPage() {
   const [rawRows, setRawRows] = useState([]);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [classificationProgress, setClassificationProgress] = useState(null);
   const [promoting, setPromoting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   const items = result?.items || [];
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) =>
-      [item.serviceName, item.bestMatch?.canonicalName, item.bestMatch?.medicalCategoryCode, item.bestMatch?.medicalCategoryName, item.statusLabel]
+    return items.filter((item) => {
+      if (statusFilter !== 'ALL' && item.status !== statusFilter) return false;
+      if (!q) return true;
+      return [item.serviceName, item.bestMatch?.canonicalName, item.bestMatch?.medicalCategoryCode, item.bestMatch?.medicalCategoryName, item.statusLabel]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [items, search]);
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [items, search, statusFilter]);
 
   const handleFile = async (event) => {
     const file = event.target.files?.[0];
@@ -176,7 +205,7 @@ export default function PriceListClassifierPage() {
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
-      const rows = extractRowsFromWorkbook(workbook).slice(0, 1000);
+      const rows = extractRowsFromWorkbook(workbook);
       setRawRows(rows);
       if (!rows.length) {
         setError('لم أجد خدمات قابلة للتصنيف داخل الملف. تحقق من بنية الأعمدة أو جرّب قالباً أوضح.');
@@ -189,15 +218,37 @@ export default function PriceListClassifierPage() {
   const classifyRows = async () => {
     if (!rawRows.length) return;
     setLoading(true);
+    setClassificationProgress({ done: 0, total: rawRows.length });
     setError('');
     setSuccess('');
     try {
-      const response = await medicalDictionaryService.classifyPriceListWithDictionary({ rows: rawRows });
-      setResult(response);
+      const chunks = [];
+      for (let index = 0; index < rawRows.length; index += CLASSIFICATION_BATCH_SIZE) {
+        chunks.push(rawRows.slice(index, index + CLASSIFICATION_BATCH_SIZE));
+      }
+
+      const allItems = [];
+      for (const chunk of chunks) {
+        const response = await medicalDictionaryService.classifyPriceListWithDictionary({ rows: chunk });
+        allItems.push(...(response.items || []));
+        setClassificationProgress({ done: allItems.length, total: rawRows.length });
+      }
+
+      setResult({
+        summary: {
+          total: allItems.length,
+          highConfidence: allItems.filter((item) => item.status === 'HIGH_CONFIDENCE').length,
+          needsReview: allItems.filter((item) => item.status === 'NEEDS_REVIEW').length,
+          unknown: allItems.filter((item) => item.status === 'UNKNOWN').length,
+          duplicateNames: allItems.filter((item) => item.duplicateName).length
+        },
+        items: allItems
+      });
     } catch (err) {
       setError(err?.response?.data?.message || 'فشل تصنيف قائمة الأسعار بالقاموس');
     } finally {
       setLoading(false);
+      setClassificationProgress(null);
     }
   };
 
@@ -277,7 +328,7 @@ export default function PriceListClassifierPage() {
                   2. تصنيف بالقاموس
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  تم استخراج {rawRows.length} خدمة. الحد الحالي 1000 خدمة في الطلب الواحد لحماية الأداء.
+                  تم استخراج {rawRows.length} خدمة. سيتم التصنيف على دفعات من {CLASSIFICATION_BATCH_SIZE} خدمة لحماية الأداء.
                 </Typography>
                 <Button
                   variant="contained"
@@ -311,12 +362,28 @@ export default function PriceListClassifierPage() {
                 >
                   تصدير Excel
                 </Button>
+                <Button
+                  sx={{ mt: 1 }}
+                  variant="contained"
+                  color="success"
+                  startIcon={<FileDownloadIcon />}
+                  disabled={!items.some((item) => item.bestMatch?.medicalCategoryId)}
+                  onClick={() => exportProviderContractReadyRows(items)}
+                  fullWidth
+                >
+                  تصدير للعقود
+                </Button>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
 
         {loading && <LinearProgress />}
+        {classificationProgress && (
+          <Typography variant="body2" color="text.secondary">
+            جاري التصنيف: {classificationProgress.done} من {classificationProgress.total}
+          </Typography>
+        )}
         {error && <Alert severity="error">{error}</Alert>}
         {success && <Alert severity="success">{success}</Alert>}
 
@@ -350,8 +417,23 @@ export default function PriceListClassifierPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="بحث داخل النتائج: اسم الخدمة، التصنيف، الكود، الحالة..."
                 />
+                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} sx={{ minWidth: 190 }}>
+                  <MenuItem value="ALL">كل النتائج</MenuItem>
+                  <MenuItem value="HIGH_CONFIDENCE">ثقة عالية</MenuItem>
+                  <MenuItem value="NEEDS_REVIEW">تحتاج مراجعة</MenuItem>
+                  <MenuItem value="UNKNOWN">غير معروف</MenuItem>
+                </Select>
                 <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={downloadTemplate}>
                   قالب Excel
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<FileDownloadIcon />}
+                  disabled={!items.some((item) => item.bestMatch?.medicalCategoryId)}
+                  onClick={() => exportProviderContractReadyRows(items)}
+                >
+                  تصدير للعقود
                 </Button>
                 <Button
                   variant="contained"
