@@ -80,6 +80,13 @@ public class MedicalDictionaryService {
     }
 
     @Transactional(readOnly = true)
+    public Page<MedicalDictionarySynonymSearchResponse> searchSynonyms(String query, boolean activeOnly, Pageable pageable) {
+        String q = normalizer.normalize(query);
+        if (q.isBlank()) return Page.empty(pageable);
+        return synonymRepository.searchSynonyms(q, activeOnly, pageable).map(this::toSynonymSearchResponse);
+    }
+
+    @Transactional(readOnly = true)
     public List<MedicalDictionaryMatchResponse> match(String text) {
         String q = normalizer.normalize(text);
         if (q.isBlank()) return List.of();
@@ -332,6 +339,25 @@ public class MedicalDictionaryService {
                 .language(synonym.getLanguage())
                 .active(synonym.isActive())
                 .usageCount(synonym.getUsageCount())
+                .build();
+    }
+
+    private MedicalDictionarySynonymSearchResponse toSynonymSearchResponse(MedicalDictionarySynonym synonym) {
+        MedicalDictionaryEntry entry = synonym.getEntry();
+        MedicalCategory category = entry.getMedicalCategory();
+        return MedicalDictionarySynonymSearchResponse.builder()
+                .synonymId(synonym.getId())
+                .synonym(synonym.getSynonym())
+                .normalizedSynonym(synonym.getNormalizedSynonym())
+                .synonymType(synonym.getSynonymType())
+                .language(synonym.getLanguage())
+                .active(synonym.isActive())
+                .usageCount(synonym.getUsageCount())
+                .entryId(entry.getId())
+                .canonicalName(entry.getCanonicalName())
+                .medicalCategoryId(category.getId())
+                .medicalCategoryCode(category.getCode())
+                .medicalCategoryName(category.getName())
                 .build();
     }
 

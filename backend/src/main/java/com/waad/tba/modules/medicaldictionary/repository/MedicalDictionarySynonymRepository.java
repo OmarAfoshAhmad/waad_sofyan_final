@@ -17,6 +17,28 @@ public interface MedicalDictionarySynonymRepository extends JpaRepository<Medica
 
     Page<MedicalDictionarySynonym> findByEntry_Id(Long entryId, Pageable pageable);
 
+    @Query(value = """
+            SELECT s FROM MedicalDictionarySynonym s
+            JOIN FETCH s.entry e
+            JOIN FETCH e.medicalCategory c
+            WHERE (:activeOnly = false OR s.active = true)
+              AND (s.normalizedSynonym LIKE CONCAT('%', :q, '%')
+                   OR e.normalizedCanonicalName LIKE CONCAT('%', :q, '%')
+                   OR LOWER(c.code) LIKE CONCAT('%', :q, '%'))
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM MedicalDictionarySynonym s
+            JOIN s.entry e
+            JOIN e.medicalCategory c
+            WHERE (:activeOnly = false OR s.active = true)
+              AND (s.normalizedSynonym LIKE CONCAT('%', :q, '%')
+                   OR e.normalizedCanonicalName LIKE CONCAT('%', :q, '%')
+                   OR LOWER(c.code) LIKE CONCAT('%', :q, '%'))
+            """)
+    Page<MedicalDictionarySynonym> searchSynonyms(@Param("q") String normalizedQuery,
+                                                  @Param("activeOnly") boolean activeOnly,
+                                                  Pageable pageable);
+
     @Query("""
             SELECT s FROM MedicalDictionarySynonym s
             JOIN FETCH s.entry e

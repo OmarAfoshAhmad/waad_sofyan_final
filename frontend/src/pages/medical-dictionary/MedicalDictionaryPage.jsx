@@ -62,6 +62,9 @@ export default function MedicalDictionaryPage() {
   const [synonymsPage, setSynonymsPage] = useState(null);
   const [synonymsLoading, setSynonymsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dictionary');
+  const [synonymSearchQuery, setSynonymSearchQuery] = useState('');
+  const [synonymSearchPage, setSynonymSearchPage] = useState(null);
+  const [synonymSearchLoading, setSynonymSearchLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     canonicalName: '',
     medicalCategoryId: '',
@@ -72,6 +75,7 @@ export default function MedicalDictionaryPage() {
   const entries = useMemo(() => getItems(entriesPage), [entriesPage]);
   const suggestions = useMemo(() => getItems(suggestionsPage), [suggestionsPage]);
   const drawerSynonyms = useMemo(() => getItems(synonymsPage), [synonymsPage]);
+  const synonymSearchResults = useMemo(() => getItems(synonymSearchPage), [synonymSearchPage]);
   const entriesTotal = entriesPage?.total || entriesPage?.totalElements || entries.length;
 
   const loadEntries = useCallback(async () => {
@@ -178,6 +182,25 @@ export default function MedicalDictionaryPage() {
     }
   };
 
+  const handleSynonymSearch = async () => {
+    if (!synonymSearchQuery.trim()) return;
+    setSynonymSearchLoading(true);
+    setError('');
+    try {
+      const result = await medicalDictionaryService.searchDictionarySynonyms({
+        query: synonymSearchQuery.trim(),
+        activeOnly: true,
+        page: 0,
+        size: 30
+      });
+      setSynonymSearchPage(result);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر البحث في المرادفات');
+    } finally {
+      setSynonymSearchLoading(false);
+    }
+  };
+
   const handleSynonymFormChange = (entryId, value) => {
     setSynonymForms((prev) => ({ ...prev, [entryId]: value }));
   };
@@ -264,6 +287,7 @@ export default function MedicalDictionaryPage() {
             sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
           >
             <Tab value="dictionary" label={`القاموس (${entriesTotal})`} />
+            <Tab value="synonyms" label="بحث المرادفات" />
             <Tab value="match" label="اختبار المطابقة" />
             <Tab value="suggestions" label={`اقتراحات المراجعة (${suggestions.length})`} />
           </Tabs>
@@ -428,6 +452,90 @@ export default function MedicalDictionaryPage() {
             </CardContent>
           </Card>
         )}
+          </Stack>
+        )}
+
+        {activeTab === 'synonyms' && (
+          <Stack spacing={3}>
+            <Card>
+              <CardContent>
+                <Typography variant="h5" sx={{ mb: 1, fontWeight: 800 }}>
+                  البحث المباشر في المرادفات
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  استخدم هذا البحث عندما تريد معرفة إلى أي اسم موحد وتصنيف ينتمي نص خدمة وارد من قائمة أسعار.
+                </Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
+                  <TextField
+                    fullWidth
+                    value={synonymSearchQuery}
+                    onChange={(e) => setSynonymSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSynonymSearch()}
+                    placeholder="ابحث عن مرادف أو اسم وارد من قائمة أسعار..."
+                  />
+                  <Button variant="contained" startIcon={<SearchIcon />} onClick={handleSynonymSearch} disabled={synonymSearchLoading}>
+                    {synonymSearchLoading ? <CircularProgress size={20} /> : 'بحث'}
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                  <Box>
+                    <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                      نتائج المرادفات
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      النتيجة توضّح النص المطابق والاسم الموحد والتصنيف المقترح.
+                    </Typography>
+                  </Box>
+                  <Chip color="primary" variant="outlined" label={`${synonymSearchPage?.total || synonymSearchResults.length} نتيجة`} />
+                </Stack>
+
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>المرادف المطابق</TableCell>
+                        <TableCell>الاسم الموحد</TableCell>
+                        <TableCell>التصنيف</TableCell>
+                        <TableCell>النوع</TableCell>
+                        <TableCell>الاستخدام</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {!synonymSearchLoading && synonymSearchResults.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            ابدأ بكتابة نص للبحث في المرادفات.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {synonymSearchResults.map((item) => (
+                        <TableRow key={item.synonymId} hover>
+                          <TableCell sx={{ fontWeight: 700 }}>{item.synonym}</TableCell>
+                          <TableCell>{item.canonicalName}</TableCell>
+                          <TableCell>
+                            <Stack spacing={0.25}>
+                              <Typography>{item.medicalCategoryName}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {item.medicalCategoryCode}
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={item.synonymType || 'COMMON'} variant="outlined" />
+                          </TableCell>
+                          <TableCell>{item.usageCount || 0}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
           </Stack>
         )}
 

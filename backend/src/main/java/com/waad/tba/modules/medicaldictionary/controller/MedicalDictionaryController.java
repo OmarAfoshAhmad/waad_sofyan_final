@@ -67,6 +67,17 @@ public class MedicalDictionaryController {
         return ResponseEntity.ok(ApiResponse.success("تم تحديث حالة المرادف", service.toggleSynonym(synonymId)));
     }
 
+    @GetMapping("/synonyms/search")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<Page<MedicalDictionarySynonymSearchResponse>>> searchSynonyms(
+            @RequestParam String query,
+            @RequestParam(defaultValue = "true") boolean activeOnly,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "30") int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100), Sort.by(Sort.Direction.DESC, "usageCount"));
+        return ResponseEntity.ok(ApiResponse.success(service.searchSynonyms(query, activeOnly, pageable)));
+    }
+
     @GetMapping("/match")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF')")
     public ResponseEntity<ApiResponse<List<MedicalDictionaryMatchResponse>>> match(@RequestParam String text) {
