@@ -28,6 +28,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
@@ -142,6 +143,7 @@ const exportProviderContractReadyRows = (items) => {
     service_code: item.serviceCode || '',
     service_name: item.bestMatch?.canonicalName || item.serviceName,
     original_service_name: item.serviceName,
+    medical_category_id: getEffectiveCategory(item)?.medicalCategoryId || '',
     medical_category_code: getEffectiveCategory(item)?.medicalCategoryCode || '',
     medical_category_name: getEffectiveCategory(item)?.medicalCategoryName || '',
     contract_price: item.price ?? '',
@@ -186,6 +188,7 @@ export default function PriceListClassifierPage() {
   const [loading, setLoading] = useState(false);
   const [classificationProgress, setClassificationProgress] = useState(null);
   const [promoting, setPromoting] = useState(false);
+  const [approvingSynonyms, setApprovingSynonyms] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -195,6 +198,7 @@ export default function PriceListClassifierPage() {
 
   const items = result?.items || [];
   const manualReviewedCount = items.filter((item) => item.manualCategory).length;
+  const synonymReadyCount = items.filter((item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName).length;
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -341,6 +345,39 @@ export default function PriceListClassifierPage() {
     }
   };
 
+  const approveMatchedRowsAsSynonyms = async () => {
+    const synonymRows = items.filter((item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName);
+    if (!synonymRows.length) {
+      setSuccess('لا توجد صفوف مرتبطة باسم موحد يمكن اعتمادها كمرادفات.');
+      return;
+    }
+
+    setApprovingSynonyms(true);
+    setError('');
+    setSuccess('');
+    let approved = 0;
+    let skipped = 0;
+    try {
+      for (const item of synonymRows) {
+        try {
+          await medicalDictionaryService.addDictionarySynonym(item.bestMatch.entryId, {
+            synonym: item.serviceName,
+            synonymType: 'PROVIDER_SPECIFIC',
+            language: /[A-Za-z]/.test(item.serviceName) ? 'en' : 'ar'
+          });
+          approved += 1;
+        } catch (err) {
+          skipped += 1;
+        }
+      }
+      setSuccess(`تم اعتماد ${approved} مرادف للقاموس. تم تخطي ${skipped} صف غالباً لأنها مرادفات موجودة مسبقاً.`);
+    } catch (err) {
+      setError('فشل اعتماد المرادفات من نتائج قائمة الأسعار');
+    } finally {
+      setApprovingSynonyms(false);
+    }
+  };
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Stack spacing={3}>
@@ -464,6 +501,7 @@ export default function PriceListClassifierPage() {
                   <Chip color="error" label={`غير معروف ${result.summary?.unknown || 0}`} />
                   <Chip color="info" label={`مكرر ${result.summary?.duplicateNames || 0}`} />
                   <Chip color="secondary" label={`مراجع يدوياً ${manualReviewedCount}`} />
+                  <Chip color="primary" label={`جاهز كمرادف ${synonymReadyCount}`} />
                 </Stack>
               </Stack>
 
@@ -493,6 +531,15 @@ export default function PriceListClassifierPage() {
                   onClick={() => exportProviderContractReadyRows(items)}
                 >
                   تصدير للعقود
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={approvingSynonyms ? <CircularProgress size={18} /> : <LibraryAddCheckIcon />}
+                  disabled={!synonymReadyCount || approvingSynonyms}
+                  onClick={approveMatchedRowsAsSynonyms}
+                >
+                  اعتماد كمرادفات
                 </Button>
                 <Button
                   variant="contained"
