@@ -58,7 +58,17 @@ public class MedicalDictionaryService {
     @Transactional(readOnly = true)
     public Page<MedicalDictionaryEntryResponse> searchEntries(String query, DictionaryEntryStatus status, Pageable pageable) {
         String q = normalizer.normalize(query);
-        return entryRepository.search(q.isBlank() ? null : q, status, pageable).map(this::toEntryResponse);
+        Page<MedicalDictionaryEntry> entries;
+        if (q.isBlank() && status == null) {
+            entries = entryRepository.findAll(pageable);
+        } else if (q.isBlank()) {
+            entries = entryRepository.findByStatus(status, pageable);
+        } else if (status == null) {
+            entries = entryRepository.searchByText(q, pageable);
+        } else {
+            entries = entryRepository.searchByTextAndStatus(q, status, pageable);
+        }
+        return entries.map(this::toEntryResponse);
     }
 
     @Transactional(readOnly = true)
@@ -79,7 +89,7 @@ public class MedicalDictionaryService {
                         .build())
                 .toList();
 
-        List<MedicalDictionaryMatchResponse> entryMatches = entryRepository.search(q, DictionaryEntryStatus.APPROVED, Pageable.ofSize(20))
+        List<MedicalDictionaryMatchResponse> entryMatches = entryRepository.searchByTextAndStatus(q, DictionaryEntryStatus.APPROVED, Pageable.ofSize(20))
                 .stream()
                 .map(e -> MedicalDictionaryMatchResponse.builder()
                         .entryId(e.getId())

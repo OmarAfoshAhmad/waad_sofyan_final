@@ -19,16 +19,26 @@ public interface MedicalDictionaryEntryRepository extends JpaRepository<MedicalD
     @Query("SELECT e FROM MedicalDictionaryEntry e LEFT JOIN FETCH e.synonyms LEFT JOIN FETCH e.medicalCategory WHERE e.id = :id")
     Optional<MedicalDictionaryEntry> findWithSynonymsById(@Param("id") Long id);
 
+    Page<MedicalDictionaryEntry> findByStatus(DictionaryEntryStatus status, Pageable pageable);
+
     @Query("""
             SELECT DISTINCT e FROM MedicalDictionaryEntry e
-            WHERE (:status IS NULL OR e.status = :status)
-              AND (:q IS NULL OR e.normalizedCanonicalName LIKE CONCAT('%', :q, '%')
+            WHERE e.normalizedCanonicalName LIKE CONCAT('%', :q, '%')
+               OR EXISTS (SELECT 1 FROM MedicalDictionarySynonym sx
+                          WHERE sx.entry = e AND sx.active = true AND sx.normalizedSynonym LIKE CONCAT('%', :q, '%'))
+            """)
+    Page<MedicalDictionaryEntry> searchByText(@Param("q") String normalizedQuery, Pageable pageable);
+
+    @Query("""
+            SELECT DISTINCT e FROM MedicalDictionaryEntry e
+            WHERE e.status = :status
+              AND (e.normalizedCanonicalName LIKE CONCAT('%', :q, '%')
                    OR EXISTS (SELECT 1 FROM MedicalDictionarySynonym sx
                               WHERE sx.entry = e AND sx.active = true AND sx.normalizedSynonym LIKE CONCAT('%', :q, '%')))
             """)
-    Page<MedicalDictionaryEntry> search(@Param("q") String normalizedQuery,
-                                        @Param("status") DictionaryEntryStatus status,
-                                        Pageable pageable);
+    Page<MedicalDictionaryEntry> searchByTextAndStatus(@Param("q") String normalizedQuery,
+                                                       @Param("status") DictionaryEntryStatus status,
+                                                       Pageable pageable);
 }
 
 
