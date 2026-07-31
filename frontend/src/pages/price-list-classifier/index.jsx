@@ -108,12 +108,46 @@ const statusColor = {
 };
 
 const CLASSIFICATION_BATCH_SIZE = 500;
+const CLASSIFICATION_SESSION_KEY = 'waad.priceListClassifier.session.v1';
 
 const rowKey = (item) => `${item.sourceSheet || '-'}-${item.rowNumber || '-'}-${item.serviceName || '-'}`;
 
 const getEffectiveCategory = (item) => item.manualCategory || item.bestMatch;
 
 const getEffectiveStatusLabel = (item) => (item.manualCategory ? 'مراجع يدوياً' : item.statusLabel);
+
+const buildSummary = (items) => ({
+  total: items.length,
+  highConfidence: items.filter((item) => item.status === 'HIGH_CONFIDENCE').length,
+  needsReview: items.filter((item) => item.status === 'NEEDS_REVIEW').length,
+  unknown: items.filter((item) => item.status === 'UNKNOWN').length,
+  duplicateNames: items.filter((item) => item.duplicateName).length
+});
+
+const saveClassificationSession = (session) => {
+  try {
+    localStorage.setItem(CLASSIFICATION_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString() }));
+  } catch (err) {
+    // Local persistence is a convenience; classification must continue even if storage quota is full.
+  }
+};
+
+const loadClassificationSession = () => {
+  try {
+    const raw = localStorage.getItem(CLASSIFICATION_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+};
+
+const clearClassificationSession = () => {
+  try {
+    localStorage.removeItem(CLASSIFICATION_SESSION_KEY);
+  } catch (err) {
+    // ignore
+  }
+};
 
 const exportRows = (items) => {
   const data = items.map((item) => ({
@@ -212,6 +246,7 @@ export default function PriceListClassifierPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState(null);
 
   const items = result?.items || [];
   const manualReviewedCount = items.filter((item) => item.manualCategory).length;
@@ -246,6 +281,28 @@ export default function PriceListClassifierPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const session = loadClassificationSession();
+    if (!session?.rawRows?.length) return;
+
+    setSessionInfo(session);
+    setFileName(session.fileName || '');
+    setRawRows(session.rawRows || []);
+    setResult({
+      summary: buildSummary(session.items || []),
+      items: session.items || []
+    });
+    setClassificationProgress({
+      done: session.done || 0,
+      total: session.total || session.rawRows.length
+    });
+    if (session.status === 'COMPLETED') {
+      setSuccess(`تم استرجاع آخر نتيجة محفوظة: ${session.done || 0} خدمة مصنفة.`);
+    } else if ((session.done || 0) > 0) {
+      setSuccess(`تم استرجاع جلسة تصنيف غير مكتملة: ${session.done} من ${session.total || session.rawRows.length}. يمكنك المتابعة من نفس النقطة.`);
+    }
+  }, []);
+
   const applyManualCategory = (item, categoryId) => {
     const category = categories.find((entry) => String(entry.id) === String(categoryId));
     setResult((previous) => {
@@ -275,8 +332,11 @@ export default function PriceListClassifierPage() {
   const handleFile = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    clearClassificationSession();
     setError('');
     setSuccess('');
+    setSessionInfo(null);
+    setClassificationProgress(null);
     setResult(null);
     setFileName(file.name);
 
@@ -285,6 +345,16 @@ export default function PriceListClassifierPage() {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const rows = extractRowsFromWorkbook(workbook);
       setRawRows(rows);
+      saveClassificationSession({
+        status: 'READY',
+        fileName: file.name,
+        rawRows: rows,
+        items: [],
+        done: 0,
+        total: rows.length,
+        batchSize: CLASSIFICATION_BATCH_SIZE
+      });
+      setSessionInfo(loadClassificationSession());
       if (!rows.length) {
         setError('لم أجد خدمات قابلة للتصنيف داخل الملف. تحقق من بنية الأعمدة أو جرّب قالباً أوضح.');
       }
@@ -296,38 +366,73 @@ export default function PriceListClassifierPage() {
   const classifyRows = async () => {
     if (!rawRows.length) return;
     setLoading(true);
-    setClassificationProgress({ done: 0, total: rawRows.length });
     setError('');
     setSuccess('');
     try {
-      const chunks = [];
-      for (let index = 0; index < rawRows.length; index += CLASSIFICATION_BATCH_SIZE) {
-        chunks.push(rawRows.slice(index, index + CLASSIFICATION_BATCH_SIZE));
-      }
+      const persisted = loadClassificationSession();
+      const shouldResume = persisted?.rawRows?.length === rawRows.length && (persisted.done || 0) < rawRows.length;
+      const allItems = shouldResume ? [...(persisted.items || [])] : [];
+      let startIndex = shouldResume ? persisted.done || 0 : 0;
 
-      const allItems = [];
-      for (const chunk of chunks) {
+      setClassificationProgress({ done: startIndex, total: rawRows.length });
+      saveClassificationSession({
+        status: 'RUNNING',
+        fileName,
+        rawRows,
+        items: allItems,
+        done: startIndex,
+        total: rawRows.length,
+        batchSize: CLASSIFICATION_BATCH_SIZE
+      });
+
+      for (let index = startIndex; index < rawRows.length; index += CLASSIFICATION_BATCH_SIZE) {
+        const chunk = rawRows.slice(index, index + CLASSIFICATION_BATCH_SIZE);
         const response = await medicalDictionaryService.classifyPriceListWithDictionary({ rows: chunk });
         allItems.push(...(response.items || []));
-        setClassificationProgress({ done: allItems.length, total: rawRows.length });
+        startIndex = Math.min(index + chunk.length, rawRows.length);
+
+        const nextResult = {
+          summary: buildSummary(allItems),
+          items: allItems
+        };
+        setResult(nextResult);
+        setClassificationProgress({ done: startIndex, total: rawRows.length });
+
+        saveClassificationSession({
+          status: startIndex >= rawRows.length ? 'COMPLETED' : 'RUNNING',
+          fileName,
+          rawRows,
+          items: allItems,
+          done: startIndex,
+          total: rawRows.length,
+          batchSize: CLASSIFICATION_BATCH_SIZE
+        });
+        setSessionInfo(loadClassificationSession());
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
-      setResult({
-        summary: {
-          total: allItems.length,
-          highConfidence: allItems.filter((item) => item.status === 'HIGH_CONFIDENCE').length,
-          needsReview: allItems.filter((item) => item.status === 'NEEDS_REVIEW').length,
-          unknown: allItems.filter((item) => item.status === 'UNKNOWN').length,
-          duplicateNames: allItems.filter((item) => item.duplicateName).length
-        },
-        items: allItems
-      });
+      setSuccess(`اكتمل التصنيف: ${allItems.length} خدمة. تم حفظ النتائج ويمكن الرجوع لها لاحقاً.`);
     } catch (err) {
+      const persisted = loadClassificationSession();
+      if (persisted) {
+        setSessionInfo(persisted);
+        setClassificationProgress({ done: persisted.done || 0, total: persisted.total || rawRows.length });
+      }
       setError(err?.response?.data?.message || 'فشل تصنيف قائمة الأسعار بالقاموس');
     } finally {
       setLoading(false);
-      setClassificationProgress(null);
     }
+  };
+
+  const clearCurrentClassificationSession = () => {
+    clearClassificationSession();
+    setSessionInfo(null);
+    setClassificationProgress(null);
+    setResult(null);
+    setRawRows([]);
+    setFileName('');
+    setSuccess('تم مسح جلسة التصنيف المحفوظة.');
   };
 
   const promoteReviewRowsToDictionarySuggestions = async () => {
@@ -411,6 +516,20 @@ export default function PriceListClassifierPage() {
           القاموس يقترح التصنيف والاسم الموحد فقط. محرك التغطية يبقى المسؤول الوحيد عن الحسابات المالية، النسب، السقوف، الرفض، والتحمل.
         </Alert>
 
+        {sessionInfo?.rawRows?.length > 0 && (
+          <Alert
+            severity={sessionInfo.status === 'COMPLETED' ? 'success' : 'warning'}
+            action={
+              <Button color="inherit" size="small" onClick={clearCurrentClassificationSession}>
+                مسح الجلسة
+              </Button>
+            }
+          >
+            جلسة محفوظة: {sessionInfo.done || 0} من {sessionInfo.total || sessionInfo.rawRows.length} خدمة
+            {sessionInfo.savedAt ? ` — آخر حفظ ${new Date(sessionInfo.savedAt).toLocaleString('ar-LY')}` : ''}
+          </Alert>
+        )}
+
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
             <Card sx={{ height: '100%' }}>
@@ -450,7 +569,7 @@ export default function PriceListClassifierPage() {
                   onClick={classifyRows}
                   fullWidth
                 >
-                  تصنيف الخدمات
+                  {(classificationProgress?.done || 0) > 0 && (classificationProgress?.done || 0) < rawRows.length ? 'متابعة التصنيف' : 'تصنيف الخدمات'}
                 </Button>
               </CardContent>
             </Card>
@@ -490,10 +609,18 @@ export default function PriceListClassifierPage() {
           </Grid>
         </Grid>
 
-        {loading && <LinearProgress />}
+        {loading && (
+          <LinearProgress
+            variant={classificationProgress?.total ? 'determinate' : 'indeterminate'}
+            value={
+              classificationProgress?.total ? Math.min(100, Math.round(((classificationProgress.done || 0) / classificationProgress.total) * 100)) : undefined
+            }
+          />
+        )}
         {classificationProgress && (
           <Typography variant="body2" color="text.secondary">
-            جاري التصنيف: {classificationProgress.done} من {classificationProgress.total}
+            التقدم الحقيقي: {classificationProgress.done} من {classificationProgress.total}
+            {classificationProgress.total ? ` (${Math.round(((classificationProgress.done || 0) / classificationProgress.total) * 100)}%)` : ''}
           </Typography>
         )}
         {error && <Alert severity="error">{error}</Alert>}
