@@ -129,8 +129,12 @@ const PreApprovalsInbox = () => {
   // PreAuth workflow: PENDING → UNDER_REVIEW → APPROVED/REJECTED
   const getStatusChip = (status) => {
     const configs = {
+      SUBMITTED: { color: 'primary', label: 'مُقدم' },
+      RESUBMITTED: { color: 'primary', label: 'أُعيد تقديمه' },
       PENDING: { color: 'warning', label: 'معلق' },
       UNDER_REVIEW: { color: 'info', label: 'قيد المراجعة' },
+      INFO_REQUESTED: { color: 'warning', label: 'بانتظار معلومات' },
+      NEEDS_CORRECTION: { color: 'warning', label: 'يحتاج تصحيح' },
       APPROVED: { color: 'success', label: 'موافق عليه' },
       REJECTED: { color: 'error', label: 'مرفوض' },
       EXPIRED: { color: 'default', label: 'منتهي' },
@@ -228,7 +232,7 @@ const PreApprovalsInbox = () => {
           {/* PENDING → Start Review (transition to UNDER_REVIEW)
               CANONICAL 2026-01-26: PreAuth workflow starts at PENDING, not SUBMITTED
               PENDING means newly created and awaiting initial review */}
-          {params.row.status === 'PENDING' && (
+          {['PENDING', 'SUBMITTED', 'RESUBMITTED'].includes(params.row.status) && (
             <Tooltip title="بدء المراجعة">
               <span>
                 <IconButton size="small" color="info" onClick={() => handleStartReview(params.row)} disabled={actionLoading}>
@@ -239,7 +243,7 @@ const PreApprovalsInbox = () => {
           )}
 
           {/* PENDING/UNDER_REVIEW → Reject (Approve is now line-level only) */}
-          {(params.row.status === 'PENDING' || params.row.status === 'UNDER_REVIEW') && (
+          {['PENDING', 'SUBMITTED', 'RESUBMITTED', 'UNDER_REVIEW'].includes(params.row.status) && (
             <>
               <Tooltip title="رفض كلي">
                 <span>

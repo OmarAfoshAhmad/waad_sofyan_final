@@ -5,6 +5,7 @@ import com.waad.tba.support.PostgresIntegrationTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
@@ -27,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * afterState jsonb path — closing the gap a mocked unit test cannot cover.
  */
 @SpringBootTest(classes = TbaWaadApplication.class)
+@ActiveProfiles("test")
 class SecurityAuditServicePostgresIntegrationTest extends PostgresIntegrationTestBase {
 
     @Autowired

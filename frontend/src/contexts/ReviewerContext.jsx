@@ -74,7 +74,11 @@ export const ReviewerProvider = ({ children }) => {
   useEffect(() => {
     // Only connect if user is logged in and has reviewer role (or admin)
     const roles = user?.roles || [];
-    const canReview = roles.includes('ROLE_REVIEWER') || roles.includes('ROLE_INSURANCE_ADMIN') || roles.includes('ROLE_SUPER_ADMIN');
+    const canReview =
+      roles.includes('ROLE_MEDICAL_REVIEWER') ||
+      roles.includes('ROLE_REVIEWER') ||
+      roles.includes('ROLE_INSURANCE_ADMIN') ||
+      roles.includes('ROLE_SUPER_ADMIN');
 
     if (!isLoggedIn || !canReview) {
       if (eventSourceRef.current) {

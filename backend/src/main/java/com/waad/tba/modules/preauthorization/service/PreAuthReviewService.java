@@ -259,7 +259,8 @@ public class PreAuthReviewService {
         }
 
         if (preAuth.getStatus() != PreAuthStatus.PENDING
-                && preAuth.getStatus() != PreAuthStatus.SUBMITTED) {
+                && preAuth.getStatus() != PreAuthStatus.SUBMITTED
+                && preAuth.getStatus() != PreAuthStatus.RESUBMITTED) {
             throw new BusinessRuleException(
                     "لا يمكن بدء المراجعة من وضع: " + preAuth.getStatus().getArabicLabel());
         }
@@ -302,7 +303,8 @@ public class PreAuthReviewService {
         // التحقق من أن الوضع يسمح بالمراجعة
         if (preAuth.getStatus() != PreAuthStatus.PENDING
                 && preAuth.getStatus() != PreAuthStatus.UNDER_REVIEW
-                && preAuth.getStatus() != PreAuthStatus.SUBMITTED) {
+                && preAuth.getStatus() != PreAuthStatus.SUBMITTED
+                && preAuth.getStatus() != PreAuthStatus.RESUBMITTED) {
             throw new BusinessRuleException(
                     "لا يمكن مراجعة الموافقة في وضع: " + preAuth.getStatus().getArabicLabel());
         }

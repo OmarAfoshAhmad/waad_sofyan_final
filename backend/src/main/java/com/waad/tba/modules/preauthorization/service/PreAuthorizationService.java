@@ -1093,15 +1093,16 @@ public class PreAuthorizationService {
      * Get pending pre-authorizations for inbox (Operations Queue) - CANONICAL
      * 2026-01-26
      * 
-     * Returns pre-authorizations with PENDING or UNDER_REVIEW status for
-     * processing.
+     * Returns pre-authorizations that still require reviewer/provider action.
      * Mirrors ClaimService.getPendingClaims() behavior.
      * 
      * FIFO pattern - oldest first for fair processing.
      * 
      * Status Logic:
+     * - SUBMITTED/RESUBMITTED: Sent from the provider portal and awaiting review
      * - PENDING: Newly created, awaiting initial review
      * - UNDER_REVIEW: Currently being reviewed by operations staff
+     * - INFO_REQUESTED: Returned to provider and still open in the workflow
      * 
      * @param pageable Pagination parameters (page, size, sort)
      * @return Page of PreAuthorizationResponseDto with all required fields for
@@ -1109,10 +1110,17 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPendingInbox(Pageable pageable) {
-        log.info("[SERVICE] Fetching pending pre-authorizations for inbox (PENDING + UNDER_REVIEW)");
+        log.info("[SERVICE] Fetching open pre-authorizations for reviewer inbox");
 
-        // CANONICAL: Include both PENDING and UNDER_REVIEW statuses (like Claims)
-        List<PreAuthStatus> inboxStatuses = List.of(PreAuthStatus.PENDING, PreAuthStatus.UNDER_REVIEW);
+        // CANONICAL: the inbox is an operational queue, not only a PENDING list.
+        // Keep all non-terminal records that still need reviewer/provider follow-up.
+        List<PreAuthStatus> inboxStatuses = List.of(
+                PreAuthStatus.SUBMITTED,
+                PreAuthStatus.RESUBMITTED,
+                PreAuthStatus.PENDING,
+                PreAuthStatus.UNDER_REVIEW,
+                PreAuthStatus.INFO_REQUESTED,
+                PreAuthStatus.NEEDS_CORRECTION);
 
         Page<PreAuthorization> preAuths = preAuthorizationRepository.findByStatusIn(
                 inboxStatuses,

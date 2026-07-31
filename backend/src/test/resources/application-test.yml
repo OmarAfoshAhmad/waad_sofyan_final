@@ -1,0 +1,16 @@
+spring:
+  main:
+    banner-mode: off
+
+logging:
+  level:
+    root: ERROR
+    com.waad.tba: ERROR
+    org.springframework: ERROR
+    org.springframework.boot.autoconfigure: ERROR
+    org.springframework.test: ERROR
+    org.springframework.security: ERROR
+    org.hibernate: ERROR
+    org.flywaydb: ERROR
+    org.testcontainers: WARN
+    tc: WARN

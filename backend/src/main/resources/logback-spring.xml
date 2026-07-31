@@ -144,6 +144,18 @@
     <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN"/>
     -->
 
+    <!-- Test Profile: keep CI output readable; test failures still print through Surefire/JUnit. -->
+    <springProfile name="test">
+        <logger name="com.waad.tba" level="WARN" additivity="true"/>
+        <logger name="com.waad.tba.modules" level="WARN" additivity="true"/>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.springframework.security" level="WARN" additivity="true"/>
+        <logger name="org.hibernate" level="WARN"/>
+        <logger name="org.flywaydb" level="WARN"/>
+        <logger name="org.testcontainers" level="WARN"/>
+        <logger name="tc" level="WARN"/>
+    </springProfile>
+
     <!-- ============================================= -->
     <!-- ROOT LOGGER                                   -->
     <!-- ============================================= -->
@@ -164,6 +176,13 @@
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="APP_INFO_FILE"/>
             <appender-ref ref="APP_ERROR_FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- Test Profile: do not flood Maven output with debug condition reports. -->
+    <springProfile name="test">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
         </root>
     </springProfile>
 
