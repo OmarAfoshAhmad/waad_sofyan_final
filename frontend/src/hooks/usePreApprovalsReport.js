@@ -94,6 +94,10 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
         params.employerId = employerId;
       }
 
+      if (providerId) {
+        params.providerId = providerId;
+      }
+
       if (filters.statuses?.length === 1) {
         params.status = filters.statuses[0];
       }
@@ -106,8 +110,8 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
         params.dateTo = filters.dateTo;
       }
 
-      // Provider/member free-text filtering remains client-side for the current
-      // server page until backend scoping and indexed joins are finalized.
+      // Member/free-text filtering remains client-side for the current server page
+      // until indexed joins are finalized. Provider scoping is enforced server-side.
       // ⚠️ FIXED: Use /v1/pre-authorizations to match Backend API
       const response = await axiosClient.get('/pre-authorizations', { params });
       const data = unwrap(response);

@@ -357,4 +357,44 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
                      @Param("dateFrom") LocalDate dateFrom,
                      @Param("dateTo") LocalDate dateTo,
                      Pageable pageable);
+
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true " +
+                     "AND pa.providerId = :providerId " +
+                     "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
+                     "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true " +
+                     "AND pa.providerId = :providerId " +
+                     "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
+                     "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)")
+       Page<PreAuthorization> findForOperationalReportByProvider(
+                     @Param("status") PreAuthStatus status,
+                     @Param("providerId") Long providerId,
+                     @Param("dateFrom") LocalDate dateFrom,
+                     @Param("dateTo") LocalDate dateTo,
+                     Pageable pageable);
+
+       @Query(value = "SELECT pa FROM PreAuthorization pa " +
+                     "LEFT JOIN FETCH pa.visit v " +
+                     "WHERE pa.active = true " +
+                     "AND pa.providerId IN :providerIds " +
+                     "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
+                     "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)",
+              countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "WHERE pa.active = true " +
+                     "AND pa.providerId IN :providerIds " +
+                     "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
+                     "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)")
+       Page<PreAuthorization> findForOperationalReportByProviders(
+                     @Param("status") PreAuthStatus status,
+                     @Param("providerIds") java.util.Collection<Long> providerIds,
+                     @Param("dateFrom") LocalDate dateFrom,
+                     @Param("dateTo") LocalDate dateTo,
+                     Pageable pageable);
 }

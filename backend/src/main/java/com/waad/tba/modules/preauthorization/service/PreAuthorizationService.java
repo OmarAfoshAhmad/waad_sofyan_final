@@ -1067,11 +1067,38 @@ public class PreAuthorizationService {
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getOperationalReport(
             PreAuthStatus status,
+            Long requestedProviderId,
             LocalDate dateFrom,
             LocalDate dateTo,
             Pageable pageable) {
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findForOperationalReport(
-                status, dateFrom, dateTo, pageable);
+        User currentUser = authorizationService.getCurrentUser();
+
+        Page<PreAuthorization> preAuths;
+        if (currentUser != null && authorizationService.isProvider(currentUser)) {
+            Long enforcedProviderId = providerContextGuard.enforceProviderId(requestedProviderId);
+            preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                    status, enforcedProviderId, dateFrom, dateTo, pageable);
+        } else if (currentUser != null && authorizationService.isReviewer(currentUser)
+                && !authorizationService.isSuperAdmin(currentUser)) {
+            if (requestedProviderId != null) {
+                reviewerIsolationService.validateReviewerAccess(currentUser, requestedProviderId);
+                preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                        status, requestedProviderId, dateFrom, dateTo, pageable);
+            } else {
+                List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
+                if (allowedProviderIds.isEmpty()) {
+                    return Page.empty(pageable);
+                }
+                preAuths = preAuthorizationRepository.findForOperationalReportByProviders(
+                        status, allowedProviderIds, dateFrom, dateTo, pageable);
+            }
+        } else if (requestedProviderId != null) {
+            preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
+                    status, requestedProviderId, dateFrom, dateTo, pageable);
+        } else {
+            preAuths = preAuthorizationRepository.findForOperationalReport(
+                    status, dateFrom, dateTo, pageable);
+        }
         return preAuths.map(this::mapToResponseDtoLight);
     }
 

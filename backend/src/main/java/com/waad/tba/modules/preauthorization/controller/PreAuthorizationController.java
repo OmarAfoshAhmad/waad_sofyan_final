@@ -397,6 +397,7 @@ public class PreAuthorizationController {
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection,
             @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "providerId", required = false) Long providerId,
             @RequestParam(name = "dateFrom", required = false) java.time.LocalDate dateFrom,
             @RequestParam(name = "dateTo", required = false) java.time.LocalDate dateTo) {
         
@@ -417,8 +418,8 @@ public class PreAuthorizationController {
         }
 
         Page<PreAuthorizationResponseDto> internalPage =
-                parsedStatus != null || dateFrom != null || dateTo != null
-                        ? preAuthorizationService.getOperationalReport(parsedStatus, dateFrom, dateTo, pageable)
+                parsedStatus != null || providerId != null || dateFrom != null || dateTo != null
+                        ? preAuthorizationService.getOperationalReport(parsedStatus, providerId, dateFrom, dateTo, pageable)
                         : preAuthorizationService.getAllPreAuthorizations(pageable);
         
         // Convert to API response
