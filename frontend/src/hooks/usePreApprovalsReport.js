@@ -110,8 +110,12 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
         params.dateTo = filters.dateTo;
       }
 
-      // Member/free-text filtering remains client-side for the current server page
-      // until indexed joins are finalized. Provider scoping is enforced server-side.
+      if (filters.memberSearch?.trim()) {
+        params.memberSearch = filters.memberSearch.trim();
+      }
+
+      // Provider, employer, date and member search are enforced server-side so
+      // pagination totals remain trustworthy for large operational reports.
       // ⚠️ FIXED: Use /v1/pre-authorizations to match Backend API
       const response = await axiosClient.get('/pre-authorizations', { params });
       const data = unwrap(response);
@@ -155,7 +159,7 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
     } finally {
       setLoading(false);
     }
-  }, [employerId, filters.dateFrom, filters.dateTo, filters.statuses, page, size]);
+  }, [employerId, providerId, filters.dateFrom, filters.dateTo, filters.memberSearch, filters.statuses, page, size]);
 
   /**
    * Initial fetch and refetch on employerId change
@@ -170,24 +174,10 @@ export const usePreApprovalsReport = ({ employerId, providerId, filters = DEFAUL
   const filteredPreApprovals = useMemo(() => {
     let result = [...preApprovals];
 
-    // Filter by provider (client-side)
-    if (providerId) {
-      result = result.filter((pa) => {
-        const paProviderId = pa._raw?.provider?.id ?? pa._raw?.providerId;
-        return paProviderId === providerId;
-      });
-    }
-
     // Filter by status (multi-select). A single status is already filtered by DB;
     // keep this for multi-status and defensive consistency.
     if (filters.statuses && filters.statuses.length > 0) {
       result = result.filter((pa) => filters.statuses.includes(pa.status));
-    }
-
-    // Filter by member name (text search)
-    if (filters.memberSearch && filters.memberSearch.trim()) {
-      const search = filters.memberSearch.trim().toLowerCase();
-      result = result.filter((pa) => pa.memberName.toLowerCase().includes(search));
     }
 
     // Date range is applied by DB; keep local guard for current page consistency.

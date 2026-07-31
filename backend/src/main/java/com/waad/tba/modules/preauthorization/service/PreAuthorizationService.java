@@ -1068,38 +1068,49 @@ public class PreAuthorizationService {
     public Page<PreAuthorizationResponseDto> getOperationalReport(
             PreAuthStatus status,
             Long requestedProviderId,
+            Long employerId,
+            String memberSearch,
             LocalDate dateFrom,
             LocalDate dateTo,
             Pageable pageable) {
         User currentUser = authorizationService.getCurrentUser();
+        String normalizedMemberSearch = normalizeReportSearch(memberSearch);
 
         Page<PreAuthorization> preAuths;
         if (currentUser != null && authorizationService.isProvider(currentUser)) {
             Long enforcedProviderId = providerContextGuard.enforceProviderId(requestedProviderId);
             preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
-                    status, enforcedProviderId, dateFrom, dateTo, pageable);
+                    status, enforcedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
         } else if (currentUser != null && authorizationService.isReviewer(currentUser)
                 && !authorizationService.isSuperAdmin(currentUser)) {
             if (requestedProviderId != null) {
                 reviewerIsolationService.validateReviewerAccess(currentUser, requestedProviderId);
                 preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
-                        status, requestedProviderId, dateFrom, dateTo, pageable);
+                        status, requestedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
             } else {
                 List<Long> allowedProviderIds = reviewerIsolationService.getAllowedProviderIds(currentUser);
                 if (allowedProviderIds.isEmpty()) {
                     return Page.empty(pageable);
                 }
                 preAuths = preAuthorizationRepository.findForOperationalReportByProviders(
-                        status, allowedProviderIds, dateFrom, dateTo, pageable);
+                        status, allowedProviderIds, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
             }
         } else if (requestedProviderId != null) {
             preAuths = preAuthorizationRepository.findForOperationalReportByProvider(
-                    status, requestedProviderId, dateFrom, dateTo, pageable);
+                    status, requestedProviderId, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
         } else {
             preAuths = preAuthorizationRepository.findForOperationalReport(
-                    status, dateFrom, dateTo, pageable);
+                    status, employerId, normalizedMemberSearch, dateFrom, dateTo, pageable);
         }
         return preAuths.map(this::mapToResponseDtoLight);
+    }
+
+    private String normalizeReportSearch(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

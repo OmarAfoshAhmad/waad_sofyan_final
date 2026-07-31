@@ -123,16 +123,16 @@ class PreAuthorizationServiceSecurityTest {
         when(authorizationService.isProvider(providerStaff)).thenReturn(true);
         when(providerContextGuard.enforceProviderId(999L)).thenReturn(251L);
         when(preAuthorizationRepository.findForOperationalReportByProvider(
-                PreAuthStatus.SUBMITTED, 251L, dateFrom, dateTo, pageable))
+                PreAuthStatus.SUBMITTED, 251L, 77L, "علي", dateFrom, dateTo, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-        service.getOperationalReport(PreAuthStatus.SUBMITTED, 999L, dateFrom, dateTo, pageable);
+        service.getOperationalReport(PreAuthStatus.SUBMITTED, 999L, 77L, " علي ", dateFrom, dateTo, pageable);
 
         verify(providerContextGuard).enforceProviderId(999L);
         verify(preAuthorizationRepository).findForOperationalReportByProvider(
-                PreAuthStatus.SUBMITTED, 251L, dateFrom, dateTo, pageable);
+                PreAuthStatus.SUBMITTED, 251L, 77L, "علي", dateFrom, dateTo, pageable);
         verify(preAuthorizationRepository, never()).findForOperationalReportByProvider(
-                PreAuthStatus.SUBMITTED, 999L, dateFrom, dateTo, pageable);
+                PreAuthStatus.SUBMITTED, 999L, 77L, "علي", dateFrom, dateTo, pageable);
     }
 
     @Test
@@ -147,10 +147,10 @@ class PreAuthorizationServiceSecurityTest {
         when(authorizationService.isSuperAdmin(reviewer)).thenReturn(false);
         when(reviewerIsolationService.getAllowedProviderIds(reviewer)).thenReturn(List.of());
 
-        Page<?> result = service.getOperationalReport(null, null, null, null, pageable);
+        Page<?> result = service.getOperationalReport(null, null, null, null, null, null, pageable);
 
         assertTrue(result.isEmpty());
-        verify(preAuthorizationRepository, never()).findForOperationalReport(null, null, null, pageable);
+        verify(preAuthorizationRepository, never()).findForOperationalReport(null, null, null, null, null, pageable);
     }
 
     @Test
@@ -164,13 +164,13 @@ class PreAuthorizationServiceSecurityTest {
         when(authorizationService.isReviewer(reviewer)).thenReturn(true);
         when(authorizationService.isSuperAdmin(reviewer)).thenReturn(false);
         when(preAuthorizationRepository.findForOperationalReportByProvider(
-                null, 251L, null, null, pageable))
+                null, 251L, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
-        service.getOperationalReport(null, 251L, null, null, pageable);
+        service.getOperationalReport(null, 251L, null, null, null, null, pageable);
 
         verify(reviewerIsolationService).validateReviewerAccess(reviewer, 251L);
         verify(preAuthorizationRepository).findForOperationalReportByProvider(
-                null, 251L, null, null, pageable);
+                null, 251L, null, null, null, null, pageable);
     }
 }

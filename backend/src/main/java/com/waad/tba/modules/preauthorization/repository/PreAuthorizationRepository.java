@@ -2,6 +2,7 @@ package com.waad.tba.modules.preauthorization.repository;
 
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization.PreAuthStatus;
+import com.waad.tba.modules.member.entity.Member;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -343,57 +344,111 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
         */
        @Query(value = "SELECT pa FROM PreAuthorization pa " +
                      "LEFT JOIN FETCH pa.visit v " +
+                     "LEFT JOIN Member m ON m.id = pa.memberId " +
+                     "LEFT JOIN m.employer e " +
                      "WHERE pa.active = true " +
                      "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:employerId IS NULL OR e.id = :employerId) " +
+                     "AND (:memberSearch IS NULL OR " +
+                     "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :memberSearch, '%'))) " +
                      "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
                      "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)",
               countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "LEFT JOIN Member m ON m.id = pa.memberId " +
+                     "LEFT JOIN m.employer e " +
                      "WHERE pa.active = true " +
                      "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:employerId IS NULL OR e.id = :employerId) " +
+                     "AND (:memberSearch IS NULL OR " +
+                     "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :memberSearch, '%'))) " +
                      "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
                      "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)")
        Page<PreAuthorization> findForOperationalReport(
                      @Param("status") PreAuthStatus status,
+                     @Param("employerId") Long employerId,
+                     @Param("memberSearch") String memberSearch,
                      @Param("dateFrom") LocalDate dateFrom,
                      @Param("dateTo") LocalDate dateTo,
                      Pageable pageable);
 
        @Query(value = "SELECT pa FROM PreAuthorization pa " +
                      "LEFT JOIN FETCH pa.visit v " +
+                     "LEFT JOIN Member m ON m.id = pa.memberId " +
+                     "LEFT JOIN m.employer e " +
                      "WHERE pa.active = true " +
                      "AND pa.providerId = :providerId " +
                      "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:employerId IS NULL OR e.id = :employerId) " +
+                     "AND (:memberSearch IS NULL OR " +
+                     "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :memberSearch, '%'))) " +
                      "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
                      "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)",
               countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "LEFT JOIN Member m ON m.id = pa.memberId " +
+                     "LEFT JOIN m.employer e " +
                      "WHERE pa.active = true " +
                      "AND pa.providerId = :providerId " +
                      "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:employerId IS NULL OR e.id = :employerId) " +
+                     "AND (:memberSearch IS NULL OR " +
+                     "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :memberSearch, '%'))) " +
                      "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
                      "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)")
        Page<PreAuthorization> findForOperationalReportByProvider(
                      @Param("status") PreAuthStatus status,
                      @Param("providerId") Long providerId,
+                     @Param("employerId") Long employerId,
+                     @Param("memberSearch") String memberSearch,
                      @Param("dateFrom") LocalDate dateFrom,
                      @Param("dateTo") LocalDate dateTo,
                      Pageable pageable);
 
        @Query(value = "SELECT pa FROM PreAuthorization pa " +
                      "LEFT JOIN FETCH pa.visit v " +
+                     "LEFT JOIN Member m ON m.id = pa.memberId " +
+                     "LEFT JOIN m.employer e " +
                      "WHERE pa.active = true " +
                      "AND pa.providerId IN :providerIds " +
                      "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:employerId IS NULL OR e.id = :employerId) " +
+                     "AND (:memberSearch IS NULL OR " +
+                     "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :memberSearch, '%'))) " +
                      "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
                      "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)",
               countQuery = "SELECT COUNT(pa) FROM PreAuthorization pa " +
+                     "LEFT JOIN Member m ON m.id = pa.memberId " +
+                     "LEFT JOIN m.employer e " +
                      "WHERE pa.active = true " +
                      "AND pa.providerId IN :providerIds " +
                      "AND (:status IS NULL OR pa.status = :status) " +
+                     "AND (:employerId IS NULL OR e.id = :employerId) " +
+                     "AND (:memberSearch IS NULL OR " +
+                     "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :memberSearch, '%')) " +
+                     "OR LOWER(m.civilId) LIKE LOWER(CONCAT('%', :memberSearch, '%'))) " +
                      "AND (:dateFrom IS NULL OR pa.requestDate >= :dateFrom) " +
                      "AND (:dateTo IS NULL OR pa.requestDate <= :dateTo)")
        Page<PreAuthorization> findForOperationalReportByProviders(
                      @Param("status") PreAuthStatus status,
                      @Param("providerIds") java.util.Collection<Long> providerIds,
+                     @Param("employerId") Long employerId,
+                     @Param("memberSearch") String memberSearch,
                      @Param("dateFrom") LocalDate dateFrom,
                      @Param("dateTo") LocalDate dateTo,
                      Pageable pageable);
