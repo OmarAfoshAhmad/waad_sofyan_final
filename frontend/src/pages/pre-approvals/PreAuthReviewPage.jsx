@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -104,7 +104,7 @@ const PreAuthReviewPage = () => {
   const [selectedAttachmentId, setSelectedAttachmentId] = useState(null);
 
   // Dialog states
-  const [dialogType, setDialogType] = useState(null); // 'reject_all' | 'info' | 'line_decision'
+  const [dialogType, setDialogType] = useState(null); // 'reject_all' | 'request_info' | 'line_decision' | 'finalize_confirm'
   const [notes, setNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
 
@@ -324,6 +324,44 @@ const PreAuthReviewPage = () => {
     setDialogType('line_decision');
   };
 
+  const financialSummary = useMemo(() => {
+    return lines.reduce(
+      (summary, line) => {
+        const status = getLineDecisionStatus(line);
+        const requested = Number(getLineRequestedAmount(line) || 0);
+        const approved = status === 'PENDING' ? 0 : Number(line?.approvedAmount || 0);
+        const patientShare = status === 'PENDING' ? 0 : Number(line?.patientShare || 0);
+        const companyShare = status === 'PENDING' ? 0 : Number(line?.companyShare || 0);
+
+        summary.requested += requested;
+        summary.approved += approved;
+        summary.patientShare += patientShare;
+        summary.companyShare += companyShare;
+        summary.rejected += Math.max(0, requested - approved);
+        summary.totalLines += 1;
+
+        if (status === 'PENDING') summary.pendingLines += 1;
+        if (status === 'APPROVED') summary.approvedLines += 1;
+        if (status === 'PARTIALLY_APPROVED') summary.partialLines += 1;
+        if (status === 'REJECTED') summary.rejectedLines += 1;
+
+        return summary;
+      },
+      {
+        requested: 0,
+        approved: 0,
+        patientShare: 0,
+        companyShare: 0,
+        rejected: 0,
+        totalLines: 0,
+        pendingLines: 0,
+        approvedLines: 0,
+        partialLines: 0,
+        rejectedLines: 0
+      }
+    );
+  }, [lines]);
+
   if (loading)
     return (
       <Box sx={{ p: 4 }}>
@@ -353,6 +391,12 @@ const PreAuthReviewPage = () => {
   const isPending = ['PENDING', 'UNDER_REVIEW'].includes(request.status);
   const canStartReview = request.status === 'PENDING';
   const allLinesDecided = lines.length > 0 && lines.every((line) => getLineDecisionStatus(line) !== 'PENDING');
+  const finalDecisionLabel =
+    financialSummary.rejectedLines === financialSummary.totalLines
+      ? 'رفض كامل'
+      : financialSummary.rejectedLines > 0 || financialSummary.partialLines > 0
+        ? 'موافقة جزئية'
+        : 'موافقة كاملة';
 
   return (
     <Box sx={{ p: 3 }}>
@@ -400,6 +444,42 @@ const PreAuthReviewPage = () => {
           />
         </Stack>
       </Box>
+
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {[
+          { label: 'المطلوب', value: financialSummary.requested, color: 'text.primary' },
+          { label: 'المعتمد المتوقع', value: financialSummary.approved, color: 'success.main' },
+          { label: 'حصة الشركة', value: financialSummary.companyShare, color: 'primary.main' },
+          { label: 'حصة المستفيد', value: financialSummary.patientShare, color: 'warning.main' },
+          { label: 'المرفوض/الفارق', value: financialSummary.rejected, color: financialSummary.rejected > 0 ? 'error.main' : 'text.secondary' }
+        ].map((item) => (
+          <Grid item xs={12} sm={6} md={2.4} key={item.label}>
+            <Card sx={{ height: '100%', borderTop: '3px solid', borderColor: item.color }}>
+              <CardContent sx={{ py: 1.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {item.label}
+                </Typography>
+                <Typography variant="h6" fontWeight={800} color={item.color}>
+                  {formatCurrency(item.value)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
+        <Chip label={`إجمالي السطور: ${financialSummary.totalLines}`} variant="outlined" color="primary" />
+        <Chip label={`موافق: ${financialSummary.approvedLines}`} variant="outlined" color="success" />
+        <Chip label={`جزئي: ${financialSummary.partialLines}`} variant="outlined" color="info" />
+        <Chip label={`مرفوض: ${financialSummary.rejectedLines}`} variant="outlined" color="error" />
+        <Chip
+          label={`معلق: ${financialSummary.pendingLines}`}
+          variant={financialSummary.pendingLines > 0 ? 'filled' : 'outlined'}
+          color={financialSummary.pendingLines > 0 ? 'warning' : 'default'}
+        />
+        <Chip label={`القرار المتوقع: ${finalDecisionLabel}`} color="secondary" variant="outlined" />
+      </Stack>
 
       <Grid container spacing={3}>
         {/* Left: Details and Lines */}
@@ -676,11 +756,11 @@ const PreAuthReviewPage = () => {
                         variant="contained"
                         color="success"
                         size="large"
-                        onClick={handleFinalize}
+                        onClick={() => setDialogType('finalize_confirm')}
                         disabled={actionLoading || !allLinesDecided}
                         startIcon={<CheckCircleIcon />}
                       >
-                        إنهاء المراجعة (إرسال)
+                        مراجعة الملخص ثم الإرسال
                       </Button>
                       <Divider />
                       <Button
@@ -773,6 +853,66 @@ const PreAuthReviewPage = () => {
             startIcon={<CancelIcon />}
           >
             تأكيد الرفض
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ===== FINALIZE CONFIRMATION DIALOG ===== */}
+      <Dialog open={dialogType === 'finalize_confirm'} onClose={() => !actionLoading && setDialogType(null)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CheckCircleIcon color="success" /> تأكيد إنهاء مراجعة الموافقة
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity={financialSummary.rejected > 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
+            سيتم تثبيت قرارات السطور وإرسال النتيجة النهائية لمقدم الخدمة. القرار المتوقع: <strong>{finalDecisionLabel}</strong>.
+          </Alert>
+
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {[
+              { label: 'المطلوب', value: financialSummary.requested, color: 'text.primary' },
+              { label: 'المعتمد', value: financialSummary.approved, color: 'success.main' },
+              { label: 'حصة الشركة', value: financialSummary.companyShare, color: 'primary.main' },
+              { label: 'حصة المستفيد', value: financialSummary.patientShare, color: 'warning.main' },
+              { label: 'المرفوض/الفارق', value: financialSummary.rejected, color: 'error.main' }
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={2.4} key={item.label}>
+                <Box sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {item.label}
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight={800} color={item.color}>
+                    {formatCurrency(item.value)}
+                  </Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip label={`موافق: ${financialSummary.approvedLines}`} color="success" variant="outlined" />
+            <Chip label={`جزئي: ${financialSummary.partialLines}`} color="info" variant="outlined" />
+            <Chip label={`مرفوض: ${financialSummary.rejectedLines}`} color="error" variant="outlined" />
+            <Chip label={`معلق: ${financialSummary.pendingLines}`} color={financialSummary.pendingLines > 0 ? 'warning' : 'default'} />
+          </Stack>
+
+          {financialSummary.pendingLines > 0 && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              لا يمكن إنهاء المراجعة قبل اتخاذ قرار لكل سطر خدمة.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setDialogType(null)} disabled={actionLoading}>
+            رجوع للتدقيق
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleFinalize}
+            disabled={actionLoading || !allLinesDecided}
+            startIcon={<CheckCircleIcon />}
+          >
+            تأكيد الإرسال النهائي
           </Button>
         </DialogActions>
       </Dialog>

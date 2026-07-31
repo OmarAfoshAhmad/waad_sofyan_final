@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useEmployerScope from 'hooks/useEmployerScope';
 import usePreApprovalsReport, { DEFAULT_FILTERS, PREAUTH_STATUS_LABELS } from 'hooks/usePreApprovalsReport';
 import { formatNumber } from 'utils/formatters';
@@ -7,7 +7,7 @@ import { exportToExcel } from 'utils/exportUtils';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 
 // MUI Components
-import { Box, Stack, Typography, IconButton, Tooltip, Alert, Chip, AlertTitle, Button } from '@mui/material';
+import { Box, Stack, Typography, IconButton, Tooltip, Alert, Chip, AlertTitle, Button, Card, CardContent, Grid } from '@mui/material';
 
 // MUI Icons
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -83,6 +83,41 @@ const PreApprovalsReport = () => {
 
   // Check if we have partial data
   const hasPartialData = pagination.totalElements > totalFetched;
+
+  const reportStats = useMemo(() => {
+    return preApprovals.reduce(
+      (stats, pa) => {
+        const requested = Number(pa.requestedAmount || 0);
+        const approved = Number(pa.approvedAmount || 0);
+
+        stats.requestedAmount += requested;
+        stats.approvedAmount += approved;
+        stats.rejectedOrPendingAmount += Math.max(0, requested - approved);
+        stats.byStatus[pa.status] = (stats.byStatus[pa.status] || 0) + 1;
+
+        if (['PENDING', 'SUBMITTED', 'RESUBMITTED'].includes(pa.status)) stats.open += 1;
+        if (pa.status === 'UNDER_REVIEW') stats.underReview += 1;
+        if (pa.status === 'APPROVED') stats.approved += 1;
+        if (pa.status === 'PARTIALLY_APPROVED') stats.partial += 1;
+        if (pa.status === 'REJECTED') stats.rejected += 1;
+        if (['INFO_REQUESTED', 'NEEDS_CORRECTION'].includes(pa.status)) stats.correction += 1;
+
+        return stats;
+      },
+      {
+        open: 0,
+        underReview: 0,
+        approved: 0,
+        partial: 0,
+        rejected: 0,
+        correction: 0,
+        requestedAmount: 0,
+        approvedAmount: 0,
+        rejectedOrPendingAmount: 0,
+        byStatus: {}
+      }
+    );
+  }, [preApprovals]);
 
   // Handlers
   const handleEmployerChange = (employerId) => {
@@ -209,6 +244,40 @@ const PreApprovalsReport = () => {
         selectedProviderId={selectedProviderId}
         onProviderChange={handleProviderChange}
       />
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        {[
+          { label: 'المعروض', value: formatNumber(preApprovals.length), color: 'primary.main' },
+          { label: 'بانتظار/مقدمة', value: formatNumber(reportStats.open), color: 'warning.main' },
+          { label: 'قيد المراجعة', value: formatNumber(reportStats.underReview), color: 'info.main' },
+          { label: 'معتمدة/جزئية', value: formatNumber(reportStats.approved + reportStats.partial), color: 'success.main' },
+          { label: 'مرفوضة', value: formatNumber(reportStats.rejected), color: 'error.main' },
+          { label: 'تصحيح/معلومات', value: formatNumber(reportStats.correction), color: 'secondary.main' }
+        ].map((item) => (
+          <Grid item xs={12} sm={6} md={2} key={item.label}>
+            <Card variant="outlined" sx={{ height: '100%', borderTop: '3px solid', borderColor: item.color }}>
+              <CardContent sx={{ py: 1.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {item.label}
+                </Typography>
+                <Typography variant="h6" fontWeight={800} color={item.color}>
+                  {item.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <Chip color="primary" variant="outlined" label={`المطلوب: ${formatNumber(reportStats.requestedAmount)} د.ل`} />
+        <Chip color="success" variant="outlined" label={`المعتمد: ${formatNumber(reportStats.approvedAmount)} د.ل`} />
+        <Chip
+          color={reportStats.rejectedOrPendingAmount > 0 ? 'warning' : 'default'}
+          variant="outlined"
+          label={`غير معتمد/قيد القرار: ${formatNumber(reportStats.rejectedOrPendingAmount)} د.ل`}
+        />
+      </Stack>
 
       {/* Data Summary */}
       {!loading && totalFetched > 0 && (
