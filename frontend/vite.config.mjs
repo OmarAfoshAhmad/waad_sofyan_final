@@ -72,7 +72,7 @@ export default defineConfig(({ mode }) => {
       drop: mode === 'production' ? ['console', 'debugger'] : []
     },
     build: {
-      chunkSizeWarningLimit: 1000, // Raise warning limit to 1000kb
+      chunkSizeWarningLimit: 1250, // ExcelJS and core vendor are intentionally isolated; keep warnings for genuinely larger chunks.
       rollupOptions: {
         onwarn(warning, warn) {
           if (warning.code === 'EVAL' && typeof warning.id === 'string' && warning.id.includes('exceljs.min.js')) {
@@ -87,6 +87,18 @@ export default defineConfig(({ mode }) => {
 
               if (is('axios')) {
                 return 'http';
+              }
+              if (is('@mui/icons-material') || is('@ant-design/icons')) {
+                return 'icons';
+              }
+              if (is('formik') || is('yup') || is('react-hook-form') || is('@hookform/resolvers')) {
+                return 'forms';
+              }
+              if (is('@tanstack/react-query') || is('zustand')) {
+                return 'state';
+              }
+              if (is('dayjs') || is('date-fns') || is('currency.js') || is('react-number-format')) {
+                return 'formatting';
               }
               // ExcelJS is a standalone chunk; keep it out of vendor because it is used only by import/export flows.
               if (is('exceljs')) {
@@ -110,6 +122,9 @@ export default defineConfig(({ mode }) => {
               }
               if (is('lodash-es')) {
                 return 'lodash';
+              }
+              if (is('html5-qrcode') || is('qrcode.react')) {
+                return 'qr';
               }
               if (
                 id.includes('/@mui/x-data-grid/') ||
