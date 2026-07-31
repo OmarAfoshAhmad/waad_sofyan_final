@@ -20,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -122,6 +125,71 @@ public class MedicalDictionaryService {
                 .sorted(Comparator.comparing(MedicalDictionaryMatchResponse::getConfidence).reversed())
                 .limit(10)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PriceListClassificationResponse classifyPriceList(PriceListClassificationRequest request) {
+        List<PriceListClassificationRequest.Row> rows = request.getRows() == null ? List.of() : request.getRows();
+
+        Map<String, Long> normalizedCounts = rows.stream()
+                .map(row -> normalizer.normalize(row.getServiceName()))
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+
+        List<PriceListClassificationResponse.Item> items = rows.stream()
+                .map(row -> classifyPriceListRow(row, normalizedCounts))
+                .toList();
+
+        int highConfidence = (int) items.stream().filter(item -> "HIGH_CONFIDENCE".equals(item.getStatus())).count();
+        int needsReview = (int) items.stream().filter(item -> "NEEDS_REVIEW".equals(item.getStatus())).count();
+        int unknown = (int) items.stream().filter(item -> "UNKNOWN".equals(item.getStatus())).count();
+        int duplicates = (int) items.stream().filter(PriceListClassificationResponse.Item::isDuplicateName).count();
+
+        return PriceListClassificationResponse.builder()
+                .summary(PriceListClassificationResponse.Summary.builder()
+                        .total(items.size())
+                        .highConfidence(highConfidence)
+                        .needsReview(needsReview)
+                        .unknown(unknown)
+                        .duplicateNames(duplicates)
+                        .build())
+                .items(items)
+                .build();
+    }
+
+    private PriceListClassificationResponse.Item classifyPriceListRow(PriceListClassificationRequest.Row row,
+                                                                       Map<String, Long> normalizedCounts) {
+        String normalized = normalizer.normalize(row.getServiceName());
+        List<MedicalDictionaryMatchResponse> matches = match(row.getServiceName());
+        MedicalDictionaryMatchResponse best = matches.isEmpty() ? null : matches.get(0);
+        String status = resolveClassificationStatus(best);
+
+        return PriceListClassificationResponse.Item.builder()
+                .rowNumber(row.getRowNumber())
+                .sourceSheet(row.getSourceSheet())
+                .serviceCode(row.getServiceCode())
+                .serviceName(row.getServiceName())
+                .price(row.getPrice())
+                .status(status)
+                .statusLabel(statusLabel(status))
+                .bestMatch(best)
+                .matches(matches)
+                .duplicateName(normalizedCounts.getOrDefault(normalized, 0L) > 1)
+                .build();
+    }
+
+    private String resolveClassificationStatus(MedicalDictionaryMatchResponse best) {
+        if (best == null) return "UNKNOWN";
+        if (best.getConfidence() != null && best.getConfidence() >= 85) return "HIGH_CONFIDENCE";
+        return "NEEDS_REVIEW";
+    }
+
+    private String statusLabel(String status) {
+        return switch (status) {
+            case "HIGH_CONFIDENCE" -> "مطابق بثقة عالية";
+            case "NEEDS_REVIEW" -> "يحتاج مراجعة";
+            default -> "غير معروف";
+        };
     }
 
     @Transactional

@@ -39,6 +39,11 @@ export const matchMedicalDictionary = async (text) => {
   return unwrap(response);
 };
 
+export const classifyPriceListWithDictionary = async (payload) => {
+  const response = await axiosClient.post(`${BASE_URL}/price-lists/classify`, payload);
+  return unwrap(response);
+};
+
 export const listDictionarySuggestions = async (params = {}) => {
   const response = await axiosClient.get(`${BASE_URL}/suggestions`, { params });
   return normalizePaginatedResponse(response);
@@ -67,6 +72,7 @@ export default {
   searchDictionarySynonyms,
   toggleDictionarySynonym,
   matchMedicalDictionary,
+  classifyPriceListWithDictionary,
   listDictionarySuggestions,
   createDictionarySuggestion,
   approveDictionarySuggestion,

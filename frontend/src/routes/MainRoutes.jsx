@@ -6,6 +6,7 @@ import Loadable from 'components/Loadable';
 import SidebarLayout from 'layout/SidebarLayout';
 import PermissionGuard from 'components/PermissionGuard';
 import ProviderPortalGuard from 'components/guards/ProviderPortalGuard';
+import BatchClaimsGuard from 'components/guards/BatchClaimsGuard';
 
 // Contexts - Phase D2.3 Table Refresh
 import { TableRefreshLayout, TableRefreshProvider } from 'contexts/TableRefreshContext';
@@ -116,6 +117,7 @@ const MedicalCategoriesPage = Loadable(lazy(() => import('pages/medical-categori
 const MedicalCategoryCreate = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryCreate')));
 const MedicalCategoryEdit = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryEdit')));
 const MedicalDictionaryPage = Loadable(lazy(() => import('pages/medical-dictionary')));
+const PriceListClassifierPage = Loadable(lazy(() => import('pages/price-list-classifier')));
 
 // ==============================|| LAZY LOADING - DOCUMENTS ||============================== //
 
@@ -318,25 +320,31 @@ const MainRoutes = {
         {
           path: 'batches',
           element: (
-            <PermissionGuard isRouteGuard>
-              <ClaimBatchManagement />
-            </PermissionGuard>
+            <BatchClaimsGuard>
+              <PermissionGuard isRouteGuard>
+                <ClaimBatchManagement />
+              </PermissionGuard>
+            </BatchClaimsGuard>
           )
         },
         {
           path: 'batches/entry',
           element: (
-            <PermissionGuard isRouteGuard>
-              <ClaimBatchEntry />
-            </PermissionGuard>
+            <BatchClaimsGuard>
+              <PermissionGuard isRouteGuard>
+                <ClaimBatchEntry />
+              </PermissionGuard>
+            </BatchClaimsGuard>
           )
         },
         {
           path: 'batches/detail',
           element: (
-            <PermissionGuard isRouteGuard>
-              <ClaimBatchDetail />
-            </PermissionGuard>
+            <BatchClaimsGuard>
+              <PermissionGuard isRouteGuard>
+                <ClaimBatchDetail />
+              </PermissionGuard>
+            </BatchClaimsGuard>
           )
         }
       ]
@@ -606,6 +614,14 @@ const MainRoutes = {
       element: (
         <PermissionGuard isRouteGuard>
           <MedicalDictionaryPage />
+        </PermissionGuard>
+      )
+    },
+    {
+      path: 'price-list-classifier',
+      element: (
+        <PermissionGuard isRouteGuard>
+          <PriceListClassifierPage />
         </PermissionGuard>
       )
     },
@@ -1020,3 +1036,4 @@ const MainRoutes = {
 };
 
 export default MainRoutes;
+

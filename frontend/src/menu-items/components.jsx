@@ -21,7 +21,8 @@ import {
   VerifiedUser as VerifiedUserIcon,
   History as HistoryIcon,
   AccountBalanceWallet as AccountBalanceWalletIcon,
-  MenuBook as MenuBookIcon
+  MenuBook as MenuBookIcon,
+  ManageSearch as ManageSearchIcon
 } from '@mui/icons-material';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -44,12 +45,14 @@ import { ROLE_RESOURCE_ACCESS } from 'config/roleAccessMap';
  * @param {Array} items - Menu items to filter
  * @param {string} role - User's canonical role (e.g. 'SUPER_ADMIN')
  * @param {boolean} providerPortalEnabled - Whether the provider portal is enabled
+ * @param {boolean} batchClaimsEnabled - Whether legacy/monthly batch intake is enabled
  * @returns {Array} Filtered menu items visible to specified role
  */
-export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false) => {
+export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false, batchClaimsEnabled = true) => {
   const allowedResources = ROLE_RESOURCE_ACCESS[role] || [];
 
-  const isAllowed = (resource) => {
+  const isAllowed = (resource, item) => {
+    if (item?.featureFlag === 'BATCH_CLAIMS_ENABLED' && !batchClaimsEnabled) return false;
     if (!resource) return true; // group headers without resource → always visible
     if (resource === 'provider_portal' && !providerPortalEnabled) return false;
     if (resource.startsWith('__hidden_')) return false; // Explicitly hidden items
@@ -58,10 +61,10 @@ export const filterMenuItemsByRole = (items, role, providerPortalEnabled = false
   };
 
   return items
-    .filter((item) => isAllowed(item.resource))
+    .filter((item) => isAllowed(item.resource, item))
     .map((item) => ({
       ...item,
-      children: item.children ? filterMenuItemsByRole(item.children, role, providerPortalEnabled) : undefined
+      children: item.children ? filterMenuItemsByRole(item.children, role, providerPortalEnabled, batchClaimsEnabled) : undefined
     }))
     .filter((item) => {
       // Remove groups/collapses with no visible children
@@ -399,7 +402,8 @@ const menuItem = [
             url: '/claims/batches',
             icon: FolderIcon,
             resource: 'claims',
-            action: 'view'
+            action: 'view',
+            featureFlag: 'BATCH_CLAIMS_ENABLED'
           },
           {
             id: 'preauth-inbox',
@@ -615,6 +619,22 @@ const menuItem = [
         }
       },
       {
+        id: 'price-list-classifier',
+        title: 'تنظيم قوائم الأسعار',
+        titleEn: 'Price List Classifier',
+        type: 'item',
+        url: '/price-list-classifier',
+        icon: ManageSearchIcon,
+        resource: 'medical_catalog',
+        action: 'view',
+        chip: {
+          label: 'Excel',
+          color: 'warning',
+          size: 'small',
+          variant: 'outlined'
+        }
+      },
+      {
         id: 'system-configuration',
         title: 'تكوين النظام والمؤسسة',
         titleEn: 'System & Organization Configuration',
@@ -679,3 +699,5 @@ const menuItem = [
 ];
 
 export default menuItem;
+
+

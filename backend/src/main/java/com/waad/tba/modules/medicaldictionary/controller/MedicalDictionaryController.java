@@ -84,6 +84,13 @@ public class MedicalDictionaryController {
         return ResponseEntity.ok(ApiResponse.success(service.match(text)));
     }
 
+    @PostMapping("/price-lists/classify")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<PriceListClassificationResponse>> classifyPriceList(
+            @Valid @RequestBody PriceListClassificationRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(service.classifyPriceList(request)));
+    }
+
     @GetMapping("/suggestions")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Page<MedicalDictionarySuggestionResponse>>> listSuggestions(
