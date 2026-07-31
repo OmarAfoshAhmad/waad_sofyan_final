@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Alert,
@@ -29,6 +29,7 @@ import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
+import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
 const normalizeText = (value) => (value == null ? '' : String(value).trim());
 const numericPattern = /^[\d\s.,]+$/;
@@ -107,18 +108,25 @@ const statusColor = {
 
 const CLASSIFICATION_BATCH_SIZE = 500;
 
+const rowKey = (item) => `${item.sourceSheet || '-'}-${item.rowNumber || '-'}-${item.serviceName || '-'}`;
+
+const getEffectiveCategory = (item) => item.manualCategory || item.bestMatch;
+
+const getEffectiveStatusLabel = (item) => (item.manualCategory ? 'مراجع يدوياً' : item.statusLabel);
+
 const exportRows = (items) => {
   const data = items.map((item) => ({
     sheet: item.sourceSheet,
     row_number: item.rowNumber,
     original_service_name: item.serviceName,
     original_price: item.price ?? '',
-    classification_status: item.statusLabel,
+    classification_status: getEffectiveStatusLabel(item),
     confidence: item.bestMatch?.confidence ?? '',
     canonical_name: item.bestMatch?.canonicalName ?? '',
-    medical_category_code: item.bestMatch?.medicalCategoryCode ?? '',
-    medical_category_name: item.bestMatch?.medicalCategoryName ?? '',
+    medical_category_code: getEffectiveCategory(item)?.medicalCategoryCode ?? '',
+    medical_category_name: getEffectiveCategory(item)?.medicalCategoryName ?? '',
     matched_text: item.bestMatch?.matchedText ?? '',
+    manual_override: item.manualCategory ? 'YES' : 'NO',
     duplicate_name: item.duplicateName ? 'YES' : 'NO'
   }));
 
@@ -129,17 +137,18 @@ const exportRows = (items) => {
 };
 
 const exportProviderContractReadyRows = (items) => {
-  const acceptedItems = items.filter((item) => item.bestMatch?.medicalCategoryId);
+  const acceptedItems = items.filter((item) => getEffectiveCategory(item)?.medicalCategoryId);
   const data = acceptedItems.map((item) => ({
     service_code: item.serviceCode || '',
     service_name: item.bestMatch?.canonicalName || item.serviceName,
     original_service_name: item.serviceName,
-    medical_category_code: item.bestMatch?.medicalCategoryCode || '',
-    medical_category_name: item.bestMatch?.medicalCategoryName || '',
+    medical_category_code: getEffectiveCategory(item)?.medicalCategoryCode || '',
+    medical_category_name: getEffectiveCategory(item)?.medicalCategoryName || '',
     contract_price: item.price ?? '',
     base_price: item.price ?? '',
     classification_confidence: item.bestMatch?.confidence ?? '',
-    review_status: item.statusLabel,
+    review_status: getEffectiveStatusLabel(item),
+    manual_override: item.manualCategory ? 'YES' : 'NO',
     source_sheet: item.sourceSheet,
     source_row: item.rowNumber
   }));
@@ -181,8 +190,11 @@ export default function PriceListClassifierPage() {
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
 
   const items = result?.items || [];
+  const manualReviewedCount = items.filter((item) => item.manualCategory).length;
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -193,6 +205,51 @@ export default function PriceListClassifierPage() {
         .some((value) => String(value).toLowerCase().includes(q));
     });
   }, [items, search, statusFilter]);
+
+  useEffect(() => {
+    let mounted = true;
+    setCategoriesLoading(true);
+    getAllMedicalCategories()
+      .then((data) => {
+        if (!mounted) return;
+        setCategories(Array.isArray(data) ? data.filter((category) => category.active !== false && category.deleted !== true) : []);
+      })
+      .catch(() => {
+        if (mounted) setError('تعذر تحميل التصنيفات الطبية للتعديل اليدوي');
+      })
+      .finally(() => {
+        if (mounted) setCategoriesLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const applyManualCategory = (item, categoryId) => {
+    const category = categories.find((entry) => String(entry.id) === String(categoryId));
+    setResult((previous) => {
+      if (!previous) return previous;
+      const nextItems = previous.items.map((row) => {
+        if (rowKey(row) !== rowKey(item)) return row;
+        if (!category) {
+          const { manualCategory, ...rest } = row;
+          return rest;
+        }
+        return {
+          ...row,
+          manualCategory: {
+            medicalCategoryId: category.id,
+            medicalCategoryCode: category.code,
+            medicalCategoryName: category.name
+          }
+        };
+      });
+      return {
+        ...previous,
+        items: nextItems
+      };
+    });
+  };
 
   const handleFile = async (event) => {
     const file = event.target.files?.[0];
@@ -265,12 +322,13 @@ export default function PriceListClassifierPage() {
     try {
       let created = 0;
       for (const item of reviewRows) {
+        const effectiveCategory = getEffectiveCategory(item);
         await medicalDictionaryService.createDictionarySuggestion({
           originalText: item.serviceName,
           suggestedEntryId: item.bestMatch?.entryId || null,
-          suggestedCategoryId: item.bestMatch?.medicalCategoryId || null,
+          suggestedCategoryId: effectiveCategory?.medicalCategoryId || null,
           source: 'PRICE_LIST_IMPORT',
-          confidence: item.bestMatch?.confidence || 0,
+          confidence: item.manualCategory ? 90 : item.bestMatch?.confidence || 0,
           sourceReference: `${fileName || 'price-list'} | ${item.sourceSheet || '-'} | row ${item.rowNumber || '-'}`
         });
         created += 1;
@@ -405,6 +463,7 @@ export default function PriceListClassifierPage() {
                   <Chip color="warning" label={`تحتاج مراجعة ${result.summary?.needsReview || 0}`} />
                   <Chip color="error" label={`غير معروف ${result.summary?.unknown || 0}`} />
                   <Chip color="info" label={`مكرر ${result.summary?.duplicateNames || 0}`} />
+                  <Chip color="secondary" label={`مراجع يدوياً ${manualReviewedCount}`} />
                 </Stack>
               </Stack>
 
@@ -457,6 +516,7 @@ export default function PriceListClassifierPage() {
                       <TableCell>الثقة</TableCell>
                       <TableCell>الاسم الموحد</TableCell>
                       <TableCell>التصنيف</TableCell>
+                      <TableCell>تعديل التصنيف</TableCell>
                       <TableCell>ملاحظات</TableCell>
                     </TableRow>
                   </TableHead>
@@ -474,21 +534,42 @@ export default function PriceListClassifierPage() {
                         </TableCell>
                         <TableCell>{item.price ?? '-'}</TableCell>
                         <TableCell>
-                          <Chip size="small" color={statusColor[item.status] || 'default'} label={item.statusLabel} />
+                          <Chip
+                            size="small"
+                            color={item.manualCategory ? 'secondary' : statusColor[item.status] || 'default'}
+                            label={getEffectiveStatusLabel(item)}
+                          />
                         </TableCell>
                         <TableCell>{item.bestMatch?.confidence ?? '-'}</TableCell>
                         <TableCell>{item.bestMatch?.canonicalName ?? '-'}</TableCell>
                         <TableCell>
-                          {item.bestMatch ? (
+                          {getEffectiveCategory(item) ? (
                             <Stack spacing={0.25}>
-                              <Typography>{item.bestMatch.medicalCategoryName}</Typography>
+                              <Typography>{getEffectiveCategory(item).medicalCategoryName}</Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {item.bestMatch.medicalCategoryCode}
+                                {getEffectiveCategory(item).medicalCategoryCode}
                               </Typography>
                             </Stack>
                           ) : (
                             '-'
                           )}
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 240 }}>
+                          <Select
+                            size="small"
+                            fullWidth
+                            displayEmpty
+                            value={item.manualCategory?.medicalCategoryId || ''}
+                            disabled={categoriesLoading}
+                            onChange={(event) => applyManualCategory(item, event.target.value)}
+                          >
+                            <MenuItem value="">بدون تعديل يدوي</MenuItem>
+                            {categories.map((category) => (
+                              <MenuItem key={category.id} value={category.id}>
+                                {category.name} ({category.code})
+                              </MenuItem>
+                            ))}
+                          </Select>
                         </TableCell>
                         <TableCell>{item.duplicateName ? <Chip size="small" color="info" label="اسم مكرر" /> : '-'}</TableCell>
                       </TableRow>
