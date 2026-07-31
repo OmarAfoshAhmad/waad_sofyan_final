@@ -19,11 +19,13 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
+import SyncAltIcon from '@mui/icons-material/SyncAlt';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 
@@ -48,6 +50,8 @@ export default function MedicalDictionaryPage() {
   const [suggestionsPage, setSuggestionsPage] = useState(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [synonymForms, setSynonymForms] = useState({});
+  const [savingSynonymId, setSavingSynonymId] = useState(null);
   const [createForm, setCreateForm] = useState({
     canonicalName: '',
     medicalCategoryId: '',
@@ -159,6 +163,45 @@ export default function MedicalDictionaryPage() {
       setError(err?.response?.data?.message || 'تعذر اختبار المطابقة');
     } finally {
       setMatching(false);
+    }
+  };
+
+  const handleSynonymFormChange = (entryId, value) => {
+    setSynonymForms((prev) => ({ ...prev, [entryId]: value }));
+  };
+
+  const handleAddSynonym = async (entryId) => {
+    const synonym = (synonymForms[entryId] || '').trim();
+    if (!synonym) return;
+
+    setSavingSynonymId(entryId);
+    setError('');
+    try {
+      await medicalDictionaryService.addDictionarySynonym(entryId, {
+        synonym,
+        synonymType: 'COMMON',
+        language: 'ar',
+        active: true
+      });
+      setSynonymForms((prev) => ({ ...prev, [entryId]: '' }));
+      await loadEntries();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر إضافة المرادف');
+    } finally {
+      setSavingSynonymId(null);
+    }
+  };
+
+  const handleToggleSynonym = async (synonym) => {
+    setSavingSynonymId(synonym.entryId || synonym.id);
+    setError('');
+    try {
+      await medicalDictionaryService.toggleDictionarySynonym(synonym.id);
+      await loadEntries();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر تغيير حالة المرادف');
+    } finally {
+      setSavingSynonymId(null);
     }
   };
 
@@ -408,18 +451,46 @@ export default function MedicalDictionaryPage() {
                       </TableCell>
                       <TableCell>{entry.defaultConfidence}%</TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
-                          {(entry.synonyms || []).length === 0 && <Typography color="text.secondary">لا توجد مرادفات</Typography>}
-                          {(entry.synonyms || []).map((syn) => (
-                            <Chip
-                              key={syn.id}
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
+                            {(entry.synonyms || []).length === 0 && <Typography color="text.secondary">لا توجد مرادفات</Typography>}
+                            {(entry.synonyms || []).map((syn) => (
+                              <Tooltip
+                                key={syn.id}
+                                title={syn.active ? 'اضغط لتعطيل هذا المرادف مؤقتًا' : 'اضغط لإعادة تفعيل هذا المرادف'}
+                              >
+                                <Chip
+                                  size="small"
+                                  icon={<LocalOfferIcon />}
+                                  onClick={() => handleToggleSynonym(syn)}
+                                  variant={syn.active ? 'outlined' : 'filled'}
+                                  color={syn.active ? 'primary' : 'default'}
+                                  label={`${syn.synonym}${syn.active ? '' : ' — معطل'}`}
+                                  sx={{ cursor: 'pointer' }}
+                                />
+                              </Tooltip>
+                            ))}
+                          </Stack>
+                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                            <TextField
                               size="small"
-                              icon={<LocalOfferIcon />}
-                              variant={syn.active ? 'outlined' : 'filled'}
-                              color={syn.active ? 'primary' : 'default'}
-                              label={syn.synonym}
+                              fullWidth
+                              placeholder="أضف مرادفًا لهذا الاسم..."
+                              value={synonymForms[entry.id] || ''}
+                              onChange={(e) => handleSynonymFormChange(entry.id, e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleAddSynonym(entry.id)}
                             />
-                          ))}
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<SyncAltIcon />}
+                              disabled={savingSynonymId === entry.id}
+                              onClick={() => handleAddSynonym(entry.id)}
+                              sx={{ minWidth: 120 }}
+                            >
+                              إضافة مرادف
+                            </Button>
+                          </Stack>
                         </Stack>
                       </TableCell>
                     </TableRow>
