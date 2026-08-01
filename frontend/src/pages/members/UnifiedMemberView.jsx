@@ -181,6 +181,7 @@ const UnifiedMemberView = () => {
   const [deletingMember, setDeletingMember] = useState(null);
   const [hardDeleteDepDialogOpen, setHardDeleteDepDialogOpen] = useState(false);
   const [hardDeletingDep, setHardDeletingDep] = useState(null);
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
 
   const handleChangePage = (event, newPage) => {
     setPg(newPage);
@@ -531,7 +532,11 @@ const UnifiedMemberView = () => {
                       justifyContent: 'center'
                     }}
                   >
-                    <MemberAvatar member={member} size={110} sx={{ mb: '0.75rem' }} />
+                    <Tooltip title="اضغط لتكبير الصورة">
+                      <span>
+                        <MemberAvatar member={member} size={110} onClick={() => setPhotoDialogOpen(true)} sx={{ mb: '0.75rem' }} />
+                      </span>
+                    </Tooltip>
 
                     <Stack spacing={1.5} alignItems="center" width="100%">
                       <Stack direction="row" spacing={1.5} justifyContent="center" width="100%">
@@ -1097,6 +1102,18 @@ const UnifiedMemberView = () => {
         principalGender={member?.gender}
         onSave={handleModalSave}
       />
+
+      <Dialog open={photoDialogOpen} onClose={() => setPhotoDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ textAlign: 'center' }}>صورة المستفيد</DialogTitle>
+        <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <MemberAvatar member={member} size={260} />
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
+          <Button variant="contained" onClick={() => setPhotoDialogOpen(false)}>
+            إغلاق
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Hard Delete Dependent Confirmation Dialog */}
       <Dialog open={hardDeleteDepDialogOpen} onClose={() => setHardDeleteDepDialogOpen(false)}>

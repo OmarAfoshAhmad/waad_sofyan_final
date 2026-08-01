@@ -19,7 +19,7 @@ import axiosClient from 'utils/axios';
  * @param {Object} [props.sx] - Additional MUI styles
  * @param {string} [props.refreshTrigger] - Optional seed to force refresh
  */
-const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger }) => {
+const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger, onClick }) => {
   const [imgError, setImgError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState(null);
@@ -120,7 +120,16 @@ const MemberAvatar = ({ member, size = 40, sx = {}, refreshTrigger }) => {
 
   // 3. Render logic
   return (
-    <Box sx={{ position: 'relative', width: size, height: size, display: 'inline-flex' }}>
+    <Box
+      onClick={onClick}
+      sx={{
+        position: 'relative',
+        width: size,
+        height: size,
+        display: 'inline-flex',
+        cursor: onClick ? 'pointer' : 'default'
+      }}
+    >
       <Avatar
         src={imgError ? undefined : photoUrl}
         alt={member?.fullName}
@@ -211,7 +220,8 @@ MemberAvatar.propTypes = {
   }),
   size: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   sx: PropTypes.object,
-  refreshTrigger: PropTypes.string
+  refreshTrigger: PropTypes.string,
+  onClick: PropTypes.func
 };
 
 export default MemberAvatar;
