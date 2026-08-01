@@ -45,7 +45,7 @@ import { reviewerPreAuthService, preApprovalsService } from 'services/api';
 import { useSnackbar } from 'notistack';
 import { useReviewer } from 'contexts/ReviewerContext';
 import { formatCurrency } from 'utils/currency-formatter';
-import { UnifiedAttachmentViewer } from 'components/medical-review';
+import { DocumentPreviewDrawer } from 'components/tba/documents';
 
 const REJECTION_REASONS = [
   { value: 'NOT_COVERED', label: 'غير مغطى ضمن الوثيقة' },
@@ -102,6 +102,7 @@ const PreAuthReviewPage = () => {
   const [attachments, setAttachments] = useState([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [selectedAttachmentId, setSelectedAttachmentId] = useState(null);
+  const [attachmentsPreviewOpen, setAttachmentsPreviewOpen] = useState(false);
 
   // Dialog states
   const [dialogType, setDialogType] = useState(null); // 'reject_all' | 'request_info' | 'line_decision' | 'finalize_confirm'
@@ -119,33 +120,19 @@ const PreAuthReviewPage = () => {
       try {
         const rawAttachments = await preApprovalsService.getAttachments(id).catch(() => fallbackAttachments || []);
         const list = Array.isArray(rawAttachments) ? rawAttachments : rawAttachments?.items || rawAttachments?.content || [];
-        const normalized = await Promise.all(
-          list.map(async (attachment, index) => {
-            const existingUrl = attachment?.url || attachment?.fileUrl || attachment?.downloadUrl || '';
-            let previewUrl = existingUrl;
-
-            if (!previewUrl && attachment?.id) {
-              try {
-                const blob = await preApprovalsService.downloadAttachment(id, attachment.id);
-                previewUrl = URL.createObjectURL(blob);
-              } catch (downloadError) {
-                console.warn('Failed to prepare pre-auth attachment preview:', downloadError);
-              }
-            }
-
-            return {
-              id: attachment?.id || `preauth-attachment-${index}`,
-              fileName: getAttachmentName(attachment, index),
-              fileSize: attachment?.fileSize || attachment?.size,
-              mimeType: getAttachmentMimeType(attachment),
-              fileType: getAttachmentMimeType(attachment),
-              url: previewUrl,
-              downloadUrl: existingUrl,
-              attachmentType: attachment?.attachmentType,
-              raw: attachment
-            };
-          })
-        );
+        const normalized = list.map((attachment, index) => ({
+          id: attachment?.id || `preauth-attachment-${index}`,
+          documentUrl: attachment?.id
+            ? `/pre-authorizations/${id}/attachments/${attachment.id}`
+            : attachment?.url || attachment?.fileUrl || attachment?.downloadUrl || '',
+          fileName: getAttachmentName(attachment, index),
+          fileSize: attachment?.fileSize || attachment?.size,
+          mimeType: getAttachmentMimeType(attachment),
+          fileType: getAttachmentMimeType(attachment),
+          documentTitle: attachment?.attachmentType || 'مرفق موافقة',
+          attachmentType: attachment?.attachmentType,
+          raw: attachment
+        }));
         setAttachments(normalized);
         setSelectedAttachmentId((prev) => prev || normalized[0]?.id || null);
       } catch (err) {
@@ -183,16 +170,6 @@ const PreAuthReviewPage = () => {
     if (id) fetchData();
   }, [fetchData, id]);
 
-  useEffect(() => {
-    return () => {
-      attachments.forEach((attachment) => {
-        if (typeof attachment?.url === 'string' && attachment.url.startsWith('blob:')) {
-          URL.revokeObjectURL(attachment.url);
-        }
-      });
-    };
-  }, [attachments]);
-
   const handleDownloadAttachment = useCallback(
     async (attachment) => {
       if (!attachment?.id) return;
@@ -211,6 +188,32 @@ const PreAuthReviewPage = () => {
       }
     },
     [enqueueSnackbar, id]
+  );
+
+  const handleOpenAttachmentPreview = useCallback(
+    (attachmentId = null) => {
+      setSelectedAttachmentId(attachmentId || attachments[0]?.id || null);
+      setAttachmentsPreviewOpen(true);
+    },
+    [attachments]
+  );
+
+  const handleCloseAttachmentPreview = useCallback(() => {
+    setAttachmentsPreviewOpen(false);
+  }, []);
+
+  const previewDocuments = useMemo(
+    () =>
+      attachments.map((attachment) => ({
+        id: attachment.id,
+        documentUrl: attachment.documentUrl,
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+        mimeType: attachment.mimeType || attachment.fileType,
+        documentTitle: attachment.documentTitle,
+        onDownload: () => handleDownloadAttachment(attachment)
+      })),
+    [attachments, handleDownloadAttachment]
   );
 
   const handleStartReview = async () => {
@@ -711,16 +714,60 @@ const PreAuthReviewPage = () => {
         {/* Right: Actions Panel */}
         <Grid item xs={12} md={4}>
           <Box sx={{ mb: 3, display: 'flex', justifyContent: { xs: 'stretch', md: 'flex-end' } }}>
-            <UnifiedAttachmentViewer
-              attachments={attachments}
-              loading={attachmentsLoading}
-              selectedAttachmentId={selectedAttachmentId}
-              onSelectionChange={setSelectedAttachmentId}
-              onDownload={handleDownloadAttachment}
-              onRefresh={() => fetchAttachments(request?.attachments || [])}
-              emptyMessage="لا توجد مرفقات طبية لهذا الطلب"
-              height="28rem"
-            />
+            <Card variant="outlined" sx={{ width: '100%' }}>
+              <CardHeader
+                avatar={<AttachmentIcon color="primary" />}
+                title="المرفقات الطبية"
+                subheader={attachmentsLoading ? 'جارٍ تحميل المرفقات...' : `${attachments.length} مرفق`}
+                action={
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AttachmentIcon />}
+                    onClick={() => handleOpenAttachmentPreview()}
+                    disabled={attachmentsLoading || attachments.length === 0}
+                  >
+                    معاينة
+                  </Button>
+                }
+              />
+              <Divider />
+              <CardContent>
+                {attachments.length === 0 ? (
+                  <Alert severity="info">لا توجد مرفقات طبية لهذا الطلب.</Alert>
+                ) : (
+                  <Stack spacing={1}>
+                    {attachments.slice(0, 4).map((attachment) => (
+                      <Paper
+                        key={attachment.id}
+                        variant="outlined"
+                        sx={{ p: 1, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                        onClick={() => handleOpenAttachmentPreview(attachment.id)}
+                      >
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" fontWeight={700} noWrap>
+                              {attachment.fileName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {attachment.documentTitle || 'مرفق موافقة'}
+                            </Typography>
+                          </Box>
+                          <Button size="small" onClick={(event) => { event.stopPropagation(); handleDownloadAttachment(attachment); }}>
+                            تحميل
+                          </Button>
+                        </Stack>
+                      </Paper>
+                    ))}
+                    {attachments.length > 4 && (
+                      <Typography variant="caption" color="text.secondary">
+                        و {attachments.length - 4} مرفقات أخرى داخل العارض.
+                      </Typography>
+                    )}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
           </Box>
 
           <Card sx={{ mb: 3, border: isPending ? '2px solid' : undefined, borderColor: 'primary.main' }}>
@@ -1013,6 +1060,14 @@ const PreAuthReviewPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <DocumentPreviewDrawer
+        open={attachmentsPreviewOpen}
+        onClose={handleCloseAttachmentPreview}
+        documents={previewDocuments}
+        initialDocumentId={selectedAttachmentId}
+        showDownload
+      />
     </Box>
   );
 };
