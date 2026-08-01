@@ -1160,19 +1160,29 @@ public class ProviderPortalController {
             java.util.List<MyContractServiceDto> servicesRequiringPA = allPricingItems.stream()
                 .filter(item -> {
                     Long serviceId = null;
+                    Long categoryId = null;
                     if (item.getMedicalService() != null) {
                         serviceId = item.getMedicalService().getId();
                     }
-                    if (serviceId == null) return false;
+                    if (item.getEffectiveCategory() != null) {
+                        categoryId = item.getEffectiveCategory().getId();
+                    } else if (item.getMedicalCategory() != null) {
+                        categoryId = item.getMedicalCategory().getId();
+                    }
+                    if (serviceId == null && categoryId == null) return false;
                     
-                    // Check if this service requires pre-approval in the member's policy
-                    return benefitPolicyRuleService.requiresPreApproval(policyId, serviceId, null);
+                    // Modern coverage rules are category/context based. Passing the
+                    // effective category prevents valid contract items from vanishing
+                    // when they are not linked to a legacy MedicalService row.
+                    return benefitPolicyRuleService.requiresPreApproval(policyId, serviceId, categoryId);
                 })
                 .map(item -> {
                     String serviceCode = item.getServiceCode();
                     String serviceName = item.getServiceName();
                     String categoryName = item.getCategoryName();
                     Long medicalServiceId = null;
+                    Long medicalCategoryId = null;
+                    String categoryCode = null;
                     
                     if (item.getMedicalService() != null) {
                         medicalServiceId = item.getMedicalService().getId();
@@ -1181,8 +1191,12 @@ public class ProviderPortalController {
                     }
                     
                     if (item.getEffectiveCategory() != null) {
+                        medicalCategoryId = item.getEffectiveCategory().getId();
+                        categoryCode = item.getEffectiveCategory().getCode();
                         categoryName = item.getEffectiveCategory().getName();
                     } else if (item.getMedicalCategory() != null) {
+                        medicalCategoryId = item.getMedicalCategory().getId();
+                        categoryCode = item.getMedicalCategory().getCode();
                         categoryName = item.getMedicalCategory().getName();
                     }
                     
@@ -1191,6 +1205,8 @@ public class ProviderPortalController {
                         .medicalServiceId(medicalServiceId)
                         .serviceCode(serviceCode)
                         .serviceName(serviceName)
+                        .medicalCategoryId(medicalCategoryId)
+                        .categoryCode(categoryCode)
                         .categoryName(categoryName)
                         .contractPrice(item.getContractPrice())
                         .maxContractPrice(item.getMaxContractPrice())
@@ -1199,6 +1215,7 @@ public class ProviderPortalController {
                         .effectiveTo(item.getEffectiveTo())
                         .hasContract(true)
                         .requiresPreAuth(true)  // All items here require pre-auth
+                        .requiresPreApproval(true)
                         .build();
                 })
                 .collect(java.util.stream.Collectors.toList());

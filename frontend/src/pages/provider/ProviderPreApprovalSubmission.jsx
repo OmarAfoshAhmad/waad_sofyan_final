@@ -465,7 +465,7 @@ const ProviderPreApprovalSubmission = () => {
         // Normalize service data for consistent access
         const normalizedServices = rawServices.map((item) => {
           const requiresPreApproval =
-            item.requiresPreApproval || item.requiresPreAuth || item.requiresPA || item.requires_pre_auth || false;
+            isPreAuthEndpoint || item.requiresPreApproval || item.requiresPreAuth || item.requiresPA || item.requires_pre_auth || false;
 
           return {
             // IDs
@@ -513,7 +513,7 @@ const ProviderPreApprovalSubmission = () => {
         });
       } catch (err) {
         console.error('[PRE-AUTH] Error loading services:', err);
-        setServices([]);
+        setAllServices([]);
       } finally {
         setLoadingServices(false);
       }

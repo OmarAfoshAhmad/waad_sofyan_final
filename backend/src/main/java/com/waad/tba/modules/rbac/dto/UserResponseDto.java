@@ -21,6 +21,7 @@ public class UserResponseDto {
     private String role;
     private Long employerId;
     private Long providerId;
+    private String providerName;
     private Boolean canViewClaims;
     private Boolean canViewVisits;
     private Boolean canViewReports;

@@ -2,6 +2,8 @@ package com.waad.tba.modules.rbac.service;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 
@@ -12,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.modules.provider.entity.Provider;
+import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.rbac.dto.UserCreateDto;
 import com.waad.tba.modules.rbac.dto.UserResponseDto;
 import com.waad.tba.modules.rbac.dto.UserUpdateDto;
@@ -45,13 +49,12 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserSecurityService securityService;
     private final SessionManagementService sessionManagementService;
+    private final ProviderRepository providerRepository;
 
     @Transactional(readOnly = true)
     public List<UserResponseDto> findAll() {
         log.debug("Finding all users");
-        return userRepository.findAll().stream()
-                .map(userMapper::toResponseDto)
-                .collect(Collectors.toList());
+        return mapUsersWithProviderNames(userRepository.findAll());
     }
     
     public User getByUsername(String username) {
@@ -64,7 +67,7 @@ public class UserService {
         log.debug("Finding user by id: {}", id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
-        return userMapper.toResponseDto(user);
+        return enrichProviderName(userMapper.toResponseDto(user));
     }
 
     @Transactional
@@ -102,7 +105,7 @@ public class UserService {
         
         log.info("User created successfully with id: {}", savedUser.getId());
         
-        return userMapper.toResponseDto(savedUser);
+        return enrichProviderName(userMapper.toResponseDto(savedUser));
     }
 
     @Transactional
@@ -175,7 +178,7 @@ public class UserService {
                 null, null);
         
         log.info("User updated successfully: {}", id);
-        return userMapper.toResponseDto(updatedUser);
+        return enrichProviderName(userMapper.toResponseDto(updatedUser));
     }
 
     @Transactional
@@ -210,9 +213,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponseDto> search(String query) {
         log.debug("Searching users with query: {}", query);
-        return userRepository.searchUsers(query).stream()
-                .map(userMapper::toResponseDto)
-                .collect(Collectors.toList());
+        return mapUsersWithProviderNames(userRepository.searchUsers(query));
     }
     
     /**
@@ -222,9 +223,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponseDto> findUnassignedProviders() {
         log.debug("Finding users not assigned to any provider");
-        return userRepository.findByProviderIdIsNull().stream()
-                .map(userMapper::toResponseDto)
-                .collect(Collectors.toList());
+        return mapUsersWithProviderNames(userRepository.findByProviderIdIsNull());
     }
     
     /**
@@ -234,16 +233,15 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserResponseDto> findByProviderId(Long providerId) {
         log.debug("Finding users assigned to provider: {}", providerId);
-        return userRepository.findByProviderId(providerId).stream()
-                .map(userMapper::toResponseDto)
-                .collect(Collectors.toList());
+        return mapUsersWithProviderNames(userRepository.findByProviderId(providerId));
     }
 
     @Transactional(readOnly = true)
     public Page<UserResponseDto> findAllPaginated(Pageable pageable) {
         log.debug("Finding users with pagination");
-        return userRepository.findAll(pageable)
-                .map(userMapper::toResponseDto);
+        Page<User> users = userRepository.findAll(pageable);
+        Map<Long, String> providerNames = loadProviderNames(users.getContent());
+        return users.map(user -> enrichProviderName(userMapper.toResponseDto(user), providerNames));
     }
 
     @Transactional(readOnly = true)
@@ -252,8 +250,9 @@ public class UserService {
         if (query == null || query.isBlank()) {
             return findAllPaginated(pageable);
         }
-        return userRepository.searchUsers(query.trim(), pageable)
-                .map(userMapper::toResponseDto);
+        Page<User> users = userRepository.searchUsers(query.trim(), pageable);
+        Map<Long, String> providerNames = loadProviderNames(users.getContent());
+        return users.map(user -> enrichProviderName(userMapper.toResponseDto(user), providerNames));
     }
 
     @Transactional(readOnly = true)
@@ -261,8 +260,47 @@ public class UserService {
         log.debug("Searching users with pagination, query: {}, role: {}", query, role);
         String normalizedQuery = query == null ? "" : query.trim();
         String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
-        return userRepository.searchUsersFiltered(normalizedQuery, normalizedRole, pageable)
-                .map(userMapper::toResponseDto);
+        Page<User> users = userRepository.searchUsersFiltered(normalizedQuery, normalizedRole, pageable);
+        Map<Long, String> providerNames = loadProviderNames(users.getContent());
+        return users.map(user -> enrichProviderName(userMapper.toResponseDto(user), providerNames));
+    }
+
+    private List<UserResponseDto> mapUsersWithProviderNames(List<User> users) {
+        Map<Long, String> providerNames = loadProviderNames(users);
+        return users.stream()
+                .map(user -> enrichProviderName(userMapper.toResponseDto(user), providerNames))
+                .collect(Collectors.toList());
+    }
+
+    private UserResponseDto enrichProviderName(UserResponseDto dto) {
+        if (dto == null || dto.getProviderId() == null) {
+            return dto;
+        }
+        providerRepository.findById(dto.getProviderId())
+                .map(Provider::getName)
+                .ifPresent(dto::setProviderName);
+        return dto;
+    }
+
+    private UserResponseDto enrichProviderName(UserResponseDto dto, Map<Long, String> providerNames) {
+        if (dto != null && dto.getProviderId() != null) {
+            dto.setProviderName(providerNames.get(dto.getProviderId()));
+        }
+        return dto;
+    }
+
+    private Map<Long, String> loadProviderNames(List<User> users) {
+        Set<Long> providerIds = users.stream()
+                .map(User::getProviderId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (providerIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+
+        return providerRepository.findByIdIn(providerIds).stream()
+                .collect(Collectors.toMap(Provider::getId, Provider::getName, (left, right) -> left));
     }
 
     @Transactional(readOnly = true)
