@@ -8,7 +8,7 @@
  * @since 2026-01-11
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -66,7 +66,9 @@ import {
   History as HistoryIcon,
   LocalHospital as VisitIcon,
   ReceiptLong as ClaimIcon,
-  FactCheck as PreAuthIcon
+  FactCheck as PreAuthIcon,
+  Search as SearchIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TablePagination } from '@mui/material';
@@ -163,6 +165,11 @@ const UnifiedMemberView = () => {
   const [medicalHistory, setMedicalHistory] = useState(null);
   const [medicalHistoryLoading, setMedicalHistoryLoading] = useState(false);
   const [medicalHistoryError, setMedicalHistoryError] = useState(null);
+  const [medicalHistorySearch, setMedicalHistorySearch] = useState('');
+  const [medicalHistoryType, setMedicalHistoryType] = useState('ALL');
+  const [medicalHistoryStatus, setMedicalHistoryStatus] = useState('ALL');
+  const [medicalHistoryPage, setMedicalHistoryPage] = useState(0);
+  const [medicalHistoryRowsPerPage, setMedicalHistoryRowsPerPage] = useState(10);
   const medicalTabIndex = member?.type === MEMBER_TYPES.PRINCIPAL ? 2 : 1;
 
   // Pagination
@@ -182,6 +189,15 @@ const UnifiedMemberView = () => {
   const handleChangeRowsPerPage = (event) => {
     setRpp(parseInt(event.target.value, 10));
     setPg(0);
+  };
+
+  const handleMedicalHistoryPageChange = (event, newPage) => {
+    setMedicalHistoryPage(newPage);
+  };
+
+  const handleMedicalHistoryRowsPerPageChange = (event) => {
+    setMedicalHistoryRowsPerPage(parseInt(event.target.value, 10));
+    setMedicalHistoryPage(0);
   };
 
   useEffect(() => {
@@ -239,6 +255,7 @@ const UnifiedMemberView = () => {
     const events = [
       ...visits.map((visit) => ({
         id: `visit-${visit.id}`,
+        originalId: visit.id,
         type: 'visit',
         typeLabel: 'زيارة',
         icon: <VisitIcon fontSize="small" />,
@@ -247,10 +264,12 @@ const UnifiedMemberView = () => {
         provider: visit.providerName || visit.provider?.name || '-',
         description: visit.diagnosisDescription || visit.reason || visit.notes || 'زيارة طبية',
         status: visit.status,
-        amount: null
+        amount: null,
+        path: `/visits/${visit.id}`
       })),
       ...claims.map((claim) => ({
         id: `claim-${claim.id}`,
+        originalId: claim.id,
         type: 'claim',
         typeLabel: 'مطالبة',
         icon: <ClaimIcon fontSize="small" />,
@@ -259,10 +278,12 @@ const UnifiedMemberView = () => {
         provider: claim.providerName || claim.provider?.name || '-',
         description: claim.diagnosisDescription || claim.diagnosis || 'مطالبة طبية',
         status: claim.status,
-        amount: claim.totalAmount ?? claim.claimedAmount ?? claim.approvedAmount
+        amount: claim.totalAmount ?? claim.claimedAmount ?? claim.approvedAmount,
+        path: `/claims/${claim.id}/medical-review`
       })),
       ...preAuths.map((preAuth) => ({
         id: `preauth-${preAuth.id}`,
+        originalId: preAuth.id,
         type: 'preauth',
         typeLabel: 'موافقة',
         icon: <PreAuthIcon fontSize="small" />,
@@ -271,13 +292,44 @@ const UnifiedMemberView = () => {
         provider: preAuth.providerName || preAuth.provider?.name || '-',
         description: preAuth.serviceName || preAuth.diagnosisDescription || 'موافقة مسبقة',
         status: preAuth.status,
-        amount: preAuth.requestedAmount ?? preAuth.approvedAmount
+        amount: preAuth.requestedAmount ?? preAuth.approvedAmount,
+        path: `/pre-approvals/${preAuth.id}`
       }))
     ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     setMedicalHistory({ visits, claims, preAuths, events });
     setMedicalHistoryLoading(false);
   };
+
+  const filteredMedicalHistoryEvents = useMemo(() => {
+    const events = medicalHistory?.events || [];
+    const query = medicalHistorySearch.trim().toLowerCase();
+
+    return events.filter((event) => {
+      const matchesType = medicalHistoryType === 'ALL' || event.type === medicalHistoryType;
+      const matchesStatus = medicalHistoryStatus === 'ALL' || event.status === medicalHistoryStatus;
+      const haystack = [event.reference, event.description, event.provider, event.status, event.typeLabel]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      const matchesSearch = !query || haystack.includes(query);
+      return matchesType && matchesStatus && matchesSearch;
+    });
+  }, [medicalHistory?.events, medicalHistorySearch, medicalHistoryStatus, medicalHistoryType]);
+
+  const medicalHistoryStatusOptions = useMemo(() => {
+    const statuses = new Set((medicalHistory?.events || []).map((event) => event.status).filter(Boolean));
+    return Array.from(statuses);
+  }, [medicalHistory?.events]);
+
+  const paginatedMedicalHistoryEvents = useMemo(() => {
+    const start = medicalHistoryPage * medicalHistoryRowsPerPage;
+    return filteredMedicalHistoryEvents.slice(start, start + medicalHistoryRowsPerPage);
+  }, [filteredMedicalHistoryEvents, medicalHistoryPage, medicalHistoryRowsPerPage]);
+
+  useEffect(() => {
+    setMedicalHistoryPage(0);
+  }, [medicalHistorySearch, medicalHistoryStatus, medicalHistoryType]);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -909,8 +961,39 @@ const UnifiedMemberView = () => {
                       size="small"
                       color="primary"
                       variant="outlined"
-                      label={`${medicalHistory?.events?.length ?? 0} حركة`}
+                      label={`${filteredMedicalHistoryEvents.length} من ${medicalHistory?.events?.length ?? 0} حركة`}
                     />
+                  </Stack>
+
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={medicalHistorySearch}
+                      onChange={(event) => setMedicalHistorySearch(event.target.value)}
+                      placeholder="بحث بالمرجع، الوصف، مقدم الخدمة أو الحالة..."
+                      InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} /> }}
+                    />
+                    <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 180 } }}>
+                      <InputLabel>نوع الحركة</InputLabel>
+                      <Select value={medicalHistoryType} label="نوع الحركة" onChange={(event) => setMedicalHistoryType(event.target.value)}>
+                        <MenuItem value="ALL">كل الحركات</MenuItem>
+                        <MenuItem value="visit">الزيارات</MenuItem>
+                        <MenuItem value="claim">المطالبات</MenuItem>
+                        <MenuItem value="preauth">الموافقات</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 180 } }}>
+                      <InputLabel>الحالة</InputLabel>
+                      <Select value={medicalHistoryStatus} label="الحالة" onChange={(event) => setMedicalHistoryStatus(event.target.value)}>
+                        <MenuItem value="ALL">كل الحالات</MenuItem>
+                        {medicalHistoryStatusOptions.map((status) => (
+                          <MenuItem key={status} value={status}>
+                            {statusLabel(status)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Stack>
 
                   {medicalHistoryLoading ? (
@@ -927,8 +1010,16 @@ const UnifiedMemberView = () => {
                         لا توجد زيارات أو مطالبات أو موافقات مسجلة لهذا المستفيد.
                       </Typography>
                     </Box>
+                  ) : !filteredMedicalHistoryEvents.length ? (
+                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                      <SearchIcon color="disabled" sx={{ fontSize: 44, mb: 1 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        لا توجد حركات مطابقة للفلاتر الحالية.
+                      </Typography>
+                    </Box>
                   ) : (
-                    <TableContainer>
+                    <>
+                    <TableContainer sx={{ maxHeight: 430 }}>
                       <Table size="small">
                         <TableHead>
                           <TableRow>
@@ -939,10 +1030,11 @@ const UnifiedMemberView = () => {
                             <TableCell align="center">مقدم الخدمة</TableCell>
                             <TableCell align="center">الحالة</TableCell>
                             <TableCell align="center">المبلغ</TableCell>
+                            <TableCell align="center">فتح</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {medicalHistory.events.map((event) => (
+                          {paginatedMedicalHistoryEvents.map((event) => (
                             <TableRow key={event.id} hover>
                               <TableCell align="center">
                                 <Chip icon={event.icon} label={event.typeLabel} size="small" variant="outlined" color="primary" />
@@ -963,11 +1055,31 @@ const UnifiedMemberView = () => {
                                 <Chip label={statusLabel(event.status)} size="small" color={statusColor(event.status)} />
                               </TableCell>
                               <TableCell align="center">{formatMoney(event.amount)}</TableCell>
+                              <TableCell align="center">
+                                <Tooltip title="فتح السجل الأصلي">
+                                  <span>
+                                    <IconButton size="small" color="primary" disabled={!event.path} onClick={() => navigate(event.path)}>
+                                      <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </TableContainer>
+                    <TablePagination
+                      component="div"
+                      count={filteredMedicalHistoryEvents.length}
+                      page={medicalHistoryPage}
+                      onPageChange={handleMedicalHistoryPageChange}
+                      rowsPerPage={medicalHistoryRowsPerPage}
+                      onRowsPerPageChange={handleMedicalHistoryRowsPerPageChange}
+                      rowsPerPageOptions={[5, 10, 20, 50]}
+                      labelRowsPerPage="حركات لكل صفحة:"
+                    />
+                    </>
                   )}
                 </Paper>
               </Stack>

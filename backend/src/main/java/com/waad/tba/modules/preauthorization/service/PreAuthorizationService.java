@@ -1118,6 +1118,17 @@ public class PreAuthorizationService {
      */
     @Transactional(readOnly = true)
     public Page<PreAuthorizationResponseDto> getPreAuthorizationsByMember(Long memberId, Pageable pageable) {
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null) {
+            throw new AccessDeniedException("Authentication required");
+        }
+
+        if (!authorizationService.canAccessMember(currentUser, memberId)) {
+            log.warn("❌ Access denied: user {} attempted to access pre-authorizations for member {}",
+                    currentUser.getUsername(), memberId);
+            throw new AccessDeniedException("Access denied to this member's pre-authorizations");
+        }
+
         Page<PreAuthorization> preAuths = preAuthorizationRepository.findByMemberIdAndActiveTrue(memberId, pageable);
         return preAuths.map(this::mapToResponseDtoLight);
     }
