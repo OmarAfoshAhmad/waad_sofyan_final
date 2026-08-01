@@ -22,11 +22,11 @@ import {
   AttachFile as AttachmentIcon,
   Receipt as ClaimIcon,
   CloudUpload as UploadIcon,
-  VisibilityOutlined as ShowDocsIcon,
-  VisibilityOffOutlined as HideDocsIcon
+  VisibilityOutlined as ShowDocsIcon
 } from '@mui/icons-material';
 import MainCard from 'components/MainCard';
-import { ModernPageHeader, DocumentSidePanel } from 'components/tba';
+import { ModernPageHeader } from 'components/tba';
+import { DocumentPreviewDrawer } from 'components/tba/documents';
 import { usePreApprovalDetails } from 'hooks/usePreApprovals';
 import { FileUploader, AttachmentList } from 'components/upload';
 import {
@@ -35,9 +35,6 @@ import {
   downloadPreAuthAttachment,
   deletePreAuthAttachment
 } from 'services/api/files.service';
-// import MedicalDocumentSidePreview from 'components/medical/MedicalDocumentSidePreview';
-// import DocumentSideViewer from 'components/documents/DocumentSideViewer';
-import DocumentPreviewPanel from 'components/documents/DocumentPreviewPanel';
 
 // Insurance UX Components - Phase B2 Step 3
 import {
@@ -102,13 +99,8 @@ const PreApprovalView = () => {
   const [attachments, setAttachments] = useState([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
 
-  // Document side panel state (old)
-  const [showDocumentPanel, setShowDocumentPanel] = useState(true);
-
-  // Medical Document Side Preview (new)
-  const [previewDocument, setPreviewDocument] = useState(null);
+  const [previewDocumentId, setPreviewDocumentId] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
 
   // Fetch attachments when preApproval loads
   const fetchAttachments = useCallback(async () => {
@@ -167,26 +159,13 @@ const PreApprovalView = () => {
   const handlePreviewDocument = useCallback((attachment) => {
     if (!attachment) return;
 
-    const fileKey = attachment.fileKey || `pre-auth/${attachment.fileName || attachment.id}`;
-
-    setPreviewDocument({
-      id: attachment.id,
-      name: attachment.fileName || attachment.originalFileName || 'مستند طبي',
-      type: attachment.contentType || attachment.mimeType,
-      mimeType: attachment.contentType || attachment.mimeType,
-      fileKey: fileKey,
-      description: attachment.attachmentType || 'مستند موافقة مسبقة'
-    });
+    setPreviewDocumentId(attachment.id);
     setPreviewOpen(true);
   }, []);
 
   const handleClosePreview = useCallback(() => {
     setPreviewOpen(false);
-    setPreviewDocument(null);
-  }, []);
-
-  const handleToggleFocus = useCallback(() => {
-    setFocusMode((prev) => !prev);
+    setPreviewDocumentId(null);
   }, []);
 
   const handleBack = () => {
@@ -210,21 +189,6 @@ const PreApprovalView = () => {
     });
   };
 
-  // Build preview URL for document side panel
-  const buildDocumentPreviewUrl = useCallback(
-    async (document) => {
-      if (!preApproval?.id || !document?.id) return null;
-      try {
-        const blob = await downloadPreAuthAttachment(preApproval.id, document.id);
-        return URL.createObjectURL(blob);
-      } catch (err) {
-        console.error('Error building preview URL:', err);
-        return null;
-      }
-    },
-    [preApproval?.id]
-  );
-
   // Pre-Auth attachment type labels (Arabic)
   const PREAUTH_ATTACHMENT_LABELS = {
     MEDICAL_REPORT: 'تقرير طبي',
@@ -235,15 +199,15 @@ const PreApprovalView = () => {
     OTHER: 'مستند آخر'
   };
 
-  // Convert attachments to DocumentSidePanel format
-  const documentPanelData = attachments.map((att) => ({
+  // Convert attachments to unified document preview format.
+  const previewDocuments = attachments.map((att) => ({
     id: att.id,
-    name: att.fileName || att.originalFileName || 'مستند',
-    type: PREAUTH_ATTACHMENT_LABELS[att.attachmentType] || att.attachmentType || 'مستند',
+    documentUrl: `/pre-authorizations/${id}/attachments/${att.id}`,
+    fileName: att.fileName || att.originalFileName || 'مستند',
+    documentTitle: PREAUTH_ATTACHMENT_LABELS[att.attachmentType] || att.attachmentType || 'مستند موافقة',
     mimeType: att.contentType || att.mimeType || 'application/octet-stream',
-    size: att.fileSize || att.size || 0,
-    status: 'UPLOADED',
-    uploadedAt: att.uploadedAt || att.createdAt
+    fileSize: att.fileSize || att.size || 0,
+    onDownload: () => handleDownloadAttachment(att.id)
   }));
 
   if (loading) {
@@ -301,11 +265,18 @@ const PreApprovalView = () => {
               showResponseTime={false}
               language="ar"
             />
-            <Tooltip title={showDocumentPanel ? 'إخفاء المستندات' : 'عرض المستندات'}>
-              <IconButton onClick={() => setShowDocumentPanel(!showDocumentPanel)} color={showDocumentPanel ? 'primary' : 'default'}>
-                {showDocumentPanel ? <HideDocsIcon /> : <ShowDocsIcon />}
-              </IconButton>
+            <Tooltip title="عرض المستندات">
+              <span>
+                <IconButton onClick={() => setPreviewOpen(true)} color="primary" disabled={!previewDocuments.length}>
+                  <ShowDocsIcon />
+                </IconButton>
+              </span>
             </Tooltip>
+            {previewDocuments.length > 0 && (
+              <Button variant="outlined" startIcon={<AttachmentIcon />} onClick={() => setPreviewOpen(true)}>
+                المستندات ({previewDocuments.length})
+              </Button>
+            )}
             <Button variant="outlined" startIcon={<ArrowBack />} onClick={handleBack}>
               رجوع
             </Button>
@@ -314,7 +285,7 @@ const PreApprovalView = () => {
       />
       <Grid container spacing={2}>
         {/* ===================== MAIN CONTENT AREA ===================== */}
-        <Grid size={{ xs: 12, md: showDocumentPanel ? 8 : 12 }}>
+        <Grid size={12}>
           <MainCard>
             <Stack spacing={2}>
               {/* ===================== WORKFLOW TIMELINE ===================== */}
@@ -556,45 +527,15 @@ const PreApprovalView = () => {
           </MainCard>
         </Grid>
 
-        {/* ===================== DOCUMENT SIDE PANEL (SPLIT LAYOUT) ===================== */}
-        {showDocumentPanel && (
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Box sx={{ position: 'sticky', top: '8.0rem', height: 'calc(100vh - 100px)' }}>
-              {/* If no document selected, show list or empty state */}
-              {!previewDocument ? (
-                <DocumentSidePanel
-                  documents={documentPanelData}
-                  loading={loadingAttachments}
-                  onRefresh={fetchAttachments}
-                  onSelect={(doc) => {
-                    setPreviewDocument({
-                      fileUrl: buildDocumentPreviewUrl(doc),
-                      fileName: doc.fileName,
-                      fileType: doc.fileType,
-                      mimeType: doc.mimeType
-                    });
-                  }}
-                  downloadUrlBuilder={buildDocumentPreviewUrl}
-                  variant="list"
-                  title="المستندات المرفقة"
-                  emptyMessage="لا توجد مستندات مرفقة بهذا الطلب"
-                />
-              ) : (
-                <DocumentPreviewPanel
-                  fileUrl={previewDocument.fileUrl}
-                  fileType={previewDocument.fileType || previewDocument.mimeType}
-                  fileName={previewDocument.fileName}
-                  onClose={() => setPreviewDocument(null)}
-                />
-              )}
-            </Box>
-          </Grid>
-        )}
       </Grid>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* Document Side Viewer - REMOVED (Replaced by Split View) */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <DocumentPreviewDrawer
+        open={previewOpen}
+        onClose={handleClosePreview}
+        documents={previewDocuments}
+        initialDocumentId={previewDocumentId}
+        showDownload
+      />
     </>
   );
 };
