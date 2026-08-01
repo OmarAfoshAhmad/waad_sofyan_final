@@ -663,6 +663,26 @@ export const restoreEmployer = async (id) => {
 };
 
 /**
+ * Bulk archive employers — each processed independently, returns a per-employer result.
+ * @param {number[]} ids
+ * @returns {Promise<Object>} BulkEmployerResultDto
+ */
+export const bulkArchiveEmployers = async (ids) => {
+  const response = await axiosClient.post(`${BASE_URL}/bulk-archive`, ids);
+  return unwrap(response);
+};
+
+/**
+ * Bulk restore employers — each processed independently, returns a per-employer result.
+ * @param {number[]} ids
+ * @returns {Promise<Object>} BulkEmployerResultDto
+ */
+export const bulkRestoreEmployers = async (ids) => {
+  const response = await axiosClient.post(`${BASE_URL}/bulk-restore`, ids);
+  return unwrap(response);
+};
+
+/**
  * Get employer selectors (for dropdowns)
  *
  * @returns {Promise<Array>} List of employer selectors

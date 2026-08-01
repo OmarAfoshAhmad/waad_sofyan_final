@@ -24,7 +24,8 @@ const BulkEditContractsDialog = ({ open, onClose, onConfirm, selectedCount }) =>
     discountPercent: 10,
     discountBeforeRejection: false,
     startDate: null,
-    endDate: null
+    endDate: null,
+    reason: ''
   });
 
   const [toggles, setToggles] = useState({
@@ -60,7 +61,7 @@ const BulkEditContractsDialog = ({ open, onClose, onConfirm, selectedCount }) =>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           قم بتفعيل صندوق الاختيار بجانب الحقل الذي ترغب في تعديله وتطبيقه على جميع العقود المحددة.
         </Typography>
-        
+
         <Grid container spacing={3}>
           {/* Status */}
           <Grid item xs={12}>
@@ -85,6 +86,20 @@ const BulkEditContractsDialog = ({ open, onClose, onConfirm, selectedCount }) =>
               </TextField>
             </Stack>
           </Grid>
+
+          {toggles.updateStatus && (formData.status === 'SUSPENDED' || formData.status === 'TERMINATED') && (
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={formData.status === 'SUSPENDED' ? 'سبب التعليق' : 'سبب الإيقاف'}
+                value={formData.reason}
+                onChange={(e) => handleChange('reason', e.target.value)}
+                required
+                multiline
+                minRows={2}
+              />
+            </Grid>
+          )}
 
           {/* Pricing Model */}
           <Grid item xs={12}>
@@ -189,7 +204,15 @@ const BulkEditContractsDialog = ({ open, onClose, onConfirm, selectedCount }) =>
         <Button onClick={onClose} color="inherit">
           إلغاء
         </Button>
-        <Button onClick={handleConfirm} variant="contained" color="primary" disabled={!Object.values(toggles).some(Boolean)}>
+        <Button
+          onClick={handleConfirm}
+          variant="contained"
+          color="primary"
+          disabled={
+            !Object.values(toggles).some(Boolean) ||
+            (toggles.updateStatus && (formData.status === 'SUSPENDED' || formData.status === 'TERMINATED') && !formData.reason?.trim())
+          }
+        >
           تطبيق التعديلات
         </Button>
       </DialogActions>

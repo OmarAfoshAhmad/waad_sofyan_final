@@ -187,6 +187,15 @@ public class ProviderContract {
     @Column(name = "updated_by", length = 100)
     private String updatedBy;
 
+    /**
+     * Optimistic-locking token. Prevents silently overwriting a concurrent
+     * edit/activate/suspend/terminate performed by another user in the meantime.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Long version = 0L;
+
     public enum ContractStatus {
         DRAFT, ACTIVE, SUSPENDED, EXPIRED, TERMINATED
     }

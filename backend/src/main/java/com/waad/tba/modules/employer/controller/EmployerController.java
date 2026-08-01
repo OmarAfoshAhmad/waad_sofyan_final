@@ -128,6 +128,26 @@ public class EmployerController {
         return ResponseEntity.ok(ApiResponse.success("Employer restored successfully", restored));
     }
 
+    @PostMapping("/bulk-archive")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.employer.dto.BulkEmployerResultDto>> bulkArchive(
+            @RequestBody List<Long> ids) {
+        var result = service.bulkArchive(ids);
+        return ResponseEntity.ok(ApiResponse.success(
+                String.format("تم حذف %d من %d جهة عمل بنجاح", result.getSuccessCount(), result.getTotalCount()),
+                result));
+    }
+
+    @PostMapping("/bulk-restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.employer.dto.BulkEmployerResultDto>> bulkRestore(
+            @RequestBody List<Long> ids) {
+        var result = service.bulkRestore(ids);
+        return ResponseEntity.ok(ApiResponse.success(
+                String.format("تمت استعادة %d من %d جهة عمل بنجاح", result.getSuccessCount(), result.getTotalCount()),
+                result));
+    }
+
     @GetMapping("/count")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Long>> count() {

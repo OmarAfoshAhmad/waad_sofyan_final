@@ -225,6 +225,25 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
                      @Param("status") ContractStatus status,
                      Pageable pageable);
 
+       /**
+        * Search with status, pricing scope and rejection-timing (discount before/after) filters.
+        * All filter params are optional (null = ignored).
+        */
+       @Query("SELECT c FROM ModernProviderContract c " +
+                     "WHERE c.active = true " +
+                     "AND (:status IS NULL OR c.status = :status) " +
+                     "AND (:pricingScope IS NULL OR c.pricingScope = :pricingScope) " +
+                     "AND (:discountBeforeRejection IS NULL OR c.discountBeforeRejection = :discountBeforeRejection) " +
+                     "AND (:search IS NULL OR :search = '' " +
+                     "     OR LOWER(c.contractCode) LIKE LOWER(CONCAT('%', :search, '%')) " +
+                     "     OR LOWER(c.provider.name) LIKE LOWER(CONCAT('%', :search, '%')))")
+       Page<ProviderContract> searchWithFilters(
+                     @Param("search") String search,
+                     @Param("status") ContractStatus status,
+                     @Param("pricingScope") PricingScope pricingScope,
+                     @Param("discountBeforeRejection") Boolean discountBeforeRejection,
+                     Pageable pageable);
+
        // ═══════════════════════════════════════════════════════════════════════════
        // STATISTICS QUERIES
        // ═══════════════════════════════════════════════════════════════════════════

@@ -102,6 +102,49 @@ public class ProviderAdminDocumentService {
     }
     
     /**
+     * Download/preview a provider administrative document's raw bytes.
+     * Raw storage file-keys are never exposed to the client (per
+     * {@link com.waad.tba.common.file.LocalFileStorageService#upload}) — this is
+     * the only authorized path to the file's content.
+     */
+    @Transactional(readOnly = true)
+    public DocumentDownload downloadDocument(Long providerId, Long docId) {
+        assertCanAccessProvider(providerId);
+
+        ProviderAdminDocument document = documentRepository.findById(docId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document", "id", docId));
+
+        if (!document.getProviderId().equals(providerId)) {
+            throw new IllegalStateException("Document does not belong to this provider");
+        }
+
+        if (document.getFilePath() == null) {
+            throw new ResourceNotFoundException("Document file", "id", docId);
+        }
+
+        String fileKey = document.getFilePath();
+        if (fileKey.contains("/uploads/")) {
+            fileKey = fileKey.substring(fileKey.indexOf("/uploads/") + 9);
+        }
+
+        byte[] content = fileStorageService.download(fileKey);
+        return new DocumentDownload(content, document.getFileName(), resolveContentType(document.getFileName()));
+    }
+
+    private String resolveContentType(String fileName) {
+        String lower = fileName == null ? "" : fileName.toLowerCase();
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        if (lower.endsWith(".doc")) return "application/msword";
+        return "application/octet-stream";
+    }
+
+    public record DocumentDownload(byte[] content, String fileName, String contentType) {
+    }
+
+    /**
      * Delete provider document
      */
     @Transactional

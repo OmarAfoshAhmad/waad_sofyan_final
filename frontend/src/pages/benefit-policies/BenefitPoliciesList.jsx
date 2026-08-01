@@ -1,6 +1,24 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Box, Button, Chip, IconButton, InputAdornment, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography
+} from '@mui/material';
 import dayjs from 'dayjs';
 import {
   Add as AddIcon,
@@ -13,7 +31,9 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Undo as UndoIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  CheckCircle as CheckCircleIcon,
+  Error as ErrorIcon
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 
@@ -26,7 +46,9 @@ import {
   deleteBenefitPolicy,
   getBenefitPolicies,
   getDeletedBenefitPolicies,
-  restoreBenefitPolicy
+  restoreBenefitPolicy,
+  bulkDeleteBenefitPolicies,
+  bulkRestoreBenefitPolicies
 } from 'services/api/benefit-policies.service';
 
 const STATUS_CONFIG = {
@@ -63,6 +85,8 @@ const BenefitPoliciesList = () => {
     confirmColor: 'primary',
     onConfirm: null
   });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkResultDialog, setBulkResultDialog] = useState({ open: false, result: null });
 
   const fetchEmployers = useCallback(async () => {
     try {
@@ -179,6 +203,59 @@ const BenefitPoliciesList = () => {
     [closeDialog, enqueueSnackbar, fetchPolicies]
   );
 
+  const handleBulkResult = useCallback(
+    (result) => {
+      setSelectedIds([]);
+      fetchPolicies();
+      if (result && result.failedCount > 0) {
+        setBulkResultDialog({ open: true, result });
+      } else {
+        enqueueSnackbar(`تمت العملية على ${result?.successCount ?? 0} من ${result?.totalCount ?? 0} سياسة بنجاح`, {
+          variant: 'success'
+        });
+      }
+    },
+    [fetchPolicies, enqueueSnackbar]
+  );
+
+  const handleBulkDelete = useCallback(() => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد حذف جماعي',
+      message: `هل تريد حذف ${selectedIds.length} سياسة محددة؟ سيتم تخطي أي سياسة بها مستفيدون نشطون مع توضيح السبب.`,
+      confirmColor: 'error',
+      onConfirm: async () => {
+        try {
+          const result = await bulkDeleteBenefitPolicies(selectedIds);
+          closeDialog();
+          handleBulkResult(result);
+        } catch (error) {
+          enqueueSnackbar(error?.response?.data?.message || 'فشل الحذف الجماعي', { variant: 'error' });
+          closeDialog();
+        }
+      }
+    });
+  }, [selectedIds, closeDialog, handleBulkResult, enqueueSnackbar]);
+
+  const handleBulkRestore = useCallback(() => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد استعادة جماعية',
+      message: `هل تريد استعادة ${selectedIds.length} سياسة محددة؟`,
+      confirmColor: 'success',
+      onConfirm: async () => {
+        try {
+          const result = await bulkRestoreBenefitPolicies(selectedIds);
+          closeDialog();
+          handleBulkResult(result);
+        } catch (error) {
+          enqueueSnackbar(error?.response?.data?.message || 'فشل الاستعادة الجماعية', { variant: 'error' });
+          closeDialog();
+        }
+      }
+    });
+  }, [selectedIds, closeDialog, handleBulkResult, enqueueSnackbar]);
+
   const columns = useMemo(
     () => [
       { id: 'policyCode', label: 'رمز السياسة', minWidth: '8.75rem', align: 'center', sortable: true },
@@ -257,7 +334,7 @@ const BenefitPoliciesList = () => {
   );
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', px: { xs: 2, sm: 3 } }}>
       <ModernPageHeader
         title="سياسات المنافع"
         subtitle="إدارة سياسات المنافع والتغطية التأمينية"
@@ -265,6 +342,16 @@ const BenefitPoliciesList = () => {
         breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'سياسات المنافع' }]}
         actions={
           <Stack direction="row" spacing={1.5}>
+            {selectedIds.length > 0 && !showDeleted && (
+              <Button variant="contained" color="error" startIcon={<DeleteIcon />} onClick={handleBulkDelete}>
+                حذف جماعي ({selectedIds.length})
+              </Button>
+            )}
+            {selectedIds.length > 0 && showDeleted && (
+              <Button variant="contained" color="success" startIcon={<UndoIcon />} onClick={handleBulkRestore}>
+                استعادة جماعية ({selectedIds.length})
+              </Button>
+            )}
             <SoftDeleteToggle
               showDeleted={showDeleted}
               onToggle={() => {
@@ -410,6 +497,9 @@ const BenefitPoliciesList = () => {
           renderCell={renderCell}
           emptyMessage={showDeleted ? 'لا توجد سياسات محذوفة' : 'لا توجد سياسات منافع مسجلة'}
           getRowKey={(row) => row.id}
+          enableRowSelection
+          selectedRowIds={selectedIds}
+          onRowSelectionChange={setSelectedIds}
           sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
           tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
         />
@@ -423,6 +513,32 @@ const BenefitPoliciesList = () => {
         onConfirm={confirmDialog.onConfirm}
         onClose={closeDialog}
       />
+
+      {/* Bulk Operation Result Dialog — never collapse partial success into a generic toast */}
+      <Dialog open={bulkResultDialog.open} onClose={() => setBulkResultDialog({ open: false, result: null })} maxWidth="sm" fullWidth>
+        <DialogTitle>نتيجة العملية الجماعية</DialogTitle>
+        <DialogContent>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+            <Chip color="success" label={`نجح: ${bulkResultDialog.result?.successCount ?? 0}`} icon={<CheckCircleIcon />} />
+            <Chip color="error" label={`فشل: ${bulkResultDialog.result?.failedCount ?? 0}`} icon={<ErrorIcon />} />
+            <Chip variant="outlined" label={`الإجمالي: ${bulkResultDialog.result?.totalCount ?? 0}`} />
+          </Stack>
+          <List dense>
+            {(bulkResultDialog.result?.results || []).map((r) => (
+              <ListItem key={r.policyId}>
+                <ListItemText
+                  primary={r.policyName || `سياسة #${r.policyId}`}
+                  secondary={r.message}
+                  secondaryTypographyProps={{ color: r.success ? 'success.main' : 'error.main' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkResultDialog({ open: false, result: null })}>إغلاق</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

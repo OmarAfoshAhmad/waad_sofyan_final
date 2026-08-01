@@ -36,6 +36,12 @@ public class ProviderViewDto {
      * Whether provider has administrative documents uploaded
      */
     private Boolean hasDocuments;
+
+    /**
+     * Number of administrative documents uploaded for this provider
+     * (license/certificates/contract files) — batch-computed per page, never per row.
+     */
+    private Long documentsCount;
     
     private LocalDate contractStartDate;
     private LocalDate contractEndDate;

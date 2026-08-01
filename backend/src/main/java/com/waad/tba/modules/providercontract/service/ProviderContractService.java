@@ -12,6 +12,8 @@ import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingMode
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.systemadmin.service.AuditLogService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,10 +22,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Year;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -49,6 +54,7 @@ public class ProviderContractService {
     private final ProviderContractPricingItemRepository pricingItemRepository;
     private final ProviderRepository providerRepository;
     private final EmployerRepository employerRepository;
+    private final AuditLogService auditLogService;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -133,21 +139,25 @@ public class ProviderContractService {
      */
     @Transactional(readOnly = true)
     public Page<ProviderContractResponseDto> search(String query, ContractStatus status, Pageable pageable) {
-        log.debug("Searching contracts: query={}, status={}", query, status);
+        return search(query, status, null, null, pageable);
+    }
 
-        if (query == null || query.trim().isEmpty()) {
-            if (status != null) {
-                return findByStatus(status, pageable);
-            }
+    /**
+     * Search contracts with optional status, pricing scope and rejection-timing filters.
+     * All filtering happens server-side via {@link ProviderContractRepository#searchWithFilters}.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProviderContractResponseDto> search(String query, ContractStatus status, PricingScope pricingScope,
+            Boolean discountBeforeRejection, Pageable pageable) {
+        log.debug("Searching contracts: query={}, status={}, pricingScope={}, discountBeforeRejection={}",
+                query, status, pricingScope, discountBeforeRejection);
+
+        if ((query == null || query.trim().isEmpty()) && status == null && pricingScope == null
+                && discountBeforeRejection == null) {
             return findAll(pageable);
         }
 
-        if (status != null) {
-            return contractRepository.searchByCodeOrProviderNameWithStatus(query, status, pageable)
-                    .map(ProviderContractResponseDto::fromEntity);
-        }
-
-        return contractRepository.searchByCodeOrProviderName(query, pageable)
+        return contractRepository.searchWithFilters(query, status, pricingScope, discountBeforeRejection, pageable)
                 .map(ProviderContractResponseDto::fromEntity);
     }
 
@@ -253,6 +263,8 @@ public class ProviderContractService {
 
         contract = contractRepository.save(contract);
         log.info("Created provider contract: {}", contract.getContractCode());
+        logAudit("CREATE", contract.getId(), "Created contract " + contract.getContractCode()
+                + " for providerId=" + contract.getProvider().getId() + ", status=" + contract.getStatus());
 
         return ProviderContractResponseDto.fromEntity(contract);
     }
@@ -360,6 +372,7 @@ public class ProviderContractService {
         contract = contractRepository.save(contract);
 
         log.info("Updated provider contract: {}", contract.getContractCode());
+        logAudit("UPDATE", contract.getId(), "Updated contract " + contract.getContractCode());
         return ProviderContractResponseDto.fromEntity(contract);
     }
 
@@ -408,11 +421,14 @@ public class ProviderContractService {
         checkForOverlappingContracts(providerId, contractId, pricingScope, employerId,
                 contractToActivate.getStartDate(), contractToActivate.getEndDate());
 
+        ContractStatus previousStatus = contractToActivate.getStatus();
         contractToActivate.setStatus(ContractStatus.ACTIVE);
         contractToActivate.setUpdatedBy(getCurrentUsername());
         ProviderContract savedContract = contractRepository.save(contractToActivate);
 
         log.info("Activated provider contract: {}", savedContract.getContractCode());
+        logAudit("ACTIVATE", savedContract.getId(),
+                "Contract " + savedContract.getContractCode() + " status " + previousStatus + " -> ACTIVE");
         return ProviderContractResponseDto.fromEntity(savedContract);
     }
 
@@ -431,6 +447,7 @@ public class ProviderContractService {
             throw new BusinessRuleException("Cannot suspend contract with status: " + contract.getStatus());
         }
 
+        ContractStatus previousStatus = contract.getStatus();
         contract.setStatus(ContractStatus.SUSPENDED);
         if (reason != null && !reason.isBlank()) {
             String notes = contract.getNotes() != null ? contract.getNotes() + "\n" : "";
@@ -441,6 +458,8 @@ public class ProviderContractService {
         contract = contractRepository.save(contract);
 
         log.info("Suspended provider contract: {}", contract.getContractCode());
+        logAudit("SUSPEND", contract.getId(), "Contract " + contract.getContractCode() + " status " + previousStatus
+                + " -> SUSPENDED. Reason: " + (reason != null ? reason : "-"));
         return ProviderContractResponseDto.fromEntity(contract);
     }
 
@@ -459,6 +478,7 @@ public class ProviderContractService {
             throw new BusinessRuleException("Cannot terminate contract with status: " + contract.getStatus());
         }
 
+        ContractStatus previousStatus = contract.getStatus();
         contract.setStatus(ContractStatus.TERMINATED);
         if (reason != null && !reason.isBlank()) {
             String notes = contract.getNotes() != null ? contract.getNotes() + "\n" : "";
@@ -469,6 +489,8 @@ public class ProviderContractService {
         contract = contractRepository.save(contract);
 
         log.info("Terminated provider contract: {}", contract.getContractCode());
+        logAudit("TERMINATE", contract.getId(), "Contract " + contract.getContractCode() + " status "
+                + previousStatus + " -> TERMINATED. Reason: " + (reason != null ? reason : "-"));
         return ProviderContractResponseDto.fromEntity(contract);
     }
 
@@ -497,6 +519,7 @@ public class ProviderContractService {
         contractRepository.save(contract);
 
         log.info("Soft deleted provider contract: {}", contract.getContractCode());
+        logAudit("DELETE", contract.getId(), "Soft-deleted contract " + contract.getContractCode());
     }
 
     /**
@@ -515,6 +538,7 @@ public class ProviderContractService {
         contract = contractRepository.save(contract);
 
         log.info("Restored provider contract: {}", contract.getContractCode());
+        logAudit("RESTORE", contract.getId(), "Restored contract " + contract.getContractCode() + " from trash");
         return ProviderContractResponseDto.fromEntity(contract);
     }
 
@@ -533,10 +557,12 @@ public class ProviderContractService {
         }
 
         try {
+            String contractCode = contract.getContractCode();
             pricingItemRepository.hardDeleteByContractId(id);
             contractRepository.delete(contract);
             contractRepository.flush();
-            log.info("Hard deleted provider contract: {}", contract.getContractCode());
+            log.info("Hard deleted provider contract: {}", contractCode);
+            logAudit("HARD_DELETE", id, "Permanently deleted contract " + contractCode);
         } catch (DataIntegrityViolationException ex) {
             throw new BusinessRuleException("تعذر الحذف النهائي للعقد لوجود بيانات مرتبطة به.");
         } catch (RuntimeException ex) {
@@ -544,6 +570,50 @@ public class ProviderContractService {
             throw new BusinessRuleException(
                     "تعذر الحذف النهائي للعقد. يرجى المحاولة لاحقاً أو مراجعة الربط مع البيانات التابعة.");
         }
+    }
+
+    /**
+     * Bulk soft-delete: each contract is processed independently so one failure
+     * (e.g. contract still ACTIVE) never blocks the rest of the batch.
+     */
+    @Transactional
+    public BulkProviderContractResultDto bulkDelete(List<Long> contractIds) {
+        List<BulkProviderContractResultDto.ContractResult> results = new ArrayList<>();
+        int successCount = 0;
+
+        for (Long id : contractIds) {
+            try {
+                delete(id);
+                ProviderContract contract = contractRepository.findById(id).orElse(null);
+                results.add(BulkProviderContractResultDto.ContractResult.builder()
+                        .contractId(id)
+                        .contractCode(contract != null ? contract.getContractCode() : null)
+                        .success(true)
+                        .message("تم الحذف بنجاح")
+                        .build());
+                successCount++;
+            } catch (BusinessRuleException ex) {
+                results.add(BulkProviderContractResultDto.ContractResult.builder()
+                        .contractId(id)
+                        .success(false)
+                        .message(ex.getMessage())
+                        .build());
+            } catch (RuntimeException ex) {
+                log.error("Unexpected bulk-delete failure for contract {}", id, ex);
+                results.add(BulkProviderContractResultDto.ContractResult.builder()
+                        .contractId(id)
+                        .success(false)
+                        .message("تعذر حذف العقد. يرجى المحاولة لاحقاً.")
+                        .build());
+            }
+        }
+
+        return BulkProviderContractResultDto.builder()
+                .totalCount(contractIds.size())
+                .successCount(successCount)
+                .failedCount(contractIds.size() - successCount)
+                .results(results)
+                .build();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -576,10 +646,14 @@ public class ProviderContractService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Bulk update contracts
+     * Bulk update contracts. Each contract is evaluated and saved independently — a
+     * failure on one contract (invalid transition, overlapping active contract, bad
+     * dates, ...) must never discard the other, valid, contracts in the batch. Callers
+     * get a full per-contract breakdown via {@link BulkProviderContractResultDto}.
      */
     @Transactional
-    public int bulkUpdateContracts(com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
+    public com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto bulkUpdateContracts(
+            com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
         log.info("Bulk updating provider contracts: {} contracts", dto.getContractIds().size());
 
         if (dto.getContractIds() == null || dto.getContractIds().isEmpty()) {
@@ -587,76 +661,126 @@ public class ProviderContractService {
         }
 
         List<ProviderContract> contracts = contractRepository.findAllById(dto.getContractIds());
-        int updatedCount = 0;
+        java.util.Map<Long, ProviderContract> byId = contracts.stream()
+                .collect(Collectors.toMap(ProviderContract::getId, c -> c));
 
-        for (ProviderContract contract : contracts) {
-            // Cannot update terminated contracts
-            if (contract.getStatus() == ContractStatus.TERMINATED) {
+        List<com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult> results =
+                new java.util.ArrayList<>();
+
+        for (Long contractId : dto.getContractIds()) {
+            ProviderContract contract = byId.get(contractId);
+            if (contract == null) {
+                results.add(com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult
+                        .builder().contractId(contractId).success(false).message("العقد غير موجود").build());
                 continue;
             }
 
-            boolean modified = false;
-
-            if (dto.isUpdateStatus() && dto.getStatus() != null) {
-                if (contract.getStatus() != dto.getStatus()) {
-                    if (dto.getStatus() == ContractStatus.ACTIVE) {
-                        PricingScope pricingScope = contract.getPricingScope() != null
-                                ? contract.getPricingScope()
-                                : PricingScope.GLOBAL;
-                        Long employerId = contract.getEmployer() != null ? contract.getEmployer().getId() : null;
-                        resolveEmployerForScope(pricingScope, employerId);
-
-                        // Avoid multiple active contracts for the same provider and scope
-                        findActiveContractForScope(contract.getProvider().getId(), pricingScope, employerId)
-                            .filter(existing -> !existing.getId().equals(contract.getId()))
-                            .ifPresent(existing -> {
-                                throw new BusinessRuleException(
-                                        "يوجد عقد نشط مسبقاً لنفس مقدم الخدمة ونطاق التسعير: " + existing.getContractCode());
-                            });
-                    }
-                    contract.setStatus(dto.getStatus());
-                    modified = true;
-                }
-            }
-
-            if (dto.isUpdatePricingModel() && dto.getPricingModel() != null) {
-                contract.setPricingModel(dto.getPricingModel());
-                modified = true;
-            }
-
-            if (dto.isUpdateDiscountPercent()) {
-                contract.setDiscountPercent(dto.getDiscountPercent() != null ? dto.getDiscountPercent() : BigDecimal.ZERO);
-                modified = true;
-            }
-
-            if (dto.isUpdateDiscountTiming() && dto.getDiscountBeforeRejection() != null) {
-                contract.setDiscountBeforeRejection(dto.getDiscountBeforeRejection());
-                modified = true;
-            }
-
-            if (dto.isUpdateStartDate() && dto.getStartDate() != null) {
-                contract.setStartDate(dto.getStartDate());
-                modified = true;
-            }
-
-            if (dto.isUpdateEndDate()) {
-                contract.setEndDate(dto.getEndDate());
-                modified = true;
-            }
-
-            // Validate dates
-            if (contract.getEndDate() != null && contract.getStartDate().isAfter(contract.getEndDate())) {
-                throw new BusinessRuleException("تاريخ البدء يجب أن يكون قبل تاريخ الانتهاء للعقد: " + contract.getContractCode());
-            }
-
-            if (modified) {
-                contract.setUpdatedBy(getCurrentUsername());
-                contractRepository.save(contract);
-                updatedCount++;
+            try {
+                results.add(applyBulkUpdateToOneContract(contract, dto));
+            } catch (BusinessRuleException ex) {
+                results.add(com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult
+                        .builder().contractId(contract.getId()).contractCode(contract.getContractCode())
+                        .success(false).message(ex.getMessage()).build());
+            } catch (Exception ex) {
+                log.error("Unexpected error during bulk update of contract {}", contractId, ex);
+                results.add(com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult
+                        .builder().contractId(contract.getId()).contractCode(contract.getContractCode())
+                        .success(false).message("حدث خطأ غير متوقع أثناء تحديث هذا العقد").build());
             }
         }
 
-        return updatedCount;
+        int successCount = (int) results.stream().filter(r -> r.isSuccess()).count();
+        return com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.builder()
+                .totalCount(dto.getContractIds().size())
+                .successCount(successCount)
+                .failedCount(results.size() - successCount)
+                .results(results)
+                .build();
+    }
+
+    /**
+     * Applies the requested field changes to a single contract as part of a bulk
+     * operation and persists it immediately, so a later failure in the same batch
+     * cannot roll this contract's change back.
+     */
+    private com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult applyBulkUpdateToOneContract(
+            ProviderContract contract, com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
+
+        if (contract.getStatus() == ContractStatus.TERMINATED) {
+            return com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult.builder()
+                    .contractId(contract.getId()).contractCode(contract.getContractCode()).success(false)
+                    .message("لا يمكن تحديث عقد ملغى").build();
+        }
+
+        boolean modified = false;
+        ContractStatus previousStatus = contract.getStatus();
+
+        if (dto.isUpdateStatus() && dto.getStatus() != null && contract.getStatus() != dto.getStatus()) {
+            if (dto.getStatus() == ContractStatus.ACTIVE) {
+                PricingScope pricingScope = contract.getPricingScope() != null ? contract.getPricingScope()
+                        : PricingScope.GLOBAL;
+                Long employerId = contract.getEmployer() != null ? contract.getEmployer().getId() : null;
+                resolveEmployerForScope(pricingScope, employerId);
+
+                final Long currentContractId = contract.getId();
+                findActiveContractForScope(contract.getProvider().getId(), pricingScope, employerId)
+                        .filter(existing -> !existing.getId().equals(currentContractId))
+                        .ifPresent(existing -> {
+                            throw new BusinessRuleException(
+                                    "يوجد عقد نشط مسبقاً لنفس مقدم الخدمة ونطاق التسعير: " + existing.getContractCode());
+                        });
+            }
+            contract.setStatus(dto.getStatus());
+            if ((dto.getStatus() == ContractStatus.SUSPENDED || dto.getStatus() == ContractStatus.TERMINATED)
+                    && dto.getReason() != null && !dto.getReason().isBlank()) {
+                String notes = contract.getNotes() != null ? contract.getNotes() + "\n" : "";
+                notes += "[" + LocalDate.now() + "] " + dto.getStatus() + " (bulk): " + dto.getReason();
+                contract.setNotes(notes);
+            }
+            modified = true;
+        }
+
+        if (dto.isUpdatePricingModel() && dto.getPricingModel() != null) {
+            contract.setPricingModel(dto.getPricingModel());
+            modified = true;
+        }
+
+        if (dto.isUpdateDiscountPercent()) {
+            contract.setDiscountPercent(dto.getDiscountPercent() != null ? dto.getDiscountPercent() : BigDecimal.ZERO);
+            modified = true;
+        }
+
+        if (dto.isUpdateDiscountTiming() && dto.getDiscountBeforeRejection() != null) {
+            contract.setDiscountBeforeRejection(dto.getDiscountBeforeRejection());
+            modified = true;
+        }
+
+        if (dto.isUpdateStartDate() && dto.getStartDate() != null) {
+            contract.setStartDate(dto.getStartDate());
+            modified = true;
+        }
+
+        if (dto.isUpdateEndDate()) {
+            contract.setEndDate(dto.getEndDate());
+            modified = true;
+        }
+
+        if (contract.getEndDate() != null && contract.getStartDate().isAfter(contract.getEndDate())) {
+            throw new BusinessRuleException(
+                    "تاريخ البدء يجب أن يكون قبل تاريخ الانتهاء للعقد: " + contract.getContractCode());
+        }
+
+        if (modified) {
+            contract.setUpdatedBy(getCurrentUsername());
+            contract = contractRepository.save(contract);
+            logAudit("BULK_UPDATE", contract.getId(), "Bulk-updated contract " + contract.getContractCode()
+                    + (previousStatus != contract.getStatus() ? " (status " + previousStatus + " -> " + contract.getStatus() + ")" : ""));
+        }
+
+        return com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto.ContractResult.builder()
+                .contractId(contract.getId()).contractCode(contract.getContractCode()).success(true)
+                .message(modified ? "تم التحديث بنجاح" : "لا يوجد تغيير")
+                .build();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -725,6 +849,34 @@ public class ProviderContractService {
             return auth != null ? auth.getName() : "SYSTEM";
         } catch (Exception e) {
             return "SYSTEM";
+        }
+    }
+
+    /**
+     * Best-effort audit trail entry for a provider-contract mutation. Never allowed to
+     * fail the surrounding business transaction — logging problems must not block the
+     * actual contract operation.
+     */
+    private void logAudit(String action, Long contractId, String details) {
+        try {
+            String username = getCurrentUsername();
+            HttpServletRequest request = currentHttpRequest();
+            String ip = request != null ? request.getRemoteAddr() : null;
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
+            auditLogService.createAuditLog(action, "ProviderContract", contractId, details, null, username, ip,
+                    userAgent);
+        } catch (Exception e) {
+            log.warn("Failed to write audit log for provider contract {} action {}: {}", contractId, action,
+                    e.getMessage());
+        }
+    }
+
+    private HttpServletRequest currentHttpRequest() {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            return attrs != null ? attrs.getRequest() : null;
+        } catch (Exception e) {
+            return null;
         }
     }
 }

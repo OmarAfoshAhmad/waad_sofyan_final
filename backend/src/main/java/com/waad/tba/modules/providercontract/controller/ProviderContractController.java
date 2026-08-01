@@ -29,6 +29,7 @@ import com.waad.tba.modules.providercontract.dto.ProviderContractResponseDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractStatsDto;
 import com.waad.tba.modules.providercontract.dto.ProviderContractUpdateDto;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingScope;
 import com.waad.tba.modules.providercontract.service.ProviderContractPricingItemService;
 import com.waad.tba.modules.providercontract.service.ProviderContractService;
 import com.waad.tba.security.AuthorizationService;
@@ -108,10 +109,13 @@ public class ProviderContractController {
     public ResponseEntity<ApiResponse<Page<ProviderContractResponseDto>>> search(
             @Parameter(description = "Search query") @RequestParam(name = "q", required = false) String q,
             @Parameter(description = "Filter by status") @RequestParam(name = "status", required = false) ContractStatus status,
+            @Parameter(description = "Filter by pricing scope (GLOBAL/EMPLOYER_SPECIFIC)") @RequestParam(name = "pricingScope", required = false) PricingScope pricingScope,
+            @Parameter(description = "Filter by rejection-timing: true=before, false=after") @RequestParam(name = "discountBeforeRejection", required = false) Boolean discountBeforeRejection,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        log.debug("REST request to search contracts: q={}, status={}", q, status);
-        Page<ProviderContractResponseDto> result = contractService.search(q, status, pageable);
+        log.debug("REST request to search contracts: q={}, status={}, pricingScope={}, discountBeforeRejection={}",
+                q, status, pricingScope, discountBeforeRejection);
+        Page<ProviderContractResponseDto> result = contractService.search(q, status, pricingScope, discountBeforeRejection, pageable);
         return ResponseEntity.ok(ApiResponse.success("Search completed", result));
     }
 
@@ -373,12 +377,29 @@ public class ProviderContractController {
     @PostMapping("/bulk-update")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
     @Operation(summary = "Bulk update contracts", description = "Update multiple contracts at once")
-    public ResponseEntity<ApiResponse<Integer>> bulkUpdateContracts(
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto>> bulkUpdateContracts(
             @Valid @RequestBody com.waad.tba.modules.providercontract.dto.BulkProviderContractUpdateDto dto) {
 
         log.debug("REST request to bulk update contracts: {}", dto.getContractIds().size());
-        int updatedCount = contractService.bulkUpdateContracts(dto);
-        return ResponseEntity.ok(ApiResponse.success(String.format("تم تحديث %d عقداً بنجاح", updatedCount), updatedCount));
+        var result = contractService.bulkUpdateContracts(dto);
+        String message = String.format("تم تحديث %d من %d عقداً بنجاح", result.getSuccessCount(), result.getTotalCount());
+        return ResponseEntity.ok(ApiResponse.success(message, result));
+    }
+
+    /**
+     * POST /api/provider-contracts/bulk-delete
+     * Bulk soft-delete contracts; each contract processed independently.
+     */
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Bulk delete contracts", description = "Soft-delete multiple contracts, returning a per-contract result")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.providercontract.dto.BulkProviderContractResultDto>> bulkDeleteContracts(
+            @RequestBody List<Long> contractIds) {
+
+        log.debug("REST request to bulk delete contracts: {}", contractIds.size());
+        var result = contractService.bulkDelete(contractIds);
+        String message = String.format("تم حذف %d من %d عقداً بنجاح", result.getSuccessCount(), result.getTotalCount());
+        return ResponseEntity.ok(ApiResponse.success(message, result));
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

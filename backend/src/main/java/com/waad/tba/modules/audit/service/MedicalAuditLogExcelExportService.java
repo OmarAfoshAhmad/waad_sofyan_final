@@ -196,7 +196,7 @@ public class MedicalAuditLogExcelExportService {
 
     private void put(Row row, int index, Object value, CellStyle style) {
         Cell cell = row.createCell(index);
-        cell.setCellValue(value == null ? "" : String.valueOf(value));
+        cell.setCellValue(value == null ? "" : com.waad.tba.common.excel.ExcelSanitizer.sanitize(String.valueOf(value)));
         cell.setCellStyle(style);
     }
 

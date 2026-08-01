@@ -289,6 +289,17 @@ export const bulkUpdateProviderContracts = async (data) => {
   return unwrap(response);
 };
 
+/**
+ * Bulk soft-delete provider contracts
+ * Endpoint: POST /api/provider-contracts/bulk-delete
+ * @param {number[]} contractIds
+ * @returns {Promise<Object>} BulkProviderContractResultDto
+ */
+export const bulkDeleteProviderContracts = async (contractIds) => {
+  const response = await axiosClient.post(`${BASE_URL}/bulk-delete`, contractIds);
+  return unwrap(response);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LIFECYCLE OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -768,6 +779,70 @@ export const bulkImportPriceList = async (file, onUploadProgress) => {
     }
   );
   return unwrap(response);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BULK IMPORT — New Provider Contracts (template + two-stage validation)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Download the Excel template for bulk-importing NEW provider contracts.
+ * Endpoint: GET /api/provider-contracts/import/template
+ */
+export const downloadContractImportTemplate = async () => {
+  const response = await axiosClient.get(`${BASE_URL}/import/template`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'قالب_استيراد_عقود_مقدمي_الخدمة.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Stage 1: upload the file for structural + business validation. Nothing is persisted.
+ * Endpoint: POST /api/provider-contracts/import/preview
+ * @returns {Promise<Object>} ContractImportPreviewResultDto { sessionId, totalRows, validCount, invalidCount, rows }
+ */
+export const previewContractImport = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axiosClient.post(`${BASE_URL}/import/preview`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300_000
+  });
+  return unwrap(response);
+};
+
+/**
+ * Stage 2: persist only the rows that were valid at preview time.
+ * Endpoint: POST /api/provider-contracts/import/confirm
+ * @returns {Promise<Object>} ContractImportConfirmResultDto
+ */
+export const confirmContractImport = async (sessionId) => {
+  const response = await axiosClient.post(`${BASE_URL}/import/confirm`, null, {
+    params: { sessionId },
+    timeout: 300_000
+  });
+  return unwrap(response);
+};
+
+/**
+ * Download an Excel report listing only the rows that failed validation, with their errors.
+ * Endpoint: GET /api/provider-contracts/import/errors/{sessionId}
+ */
+export const downloadContractImportErrors = async (sessionId) => {
+  const response = await axiosClient.get(`${BASE_URL}/import/errors/${sessionId}`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'تقرير_أخطاء_استيراد_العقود.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };
 
 const providerContractsService = {

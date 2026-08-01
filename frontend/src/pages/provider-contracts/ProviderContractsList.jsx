@@ -8,7 +8,28 @@
 import { useMemo, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Chip, IconButton, Stack, Tooltip, Typography, Grid, TextField, MenuItem, InputAdornment, Button } from '@mui/material';
+import {
+  Box,
+  Chip,
+  IconButton,
+  Stack,
+  Tooltip,
+  Typography,
+  Grid,
+  TextField,
+  MenuItem,
+  InputAdornment,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText
+} from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -19,10 +40,10 @@ import UndoIcon from '@mui/icons-material/Undo';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 
-import UnifiedPageHeader from 'components/UnifiedPageHeader';
+import MainCard from 'components/MainCard';
+import { ModernPageHeader, ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 import { UnifiedMedicalTable } from 'components/common';
 import TableErrorBoundary from 'components/TableErrorBoundary';
-import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
 import useTableState from 'hooks/useTableState';
 import {
   getProviderContracts,
@@ -32,11 +53,13 @@ import {
   hardDeleteProviderContract,
   deleteProviderContract,
   bulkUpdateProviderContracts,
+  bulkDeleteProviderContracts,
   CONTRACT_STATUS_CONFIG,
   PRICING_MODEL_CONFIG
 } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
 import BulkPriceListImportDialog from './components/BulkPriceListImportDialog';
+import ProviderContractImportDialog from './components/ProviderContractImportDialog';
 import BulkEditContractsDialog from './components/BulkEditContractsDialog';
 
 const QUERY_KEY = 'provider-contracts';
@@ -61,6 +84,7 @@ const ProviderContractsList = () => {
   const { enqueueSnackbar } = useSnackbar();
   const [showDeleted, setShowDeleted] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [contractImportOpen, setContractImportOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [confirmState, setConfirmState] = useState({
@@ -210,21 +234,62 @@ const ProviderContractsList = () => {
     [enqueueSnackbar, queryClient]
   );
 
+  const [bulkResultDialog, setBulkResultDialog] = useState({ open: false, result: null });
+
   const handleBulkEditConfirm = async (updateData) => {
     try {
       const payload = {
         contractIds: selectedIds,
         ...updateData
       };
-      const count = await bulkUpdateProviderContracts(payload);
-      enqueueSnackbar(`تم تحديث ${count} عقود بنجاح`, { variant: 'success' });
+      const result = await bulkUpdateProviderContracts(payload);
       setBulkEditOpen(false);
       setSelectedIds([]);
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+
+      if (result && result.failedCount > 0) {
+        // Partial (or full) failure: never collapse into a single generic toast —
+        // show the per-contract breakdown so the user knows exactly which contracts failed and why.
+        setBulkResultDialog({ open: true, result });
+      } else {
+        enqueueSnackbar(`تم تحديث ${result?.successCount ?? 0} من ${result?.totalCount ?? 0} عقود بنجاح`, {
+          variant: 'success'
+        });
+      }
     } catch (err) {
       enqueueSnackbar(err?.response?.data?.message || 'فشل التحديث الجماعي', { variant: 'error' });
     }
   };
+
+  const handleBulkDelete = useCallback(() => {
+    setConfirmState({
+      open: true,
+      title: 'تأكيد الحذف الجماعي',
+      message: `هل تريد حذف ${selectedIds.length} عقود محددة؟ سيتم تخطي أي عقد نشط تلقائياً مع توضيح السبب.`,
+      confirmText: 'حذف',
+      cancelText: 'إلغاء',
+      confirmColor: 'error',
+      onConfirm: async () => {
+        try {
+          const result = await bulkDeleteProviderContracts(selectedIds);
+          setSelectedIds([]);
+          queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+
+          if (result && result.failedCount > 0) {
+            setBulkResultDialog({ open: true, result });
+          } else {
+            enqueueSnackbar(`تم حذف ${result?.successCount ?? 0} من ${result?.totalCount ?? 0} عقود بنجاح`, {
+              variant: 'success'
+            });
+          }
+        } catch (err) {
+          enqueueSnackbar(err?.response?.data?.message || 'فشل الحذف الجماعي', { variant: 'error' });
+        } finally {
+          setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+        }
+      }
+    });
+  }, [selectedIds, enqueueSnackbar, queryClient]);
 
   const { data, isLoading } = useQuery({
     queryKey: [QUERY_KEY, showDeleted, tableState.page, tableState.pageSize, tableState.sorting, tableState.columnFilters],
@@ -240,7 +305,7 @@ const ProviderContractsList = () => {
       if (showDeleted) {
         return await getDeletedProviderContracts(params);
       }
-      if (params.q || params.status || params.discountBeforeRejection || params.discountPercentage) {
+      if (params.q || params.status || params.pricingScope || params.discountBeforeRejection || params.discountPercentage) {
         return await searchProviderContracts(params);
       }
       return await getProviderContracts(params);
@@ -360,14 +425,16 @@ const ProviderContractsList = () => {
           return (
             <Stack spacing={0.5} alignItems="flex-start">
               <Chip
-                label={contract.pricingScopeLabel || (isEmployerSpecific ? 'خاص بجهة عمل' : 'عام')}
+                label={isEmployerSpecific ? 'خاص' : 'الكل'}
                 size="small"
                 color={isEmployerSpecific ? 'secondary' : 'default'}
                 variant={isEmployerSpecific ? 'filled' : 'outlined'}
               />
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 180 }}>
-                {isEmployerSpecific ? contract.employer?.name || '-' : 'يستخدم كـ fallback عام'}
-              </Typography>
+              {isEmployerSpecific && (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 180 }}>
+                  {contract.employer?.name || '-'}
+                </Typography>
+              )}
             </Stack>
           );
         }
@@ -484,18 +551,14 @@ const ProviderContractsList = () => {
 
   return (
     <>
-      <Box>
-        <UnifiedPageHeader
+      <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
+        <ModernPageHeader
           title="عقود مقدمي الخدمة"
           subtitle="إدارة عقود التسعير مع مقدمي الخدمات الصحية"
-          icon={DescriptionIcon}
-          breadcrumbs={[{ label: 'الرئيسية', path: '/dashboard' }, { label: 'عقود مقدمي الخدمة' }]}
-          showAddButton={true}
-          addButtonLabel="إنشاء عقد جديد"
-          onAddClick={handleNavigateAdd}
-          requires="provider_contracts.create"
-          additionalActions={
-            <Stack direction="row" spacing={1} alignItems="center">
+          icon={<DescriptionIcon />}
+          breadcrumbs={[{ label: 'الرئيسية', href: '/dashboard' }, { label: 'عقود مقدمي الخدمة' }]}
+          actions={
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
               {selectedIds.length > 0 && (
                 <Button
                   variant="contained"
@@ -508,6 +571,28 @@ const ProviderContractsList = () => {
                   تعديل جماعي ({selectedIds.length})
                 </Button>
               )}
+              {selectedIds.length > 0 && (
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  size="small"
+                  onClick={handleBulkDelete}
+                  sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+                >
+                  حذف جماعي ({selectedIds.length})
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<FileUploadIcon />}
+                size="small"
+                onClick={() => setContractImportOpen(true)}
+                sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+              >
+                استيراد عقود جديدة
+              </Button>
               <Button
                 variant="contained"
                 color="secondary"
@@ -516,14 +601,18 @@ const ProviderContractsList = () => {
                 onClick={() => setBulkImportOpen(true)}
                 sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
               >
-                استيراد جماعي
+                استيراد قوائم أسعار
               </Button>
               <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
+              <Button variant="contained" startIcon={<DescriptionIcon />} size="small" onClick={handleNavigateAdd}>
+                إنشاء عقد جديد
+              </Button>
             </Stack>
           }
+          sx={{ mb: 0.5 }}
         />
 
-        <Box sx={{ p: 2, mb: 2 }}>
+        <MainCard sx={{ mb: 1, flexShrink: 0 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
@@ -563,6 +652,20 @@ const ProviderContractsList = () => {
                 select
                 fullWidth
                 size="small"
+                label="نطاق العقد"
+                value={tableState.columnFilters.pricingScope || ''}
+                onChange={(e) => tableState.setFilter('pricingScope', e.target.value)}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                <MenuItem value="EMPLOYER_SPECIFIC">خاص</MenuItem>
+                <MenuItem value="GLOBAL">الكل</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <TextField
+                select
+                fullWidth
+                size="small"
                 label="آلية الخصم"
                 value={tableState.columnFilters.discountBeforeRejection || ''}
                 onChange={(e) => tableState.setFilter('discountBeforeRejection', e.target.value)}
@@ -591,6 +694,7 @@ const ProviderContractsList = () => {
                 onClick={() => {
                   tableState.setFilter('q', '');
                   tableState.setFilter('status', '');
+                  tableState.setFilter('pricingScope', '');
                   tableState.setFilter('discountBeforeRejection', '');
                   tableState.setFilter('discountPercentage', '');
                 }}
@@ -601,7 +705,7 @@ const ProviderContractsList = () => {
               </Button>
             </Grid>
           </Grid>
-        </Box>
+        </MainCard>
 
         <TableErrorBoundary>
           <UnifiedMedicalTable
@@ -619,6 +723,7 @@ const ProviderContractsList = () => {
             enableRowSelection={true}
             selectedRowIds={selectedIds}
             onRowSelectionChange={setSelectedIds}
+            tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
           />
         </TableErrorBoundary>
 
@@ -631,6 +736,15 @@ const ProviderContractsList = () => {
           confirmColor={confirmState.confirmColor}
           onClose={() => setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }))}
           onConfirm={() => confirmState.onConfirm?.()}
+        />
+
+        {/* ── New Contract Bulk Import Dialog ── */}
+        <ProviderContractImportDialog
+          open={contractImportOpen}
+          onClose={() => setContractImportOpen(false)}
+          onImportComplete={() => {
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          }}
         />
 
         {/* ── Bulk Price List Import Dialog ── */}
@@ -648,6 +762,35 @@ const ProviderContractsList = () => {
           onConfirm={handleBulkEditConfirm}
           selectedCount={selectedIds.length}
         />
+
+        {/* ── Bulk Operation Result: per-contract breakdown, never a single generic toast ── */}
+        <Dialog open={bulkResultDialog.open} onClose={() => setBulkResultDialog({ open: false, result: null })} maxWidth="sm" fullWidth>
+          <DialogTitle>نتيجة التحديث الجماعي</DialogTitle>
+          <DialogContent dividers>
+            <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+              <Chip color="success" label={`نجح: ${bulkResultDialog.result?.successCount ?? 0}`} icon={<CheckCircleIcon />} />
+              <Chip color="error" label={`فشل: ${bulkResultDialog.result?.failedCount ?? 0}`} icon={<ErrorIcon />} />
+              <Chip variant="outlined" label={`الإجمالي: ${bulkResultDialog.result?.totalCount ?? 0}`} />
+            </Stack>
+            <List dense>
+              {(bulkResultDialog.result?.results || []).map((r) => (
+                <ListItem key={r.contractId} disableGutters>
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" color={r.success ? 'success.main' : 'error.main'} fontWeight={600}>
+                        {r.contractCode || r.contractId} — {r.success ? 'نجح' : 'فشل'}
+                      </Typography>
+                    }
+                    secondary={r.message}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setBulkResultDialog({ open: false, result: null })}>إغلاق</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </>
   );

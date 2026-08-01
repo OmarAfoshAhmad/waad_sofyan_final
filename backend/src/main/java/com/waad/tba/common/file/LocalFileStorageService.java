@@ -51,7 +51,9 @@ public class LocalFileStorageService implements FileStorageService {
 
     // Allowed MIME types
     private static final List<String> ALLOWED_DOCUMENT_TYPES = Arrays.asList(
-            "application/pdf");
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 
     private static final List<String> ALLOWED_IMAGE_TYPES = Arrays.asList(
             "image/jpeg",

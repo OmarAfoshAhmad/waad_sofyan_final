@@ -23,6 +23,7 @@ import com.waad.tba.modules.provider.dto.ProviderUpdateDto;
 import com.waad.tba.modules.provider.dto.ProviderViewDto;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.mapper.ProviderMapper;
+import com.waad.tba.modules.provider.repository.ProviderAdminDocumentRepository;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 
 import com.waad.tba.modules.employer.entity.Employer;
@@ -43,6 +44,7 @@ public class ProviderService {
     private final EmployerRepository employerRepository;
     private final com.waad.tba.modules.providercontract.repository.ProviderContractRepository newProviderContractRepository;
     private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
+    private final ProviderAdminDocumentRepository providerAdminDocumentRepository;
 
     /**
      * Get provider selector options with pagination
@@ -106,10 +108,24 @@ public class ProviderService {
 
     @Transactional(readOnly = true)
     public Page<ProviderViewDto> listProviders(int page, int size, String search, Boolean active, String providerTypeStr) {
+        return listProviders(page, size, search, active, providerTypeStr, null, null);
+    }
+
+    /**
+     * @param networkStatusStr raw NetworkTier name (IN_NETWORK/OUT_OF_NETWORK/PREFERRED), or null for no filter
+     * @param statusStr        one of ACTIVE / INACTIVE / EXPIRED — a pure REFINEMENT on top of {@code active},
+     *                         never a substitute for it. "عرض المحذوفات" (archived) and this status filter are two
+     *                         independent axes: {@code active} alone controls the soft-deleted/archived scope,
+     *                         while status further narrows within that scope using {@code contractEndDate}
+     *                         (ACTIVE = active & not expired, EXPIRED = active & contract end date has passed,
+     *                         INACTIVE = redundant with active=false, kept only for the dropdown's own label).
+     */
+    @Transactional(readOnly = true)
+    public Page<ProviderViewDto> listProviders(int page, int size, String search, Boolean active, String providerTypeStr,
+            String networkStatusStr, String statusStr) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Provider> providers;
+
         Provider.ProviderType providerType = null;
-        
         if (providerTypeStr != null && !providerTypeStr.isEmpty()) {
             try {
                 providerType = Provider.ProviderType.valueOf(providerTypeStr);
@@ -118,25 +134,77 @@ public class ProviderService {
             }
         }
 
-        if (search != null && !search.isEmpty()) {
-            if (active == null) {
-                providers = providerType != null ? providerRepository.searchPagedAllWithType(search, providerType, pageable) : providerRepository.searchPagedAll(search, pageable);
-            } else if (Boolean.TRUE.equals(active)) {
-                providers = providerType != null ? providerRepository.searchPagedWithType(search, providerType, pageable) : providerRepository.searchPaged(search, pageable);
-            } else {
-                providers = providerType != null ? providerRepository.searchPagedInactiveWithType(search, providerType, pageable) : providerRepository.searchPagedInactive(search, pageable);
-            }
-        } else {
-            if (active == null) {
-                providers = providerType != null ? providerRepository.findByProviderType(providerType, pageable) : providerRepository.findAll(pageable);
-            } else if (Boolean.TRUE.equals(active)) {
-                providers = providerType != null ? providerRepository.findByActiveTrueAndProviderType(providerType, pageable) : providerRepository.findByActiveTrue(pageable);
-            } else {
-                providers = providerType != null ? providerRepository.findByActiveFalseAndProviderType(providerType, pageable) : providerRepository.findByActiveFalse(pageable);
+        Provider.NetworkTier networkTier = null;
+        if (networkStatusStr != null && !networkStatusStr.isEmpty()) {
+            try {
+                networkTier = Provider.NetworkTier.valueOf(networkStatusStr);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid networkStatus: {}", networkStatusStr);
             }
         }
 
-        return providers.map(providerMapper::toViewDto);
+        final String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
+        final Boolean activeFilter = active;
+        final Provider.ProviderType typeFilter = providerType;
+        final Provider.NetworkTier tierFilter = networkTier;
+        final String status = (statusStr != null && !statusStr.isBlank()) ? statusStr.trim().toUpperCase() : null;
+
+        org.springframework.data.jpa.domain.Specification<Provider> spec = (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+
+            if (searchTerm != null) {
+                String likeTerm = "%" + searchTerm.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("name")), likeTerm),
+                        cb.like(cb.lower(root.get("licenseNumber")), likeTerm),
+                        cb.like(cb.lower(root.get("city")), likeTerm)));
+            }
+            if (activeFilter != null) {
+                predicates.add(cb.equal(root.get("active"), activeFilter));
+            }
+            if (typeFilter != null) {
+                predicates.add(cb.equal(root.get("providerType"), typeFilter));
+            }
+            if (tierFilter != null) {
+                predicates.add(cb.equal(root.get("networkStatus"), tierFilter));
+            }
+            if ("EXPIRED".equals(status)) {
+                predicates.add(cb.lessThan(root.get("contractEndDate"), java.time.LocalDate.now()));
+            } else if ("ACTIVE".equals(status)) {
+                predicates.add(cb.or(
+                        cb.isNull(root.get("contractEndDate")),
+                        cb.greaterThanOrEqualTo(root.get("contractEndDate"), java.time.LocalDate.now())));
+            }
+            // INACTIVE: no extra predicate needed — already fully expressed by activeFilter=false.
+
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+
+        Page<Provider> providers = providerRepository.findAll(spec, pageable);
+        return attachDocumentCounts(providers.map(providerMapper::toViewDto));
+    }
+
+    /**
+     * Batch-attach the administrative-document count for every provider on this
+     * page in a single grouped query, instead of one count query per row.
+     */
+    private Page<ProviderViewDto> attachDocumentCounts(Page<ProviderViewDto> page) {
+        List<Long> providerIds = page.getContent().stream().map(ProviderViewDto::getId).collect(Collectors.toList());
+        if (providerIds.isEmpty()) {
+            return page;
+        }
+
+        java.util.Map<Long, Long> countsByProviderId = providerAdminDocumentRepository
+                .countByProviderIdIn(providerIds).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+
+        page.getContent().forEach(dto -> {
+            long count = countsByProviderId.getOrDefault(dto.getId(), 0L);
+            dto.setDocumentsCount(count);
+            dto.setHasDocuments(count > 0);
+        });
+
+        return page;
     }
 
     /**

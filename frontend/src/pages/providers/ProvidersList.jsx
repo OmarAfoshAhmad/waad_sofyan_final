@@ -44,7 +44,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DescriptionIcon from '@mui/icons-material/Description';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CloseIcon from '@mui/icons-material/Close';
 import HandshakeIcon from '@mui/icons-material/Handshake';
@@ -56,7 +55,7 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 
 // Project Components
 import MainCard from 'components/MainCard';
-import UnifiedPageHeader from 'components/UnifiedPageHeader';
+import { ModernPageHeader } from 'components/tba';
 import PermissionGuard from 'components/PermissionGuard';
 import { UnifiedMedicalTable } from 'components/common';
 import { ActionConfirmDialog, SoftDeleteToggle } from 'components/tba';
@@ -134,9 +133,11 @@ const getNetworkTier = (provider) => {
  * Get provider status
  */
 const getProviderStatus = (provider) => {
-  if (provider?.status) return provider.status;
-  if (provider?.active === true) return 'ACTIVE';
   if (provider?.active === false) return 'INACTIVE';
+  if (provider?.active === true) {
+    if (provider?.contractEndDate && new Date(provider.contractEndDate) < new Date()) return 'EXPIRED';
+    return 'ACTIVE';
+  }
   return 'PENDING';
 };
 
@@ -533,29 +534,22 @@ export default function ProvidersList() {
           return <ProviderEmployersCell providerId={provider.id} providerName={provider.name} />;
 
         case 'documents':
-          const hasDocs = provider.hasDocuments || provider.documentsCount > 0;
+          const documentsCount = provider.documentsCount ?? 0;
+          const hasDocs = provider.hasDocuments || documentsCount > 0;
           const hasContract = !!provider.contractStartDate;
 
           return (
             <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
-              {/* Document Indicator */}
-              <Tooltip title={hasDocs ? 'توجد مستندات مرفوعة' : 'لا توجد مستندات'}>
-                <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-                  <DescriptionIcon sx={{ color: hasDocs ? 'primary.main' : 'text.disabled' }} fontSize="small" />
-                  {hasDocs && (
-                    <CheckCircleIcon
-                      color="success"
-                      sx={{
-                        fontSize: '0.75rem',
-                        position: 'absolute',
-                        bottom: -2,
-                        right: -2,
-                        bgcolor: 'white',
-                        borderRadius: '50%'
-                      }}
-                    />
-                  )}
-                </Box>
+              {/* Document Count */}
+              <Tooltip title={hasDocs ? `${documentsCount} مستند مرفوع` : 'لا توجد مستندات'}>
+                <Chip
+                  size="small"
+                  icon={<DescriptionIcon fontSize="small" />}
+                  label={documentsCount}
+                  color={hasDocs ? 'primary' : 'default'}
+                  variant={hasDocs ? 'filled' : 'outlined'}
+                  sx={{ minWidth: '3.5rem' }}
+                />
               </Tooltip>
 
               {/* Contract Indicator (if contract date exists or explicitly marked) */}
@@ -571,7 +565,7 @@ export default function ProvidersList() {
           const providerStatusConfig = {
             ACTIVE: { label: 'نشط', color: 'success' },
             INACTIVE: { label: 'غير نشط', color: 'error' },
-            SUSPENDED: { label: 'معلق', color: 'warning' },
+            EXPIRED: { label: 'نشط - منتهي العقد', color: 'warning' },
             PENDING: { label: 'قيد المراجعة', color: 'warning' }
           };
           const sc = providerStatusConfig[getProviderStatus(provider)] || { label: getProviderStatus(provider), color: 'default' };
@@ -679,10 +673,15 @@ export default function ProvidersList() {
         page: page + 1, // Backend uses 1-based pages
         size: rowsPerPage,
         sort: sortColumn ? `${sortColumn},${sortDirection}` : 'id,desc',
+        // "عرض المحذوفات" (archived/soft-deleted) is a completely separate axis from
+        // the "الحالة" status filter below — it must always control `active` on its
+        // own, never be overridden by it.
         active: showDeleted ? false : true,
         search: tableState.columnFilters.q || undefined,
         providerType: tableState.columnFilters.providerType || undefined,
         networkStatus: tableState.columnFilters.networkStatus || undefined,
+        // status is a pure refinement on top of `active` (ACTIVE/EXPIRED both mean
+        // active=true, distinguished by contractEndDate) — never a replacement for it.
         status: tableState.columnFilters.status || undefined
       };
 
@@ -764,31 +763,30 @@ export default function ProvidersList() {
   // ========================================
 
   return (
-    <Box>
-      {/* ====== UNIFIED PAGE HEADER ====== */}
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
+      {/* ====== MODERN PAGE HEADER ====== */}
       <PermissionGuard resource="providers" action="view">
-        <UnifiedPageHeader
+        <ModernPageHeader
           title="مقدمي الخدمات الصحية"
           subtitle="إدارة المستشفيات والعيادات والمختبرات والصيدليات"
-          icon={LocalHospitalIcon}
+          icon={<LocalHospitalIcon />}
           breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'مقدمي الخدمات' }]}
-          pdfModule={MODULE_NAME}
-          showAddButton={true}
-          addButtonLabel="إضافة مقدم خدمة"
-          onAddClick={handleNavigateAdd}
-          additionalActions={
-            <Stack direction="row" spacing={1} alignItems="center">
+          actions={
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
               <Button variant="outlined" color="secondary" startIcon={<FileUploadIcon />} onClick={() => setIsImportDialogOpen(true)}>
                 استيراد من إكسل
               </Button>
               <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
+              <Button variant="contained" startIcon={<AddIcon />} onClick={handleNavigateAdd}>
+                إضافة مقدم خدمة
+              </Button>
             </Stack>
           }
         />
       </PermissionGuard>
 
       {/* ====== FILTERS & BULK ACTIONS ====== */}
-      <Box sx={{ p: 2, mb: 2 }}>
+      <MainCard sx={{ mb: 1, flexShrink: 0 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid size={{ xs: 12, md: 4 }}>
             <TextField
@@ -851,8 +849,7 @@ export default function ProvidersList() {
                 <MenuItem value="">الكل</MenuItem>
                 <MenuItem value="ACTIVE">نشط</MenuItem>
                 <MenuItem value="INACTIVE">غير نشط</MenuItem>
-                <MenuItem value="PENDING">قيد المراجعة</MenuItem>
-                <MenuItem value="SUSPENDED">معلق</MenuItem>
+                <MenuItem value="EXPIRED">نشط - منتهي العقد</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -959,10 +956,10 @@ export default function ProvidersList() {
             </Grid>
           )}
         </Grid>
-      </Box>
+      </MainCard>
 
       {/* ====== DATA TABLE ====== */}
-      <MainCard content={false} sx={{ height: 'calc(100vh - 250px)', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <UnifiedMedicalTable
           columns={columns}
           rows={providers}
@@ -982,8 +979,10 @@ export default function ProvidersList() {
           selectedRows={selectedIds}
           onSelectAllClick={handleSelectAllClick}
           onSelectRow={handleSelectRow}
+          sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
+          tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
         />
-      </MainCard>
+      </Box>
 
       <ActionConfirmDialog
         open={confirmState.open}

@@ -7,7 +7,25 @@ import { useMemo, useCallback, useDeferredValue, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { Box, Button, Chip, IconButton, Stack, Tooltip, Typography, TextField, InputAdornment, MenuItem } from '@mui/material';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
+  Tooltip,
+  Typography,
+  TextField,
+  InputAdornment,
+  MenuItem
+} from '@mui/material';
 
 // MUI Icons - Always as Component, NEVER as JSX
 import AddIcon from '@mui/icons-material/Add';
@@ -22,6 +40,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 
 // Project Components
 import MainCard from 'components/MainCard';
@@ -30,7 +50,14 @@ import { ModernPageHeader, SoftDeleteToggle, DataExportWizard, ActionConfirmDial
 import PermissionGuard from 'components/PermissionGuard';
 
 // Services
-import { getEmployersPage, archiveEmployer, restoreEmployer, exportEmployers } from 'services/api/employers.service';
+import {
+  getEmployersPage,
+  archiveEmployer,
+  restoreEmployer,
+  bulkArchiveEmployers,
+  bulkRestoreEmployers,
+  exportEmployers
+} from 'services/api/employers.service';
 import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
 import { useSnackbar } from 'notistack';
 
@@ -61,6 +88,8 @@ const EmployersList = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [exportWizardOpen, setExportWizardOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, confirmColor: 'primary' });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkResultDialog, setBulkResultDialog] = useState({ open: false, result: null });
 
   const handleResetFilters = () => {
     setFilters({ active: '' });
@@ -149,16 +178,67 @@ const EmployersList = () => {
     [queryClient]
   );
 
+  const handleBulkResult = (result) => {
+    setSelectedIds([]);
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    if (result && result.failedCount > 0) {
+      setBulkResultDialog({ open: true, result });
+    } else {
+      enqueueSnackbar(`تمت العملية على ${result?.successCount ?? 0} من ${result?.totalCount ?? 0} جهة عمل بنجاح`, {
+        variant: 'success'
+      });
+    }
+  };
+
+  const handleBulkArchive = useCallback(() => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد حذف جماعي',
+      message: `هل تريد حذف ${selectedIds.length} جهة عمل محددة؟ سيتم تخطي أي جهة عمل بها مستفيدون/وثائق نشطة مع توضيح السبب.`,
+      confirmColor: 'error',
+      onConfirm: async () => {
+        try {
+          const result = await bulkArchiveEmployers(selectedIds);
+          handleBulkResult(result);
+        } catch (err) {
+          enqueueSnackbar(err?.response?.data?.message || 'فشل الحذف الجماعي', { variant: 'error' });
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        }
+      }
+    });
+  }, [selectedIds, enqueueSnackbar, queryClient]);
+
+  const handleBulkRestore = useCallback(() => {
+    setConfirmDialog({
+      open: true,
+      title: 'تأكيد استعادة جماعية',
+      message: `هل تريد استعادة ${selectedIds.length} جهة عمل محددة؟`,
+      confirmColor: 'success',
+      onConfirm: async () => {
+        try {
+          const result = await bulkRestoreEmployers(selectedIds);
+          handleBulkResult(result);
+        } catch (err) {
+          enqueueSnackbar(err?.response?.data?.message || 'فشل الاستعادة الجماعية', { variant: 'error' });
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        }
+      }
+    });
+  }, [selectedIds, enqueueSnackbar, queryClient]);
+
   const { data, isLoading, refetch } = useQuery({
     queryKey: [QUERY_KEY, page, rowsPerPage, sortBy, sortDirection, deferredSearchTerm, filters.active, showArchived],
-    queryFn: () => getEmployersPage({
-      page,
-      size: rowsPerPage,
-      sortBy,
-      sortDir: sortDirection,
-      q: deferredSearchTerm.trim(),
-      archivedOnly: showArchived || filters.active === 'inactive'
-    }),
+    queryFn: () =>
+      getEmployersPage({
+        page,
+        size: rowsPerPage,
+        sortBy,
+        sortDir: sortDirection,
+        q: deferredSearchTerm.trim(),
+        archivedOnly: showArchived || filters.active === 'inactive'
+      }),
     staleTime: 0,
     refetchOnMount: 'always',
     keepPreviousData: true
@@ -193,7 +273,15 @@ const EmployersList = () => {
   const renderCell = (row, column) => {
     switch (column.id) {
       case 'code':
-        return <Chip label={row.code || '-'} size="small" variant="outlined" color="primary" sx={{ minWidth: '4.5rem', justifyContent: 'center' }} />;
+        return (
+          <Chip
+            label={row.code || '-'}
+            size="small"
+            variant="outlined"
+            color="primary"
+            sx={{ minWidth: '4.5rem', justifyContent: 'center' }}
+          />
+        );
       case 'name':
         return (
           <Stack direction="row" spacing={1} alignItems="center" sx={{ justifyContent: 'flex-start', width: '100%' }}>
@@ -285,7 +373,7 @@ const EmployersList = () => {
   // ========================================
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', px: { xs: 2, sm: 3 } }}>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', px: { xs: 2, sm: 3 } }}>
       <PermissionGuard resource="employers" action="view">
         <ModernPageHeader
           title="جهات العمل"
@@ -294,6 +382,16 @@ const EmployersList = () => {
           breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'جهات العمل' }]}
           actions={
             <Stack direction="row" spacing={1.5}>
+              {selectedIds.length > 0 && !showArchived && (
+                <Button variant="contained" color="error" startIcon={<DeleteIcon />} onClick={handleBulkArchive}>
+                  حذف جماعي ({selectedIds.length})
+                </Button>
+              )}
+              {selectedIds.length > 0 && showArchived && (
+                <Button variant="contained" color="success" startIcon={<UndoIcon />} onClick={handleBulkRestore}>
+                  استعادة جماعية ({selectedIds.length})
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 onClick={() => setExportWizardOpen(true)}
@@ -434,6 +532,9 @@ const EmployersList = () => {
           renderCell={renderCell}
           emptyMessage="لا توجد جهات عمل مسجلة"
           getRowKey={(row) => row.id}
+          enableRowSelection
+          selectedRowIds={selectedIds}
+          onRowSelectionChange={setSelectedIds}
           sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, mb: 1 }}
           tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
         />
@@ -464,6 +565,32 @@ const EmployersList = () => {
         onConfirm={confirmDialog.onConfirm}
         onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
       />
+
+      {/* Bulk Operation Result Dialog — never collapse partial success into a generic toast */}
+      <Dialog open={bulkResultDialog.open} onClose={() => setBulkResultDialog({ open: false, result: null })} maxWidth="sm" fullWidth>
+        <DialogTitle>نتيجة العملية الجماعية</DialogTitle>
+        <DialogContent>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+            <Chip color="success" label={`نجح: ${bulkResultDialog.result?.successCount ?? 0}`} icon={<CheckCircleIcon />} />
+            <Chip color="error" label={`فشل: ${bulkResultDialog.result?.failedCount ?? 0}`} icon={<ErrorIcon />} />
+            <Chip variant="outlined" label={`الإجمالي: ${bulkResultDialog.result?.totalCount ?? 0}`} />
+          </Stack>
+          <List dense>
+            {(bulkResultDialog.result?.results || []).map((r) => (
+              <ListItem key={r.employerId}>
+                <ListItemText
+                  primary={r.employerName || `جهة عمل #${r.employerId}`}
+                  secondary={r.message}
+                  secondaryTypographyProps={{ color: r.success ? 'success.main' : 'error.main' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkResultDialog({ open: false, result: null })}>إغلاق</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

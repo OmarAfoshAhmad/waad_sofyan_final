@@ -315,10 +315,12 @@ public class EmployerService {
 
         Employer employer = findEmployerById(id);
 
+        // NOTE: only ACTIVE members/policies block archiving. Historical
+        // (already-inactive) members must never block it — otherwise any employer
+        // that ever had a member deactivated becomes permanently un-archivable
+        // even with zero active members, which was the actual bug reported.
         DeletionGuard.of("جهة العمل")
                 .check("مستفيدون نشطون", memberRepository.countByEmployerIdAndActiveTrue(id))
-                .check("مستفيدون غير نشطين",
-                        memberRepository.countByEmployerId(id) - memberRepository.countByEmployerIdAndActiveTrue(id))
                 .check("وثائق تأمين نشطة", benefitPolicyRepository.countByEmployerIdAndActiveTrue(id))
                 .throwIfBlocked("أوقف تفعيل المستفيدين وأنهِ الوثائق أولاً.");
 
@@ -357,6 +359,57 @@ public class EmployerService {
 
         log.info("[EmployerService] Restored employer ID: {}", id);
         return mapper.toResponse(updated);
+    }
+
+    /**
+     * Bulk archive — each employer is archived independently so one blocked
+     * employer (active members/policies) never discards the others in the batch.
+     */
+    @Transactional
+    public com.waad.tba.modules.employer.dto.BulkEmployerResultDto bulkArchive(List<Long> ids) {
+        return bulkApply(ids, this::archive);
+    }
+
+    /**
+     * Bulk restore — same independent-per-item semantics as {@link #bulkArchive}.
+     */
+    @Transactional
+    public com.waad.tba.modules.employer.dto.BulkEmployerResultDto bulkRestore(List<Long> ids) {
+        return bulkApply(ids, this::restore);
+    }
+
+    private com.waad.tba.modules.employer.dto.BulkEmployerResultDto bulkApply(
+            List<Long> ids, java.util.function.Function<Long, EmployerResponseDto> operation) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BusinessRuleException("يجب تحديد جهات العمل المطلوبة");
+        }
+
+        List<com.waad.tba.modules.employer.dto.BulkEmployerResultDto.EmployerResult> results = new java.util.ArrayList<>();
+        int successCount = 0;
+
+        for (Long id : ids) {
+            try {
+                EmployerResponseDto updated = operation.apply(id);
+                successCount++;
+                results.add(com.waad.tba.modules.employer.dto.BulkEmployerResultDto.EmployerResult.builder()
+                        .employerId(id).employerName(updated.getName()).success(true)
+                        .message("تمت العملية بنجاح").build());
+            } catch (BusinessRuleException | ResourceNotFoundException ex) {
+                results.add(com.waad.tba.modules.employer.dto.BulkEmployerResultDto.EmployerResult.builder()
+                        .employerId(id).success(false).message(ex.getMessage()).build());
+            } catch (RuntimeException ex) {
+                log.error("Unexpected error during bulk operation for employer {}", id, ex);
+                results.add(com.waad.tba.modules.employer.dto.BulkEmployerResultDto.EmployerResult.builder()
+                        .employerId(id).success(false).message("حدث خطأ غير متوقع").build());
+            }
+        }
+
+        return com.waad.tba.modules.employer.dto.BulkEmployerResultDto.builder()
+                .totalCount(ids.size())
+                .successCount(successCount)
+                .failedCount(ids.size() - successCount)
+                .results(results)
+                .build();
     }
 
     /**

@@ -141,8 +141,11 @@ public class ProviderController {
             @RequestParam(name = "size", defaultValue = "10") int size,
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "active", required = false) Boolean active,
-            @RequestParam(name = "providerType", required = false) String providerType) {
-        Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search, active, providerType);
+            @RequestParam(name = "providerType", required = false) String providerType,
+            @RequestParam(name = "networkStatus", required = false) String networkStatus,
+            @RequestParam(name = "status", required = false) String status) {
+        Page<ProviderViewDto> providers = providerService.listProviders(Math.max(0, page - 1), size, search, active,
+                providerType, networkStatus, status);
 
         PaginationResponse<ProviderViewDto> response = PaginationResponse.<ProviderViewDto>builder()
                 .items(providers.getContent())
@@ -424,8 +427,33 @@ public class ProviderController {
     }
 
     /**
+     * Download/preview an administrative document's raw bytes (authorized —
+     * this is the only path that can ever read the underlying stored file).
+     *
+     * GET /api/providers/{providerId}/documents/{docId}/download
+     */
+    @GetMapping("/{providerId}/documents/{docId}/download")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<byte[]> downloadProviderDocument(
+            @PathVariable("providerId") Long providerId,
+            @PathVariable("docId") Long docId) {
+
+        var download = providerAdminDocumentService.downloadDocument(providerId, docId);
+        String encodedFileName = java.net.URLEncoder.encode(download.fileName(), java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20");
+
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType(download.contentType()))
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename*=UTF-8''" + encodedFileName)
+                .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "no-store, private")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(download.content());
+    }
+
+    /**
      * Delete administrative document
-     * 
+     *
      * DELETE /api/providers/{providerId}/documents/{docId}
      */
     @DeleteMapping("/{providerId}/documents/{docId}")

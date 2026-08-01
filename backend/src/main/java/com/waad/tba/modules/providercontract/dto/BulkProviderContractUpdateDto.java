@@ -29,6 +29,9 @@ public class BulkProviderContractUpdateDto {
     private LocalDate startDate;
     private LocalDate endDate;
 
+    /** Required-by-convention reason when bulk-transitioning to SUSPENDED/TERMINATED. */
+    private String reason;
+
     // Flags to indicate which fields should actually be updated
     private boolean updateStatus;
     private boolean updatePricingModel;

@@ -6,6 +6,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { getEmployerSelectors } from 'services/api/employers.service';
 import { providersService } from 'services/api/providers.service';
+import { DocumentPreviewDrawer } from 'components/tba/documents';
 import { usersService } from 'services/rbac/users.service';
 import { useAuth } from 'contexts/AuthContext';
 import {
@@ -532,11 +533,23 @@ const ProviderEdit = () => {
     }
   };
 
+  const resolveDocMimeType = (fileName) => {
+    const lower = (fileName || '').toLowerCase();
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (lower.endsWith('.doc')) return 'application/msword';
+    return 'application/octet-stream';
+  };
+
   const handlePreview = (doc) => {
     setPreviewDialog({
       open: true,
-      url: doc.fileUrl || doc.filePath,
-      title: doc.fileName
+      url: providersService.getDocumentDownloadUrl(id, doc.id),
+      title: doc.fileName,
+      fileName: doc.fileName,
+      mimeType: resolveDocMimeType(doc.fileName)
     });
   };
 
@@ -1112,6 +1125,7 @@ const ProviderEdit = () => {
               <input
                 type="file"
                 hidden
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={(e) =>
                   e.target.files[0] &&
                   setDocDialog({
@@ -1146,17 +1160,15 @@ const ProviderEdit = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={previewDialog.open} onClose={() => setPreviewDialog({ ...previewDialog, open: false })} maxWidth="lg" fullWidth>
-        <DialogTitle>{previewDialog.title}</DialogTitle>
-        <DialogContent sx={{ height: '80vh' }}>
-          {previewDialog.url && (
-            <iframe src={previewDialog.url} style={{ width: '100%', height: '100%', border: 'none' }} title="preview" />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPreviewDialog({ ...previewDialog, open: false })}>إغلاق</Button>
-        </DialogActions>
-      </Dialog>
+      <DocumentPreviewDrawer
+        open={previewDialog.open}
+        onClose={() => setPreviewDialog({ ...previewDialog, open: false })}
+        documentUrl={previewDialog.url}
+        fileName={previewDialog.fileName}
+        mimeType={previewDialog.mimeType}
+        documentTitle={previewDialog.title}
+        showDownload
+      />
     </>
   );
 };

@@ -388,6 +388,28 @@ public class BenefitPolicyController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Bulk soft-delete benefit policies", description = "Each policy is processed independently and returns a per-policy result")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto>> bulkDelete(
+            @RequestBody List<Long> ids) {
+        var result = benefitPolicyService.bulkDelete(ids);
+        return ResponseEntity.ok(ApiResponse.success(
+                String.format("تم حذف %d من %d وثيقة بنجاح", result.getSuccessCount(), result.getTotalCount()),
+                result));
+    }
+
+    @PostMapping("/bulk-restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Bulk restore benefit policies", description = "Each policy is processed independently and returns a per-policy result")
+    public ResponseEntity<ApiResponse<com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto>> bulkRestore(
+            @RequestBody List<Long> ids) {
+        var result = benefitPolicyService.bulkRestore(ids);
+        return ResponseEntity.ok(ApiResponse.success(
+                String.format("تمت استعادة %d من %d وثيقة بنجاح", result.getSuccessCount(), result.getTotalCount()),
+                result));
+    }
+
     @DeleteMapping("/{id:\\d+}/permanent")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Permanently delete a soft-deleted benefit policy")

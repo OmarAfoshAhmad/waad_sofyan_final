@@ -276,6 +276,28 @@ export const restoreBenefitPolicy = async (id) => {
 };
 
 /**
+ * Bulk soft-delete benefit policies — each processed independently, returns a per-policy result.
+ * Endpoint: POST /api/benefit-policies/bulk-delete
+ * @param {number[]} ids
+ * @returns {Promise<Object>} BulkBenefitPolicyResultDto
+ */
+export const bulkDeleteBenefitPolicies = async (ids) => {
+  const response = await axiosClient.post(`${BASE_URL}/bulk-delete`, ids);
+  return unwrap(response);
+};
+
+/**
+ * Bulk restore benefit policies — each processed independently, returns a per-policy result.
+ * Endpoint: POST /api/benefit-policies/bulk-restore
+ * @param {number[]} ids
+ * @returns {Promise<Object>} BulkBenefitPolicyResultDto
+ */
+export const bulkRestoreBenefitPolicies = async (ids) => {
+  const response = await axiosClient.post(`${BASE_URL}/bulk-restore`, ids);
+  return unwrap(response);
+};
+
+/**
  * Permanently delete a soft-deleted benefit policy (hard delete)
  * Endpoint: DELETE /api/benefit-policies/{id}/permanent
  * @param {number} id - Policy ID
@@ -321,6 +343,8 @@ export default {
   suspendBenefitPolicy,
   cancelBenefitPolicy,
   deleteBenefitPolicy,
+  bulkDeleteBenefitPolicies,
+  bulkRestoreBenefitPolicies,
   permanentDeleteBenefitPolicy,
   // Admin
   expireOldPolicies

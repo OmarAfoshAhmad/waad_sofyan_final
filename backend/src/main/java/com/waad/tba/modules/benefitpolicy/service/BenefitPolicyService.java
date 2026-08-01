@@ -511,6 +511,82 @@ public class BenefitPolicyService {
     }
 
     /**
+     * Bulk soft-delete — each policy is processed independently so one blocked
+     * policy (active members still enrolled) never discards the rest of the batch.
+     */
+    @Transactional
+    public com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto bulkDelete(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BusinessRuleException("يجب تحديد الوثائق المطلوبة");
+        }
+
+        List<com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult> results = new java.util.ArrayList<>();
+        int successCount = 0;
+
+        for (Long id : ids) {
+            try {
+                BenefitPolicy policy = benefitPolicyRepository.findById(id).orElse(null);
+                delete(id);
+                successCount++;
+                results.add(com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult.builder()
+                        .policyId(id).policyName(policy != null ? policy.getName() : null)
+                        .success(true).message("تم الحذف بنجاح").build());
+            } catch (BusinessRuleException ex) {
+                results.add(com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult.builder()
+                        .policyId(id).success(false).message(ex.getMessage()).build());
+            } catch (RuntimeException ex) {
+                log.error("Unexpected error during bulk delete of benefit policy {}", id, ex);
+                results.add(com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult.builder()
+                        .policyId(id).success(false).message("حدث خطأ غير متوقع").build());
+            }
+        }
+
+        return com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.builder()
+                .totalCount(ids.size())
+                .successCount(successCount)
+                .failedCount(ids.size() - successCount)
+                .results(results)
+                .build();
+    }
+
+    /**
+     * Bulk restore — same independent-per-item semantics as {@link #bulkDelete}.
+     */
+    @Transactional
+    public com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto bulkRestore(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BusinessRuleException("يجب تحديد الوثائق المطلوبة");
+        }
+
+        List<com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult> results = new java.util.ArrayList<>();
+        int successCount = 0;
+
+        for (Long id : ids) {
+            try {
+                BenefitPolicyResponseDto restored = restore(id);
+                successCount++;
+                results.add(com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult.builder()
+                        .policyId(id).policyName(restored.getName())
+                        .success(true).message("تمت الاستعادة بنجاح").build());
+            } catch (BusinessRuleException ex) {
+                results.add(com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult.builder()
+                        .policyId(id).success(false).message(ex.getMessage()).build());
+            } catch (RuntimeException ex) {
+                log.error("Unexpected error during bulk restore of benefit policy {}", id, ex);
+                results.add(com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.PolicyResult.builder()
+                        .policyId(id).success(false).message("حدث خطأ غير متوقع").build());
+            }
+        }
+
+        return com.waad.tba.modules.benefitpolicy.dto.BulkBenefitPolicyResultDto.builder()
+                .totalCount(ids.size())
+                .successCount(successCount)
+                .failedCount(ids.size() - successCount)
+                .results(results)
+                .build();
+    }
+
+    /**
      * Permanently delete a soft-deleted benefit policy (hard delete from DB)
      */
     @Transactional

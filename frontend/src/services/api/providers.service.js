@@ -392,6 +392,12 @@ export const providersService = {
   },
 
   /**
+   * Authorized URL to download/preview a provider administrative document.
+   * Must be fetched via axios (auth cookie) — never used as a raw <img>/<iframe> src.
+   */
+  getDocumentDownloadUrl: (providerId, docId) => `${BASE_URL}/${providerId}/documents/${docId}/download`,
+
+  /**
    * Delete provider document
    * DELETE /api/providers/{providerId}/documents/{docId}
    */

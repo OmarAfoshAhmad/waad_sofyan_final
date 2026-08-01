@@ -73,7 +73,9 @@ public enum ErrorCode {
     // === General Business Rules ===
     /** General business rule violation */
     BUSINESS_RULE_VIOLATION,
-    
+    /** Entity was modified by another user since it was loaded (optimistic-lock conflict) */
+    CONCURRENT_MODIFICATION,
+
     // === General Errors ===
     VALIDATION_ERROR,
     INTERNAL_ERROR

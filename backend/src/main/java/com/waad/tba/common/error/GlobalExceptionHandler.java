@@ -214,6 +214,15 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ErrorCode.INTERNAL_ERROR, ex.getMessage(), request, null);
     }
 
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> handleOptimisticLock(
+            org.springframework.orm.ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+        String trackingId = generateTrackingId();
+        log.warn("Optimistic lock conflict - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId);
+        return build(HttpStatus.CONFLICT, ErrorCode.CONCURRENT_MODIFICATION,
+                "تم تعديل هذا العنصر من قبل مستخدم آخر. الرجاء تحديث الصفحة وإعادة المحاولة.", request, null);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         String trackingId = generateTrackingId();

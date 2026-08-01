@@ -61,6 +61,9 @@ const MedicalAuditLogs = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
 
+  // Details Dialog State
+  const [detailsLog, setDetailsLog] = useState(null);
+
   const {
     data: logData,
     isPending: isLoading,
@@ -151,6 +154,16 @@ const MedicalAuditLogs = () => {
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) return '—';
     return date.toLocaleString('ar-LY');
+  };
+
+  const formatJson = (value) => {
+    if (!value) return '—';
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return String(value);
+    }
   };
 
   const logs = logData?.items || [];
@@ -305,7 +318,7 @@ const MedicalAuditLogs = () => {
                           color="info"
                           onClick={(e) => {
                             e.stopPropagation();
-                            console.log(log);
+                            setDetailsLog(log);
                           }}
                         >
                           <InfoIcon fontSize="small" />
@@ -360,6 +373,83 @@ const MedicalAuditLogs = () => {
           <LoadingButton onClick={confirmDelete} variant="contained" color="error" loading={deleteMutation.isPending}>
             حذف نهائي
           </LoadingButton>
+        </DialogActions>
+      </Dialog>
+
+      {/* Details Dialog — shows before/after JSON snapshot of the audited entity */}
+      <Dialog open={Boolean(detailsLog)} onClose={() => setDetailsLog(null)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <InfoIcon color="info" /> تفاصيل سجل التدقيق #{detailsLog?.id}
+        </DialogTitle>
+        <DialogContent>
+          {detailsLog && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={2} flexWrap="wrap">
+                <Typography variant="body2">
+                  <b>الإجراء:</b> {detailsLog.action}
+                </Typography>
+                <Typography variant="body2">
+                  <b>الكيان:</b> {detailsLog.entityType} #{detailsLog.entityId}
+                </Typography>
+                <Typography variant="body2">
+                  <b>التاريخ:</b> {formatTimestamp(detailsLog.timestamp)}
+                </Typography>
+                <Typography variant="body2">
+                  <b>معرف الارتباط:</b> {detailsLog.correlationId || '—'}
+                </Typography>
+              </Stack>
+              {detailsLog.reason && (
+                <Typography variant="body2">
+                  <b>السبب:</b> {detailsLog.reason}
+                </Typography>
+              )}
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                    الحالة قبل التغيير
+                  </Typography>
+                  <Box
+                    component="pre"
+                    sx={{
+                      p: 1.5,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      fontSize: '0.75rem',
+                      overflow: 'auto',
+                      maxHeight: 320,
+                      direction: 'ltr',
+                      textAlign: 'left'
+                    }}
+                  >
+                    {formatJson(detailsLog.beforeState)}
+                  </Box>
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                    الحالة بعد التغيير
+                  </Typography>
+                  <Box
+                    component="pre"
+                    sx={{
+                      p: 1.5,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      fontSize: '0.75rem',
+                      overflow: 'auto',
+                      maxHeight: 320,
+                      direction: 'ltr',
+                      textAlign: 'left'
+                    }}
+                  >
+                    {formatJson(detailsLog.afterState)}
+                  </Box>
+                </Box>
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setDetailsLog(null)}>إغلاق</Button>
         </DialogActions>
       </Dialog>
     </Stack>
