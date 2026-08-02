@@ -243,6 +243,7 @@ const MedicalAuditLogs = () => {
               <MenuItem value="SETTLEMENT">تسوية</MenuItem>
               <MenuItem value="SYSTEM_SETTING">إعداد نظام</MenuItem>
               <MenuItem value="USER_SESSION">جلسة مستخدم</MenuItem>
+              <MenuItem value="SIMULATION_RUN">تشغيل محاكاة</MenuItem>
             </TextField>
             <TextField
               label="معرف الكيان"

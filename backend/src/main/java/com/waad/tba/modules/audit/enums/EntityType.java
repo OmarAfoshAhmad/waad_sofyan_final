@@ -10,5 +10,6 @@ public enum EntityType {
     SETTLEMENT,
     MEMBER,
     SYSTEM_SETTING,
-    USER_SESSION
+    USER_SESSION,
+    SIMULATION_RUN
 }
