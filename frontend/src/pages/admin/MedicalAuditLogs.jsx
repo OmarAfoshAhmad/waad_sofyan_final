@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 // material-ui
 import {
@@ -21,7 +21,6 @@ import {
   IconButton,
   LinearProgress,
   CardContent,
-  Checkbox,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -29,8 +28,6 @@ import {
   Alert,
   MenuItem
 } from '@mui/material';
-import { LoadingButton } from '@mui/lab';
-
 // project imports
 import MainCard from 'components/MainCard';
 import auditService from 'services/api/audit.service';
@@ -44,9 +41,7 @@ import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   Info as InfoIcon,
-  History as HistoryIcon,
-  Delete as DeleteIcon,
-  Lock as LockIcon
+  History as HistoryIcon
 } from '@mui/icons-material';
 
 // ==============================|| MEDICAL AUDIT LOGS PAGE ||============================== //
@@ -62,11 +57,6 @@ const MedicalAuditLogs = () => {
   const [correlationId, setCorrelationId] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [selectedIds, setSelectedIds] = useState([]);
-
-  // Deletion Password Dialog State
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletePassword, setDeletePassword] = useState('');
 
   // Details Dialog State
   const [detailsLog, setDetailsLog] = useState(null);
@@ -94,42 +84,6 @@ const MedicalAuditLogs = () => {
       })
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (data) => auditService.deleteBulk(data),
-    onSuccess: () => {
-      enqueueSnackbar('تم حذف السجلات المحددة بنجاح', { variant: 'success' });
-      setSelectedIds([]);
-      setDeleteDialogOpen(false);
-      setDeletePassword('');
-      refetch();
-    },
-    onError: (err) => {
-      enqueueSnackbar(err?.response?.data?.messageAr || err?.message || 'حدث خطأ أثناء الحذف', { variant: 'error' });
-    }
-  });
-
-  const handleSelectAll = (event) => {
-    if (event.target.checked) {
-      const allIds = logs.map((log) => log.id);
-      setSelectedIds(allIds);
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const handleSelectRow = (id) => {
-    const selectedIndex = selectedIds.indexOf(id);
-    let newSelected = [];
-
-    if (selectedIndex === -1) {
-      newSelected = [...selectedIds, id];
-    } else {
-      newSelected = selectedIds.filter((sid) => sid !== id);
-    }
-
-    setSelectedIds(newSelected);
-  };
-
   const handleExport = async () => {
     try {
       const blob = await auditService.exportXlsx({ claimId, entityType, entityId, action, source, correlationId });
@@ -155,14 +109,6 @@ const MedicalAuditLogs = () => {
     setFromDate('');
     setToDate('');
     tableState.setPage(0);
-  };
-
-  const confirmDelete = () => {
-    if (!deletePassword) {
-      enqueueSnackbar('يجب إدخال كلمة المرور لتأكيد الحذف', { variant: 'warning' });
-      return;
-    }
-    deleteMutation.mutate({ ids: selectedIds, password: deletePassword });
   };
 
   const getActionColor = (action) => {
@@ -201,11 +147,6 @@ const MedicalAuditLogs = () => {
           <HistoryIcon color="primary" /> سجل التدقيق الطبي (Audit Trail)
         </Typography>
         <Stack direction="row" spacing={1}>
-          {selectedIds.length > 0 && (
-            <Button variant="contained" color="error" startIcon={<DeleteIcon />} onClick={() => setDeleteDialogOpen(true)}>
-              حذف ({selectedIds.length})
-            </Button>
-          )}
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => refetch()} disabled={isFetching}>
             تحديث
           </Button>
@@ -240,6 +181,15 @@ const MedicalAuditLogs = () => {
               <MenuItem value="CLAIM_LINE">بند مطالبة</MenuItem>
               <MenuItem value="PREAUTHORIZATION">موافقة مسبقة</MenuItem>
               <MenuItem value="MEMBER">مستفيد</MenuItem>
+              <MenuItem value="VISIT">زيارة / سجل طبي</MenuItem>
+              <MenuItem value="PROVIDER">مقدم خدمة</MenuItem>
+              <MenuItem value="PROVIDER_CONTRACT">عقد مقدم خدمة</MenuItem>
+              <MenuItem value="MEDICAL_REVIEWER_PROVIDER">ربط مراجع بمقدم خدمة</MenuItem>
+              <MenuItem value="FEATURE_FLAG">ميزة نظام</MenuItem>
+              <MenuItem value="EMPLOYER">جهة عمل</MenuItem>
+              <MenuItem value="EMPLOYER_CONTRACT">وثيقة / عقد جهة عمل</MenuItem>
+              <MenuItem value="PRICE_LIST">قائمة أسعار</MenuItem>
+              <MenuItem value="MEDICAL_DICTIONARY">القاموس الطبي</MenuItem>
               <MenuItem value="SETTLEMENT">تسوية</MenuItem>
               <MenuItem value="SYSTEM_SETTING">إعداد نظام</MenuItem>
               <MenuItem value="USER_SESSION">جلسة مستخدم</MenuItem>
@@ -255,8 +205,16 @@ const MedicalAuditLogs = () => {
             />
             <TextField select label="الإجراء" size="small" value={action} onChange={(e) => setAction(e.target.value)} sx={{ width: 170 }}>
               <MenuItem value="">كل الإجراءات</MenuItem>
+              <MenuItem value="VIEW">عرض</MenuItem>
               <MenuItem value="CREATED">إنشاء</MenuItem>
               <MenuItem value="UPDATED">تعديل</MenuItem>
+              <MenuItem value="DELETED">حذف</MenuItem>
+              <MenuItem value="RESTORED">استعادة</MenuItem>
+              <MenuItem value="ACTIVATED">تفعيل</MenuItem>
+              <MenuItem value="SUSPENDED">إيقاف مؤقت</MenuItem>
+              <MenuItem value="TERMINATED">إنهاء</MenuItem>
+              <MenuItem value="IMPORTED">استيراد</MenuItem>
+              <MenuItem value="EXPORTED">تصدير</MenuItem>
               <MenuItem value="STATUS_CHANGE">تغيير حالة</MenuItem>
               <MenuItem value="APPROVED">اعتماد</MenuItem>
               <MenuItem value="REJECTED">رفض</MenuItem>
@@ -324,13 +282,6 @@ const MedicalAuditLogs = () => {
         <Table sx={{ minWidth: 650, direction: 'rtl' }}>
           <TableHead sx={{ bgcolor: 'grey.50' }}>
             <TableRow>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  indeterminate={selectedIds.length > 0 && selectedIds.length < logs.length}
-                  checked={logs.length > 0 && selectedIds.length === logs.length}
-                  onChange={handleSelectAll}
-                />
-              </TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                 التاريخ والوقت
               </TableCell>
@@ -360,24 +311,19 @@ const MedicalAuditLogs = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
                   جاري تحميل سجلات التدقيق...
                 </TableCell>
               </TableRow>
             ) : logs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 10 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 10 }}>
                   <Typography color="text.secondary">لا توجد سجلات تدقيق مطابقة للبحث</Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              logs.map((log) => {
-                const isItemSelected = selectedIds.indexOf(log.id) !== -1;
-                return (
-                  <TableRow key={log.id} hover selected={isItemSelected} onClick={() => handleSelectRow(log.id)} sx={{ cursor: 'pointer' }}>
-                    <TableCell padding="checkbox">
-                      <Checkbox checked={isItemSelected} />
-                    </TableCell>
+              logs.map((log) => (
+                  <TableRow key={log.id} hover>
                     <TableCell align="right" dir="ltr" sx={{ fontSize: '0.8rem' }}>
                       {formatTimestamp(log.timestamp)}
                     </TableCell>
@@ -418,8 +364,7 @@ const MedicalAuditLogs = () => {
                       </Tooltip>
                     </TableCell>
                   </TableRow>
-                );
-              })
+              ))
             )}
           </TableBody>
         </Table>
@@ -429,44 +374,6 @@ const MedicalAuditLogs = () => {
           </Typography>
         </Box>
       </TableContainer>
-
-      {/* Password Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
-          <DeleteIcon /> تأكيد حذف سجلات التدقيق
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Alert severity="warning">سيتم حذف {selectedIds.length} سجلات نهائياً من النظام. هذا الإجراء غير قابل للتراجع.</Alert>
-            <Typography variant="body2" color="text.secondary">
-              يرجى إدخال كلمة مرورك للمتابعة:
-            </Typography>
-            <TextField
-              fullWidth
-              type="password"
-              label="كلمة المرور"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon fontSize="small" />
-                  </InputAdornment>
-                )
-              }}
-              autoFocus
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button onClick={() => setDeleteDialogOpen(false)} color="inherit">
-            إلغاء
-          </Button>
-          <LoadingButton onClick={confirmDelete} variant="contained" color="error" loading={deleteMutation.isPending}>
-            حذف نهائي
-          </LoadingButton>
-        </DialogActions>
-      </Dialog>
 
       {/* Details Dialog — shows before/after JSON snapshot of the audited entity */}
       <Dialog open={Boolean(detailsLog)} onClose={() => setDetailsLog(null)} maxWidth="md" fullWidth>

@@ -1,139 +1,109 @@
 package com.waad.tba.modules.systemadmin.service;
 
-import com.waad.tba.modules.systemadmin.entity.AuditLog;
-import com.waad.tba.modules.systemadmin.repository.AuditLogRepository;
+import com.waad.tba.modules.audit.enums.AuditAction;
+import com.waad.tba.modules.audit.enums.AuditSource;
+import com.waad.tba.modules.audit.enums.EntityType;
+import com.waad.tba.modules.audit.service.AuditLogWriteRequest;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 
 /**
- * Audit Log Service
- * Phase 2 - System Administration
- * 
- * Manages audit trail for all system activities
+ * Compatibility facade for legacy system-admin audit calls.
+ *
+ * The canonical audit trail is now {@code medical_audit_logs}. Keeping this
+ * facade avoids scattering old table writes across modules while existing
+ * services are gradually renamed to the canonical audit API.
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class AuditLogService {
 
-    private final AuditLogRepository auditLogRepository;
+    private final MedicalAuditLogService medicalAuditLogService;
 
-    /**
-     * Get all audit logs (paginated)
-     */
-    @Transactional(readOnly = true)
-    public Page<AuditLog> getAllAuditLogs(Pageable pageable) {
-        log.info("Fetching all audit logs (page {})", pageable.getPageNumber());
-        return auditLogRepository.findAll(pageable);
-    }
-
-    /**
-     * Get audit log by ID
-     */
-    @Transactional(readOnly = true)
-    public AuditLog getAuditLogById(Long id) {
-        log.info("Fetching audit log by ID: {}", id);
-        return auditLogRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Audit log not found with ID: " + id));
-    }
-
-    /**
-     * Get audit logs by user ID
-     */
-    @Transactional(readOnly = true)
-    public Page<AuditLog> getAuditLogsByUser(Long userId, Pageable pageable) {
-        log.info("Fetching audit logs for user: {}", userId);
-        return auditLogRepository.findByUserIdOrderByTimestampDesc(userId, pageable);
-    }
-
-    /**
-     * Get audit logs by entity
-     */
-    @Transactional(readOnly = true)
-    public Page<AuditLog> getAuditLogsByEntity(String entityType, Long entityId, Pageable pageable) {
-        log.info("Fetching audit logs for entity: {} with ID: {}", entityType, entityId);
-        return auditLogRepository.findByEntityTypeAndEntityIdOrderByTimestampDesc(
-                entityType, entityId, pageable);
-    }
-
-    /**
-     * Get audit logs by action type
-     */
-    @Transactional(readOnly = true)
-    public Page<AuditLog> getAuditLogsByAction(String action, Pageable pageable) {
-        log.info("Fetching audit logs for action: {}", action);
-        return auditLogRepository.findByActionOrderByTimestampDesc(action, pageable);
-    }
-
-    /**
-     * Get audit logs within time range
-     */
-    @Transactional(readOnly = true)
-    public Page<AuditLog> getAuditLogsByTimeRange(LocalDateTime start, LocalDateTime end, Pageable pageable) {
-        log.info("Fetching audit logs between {} and {}", start, end);
-        return auditLogRepository.findByTimestampBetweenOrderByTimestampDesc(start, end, pageable);
-    }
-
-    /**
-     * Get all distinct action types
-     */
-    @Transactional(readOnly = true)
-    public List<String> getAllActionTypes() {
-        log.info("Fetching all distinct action types");
-        return auditLogRepository.findDistinctActions();
-    }
-
-    /**
-     * Get all distinct entity types
-     */
-    @Transactional(readOnly = true)
-    public List<String> getAllEntityTypes() {
-        log.info("Fetching all distinct entity types");
-        return auditLogRepository.findDistinctEntityTypes();
-    }
-
-    /**
-     * Create audit log entry
-     */
     @Transactional
-    public void createAuditLog(String action, String entityType, Long entityId, 
-                               String details, Long userId, String username, 
+    public void createAuditLog(String action, String entityType, Long entityId,
+                               String details, Long userId, String username,
                                String ipAddress, String userAgent) {
-        AuditLog auditLog = AuditLog.builder()
-                .action(action)
-                .entityType(entityType)
-                .entityId(entityId)
-                .details(details)
-                .userId(userId)
-                .username(username)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .build();
+        EntityType canonicalEntityType = toEntityType(entityType);
+        AuditAction canonicalAction = toAction(action);
 
-        auditLogRepository.save(auditLog);
-        log.debug("Audit log created: {} by {}", action, username);
+        Map<String, Object> afterState = new LinkedHashMap<>();
+        afterState.put("legacyAction", action);
+        afterState.put("legacyEntityType", entityType);
+        afterState.put("details", details);
+        afterState.put("username", username);
+        afterState.put("ipAddress", ipAddress);
+        afterState.put("userAgent", userAgent);
+
+        medicalAuditLogService.record(AuditLogWriteRequest.builder()
+                .entityType(canonicalEntityType)
+                .entityId(entityId == null ? "N/A" : String.valueOf(entityId))
+                .action(canonicalAction)
+                .reason(details)
+                .afterState(afterState)
+                .source(AuditSource.USER)
+                .version(1)
+                .build());
+
+        log.debug("Canonical audit log created via legacy facade: {} {} by {}", action, entityType, username);
     }
 
-    /**
-     * Get audit log count by user
-     */
-    @Transactional(readOnly = true)
-    public Long getAuditLogCountByUser(Long userId) {
-        return auditLogRepository.countByUserId(userId);
+    private AuditAction toAction(String action) {
+        String normalized = normalize(action);
+        return switch (normalized) {
+            case "VIEW", "VIEWED" -> AuditAction.VIEW;
+            case "CREATE", "CREATED", "FEATURE_FLAG_CREATED" -> AuditAction.CREATED;
+            case "UPDATE", "UPDATED", "FEATURE_FLAG_UPDATED", "UPDATE_REVIEWER_PROVIDER_ASSIGNMENTS",
+                    "FEATURE_FLAG_TOGGLED" -> AuditAction.UPDATED;
+            case "DELETE", "DELETED", "FEATURE_FLAG_DELETED" -> AuditAction.DELETED;
+            case "RESTORE", "RESTORED" -> AuditAction.RESTORED;
+            case "ACTIVATE", "ACTIVATED" -> AuditAction.ACTIVATED;
+            case "SUSPEND", "SUSPENDED" -> AuditAction.SUSPENDED;
+            case "TERMINATE", "TERMINATED" -> AuditAction.TERMINATED;
+            case "APPROVE", "APPROVED" -> AuditAction.APPROVED;
+            case "REJECT", "REJECTED" -> AuditAction.REJECTED;
+            case "IMPORT", "IMPORTED" -> AuditAction.IMPORTED;
+            case "EXPORT", "EXPORTED" -> AuditAction.EXPORTED;
+            default -> AuditAction.MANUAL_OVERRIDE;
+        };
     }
 
-    /**
-     * Get audit log count by action
-     */
-    @Transactional(readOnly = true)
-    public Long getAuditLogCountByAction(String action) {
-        return auditLogRepository.countByAction(action);
+    private EntityType toEntityType(String entityType) {
+        String normalized = normalize(entityType);
+        return switch (normalized) {
+            case "CLAIM" -> EntityType.CLAIM;
+            case "CLAIM_LINE", "CLAIMLINE" -> EntityType.CLAIM_LINE;
+            case "PREAUTHORIZATION", "PRE_AUTHORIZATION", "PREAUTH" -> EntityType.PREAUTHORIZATION;
+            case "SETTLEMENT" -> EntityType.SETTLEMENT;
+            case "MEMBER" -> EntityType.MEMBER;
+            case "VISIT" -> EntityType.VISIT;
+            case "PROVIDER" -> EntityType.PROVIDER;
+            case "PROVIDERCONTRACT", "PROVIDER_CONTRACT" -> EntityType.PROVIDER_CONTRACT;
+            case "MEDICALREVIEWERPROVIDER", "MEDICAL_REVIEWER_PROVIDER" -> EntityType.MEDICAL_REVIEWER_PROVIDER;
+            case "FEATUREFLAG", "FEATURE_FLAG" -> EntityType.FEATURE_FLAG;
+            case "EMPLOYER" -> EntityType.EMPLOYER;
+            case "EMPLOYERCONTRACT", "EMPLOYER_CONTRACT" -> EntityType.EMPLOYER_CONTRACT;
+            case "PRICELIST", "PRICE_LIST" -> EntityType.PRICE_LIST;
+            case "MEDICALDICTIONARY", "MEDICAL_DICTIONARY" -> EntityType.MEDICAL_DICTIONARY;
+            default -> EntityType.SYSTEM_SETTING;
+        };
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return value.trim()
+                .replace('-', '_')
+                .replace(' ', '_')
+                .toUpperCase(Locale.ROOT);
     }
 }

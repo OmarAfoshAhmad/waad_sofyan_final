@@ -22,10 +22,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import com.waad.tba.modules.audit.service.AuditLogDeleteRequest;
-import java.util.List;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -136,11 +132,4 @@ public class MedicalAuditLogController {
                                 .body(file);
         }
 
-        @PostMapping("/bulk-delete")
-        @PreAuthorize("hasRole('SUPER_ADMIN')")
-        @Operation(summary = "Bulk delete audit logs", description = "Delete multiple audit logs by ID. Requires user password for confirmation.")
-        public ResponseEntity<ApiResponse<Void>> deleteBulk(@RequestBody AuditLogDeleteRequest request) {
-                medicalAuditLogService.bulkDeleteLogs(request.getIds(), request.getPassword());
-                return ResponseEntity.ok(ApiResponse.success(null));
-        }
 }

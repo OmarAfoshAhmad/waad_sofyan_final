@@ -57,19 +57,6 @@ export const auditService = {
     } catch (error) {
       throw handleAuditErrors(error);
     }
-  },
-
-  /**
-   * Bulk delete audit logs
-   * @param {Object} data - {ids: [], password: ''}
-   */
-  deleteBulk: async (data) => {
-    try {
-      const response = await axiosClient.post(`${BASE_URL}/bulk-delete`, data);
-      return response.data;
-    } catch (error) {
-      throw handleAuditErrors(error);
-    }
   }
 };
 

@@ -3,8 +3,6 @@ package com.waad.tba.modules.systemadmin.service;
 import com.waad.tba.modules.systemadmin.dto.FeatureFlagDto;
 import com.waad.tba.modules.systemadmin.entity.FeatureFlag;
 import com.waad.tba.modules.systemadmin.repository.FeatureFlagRepository;
-import com.waad.tba.modules.systemadmin.repository.AuditLogRepository;
-import com.waad.tba.modules.systemadmin.entity.AuditLog;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,7 +26,7 @@ import java.util.stream.Collectors;
 public class FeatureFlagService {
 
     private final FeatureFlagRepository featureFlagRepository;
-    private final AuditLogRepository auditLogRepository;
+    private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -228,13 +226,6 @@ public class FeatureFlagService {
     }
 
     private void createAuditLog(String action, String entityType, Long entityId, String details, String username) {
-        AuditLog auditLog = AuditLog.builder()
-                .action(action)
-                .entityType(entityType)
-                .entityId(entityId)
-                .details(details)
-                .username(username)
-                .build();
-        auditLogRepository.save(auditLog);
+        auditLogService.createAuditLog(action, entityType, entityId, details, null, username, null, null);
     }
 }
