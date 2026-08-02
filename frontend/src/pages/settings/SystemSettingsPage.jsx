@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CircularProgress,
-  Divider,
   FormControlLabel,
   Grid,
   MenuItem,
@@ -27,14 +26,12 @@ import {
   LocalHospital as ProviderPortalIcon,
   Lock as SecurityIcon,
   Palette as PaletteIcon,
-  Preview as PreviewIcon,
   Save as SaveIcon,
   Settings as SettingsIcon,
   Speed as SpeedIcon,
   Mail as MailIcon
 } from '@mui/icons-material';
 
-import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import waadLogoFallback from 'assets/images/waad-logo.png';
 import featureFlagsService from 'services/api/featureFlags.service';
@@ -306,12 +303,12 @@ const SystemSettingsPage = () => {
       setPreAuthSubmissionEnabled(preAuthSubmissionFlag ? preAuthSubmissionFlag.enabled : false);
       setBatchClaimsEnabled(batchClaimsFlag ? batchClaimsFlag.enabled : true);
       setPreApprovalItemsOnly(preApprovalItemsFlag ? preApprovalItemsFlag.enabled : true);
-    } catch (e) {
+    } catch {
       setError('فشل تحميل نافذة الإعدادات');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [visualSettings]);
 
   useEffect(() => {
     loadData();
@@ -427,7 +424,7 @@ const SystemSettingsPage = () => {
       setTimeout(() => setSuccess(null), 3000);
       // ✅ تمت إزالة await loadData() الزائدة - البيانات محدَّثة محلياً، refreshSystemConfig() تكفي
     } catch (e) {
-      setError(e?.response?.data?.message || 'فشل حفظ الإعدادات');
+      setError(e?.response?.data?.messageAr || e?.response?.data?.message || 'فشل حفظ الإعدادات');
     } finally {
       setIsSaving(false);
     }
@@ -1063,7 +1060,8 @@ const SystemSettingsPage = () => {
                 <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
                   <FieldGroup title="إظهار مسار دفعات المطالبات الداخلي" icon={ReportIcon} color="warning.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
-                      عند التعطيل، تختفي واجهة إدخال المطالبات بالدفعات ويغلق مسارها البرمجي. استخدم هذا الخيار عند الانتقال التشغيلي إلى بوابة مقدم الخدمة.
+                      عند التعطيل، تختفي واجهة إدخال المطالبات بالدفعات ويغلق مسارها البرمجي. استخدم هذا الخيار عند الانتقال التشغيلي إلى
+                      بوابة مقدم الخدمة.
                     </Typography>
 
                     <Stack direction="row" alignItems="center" spacing={2}>

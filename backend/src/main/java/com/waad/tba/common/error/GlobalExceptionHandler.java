@@ -239,8 +239,12 @@ public class GlobalExceptionHandler {
         log.warn("Bad request - Path: {}, Message: {}, TrackingId: {}", request.getRequestURI(), ex.getMessage(),
                 trackingId);
 
-        // Use a generic, safe message to avoid exposing internal Spring class paths
-        String safeMessage = "Invalid request parameter value.";
+        String originalMessage = ex.getMessage();
+        // Use the original business validation message only for explicit system setting
+        // validation errors; keep a generic message for framework/type errors.
+        String safeMessage = originalMessage != null && originalMessage.startsWith("Setting ")
+                ? originalMessage
+                : "Invalid request parameter value.";
         ApiError error = ApiError.of(
                 ErrorCode.VALIDATION_ERROR,
                 safeMessage,
@@ -390,6 +394,9 @@ public class GlobalExceptionHandler {
             return "خطأ في التحقق من صحة البيانات";
 
         // Common translations
+        if (message.startsWith("Setting ")) {
+            return translateSystemSettingValidationMessage(message);
+        }
         if (message.contains("barcode or card number") ||
                 message.contains("Barcode or card number")) {
             return "يجب إدخال الباركود أو رقم البطاقة";
@@ -405,6 +412,66 @@ public class GlobalExceptionHandler {
         }
 
         return message; // Return original if no translation
+    }
+
+    private String translateSystemSettingValidationMessage(String message) {
+        String settingKey = extractSettingKey(message);
+        String label = translateSystemSettingKey(settingKey);
+
+        if (message.contains("cannot be empty")) {
+            return label + " لا يمكن أن يكون فارغاً.";
+        }
+        if (message.contains("must be true or false")) {
+            return label + " يجب أن يكون مفعلاً أو معطلاً فقط.";
+        }
+        if (message.contains("must not be negative")) {
+            return label + " لا يمكن أن يكون رقماً سالباً.";
+        }
+        if (message.contains("must be an integer")) {
+            return label + " يجب أن يكون رقماً صحيحاً.";
+        }
+        if (message.contains("must be a decimal")) {
+            return label + " يجب أن يكون رقماً عشرياً صالحاً.";
+        }
+        if (message.contains("must be >=")) {
+            return label + " أقل من الحد الأدنى المسموح.";
+        }
+        if (message.contains("must be <=")) {
+            return label + " أكبر من الحد الأعلى المسموح.";
+        }
+        if (message.contains("has unsupported value")) {
+            return label + " يحتوي قيمة غير مدعومة.";
+        }
+        return "قيمة إعداد غير صحيحة: " + label;
+    }
+
+    private String extractSettingKey(String message) {
+        String prefix = "Setting ";
+        int start = message.indexOf(prefix);
+        if (start < 0) return "UNKNOWN";
+        int keyStart = start + prefix.length();
+        int keyEnd = message.indexOf(' ', keyStart);
+        return keyEnd > keyStart ? message.substring(keyStart, keyEnd) : message.substring(keyStart);
+    }
+
+    private String translateSystemSettingKey(String key) {
+        return switch (key) {
+            case "LOGO_URL" -> "رابط الشعار";
+            case "ELIGIBILITY_STRICT_MODE" -> "وضع الاستحقاق الصارم";
+            case "FONT_SIZE_BASE" -> "حجم الخط الأساسي";
+            case "CLAIM_SLA_DAYS" -> "مدة إنجاز المطالبات";
+            case "PRE_APPROVAL_SLA_DAYS" -> "مدة إنجاز الموافقات المسبقة";
+            case "CLAIM_BACKDATED_MONTHS" -> "مدة قبول المطالبات القديمة";
+            case "BENEFICIARY_NUMBER_DIGITS" -> "عدد أرقام رقم المستفيد";
+            case "WAITING_PERIOD_DAYS_DEFAULT" -> "فترة الانتظار الافتراضية";
+            case "ELIGIBILITY_GRACE_PERIOD_DAYS" -> "فترة السماح للاستحقاق";
+            case "SYSTEM_NAME_AR" -> "اسم النظام العربي";
+            case "SYSTEM_NAME_EN" -> "اسم النظام الإنجليزي";
+            case "FONT_FAMILY" -> "نوع الخط";
+            case "BENEFICIARY_NUMBER_FORMAT" -> "تنسيق رقم المستفيد";
+            case "BENEFICIARY_NUMBER_PREFIX" -> "بادئة رقم المستفيد";
+            default -> key;
+        };
     }
 
     @ExceptionHandler(BadCredentialsException.class)
