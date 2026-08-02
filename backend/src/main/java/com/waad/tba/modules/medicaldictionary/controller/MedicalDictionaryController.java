@@ -132,6 +132,16 @@ public class MedicalDictionaryController {
                 service.postPriceListSessionToContract(sessionId, request)));
     }
 
+    @PostMapping("/price-lists/sessions/{sessionId}/diff-contract")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<PriceListSessionDiffResponse>> diffPriceListSessionWithContract(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody PriceListSessionPostRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم إنشاء تقرير فروقات قائمة الأسعار مع عقد مقدم الخدمة",
+                service.diffPriceListSessionWithContract(sessionId, request)));
+    }
+
     @GetMapping("/suggestions")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Page<MedicalDictionarySuggestionResponse>>> listSuggestions(

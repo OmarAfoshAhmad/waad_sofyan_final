@@ -308,9 +308,52 @@ public class MedicalDictionaryService {
     }
 
     @Transactional
+    public PriceListSessionDiffResponse diffPriceListSessionWithContract(Long sessionId, PriceListSessionPostRequest request) {
+        PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+        session = syncPostedPriceLinks(session);
+
+        ProviderContract contract = providerContractRepository.findById(request.getContractId())
+                .filter(c -> Boolean.TRUE.equals(c.getActive()))
+                .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
+
+        List<PriceListClassificationItem> items = priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(session.getId());
+        List<PriceListSessionDiffResponse.ItemDiff> diffs = new ArrayList<>();
+        int createCount = 0;
+        int updateCount = 0;
+        int identicalCount = 0;
+        int rejectedCount = 0;
+
+        for (PriceListClassificationItem item : items) {
+            PriceListSessionDiffResponse.ItemDiff diff = buildPriceListDiffItem(contract, item, request.isOnlyReviewedItems());
+            diffs.add(diff);
+            switch (diff.getAction()) {
+                case "CREATE" -> createCount++;
+                case "UPDATE" -> updateCount++;
+                case "IDENTICAL" -> identicalCount++;
+                default -> rejectedCount++;
+            }
+        }
+
+        return PriceListSessionDiffResponse.builder()
+                .sessionId(session.getId())
+                .contractId(contract.getId())
+                .contractCode(contract.getContractCode())
+                .total(items.size())
+                .createCount(createCount)
+                .updateCount(updateCount)
+                .identicalCount(identicalCount)
+                .rejectedCount(rejectedCount)
+                .hasChanges(createCount > 0 || updateCount > 0)
+                .items(diffs)
+                .build();
+    }
+
+    @Transactional
     public PriceListSessionPostResponse postPriceListSessionToContract(Long sessionId, PriceListSessionPostRequest request) {
         PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+        session = syncPostedPriceLinks(session);
 
         ProviderContract contract = providerContractRepository.findById(request.getContractId())
                 .filter(c -> Boolean.TRUE.equals(c.getActive()))
@@ -334,17 +377,12 @@ public class MedicalDictionaryService {
         List<PriceListClassificationItem> items = priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(sessionId);
         List<PriceListSessionPostResponse.ItemResult> results = new ArrayList<>();
         int created = 0;
+        int updated = 0;
         int superseded = 0;
         int skipped = 0;
         int rejected = 0;
 
         for (PriceListClassificationItem item : items) {
-            if (item.getPostedPricingItemId() != null || item.getStatus() == PriceListItemStatus.POSTED_TO_CONTRACT) {
-                skipped++;
-                results.add(postResult(item, "SKIPPED", "تم ترحيل هذا البند سابقاً", item.getPostedPricingItemId()));
-                continue;
-            }
-
             String validationError = validatePostableItem(item, request.isOnlyReviewedItems());
             if (validationError != null) {
                 rejected++;
@@ -360,7 +398,36 @@ public class MedicalDictionaryService {
                 continue;
             }
 
+            if (item.getPostedPricingItemId() != null || item.getStatus() == PriceListItemStatus.POSTED_TO_CONTRACT) {
+                Optional<ProviderContractPricingItem> postedPricingItem = findOwnedActivePostedPricingItem(item, contract.getId());
+                if (postedPricingItem.isPresent()) {
+                    if (pricingItemMatches(postedPricingItem.get(), item, category)) {
+                        skipped++;
+                        results.add(postResult(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", postedPricingItem.get().getId()));
+                        continue;
+                    }
+                    applyPricingItemValues(postedPricingItem.get(), contract, category, item, actorId);
+                    providerContractPricingItemRepository.save(postedPricingItem.get());
+                    updated++;
+                    results.add(postResult(item, "UPDATED", "تم تحديث سعر العقد من نسخة قائمة التنظيم", postedPricingItem.get().getId()));
+                    continue;
+                }
+                rejected++;
+                results.add(postResult(item, "REJECTED", "البند مرتبط بسعر عقد غير موجود أو لا يخص العقد المختار", item.getPostedPricingItemId()));
+                continue;
+            }
+
             Optional<ProviderContractPricingItem> effectiveExisting = findExistingPrice(contract.getId(), item);
+            if (effectiveExisting.isPresent() && pricingItemMatches(effectiveExisting.get(), item, category)) {
+                ProviderContractPricingItem current = effectiveExisting.get();
+                item.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
+                item.setPostedPricingItemId(current.getId());
+                item.setPostedAt(LocalDateTime.now());
+                priceListItemRepository.save(item);
+                skipped++;
+                results.add(postResult(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current.getId()));
+                continue;
+            }
             if (effectiveExisting.isPresent() && !request.isReplaceEffectivePrices()) {
                 rejected++;
                 results.add(postResult(item, "REJECTED", "يوجد سعر فعال لنفس كود/اسم الخدمة", effectiveExisting.get().getId()));
@@ -411,6 +478,7 @@ public class MedicalDictionaryService {
                         "contractId", contract.getId(),
                         "contractCode", contract.getContractCode(),
                         "created", created,
+                        "updated", updated,
                         "superseded", superseded,
                         "skipped", skipped,
                         "rejected", rejected,
@@ -422,6 +490,7 @@ public class MedicalDictionaryService {
                 .contractId(contract.getId())
                 .contractCode(contract.getContractCode())
                 .created(created)
+                .updated(updated)
                 .superseded(superseded)
                 .skipped(skipped)
                 .rejected(rejected)
@@ -456,6 +525,83 @@ public class MedicalDictionaryService {
         return providerContractPricingItemRepository.findByContractIdAndServiceNameActiveTrue(
                 contractId,
                 item.getProviderServiceName());
+    }
+
+    private Optional<ProviderContractPricingItem> findOwnedActivePostedPricingItem(PriceListClassificationItem item, Long contractId) {
+        Long postedPricingItemId = item.getPostedPricingItemId();
+        if (postedPricingItemId == null) return Optional.empty();
+        return providerContractPricingItemRepository.findById(postedPricingItemId)
+                .filter(price -> Boolean.TRUE.equals(price.getActive()))
+                .filter(price -> price.getContract() != null && price.getContract().getId() != null)
+                .filter(price -> price.getContract().getId().equals(contractId));
+    }
+
+    private PriceListSessionDiffResponse.ItemDiff buildPriceListDiffItem(ProviderContract contract,
+                                                                         PriceListClassificationItem item,
+                                                                         boolean onlyReviewedItems) {
+        String validationError = validatePostableItem(item, onlyReviewedItems);
+        if (validationError != null) {
+            return priceListDiff(item, "REJECTED", validationError, null, null);
+        }
+
+        MedicalCategory category = medicalCategoryRepository.findActiveById(item.getMedicalCategoryId()).orElse(null);
+        if (category == null) {
+            return priceListDiff(item, "REJECTED", "التصنيف الطبي غير موجود أو غير نشط", null, null);
+        }
+
+        Optional<ProviderContractPricingItem> postedPricingItem = findOwnedActivePostedPricingItem(item, contract.getId());
+        if (item.getPostedPricingItemId() != null && postedPricingItem.isEmpty()) {
+            return priceListDiff(item, "REJECTED", "البند مرتبط بسعر عقد غير موجود أو لا يخص العقد المختار", null, category);
+        }
+
+        Optional<ProviderContractPricingItem> existing = postedPricingItem.isPresent()
+                ? postedPricingItem
+                : findExistingPrice(contract.getId(), item);
+
+        if (existing.isEmpty()) {
+            return priceListDiff(item, "CREATE", "خدمة جديدة ستضاف إلى عقد مقدم الخدمة", null, category);
+        }
+
+        ProviderContractPricingItem current = existing.get();
+        if (pricingItemMatches(current, item, category)) {
+            return priceListDiff(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current, category);
+        }
+
+        return priceListDiff(item, "UPDATE", "سيتم تحديث سعر أو تصنيف الخدمة في عقد مقدم الخدمة", current, category);
+    }
+
+    private boolean pricingItemMatches(ProviderContractPricingItem current,
+                                       PriceListClassificationItem item,
+                                       MedicalCategory category) {
+        return sameAmount(current.getContractPrice(), resolveContractPrice(item))
+                && sameAmount(current.getMaxContractPrice(), resolveMaxContractPrice(item))
+                && sameText(current.getServiceName(), item.getProviderServiceName())
+                && sameText(current.getServiceCode(), blankToNull(item.getProviderServiceCode()))
+                && current.getMedicalCategory() != null
+                && current.getMedicalCategory().getId() != null
+                && current.getMedicalCategory().getId().equals(category.getId());
+    }
+
+    private PriceListSessionDiffResponse.ItemDiff priceListDiff(PriceListClassificationItem item,
+                                                                String action,
+                                                                String message,
+                                                                ProviderContractPricingItem current,
+                                                                MedicalCategory newCategory) {
+        return PriceListSessionDiffResponse.ItemDiff.builder()
+                .itemId(item.getId())
+                .rowNumber(item.getRowNumber())
+                .serviceCode(item.getProviderServiceCode())
+                .serviceName(item.getProviderServiceName())
+                .action(action)
+                .message(message)
+                .pricingItemId(current == null ? item.getPostedPricingItemId() : current.getId())
+                .currentMinPrice(current == null ? null : current.getContractPrice())
+                .currentMaxPrice(current == null ? null : current.getMaxContractPrice())
+                .newMinPrice(resolveContractPrice(item))
+                .newMaxPrice(resolveMaxContractPrice(item))
+                .currentCategoryCode(current == null || current.getMedicalCategory() == null ? null : current.getMedicalCategory().getCode())
+                .newCategoryCode(newCategory == null ? item.getMedicalCategoryCode() : newCategory.getCode())
+                .build();
     }
 
     private ProviderContractPricingItem buildPricingItem(ProviderContract contract,
@@ -495,9 +641,59 @@ public class MedicalDictionaryService {
                 .build();
     }
 
+    private void applyPricingItemValues(ProviderContractPricingItem pricingItem,
+                                        ProviderContract contract,
+                                        MedicalCategory category,
+                                        PriceListClassificationItem item,
+                                        Long actorId) {
+        BigDecimal minPrice = resolveContractPrice(item);
+        BigDecimal maxPrice = item.getMaxPrice() != null && item.getMaxPrice().compareTo(minPrice) >= 0
+                ? item.getMaxPrice()
+                : null;
+        Integer confidence = item.getConfidence() == null ? 0 : item.getConfidence();
+
+        pricingItem.setServiceName(item.getProviderServiceName());
+        pricingItem.setServiceCode(blankToNull(item.getProviderServiceCode()));
+        pricingItem.setMedicalCategory(category);
+        pricingItem.setCategoryName(categoryName(category));
+        pricingItem.setBasePrice(minPrice);
+        pricingItem.setContractPrice(minPrice);
+        pricingItem.setMaxContractPrice(maxPrice);
+        pricingItem.setCurrency(contract.getCurrency() == null || contract.getCurrency().isBlank() ? "LYD" : contract.getCurrency());
+        pricingItem.setClassificationStatus(item.getStatus() == PriceListItemStatus.MANUALLY_REVIEWED
+                ? ClassificationStatus.MANUAL
+                : ClassificationStatus.AUTO);
+        pricingItem.setConfidenceLevel(confidence >= 85 ? ConfidenceLevel.HIGH : (confidence >= 60 ? ConfidenceLevel.MEDIUM : ConfidenceLevel.LOW));
+        pricingItem.setClassificationSource("MEDICAL_DICTIONARY_PRICE_LIST");
+        pricingItem.setApprovedBy(actorId);
+        pricingItem.setApprovedAt(LocalDateTime.now());
+        pricingItem.setUpdatedBy(actorId == null ? null : actorId.toString());
+        pricingItem.setNotes(buildPricingNotes(item));
+    }
+
     private BigDecimal resolveContractPrice(PriceListClassificationItem item) {
         if (item.getMinPrice() != null) return item.getMinPrice();
         return item.getPrice();
+    }
+
+    private BigDecimal resolveMaxContractPrice(PriceListClassificationItem item) {
+        BigDecimal minPrice = resolveContractPrice(item);
+        if (minPrice == null) return null;
+        return item.getMaxPrice() != null && item.getMaxPrice().compareTo(minPrice) >= 0 ? item.getMaxPrice() : null;
+    }
+
+    private boolean sameAmount(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) return true;
+        if (left == null || right == null) return false;
+        return left.compareTo(right) == 0;
+    }
+
+    private boolean sameText(String left, String right) {
+        String normalizedLeft = blankToNull(left);
+        String normalizedRight = blankToNull(right);
+        if (normalizedLeft == null && normalizedRight == null) return true;
+        if (normalizedLeft == null || normalizedRight == null) return false;
+        return normalizedLeft.equalsIgnoreCase(normalizedRight);
     }
 
     private String buildPricingNotes(PriceListClassificationItem item) {
@@ -629,7 +825,7 @@ public class MedicalDictionaryService {
         for (PriceListClassificationItem item : items) {
             Long postedPricingItemId = item.getPostedPricingItemId();
             boolean markedAsPosted = item.getStatus() == PriceListItemStatus.POSTED_TO_CONTRACT;
-            boolean postedPriceStillExists = postedPricingItemId != null && providerContractPricingItemRepository.existsById(postedPricingItemId);
+            boolean postedPriceStillExists = postedPricingItemId != null && providerContractPricingItemRepository.existsByIdAndActiveTrue(postedPricingItemId);
 
             if ((postedPricingItemId != null || markedAsPosted) && !postedPriceStillExists) {
                 item.setPostedPricingItemId(null);

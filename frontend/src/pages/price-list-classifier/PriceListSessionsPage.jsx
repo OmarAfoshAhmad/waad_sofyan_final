@@ -63,7 +63,7 @@ const statusLabel = (status) => STATUSES.find((item) => item.value === status)?.
 const isPostedSession = (session) => session?.status === 'POSTED_TO_CONTRACT' || (session?.posted || 0) > 0;
 
 const isPostableSession = (session) =>
-  session?.status === 'READY_TO_POST' && (session?.unknown || 0) === 0 && (session?.needsReview || 0) === 0;
+  ['READY_TO_POST', 'POSTED_TO_CONTRACT'].includes(session?.status) && (session?.unknown || 0) === 0 && (session?.needsReview || 0) === 0;
 
 const normalizePage = (response) => ({
   content: response?.content || response?.items || response?.data?.content || response?.data?.items || [],
@@ -84,7 +84,15 @@ export default function PriceListSessionsPage() {
   const [contractOptions, setContractOptions] = useState([]);
   const [contractsLoading, setContractsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [postDialog, setPostDialog] = useState({ open: false, sessions: [], contract: null, effectiveFrom: '' });
+  const [postDialog, setPostDialog] = useState({
+    open: false,
+    sessions: [],
+    contract: null,
+    effectiveFrom: '',
+    diffLoading: false,
+    diff: null,
+    diffError: ''
+  });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, sessions: [] });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -180,21 +188,29 @@ export default function PriceListSessionsPage() {
   };
 
   const openPostDialog = (session) => {
-    setPostDialog({ open: true, sessions: [session], contract: null, effectiveFrom: '' });
+    setPostDialog({ open: true, sessions: [session], contract: null, effectiveFrom: '', diffLoading: false, diff: null, diffError: '' });
     setError('');
     setSuccess('');
   };
 
   const openBulkPostDialog = () => {
     if (!postEligibleSessions.length) return;
-    setPostDialog({ open: true, sessions: postEligibleSessions, contract: null, effectiveFrom: '' });
+    setPostDialog({
+      open: true,
+      sessions: postEligibleSessions,
+      contract: null,
+      effectiveFrom: '',
+      diffLoading: false,
+      diff: null,
+      diffError: ''
+    });
     setError('');
     setSuccess('');
   };
 
   const closePostDialog = () => {
     if (posting) return;
-    setPostDialog({ open: false, sessions: [], contract: null, effectiveFrom: '' });
+    setPostDialog({ open: false, sessions: [], contract: null, effectiveFrom: '', diffLoading: false, diff: null, diffError: '' });
   };
 
   const openDeleteDialog = (session) => {
@@ -213,6 +229,44 @@ export default function PriceListSessionsPage() {
   const closeDeleteDialog = () => {
     if (deleting) return;
     setDeleteDialog({ open: false, sessions: [] });
+  };
+
+  const loadPostDiff = async (contract = postDialog.contract, effectiveFrom = postDialog.effectiveFrom) => {
+    const sessionsToPost = postDialog.sessions || [];
+    if (!sessionsToPost.length || !contract?.id) return;
+    setPostDialog((current) => ({ ...current, diffLoading: true, diff: null, diffError: '' }));
+    try {
+      const responses = [];
+      for (const session of sessionsToPost) {
+        const diff = await medicalDictionaryService.diffPriceListClassificationSessionWithContract(session.id, {
+          contractId: contract.id,
+          effectiveFrom: effectiveFrom || null,
+          replaceEffectivePrices: true,
+          onlyReviewedItems: true
+        });
+        responses.push(diff);
+      }
+      const aggregate = responses.reduce(
+        (acc, diff) => ({
+          total: acc.total + (diff.total || 0),
+          createCount: acc.createCount + (diff.createCount || 0),
+          updateCount: acc.updateCount + (diff.updateCount || 0),
+          identicalCount: acc.identicalCount + (diff.identicalCount || 0),
+          rejectedCount: acc.rejectedCount + (diff.rejectedCount || 0),
+          hasChanges: acc.hasChanges || Boolean(diff.hasChanges),
+          items: [...acc.items, ...(diff.items || []).map((item) => ({ ...item, sessionId: diff.sessionId }))]
+        }),
+        { total: 0, createCount: 0, updateCount: 0, identicalCount: 0, rejectedCount: 0, hasChanges: false, items: [] }
+      );
+      setPostDialog((current) => ({ ...current, diffLoading: false, diff: aggregate, diffError: '' }));
+    } catch (err) {
+      setPostDialog((current) => ({
+        ...current,
+        diffLoading: false,
+        diff: null,
+        diffError: err?.response?.data?.message || 'تعذر إنشاء تقرير الفروقات مع عقد مقدم الخدمة'
+      }));
+    }
   };
 
   const deleteSelectedSession = async () => {
@@ -252,10 +306,16 @@ export default function PriceListSessionsPage() {
       setError('اختر عقداً نشطاً قبل الترحيل.');
       return;
     }
+    if (postDialog.diff && !postDialog.diff.hasChanges) {
+      setSuccess('لا يوجد تغييرات بين قائمة التنظيم وأسعار العقد؛ لم يتم تنفيذ أي ترحيل جديد.');
+      closePostDialog();
+      return;
+    }
     setPosting(true);
     setError('');
     setSuccess('');
     let created = 0;
+    let updated = 0;
     let superseded = 0;
     let rejected = 0;
     const postedIds = [];
@@ -270,6 +330,7 @@ export default function PriceListSessionsPage() {
             onlyReviewedItems: true
           });
           created += response.created || 0;
+          updated += response.updated || 0;
           superseded += response.superseded || 0;
           rejected += response.rejected || 0;
           postedIds.push(session.id);
@@ -277,7 +338,9 @@ export default function PriceListSessionsPage() {
           failedNames.push(session.sessionName || `#${session.id}`);
         }
       }
-      setSuccess(`تم ترحيل ${postedIds.length} قائمة: أُنشئ ${created} سعر، أُغلق ${superseded} سعر سابق، ورُفض ${rejected} بند.`);
+      setSuccess(
+        `تمت معالجة ${postedIds.length} قائمة: أُنشئ ${created} سعر، حُدّث ${updated} سعر، أُغلق ${superseded} سعر سابق، ورُفض ${rejected} بند.`
+      );
       if (failedNames.length) {
         setError(`تعذر ترحيل ${failedNames.length} قائمة: ${failedNames.join('، ')}`);
       }
@@ -486,7 +549,7 @@ export default function PriceListSessionsPage() {
                             onClick={() => openPostDialog(session)}
                             sx={{ minWidth: 90 }}
                           >
-                            ترحيل
+                            {isPostedSession(session) ? 'تحديث' : 'ترحيل'}
                           </Button>
                         </Stack>
                       </TableCell>
@@ -554,13 +617,19 @@ export default function PriceListSessionsPage() {
                 options={contractOptions}
                 loading={contractsLoading}
                 value={postDialog.contract}
-                onChange={(_, contract) =>
+                onChange={(_, contract) => {
+                  const effectiveFrom = postDialog.effectiveFrom || contract?.startDate || '';
                   setPostDialog((current) => ({
                     ...current,
                     contract,
-                    effectiveFrom: current.effectiveFrom || contract?.startDate || ''
-                  }))
-                }
+                    effectiveFrom,
+                    diff: null,
+                    diffError: ''
+                  }));
+                  if (contract?.id) {
+                    loadPostDiff(contract, effectiveFrom);
+                  }
+                }}
                 getOptionLabel={(option) =>
                   option
                     ? `${option.contractCode || `#${option.id}`} — ${option.provider?.name || 'مقدم خدمة غير محدد'} — ${
@@ -575,9 +644,65 @@ export default function PriceListSessionsPage() {
                 type="date"
                 label="تاريخ نفاذ الأسعار"
                 value={postDialog.effectiveFrom}
-                onChange={(event) => setPostDialog((current) => ({ ...current, effectiveFrom: event.target.value }))}
+                onChange={(event) => {
+                  const effectiveFrom = event.target.value;
+                  setPostDialog((current) => ({ ...current, effectiveFrom, diff: null, diffError: '' }));
+                  if (postDialog.contract?.id) {
+                    loadPostDiff(postDialog.contract, effectiveFrom);
+                  }
+                }}
                 InputLabelProps={{ shrink: true }}
               />
+              {postDialog.contract && (
+                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <Typography fontWeight={900} sx={{ flex: 1 }}>
+                      تقرير الفروقات قبل الترحيل
+                    </Typography>
+                    <Button size="small" variant="outlined" onClick={() => loadPostDiff()} disabled={postDialog.diffLoading}>
+                      تحديث التقرير
+                    </Button>
+                  </Stack>
+                  {postDialog.diffLoading && (
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                      <CircularProgress size={18} />
+                      <Typography variant="body2">جاري مقارنة قائمة التنظيم مع أسعار العقد...</Typography>
+                    </Stack>
+                  )}
+                  {postDialog.diffError && (
+                    <Alert severity="error" sx={{ mt: 1 }}>
+                      {postDialog.diffError}
+                    </Alert>
+                  )}
+                  {postDialog.diff && (
+                    <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Chip label={`الإجمالي ${postDialog.diff.total}`} />
+                        <Chip color="success" label={`جديد ${postDialog.diff.createCount}`} />
+                        <Chip color="info" label={`سيتحدث ${postDialog.diff.updateCount}`} />
+                        <Chip color="default" label={`مطابق ${postDialog.diff.identicalCount}`} />
+                        <Chip color="error" label={`مرفوض ${postDialog.diff.rejectedCount}`} />
+                      </Stack>
+                      {!postDialog.diff.hasChanges ? (
+                        <Alert severity="success">لا يوجد تغييرات. قائمة التنظيم مطابقة لأسعار العقد، ولن يتم إرسال تحديثات زائدة.</Alert>
+                      ) : (
+                        <Alert severity="warning">توجد تغييرات ستؤثر على أسعار عقد مقدم الخدمة عند اعتماد الترحيل.</Alert>
+                      )}
+                      <Box sx={{ maxHeight: 180, overflow: 'auto' }}>
+                        {postDialog.diff.items
+                          .filter((item) => item.action !== 'IDENTICAL')
+                          .slice(0, 8)
+                          .map((item) => (
+                            <Typography key={`${item.sessionId}-${item.itemId}`} variant="caption" display="block" sx={{ py: 0.25 }}>
+                              {item.action === 'CREATE' ? 'إضافة' : item.action === 'UPDATE' ? 'تحديث' : 'رفض'} — {item.serviceName} —{' '}
+                              {item.message}
+                            </Typography>
+                          ))}
+                      </Box>
+                    </Stack>
+                  )}
+                </Box>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>
@@ -588,7 +713,7 @@ export default function PriceListSessionsPage() {
               variant="contained"
               color="success"
               startIcon={posting ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
-              disabled={posting || !postDialog.contract}
+              disabled={posting || postDialog.diffLoading || !postDialog.contract || (postDialog.diff && !postDialog.diff.hasChanges)}
               onClick={postSelectedSession}
             >
               {postDialog.sessions.length > 1 ? 'ترحيل القوائم للعقد' : 'ترحيل للعقد'}

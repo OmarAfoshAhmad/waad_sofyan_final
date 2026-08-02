@@ -12,6 +12,7 @@ public class PriceListSessionPostResponse {
     Long contractId;
     String contractCode;
     int created;
+    int updated;
     int superseded;
     int skipped;
     int rejected;
