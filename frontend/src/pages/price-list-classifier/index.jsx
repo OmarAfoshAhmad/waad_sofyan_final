@@ -34,7 +34,6 @@ import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import { useSearchParams } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
-import { searchProviderContracts } from 'services/api/provider-contracts.service';
 
 const loadXlsx = async () => import('xlsx');
 
@@ -566,12 +565,6 @@ export default function PriceListClassifierPage() {
   const [promoting, setPromoting] = useState(false);
   const [approvingSynonyms, setApprovingSynonyms] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
-  const [postingToContract, setPostingToContract] = useState(false);
-  const [targetContractId, setTargetContractId] = useState('');
-  const [targetContract, setTargetContract] = useState(null);
-  const [contractOptions, setContractOptions] = useState([]);
-  const [contractsLoading, setContractsLoading] = useState(false);
-  const [targetEffectiveFrom, setTargetEffectiveFrom] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -648,31 +641,6 @@ export default function PriceListClassifierPage() {
       .finally(() => {
         if (mounted) setCategoriesLoading(false);
       });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    const extractContracts = (response) => {
-      const content = response?.content || response?.items || response?.data?.content || response?.data?.items || [];
-      return Array.isArray(content) ? content : [];
-    };
-
-    const fetchContracts = async () => {
-      setContractsLoading(true);
-      try {
-        const response = await searchProviderContracts({ status: 'ACTIVE', page: 0, size: 50 });
-        if (mounted) setContractOptions(extractContracts(response));
-      } catch {
-        if (mounted) setContractOptions([]);
-      } finally {
-        if (mounted) setContractsLoading(false);
-      }
-    };
-
-    fetchContracts();
     return () => {
       mounted = false;
     };
@@ -953,63 +921,6 @@ export default function PriceListClassifierPage() {
     }
   };
 
-  const ensureBackendSessionSaved = async () => {
-    if (sessionInfo?.backendSessionId) return sessionInfo.backendSessionId;
-    const saved = await medicalDictionaryService.savePriceListClassificationSession(buildBackendSessionPayload());
-    const nextSession = {
-      ...(loadClassificationSession() || sessionInfo || {}),
-      backendSessionId: saved.id,
-      backendStatus: saved.status,
-      backendSummary: saved.summary,
-      savedAtBackend: new Date().toISOString()
-    };
-    saveClassificationSession(nextSession);
-    setSessionInfo(nextSession);
-    return saved.id;
-  };
-
-  const postSessionToContract = async () => {
-    const contractId = Number(targetContractId);
-    if (!Number.isFinite(contractId) || contractId <= 0) {
-      setError('أدخل رقم عقد مقدم الخدمة قبل الترحيل.');
-      return;
-    }
-    if (!items.length) {
-      setError('لا توجد نتيجة تصنيف لترحيلها.');
-      return;
-    }
-
-    setPostingToContract(true);
-    setError('');
-    setSuccess('');
-    try {
-      const backendSessionId = await ensureBackendSessionSaved();
-      const response = await medicalDictionaryService.postPriceListClassificationSessionToContract(backendSessionId, {
-        contractId,
-        effectiveFrom: targetEffectiveFrom || null,
-        replaceEffectivePrices: true,
-        onlyReviewedItems: true
-      });
-      const nextSession = {
-        ...(loadClassificationSession() || sessionInfo || {}),
-        backendSessionId: response.sessionId,
-        backendStatus: response.session?.status,
-        backendSummary: response.session?.summary,
-        postedAtBackend: new Date().toISOString()
-      };
-      saveClassificationSession(nextSession);
-      setSessionInfo(nextSession);
-      setSuccess(
-        `تم ترحيل ${response.created || 0} سعر للعقد ${response.contractCode || response.contractId}. ` +
-          `أُغلقت ${response.superseded || 0} أسعار سابقة، وتخطى النظام ${response.skipped || 0}، ورفض ${response.rejected || 0}.`
-      );
-    } catch (err) {
-      setError(err?.response?.data?.message || 'فشل ترحيل قائمة الأسعار إلى عقد مقدم الخدمة');
-    } finally {
-      setPostingToContract(false);
-    }
-  };
-
   const promoteReviewRowsToDictionarySuggestions = async () => {
     const reviewRows = items.filter((item) => item.status !== 'HIGH_CONFIDENCE');
     if (!reviewRows.length) {
@@ -1233,28 +1144,44 @@ export default function PriceListClassifierPage() {
                     هذه النتائج للمراجعة والتنظيم فقط، وليست اعتماداً مالياً.
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Chip label={`الإجمالي ${result.summary?.total || 0}`} />
-                  <Chip color="success" label={`ثقة عالية ${result.summary?.highConfidence || 0}`} />
-                  <Chip color="warning" label={`تحتاج مراجعة ${result.summary?.needsReview || 0}`} />
-                  <Chip color="error" label={`غير معروف ${result.summary?.unknown || 0}`} />
-                  <Chip color="info" label={`مكرر ${result.summary?.duplicateNames || 0}`} />
-                  <Chip color="warning" variant="outlined" label={`أسعار بمجال ${result.summary?.rangedPrices || 0}`} />
-                  <Chip color="success" variant="outlined" label={`جاهز للعقود ${contractDisplayRows.length}`} />
-                  <Chip color="success" variant="outlined" label={`بعد الدمج ${mergedContractRows.length}`} />
-                  <Chip color="secondary" label={`مراجع يدوياً ${manualReviewedCount}`} />
-                  <Chip color="primary" label={`جاهز كمرادف ${synonymReadyCount}`} />
-                </Stack>
               </Stack>
 
-              <Divider sx={{ my: 2 }} />
+              <Grid container spacing={1.25} sx={{ mt: 2 }}>
+                {[
+                  { label: 'الإجمالي', value: result.summary?.total || 0, color: 'text.primary' },
+                  { label: 'ثقة عالية', value: result.summary?.highConfidence || 0, color: 'success.main' },
+                  { label: 'تحتاج مراجعة', value: result.summary?.needsReview || 0, color: 'warning.main' },
+                  { label: 'غير معروف', value: result.summary?.unknown || 0, color: 'error.main' },
+                  { label: 'مكرر', value: result.summary?.duplicateNames || 0, color: 'info.main' },
+                  { label: 'أسعار بمجال', value: result.summary?.rangedPrices || 0, color: 'warning.main' },
+                  { label: 'جاهز للعقود', value: contractDisplayRows.length, color: 'success.main' },
+                  { label: 'بعد الدمج', value: mergedContractRows.length, color: 'success.main' },
+                  { label: 'مراجع يدوياً', value: manualReviewedCount, color: 'secondary.main' },
+                  { label: 'جاهز كمرادف', value: synonymReadyCount, color: 'primary.main' }
+                ].map((stat) => (
+                  <Grid key={stat.label} item xs={6} sm={4} md={2.4}>
+                    <Card variant="outlined" sx={{ bgcolor: 'grey.50', height: '100%' }}>
+                      <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {stat.label}
+                        </Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 900, color: stat.color }}>
+                          {stat.value}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
 
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+              <Divider sx={{ my: 2.5 }} />
+
+              <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.25} sx={{ mb: 2 }} useFlexGap flexWrap="wrap">
                 <TextField
-                  fullWidth
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="بحث: كود المرفق، اسم خدمة المرفق، الاسم الموحد، التصنيف، الحالة..."
+                  sx={{ flex: '1 1 320px', minWidth: 260 }}
                 />
                 <FormControlLabel
                   control={
@@ -1279,7 +1206,7 @@ export default function PriceListClassifierPage() {
                   <MenuItem value="SINGLE">سعر مفرد</MenuItem>
                   <MenuItem value="MISSING">بدون سعر</MenuItem>
                 </Select>
-                <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)}>
+                <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)} sx={{ minWidth: 130 }}>
                   قالب Excel
                 </Button>
                 <Button
@@ -1290,50 +1217,6 @@ export default function PriceListClassifierPage() {
                   onClick={saveSessionToBackend}
                 >
                   حفظ الجلسة
-                </Button>
-                <Autocomplete
-                  size="small"
-                  options={contractOptions}
-                  loading={contractsLoading}
-                  value={targetContract}
-                  onChange={(_, value) => {
-                    setTargetContract(value);
-                    setTargetContractId(value?.id ? String(value.id) : '');
-                    if (value?.startDate && !targetEffectiveFrom) setTargetEffectiveFrom(value.startDate);
-                  }}
-                  getOptionLabel={(option) =>
-                    option
-                      ? `${option.contractCode || `#${option.id}`} — ${option.provider?.name || 'مقدم خدمة غير محدد'} — ${
-                          option.pricingScopeLabel || option.pricingScope || ''
-                        }`
-                      : ''
-                  }
-                  isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      placeholder="اختر عقداً نشطاً"
-                      helperText={targetContract?.pricingItemsCount != null ? `${targetContract.pricingItemsCount} خدمة حالية` : 'العقود النشطة فقط'}
-                    />
-                  )}
-                  sx={{ minWidth: 320 }}
-                />
-                <TextField
-                  size="small"
-                  type="date"
-                  value={targetEffectiveFrom}
-                  onChange={(event) => setTargetEffectiveFrom(event.target.value)}
-                  helperText="تاريخ نفاذ الأسعار"
-                  sx={{ minWidth: 170 }}
-                />
-                <Button
-                  variant="contained"
-                  color="info"
-                  startIcon={postingToContract ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
-                  disabled={!items.length || postingToContract}
-                  onClick={postSessionToContract}
-                >
-                  ترحيل للعقد
                 </Button>
                 <Button
                   variant="contained"

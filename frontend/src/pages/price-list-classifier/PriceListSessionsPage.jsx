@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -8,6 +9,10 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Select,
   Stack,
@@ -23,8 +28,10 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import { useNavigate } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
+import { searchProviderContracts } from 'services/api/provider-contracts.service';
 
 const STATUSES = [
   { value: 'ALL', label: 'كل الجلسات' },
@@ -64,7 +71,12 @@ export default function PriceListSessionsPage() {
   const [status, setStatus] = useState('ALL');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [contractOptions, setContractOptions] = useState([]);
+  const [contractsLoading, setContractsLoading] = useState(false);
+  const [postDialog, setPostDialog] = useState({ open: false, session: null, contract: null, effectiveFrom: '' });
 
   const filteredSessions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -102,10 +114,27 @@ export default function PriceListSessionsPage() {
     }
   };
 
+  const loadActiveContracts = async () => {
+    setContractsLoading(true);
+    try {
+      const response = await searchProviderContracts({ status: 'ACTIVE', page: 0, size: 80 });
+      const content = response?.content || response?.items || response?.data?.content || response?.data?.items || [];
+      setContractOptions(Array.isArray(content) ? content : []);
+    } catch {
+      setContractOptions([]);
+    } finally {
+      setContractsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  useEffect(() => {
+    loadActiveContracts();
+  }, []);
 
   const copySessionId = async (id) => {
     try {
@@ -115,13 +144,51 @@ export default function PriceListSessionsPage() {
     }
   };
 
+  const openPostDialog = (session) => {
+    setPostDialog({ open: true, session, contract: null, effectiveFrom: '' });
+    setError('');
+    setSuccess('');
+  };
+
+  const closePostDialog = () => {
+    if (posting) return;
+    setPostDialog({ open: false, session: null, contract: null, effectiveFrom: '' });
+  };
+
+  const postSelectedSession = async () => {
+    if (!postDialog.session?.id || !postDialog.contract?.id) {
+      setError('اختر عقداً نشطاً قبل الترحيل.');
+      return;
+    }
+    setPosting(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await medicalDictionaryService.postPriceListClassificationSessionToContract(postDialog.session.id, {
+        contractId: postDialog.contract.id,
+        effectiveFrom: postDialog.effectiveFrom || null,
+        replaceEffectivePrices: true,
+        onlyReviewedItems: true
+      });
+      setSuccess(
+        `تم ترحيل ${response.created || 0} سعر. أُغلقت ${response.superseded || 0} أسعار سابقة، ورُفض ${response.rejected || 0}.`
+      );
+      setPostDialog({ open: false, session: null, contract: null, effectiveFrom: '' });
+      await loadSessions();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'فشل ترحيل القائمة المصنفة إلى العقد');
+    } finally {
+      setPosting(false);
+    }
+  };
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Stack spacing={3}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2}>
           <Box>
             <Typography variant="h2" sx={{ fontWeight: 900 }}>
-              جلسات تنظيم قوائم الأسعار
+              القوائم المصنفة
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75 }}>
               متابعة القوائم المصنفة، جاهزية الترحيل، وما تم إرساله لعقود مقدمي الخدمة.
@@ -163,6 +230,7 @@ export default function PriceListSessionsPage() {
         </Card>
 
         {error && <Alert severity="error">{error}</Alert>}
+        {success && <Alert severity="success">{success}</Alert>}
 
         <Card>
           <CardContent>
@@ -216,9 +284,19 @@ export default function PriceListSessionsPage() {
                           {session.updatedAt ? new Date(session.updatedAt).toLocaleString('ar-LY') : '-'}
                         </TableCell>
                         <TableCell align="center">
-                          <Stack direction="row" spacing={0.75} justifyContent="center">
+                          <Stack direction="row" spacing={0.75} justifyContent="center" flexWrap="wrap">
                             <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => copySessionId(session.id)}>
                               نسخ الرقم
+                            </Button>
+                            <Button
+                              size="small"
+                              color="success"
+                              variant="contained"
+                              startIcon={<PlaylistAddCheckIcon />}
+                              disabled={session.status === 'POSTED_TO_CONTRACT' || (session.unknown || 0) > 0 || (session.needsReview || 0) > 0}
+                              onClick={() => openPostDialog(session)}
+                            >
+                              ترحيل
                             </Button>
                             <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/price-list-classifier?sessionId=${session.id}`)}>
                               فتح الأداة
@@ -244,6 +322,60 @@ export default function PriceListSessionsPage() {
             </Typography>
           </CardContent>
         </Card>
+
+        <Dialog open={postDialog.open} onClose={closePostDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>ترحيل قائمة مصنفة إلى عقد مقدم خدمة</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Alert severity="info">
+                سيتم إنشاء أسعار عقد جديدة من تاريخ النفاذ. إذا وُجد سعر فعال سابق لنفس الخدمة سيتم إغلاقه تاريخياً قبل السعر الجديد.
+              </Alert>
+              <Typography fontWeight={800}>{postDialog.session?.sessionName}</Typography>
+              <Autocomplete
+                options={contractOptions}
+                loading={contractsLoading}
+                value={postDialog.contract}
+                onChange={(_, contract) =>
+                  setPostDialog((current) => ({
+                    ...current,
+                    contract,
+                    effectiveFrom: current.effectiveFrom || contract?.startDate || ''
+                  }))
+                }
+                getOptionLabel={(option) =>
+                  option
+                    ? `${option.contractCode || `#${option.id}`} — ${option.provider?.name || 'مقدم خدمة غير محدد'} — ${
+                        option.pricingScopeLabel || option.pricingScope || ''
+                      }`
+                    : ''
+                }
+                isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
+                renderInput={(params) => <TextField {...params} label="العقد النشط" placeholder="ابحث باسم مقدم الخدمة أو كود العقد" />}
+              />
+              <TextField
+                type="date"
+                label="تاريخ نفاذ الأسعار"
+                value={postDialog.effectiveFrom}
+                onChange={(event) => setPostDialog((current) => ({ ...current, effectiveFrom: event.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closePostDialog} disabled={posting}>
+              إلغاء
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={posting ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
+              disabled={posting || !postDialog.contract}
+              onClick={postSelectedSession}
+            >
+              ترحيل للعقد
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Stack>
     </Box>
   );

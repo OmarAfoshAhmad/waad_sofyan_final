@@ -636,8 +636,8 @@ const menuItem = [
       },
       {
         id: 'price-list-sessions',
-        title: 'جلسات قوائم الأسعار',
-        titleEn: 'Price List Sessions',
+        title: 'القوائم المصنفة',
+        titleEn: 'Classified Price Lists',
         type: 'item',
         url: '/price-list-sessions',
         icon: HistoryIcon,
