@@ -58,6 +58,13 @@
 - تقرير فروقات قبل الترحيل: جديد / سيتحدث / مطابق / مرفوض.
 - إذا لا توجد تغييرات لا يتم إرسال تحديثات زائدة.
 
+تحقق آلي منفذ:
+
+- `MedicalDictionaryServiceTest.diffPriceListSessionWithContract_reportsIdenticalWhenPriceAndCategoryMatch`
+- `MedicalDictionaryServiceTest.diffPriceListSessionWithContract_reportsUpdateWhenPriceChanged`
+
+نتيجة آخر تشغيل: ناجح.
+
 معايير القبول النهائية:
 
 - قائمة التنظيم لا تُحذف ولا تفقد قيمها بسبب حذف أسعار العقد.
