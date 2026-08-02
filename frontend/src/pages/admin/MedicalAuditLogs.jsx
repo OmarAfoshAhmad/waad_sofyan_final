@@ -262,6 +262,7 @@ const MedicalAuditLogs = () => {
               <MenuItem value="RECALCULATION">إعادة حساب</MenuItem>
               <MenuItem value="MANUAL_OVERRIDE">تدخل يدوي</MenuItem>
               <MenuItem value="CLAIM_VOIDED">عكس/إلغاء مطالبة</MenuItem>
+              <MenuItem value="SIMULATION_EXECUTED">تشغيل محاكاة</MenuItem>
             </TextField>
             <TextField select label="المصدر" size="small" value={source} onChange={(e) => setSource(e.target.value)} sx={{ width: 150 }}>
               <MenuItem value="">كل المصادر</MenuItem>
