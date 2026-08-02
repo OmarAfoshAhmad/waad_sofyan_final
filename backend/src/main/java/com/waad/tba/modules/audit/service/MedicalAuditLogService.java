@@ -3,6 +3,7 @@ package com.waad.tba.modules.audit.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.waad.tba.modules.audit.entity.AuditLog;
+import com.waad.tba.modules.audit.enums.AuditAction;
 import com.waad.tba.modules.audit.enums.AuditSource;
 import com.waad.tba.modules.audit.enums.EntityType;
 import com.waad.tba.modules.audit.repository.MedicalAuditLogRepository;
@@ -14,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -107,6 +109,47 @@ public class MedicalAuditLogService {
     }
 
     @Transactional(readOnly = true)
+    public Page<AuditLog> searchAuditLogs(
+            EntityType entityType,
+            String entityId,
+            AuditAction action,
+            AuditSource source,
+            String correlationId,
+            Instant fromInclusive,
+            Instant toExclusive,
+            Pageable pageable) {
+
+        String normalizedEntityId = normalizeBlank(entityId);
+        String normalizedCorrelation = normalizeBlank(correlationId);
+
+        Specification<AuditLog> spec = Specification.where(null);
+
+        if (entityType != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("entityType"), entityType));
+        }
+        if (normalizedEntityId != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("entityId"), normalizedEntityId));
+        }
+        if (action != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("action"), action));
+        }
+        if (source != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("source"), source));
+        }
+        if (normalizedCorrelation != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("correlationId"), normalizedCorrelation));
+        }
+        if (fromInclusive != null) {
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("timestamp"), fromInclusive));
+        }
+        if (toExclusive != null) {
+            spec = spec.and((root, query, cb) -> cb.lessThan(root.get("timestamp"), toExclusive));
+        }
+
+        return repository.findAll(spec, pageable);
+    }
+
+    @Transactional(readOnly = true)
     public Page<AuditLog> searchClaimAuditLogs(Long claimId, String correlationId, Pageable pageable) {
         String normalizedCorrelation = correlationId == null ? null : correlationId.trim();
         if (normalizedCorrelation != null && normalizedCorrelation.isEmpty()) {
@@ -135,6 +178,14 @@ public class MedicalAuditLogService {
         }
 
         return repository.findAll(pageable);
+    }
+
+    private String normalizeBlank(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional(readOnly = true)

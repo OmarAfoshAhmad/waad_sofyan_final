@@ -5,6 +5,7 @@ import com.waad.tba.modules.audit.enums.EntityType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,7 +15,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Repository
-public interface MedicalAuditLogRepository extends JpaRepository<AuditLog, Long> {
+public interface MedicalAuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSpecificationExecutor<AuditLog> {
 
         /**
          * Bulk delete using native SQL — bypasses Hibernate entity lifecycle
@@ -63,4 +64,5 @@ public interface MedicalAuditLogRepository extends JpaRepository<AuditLog, Long>
                         Instant fromInclusive,
                         Instant toExclusive,
                         Pageable pageable);
+
 }

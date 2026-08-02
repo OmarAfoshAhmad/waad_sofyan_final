@@ -18,7 +18,13 @@ export const auditService = {
     try {
       const queryParams = new URLSearchParams();
       if (params.claimId) queryParams.append('claimId', params.claimId);
+      if (params.entityType) queryParams.append('entityType', params.entityType);
+      if (params.entityId) queryParams.append('entityId', params.entityId);
+      if (params.action) queryParams.append('action', params.action);
+      if (params.source) queryParams.append('source', params.source);
       if (params.correlationId) queryParams.append('correlationId', params.correlationId);
+      if (params.fromDate) queryParams.append('fromDate', params.fromDate);
+      if (params.toDate) queryParams.append('toDate', params.toDate);
       if (params.page) queryParams.append('page', params.page);
       if (params.size) queryParams.append('size', params.size);
       if (params.sortBy) queryParams.append('sortBy', params.sortBy);
@@ -38,6 +44,10 @@ export const auditService = {
     try {
       const queryParams = new URLSearchParams();
       if (params.claimId) queryParams.append('claimId', params.claimId);
+      if (params.entityType) queryParams.append('entityType', params.entityType);
+      if (params.entityId) queryParams.append('entityId', params.entityId);
+      if (params.action) queryParams.append('action', params.action);
+      if (params.source) queryParams.append('source', params.source);
       if (params.correlationId) queryParams.append('correlationId', params.correlationId);
 
       const response = await axiosClient.get(`${BASE_URL}/export.xlsx?${queryParams.toString()}`, {

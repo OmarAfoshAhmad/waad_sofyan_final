@@ -26,7 +26,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert
+  Alert,
+  MenuItem
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 
@@ -54,7 +55,13 @@ const MedicalAuditLogs = () => {
   const { enqueueSnackbar } = useSnackbar();
   const tableState = useTableState({ initialPageSize: 20 });
   const [claimId, setClaimId] = useState('');
+  const [entityType, setEntityType] = useState('');
+  const [entityId, setEntityId] = useState('');
+  const [action, setAction] = useState('');
+  const [source, setSource] = useState('');
   const [correlationId, setCorrelationId] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
 
   // Deletion Password Dialog State
@@ -71,13 +78,19 @@ const MedicalAuditLogs = () => {
     isFetching,
     error: loadError
   } = useQuery({
-    queryKey: ['medical-audit-logs', tableState.page, tableState.pageSize, claimId, correlationId],
+    queryKey: ['medical-audit-logs', tableState.page, tableState.pageSize, claimId, entityType, entityId, action, source, correlationId, fromDate, toDate],
     queryFn: () =>
       auditService.search({
         page: tableState.page + 1,
         size: tableState.pageSize,
         claimId: claimId || undefined,
-        correlationId: correlationId || undefined
+        entityType: entityType || undefined,
+        entityId: entityId || undefined,
+        action: action || undefined,
+        source: source || undefined,
+        correlationId: correlationId || undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined
       })
   });
 
@@ -119,7 +132,7 @@ const MedicalAuditLogs = () => {
 
   const handleExport = async () => {
     try {
-      const blob = await auditService.exportXlsx({ claimId, correlationId });
+      const blob = await auditService.exportXlsx({ claimId, entityType, entityId, action, source, correlationId });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -130,6 +143,18 @@ const MedicalAuditLogs = () => {
     } catch (err) {
       console.error('Export failed', err);
     }
+  };
+
+  const resetFilters = () => {
+    setClaimId('');
+    setEntityType('');
+    setEntityId('');
+    setAction('');
+    setSource('');
+    setCorrelationId('');
+    setFromDate('');
+    setToDate('');
+    tableState.setPage(0);
   };
 
   const confirmDelete = () => {
@@ -192,7 +217,7 @@ const MedicalAuditLogs = () => {
 
       <MainCard>
         <CardContent sx={{ p: 2 }}>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems={{ xs: 'stretch', lg: 'center' }} flexWrap="wrap">
             <TextField
               label="رقم المطالبة (ID)"
               size="small"
@@ -200,6 +225,50 @@ const MedicalAuditLogs = () => {
               onChange={(e) => setClaimId(e.target.value)}
               sx={{ width: 200 }}
             />
+            <TextField
+              select
+              label="نوع الكيان"
+              size="small"
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value)}
+              sx={{ width: 190 }}
+              disabled={Boolean(claimId)}
+              helperText={claimId ? 'رقم المطالبة يحدد CLAIM تلقائياً' : ' '}
+            >
+              <MenuItem value="">كل الكيانات</MenuItem>
+              <MenuItem value="CLAIM">مطالبة</MenuItem>
+              <MenuItem value="CLAIM_LINE">بند مطالبة</MenuItem>
+              <MenuItem value="PREAUTHORIZATION">موافقة مسبقة</MenuItem>
+              <MenuItem value="MEMBER">مستفيد</MenuItem>
+              <MenuItem value="SETTLEMENT">تسوية</MenuItem>
+              <MenuItem value="SYSTEM_SETTING">إعداد نظام</MenuItem>
+              <MenuItem value="USER_SESSION">جلسة مستخدم</MenuItem>
+            </TextField>
+            <TextField
+              label="معرف الكيان"
+              size="small"
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+              sx={{ width: 180 }}
+              disabled={Boolean(claimId)}
+            />
+            <TextField select label="الإجراء" size="small" value={action} onChange={(e) => setAction(e.target.value)} sx={{ width: 170 }}>
+              <MenuItem value="">كل الإجراءات</MenuItem>
+              <MenuItem value="CREATED">إنشاء</MenuItem>
+              <MenuItem value="UPDATED">تعديل</MenuItem>
+              <MenuItem value="STATUS_CHANGE">تغيير حالة</MenuItem>
+              <MenuItem value="APPROVED">اعتماد</MenuItem>
+              <MenuItem value="REJECTED">رفض</MenuItem>
+              <MenuItem value="RECALCULATION">إعادة حساب</MenuItem>
+              <MenuItem value="MANUAL_OVERRIDE">تدخل يدوي</MenuItem>
+              <MenuItem value="CLAIM_VOIDED">عكس/إلغاء مطالبة</MenuItem>
+            </TextField>
+            <TextField select label="المصدر" size="small" value={source} onChange={(e) => setSource(e.target.value)} sx={{ width: 150 }}>
+              <MenuItem value="">كل المصادر</MenuItem>
+              <MenuItem value="USER">مستخدم</MenuItem>
+              <MenuItem value="SYSTEM">النظام</MenuItem>
+              <MenuItem value="API">API</MenuItem>
+            </TextField>
             <TextField
               label="معرف الارتباط (Correlation ID)"
               size="small"
@@ -214,8 +283,29 @@ const MedicalAuditLogs = () => {
                 )
               }}
             />
+            <TextField
+              type="date"
+              label="من تاريخ"
+              size="small"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ width: 160 }}
+            />
+            <TextField
+              type="date"
+              label="إلى تاريخ"
+              size="small"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ width: 160 }}
+            />
             <Button variant="contained" startIcon={<FilterAltIcon />} onClick={() => tableState.setPage(0)}>
               تصفية
+            </Button>
+            <Button variant="outlined" onClick={resetFilters}>
+              إعادة تعيين
             </Button>
           </Stack>
         </CardContent>

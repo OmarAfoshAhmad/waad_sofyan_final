@@ -2,6 +2,9 @@ package com.waad.tba.modules.audit.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.audit.entity.AuditLog;
+import com.waad.tba.modules.audit.enums.AuditAction;
+import com.waad.tba.modules.audit.enums.AuditSource;
+import com.waad.tba.modules.audit.enums.EntityType;
 import com.waad.tba.modules.audit.service.MedicalAuditLogExcelExportService;
 import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +47,13 @@ public class MedicalAuditLogController {
         @Operation(summary = "Search claim audit logs", description = "Filter by claimId and/or correlationId with pagination")
         public ResponseEntity<ApiResponse<Page<AuditLog>>> search(
                         @RequestParam(name = "claimId", required = false) Long claimId,
+                        @RequestParam(name = "entityType", required = false) EntityType entityType,
+                        @RequestParam(name = "entityId", required = false) String entityId,
+                        @RequestParam(name = "action", required = false) AuditAction action,
+                        @RequestParam(name = "source", required = false) AuditSource source,
                         @RequestParam(name = "correlationId", required = false) String correlationId,
+                        @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+                        @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
                         @RequestParam(name = "page", defaultValue = "1") int page,
                         @RequestParam(name = "size", defaultValue = "20") int size,
                         @RequestParam(name = "sortBy", defaultValue = "timestamp") String sortBy,
@@ -60,7 +69,20 @@ public class MedicalAuditLogController {
                 int safeSize = Math.min(Math.max(1, size), 100);
                 PageRequest pageable = PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
 
-                Page<AuditLog> result = medicalAuditLogService.searchClaimAuditLogs(claimId, correlationId, pageable);
+                EntityType effectiveEntityType = claimId != null ? EntityType.CLAIM : entityType;
+                String effectiveEntityId = claimId != null ? String.valueOf(claimId) : entityId;
+                LocalDateTime from = fromDate != null ? fromDate.atStartOfDay() : null;
+                LocalDateTime to = toDate != null ? toDate.plusDays(1).atStartOfDay() : null;
+
+                Page<AuditLog> result = medicalAuditLogService.searchAuditLogs(
+                                effectiveEntityType,
+                                effectiveEntityId,
+                                action,
+                                source,
+                                correlationId,
+                                from != null ? from.toInstant(ZoneOffset.UTC) : null,
+                                to != null ? to.toInstant(ZoneOffset.UTC) : null,
+                                pageable);
                 return ResponseEntity.ok(ApiResponse.success(result));
         }
 
