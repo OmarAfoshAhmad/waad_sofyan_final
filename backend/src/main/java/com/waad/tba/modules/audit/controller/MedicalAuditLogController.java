@@ -1,18 +1,27 @@
 package com.waad.tba.modules.audit.controller;
 
 import com.waad.tba.common.dto.ApiResponse;
+import com.waad.tba.modules.audit.dto.AuditLogViewDto;
 import com.waad.tba.modules.audit.entity.AuditLog;
 import com.waad.tba.modules.audit.enums.AuditAction;
 import com.waad.tba.modules.audit.enums.AuditSource;
 import com.waad.tba.modules.audit.enums.EntityType;
+import com.waad.tba.modules.audit.service.AuditLogEnrichmentService;
 import com.waad.tba.modules.audit.service.MedicalAuditLogExcelExportService;
 import com.waad.tba.modules.audit.service.MedicalAuditLogService;
+import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.preauthorization.repository.PreAuthorizationRepository;
+import com.waad.tba.modules.visit.repository.VisitRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +37,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/admin/medical-audit-logs")
@@ -38,13 +50,20 @@ public class MedicalAuditLogController {
 
         private final MedicalAuditLogService medicalAuditLogService;
         private final MedicalAuditLogExcelExportService medicalAuditLogExcelExportService;
+        private final AuditLogEnrichmentService auditLogEnrichmentService;
+        private final ClaimRepository claimRepository;
+        private final VisitRepository visitRepository;
+        private final PreAuthorizationRepository preAuthorizationRepository;
+        private final MemberRepository memberRepository;
 
         @GetMapping
-        @Operation(summary = "Search claim audit logs", description = "Filter by claimId and/or correlationId with pagination")
-        public ResponseEntity<ApiResponse<Page<AuditLog>>> search(
+        @Operation(summary = "Search claim audit logs", description = "Filter by claimId, providerId, employerId and/or correlationId with pagination")
+        public ResponseEntity<ApiResponse<Page<AuditLogViewDto>>> search(
                         @RequestParam(name = "claimId", required = false) Long claimId,
                         @RequestParam(name = "entityType", required = false) EntityType entityType,
                         @RequestParam(name = "entityId", required = false) String entityId,
+                        @RequestParam(name = "providerId", required = false) Long providerId,
+                        @RequestParam(name = "employerId", required = false) Long employerId,
                         @RequestParam(name = "action", required = false) AuditAction action,
                         @RequestParam(name = "source", required = false) AuditSource source,
                         @RequestParam(name = "correlationId", required = false) String correlationId,
@@ -70,16 +89,72 @@ public class MedicalAuditLogController {
                 LocalDateTime from = fromDate != null ? fromDate.atStartOfDay() : null;
                 LocalDateTime to = toDate != null ? toDate.plusDays(1).atStartOfDay() : null;
 
+                Specification<AuditLog> facilityFilter = buildFacilityFilter(providerId, employerId);
+
                 Page<AuditLog> result = medicalAuditLogService.searchAuditLogs(
                                 effectiveEntityType,
                                 effectiveEntityId,
+                                null,
+                                facilityFilter,
                                 action,
                                 source,
                                 correlationId,
                                 from != null ? from.toInstant(ZoneOffset.UTC) : null,
                                 to != null ? to.toInstant(ZoneOffset.UTC) : null,
                                 pageable);
-                return ResponseEntity.ok(ApiResponse.success(result));
+                return ResponseEntity.ok(ApiResponse.success(auditLogEnrichmentService.enrich(result)));
+        }
+
+        /**
+         * Builds a facility/company OR-filter without any schema migration: resolves which entity
+         * IDs belong to the given provider (across CLAIM/VISIT/PREAUTHORIZATION/PROVIDER) or
+         * employer (across MEMBER/EMPLOYER), then restricts the audit log query to
+         * (entityType = X AND entityId IN resolvedIds) OR (entityType = Y AND entityId IN ...).
+         */
+        private Specification<AuditLog> buildFacilityFilter(Long providerId, Long employerId) {
+                if (providerId == null && employerId == null) {
+                        return null;
+                }
+
+                List<Specification<AuditLog>> branches = new ArrayList<>();
+
+                if (providerId != null) {
+                        List<String> claimIds = claimRepository.findByProviderId(providerId).stream()
+                                        .map(c -> String.valueOf(c.getId())).collect(Collectors.toList());
+                        List<String> visitIds = visitRepository.findByProviderId(providerId).stream()
+                                        .map(v -> String.valueOf(v.getId())).collect(Collectors.toList());
+                        List<String> preAuthIds = preAuthorizationRepository.findByProviderIdAndActiveTrue(providerId).stream()
+                                        .map(p -> String.valueOf(p.getId())).collect(Collectors.toList());
+
+                        branches.add(entityTypeAndIdsIn(EntityType.CLAIM, claimIds));
+                        branches.add(entityTypeAndIdsIn(EntityType.VISIT, visitIds));
+                        branches.add(entityTypeAndIdsIn(EntityType.PREAUTHORIZATION, preAuthIds));
+                        branches.add(entityTypeAndIdsIn(EntityType.PROVIDER, List.of(String.valueOf(providerId))));
+                }
+
+                if (employerId != null) {
+                        List<String> memberIds = memberRepository.findByEmployerId(employerId).stream()
+                                        .map(m -> String.valueOf(m.getId())).collect(Collectors.toList());
+
+                        branches.add(entityTypeAndIdsIn(EntityType.MEMBER, memberIds));
+                        branches.add(entityTypeAndIdsIn(EntityType.EMPLOYER, List.of(String.valueOf(employerId))));
+                }
+
+                Specification<AuditLog> combined = Specification.where(null);
+                for (Specification<AuditLog> branch : branches) {
+                        combined = combined == null ? Specification.where(branch) : combined.or(branch);
+                }
+                return combined;
+        }
+
+        private Specification<AuditLog> entityTypeAndIdsIn(EntityType entityType, List<String> ids) {
+                return (root, query, cb) -> {
+                        Predicate typeMatch = cb.equal(root.get("entityType"), entityType);
+                        if (ids.isEmpty()) {
+                                return cb.and(typeMatch, cb.disjunction());
+                        }
+                        return cb.and(typeMatch, root.get("entityId").in(ids));
+                };
         }
 
         @GetMapping("/export.xlsx")

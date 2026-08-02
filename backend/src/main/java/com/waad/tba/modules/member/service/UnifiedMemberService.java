@@ -29,6 +29,7 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.provider.service.ProviderService;
+import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 import com.waad.tba.modules.rbac.entity.User;
 
@@ -78,6 +79,7 @@ public class UnifiedMemberService {
     private final ProviderService providerService;
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
+    private final AuditLogService auditLogService;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -390,6 +392,110 @@ public class UnifiedMemberService {
             return mapper.toViewDto(member, dependents);
         }
         return mapper.toViewDto(member);
+    }
+
+    /**
+     * Explicitly transition a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED).
+     *
+     * Distinct from {@link #toggleActive}: that only flips the coarse `active` flag used for
+     * eligibility checks, but never touched the richer {@code MemberStatus} enum, leaving it
+     * permanently stale after creation. This is the first endpoint that lets an operator move a
+     * member to SUSPENDED or PENDING (not just active/terminated).
+     *
+     * `active` is kept in sync: true only while status == ACTIVE, so eligibility checks continue
+     * to rely solely on the `active` flag with no behavior change elsewhere.
+     *
+     * @param id        Member ID
+     * @param newStatus Target status
+     * @param reason    Optional reason, required for SUSPENDED (stored as blockedReason)
+     * @return Updated member view DTO
+     */
+    @Transactional
+    public MemberViewDto changeStatus(Long id, Member.MemberStatus newStatus, String reason) {
+        if (newStatus == null) {
+            throw new BusinessRuleException("يجب تحديد الحالة الجديدة");
+        }
+
+        Member member = memberRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + id));
+
+        User currentUser = authorizationService.getCurrentUser();
+        if (!authorizationService.canAccessMember(currentUser, id)) {
+            log.warn("❌ Access denied: user {} attempted to change status of member {}",
+                    currentUser != null ? currentUser.getUsername() : "unknown", id);
+            throw new AccessDeniedException("Access denied to this member");
+        }
+
+        Member.MemberStatus previousStatus = member.getStatus();
+        if (previousStatus == newStatus) {
+            throw new BusinessRuleException("المستفيد بالفعل في هذه الحالة: " + newStatus);
+        }
+
+        if (newStatus == Member.MemberStatus.SUSPENDED && (reason == null || reason.trim().isEmpty())) {
+            throw new BusinessRuleException("سبب الإيقاف مطلوب عند تعليق المستفيد");
+        }
+
+        if (newStatus == Member.MemberStatus.ACTIVE) {
+            ensureBenefitPolicyForActivation(member);
+        }
+
+        member.setStatus(newStatus);
+        // `active` is this system's archive/soft-delete flag (same convention as Employer/Provider),
+        // NOT a mirror of "status == ACTIVE" — it drives default-list visibility. Only TERMINATED
+        // is an archival state; SUSPENDED/PENDING members must stay visible in the normal list with
+        // their status chip reflecting the real state, not vanish as if soft-deleted.
+        member.setActive(newStatus != Member.MemberStatus.TERMINATED);
+        member.setBlockedReason(newStatus == Member.MemberStatus.SUSPENDED ? reason : null);
+        member = memberRepository.save(member);
+
+        // Suspending/terminating a principal removes coverage for the whole family; reactivation
+        // is deliberately NOT cascaded — each dependent must be reactivated individually so a
+        // dependent who was separately suspended for their own reason isn't silently reinstated.
+        if (member.isPrincipal()
+                && (newStatus == Member.MemberStatus.SUSPENDED || newStatus == Member.MemberStatus.TERMINATED)) {
+            List<Member> dependents = memberRepository.findByParentId(id);
+            dependents.forEach(dep -> {
+                dep.setStatus(newStatus);
+                dep.setActive(newStatus != Member.MemberStatus.TERMINATED);
+            });
+            memberRepository.saveAll(dependents);
+        }
+
+        auditLogService.createAuditLog("STATUS_CHANGE", "MEMBER", id,
+                String.format("Status changed from %s to %s%s", previousStatus, newStatus,
+                        reason != null && !reason.isBlank() ? " — " + reason : ""),
+                currentUser != null ? currentUser.getId() : null,
+                currentUser != null ? currentUser.getUsername() : "system", null, null);
+
+        log.info("✅ Member ID={} status changed: {} -> {}", id, previousStatus, newStatus);
+
+        if (member.isPrincipal()) {
+            List<Member> dependents = memberRepository.findByParentId(member.getId());
+            return mapper.toViewDto(member, dependents);
+        }
+        return mapper.toViewDto(member);
+    }
+
+    /**
+     * The database enforces {@code chk_active_member_requires_policy}: a member row cannot be
+     * saved with active=true and no benefit policy. Members can end up without one (e.g. a
+     * dependent created while the employer had no active policy yet, or a policy that later
+     * expired). Rather than let that raw SQL constraint violation surface to the user, try to
+     * auto-assign the employer's current active policy, and fail with a clear Arabic message if
+     * none exists.
+     */
+    private void ensureBenefitPolicyForActivation(Member member) {
+        if (member.getBenefitPolicy() != null) {
+            return;
+        }
+        Long employerId = member.getEmployer() != null ? member.getEmployer().getId() : null;
+        BenefitPolicy autoPolicy = findActiveEmployerPolicy(employerId);
+        if (autoPolicy == null) {
+            throw new BusinessRuleException(
+                    "لا يمكن تفعيل المستفيد لعدم وجود وثيقة تأمين سارية لجهة العمل. يرجى ربط وثيقة تأمين أولاً.");
+        }
+        member.setBenefitPolicy(autoPolicy);
+        log.info("✅ Auto-assigned policy while activating member: memberId={}, policyId={}", member.getId(), autoPolicy.getId());
     }
 
     private BenefitPolicy findActiveEmployerPolicy(Long employerId) {
@@ -1186,6 +1292,8 @@ public class UnifiedMemberService {
         if (member.getStatus() == Member.MemberStatus.ACTIVE) {
             throw new BusinessRuleException("Member is already active: " + memberId);
         }
+
+        ensureBenefitPolicyForActivation(member);
 
         member.setStatus(Member.MemberStatus.ACTIVE);
         member.setActive(true);

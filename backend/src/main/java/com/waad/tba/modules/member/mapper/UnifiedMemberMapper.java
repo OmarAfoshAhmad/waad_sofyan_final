@@ -155,9 +155,10 @@ public class UnifiedMemberMapper {
         if (dto.getOccupation() != null) {
             entity.setOccupation(dto.getOccupation());
         }
-        if (dto.getStatus() != null) {
-            entity.setStatus(dto.getStatus());
-        }
+        // Status is intentionally NOT settable through the generic update path: it must go
+        // through UnifiedMemberService.changeStatus(), which enforces the reason-for-SUSPENDED
+        // rule, syncs the `active` flag, cascades to dependents, and writes an audit log entry.
+        // Setting it here would silently bypass all of that.
         if (dto.getStartDate() != null) {
             entity.setStartDate(dto.getStartDate());
         }

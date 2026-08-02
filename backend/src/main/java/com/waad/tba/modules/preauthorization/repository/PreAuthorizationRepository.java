@@ -50,6 +50,14 @@ public interface PreAuthorizationRepository extends JpaRepository<PreAuthorizati
        Page<PreAuthorization> findByMemberIdAndActiveTrue(Long memberId, Pageable pageable);
 
        /**
+        * Find pre-authorizations for a member, scoped to a single provider —
+        * used when a provider-scoped caller requests a member's history so they
+        * only see their own facility's requests.
+        */
+       @EntityGraph(attributePaths = { "visit" })
+       Page<PreAuthorization> findByMemberIdAndProviderIdAndActiveTrue(Long memberId, Long providerId, Pageable pageable);
+
+       /**
         * Find pre-authorizations by member and status
         */
        @EntityGraph(attributePaths = { "visit" })

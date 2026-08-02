@@ -1056,6 +1056,15 @@ public class ClaimService {
         }
 
         List<Claim> claims = claimRepository.findByMemberId(memberId);
+
+        // Provider-scoped users must only see claims filed at their own facility —
+        // canAccessMember() only checks whether the member is visible, not which
+        // provider's claims (diagnoses, amounts) should be exposed to this caller.
+        Long providerId = authorizationService.getProviderFilterForUser(currentUser);
+        if (providerId != null) {
+            claims = claims.stream().filter(c -> providerId.equals(c.getProviderId())).collect(Collectors.toList());
+        }
+
         return claims.stream()
                 .map(claimMapper::toViewDto)
                 .collect(Collectors.toList());

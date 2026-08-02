@@ -285,7 +285,7 @@ public class ClaimController {
     }
 
     @GetMapping("/member/{memberId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'PROVIDER_STAFF', 'DATA_ENTRY', 'ACCOUNTANT')")
     @Operation(summary = "Get claims by member", description = "Retrieve all claims for a specific member")
     public ResponseEntity<ApiResponse<List<ClaimResponse>>> getClaimsByMember(@PathVariable("memberId") Long memberId) {
         List<ClaimViewDto> claims = claimService.getClaimsByMember(memberId);

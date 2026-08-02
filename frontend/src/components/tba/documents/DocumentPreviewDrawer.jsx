@@ -202,6 +202,11 @@ const DocumentPreviewDrawer = memo(
           if (cancelled) return;
           objectUrl = window.URL.createObjectURL(new Blob([response.data], { type: selectedMimeType || response.data.type }));
           setBlobUrl(objectUrl);
+          // Fetch succeeded — the blob is ready. Do NOT wait for <img>/<iframe>
+          // onLoad to clear `loading`: those elements only mount once
+          // loading=false, so waiting on their onLoad here deadlocks forever
+          // (element never mounts -> onLoad never fires -> loading never clears).
+          setLoading(false);
         })
         .catch(() => {
           if (!cancelled) {

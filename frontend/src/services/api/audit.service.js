@@ -20,6 +20,8 @@ export const auditService = {
       if (params.claimId) queryParams.append('claimId', params.claimId);
       if (params.entityType) queryParams.append('entityType', params.entityType);
       if (params.entityId) queryParams.append('entityId', params.entityId);
+      if (params.providerId) queryParams.append('providerId', params.providerId);
+      if (params.employerId) queryParams.append('employerId', params.employerId);
       if (params.action) queryParams.append('action', params.action);
       if (params.source) queryParams.append('source', params.source);
       if (params.correlationId) queryParams.append('correlationId', params.correlationId);

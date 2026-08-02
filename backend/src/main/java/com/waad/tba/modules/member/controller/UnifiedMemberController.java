@@ -8,6 +8,7 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
+import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.service.MemberFinancialSummaryService;
 import com.waad.tba.modules.member.service.UnifiedMemberService;
 import com.waad.tba.modules.member.service.MemberExcelExportService;
@@ -858,6 +859,32 @@ public class UnifiedMemberController {
                 MemberViewDto updated = unifiedMemberService.toggleActive(id, active);
                 String message = active ? "تم تفعيل العضو بنجاح" : "تم إيقاف العضو بنجاح";
                 return ResponseEntity.ok(ApiResponse.success(message, updated));
+        }
+
+        /**
+         * Explicitly transition a member's membership status.
+         *
+         * Unlike {@code /active} (which only flips the coarse active/inactive flag), this sets the
+         * full {@link Member.MemberStatus} (ACTIVE / SUSPENDED / PENDING / TERMINATED), enabling a
+         * real "pause without terminating" workflow.
+         */
+        @PatchMapping("/{id}/status")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
+        @Operation(summary = "Change member membership status", description = "Transitions a member to ACTIVE, SUSPENDED, PENDING, or TERMINATED.", parameters = {
+                        @Parameter(name = "id", description = "Member ID", required = true)
+        })
+        @ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member status updated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Member not found")
+        })
+        public ResponseEntity<ApiResponse<MemberViewDto>> changeStatus(
+                        @PathVariable("id") Long id,
+                        @RequestParam(name = "status") Member.MemberStatus status,
+                        @RequestParam(name = "reason", required = false) String reason) {
+
+                log.info("Changing status to {} for member ID={}", status, id);
+                MemberViewDto updated = unifiedMemberService.changeStatus(id, status, reason);
+                return ResponseEntity.ok(ApiResponse.success("تم تحديث حالة المستفيد بنجاح", updated));
         }
 
         // ==================== DELETE OPERATIONS ====================

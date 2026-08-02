@@ -332,6 +332,24 @@ export const toggleMemberActive = async (id, active) => {
 };
 
 /**
+ * Change a member's membership status (ACTIVE / SUSPENDED / PENDING / TERMINATED)
+ *
+ * @param {number} id - Member ID
+ * @param {string} status - Target status: 'ACTIVE' | 'SUSPENDED' | 'PENDING' | 'TERMINATED'
+ * @param {string} [reason] - Required when status is 'SUSPENDED'
+ * @returns {Promise<Object>} Updated member
+ */
+export const changeMemberStatus = async (id, status, reason) => {
+  try {
+    const response = await api.patch(`${UNIFIED_MEMBERS_BASE_URL}/${id}/status`, null, { params: { status, reason } });
+    return response.data;
+  } catch (error) {
+    console.error('Error changing member status:', error);
+    throw error;
+  }
+};
+
+/**
  * Physically delete a member from the database
  *
  * @param {number} id - Member ID

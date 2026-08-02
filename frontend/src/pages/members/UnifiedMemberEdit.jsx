@@ -50,7 +50,15 @@ import dayjs from 'dayjs';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
-import { getMember, updateMember, uploadPhoto, deletePhoto, RELATIONSHIPS, GENDERS } from 'services/api/unified-members.service';
+import {
+  getMember,
+  updateMember,
+  changeMemberStatus,
+  uploadPhoto,
+  deletePhoto,
+  RELATIONSHIPS,
+  GENDERS
+} from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
@@ -112,6 +120,8 @@ const UnifiedMemberEdit = () => {
   const [employers, setEmployers] = useState([]);
   const [benefitPolicies, setBenefitPolicies] = useState([]);
   const [isPrincipal, setIsPrincipal] = useState(false);
+  const [initialStatus, setInitialStatus] = useState('ACTIVE');
+  const [statusReason, setStatusReason] = useState('');
 
   /**
    * Helper to check if a tab has validation errors
@@ -173,6 +183,7 @@ const UnifiedMemberEdit = () => {
             : null,
         hasExistingPhoto: !!data.profilePhotoPath
       });
+      setInitialStatus(data.status || 'ACTIVE');
     } catch (error) {
       console.error('Error fetching member:', error);
       setFetchError('فشل في تحميل بيانات المنتفع');
@@ -288,6 +299,12 @@ const UnifiedMemberEdit = () => {
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    if (form.status !== initialStatus && form.status === 'SUSPENDED' && !statusReason.trim()) {
+      setErrors((prev) => ({ ...prev, statusReason: 'سبب الإيقاف مطلوب' }));
+      setTabValue(0);
+      return;
+    }
+
     try {
       setSaving(true);
       const payload = {
@@ -302,8 +319,10 @@ const UnifiedMemberEdit = () => {
         employeeNumber: form.employeeNumber || null,
         joinDate: form.joinDate ? dayjs(form.joinDate).format('YYYY-MM-DD') : null,
         occupation: form.occupation || null,
-        status: form.status || 'ACTIVE',
-        active: form.status === 'ACTIVE',
+        // status/active are intentionally NOT part of this payload — they're saved separately
+        // via changeMemberStatus() below, which enforces the reason-for-SUSPENDED rule, syncs
+        // active, cascades to dependents, and writes an audit log entry. Sending them here would
+        // silently bypass all of that.
         startDate: form.startDate ? dayjs(form.startDate).format('YYYY-MM-DD') : null,
         endDate: form.endDate ? dayjs(form.endDate).format('YYYY-MM-DD') : null,
         notes: form.notes || null
@@ -316,6 +335,11 @@ const UnifiedMemberEdit = () => {
       }
 
       await updateMember(id, payload);
+
+      if (form.status !== initialStatus) {
+        await changeMemberStatus(id, form.status, form.status === 'SUSPENDED' ? statusReason.trim() : undefined);
+        setInitialStatus(form.status);
+      }
 
       if (form.photoFile) {
         try {
@@ -563,6 +587,33 @@ const UnifiedMemberEdit = () => {
                     <Grid size={{ xs: 12, md: 6 }}>
                       <TextField fullWidth label="الجنسية" value={form.nationality} onChange={handleChange('nationality')} size="small" />
                     </Grid>
+
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>حالة المستفيد</InputLabel>
+                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
+                          <MenuItem value="ACTIVE">نشط</MenuItem>
+                          <MenuItem value="SUSPENDED">موقوف</MenuItem>
+                          <MenuItem value="PENDING">قيد المراجعة</MenuItem>
+                          <MenuItem value="TERMINATED">منتهي</MenuItem>
+                        </Select>
+                        <FormHelperText>تؤثر الحالة على الأهلية والبحث في البوابة.</FormHelperText>
+                      </FormControl>
+                    </Grid>
+                    {form.status === 'SUSPENDED' && form.status !== initialStatus && (
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField
+                          fullWidth
+                          required
+                          label="سبب الإيقاف"
+                          value={statusReason}
+                          onChange={(e) => setStatusReason(e.target.value)}
+                          error={!!errors.statusReason}
+                          helperText={errors.statusReason}
+                          size="small"
+                        />
+                      </Grid>
+                    )}
                   </Grid>
                 </Grid>
 
@@ -689,18 +740,6 @@ const UnifiedMemberEdit = () => {
                       <Divider sx={{ my: 1 }} />
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
-                      <FormControl fullWidth size="small">
-                        <InputLabel>حالة المستفيد</InputLabel>
-                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
-                          <MenuItem value="ACTIVE">نشط</MenuItem>
-                          <MenuItem value="SUSPENDED">موقوف</MenuItem>
-                          <MenuItem value="PENDING">معلق</MenuItem>
-                          <MenuItem value="TERMINATED">منتهي / محذوف</MenuItem>
-                        </Select>
-                        <FormHelperText>تؤثر الحالة على الأهلية والبحث في البوابة.</FormHelperText>
-                      </FormControl>
-                    </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <DatePicker
                         label="تاريخ البدء"

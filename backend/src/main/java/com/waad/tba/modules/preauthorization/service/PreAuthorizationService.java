@@ -1129,7 +1129,13 @@ public class PreAuthorizationService {
             throw new AccessDeniedException("Access denied to this member's pre-authorizations");
         }
 
-        Page<PreAuthorization> preAuths = preAuthorizationRepository.findByMemberIdAndActiveTrue(memberId, pageable);
+        // Provider-scoped users must only see pre-authorizations requested by their
+        // own facility — canAccessMember() only checks whether the member itself is
+        // visible, not which provider's requests should be exposed to this caller.
+        Long providerId = authorizationService.getProviderFilterForUser(currentUser);
+        Page<PreAuthorization> preAuths = providerId != null
+                ? preAuthorizationRepository.findByMemberIdAndProviderIdAndActiveTrue(memberId, providerId, pageable)
+                : preAuthorizationRepository.findByMemberIdAndActiveTrue(memberId, pageable);
         return preAuths.map(this::mapToResponseDtoLight);
     }
 

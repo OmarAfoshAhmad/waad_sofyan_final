@@ -85,6 +85,49 @@ public class MedicalAuditLogService {
             Instant fromInclusive,
             Instant toExclusive,
             Pageable pageable) {
+        return searchAuditLogs(entityType, entityId, null, action, source, correlationId, fromInclusive, toExclusive, pageable);
+    }
+
+    /**
+     * Same as {@link #searchAuditLogs(EntityType, String, AuditAction, AuditSource, String, Instant, Instant, Pageable)}
+     * with an additional entityId allow-list, used to filter by facility/employer without a schema
+     * migration: the caller resolves which entity IDs belong to a given provider/employer (e.g. all
+     * claim IDs for a provider) and passes them here.
+     */
+    @Transactional(readOnly = true)
+    public Page<AuditLog> searchAuditLogs(
+            EntityType entityType,
+            String entityId,
+            java.util.Collection<String> entityIdIn,
+            AuditAction action,
+            AuditSource source,
+            String correlationId,
+            Instant fromInclusive,
+            Instant toExclusive,
+            Pageable pageable) {
+        return searchAuditLogs(entityType, entityId, entityIdIn, null, action, source, correlationId, fromInclusive,
+                toExclusive, pageable);
+    }
+
+    /**
+     * Fullest overload: also accepts a caller-built {@code facilityFilter} Specification, used to
+     * scope results to a provider/employer whose records span multiple {@link EntityType}s (e.g.
+     * a provider's CLAIM ids OR VISIT ids OR PREAUTHORIZATION ids) — a single {@code entityIdIn}
+     * allow-list can't express that OR-across-types shape safely, since numeric IDs from different
+     * entity types can collide.
+     */
+    @Transactional(readOnly = true)
+    public Page<AuditLog> searchAuditLogs(
+            EntityType entityType,
+            String entityId,
+            java.util.Collection<String> entityIdIn,
+            Specification<AuditLog> facilityFilter,
+            AuditAction action,
+            AuditSource source,
+            String correlationId,
+            Instant fromInclusive,
+            Instant toExclusive,
+            Pageable pageable) {
 
         String normalizedEntityId = normalizeBlank(entityId);
         String normalizedCorrelation = normalizeBlank(correlationId);
@@ -96,6 +139,14 @@ public class MedicalAuditLogService {
         }
         if (normalizedEntityId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("entityId"), normalizedEntityId));
+        }
+        if (entityIdIn != null) {
+            // Empty collection means "no matching records for this provider/employer" — force a
+            // no-result predicate rather than silently ignoring the filter.
+            spec = spec.and((root, query, cb) -> entityIdIn.isEmpty() ? cb.disjunction() : root.get("entityId").in(entityIdIn));
+        }
+        if (facilityFilter != null) {
+            spec = spec.and(facilityFilter);
         }
         if (action != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("action"), action));

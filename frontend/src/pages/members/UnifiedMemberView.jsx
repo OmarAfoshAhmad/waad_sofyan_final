@@ -45,6 +45,7 @@ import {
   FormHelperText,
   FormControlLabel,
   Switch,
+  Menu,
   useTheme
 } from '@mui/material';
 import {
@@ -84,6 +85,7 @@ import {
   deleteMember,
   hardDeleteMember,
   restoreMember,
+  changeMemberStatus,
   MEMBER_TYPES,
   GENDERS,
   RELATIONSHIPS
@@ -182,6 +184,52 @@ const UnifiedMemberView = () => {
   const [hardDeleteDepDialogOpen, setHardDeleteDepDialogOpen] = useState(false);
   const [hardDeletingDep, setHardDeletingDep] = useState(null);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [statusMenuAnchor, setStatusMenuAnchor] = useState(null);
+  const [statusMenuTargetId, setStatusMenuTargetId] = useState(null);
+  const [statusChangeDialog, setStatusChangeDialog] = useState({ open: false, targetId: null, targetStatus: null, reason: '' });
+  const [statusChangeLoading, setStatusChangeLoading] = useState(false);
+
+  const MEMBER_STATUS_OPTIONS = [
+    { value: 'ACTIVE', label: 'نشط' },
+    { value: 'SUSPENDED', label: 'موقوف' },
+    { value: 'PENDING', label: 'قيد المراجعة' },
+    { value: 'TERMINATED', label: 'منتهي' }
+  ];
+
+  const applyStatusChange = async (targetId, targetStatus, reason) => {
+    setStatusChangeLoading(true);
+    try {
+      await changeMemberStatus(targetId, targetStatus, reason);
+      openSnackbar({ open: true, message: 'تم تحديث حالة المستفيد بنجاح', variant: 'alert', alert: { color: 'success' } });
+      setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' });
+      fetchMemberData();
+    } catch (err) {
+      openSnackbar({
+        open: true,
+        message: err?.response?.data?.message || 'تعذر تحديث حالة المستفيد',
+        variant: 'alert',
+        alert: { color: 'error' }
+      });
+    } finally {
+      setStatusChangeLoading(false);
+    }
+  };
+
+  const handleOpenStatusMenu = (event, targetId) => {
+    setStatusMenuAnchor(event.currentTarget);
+    setStatusMenuTargetId(targetId);
+  };
+
+  const handleSelectStatus = (targetStatus) => {
+    const targetId = statusMenuTargetId;
+    setStatusMenuAnchor(null);
+    setStatusMenuTargetId(null);
+    if (targetStatus === 'SUSPENDED') {
+      setStatusChangeDialog({ open: true, targetId, targetStatus, reason: '' });
+      return;
+    }
+    applyStatusChange(targetId, targetStatus, null);
+  };
 
   const handleChangePage = (event, newPage) => {
     setPg(newPage);
@@ -546,17 +594,34 @@ const UnifiedMemberView = () => {
                           size="small"
                           sx={{ height: '1.5rem', fontSize: '0.75rem' }}
                         />
-                        <Chip
-                          label={
-                            { ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[member.status] ||
-                            member.status
-                          }
-                          color={
-                            { ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[member.status] || 'default'
-                          }
-                          size="small"
-                          sx={{ height: '1.5rem', fontSize: '0.75rem' }}
-                        />
+                        <Tooltip title="اضغط لتغيير حالة المستفيد">
+                          <Chip
+                            label={
+                              { ACTIVE: 'نشط', TERMINATED: 'منتهي', SUSPENDED: 'موقوف', PENDING: 'قيد المراجعة' }[member.status] ||
+                              member.status
+                            }
+                            color={
+                              { ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[member.status] ||
+                              'default'
+                            }
+                            size="small"
+                            onClick={(e) => handleOpenStatusMenu(e, member.id)}
+                            sx={{ height: '1.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                          />
+                        </Tooltip>
+                        <Menu anchorEl={statusMenuAnchor} open={Boolean(statusMenuAnchor)} onClose={() => setStatusMenuAnchor(null)}>
+                          {MEMBER_STATUS_OPTIONS.filter((opt) => {
+                            const currentStatus =
+                              statusMenuTargetId === member.id
+                                ? member.status
+                                : dependents.find((d) => d.id === statusMenuTargetId)?.status;
+                            return opt.value !== currentStatus;
+                          }).map((opt) => (
+                            <MenuItem key={opt.value} onClick={() => handleSelectStatus(opt.value)}>
+                              {opt.label}
+                            </MenuItem>
+                          ))}
+                        </Menu>
                       </Stack>
 
                       <Divider flexItem sx={{ width: '100%', my: 0.5 }} />
@@ -842,18 +907,23 @@ const UnifiedMemberView = () => {
                                   </TableCell>
                                   <TableCell align="center">{dep.birthDate || '-'}</TableCell>
                                   <TableCell align="center">
-                                    <Chip
-                                      label={
-                                        { ACTIVE: 'نشط', TERMINATED: 'غير نشط', SUSPENDED: 'معلق', PENDING: 'قيد المراجعة' }[dep.status] ||
-                                        dep.status
-                                      }
-                                      color={
-                                        { ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[dep.status] ||
-                                        'default'
-                                      }
-                                      size="small"
-                                      sx={{ height: '1.5rem' }}
-                                    />
+                                    <Tooltip title="اضغط لتغيير حالة التابع">
+                                      <Chip
+                                        label={
+                                          { ACTIVE: 'نشط', TERMINATED: 'منتهي', SUSPENDED: 'موقوف', PENDING: 'قيد المراجعة' }[
+                                            dep.status
+                                          ] || dep.status
+                                        }
+                                        color={
+                                          { ACTIVE: 'success', TERMINATED: 'error', SUSPENDED: 'warning', PENDING: 'warning' }[
+                                            dep.status
+                                          ] || 'default'
+                                        }
+                                        size="small"
+                                        onClick={(e) => handleOpenStatusMenu(e, dep.id)}
+                                        sx={{ height: '1.5rem', cursor: 'pointer' }}
+                                      />
+                                    </Tooltip>
                                   </TableCell>
                                   <TableCell align="center">
                                     <Stack direction="row" spacing={1} justifyContent="center">
@@ -1111,6 +1181,40 @@ const UnifiedMemberView = () => {
         <DialogActions sx={{ justifyContent: 'center', pb: 2 }}>
           <Button variant="contained" onClick={() => setPhotoDialogOpen(false)}>
             إغلاق
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={statusChangeDialog.open}
+        onClose={() => (statusChangeLoading ? null : setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' }))}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>تعليق المستفيد</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>يرجى توضيح سبب تعليق هذا المستفيد.</DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={2}
+            label="سبب التعليق"
+            value={statusChangeDialog.reason}
+            onChange={(e) => setStatusChangeDialog((prev) => ({ ...prev, reason: e.target.value }))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusChangeDialog({ open: false, targetId: null, targetStatus: null, reason: '' })} disabled={statusChangeLoading}>
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={statusChangeLoading || !statusChangeDialog.reason.trim()}
+            onClick={() => applyStatusChange(statusChangeDialog.targetId, statusChangeDialog.targetStatus, statusChangeDialog.reason)}
+          >
+            تأكيد التعليق
           </Button>
         </DialogActions>
       </Dialog>

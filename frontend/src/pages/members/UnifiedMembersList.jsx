@@ -534,7 +534,7 @@ const UnifiedMembersList = () => {
       case 'status':
         const statusConfig = {
           ACTIVE: { label: 'نشط', color: 'success' },
-          SUSPENDED: { label: 'معلق', color: 'warning' },
+          SUSPENDED: { label: 'موقوف', color: 'warning' },
           TERMINATED: { label: 'منتهي', color: 'error' },
           PENDING: { label: 'قيد المراجعة', color: 'warning' }
         };
@@ -837,7 +837,8 @@ const UnifiedMembersList = () => {
                 <em>الكل</em>
               </MenuItem>
               <MenuItem value={MEMBER_STATUSES.ACTIVE}>نشط</MenuItem>
-              <MenuItem value={MEMBER_STATUSES.SUSPENDED}>معلق</MenuItem>
+              <MenuItem value={MEMBER_STATUSES.SUSPENDED}>موقوف</MenuItem>
+              <MenuItem value={MEMBER_STATUSES.PENDING}>قيد المراجعة</MenuItem>
               <MenuItem value={MEMBER_STATUSES.TERMINATED}>منتهي</MenuItem>
             </TextField>
 

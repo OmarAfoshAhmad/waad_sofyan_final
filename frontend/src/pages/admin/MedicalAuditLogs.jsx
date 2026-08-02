@@ -31,6 +31,8 @@ import {
 // project imports
 import MainCard from 'components/MainCard';
 import auditService from 'services/api/audit.service';
+import providersService from 'services/api/providers.service';
+import { getEmployerSelectors } from 'services/api/employers.service';
 import { useTableState } from 'hooks/useTableState';
 import { useSnackbar } from 'notistack';
 
@@ -52,11 +54,25 @@ const MedicalAuditLogs = () => {
   const [claimId, setClaimId] = useState('');
   const [entityType, setEntityType] = useState('');
   const [entityId, setEntityId] = useState('');
+  const [providerId, setProviderId] = useState('');
+  const [employerId, setEmployerId] = useState('');
   const [action, setAction] = useState('');
   const [source, setSource] = useState('');
   const [correlationId, setCorrelationId] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  const { data: providerOptions = [] } = useQuery({
+    queryKey: ['medical-audit-provider-options'],
+    queryFn: () => providersService.getSelector(),
+    staleTime: 5 * 60 * 1000
+  });
+
+  const { data: employerOptions = [] } = useQuery({
+    queryKey: ['medical-audit-employer-options'],
+    queryFn: () => getEmployerSelectors(),
+    staleTime: 5 * 60 * 1000
+  });
 
   // Details Dialog State
   const [detailsLog, setDetailsLog] = useState(null);
@@ -68,7 +84,21 @@ const MedicalAuditLogs = () => {
     isFetching,
     error: loadError
   } = useQuery({
-    queryKey: ['medical-audit-logs', tableState.page, tableState.pageSize, claimId, entityType, entityId, action, source, correlationId, fromDate, toDate],
+    queryKey: [
+      'medical-audit-logs',
+      tableState.page,
+      tableState.pageSize,
+      claimId,
+      entityType,
+      entityId,
+      providerId,
+      employerId,
+      action,
+      source,
+      correlationId,
+      fromDate,
+      toDate
+    ],
     queryFn: () =>
       auditService.search({
         page: tableState.page + 1,
@@ -76,6 +106,8 @@ const MedicalAuditLogs = () => {
         claimId: claimId || undefined,
         entityType: entityType || undefined,
         entityId: entityId || undefined,
+        providerId: providerId || undefined,
+        employerId: employerId || undefined,
         action: action || undefined,
         source: source || undefined,
         correlationId: correlationId || undefined,
@@ -86,7 +118,7 @@ const MedicalAuditLogs = () => {
 
   const handleExport = async () => {
     try {
-      const blob = await auditService.exportXlsx({ claimId, entityType, entityId, action, source, correlationId });
+      const blob = await auditService.exportXlsx({ claimId, entityType, entityId, providerId, employerId, action, source, correlationId });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -103,6 +135,8 @@ const MedicalAuditLogs = () => {
     setClaimId('');
     setEntityType('');
     setEntityId('');
+    setProviderId('');
+    setEmployerId('');
     setAction('');
     setSource('');
     setCorrelationId('');
@@ -230,6 +264,36 @@ const MedicalAuditLogs = () => {
               <MenuItem value="API">API</MenuItem>
             </TextField>
             <TextField
+              select
+              label="المنشأة (مقدم الخدمة)"
+              size="small"
+              value={providerId}
+              onChange={(e) => setProviderId(e.target.value)}
+              sx={{ width: 200 }}
+            >
+              <MenuItem value="">كل المنشآت</MenuItem>
+              {providerOptions.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="الشركة (جهة العمل)"
+              size="small"
+              value={employerId}
+              onChange={(e) => setEmployerId(e.target.value)}
+              sx={{ width: 200 }}
+            >
+              <MenuItem value="">كل الشركات</MenuItem>
+              {employerOptions.map((e) => (
+                <MenuItem key={e.id} value={e.id}>
+                  {e.label || e.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
               label="معرف الارتباط (Correlation ID)"
               size="small"
               value={correlationId}
@@ -295,6 +359,12 @@ const MedicalAuditLogs = () => {
                 المعرف
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                المنشأة
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                الشركة
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                 المستخدم
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>
@@ -311,13 +381,13 @@ const MedicalAuditLogs = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                <TableCell colSpan={11} align="center" sx={{ py: 5 }}>
                   جاري تحميل سجلات التدقيق...
                 </TableCell>
               </TableRow>
             ) : logs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 10 }}>
+                <TableCell colSpan={11} align="center" sx={{ py: 10 }}>
                   <Typography color="text.secondary">لا توجد سجلات تدقيق مطابقة للبحث</Typography>
                 </TableCell>
               </TableRow>
@@ -340,6 +410,8 @@ const MedicalAuditLogs = () => {
                     <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                       {log.entityId}
                     </TableCell>
+                    <TableCell align="right">{log.facilityName || '—'}</TableCell>
+                    <TableCell align="right">{log.companyName || '—'}</TableCell>
                     <TableCell align="right">{log.userId === 0 ? 'النظام' : `مستخدم #${log.userId}`}</TableCell>
                     <TableCell align="right">
                       <Typography variant="caption" sx={{ bgcolor: 'grey.200', px: 1, borderRadius: 1 }}>

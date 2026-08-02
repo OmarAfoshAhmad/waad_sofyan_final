@@ -163,6 +163,17 @@ public class VisitService {
         }
 
         List<Visit> visits = repository.findByMemberIdAndActiveTrue(memberId);
+
+        // Provider-scoped users (PROVIDER_STAFF) must only see their own facility's
+        // encounters for this member — canAccessMember() only checked whether the
+        // member itself is visible, not which provider's visits should be exposed.
+        // Without this filter a provider could see another provider's diagnoses/notes
+        // for a shared beneficiary.
+        Long providerId = authorizationService.getProviderFilterForUser(currentUser);
+        if (providerId != null) {
+            visits = visits.stream().filter(v -> providerId.equals(v.getProviderId())).toList();
+        }
+
         return mapVisitsToDtos(visits);
     }
 
