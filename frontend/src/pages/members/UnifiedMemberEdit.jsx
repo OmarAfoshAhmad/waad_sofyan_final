@@ -31,8 +31,6 @@ import {
   Divider,
   IconButton,
   Tooltip,
-  FormControlLabel,
-  Switch,
   Badge
 } from '@mui/material';
 import {
@@ -251,10 +249,6 @@ const UnifiedMemberEdit = () => {
     }
   };
 
-  const handleStatusToggle = (event) => {
-    setForm((prev) => ({ ...prev, status: event.target.checked ? 'ACTIVE' : 'SUSPENDED' }));
-  };
-
   /**
    * Validation
    */
@@ -309,6 +303,7 @@ const UnifiedMemberEdit = () => {
         joinDate: form.joinDate ? dayjs(form.joinDate).format('YYYY-MM-DD') : null,
         occupation: form.occupation || null,
         status: form.status || 'ACTIVE',
+        active: form.status === 'ACTIVE',
         startDate: form.startDate ? dayjs(form.startDate).format('YYYY-MM-DD') : null,
         endDate: form.endDate ? dayjs(form.endDate).format('YYYY-MM-DD') : null,
         notes: form.notes || null
@@ -695,11 +690,16 @@ const UnifiedMemberEdit = () => {
                     </Grid>
 
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <FormControlLabel
-                        control={<Switch checked={form.status === 'ACTIVE'} onChange={handleStatusToggle} color="success" />}
-                        label={form.status === 'ACTIVE' ? 'نشط' : 'غير نشط'}
-                        sx={{ ml: 1, mt: 0.5 }}
-                      />
+                      <FormControl fullWidth size="small">
+                        <InputLabel>حالة المستفيد</InputLabel>
+                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
+                          <MenuItem value="ACTIVE">نشط</MenuItem>
+                          <MenuItem value="SUSPENDED">موقوف</MenuItem>
+                          <MenuItem value="PENDING">معلق</MenuItem>
+                          <MenuItem value="TERMINATED">منتهي / محذوف</MenuItem>
+                        </Select>
+                        <FormHelperText>تؤثر الحالة على الأهلية والبحث في البوابة.</FormHelperText>
+                      </FormControl>
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <DatePicker
