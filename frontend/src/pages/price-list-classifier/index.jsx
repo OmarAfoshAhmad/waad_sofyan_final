@@ -31,6 +31,7 @@ import PsychologyAltIcon from '@mui/icons-material/PsychologyAlt';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
+import { useSearchParams } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import { searchProviderContracts } from 'services/api/provider-contracts.service';
@@ -421,6 +422,38 @@ const buildSummary = (items) => ({
   rangedPrices: items.filter((item) => hasPriceRange(item)).length
 });
 
+const mapBackendSessionItems = (session) =>
+  (session?.items || []).map((item) => ({
+    rowNumber: item.rowNumber,
+    sourceSheet: item.sourceSheet,
+    serviceCode: item.serviceCode,
+    serviceName: item.serviceName,
+    price: item.price ?? item.minPrice,
+    minPrice: item.minPrice ?? item.price,
+    maxPrice: item.maxPrice ?? item.minPrice ?? item.price,
+    priceLabel: item.priceLabel,
+    status: item.status,
+    statusLabel: item.status,
+    duplicateName: Boolean(item.duplicateName),
+    manualCategory: item.medicalCategoryId
+      ? {
+          medicalCategoryId: item.medicalCategoryId,
+          medicalCategoryCode: item.medicalCategoryCode,
+          medicalCategoryName: item.medicalCategoryName
+        }
+      : null,
+    bestMatch: item.medicalCategoryId
+      ? {
+          entryId: item.dictionaryEntryId,
+          canonicalName: item.canonicalName,
+          medicalCategoryId: item.medicalCategoryId,
+          medicalCategoryCode: item.medicalCategoryCode,
+          medicalCategoryName: item.medicalCategoryName,
+          confidence: item.confidence
+        }
+      : null
+  }));
+
 const saveClassificationSession = (session) => {
   try {
     localStorage.setItem(CLASSIFICATION_SESSION_KEY, JSON.stringify({ ...session, savedAt: new Date().toISOString() }));
@@ -524,6 +557,7 @@ const downloadTemplate = async (categories = []) => {
 };
 
 export default function PriceListClassifierPage() {
+  const [searchParams] = useSearchParams();
   const [fileName, setFileName] = useState('');
   const [rawRows, setRawRows] = useState([]);
   const [result, setResult] = useState(null);
@@ -645,6 +679,8 @@ export default function PriceListClassifierPage() {
   }, []);
 
   useEffect(() => {
+    const backendSessionId = searchParams.get('sessionId');
+    if (backendSessionId) return;
     const session = loadClassificationSession();
     if (!session?.rawRows?.length) return;
 
@@ -666,7 +702,58 @@ export default function PriceListClassifierPage() {
         `تم استرجاع جلسة تصنيف غير مكتملة: ${session.done} من ${session.total || session.rawRows.length}. يمكنك المتابعة من نفس النقطة.`
       );
     }
-  }, []);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const backendSessionId = searchParams.get('sessionId');
+    if (!backendSessionId) return;
+
+    let mounted = true;
+    setLoading(true);
+    setError('');
+    medicalDictionaryService
+      .getPriceListClassificationSession(backendSessionId)
+      .then((session) => {
+        if (!mounted) return;
+        const mappedItems = mapBackendSessionItems(session);
+        setFileName(session.originalFileName || session.sessionName || '');
+        setRawRows(
+          mappedItems.map((item) => ({
+            rowNumber: item.rowNumber,
+            sourceSheet: item.sourceSheet,
+            serviceCode: item.serviceCode,
+            serviceName: item.serviceName,
+            price: item.price,
+            minPrice: item.minPrice,
+            maxPrice: item.maxPrice,
+            priceLabel: item.priceLabel
+          }))
+        );
+        setResult({ summary: buildSummary(mappedItems), items: mappedItems });
+        setSessionInfo({
+          backendSessionId: session.id,
+          backendStatus: session.status,
+          backendSummary: session.summary,
+          fileName: session.originalFileName || session.sessionName || '',
+          done: mappedItems.length,
+          total: mappedItems.length,
+          status: 'COMPLETED',
+          savedAtBackend: session.updatedAt
+        });
+        setClassificationProgress({ done: mappedItems.length, total: mappedItems.length });
+        setSuccess(`تم فتح جلسة قائمة الأسعار #${session.id}`);
+      })
+      .catch((err) => {
+        if (mounted) setError(err?.response?.data?.message || 'فشل فتح جلسة قائمة الأسعار');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [searchParams]);
 
   const applyManualCategory = (item, categoryId) => {
     applyManualCategoryByKeys([rowKey(item)], categoryId);

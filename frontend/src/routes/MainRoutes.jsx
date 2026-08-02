@@ -118,6 +118,7 @@ const MedicalCategoryCreate = Loadable(lazy(() => import('pages/medical-categori
 const MedicalCategoryEdit = Loadable(lazy(() => import('pages/medical-categories/MedicalCategoryEdit')));
 const MedicalDictionaryPage = Loadable(lazy(() => import('pages/medical-dictionary')));
 const PriceListClassifierPage = Loadable(lazy(() => import('pages/price-list-classifier')));
+const PriceListSessionsPage = Loadable(lazy(() => import('pages/price-list-classifier/PriceListSessionsPage')));
 
 // ==============================|| LAZY LOADING - DOCUMENTS ||============================== //
 
@@ -622,6 +623,14 @@ const MainRoutes = {
       element: (
         <PermissionGuard isRouteGuard>
           <PriceListClassifierPage />
+        </PermissionGuard>
+      )
+    },
+    {
+      path: 'price-list-sessions',
+      element: (
+        <PermissionGuard isRouteGuard>
+          <PriceListSessionsPage />
         </PermissionGuard>
       )
     },

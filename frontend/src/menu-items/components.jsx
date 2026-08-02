@@ -635,6 +635,22 @@ const menuItem = [
         }
       },
       {
+        id: 'price-list-sessions',
+        title: 'جلسات قوائم الأسعار',
+        titleEn: 'Price List Sessions',
+        type: 'item',
+        url: '/price-list-sessions',
+        icon: HistoryIcon,
+        resource: 'medical_catalog',
+        action: 'view',
+        chip: {
+          label: 'تتبع',
+          color: 'info',
+          size: 'small',
+          variant: 'outlined'
+        }
+      },
+      {
         id: 'system-configuration',
         title: 'تكوين النظام والمؤسسة',
         titleEn: 'System & Organization Configuration',
