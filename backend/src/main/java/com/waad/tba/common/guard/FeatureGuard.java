@@ -25,6 +25,7 @@ public class FeatureGuard {
     // Flag keys — must match seeds in V100 migration
     public static final String FLAG_PROVIDER_PORTAL = "PROVIDER_PORTAL_ENABLED";
     public static final String FLAG_DIRECT_CLAIM_SUBMISSION = "DIRECT_CLAIM_SUBMISSION_ENABLED";
+    public static final String FLAG_DIRECT_PREAUTH_SUBMISSION = "DIRECT_PREAUTH_SUBMISSION_ENABLED";
     public static final String FLAG_BATCH_CLAIMS = "BATCH_CLAIMS_ENABLED";
 
     private final FeatureFlagsConfig flags;
@@ -64,6 +65,22 @@ public class FeatureGuard {
     }
 
     /**
+     * Guard access to direct pre-authorization submission from provider portal.
+     * ALLOWED for internal staff roles.
+     */
+    public void requireDirectPreauthSubmission() {
+        if (isStaff())
+            return;
+
+        if (!isDirectPreauthSubmissionEnabled()) {
+            log.warn("🚫 [FEATURE-GUARD] Blocked direct pre-authorization submission (flag disabled).");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "التقديم المباشر للموافقات المسبقة معطل حالياً.");
+        }
+    }
+
+    /**
      * Guard access to monthly batch claim intake.
      *
      * Unlike the provider-portal guard, this applies to internal staff too. When
@@ -87,6 +104,11 @@ public class FeatureGuard {
     /** DB-first check with yml fallback */
     public boolean isDirectClaimSubmissionEnabled() {
         return featureFlagService.isFlagEnabled(FLAG_DIRECT_CLAIM_SUBMISSION, flags.isDirectClaimSubmissionEnabled());
+    }
+
+    /** DB-first check with yml fallback */
+    public boolean isDirectPreauthSubmissionEnabled() {
+        return featureFlagService.isFlagEnabled(FLAG_DIRECT_PREAUTH_SUBMISSION, flags.isDirectPreauthSubmissionEnabled());
     }
 
     /** DB-first check with yml fallback */

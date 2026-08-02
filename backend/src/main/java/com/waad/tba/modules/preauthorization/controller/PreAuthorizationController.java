@@ -9,6 +9,7 @@ import com.waad.tba.modules.preauthorization.entity.PreAuthorizationAttachment;
 import com.waad.tba.modules.preauthorization.service.PreAuthorizationService;
 import com.waad.tba.modules.preauthorization.service.PreAuthorizationAttachmentService;
 import com.waad.tba.common.file.FileResourceUtils;
+import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.common.dto.PaginationResponse;
 import com.waad.tba.modules.rbac.entity.User;
@@ -54,6 +55,7 @@ public class PreAuthorizationController {
     private final PreAuthorizationAttachmentService attachmentService;
     private final PreAuthorizationApiMapper apiMapper;
     private final AuthorizationService authorizationService;
+    private final FeatureGuard featureGuard;
 
     /**
      * Allowed sort fields for pre-authorization list endpoints
@@ -84,6 +86,12 @@ public class PreAuthorizationController {
                  request.getProviderId(), request.getMedicalServiceId());
         
         try {
+            User currentUser = authorizationService.getCurrentUser();
+            if (authorizationService.isProvider(currentUser)) {
+                featureGuard.requireProviderPortal();
+                featureGuard.requireDirectPreauthSubmission();
+            }
+
             // Convert API contract to internal DTO
             PreAuthorizationCreateDto createDto = apiMapper.toCreateDto(request);
             

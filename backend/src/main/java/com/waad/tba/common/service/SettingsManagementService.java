@@ -25,6 +25,9 @@ public class SettingsManagementService {
     private final SecurityAuditService securityAuditService;
 
     public static final String CLAIM_SLA_DAYS_KEY = "CLAIM_SLA_DAYS";
+    private static final java.util.Set<String> OPTIONAL_STRING_SETTINGS = java.util.Set.of(
+            "LOGO_URL"
+    );
 
     @Cacheable(value = "systemSettings", key = "#key")
     public String getSetting(String key, String defaultValue) {
@@ -145,7 +148,9 @@ public class SettingsManagementService {
         // blank/null validation_rules previously meant "accept anything",
         // so e.g. PASSWORD_RESET_TOKEN_EXPIRY_MINUTES = -1 or 0 was
         // persisted and served verbatim by AuthenticationSettingsService.
-        if (valueType == SystemSetting.SettingValueType.STRING && normalized.isEmpty()) {
+        if (valueType == SystemSetting.SettingValueType.STRING
+                && normalized.isEmpty()
+                && !OPTIONAL_STRING_SETTINGS.contains(setting.getSettingKey())) {
             throw new IllegalArgumentException("Setting " + setting.getSettingKey() + " cannot be empty");
         }
         if (valueType == SystemSetting.SettingValueType.INTEGER) {

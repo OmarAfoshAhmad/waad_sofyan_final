@@ -25,6 +25,11 @@ public class FeatureFlagsConfig {
      * Allow direct claim creation from provider side (VISIT-based).
      */
     private boolean directClaimSubmissionEnabled = false;
+
+    /**
+     * Allow direct pre-authorization creation from provider side.
+     */
+    private boolean directPreauthSubmissionEnabled = false;
     
     /**
      * Is the Batches mode active?

@@ -161,6 +161,8 @@ waad:
     provider-portal-enabled: ${WAAD_FEATURE_PROVIDER_PORTAL:false}
     # false = Direct claim creation via VISIT is disabled
     direct-claim-submission-enabled: ${WAAD_FEATURE_DIRECT_CLAIMS:false}
+    # false = Direct pre-authorization creation via provider portal is disabled
+    direct-preauth-submission-enabled: ${WAAD_FEATURE_DIRECT_PREAUTH:false}
     # Always true as it is our primary source
     batch-claims-enabled: true
     max-size:

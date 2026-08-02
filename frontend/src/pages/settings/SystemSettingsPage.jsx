@@ -26,7 +26,6 @@ import {
   Description as ReportIcon,
   LocalHospital as ProviderPortalIcon,
   Lock as SecurityIcon,
-  Rule as RuleIcon,
   Palette as PaletteIcon,
   Preview as PreviewIcon,
   Save as SaveIcon,
@@ -46,7 +45,6 @@ import useSystemConfig from 'hooks/useSystemConfig';
 import useConfig from 'hooks/useConfig';
 import { useCompanySettings } from 'contexts/CompanySettingsContext';
 import EmailSettingsTab from './EmailSettingsTab';
-import FinancialRuleEngineTab from './FinancialRuleEngineTab';
 
 const KEYS = {
   systemNameAr: 'SYSTEM_NAME_AR',
@@ -173,6 +171,7 @@ const SystemSettingsPage = () => {
   const [providerPortalEnabled, setProviderPortalEnabled] = useState(false);
   const [claimSubmissionEnabled, setClaimSubmissionEnabled] = useState(false);
   const [preAuthSubmissionEnabled, setPreAuthSubmissionEnabled] = useState(false);
+  const [batchClaimsEnabled, setBatchClaimsEnabled] = useState(true);
   const [preApprovalItemsOnly, setPreApprovalItemsOnly] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -299,11 +298,13 @@ const SystemSettingsPage = () => {
       const providerPortalFlag = (flags || []).find((f) => f.flagKey === PROVIDER_PORTAL_FLAG_KEY);
       const claimSubmissionFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_CLAIM_SUBMISSION_ENABLED');
       const preAuthSubmissionFlag = (flags || []).find((f) => f.flagKey === 'DIRECT_PREAUTH_SUBMISSION_ENABLED');
+      const batchClaimsFlag = (flags || []).find((f) => f.flagKey === 'BATCH_CLAIMS_ENABLED');
       const preApprovalItemsFlag = (flags || []).find((f) => f.flagKey === 'PROVIDER_PRE_APPROVAL_ITEMS_ONLY');
 
       setProviderPortalEnabled(providerPortalFlag ? providerPortalFlag.enabled : false);
       setClaimSubmissionEnabled(claimSubmissionFlag ? claimSubmissionFlag.enabled : false);
       setPreAuthSubmissionEnabled(preAuthSubmissionFlag ? preAuthSubmissionFlag.enabled : false);
+      setBatchClaimsEnabled(batchClaimsFlag ? batchClaimsFlag.enabled : true);
       setPreApprovalItemsOnly(preApprovalItemsFlag ? preApprovalItemsFlag.enabled : true);
     } catch (e) {
       setError('فشل تحميل نافذة الإعدادات');
@@ -329,7 +330,7 @@ const SystemSettingsPage = () => {
   const saveSettingIfExists = useCallback(
     async (key, value) => {
       if (!hasKey(key) && !Object.values(KEYS).includes(key)) return;
-      await systemSettingsService.updateSetting(key, value ? String(value) : '');
+      await systemSettingsService.updateSetting(key, value === null || value === undefined ? '' : String(value));
     },
     [hasKey]
   );
@@ -484,6 +485,23 @@ const SystemSettingsPage = () => {
     }
   };
 
+  const handleToggleBatchClaims = async (event) => {
+    const next = event.target.checked;
+    try {
+      setIsToggling(true);
+      setError(null);
+      await featureFlagsService.toggleFlag('BATCH_CLAIMS_ENABLED', next);
+      setBatchClaimsEnabled(next);
+      applyFlags({ BATCH_CLAIMS_ENABLED: next });
+      refreshSystemConfig();
+      setSuccess(next ? 'تم تفعيل مسار دفعات المطالبات الداخلي' : 'تم إخفاء مسار دفعات المطالبات الداخلي');
+    } catch (e) {
+      setError(e?.response?.data?.message || 'فشل تحديث خيار دفعات المطالبات');
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
   const handleTogglePreApprovalItemsOnly = async (event) => {
     const next = event.target.checked;
     setIsToggling(true);
@@ -583,7 +601,6 @@ const SystemSettingsPage = () => {
         >
           <Tab icon={<BusinessIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="معلومات المؤسسة" />
           <Tab icon={<SecurityIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="قواعد الاستحقاق" />
-          <Tab icon={<RuleIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="قواعد التغطية المالية" />
           <Tab icon={<SpeedIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="المحرك التشغيلي" />
           <Tab icon={<ReportIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="إعدادات التقارير" />
           <Tab icon={<ProviderPortalIcon sx={{ fontSize: '1.2rem' }} />} iconPosition="start" label="بوابة مقدم الخدمة" />
@@ -778,14 +795,6 @@ const SystemSettingsPage = () => {
 
           <TabPanel value={tabValue} index={2}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                <FinancialRuleEngineTab />
-              </Box>
-            </Box>
-          </TabPanel>
-
-          <TabPanel value={tabValue} index={3}>
-            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, md: 7 }}>
@@ -861,7 +870,7 @@ const SystemSettingsPage = () => {
             </Box>
           </TabPanel>
 
-          <TabPanel value={tabValue} index={4}>
+          <TabPanel value={tabValue} index={3}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
@@ -990,7 +999,7 @@ const SystemSettingsPage = () => {
             </Box>
           </TabPanel>
 
-          <TabPanel value={tabValue} index={5}>
+          <TabPanel value={tabValue} index={4}>
             <Box sx={{ p: '1.0rem' }}>
               <Stack spacing={1.5} sx={{ maxWidth: '47.5rem' }}>
                 <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
@@ -1052,6 +1061,22 @@ const SystemSettingsPage = () => {
                 </Paper>
 
                 <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                  <FieldGroup title="إظهار مسار دفعات المطالبات الداخلي" icon={ReportIcon} color="warning.main">
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
+                      عند التعطيل، تختفي واجهة إدخال المطالبات بالدفعات ويغلق مسارها البرمجي. استخدم هذا الخيار عند الانتقال التشغيلي إلى بوابة مقدم الخدمة.
+                    </Typography>
+
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Switch checked={batchClaimsEnabled} onChange={handleToggleBatchClaims} disabled={isToggling} color="warning" />
+                      <Typography variant="subtitle1" fontWeight={700} color={batchClaimsEnabled ? 'warning.main' : 'text.primary'}>
+                        {batchClaimsEnabled ? 'الدفعات مفعلة' : 'الدفعات مخفية ومعطلة'}
+                      </Typography>
+                      {isToggling && <CircularProgress size={18} />}
+                    </Stack>
+                  </FieldGroup>
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
                   <FieldGroup title="أصناف بموافقة مسبقة" icon={SecurityIcon} color="primary.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التفعيل، سيتم فلترة الخدمات لتشمل فقط الأصناف التي تتطلب موافقة مسبقة. وعند التعطيل سيتم عرض جميع الأصناف.
@@ -1075,7 +1100,7 @@ const SystemSettingsPage = () => {
             </Box>
           </TabPanel>
 
-          <TabPanel value={tabValue} index={6}>
+          <TabPanel value={tabValue} index={5}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto' }}>
                 <EmailSettingsTab settings={emailSettings} setSettings={setEmailSettings} />
@@ -1084,7 +1109,7 @@ const SystemSettingsPage = () => {
           </TabPanel>
 
           {/* ===================== تبويب المظهر ===================== */}
-          <TabPanel value={tabValue} index={7}>
+          <TabPanel value={tabValue} index={6}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Box sx={{ flex: 1, overflow: 'auto', p: '1.0rem' }}>
                 <Grid container spacing={2}>
