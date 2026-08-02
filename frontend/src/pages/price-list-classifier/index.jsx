@@ -531,6 +531,9 @@ export default function PriceListClassifierPage() {
   const [promoting, setPromoting] = useState(false);
   const [approvingSynonyms, setApprovingSynonyms] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
+  const [postingToContract, setPostingToContract] = useState(false);
+  const [targetContractId, setTargetContractId] = useState('');
+  const [targetEffectiveFrom, setTargetEffectiveFrom] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -834,6 +837,63 @@ export default function PriceListClassifierPage() {
     }
   };
 
+  const ensureBackendSessionSaved = async () => {
+    if (sessionInfo?.backendSessionId) return sessionInfo.backendSessionId;
+    const saved = await medicalDictionaryService.savePriceListClassificationSession(buildBackendSessionPayload());
+    const nextSession = {
+      ...(loadClassificationSession() || sessionInfo || {}),
+      backendSessionId: saved.id,
+      backendStatus: saved.status,
+      backendSummary: saved.summary,
+      savedAtBackend: new Date().toISOString()
+    };
+    saveClassificationSession(nextSession);
+    setSessionInfo(nextSession);
+    return saved.id;
+  };
+
+  const postSessionToContract = async () => {
+    const contractId = Number(targetContractId);
+    if (!Number.isFinite(contractId) || contractId <= 0) {
+      setError('أدخل رقم عقد مقدم الخدمة قبل الترحيل.');
+      return;
+    }
+    if (!items.length) {
+      setError('لا توجد نتيجة تصنيف لترحيلها.');
+      return;
+    }
+
+    setPostingToContract(true);
+    setError('');
+    setSuccess('');
+    try {
+      const backendSessionId = await ensureBackendSessionSaved();
+      const response = await medicalDictionaryService.postPriceListClassificationSessionToContract(backendSessionId, {
+        contractId,
+        effectiveFrom: targetEffectiveFrom || null,
+        replaceEffectivePrices: true,
+        onlyReviewedItems: true
+      });
+      const nextSession = {
+        ...(loadClassificationSession() || sessionInfo || {}),
+        backendSessionId: response.sessionId,
+        backendStatus: response.session?.status,
+        backendSummary: response.session?.summary,
+        postedAtBackend: new Date().toISOString()
+      };
+      saveClassificationSession(nextSession);
+      setSessionInfo(nextSession);
+      setSuccess(
+        `تم ترحيل ${response.created || 0} سعر للعقد ${response.contractCode || response.contractId}. ` +
+          `أُغلقت ${response.superseded || 0} أسعار سابقة، وتخطى النظام ${response.skipped || 0}، ورفض ${response.rejected || 0}.`
+      );
+    } catch (err) {
+      setError(err?.response?.data?.message || 'فشل ترحيل قائمة الأسعار إلى عقد مقدم الخدمة');
+    } finally {
+      setPostingToContract(false);
+    }
+  };
+
   const promoteReviewRowsToDictionarySuggestions = async () => {
     const reviewRows = items.filter((item) => item.status !== 'HIGH_CONFIDENCE');
     if (!reviewRows.length) {
@@ -1114,6 +1174,30 @@ export default function PriceListClassifierPage() {
                   onClick={saveSessionToBackend}
                 >
                   حفظ الجلسة
+                </Button>
+                <TextField
+                  size="small"
+                  value={targetContractId}
+                  onChange={(event) => setTargetContractId(event.target.value)}
+                  placeholder="رقم العقد"
+                  sx={{ minWidth: 130 }}
+                />
+                <TextField
+                  size="small"
+                  type="date"
+                  value={targetEffectiveFrom}
+                  onChange={(event) => setTargetEffectiveFrom(event.target.value)}
+                  helperText="تاريخ نفاذ الأسعار"
+                  sx={{ minWidth: 170 }}
+                />
+                <Button
+                  variant="contained"
+                  color="info"
+                  startIcon={postingToContract ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
+                  disabled={!items.length || postingToContract}
+                  onClick={postSessionToContract}
+                >
+                  ترحيل للعقد
                 </Button>
                 <Button
                   variant="contained"

@@ -17,6 +17,17 @@ import com.waad.tba.modules.medicaldictionary.repository.PriceListClassification
 import com.waad.tba.modules.medicaldictionary.repository.PriceListClassificationSessionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.audit.enums.AuditAction;
+import com.waad.tba.modules.audit.enums.AuditSource;
+import com.waad.tba.modules.audit.enums.EntityType;
+import com.waad.tba.modules.audit.service.AuditLogWriteRequest;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
+import com.waad.tba.modules.providercontract.entity.ProviderContract;
+import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
+import com.waad.tba.modules.providercontract.enums.ClassificationStatus;
+import com.waad.tba.modules.providercontract.enums.ConfidenceLevel;
+import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
+import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,6 +35,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,6 +56,9 @@ public class MedicalDictionaryService {
     private final PriceListClassificationSessionRepository priceListSessionRepository;
     private final PriceListClassificationItemRepository priceListItemRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
+    private final ProviderContractRepository providerContractRepository;
+    private final ProviderContractPricingItemRepository providerContractPricingItemRepository;
+    private final MedicalAuditLogService medicalAuditLogService;
     private final MedicalDictionaryNormalizer normalizer;
     private final AuthorizationService authorizationService;
 
@@ -218,6 +234,235 @@ public class MedicalDictionaryService {
         PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
         return toPriceListSessionResponse(session, true);
+    }
+
+    @Transactional
+    public PriceListSessionPostResponse postPriceListSessionToContract(Long sessionId, PriceListSessionPostRequest request) {
+        PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+
+        ProviderContract contract = providerContractRepository.findById(request.getContractId())
+                .filter(c -> Boolean.TRUE.equals(c.getActive()))
+                .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
+
+        LocalDate effectiveFrom = request.getEffectiveFrom() != null
+                ? request.getEffectiveFrom()
+                : contract.getStartDate();
+        if (effectiveFrom == null) {
+            throw new IllegalArgumentException("تاريخ بداية تطبيق قائمة الأسعار مطلوب لأن العقد لا يملك تاريخ بداية");
+        }
+        if (contract.getStartDate() != null && effectiveFrom.isBefore(contract.getStartDate())) {
+            throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يسبق تاريخ بداية العقد");
+        }
+        if (contract.getEndDate() != null && effectiveFrom.isAfter(contract.getEndDate())) {
+            throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يكون بعد نهاية العقد");
+        }
+
+        var currentUser = authorizationService.getCurrentUser();
+        Long actorId = currentUser == null ? null : currentUser.getId();
+        List<PriceListClassificationItem> items = priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(sessionId);
+        List<PriceListSessionPostResponse.ItemResult> results = new ArrayList<>();
+        int created = 0;
+        int superseded = 0;
+        int skipped = 0;
+        int rejected = 0;
+
+        for (PriceListClassificationItem item : items) {
+            if (item.getPostedPricingItemId() != null || item.getStatus() == PriceListItemStatus.POSTED_TO_CONTRACT) {
+                skipped++;
+                results.add(postResult(item, "SKIPPED", "تم ترحيل هذا البند سابقاً", item.getPostedPricingItemId()));
+                continue;
+            }
+
+            String validationError = validatePostableItem(item, request.isOnlyReviewedItems());
+            if (validationError != null) {
+                rejected++;
+                results.add(postResult(item, "REJECTED", validationError, null));
+                continue;
+            }
+
+            MedicalCategory category = medicalCategoryRepository.findActiveById(item.getMedicalCategoryId())
+                    .orElse(null);
+            if (category == null) {
+                rejected++;
+                results.add(postResult(item, "REJECTED", "التصنيف الطبي غير موجود أو غير نشط", null));
+                continue;
+            }
+
+            Optional<ProviderContractPricingItem> effectiveExisting = findExistingPrice(contract.getId(), item);
+            if (effectiveExisting.isPresent() && !request.isReplaceEffectivePrices()) {
+                rejected++;
+                results.add(postResult(item, "REJECTED", "يوجد سعر فعال لنفس كود/اسم الخدمة", effectiveExisting.get().getId()));
+                continue;
+            }
+
+            if (effectiveExisting.isPresent()) {
+                ProviderContractPricingItem existing = effectiveExisting.get();
+                if (existing.getEffectiveFrom() == null || existing.getEffectiveFrom().isBefore(effectiveFrom)) {
+                    existing.setEffectiveTo(effectiveFrom.minusDays(1));
+                    existing.setUpdatedBy(actorId == null ? null : actorId.toString());
+                    providerContractPricingItemRepository.save(existing);
+                    superseded++;
+                } else if (existing.getEffectiveFrom().isEqual(effectiveFrom)) {
+                    existing.setActive(false);
+                    existing.setUpdatedBy(actorId == null ? null : actorId.toString());
+                    providerContractPricingItemRepository.save(existing);
+                    superseded++;
+                }
+            }
+
+            ProviderContractPricingItem pricingItem = buildPricingItem(contract, category, item, effectiveFrom, actorId);
+            ProviderContractPricingItem savedPricingItem = providerContractPricingItemRepository.save(pricingItem);
+
+            item.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
+            item.setPostedPricingItemId(savedPricingItem.getId());
+            item.setPostedAt(LocalDateTime.now());
+            priceListItemRepository.save(item);
+
+            created++;
+            results.add(postResult(item, "CREATED", "تم إنشاء سعر عقد جديد", savedPricingItem.getId()));
+        }
+
+        session.setContractId(contract.getId());
+        session.setContractCode(contract.getContractCode());
+        session.setProviderId(contract.getProvider() == null ? session.getProviderId() : contract.getProvider().getId());
+        session.setProviderName(contract.getProvider() == null ? session.getProviderName() : contract.getProvider().getName());
+        recalculateSessionSummary(session);
+        PriceListClassificationSession savedSession = priceListSessionRepository.save(session);
+
+        medicalAuditLogService.record(AuditLogWriteRequest.builder()
+                .entityType(EntityType.PRICE_LIST)
+                .entityId(String.valueOf(savedSession.getId()))
+                .action(AuditAction.IMPORTED)
+                .source(AuditSource.USER)
+                .reason("ترحيل جلسة تنظيم قائمة الأسعار إلى عقد مقدم خدمة")
+                .afterState(Map.of(
+                        "contractId", contract.getId(),
+                        "contractCode", contract.getContractCode(),
+                        "created", created,
+                        "superseded", superseded,
+                        "skipped", skipped,
+                        "rejected", rejected,
+                        "effectiveFrom", effectiveFrom.toString()))
+                .build());
+
+        return PriceListSessionPostResponse.builder()
+                .sessionId(savedSession.getId())
+                .contractId(contract.getId())
+                .contractCode(contract.getContractCode())
+                .created(created)
+                .superseded(superseded)
+                .skipped(skipped)
+                .rejected(rejected)
+                .results(results)
+                .session(toPriceListSessionResponse(savedSession, true))
+                .build();
+    }
+
+    private String validatePostableItem(PriceListClassificationItem item, boolean onlyReviewedItems) {
+        if (item.getProviderServiceName() == null || item.getProviderServiceName().isBlank()) {
+            return "اسم خدمة المرفق مطلوب";
+        }
+        if (item.getMedicalCategoryId() == null) {
+            return "لا يمكن الترحيل دون تصنيف طبي موحد";
+        }
+        if (resolveContractPrice(item) == null) {
+            return "لا يمكن الترحيل دون سعر تعاقدي";
+        }
+        if (onlyReviewedItems && (item.getStatus() == PriceListItemStatus.UNKNOWN || item.getStatus() == PriceListItemStatus.NEEDS_REVIEW)) {
+            return "البند يحتاج مراجعة قبل الترحيل";
+        }
+        return null;
+    }
+
+    private Optional<ProviderContractPricingItem> findExistingPrice(Long contractId, PriceListClassificationItem item) {
+        String serviceCode = blankToNull(item.getProviderServiceCode());
+        if (serviceCode != null) {
+            Optional<ProviderContractPricingItem> byCode = providerContractPricingItemRepository
+                    .findByContractIdAndServiceCodeActiveTrue(contractId, serviceCode);
+            if (byCode.isPresent()) return byCode;
+        }
+        return providerContractPricingItemRepository.findByContractIdAndServiceNameActiveTrue(
+                contractId,
+                item.getProviderServiceName());
+    }
+
+    private ProviderContractPricingItem buildPricingItem(ProviderContract contract,
+                                                         MedicalCategory category,
+                                                         PriceListClassificationItem item,
+                                                         LocalDate effectiveFrom,
+                                                         Long actorId) {
+        BigDecimal minPrice = resolveContractPrice(item);
+        BigDecimal maxPrice = item.getMaxPrice() != null && item.getMaxPrice().compareTo(minPrice) >= 0
+                ? item.getMaxPrice()
+                : null;
+        Integer confidence = item.getConfidence() == null ? 0 : item.getConfidence();
+
+        return ProviderContractPricingItem.builder()
+                .contract(contract)
+                .serviceName(item.getProviderServiceName())
+                .serviceCode(blankToNull(item.getProviderServiceCode()))
+                .medicalCategory(category)
+                .categoryName(categoryName(category))
+                .basePrice(minPrice)
+                .contractPrice(minPrice)
+                .maxContractPrice(maxPrice)
+                .currency(contract.getCurrency() == null || contract.getCurrency().isBlank() ? "LYD" : contract.getCurrency())
+                .effectiveFrom(effectiveFrom)
+                .effectiveTo(null)
+                .active(true)
+                .classificationStatus(item.getStatus() == PriceListItemStatus.MANUALLY_REVIEWED
+                        ? ClassificationStatus.MANUAL
+                        : ClassificationStatus.AUTO)
+                .confidenceLevel(confidence >= 85 ? ConfidenceLevel.HIGH : (confidence >= 60 ? ConfidenceLevel.MEDIUM : ConfidenceLevel.LOW))
+                .classificationSource("MEDICAL_DICTIONARY_PRICE_LIST")
+                .approvedBy(actorId)
+                .approvedAt(LocalDateTime.now())
+                .createdBy(actorId == null ? null : actorId.toString())
+                .updatedBy(actorId == null ? null : actorId.toString())
+                .notes(buildPricingNotes(item))
+                .build();
+    }
+
+    private BigDecimal resolveContractPrice(PriceListClassificationItem item) {
+        if (item.getMinPrice() != null) return item.getMinPrice();
+        return item.getPrice();
+    }
+
+    private String buildPricingNotes(PriceListClassificationItem item) {
+        List<String> notes = new ArrayList<>();
+        notes.add("مصدر السعر: جلسة تنظيم قوائم الأسعار بالقاموس الطبي");
+        if (item.getCanonicalName() != null && !item.getCanonicalName().isBlank()) {
+            notes.add("الاسم الموحد: " + item.getCanonicalName());
+        }
+        if (item.getPriceLabel() != null && !item.getPriceLabel().isBlank()) {
+            notes.add("السعر الأصلي: " + item.getPriceLabel());
+        }
+        if (Boolean.TRUE.equals(item.getMergedDuplicate())) {
+            notes.add("مدمج من " + item.getMergedSourceCount() + " أسطر مصدر");
+        }
+        if (item.getMergeNotes() != null && !item.getMergeNotes().isBlank()) {
+            notes.add(item.getMergeNotes());
+        }
+        if (item.getManualReviewNote() != null && !item.getManualReviewNote().isBlank()) {
+            notes.add("ملاحظة المراجعة: " + item.getManualReviewNote());
+        }
+        return String.join(" | ", notes);
+    }
+
+    private PriceListSessionPostResponse.ItemResult postResult(PriceListClassificationItem item,
+                                                               String result,
+                                                               String message,
+                                                               Long pricingItemId) {
+        return PriceListSessionPostResponse.ItemResult.builder()
+                .itemId(item.getId())
+                .rowNumber(item.getRowNumber())
+                .serviceCode(item.getProviderServiceCode())
+                .serviceName(item.getProviderServiceName())
+                .result(result)
+                .message(message)
+                .pricingItemId(pricingItemId)
+                .build();
     }
 
     private PriceListClassificationItem toPriceListItem(PriceListClassificationSession session, PriceListSessionSaveRequest.Item request) {

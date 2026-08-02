@@ -115,6 +115,16 @@ public class MedicalDictionaryController {
         return ResponseEntity.ok(ApiResponse.success("تم حفظ جلسة تنظيم قائمة الأسعار", service.savePriceListSession(request)));
     }
 
+    @PostMapping("/price-lists/sessions/{sessionId}/post-to-contract")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<PriceListSessionPostResponse>> postPriceListSessionToContract(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody PriceListSessionPostRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "تم ترحيل قائمة الأسعار إلى عقد مقدم الخدمة",
+                service.postPriceListSessionToContract(sessionId, request)));
+    }
+
     @GetMapping("/suggestions")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Page<MedicalDictionarySuggestionResponse>>> listSuggestions(
