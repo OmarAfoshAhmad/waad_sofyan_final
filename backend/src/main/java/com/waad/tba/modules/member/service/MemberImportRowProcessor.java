@@ -197,9 +197,6 @@ public class MemberImportRowProcessor {
             member.setCardStatus(Member.CardStatus.ACTIVE);
             member.setActive(true);
             member.getAttributes().clear();
-            if (parent == null && member.getBarcode() == null) {
-                member.setBarcode(barcodeGeneratorService.generateForPrincipal());
-            }
         } else {
             member = Member.builder()
                     .fullName(fullName)
@@ -210,7 +207,6 @@ public class MemberImportRowProcessor {
                     .active(true)
                     .parent(parent)
                     .relationship(relationship)
-                    .barcode(parent == null ? barcodeGeneratorService.generateForPrincipal() : null)
                     .build();
         }
 
@@ -225,6 +221,7 @@ public class MemberImportRowProcessor {
                 member.setCardNumber(cardNumberGeneratorService.generateForDependent(parent, relationship));
             }
         }
+        member.setBarcode(member.getCardNumber());
 
         if (civilId != null && !civilId.isBlank())
             member.setNationalNumber(civilId);

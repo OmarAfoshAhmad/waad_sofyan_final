@@ -96,11 +96,7 @@ public class UnifiedMemberService {
                             "Use createDependentMember() for dependents.");
         }
 
-        // 1. Generate BARCODE (MANDATORY for principal)
-        String barcode = barcodeGenerator.generateUniqueBarcodeForPrincipal();
-        log.info("✅ Generated barcode for principal: {}", barcode);
-
-        // 2. Load employer (needed for card number formula)
+        // 1. Load employer (needed for card number formula)
         // An EMPLOYER_ADMIN must not be able to enroll a member into a
         // different employer by sending an arbitrary employerId — force it
         // to their own employer regardless of what the request carries.
@@ -126,10 +122,9 @@ public class UnifiedMemberService {
             }
         }
 
-        // 3. Build PRINCIPAL member entity (employer/joinDate/employeeNumber needed for
+        // 2. Build PRINCIPAL member entity (employer/joinDate/employeeNumber needed for
         // card number)
         Member principal = mapper.toEntity(dto);
-        principal.setBarcode(barcode);
         principal.setEmployer(employer);
         principal.setBenefitPolicy(benefitPolicy);
         principal.setParent(null); // PRINCIPAL
@@ -139,7 +134,7 @@ public class UnifiedMemberService {
             principal.setStatus(Member.MemberStatus.TERMINATED);
         }
 
-        // 4. Generate CARD NUMBER (formula: EMPLOYER_CODE-JOIN_YEAR-EMPLOYEE_NUMBER)
+        // 3. Generate CARD NUMBER (formula: EMPLOYER_CODE + EMPLOYEE_NUMBER)
         String cardNumber = dto.getCardNumber();
         if (cardNumber == null || cardNumber.trim().isEmpty()) {
             cardNumber = cardNumberGenerator.generateUniqueForPrincipal(principal);
@@ -151,14 +146,15 @@ public class UnifiedMemberService {
             }
         }
         principal.setCardNumber(cardNumber);
+        principal.setBarcode(cardNumber);
 
-        // 5. Save principal
+        // 4. Save principal
         principal = memberRepository.save(principal);
         log.info("✅ Created PRINCIPAL member ID={}, barcode={}, cardNumber={}, employer={}",
                 principal.getId(), principal.getBarcode(), principal.getCardNumber(),
                 principal.getEmployer() != null ? principal.getEmployer().getName() : "NONE");
 
-        // 6. Create DEPENDENTS if provided
+        // 5. Create DEPENDENTS if provided
         List<Member> dependents = new ArrayList<>();
         if (dto.getDependents() != null && !dto.getDependents().isEmpty()) {
             log.info("📦 Creating {} dependents for principal ID={}",
@@ -172,7 +168,7 @@ public class UnifiedMemberService {
 
         // Note: familyMembers field removed as part of unified architecture
 
-        // 7. Return view DTO
+        // 6. Return view DTO
         return mapper.toViewDto(principal, dependents);
     }
 
@@ -282,7 +278,7 @@ public class UnifiedMemberService {
         Member dependent = mapper.toEntity(dto);
         dependent.setParent(principal);
         dependent.setCardNumber(cardNumber);
-        dependent.setBarcode(null); // NO barcode for dependents
+        dependent.setBarcode(cardNumber);
 
         // 3. Inherit from principal
         dependent.setEmployer(principal.getEmployer());

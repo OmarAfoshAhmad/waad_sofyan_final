@@ -593,7 +593,7 @@ public class MemberExcelImportService {
                 .status(Member.MemberStatus.ACTIVE)
                 .cardStatus(Member.CardStatus.ACTIVE)
                 .active(true)
-                .barcode(barcodeGeneratorService.generateForPrincipal())
+                .barcode(parentCardNumber)
                 .build();
         return memberRepository.save(parent);
     }

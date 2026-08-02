@@ -122,7 +122,8 @@ public class Member {
     @Column(length = 50, name = "card_number")
     private String cardNumber;
 
-    // Barcode: auto-generated for principals only (WAD-YYYY-NNNNNNNN)
+    // Barcode: equals cardNumber for every beneficiary (principal and dependent).
+    // Keeping a dedicated column preserves existing scanner/search integration.
     @Column(unique = true, length = 100, name = "barcode")
     private String barcode;
 
@@ -142,21 +143,15 @@ public class Member {
             this.gender = null;
         }
 
-        // UNIFIED VALIDATION: Barcode MUST exist for PRINCIPAL only
-        if (isPrincipal()) {
-            if (this.barcode == null || this.barcode.trim().isEmpty()) {
-                throw new IllegalStateException(
-                        "Principal Member cannot be persisted without a valid barcode. " +
-                                "Use BarcodeGeneratorService.generateForMember().");
-            }
-        } else if (isDependent()) {
-            // IMPORTANT: Dependents should NOT have barcode
-            if (this.barcode != null && !this.barcode.trim().isEmpty()) {
-                throw new IllegalStateException(
-                        "Dependent Member should NOT have a barcode. " +
-                                "Barcode is only for Principal members.");
-            }
-            // Dependents MUST have a parent
+        if (this.cardNumber != null && (this.barcode == null || this.barcode.trim().isEmpty())) {
+            this.barcode = this.cardNumber;
+        }
+
+        if (this.cardNumber != null && this.barcode != null && !this.cardNumber.equals(this.barcode)) {
+            throw new IllegalStateException("Member barcode must equal card number.");
+        }
+
+        if (isDependent()) {
             if (this.parent == null) {
                 throw new IllegalStateException(
                         "Dependent Member must have a parent (Principal Member).");

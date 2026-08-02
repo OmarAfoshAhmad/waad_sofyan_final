@@ -529,7 +529,7 @@ public class MemberExcelTemplateService {
                     // ── تسجيل الرقم فوراً لمنع التكرار داخل نفس الدفعة ───────────────────
                     usedCardNumbers.add(member.getCardNumber());
 
-                    member.setBarcode(barcodeGeneratorService.generateUniqueBarcodeForPrincipal());
+                    member.setBarcode(member.getCardNumber());
                     principalBatch.add(member);
                     principalBatchRowNums.add(rowNum);
                     pass1Processed++;
