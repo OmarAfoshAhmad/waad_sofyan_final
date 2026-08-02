@@ -32,6 +32,9 @@ public class PriceListClassificationSession {
     @Column(name = "original_file_name", length = 500)
     private String originalFileName;
 
+    @Column(name = "source_fingerprint", length = 64)
+    private String sourceFingerprint;
+
     @Column(name = "provider_id")
     private Long providerId;
 

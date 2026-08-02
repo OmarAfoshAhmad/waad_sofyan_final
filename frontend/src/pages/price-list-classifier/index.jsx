@@ -246,6 +246,16 @@ const statusColor = {
   UNKNOWN: 'error'
 };
 
+const sessionStatusLabel = {
+  DRAFT: 'مسودة',
+  CLASSIFIED: 'مصنفة',
+  NEEDS_REVIEW: 'تحتاج مراجعة',
+  READY_TO_POST: 'جاهزة للترحيل',
+  POSTED_TO_CONTRACT: 'مرحّلة لعقد',
+  SUPERSEDED: 'استُبدلت',
+  CANCELLED: 'ملغاة'
+};
+
 const CLASSIFICATION_BATCH_SIZE = 500;
 const CLASSIFICATION_SESSION_KEY = 'waad.priceListClassifier.session.v1';
 
@@ -913,7 +923,7 @@ export default function PriceListClassifierPage() {
       };
       saveClassificationSession(nextSession);
       setSessionInfo(nextSession);
-      setSuccess(`تم حفظ جلسة تنظيم قائمة الأسعار في قاعدة البيانات #${saved.id} — الحالة: ${saved.status}`);
+      setSuccess(`تم حفظ القائمة المصنفة رقم ${saved.id}. الحالة الحالية: ${sessionStatusLabel[saved.status] || 'غير محددة'}.`);
     } catch (err) {
       setError(err?.response?.data?.message || 'فشل حفظ جلسة تنظيم قائمة الأسعار في قاعدة البيانات');
     } finally {

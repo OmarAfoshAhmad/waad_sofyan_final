@@ -36,6 +36,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -192,13 +195,12 @@ public class MedicalDictionaryService {
         var currentUser = authorizationService.getCurrentUser();
         Long actorId = currentUser == null ? null : currentUser.getId();
 
-        PriceListClassificationSession session = request.getSessionId() == null
-                ? new PriceListClassificationSession()
-                : priceListSessionRepository.findById(request.getSessionId())
-                .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+        String sourceFingerprint = calculatePriceListFingerprint(request);
+        PriceListClassificationSession session = resolveSessionForSave(request, sourceFingerprint);
 
         session.setSessionName(request.getSessionName().trim());
         session.setOriginalFileName(blankToNull(request.getOriginalFileName()));
+        session.setSourceFingerprint(sourceFingerprint);
         session.setProviderId(request.getProviderId());
         session.setProviderName(blankToNull(request.getProviderName()));
         session.setContractId(request.getContractId());
@@ -221,6 +223,51 @@ public class MedicalDictionaryService {
         return toPriceListSessionResponse(saved, true);
     }
 
+    private PriceListClassificationSession resolveSessionForSave(PriceListSessionSaveRequest request, String sourceFingerprint) {
+        if (request.getSessionId() != null) {
+            return priceListSessionRepository.findById(request.getSessionId())
+                    .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+        }
+        return priceListSessionRepository
+                .findFirstBySourceFingerprintAndStatusNotOrderByUpdatedAtDesc(sourceFingerprint, PriceListSessionStatus.POSTED_TO_CONTRACT)
+                .orElseGet(PriceListClassificationSession::new);
+    }
+
+    private String calculatePriceListFingerprint(PriceListSessionSaveRequest request) {
+        StringBuilder signature = new StringBuilder();
+        signature.append("file=").append(blankToNull(request.getOriginalFileName())).append('|')
+                .append("providerId=").append(request.getProviderId()).append('|')
+                .append("providerName=").append(normalizer.normalize(request.getProviderName())).append('|')
+                .append("contractId=").append(request.getContractId()).append('|')
+                .append("contractCode=").append(normalizer.normalize(request.getContractCode())).append('|');
+
+        List<PriceListSessionSaveRequest.Item> items = request.getItems() == null ? List.of() : request.getItems();
+        items.stream()
+                .sorted(Comparator
+                        .comparing((PriceListSessionSaveRequest.Item item) -> normalizer.normalize(item.getServiceCode()))
+                        .thenComparing(item -> normalizer.normalize(item.getServiceName()))
+                        .thenComparing(item -> String.valueOf(item.getMinPrice()))
+                        .thenComparing(item -> String.valueOf(item.getMaxPrice())))
+                .forEach(item -> signature
+                        .append(normalizer.normalize(item.getServiceCode())).append('~')
+                        .append(normalizer.normalize(item.getServiceName())).append('~')
+                        .append(item.getMinPrice()).append('~')
+                        .append(item.getMaxPrice()).append('~')
+                        .append(item.getMedicalCategoryId()).append(';'));
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(signature.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("تعذر حساب بصمة قائمة الأسعار", e);
+        }
+    }
+
     @Transactional(readOnly = true)
     public Page<PriceListSessionSummaryResponse> listPriceListSessions(PriceListSessionStatus status, Pageable pageable) {
         Page<PriceListClassificationSession> page = status == null
@@ -234,6 +281,29 @@ public class MedicalDictionaryService {
         PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
         return toPriceListSessionResponse(session, true);
+    }
+
+    @Transactional
+    public void deletePriceListSession(Long sessionId) {
+        PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("القائمة المصنفة غير موجودة"));
+        if (session.getStatus() == PriceListSessionStatus.POSTED_TO_CONTRACT || session.getPostedCount() != null && session.getPostedCount() > 0) {
+            throw new IllegalArgumentException("لا يمكن حذف قائمة تم ترحيلها لعقد مقدم خدمة. يمكن مراجعة أثرها من العقد وسجل التدقيق.");
+        }
+
+        medicalAuditLogService.record(AuditLogWriteRequest.builder()
+                .entityType(EntityType.PRICE_LIST)
+                .entityId(String.valueOf(session.getId()))
+                .action(AuditAction.DELETED)
+                .source(AuditSource.USER)
+                .reason("حذف قائمة أسعار مصنفة غير مرحلة")
+                .beforeState(Map.of(
+                        "sessionName", session.getSessionName(),
+                        "originalFileName", session.getOriginalFileName(),
+                        "status", session.getStatus() == null ? "" : session.getStatus().name(),
+                        "totalRows", session.getTotalRows()))
+                .build());
+        priceListSessionRepository.delete(session);
     }
 
     @Transactional

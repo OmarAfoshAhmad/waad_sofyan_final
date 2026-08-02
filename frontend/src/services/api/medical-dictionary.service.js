@@ -59,6 +59,11 @@ export const getPriceListClassificationSession = async (sessionId) => {
   return unwrap(response);
 };
 
+export const deletePriceListClassificationSession = async (sessionId) => {
+  const response = await axiosClient.delete(`${BASE_URL}/price-lists/sessions/${sessionId}`);
+  return unwrap(response);
+};
+
 export const postPriceListClassificationSessionToContract = async (sessionId, payload) => {
   const response = await axiosClient.post(`${BASE_URL}/price-lists/sessions/${sessionId}/post-to-contract`, payload);
   return unwrap(response);
@@ -96,6 +101,7 @@ export default {
   savePriceListClassificationSession,
   listPriceListClassificationSessions,
   getPriceListClassificationSession,
+  deletePriceListClassificationSession,
   postPriceListClassificationSessionToContract,
   listDictionarySuggestions,
   createDictionarySuggestion,

@@ -108,6 +108,13 @@ public class MedicalDictionaryController {
         return ResponseEntity.ok(ApiResponse.success(service.getPriceListSession(sessionId)));
     }
 
+    @DeleteMapping("/price-lists/sessions/{sessionId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<Void>> deletePriceListSession(@PathVariable Long sessionId) {
+        service.deletePriceListSession(sessionId);
+        return ResponseEntity.ok(ApiResponse.success("تم حذف القائمة المصنفة غير المرحلة بنجاح", null));
+    }
+
     @PostMapping("/price-lists/sessions")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<PriceListSessionResponse>> savePriceListSession(

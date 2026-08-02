@@ -29,6 +29,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useNavigate } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { searchProviderContracts } from 'services/api/provider-contracts.service';
@@ -72,11 +74,13 @@ export default function PriceListSessionsPage() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [contractOptions, setContractOptions] = useState([]);
   const [contractsLoading, setContractsLoading] = useState(false);
   const [postDialog, setPostDialog] = useState({ open: false, session: null, contract: null, effectiveFrom: '' });
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, session: null });
 
   const filteredSessions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -153,6 +157,34 @@ export default function PriceListSessionsPage() {
   const closePostDialog = () => {
     if (posting) return;
     setPostDialog({ open: false, session: null, contract: null, effectiveFrom: '' });
+  };
+
+  const openDeleteDialog = (session) => {
+    setDeleteDialog({ open: true, session });
+    setError('');
+    setSuccess('');
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setDeleteDialog({ open: false, session: null });
+  };
+
+  const deleteSelectedSession = async () => {
+    if (!deleteDialog.session?.id) return;
+    setDeleting(true);
+    setError('');
+    setSuccess('');
+    try {
+      await medicalDictionaryService.deletePriceListClassificationSession(deleteDialog.session.id);
+      setSuccess(`تم حذف القائمة المصنفة رقم ${deleteDialog.session.id} لأنها لم تُرحّل لأي عقد.`);
+      setDeleteDialog({ open: false, session: null });
+      await loadSessions();
+    } catch (err) {
+      setError(err?.response?.data?.message || 'تعذر حذف القائمة المصنفة');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const postSelectedSession = async () => {
@@ -298,6 +330,15 @@ export default function PriceListSessionsPage() {
                             >
                               ترحيل
                             </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              startIcon={<DeleteOutlineIcon />}
+                              disabled={session.status === 'POSTED_TO_CONTRACT' || (session.posted || 0) > 0}
+                              onClick={() => openDeleteDialog(session)}
+                            >
+                              حذف
+                            </Button>
                             <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => navigate(`/price-list-classifier?sessionId=${session.id}`)}>
                               فتح الأداة
                             </Button>
@@ -373,6 +414,43 @@ export default function PriceListSessionsPage() {
               onClick={postSelectedSession}
             >
               ترحيل للعقد
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={deleteDialog.open} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <WarningAmberIcon color="error" />
+              <span>تأكيد حذف القائمة المصنفة</span>
+            </Stack>
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              سيتم حذف القائمة المصنفة وبنودها من المتابعة. لا يمكن حذف قائمة تم ترحيلها لعقد مقدم خدمة.
+            </Alert>
+            <Typography>
+              هل تريد حذف القائمة:
+            </Typography>
+            <Typography sx={{ mt: 1, fontWeight: 900 }}>
+              {deleteDialog.session?.sessionName}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              رقم القائمة: {deleteDialog.session?.id} — عدد الصفوف: {deleteDialog.session?.totalRows || 0}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeDeleteDialog} disabled={deleting}>
+              تراجع
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={deleting ? <CircularProgress size={18} /> : <DeleteOutlineIcon />}
+              disabled={deleting}
+              onClick={deleteSelectedSession}
+            >
+              حذف نهائي
             </Button>
           </DialogActions>
         </Dialog>
