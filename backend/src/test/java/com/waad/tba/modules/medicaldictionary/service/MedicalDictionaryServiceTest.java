@@ -6,7 +6,12 @@ import com.waad.tba.modules.medicaldictionary.enums.DictionaryEntryStatus;
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionaryEntryRepository;
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionarySuggestionRepository;
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionarySynonymRepository;
+import com.waad.tba.modules.medicaldictionary.repository.PriceListClassificationItemRepository;
+import com.waad.tba.modules.medicaldictionary.repository.PriceListClassificationSessionRepository;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.audit.service.MedicalAuditLogService;
+import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
+import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.security.AuthorizationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,7 +37,17 @@ class MedicalDictionaryServiceTest {
     @Mock
     private MedicalDictionarySuggestionRepository suggestionRepository;
     @Mock
+    private PriceListClassificationSessionRepository priceListSessionRepository;
+    @Mock
+    private PriceListClassificationItemRepository priceListItemRepository;
+    @Mock
     private MedicalCategoryRepository medicalCategoryRepository;
+    @Mock
+    private ProviderContractRepository providerContractRepository;
+    @Mock
+    private ProviderContractPricingItemRepository providerContractPricingItemRepository;
+    @Mock
+    private MedicalAuditLogService medicalAuditLogService;
     @Mock
     private AuthorizationService authorizationService;
 
@@ -54,7 +69,12 @@ class MedicalDictionaryServiceTest {
                 entryRepository,
                 synonymRepository,
                 suggestionRepository,
+                priceListSessionRepository,
+                priceListItemRepository,
                 medicalCategoryRepository,
+                providerContractRepository,
+                providerContractPricingItemRepository,
+                medicalAuditLogService,
                 new MedicalDictionaryNormalizer(),
                 authorizationService
         );
