@@ -427,11 +427,13 @@ public class PreAuthorizationController {
             parsedStatus = PreAuthStatus.valueOf(status.trim().toUpperCase());
         }
 
+        // Always route through getOperationalReport(), even with no filters applied: it enforces
+        // provider/reviewer scoping (a PROVIDER_STAFF or MEDICAL_REVIEWER user is restricted to
+        // their own provider/assigned providers). getAllPreAuthorizations() applies NO scoping at
+        // all — calling it for the default unfiltered view let any provider user see every
+        // pre-authorization in the system, from every other provider and employer.
         Page<PreAuthorizationResponseDto> internalPage =
-                parsedStatus != null || providerId != null || employerId != null
-                        || (memberSearch != null && !memberSearch.isBlank()) || dateFrom != null || dateTo != null
-                        ? preAuthorizationService.getOperationalReport(parsedStatus, providerId, employerId, memberSearch, dateFrom, dateTo, pageable)
-                        : preAuthorizationService.getAllPreAuthorizations(pageable);
+                preAuthorizationService.getOperationalReport(parsedStatus, providerId, employerId, memberSearch, dateFrom, dateTo, pageable);
         
         // Convert to API response
         PreAuthorizationListResponse response = apiMapper.toListResponse(internalPage);

@@ -594,7 +594,13 @@ const UnifiedMemberView = () => {
                           size="small"
                           sx={{ height: '1.5rem', fontSize: '0.75rem' }}
                         />
-                        <Tooltip title="اضغط لتغيير حالة المستفيد">
+                        <Tooltip
+                          title={
+                            member.status === 'SUSPENDED' && member.blockedReason
+                              ? `سبب الإيقاف: ${member.blockedReason}`
+                              : 'اضغط لتغيير حالة المستفيد'
+                          }
+                        >
                           <Chip
                             label={
                               { ACTIVE: 'نشط', TERMINATED: 'منتهي', SUSPENDED: 'موقوف', PENDING: 'قيد المراجعة' }[member.status] ||
@@ -907,7 +913,13 @@ const UnifiedMemberView = () => {
                                   </TableCell>
                                   <TableCell align="center">{dep.birthDate || '-'}</TableCell>
                                   <TableCell align="center">
-                                    <Tooltip title="اضغط لتغيير حالة التابع">
+                                    <Tooltip
+                                      title={
+                                        dep.status === 'SUSPENDED' && dep.blockedReason
+                                          ? `سبب الإيقاف: ${dep.blockedReason}`
+                                          : 'اضغط لتغيير حالة التابع'
+                                      }
+                                    >
                                       <Chip
                                         label={
                                           { ACTIVE: 'نشط', TERMINATED: 'منتهي', SUSPENDED: 'موقوف', PENDING: 'قيد المراجعة' }[

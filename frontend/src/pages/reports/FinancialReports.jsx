@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -67,6 +68,7 @@ import { useAuth } from 'contexts/AuthContext';
  * Permissions: ACCOUNTANT, MEDICAL_REVIEWER, SUPER_ADMIN (NOT PROVIDER)
  */
 const FinancialReports = () => {
+  const navigate = useNavigate();
   const { companyName, primaryColor } = useCompanySettings();
   const { user } = useAuth();
   const printRef = useRef(null);
@@ -874,7 +876,9 @@ const FinancialReports = () => {
                           <TableRow
                             key={row.id || idx}
                             hover
+                            onClick={() => row.id && navigate(`/claims/${row.id}/medical-review`)}
                             sx={{
+                              cursor: row.id ? 'pointer' : 'default',
                               '&:nth-of-type(odd)': { bgcolor: 'grey.50' },
                               '&:hover': { bgcolor: 'action.hover' }
                             }}

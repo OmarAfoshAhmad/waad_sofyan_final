@@ -174,7 +174,11 @@ const EmployerEdit = () => {
     }
   };
 
-  if (loadingEmployer) {
+  // Two separate loading gates on purpose: `loadingEmployer` covers the network fetch, but
+  // `employer` (local form state) is only populated one render later by a separate effect once
+  // `employerData` arrives. Without this second check, that one-render gap showed the
+  // "not found" error below for a single frame before the real form appeared, even on success.
+  if (loadingEmployer || (!fetchError && !employer)) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />

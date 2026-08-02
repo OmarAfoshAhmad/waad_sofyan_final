@@ -457,6 +457,12 @@ public class UnifiedMemberService {
             dependents.forEach(dep -> {
                 dep.setStatus(newStatus);
                 dep.setActive(newStatus != Member.MemberStatus.TERMINATED);
+                // Dependents inherit the principal's suspension reason — they weren't suspended
+                // for their own reason, so the tooltip/badge should explain it's a family-wide
+                // effect of the principal's status, not show a blank reason.
+                dep.setBlockedReason(newStatus == Member.MemberStatus.SUSPENDED
+                        ? "إيقاف تلقائي لتوقف الرئيسي: " + reason
+                        : null);
             });
             memberRepository.saveAll(dependents);
         }

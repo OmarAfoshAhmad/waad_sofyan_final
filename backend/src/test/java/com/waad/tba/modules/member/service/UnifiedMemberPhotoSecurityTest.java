@@ -26,6 +26,7 @@ import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.provider.service.ProviderService;
 import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.systemadmin.service.AuditLogService;
 import com.waad.tba.security.AuthorizationService;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +42,7 @@ class UnifiedMemberPhotoSecurityTest {
     @Mock private ProviderService providerService;
     @Mock private MemberFinancialSummaryService financialSummaryService;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private AuditLogService auditLogService;
 
     private UnifiedMemberService service;
     private User currentUser;
@@ -57,7 +59,8 @@ class UnifiedMemberPhotoSecurityTest {
                 authorizationService,
                 providerService,
                 financialSummaryService,
-                jdbcTemplate);
+                jdbcTemplate,
+                auditLogService);
         currentUser = mock(User.class);
         when(authorizationService.requireCurrentUser()).thenReturn(currentUser);
     }

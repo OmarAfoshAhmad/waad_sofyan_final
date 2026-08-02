@@ -618,6 +618,15 @@ public class ClaimReviewService {
         User currentUser = authorizationService.getCurrentUser();
         Page<Claim> claims;
 
+        // PROVIDER_STAFF must never see another provider's inbox: the client-supplied providerId
+        // is IGNORED and overridden with the caller's own. Without this, omitting providerId
+        // returned every pending claim in the system, and passing another provider's ID returned
+        // that provider's inbox instead of a 403.
+        Long enforcedProviderId = authorizationService.getProviderFilterForUser(currentUser);
+        if (enforcedProviderId != null) {
+            providerId = enforcedProviderId;
+        }
+
         if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
             if (providerId == null)
                 throw new BusinessRuleException("providerId is required");
@@ -644,6 +653,14 @@ public class ClaimReviewService {
 
         User currentUser = authorizationService.getCurrentUser();
         Page<Claim> claims;
+
+        // Same enforcement as getPendingClaims(): a provider must never see another provider's
+        // settlement inbox, whether by omitting providerId (saw everyone's) or passing someone
+        // else's ID (saw theirs instead of being denied).
+        Long enforcedProviderId = authorizationService.getProviderFilterForUser(currentUser);
+        if (enforcedProviderId != null) {
+            providerId = enforcedProviderId;
+        }
 
         if (reviewerIsolationService.isSubjectToIsolation(currentUser)) {
             if (providerId == null)

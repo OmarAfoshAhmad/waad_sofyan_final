@@ -31,7 +31,8 @@ import {
   Divider,
   IconButton,
   Tooltip,
-  Badge
+  Badge,
+  Chip
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -108,6 +109,7 @@ const UnifiedMemberEdit = () => {
     joinDate: null,
     occupation: '',
     status: 'ACTIVE',
+    blockedReason: '',
     startDate: null,
     endDate: null,
     notes: '',
@@ -173,6 +175,7 @@ const UnifiedMemberEdit = () => {
         joinDate: data.joinDate ? dayjs(data.joinDate) : null,
         occupation: data.occupation || '',
         status: data.status || 'ACTIVE',
+        blockedReason: data.blockedReason || '',
         startDate: data.startDate ? dayjs(data.startDate) : null,
         endDate: data.endDate ? dayjs(data.endDate) : null,
         notes: data.notes || '',
@@ -600,6 +603,13 @@ const UnifiedMemberEdit = () => {
                         <FormHelperText>تؤثر الحالة على الأهلية والبحث في البوابة.</FormHelperText>
                       </FormControl>
                     </Grid>
+                    {form.status === 'SUSPENDED' && form.status === initialStatus && form.blockedReason && (
+                      <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Tooltip title={form.blockedReason}>
+                          <Chip label={`سبب الإيقاف: ${form.blockedReason}`} color="warning" variant="outlined" sx={{ maxWidth: '100%' }} />
+                        </Tooltip>
+                      </Grid>
+                    )}
                     {form.status === 'SUSPENDED' && form.status !== initialStatus && (
                       <Grid size={{ xs: 12, md: 6 }}>
                         <TextField

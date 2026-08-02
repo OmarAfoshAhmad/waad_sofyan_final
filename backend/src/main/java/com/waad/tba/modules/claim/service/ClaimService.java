@@ -998,6 +998,16 @@ public class ClaimService {
             employerId = currentUser.getEmployerId();
         }
 
+        // PROVIDER_STAFF is locked to their own provider — without this, a provider user
+        // falls into the "else" branch below (meant for Admin/SuperAdmin bypass) and would see
+        // every claim from every provider and employer in the system. The client-supplied
+        // providerId, if any, is IGNORED and overridden here to prevent a provider requesting
+        // another provider's ID from seeing their claims.
+        Long enforcedProviderId = authorizationService.getProviderFilterForUser(currentUser);
+        if (enforcedProviderId != null) {
+            providerId = enforcedProviderId;
+        }
+
         // Build sort direction from string parameter
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));

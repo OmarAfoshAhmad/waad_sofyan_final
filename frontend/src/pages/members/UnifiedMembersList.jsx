@@ -539,7 +539,12 @@ const UnifiedMembersList = () => {
           PENDING: { label: 'قيد المراجعة', color: 'warning' }
         };
         const config = statusConfig[member.status] || { label: member.status, color: 'default' };
-        return <Chip label={config.label} color={config.color} size="small" />;
+        const statusChip = <Chip label={config.label} color={config.color} size="small" />;
+        return member.status === 'SUSPENDED' && member.blockedReason ? (
+          <Tooltip title={`سبب الإيقاف: ${member.blockedReason}`}>{statusChip}</Tooltip>
+        ) : (
+          statusChip
+        );
 
       case 'employerName':
         return <Typography variant="body2">{member.employerName || '-'}</Typography>;
@@ -749,33 +754,37 @@ const UnifiedMembersList = () => {
             />
 
             {/* Search Input */}
-            <TextField
-              sx={{ flexGrow: 1, minWidth: { md: '200px' } }}
-              size="small"
-              placeholder="بحث بالاسم أو رقم البطاقة..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              helperText={
-                searchTerm.trim() && searchTerm.trim().length < MIN_MEMBER_SEARCH_LENGTH
-                  ? `أدخل ${MIN_MEMBER_SEARCH_LENGTH} أحرف على الأقل للبحث`
-                  : ' '
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-                endAdornment: searchTerm && (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setSearchTerm('')}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-                sx: { height: '2.5rem' }
-              }}
-            />
+            {/* Tooltip (not helperText) so this field reserves the same height as its sibling
+                filter dropdowns, none of which have helper text — helperText was pushing this
+                field out of vertical alignment with the rest of the row. */}
+            <Tooltip
+              title={`أدخل ${MIN_MEMBER_SEARCH_LENGTH} أحرف على الأقل للبحث`}
+              open={Boolean(searchTerm.trim() && searchTerm.trim().length < MIN_MEMBER_SEARCH_LENGTH)}
+              placement="bottom-start"
+            >
+              <TextField
+                sx={{ flexGrow: 1, minWidth: { md: '200px' } }}
+                size="small"
+                placeholder="بحث بالاسم أو رقم البطاقة..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchTerm('')}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                  sx: { height: '2.5rem' }
+                }}
+              />
+            </Tooltip>
 
             {/* Employer Filter */}
             <TextField
