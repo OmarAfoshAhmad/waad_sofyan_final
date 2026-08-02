@@ -33,6 +33,7 @@ import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+import { searchProviderContracts } from 'services/api/provider-contracts.service';
 
 const loadXlsx = async () => import('xlsx');
 
@@ -533,6 +534,9 @@ export default function PriceListClassifierPage() {
   const [savingSession, setSavingSession] = useState(false);
   const [postingToContract, setPostingToContract] = useState(false);
   const [targetContractId, setTargetContractId] = useState('');
+  const [targetContract, setTargetContract] = useState(null);
+  const [contractOptions, setContractOptions] = useState([]);
+  const [contractsLoading, setContractsLoading] = useState(false);
   const [targetEffectiveFrom, setTargetEffectiveFrom] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -610,6 +614,31 @@ export default function PriceListClassifierPage() {
       .finally(() => {
         if (mounted) setCategoriesLoading(false);
       });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const extractContracts = (response) => {
+      const content = response?.content || response?.items || response?.data?.content || response?.data?.items || [];
+      return Array.isArray(content) ? content : [];
+    };
+
+    const fetchContracts = async () => {
+      setContractsLoading(true);
+      try {
+        const response = await searchProviderContracts({ status: 'ACTIVE', page: 0, size: 50 });
+        if (mounted) setContractOptions(extractContracts(response));
+      } catch {
+        if (mounted) setContractOptions([]);
+      } finally {
+        if (mounted) setContractsLoading(false);
+      }
+    };
+
+    fetchContracts();
     return () => {
       mounted = false;
     };
@@ -1175,12 +1204,32 @@ export default function PriceListClassifierPage() {
                 >
                   حفظ الجلسة
                 </Button>
-                <TextField
+                <Autocomplete
                   size="small"
-                  value={targetContractId}
-                  onChange={(event) => setTargetContractId(event.target.value)}
-                  placeholder="رقم العقد"
-                  sx={{ minWidth: 130 }}
+                  options={contractOptions}
+                  loading={contractsLoading}
+                  value={targetContract}
+                  onChange={(_, value) => {
+                    setTargetContract(value);
+                    setTargetContractId(value?.id ? String(value.id) : '');
+                    if (value?.startDate && !targetEffectiveFrom) setTargetEffectiveFrom(value.startDate);
+                  }}
+                  getOptionLabel={(option) =>
+                    option
+                      ? `${option.contractCode || `#${option.id}`} — ${option.provider?.name || 'مقدم خدمة غير محدد'} — ${
+                          option.pricingScopeLabel || option.pricingScope || ''
+                        }`
+                      : ''
+                  }
+                  isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="اختر عقداً نشطاً"
+                      helperText={targetContract?.pricingItemsCount != null ? `${targetContract.pricingItemsCount} خدمة حالية` : 'العقود النشطة فقط'}
+                    />
+                  )}
+                  sx={{ minWidth: 320 }}
                 />
                 <TextField
                   size="small"

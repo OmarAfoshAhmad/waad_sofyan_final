@@ -1823,13 +1823,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           </Stack>
         }
         secondary={
-          canEdit && (
             <Stack direction="row" spacing={1}>
               {onOpenStructure && (
                 <Tooltip title="إدارة المجموعات والأوعية والروابط">
                   <IconButton
                     color="success"
                     onClick={onOpenStructure}
+                    disabled={!canEdit}
                     sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
                   >
                     <LinkIcon fontSize="small" />
@@ -1842,7 +1842,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 <IconButton
                   color="primary"
                   onClick={handleDownloadTemplate}
-                  disabled={!canEdit || downloadingTemplate}
+                  disabled={downloadingTemplate}
                   sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
                 >
                   {downloadingTemplate ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon fontSize="small" />}
@@ -1895,7 +1895,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 </IconButton>
               </Tooltip>
             </Stack>
-          )
         }
       >
         {structureLoadFailed && (
