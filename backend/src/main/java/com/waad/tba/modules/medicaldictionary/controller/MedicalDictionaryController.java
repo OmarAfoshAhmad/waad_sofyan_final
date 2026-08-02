@@ -4,6 +4,7 @@ import com.waad.tba.common.dto.ApiResponse;
 import com.waad.tba.modules.medicaldictionary.dto.*;
 import com.waad.tba.modules.medicaldictionary.enums.DictionaryEntryStatus;
 import com.waad.tba.modules.medicaldictionary.enums.DictionarySuggestionStatus;
+import com.waad.tba.modules.medicaldictionary.enums.PriceListSessionStatus;
 import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -89,6 +90,29 @@ public class MedicalDictionaryController {
     public ResponseEntity<ApiResponse<PriceListClassificationResponse>> classifyPriceList(
             @Valid @RequestBody PriceListClassificationRequest request) {
         return ResponseEntity.ok(ApiResponse.success(service.classifyPriceList(request)));
+    }
+
+    @GetMapping("/price-lists/sessions")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<Page<PriceListSessionSummaryResponse>>> listPriceListSessions(
+            @RequestParam(required = false) PriceListSessionStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100), Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ResponseEntity.ok(ApiResponse.success(service.listPriceListSessions(status, pageable)));
+    }
+
+    @GetMapping("/price-lists/sessions/{sessionId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<PriceListSessionResponse>> getPriceListSession(@PathVariable Long sessionId) {
+        return ResponseEntity.ok(ApiResponse.success(service.getPriceListSession(sessionId)));
+    }
+
+    @PostMapping("/price-lists/sessions")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<PriceListSessionResponse>> savePriceListSession(
+            @Valid @RequestBody PriceListSessionSaveRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("تم حفظ جلسة تنظيم قائمة الأسعار", service.savePriceListSession(request)));
     }
 
     @GetMapping("/suggestions")

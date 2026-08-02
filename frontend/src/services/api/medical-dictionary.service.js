@@ -44,6 +44,21 @@ export const classifyPriceListWithDictionary = async (payload) => {
   return unwrap(response);
 };
 
+export const savePriceListClassificationSession = async (payload) => {
+  const response = await axiosClient.post(`${BASE_URL}/price-lists/sessions`, payload);
+  return unwrap(response);
+};
+
+export const listPriceListClassificationSessions = async (params = {}) => {
+  const response = await axiosClient.get(`${BASE_URL}/price-lists/sessions`, { params });
+  return normalizePaginatedResponse(response);
+};
+
+export const getPriceListClassificationSession = async (sessionId) => {
+  const response = await axiosClient.get(`${BASE_URL}/price-lists/sessions/${sessionId}`);
+  return unwrap(response);
+};
+
 export const listDictionarySuggestions = async (params = {}) => {
   const response = await axiosClient.get(`${BASE_URL}/suggestions`, { params });
   return normalizePaginatedResponse(response);
@@ -73,6 +88,9 @@ export default {
   toggleDictionarySynonym,
   matchMedicalDictionary,
   classifyPriceListWithDictionary,
+  savePriceListClassificationSession,
+  listPriceListClassificationSessions,
+  getPriceListClassificationSession,
   listDictionarySuggestions,
   createDictionarySuggestion,
   approveDictionarySuggestion,

@@ -530,6 +530,7 @@ export default function PriceListClassifierPage() {
   const [classificationProgress, setClassificationProgress] = useState(null);
   const [promoting, setPromoting] = useState(false);
   const [approvingSynonyms, setApprovingSynonyms] = useState(false);
+  const [savingSession, setSavingSession] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -771,6 +772,66 @@ export default function PriceListClassifierPage() {
     setRawRows([]);
     setFileName('');
     setSuccess('تم مسح جلسة التصنيف المحفوظة.');
+  };
+
+  const buildBackendSessionPayload = () => ({
+    sessionId: sessionInfo?.backendSessionId || null,
+    sessionName: fileName ? `تنظيم قائمة أسعار - ${fileName}` : `تنظيم قائمة أسعار - ${new Date().toLocaleDateString('ar-LY')}`,
+    originalFileName: fileName || '',
+    items: items.map((item) => {
+      const effectiveCategory = getEffectiveCategory(item);
+      const isManual = Boolean(item.manualCategory);
+      return {
+        rowNumber: item.rowNumber,
+        sourceSheet: item.sourceSheet,
+        serviceCode: item.serviceCode || '',
+        serviceName: item.serviceName,
+        canonicalName: item.bestMatch?.canonicalName || '',
+        dictionaryEntryId: item.bestMatch?.entryId || null,
+        medicalCategoryId: effectiveCategory?.medicalCategoryId || null,
+        medicalCategoryCode: effectiveCategory?.medicalCategoryCode || '',
+        medicalCategoryName: effectiveCategory?.medicalCategoryName || '',
+        confidence: isManual ? 95 : item.bestMatch?.confidence || 0,
+        status: isManual ? 'MANUALLY_REVIEWED' : item.status,
+        price: item.price ?? getPriceMin(item),
+        minPrice: getPriceMin(item),
+        maxPrice: getPriceMax(item),
+        priceLabel: item.priceLabel || '',
+        duplicateName: Boolean(item.duplicateName),
+        mergedDuplicate: false,
+        mergedSourceCount: 1,
+        mergeNotes: item.duplicateName ? 'اسم خدمة مكرر في المصدر' : '',
+        manualReviewNote: isManual ? 'تم تعديل التصنيف يدوياً داخل نافذة تنظيم قوائم الأسعار' : ''
+      };
+    })
+  });
+
+  const saveSessionToBackend = async () => {
+    if (!items.length) {
+      setError('لا توجد نتيجة تصنيف لحفظها.');
+      return;
+    }
+
+    setSavingSession(true);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = await medicalDictionaryService.savePriceListClassificationSession(buildBackendSessionPayload());
+      const nextSession = {
+        ...(loadClassificationSession() || sessionInfo || {}),
+        backendSessionId: saved.id,
+        backendStatus: saved.status,
+        backendSummary: saved.summary,
+        savedAtBackend: new Date().toISOString()
+      };
+      saveClassificationSession(nextSession);
+      setSessionInfo(nextSession);
+      setSuccess(`تم حفظ جلسة تنظيم قائمة الأسعار في قاعدة البيانات #${saved.id} — الحالة: ${saved.status}`);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'فشل حفظ جلسة تنظيم قائمة الأسعار في قاعدة البيانات');
+    } finally {
+      setSavingSession(false);
+    }
   };
 
   const promoteReviewRowsToDictionarySuggestions = async () => {
@@ -1044,6 +1105,15 @@ export default function PriceListClassifierPage() {
                 </Select>
                 <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)}>
                   قالب Excel
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  startIcon={savingSession ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
+                  disabled={!items.length || savingSession}
+                  onClick={saveSessionToBackend}
+                >
+                  حفظ الجلسة
                 </Button>
                 <Button
                   variant="contained"

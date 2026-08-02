@@ -4,11 +4,17 @@ import com.waad.tba.modules.medicaldictionary.dto.*;
 import com.waad.tba.modules.medicaldictionary.entity.MedicalDictionaryEntry;
 import com.waad.tba.modules.medicaldictionary.entity.MedicalDictionarySuggestion;
 import com.waad.tba.modules.medicaldictionary.entity.MedicalDictionarySynonym;
+import com.waad.tba.modules.medicaldictionary.entity.PriceListClassificationItem;
+import com.waad.tba.modules.medicaldictionary.entity.PriceListClassificationSession;
 import com.waad.tba.modules.medicaldictionary.enums.DictionaryEntryStatus;
 import com.waad.tba.modules.medicaldictionary.enums.DictionarySuggestionStatus;
+import com.waad.tba.modules.medicaldictionary.enums.PriceListItemStatus;
+import com.waad.tba.modules.medicaldictionary.enums.PriceListSessionStatus;
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionaryEntryRepository;
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionarySuggestionRepository;
 import com.waad.tba.modules.medicaldictionary.repository.MedicalDictionarySynonymRepository;
+import com.waad.tba.modules.medicaldictionary.repository.PriceListClassificationItemRepository;
+import com.waad.tba.modules.medicaldictionary.repository.PriceListClassificationSessionRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
 import com.waad.tba.security.AuthorizationService;
@@ -19,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +40,8 @@ public class MedicalDictionaryService {
     private final MedicalDictionaryEntryRepository entryRepository;
     private final MedicalDictionarySynonymRepository synonymRepository;
     private final MedicalDictionarySuggestionRepository suggestionRepository;
+    private final PriceListClassificationSessionRepository priceListSessionRepository;
+    private final PriceListClassificationItemRepository priceListItemRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
     private final MedicalDictionaryNormalizer normalizer;
     private final AuthorizationService authorizationService;
@@ -159,6 +168,224 @@ public class MedicalDictionaryService {
                         .duplicateNames(duplicates)
                         .build())
                 .items(items)
+                .build();
+    }
+
+    @Transactional
+    public PriceListSessionResponse savePriceListSession(PriceListSessionSaveRequest request) {
+        var currentUser = authorizationService.getCurrentUser();
+        Long actorId = currentUser == null ? null : currentUser.getId();
+
+        PriceListClassificationSession session = request.getSessionId() == null
+                ? new PriceListClassificationSession()
+                : priceListSessionRepository.findById(request.getSessionId())
+                .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+
+        session.setSessionName(request.getSessionName().trim());
+        session.setOriginalFileName(blankToNull(request.getOriginalFileName()));
+        session.setProviderId(request.getProviderId());
+        session.setProviderName(blankToNull(request.getProviderName()));
+        session.setContractId(request.getContractId());
+        session.setContractCode(blankToNull(request.getContractCode()));
+        session.setNotes(blankToNull(request.getNotes()));
+        session.setUpdatedBy(actorId);
+        if (session.getId() == null) {
+            session.setCreatedBy(actorId);
+            session.setItems(new ArrayList<>());
+        }
+
+        session.getItems().clear();
+        for (PriceListSessionSaveRequest.Item itemRequest : request.getItems()) {
+            PriceListClassificationItem item = toPriceListItem(session, itemRequest);
+            session.getItems().add(item);
+        }
+        recalculateSessionSummary(session);
+
+        PriceListClassificationSession saved = priceListSessionRepository.save(session);
+        return toPriceListSessionResponse(saved, true);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PriceListSessionSummaryResponse> listPriceListSessions(PriceListSessionStatus status, Pageable pageable) {
+        Page<PriceListClassificationSession> page = status == null
+                ? priceListSessionRepository.findAll(pageable)
+                : priceListSessionRepository.findByStatus(status, pageable);
+        return page.map(this::toPriceListSessionSummaryResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public PriceListSessionResponse getPriceListSession(Long sessionId) {
+        PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
+        return toPriceListSessionResponse(session, true);
+    }
+
+    private PriceListClassificationItem toPriceListItem(PriceListClassificationSession session, PriceListSessionSaveRequest.Item request) {
+        PriceListItemStatus status = resolveItemStatus(request.getStatus(), request.getMedicalCategoryId(), request.getCanonicalName());
+        return PriceListClassificationItem.builder()
+                .session(session)
+                .rowNumber(request.getRowNumber())
+                .sourceSheet(blankToNull(request.getSourceSheet()))
+                .providerServiceCode(blankToNull(request.getServiceCode()))
+                .providerServiceName(request.getServiceName().trim())
+                .canonicalName(blankToNull(request.getCanonicalName()))
+                .dictionaryEntryId(request.getDictionaryEntryId())
+                .medicalCategoryId(request.getMedicalCategoryId())
+                .medicalCategoryCode(blankToNull(request.getMedicalCategoryCode()))
+                .medicalCategoryName(blankToNull(request.getMedicalCategoryName()))
+                .confidence(request.getConfidence())
+                .status(status)
+                .price(request.getPrice())
+                .minPrice(request.getMinPrice() != null ? request.getMinPrice() : request.getPrice())
+                .maxPrice(request.getMaxPrice())
+                .priceLabel(blankToNull(request.getPriceLabel()))
+                .duplicateName(Boolean.TRUE.equals(request.getDuplicateName()))
+                .mergedDuplicate(Boolean.TRUE.equals(request.getMergedDuplicate()))
+                .mergedSourceCount(request.getMergedSourceCount() == null || request.getMergedSourceCount() < 1 ? 1 : request.getMergedSourceCount())
+                .mergeNotes(blankToNull(request.getMergeNotes()))
+                .manualReviewNote(blankToNull(request.getManualReviewNote()))
+                .build();
+    }
+
+    private PriceListItemStatus resolveItemStatus(String status, Long categoryId, String canonicalName) {
+        if (status != null && !status.isBlank()) {
+            try {
+                return PriceListItemStatus.valueOf(status.trim());
+            } catch (IllegalArgumentException ignored) {
+                // fall through to legacy status mapping
+            }
+            return switch (status.trim()) {
+                case "HIGH_CONFIDENCE" -> PriceListItemStatus.HIGH_CONFIDENCE;
+                case "NEEDS_REVIEW" -> PriceListItemStatus.NEEDS_REVIEW;
+                case "MANUAL", "MANUALLY_REVIEWED" -> PriceListItemStatus.MANUALLY_REVIEWED;
+                default -> PriceListItemStatus.UNKNOWN;
+            };
+        }
+        if (categoryId != null && canonicalName != null && !canonicalName.isBlank()) {
+            return PriceListItemStatus.MANUALLY_REVIEWED;
+        }
+        return PriceListItemStatus.UNKNOWN;
+    }
+
+    private void recalculateSessionSummary(PriceListClassificationSession session) {
+        List<PriceListClassificationItem> items = session.getItems() == null ? List.of() : session.getItems();
+        int high = 0;
+        int review = 0;
+        int unknown = 0;
+        int duplicate = 0;
+        int ranged = 0;
+        int posted = 0;
+
+        for (PriceListClassificationItem item : items) {
+            PriceListItemStatus status = item.getStatus();
+            if (status == PriceListItemStatus.HIGH_CONFIDENCE || status == PriceListItemStatus.MANUALLY_REVIEWED || status == PriceListItemStatus.READY_TO_POST) {
+                high++;
+            } else if (status == PriceListItemStatus.NEEDS_REVIEW) {
+                review++;
+            } else if (status == PriceListItemStatus.UNKNOWN) {
+                unknown++;
+            }
+            if (Boolean.TRUE.equals(item.getDuplicateName()) || Boolean.TRUE.equals(item.getMergedDuplicate())) duplicate++;
+            if (item.getMinPrice() != null && item.getMaxPrice() != null && item.getMaxPrice().compareTo(item.getMinPrice()) > 0) ranged++;
+            if (item.getPostedPricingItemId() != null || status == PriceListItemStatus.POSTED_TO_CONTRACT) posted++;
+        }
+
+        session.setTotalRows(items.size());
+        session.setHighConfidenceCount(high);
+        session.setNeedsReviewCount(review);
+        session.setUnknownCount(unknown);
+        session.setDuplicateCount(duplicate);
+        session.setRangedPriceCount(ranged);
+        session.setPostedCount(posted);
+        if (posted > 0 && posted == items.size()) {
+            session.setStatus(PriceListSessionStatus.POSTED_TO_CONTRACT);
+        } else if (unknown > 0 || review > 0) {
+            session.setStatus(PriceListSessionStatus.NEEDS_REVIEW);
+        } else {
+            session.setStatus(PriceListSessionStatus.READY_TO_POST);
+        }
+    }
+
+    private PriceListSessionResponse toPriceListSessionResponse(PriceListClassificationSession session, boolean includeItems) {
+        List<PriceListSessionResponse.Item> items = includeItems
+                ? priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(session.getId()).stream().map(this::toPriceListItemResponse).toList()
+                : List.of();
+        return PriceListSessionResponse.builder()
+                .id(session.getId())
+                .sessionName(session.getSessionName())
+                .originalFileName(session.getOriginalFileName())
+                .providerId(session.getProviderId())
+                .providerName(session.getProviderName())
+                .contractId(session.getContractId())
+                .contractCode(session.getContractCode())
+                .status(session.getStatus())
+                .summary(toPriceListSessionSummary(session))
+                .notes(session.getNotes())
+                .createdAt(session.getCreatedAt())
+                .updatedAt(session.getUpdatedAt())
+                .items(items)
+                .build();
+    }
+
+    private PriceListSessionSummaryResponse toPriceListSessionSummaryResponse(PriceListClassificationSession session) {
+        return PriceListSessionSummaryResponse.builder()
+                .id(session.getId())
+                .sessionName(session.getSessionName())
+                .originalFileName(session.getOriginalFileName())
+                .providerId(session.getProviderId())
+                .providerName(session.getProviderName())
+                .contractId(session.getContractId())
+                .contractCode(session.getContractCode())
+                .status(session.getStatus())
+                .totalRows(session.getTotalRows())
+                .highConfidence(session.getHighConfidenceCount())
+                .needsReview(session.getNeedsReviewCount())
+                .unknown(session.getUnknownCount())
+                .duplicates(session.getDuplicateCount())
+                .rangedPrices(session.getRangedPriceCount())
+                .posted(session.getPostedCount())
+                .createdAt(session.getCreatedAt())
+                .updatedAt(session.getUpdatedAt())
+                .build();
+    }
+
+    private PriceListSessionResponse.Summary toPriceListSessionSummary(PriceListClassificationSession session) {
+        return PriceListSessionResponse.Summary.builder()
+                .totalRows(session.getTotalRows())
+                .highConfidence(session.getHighConfidenceCount())
+                .needsReview(session.getNeedsReviewCount())
+                .unknown(session.getUnknownCount())
+                .duplicates(session.getDuplicateCount())
+                .rangedPrices(session.getRangedPriceCount())
+                .posted(session.getPostedCount())
+                .build();
+    }
+
+    private PriceListSessionResponse.Item toPriceListItemResponse(PriceListClassificationItem item) {
+        return PriceListSessionResponse.Item.builder()
+                .id(item.getId())
+                .rowNumber(item.getRowNumber())
+                .sourceSheet(item.getSourceSheet())
+                .serviceCode(item.getProviderServiceCode())
+                .serviceName(item.getProviderServiceName())
+                .canonicalName(item.getCanonicalName())
+                .dictionaryEntryId(item.getDictionaryEntryId())
+                .medicalCategoryId(item.getMedicalCategoryId())
+                .medicalCategoryCode(item.getMedicalCategoryCode())
+                .medicalCategoryName(item.getMedicalCategoryName())
+                .confidence(item.getConfidence())
+                .status(item.getStatus())
+                .price(item.getPrice())
+                .minPrice(item.getMinPrice())
+                .maxPrice(item.getMaxPrice())
+                .priceLabel(item.getPriceLabel())
+                .duplicateName(item.getDuplicateName())
+                .mergedDuplicate(item.getMergedDuplicate())
+                .mergedSourceCount(item.getMergedSourceCount())
+                .mergeNotes(item.getMergeNotes())
+                .manualReviewNote(item.getManualReviewNote())
+                .postedPricingItemId(item.getPostedPricingItemId())
+                .postedAt(item.getPostedAt())
                 .build();
     }
 
@@ -509,6 +736,12 @@ public class MedicalDictionaryService {
         if (category.getNameAr() != null && !category.getNameAr().isBlank()) return category.getNameAr();
         if (category.getCode() != null && !category.getCode().isBlank()) return category.getCode();
         return "غير محدد";
+    }
+
+    private String blankToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
 
