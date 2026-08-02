@@ -268,25 +268,26 @@ public class MedicalDictionaryService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<PriceListSessionSummaryResponse> listPriceListSessions(PriceListSessionStatus status, Pageable pageable) {
         Page<PriceListClassificationSession> page = status == null
                 ? priceListSessionRepository.findAll(pageable)
                 : priceListSessionRepository.findByStatus(status, pageable);
-        return page.map(this::toPriceListSessionSummaryResponse);
+        return page.map(session -> toPriceListSessionSummaryResponse(syncPostedPriceLinks(session)));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PriceListSessionResponse getPriceListSession(Long sessionId) {
         PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
-        return toPriceListSessionResponse(session, true);
+        return toPriceListSessionResponse(syncPostedPriceLinks(session), true);
     }
 
     @Transactional
     public void deletePriceListSession(Long sessionId) {
         PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("القائمة المصنفة غير موجودة"));
+        syncPostedPriceLinks(session);
         if (session.getStatus() == PriceListSessionStatus.POSTED_TO_CONTRACT || session.getPostedCount() != null && session.getPostedCount() > 0) {
             throw new IllegalArgumentException("لا يمكن حذف قائمة تم ترحيلها لعقد مقدم خدمة. يمكن مراجعة أثرها من العقد وسجل التدقيق.");
         }
@@ -619,6 +620,41 @@ public class MedicalDictionaryService {
         } else {
             session.setStatus(PriceListSessionStatus.READY_TO_POST);
         }
+    }
+
+    private PriceListClassificationSession syncPostedPriceLinks(PriceListClassificationSession session) {
+        List<PriceListClassificationItem> items = priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(session.getId());
+        boolean changed = false;
+
+        for (PriceListClassificationItem item : items) {
+            Long postedPricingItemId = item.getPostedPricingItemId();
+            boolean markedAsPosted = item.getStatus() == PriceListItemStatus.POSTED_TO_CONTRACT;
+            boolean postedPriceStillExists = postedPricingItemId != null && providerContractPricingItemRepository.existsById(postedPricingItemId);
+
+            if ((postedPricingItemId != null || markedAsPosted) && !postedPriceStillExists) {
+                item.setPostedPricingItemId(null);
+                item.setPostedAt(null);
+                if (item.getMedicalCategoryId() != null && resolveContractPrice(item) != null) {
+                    item.setStatus(item.getConfidence() != null && item.getConfidence() >= 85
+                            ? PriceListItemStatus.HIGH_CONFIDENCE
+                            : PriceListItemStatus.MANUALLY_REVIEWED);
+                } else if (item.getMedicalCategoryId() != null) {
+                    item.setStatus(PriceListItemStatus.NEEDS_REVIEW);
+                } else {
+                    item.setStatus(PriceListItemStatus.UNKNOWN);
+                }
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            session.setItems(items);
+            recalculateSessionSummary(session);
+            priceListItemRepository.saveAll(items);
+            return priceListSessionRepository.save(session);
+        }
+
+        return session;
     }
 
     private PriceListSessionResponse toPriceListSessionResponse(PriceListClassificationSession session, boolean includeItems) {
