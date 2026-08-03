@@ -13,6 +13,12 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
      * Fail-closed guard for legacy/partially deployed claims. An approved claim
      * with bucket-backed lines but without a committed ledger entry must never be
      * silently ignored when approving a later claim for the same member.
+     *
+     * Only lines with a positive company_share are considered a financial risk: a
+     * claim/line that was rejected for exhausting the benefit limit (or has no
+     * qualifying amount) never actually consumed the bucket, so it must not
+     * permanently block every later claim for the same member just because it
+     * has no COMMITTED ledger row — there was never anything to commit.
      */
     @Query(value = """
         select exists (
@@ -24,6 +30,7 @@ public interface BenefitBucketConsumptionRepository extends JpaRepository<Benefi
                and c.active = true
                and c.status in ('APPROVED', 'BATCHED', 'SETTLED')
                and cl.applied_rule_id is not null
+               and coalesce(cl.company_share, 0) > 0
                and exists (
                    select 1
                      from benefit_rule_buckets brb

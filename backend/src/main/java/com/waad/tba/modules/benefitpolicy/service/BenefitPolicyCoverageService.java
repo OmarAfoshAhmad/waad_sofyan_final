@@ -483,23 +483,55 @@ public class BenefitPolicyCoverageService {
     /**
      * Validate amount against BenefitPolicy limits.
      * This replaces the legacy CoverageValidationService.validateAmountLimits().
-     * 
+     *
      * Validates:
      * - Annual limit per member
      * - Per-member limit on policy
      * - Per-family limit on policy
-     * 
+     *
      * @param member          The member making the claim
      * @param benefitPolicy   The member's BenefitPolicy
      * @param requestedAmount The requested claim amount
      * @param serviceDate     The date of service
+     * @throws BusinessRuleException if any limit is exceeded
+     * @deprecated use {@link #validateAmountLimits(Member, BenefitPolicy, BigDecimal, LocalDate, Long)}
+     *             — this overload cannot exclude an already-persisted claim from the
+     *             "previously used" totals, which double-counts the claim being validated
+     *             whenever it was saved (even in a non-final status) before this check runs.
+     *             Kept only for callers that validate a not-yet-persisted amount.
+     */
+    @Deprecated
+    public void validateAmountLimits(
+            Member member,
+            BenefitPolicy benefitPolicy,
+            BigDecimal requestedAmount,
+            LocalDate serviceDate) {
+        validateAmountLimits(member, benefitPolicy, requestedAmount, serviceDate, null);
+    }
+
+    /**
+     * Validate amount against BenefitPolicy limits, excluding a specific claim from the
+     * "previously used" aggregation.
+     *
+     * excludeClaimId MUST be the claim's own id whenever that claim already exists as a
+     * row in the database at call time (e.g. finalizeSnapshot runs against an
+     * already-saved claim) — otherwise the claim being validated is summed as part of
+     * its own prior usage and compared against itself a second time, silently doubling
+     * its effective cost against the member/family limit.
+     *
+     * @param member          The member making the claim
+     * @param benefitPolicy   The member's BenefitPolicy
+     * @param requestedAmount The requested claim amount
+     * @param serviceDate     The date of service
+     * @param excludeClaimId  Id of the claim being validated, or null if it has no row yet
      * @throws BusinessRuleException if any limit is exceeded
      */
     public void validateAmountLimits(
             Member member,
             BenefitPolicy benefitPolicy,
             BigDecimal requestedAmount,
-            LocalDate serviceDate) {
+            LocalDate serviceDate,
+            Long excludeClaimId) {
 
         if (benefitPolicy == null) {
             throw new BusinessRuleException("Member has no BenefitPolicy assigned");
@@ -509,13 +541,13 @@ public class BenefitPolicyCoverageService {
             return; // No amount to validate
         }
 
-        log.debug("🔍 Validating amount limits for member {} amount {} on {}",
-                member.getId(), requestedAmount, serviceDate);
+        log.debug("🔍 Validating amount limits for member {} amount {} on {} (excludeClaimId={})",
+                member.getId(), requestedAmount, serviceDate, excludeClaimId);
 
         // Check annual limit from BenefitPolicy
         BigDecimal annualLimit = benefitPolicy.getAnnualLimit();
         if (annualLimit != null && annualLimit.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal usedAmount = calculateUsedAmountForYear(member.getId(), serviceDate.getYear());
+            BigDecimal usedAmount = calculateUsedAmountForYear(member.getId(), serviceDate.getYear(), excludeClaimId);
             BigDecimal remainingLimit = annualLimit.subtract(usedAmount);
 
             if (requestedAmount.compareTo(remainingLimit) > 0) {
@@ -531,7 +563,7 @@ public class BenefitPolicyCoverageService {
         // Check per-member limit
         BigDecimal perMemberLimit = benefitPolicy.getPerMemberLimit();
         if (perMemberLimit != null && perMemberLimit.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal totalUsed = calculateTotalUsedForMember(member.getId());
+            BigDecimal totalUsed = calculateTotalUsedForMember(member.getId(), excludeClaimId);
             BigDecimal remaining = perMemberLimit.subtract(totalUsed);
 
             if (requestedAmount.compareTo(remaining) > 0) {
@@ -548,7 +580,7 @@ public class BenefitPolicyCoverageService {
         BigDecimal perFamilyLimit = benefitPolicy.getPerFamilyLimit();
         if (perFamilyLimit != null && perFamilyLimit.compareTo(BigDecimal.ZERO) > 0) {
             Long principalId = member.getPrincipalMember().getId();
-            BigDecimal familyUsed = calculateFamilyUsedAmountForYear(principalId, serviceDate.getYear());
+            BigDecimal familyUsed = calculateFamilyUsedAmountForYear(principalId, serviceDate.getYear(), excludeClaimId);
             BigDecimal remainingFamily = perFamilyLimit.subtract(familyUsed);
 
             if (requestedAmount.compareTo(remainingFamily) > 0) {
@@ -726,35 +758,39 @@ public class BenefitPolicyCoverageService {
      * PERFORMANCE: O(1) query replaces loading all claims into memory.
      */
     private BigDecimal calculateUsedAmountForYear(Long memberId, int year) {
+        return calculateUsedAmountForYear(memberId, year, null);
+    }
+
+    private BigDecimal calculateUsedAmountForYear(Long memberId, int year, Long excludeClaimId) {
         List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
                 com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
                 com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
                 com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
-        return claimRepository.sumApprovedAmountByMemberAndYear(memberId, year, validStatuses);
+        return claimRepository.sumApprovedAmountByMemberAndYear(memberId, year, validStatuses, excludeClaimId);
     }
 
     /**
      * Calculate used amount for a whole family in a specific year using DB
      * aggregation.
      */
-    private BigDecimal calculateFamilyUsedAmountForYear(Long principalId, int year) {
+    private BigDecimal calculateFamilyUsedAmountForYear(Long principalId, int year, Long excludeClaimId) {
         List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
                 com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
                 com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
                 com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
-        return claimRepository.sumApprovedAmountByFamilyAndYear(principalId, year, validStatuses);
+        return claimRepository.sumApprovedAmountByFamilyAndYear(principalId, year, validStatuses, excludeClaimId);
     }
 
     /**
      * Calculate total approved amount for a member across all years (lifetime).
      * Uses DB aggregation — avoids loading all claims into memory.
      */
-    private BigDecimal calculateTotalUsedForMember(Long memberId) {
+    private BigDecimal calculateTotalUsedForMember(Long memberId, Long excludeClaimId) {
         List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
                 com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
                 com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
                 com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
-        BigDecimal total = claimRepository.sumApprovedAmountByMember(memberId, validStatuses);
+        BigDecimal total = claimRepository.sumApprovedAmountByMember(memberId, validStatuses, excludeClaimId);
         return total != null ? total : BigDecimal.ZERO;
     }
 

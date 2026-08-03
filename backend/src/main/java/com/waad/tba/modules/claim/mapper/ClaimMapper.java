@@ -87,7 +87,10 @@ public class ClaimMapper {
                                 .diagnosisCode(dto.getDiagnosisCode())
                                 .diagnosisDescription(dto.getDiagnosisDescription())
                                 .doctorName(dto.getDoctorName())
-                                .status(dto.getStatus() != null ? dto.getStatus() : ClaimStatus.APPROVED)
+                                // DRAFT, never APPROVED: the mapper only builds data. Financial approval
+                                // (amount limits, totalApproved > 0) is decided later by ClaimService via
+                                // ClaimStateMachine, after finalizeSnapshot has computed the real amount.
+                                .status(dto.getStatus() != null ? dto.getStatus() : ClaimStatus.DRAFT)
                                 .complaint(dto.getComplaint())
                                 .reviewerComment(dto.getRejectionReason())
                                 .preAuthorization(preAuth)

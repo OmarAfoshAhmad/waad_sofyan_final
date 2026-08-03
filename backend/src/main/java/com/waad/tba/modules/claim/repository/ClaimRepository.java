@@ -47,6 +47,42 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("yearEnd") LocalDate yearEnd,
                         @Param("excludeClaimId") Long excludeClaimId);
 
+        /**
+         * Legacy-data repair candidates, case A: an APPROVED claim with no qualifying
+         * amount — never actually consumed anything, so it must not permanently sit as
+         * a phantom "approved with 0" row (see ClaimLegacyReconciliationService).
+         */
+        @Query(value = """
+                        SELECT c.id FROM claims c
+                         WHERE c.active = true AND c.status = 'APPROVED'
+                           AND coalesce(c.approved_amount, 0) = 0
+                           AND NOT EXISTS (
+                               SELECT 1 FROM claim_lines cl WHERE cl.claim_id = c.id
+                                  AND coalesce(cl.company_share, 0) > 0)
+                           AND NOT EXISTS (
+                               SELECT 1 FROM claim_lines cl
+                                 JOIN benefit_bucket_consumptions bc ON bc.claim_line_id = cl.id
+                                WHERE cl.claim_id = c.id AND bc.status = 'COMMITTED')
+                        """, nativeQuery = true)
+        List<Long> findLegacyZeroApprovedClaimIds();
+
+        /**
+         * Legacy-data repair candidates, case B: an APPROVED claim with a genuine
+         * positive company share, tied to a benefit bucket, but missing its COMMITTED
+         * ledger entry — a real financial event that was never recorded.
+         */
+        @Query(value = """
+                        SELECT DISTINCT c.id FROM claims c
+                          JOIN claim_lines cl ON cl.claim_id = c.id
+                         WHERE c.active = true AND c.status = 'APPROVED'
+                           AND coalesce(cl.company_share, 0) > 0
+                           AND cl.applied_rule_id IS NOT NULL
+                           AND NOT EXISTS (
+                               SELECT 1 FROM benefit_bucket_consumptions bc
+                                WHERE bc.claim_line_id = cl.id AND bc.status = 'COMMITTED')
+                        """, nativeQuery = true)
+        List<Long> findLegacyUnledgeredPositiveClaimIds();
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // FINANCIAL CLOSURE: PESSIMISTIC LOCKING FOR ALL FINANCIAL OPERATIONS
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -814,41 +850,64 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
                         @Param("excludeClaimId") Long excludeClaimId);
 
+        /**
+         * Calculate total approved amount for a family in a given year.
+         * Used for per-family limit validation.
+         *
+         * excludeClaimId MUST be passed when validating a claim that is already
+         * persisted (e.g. finalizeSnapshot on an already-saved, already-APPROVED
+         * claim) — otherwise the claim being validated is double-counted: once as
+         * "previously used" by this SUM, and once again as the requested amount
+         * compared against the remaining limit.
+         *
+         * c.active = true excludes cancelled/reversed claims so a voided claim
+         * does not permanently consume the member's/family's limit.
+         */
         @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
                         "JOIN c.member m LEFT JOIN m.parent p " +
                         "WHERE (m.id = :principalId OR p.id = :principalId) " +
                         "AND YEAR(c.serviceDate) = :year " +
                         "AND c.active = true " +
-                        "AND c.status IN :statuses")
+                        "AND c.status IN :statuses " +
+                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
         java.math.BigDecimal sumApprovedAmountByFamilyAndYear(
                         @Param("principalId") Long principalId,
                         @Param("year") int year,
-                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
+                        @Param("excludeClaimId") Long excludeClaimId);
 
         /**
          * Calculate total approved amount for a member in a given year.
-         * Used for per-member limit validation.
+         * Used for per-member annual limit validation.
+         * See sumApprovedAmountByFamilyAndYear javadoc for excludeClaimId/active rationale.
          */
         @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
                         "WHERE c.member.id = :memberId " +
                         "AND YEAR(c.serviceDate) = :year " +
-                        "AND c.status IN :statuses")
+                        "AND c.active = true " +
+                        "AND c.status IN :statuses " +
+                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
         java.math.BigDecimal sumApprovedAmountByMemberAndYear(
                         @Param("memberId") Long memberId,
                         @Param("year") int year,
-                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
+                        @Param("excludeClaimId") Long excludeClaimId);
 
         /**
          * Calculate total approved amount for a member across all years (lifetime).
          * Used for per-member lifetime limit validation.
          * DB-aggregated: avoids loading all claim entities into memory.
+         * See sumApprovedAmountByFamilyAndYear javadoc for excludeClaimId/active rationale.
          */
         @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
                         "WHERE c.member.id = :memberId " +
-                        "AND c.status IN :statuses")
+                        "AND c.active = true " +
+                        "AND c.status IN :statuses " +
+                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
         java.math.BigDecimal sumApprovedAmountByMember(
                         @Param("memberId") Long memberId,
-                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses);
+                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
+                        @Param("excludeClaimId") Long excludeClaimId);
 
         /**
          * Count service usage for a member in a given year.
