@@ -374,10 +374,31 @@ public class ClaimService {
         claim.setSubmissionSource(currentUser != null && "PROVIDER_STAFF".equals(currentUser.getUserType())
                 ? com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL
                 : com.waad.tba.modules.claim.entity.ClaimSubmissionSource.INTERNAL_DIRECT);
-        // Status set to APPROVED by mapper — direct entry model (no review workflow)
+        // dto.getStatus() == null is the direct-entry model (no review workflow): the
+        // mapper leaves the claim DRAFT, and it must be persisted BEFORE its financial
+        // amount is known — finalizeSnapshot must run against a row that is not yet
+        // APPROVED, so validateAmountLimits' "previously used" aggregation (which only
+        // counts APPROVED/SETTLED/BATCHED claims) cannot see and double-count this
+        // claim against itself. Callers that explicitly requested a status (e.g.
+        // SUBMITTED, to start the reviewed workflow) are untouched here — their
+        // financial snapshot is finalized later by ClaimReviewService.
+        boolean isDirectEntry = claim.getStatus() == ClaimStatus.DRAFT;
         Claim savedClaim = claimRepository.save(claim);
-        if (savedClaim.getStatus() == ClaimStatus.APPROVED) {
-            financialSnapshotService.finalizeSnapshot(savedClaim);
+
+        if (isDirectEntry) {
+            BigDecimal payable = financialSnapshotService.finalizeSnapshot(savedClaim);
+
+            // Never construct an APPROVED claim with a zero approved amount: a claim with
+            // no qualifying amount after benefit-limit/coverage calculation is a rejection,
+            // not a silent zero-value approval. ClaimStateMachine enforces this same
+            // "totalApproved > 0" rule for the reviewed path — this makes the direct-entry
+            // path go through the identical, audited gate instead of bypassing it.
+            if (payable.compareTo(BigDecimal.ZERO) <= 0) {
+                savedClaim.setReviewerComment("تم رفض المطالبة تلقائياً لعدم وجود مبلغ مؤهل للتغطية بعد تطبيق سقوف المنافع");
+                claimStateMachine.transition(savedClaim, ClaimStatus.REJECTED, currentUser);
+            } else {
+                claimStateMachine.transition(savedClaim, ClaimStatus.APPROVED, currentUser);
+            }
             savedClaim = claimRepository.save(savedClaim);
         }
 
@@ -744,6 +765,28 @@ public class ClaimService {
         // re-pricing
         if (dto.getLines() != null) {
             claimMapper.replaceClaimLinesForDraft(claim, dto.getLines());
+        }
+
+        // Re-validate benefit-policy limits whenever this update produces a new/changed
+        // APPROVED amount (edited lines on an already-approved claim, or a
+        // NEEDS_CORRECTION -> APPROVED re-approval). Without this, a claim could be
+        // edited to a higher approved amount, or a corrected claim approved, with no
+        // check against the member's annual/per-member/per-family limits at all —
+        // createClaim's finalizeSnapshot only runs once, at initial creation.
+        // excludeClaimId = claim.getId(): this claim's OWN previously-approved amount
+        // must not count against itself in the "previously used" aggregation.
+        if ((approvedLinesEdit || internalCorrectionReapproval)
+                && claim.getMember() != null && claim.getMember().getBenefitPolicy() != null
+                && claim.getApprovedAmount() != null && claim.getApprovedAmount().compareTo(BigDecimal.ZERO) > 0) {
+            // Same PESSIMISTIC_WRITE member lock createClaim gets transitively via
+            // finalizeSnapshot -> AtomicFinancialService.calculateCostsWithAtomicDeductible.
+            // Without it, a concurrent createClaim/updateClaimData for the same member
+            // could both read the "previously used" sum before either commits, letting
+            // both edits pass validation and jointly exceed the limit.
+            memberRepository.findByIdWithLock(claim.getMember().getId());
+            benefitPolicyCoverageService.validateAmountLimits(
+                    claim.getMember(), claim.getMember().getBenefitPolicy(), claim.getApprovedAmount(),
+                    claim.getServiceDate(), claim.getId());
         }
 
         // Save and return
