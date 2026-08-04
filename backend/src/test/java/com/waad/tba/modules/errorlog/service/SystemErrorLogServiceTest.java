@@ -4,6 +4,7 @@ import com.waad.tba.modules.errorlog.dto.ErrorLogDtos.ErrorLogDetailDto;
 import com.waad.tba.modules.errorlog.entity.ErrorLogSource;
 import com.waad.tba.modules.errorlog.entity.SystemErrorLog;
 import com.waad.tba.modules.errorlog.repository.SystemErrorLogRepository;
+import com.waad.tba.modules.maintenancehub.service.IssueRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,12 +24,15 @@ class SystemErrorLogServiceTest {
 
     @Mock
     private SystemErrorLogRepository repository;
+    @Mock
+    private IssueRegistry issueRegistry;
 
     private SystemErrorLogService service;
 
     @BeforeEach
     void setUp() {
-        service = new SystemErrorLogService(repository);
+        service = new SystemErrorLogService(repository, issueRegistry);
+        lenient().when(issueRegistry.register(any())).thenReturn(1L);
     }
 
     @Test
@@ -71,6 +75,34 @@ class SystemErrorLogServiceTest {
         when(repository.save(any(SystemErrorLog.class))).thenThrow(new RuntimeException("db down"));
         assertDoesNotThrow(() ->
                 service.record(SystemErrorLog.builder().source(ErrorLogSource.BACKEND).build()));
+    }
+
+    @Test
+    @DisplayName("record() registers ERROR severity backend events in the maintenance ledger")
+    void recordRegistersErrorSeverityInLedger() {
+        when(repository.save(any(SystemErrorLog.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.record(SystemErrorLog.builder()
+                .source(ErrorLogSource.BACKEND)
+                .path("/api/v1/claims")
+                .stackHash("abc123")
+                .build());
+
+        verify(issueRegistry).register(any());
+    }
+
+    @Test
+    @DisplayName("record() does not register low-severity events in the maintenance ledger")
+    void recordDoesNotRegisterLowSeverityInLedger() {
+        when(repository.save(any(SystemErrorLog.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.record(SystemErrorLog.builder()
+                .source(ErrorLogSource.BACKEND)
+                .severity(com.waad.tba.modules.errorlog.entity.ErrorLogSeverity.INFO)
+                .stackHash("abc123")
+                .build());
+
+        verify(issueRegistry, never()).register(any());
     }
 
     @Test

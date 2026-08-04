@@ -6,6 +6,9 @@ import com.waad.tba.modules.errorlog.entity.ErrorLogSeverity;
 import com.waad.tba.modules.errorlog.entity.ErrorLogSource;
 import com.waad.tba.modules.errorlog.entity.SystemErrorLog;
 import com.waad.tba.modules.errorlog.repository.SystemErrorLogRepository;
+import com.waad.tba.modules.maintenancehub.dto.MaintenanceHubDtos.IssueRegistration;
+import com.waad.tba.modules.maintenancehub.entity.IssueType;
+import com.waad.tba.modules.maintenancehub.service.IssueRegistry;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -32,6 +36,7 @@ import java.util.regex.Pattern;
 public class SystemErrorLogService {
 
     private final SystemErrorLogRepository repository;
+    private final IssueRegistry issueRegistry;
 
     // Redact anything that looks like a secret before persisting technical text.
     private static final Pattern SENSITIVE = Pattern.compile(
@@ -61,9 +66,45 @@ public class SystemErrorLogService {
                 event.setStackHash(hash(event.getStackExcerpt()));
             }
             repository.save(event);
+            registerAsIssueIfActionable(event);
         } catch (Exception e) {
             log.warn("[MON-BKP-LOG-1] Failed to persist error event: {}", e.getMessage());
         }
+    }
+
+    /**
+     * ERROR/CRITICAL events also feed the unified maintenance ledger, deduplicated by
+     * stack hash (or path when no stack is available) — the same recurring exception
+     * bumps one issue's occurrence count instead of flooding the ledger with one row
+     * per request. INFO/WARN stay in the error log only; they are not "issues" to track.
+     */
+    private void registerAsIssueIfActionable(SystemErrorLog event) {
+        if (event.getSeverity() != ErrorLogSeverity.ERROR && event.getSeverity() != ErrorLogSeverity.CRITICAL) {
+            return;
+        }
+        boolean backend = event.getSource() == ErrorLogSource.BACKEND;
+        String fingerprintKey = event.getStackHash() != null ? event.getStackHash()
+                : (event.getPath() != null ? event.getPath() : event.getErrorCode());
+        if (fingerprintKey == null) {
+            return;
+        }
+        String route = backend ? event.getPath() : event.getFrontendRoute();
+        issueRegistry.register(new IssueRegistration(
+                backend ? IssueType.BACKEND_ERROR : IssueType.FRONTEND_ERROR,
+                (backend ? "BACKEND_ERROR:" : "FRONTEND_ERROR:") + fingerprintKey,
+                null,
+                backend ? "API" : "UI",
+                route,
+                "خطأ متكرر: " + (route == null ? event.getSource() : route),
+                event.getTechnicalMessage() != null ? event.getTechnicalMessage() : event.getUserMessage(),
+                event.getSeverity() == ErrorLogSeverity.CRITICAL ? "CRITICAL" : "HIGH",
+                "GlobalExceptionHandler",
+                Map.of(
+                        "statusCode", String.valueOf(event.getStatusCode()),
+                        "exceptionClass", String.valueOf(event.getExceptionClass()),
+                        "correlationId", String.valueOf(event.getCorrelationId())
+                )
+        ));
     }
 
     @Transactional(readOnly = true)
