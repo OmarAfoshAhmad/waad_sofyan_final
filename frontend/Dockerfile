@@ -4,7 +4,11 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-RUN npm install
+# npm ci installs the exact versions recorded in package-lock.json, including
+# transitive dependencies — npm install would let semver ranges drift and can
+# silently resolve a newer, incompatible transitive version between builds
+# (this broke the build once already: framer-motion vs. an updated motion-dom).
+RUN npm ci
 
 # Copy source
 COPY . .
