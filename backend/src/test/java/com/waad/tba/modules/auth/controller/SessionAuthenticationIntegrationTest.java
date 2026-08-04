@@ -93,7 +93,8 @@ class SessionAuthenticationIntegrationTest extends PostgresIntegrationTestBase {
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/auth/session/me").cookie(session))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -104,7 +105,8 @@ class SessionAuthenticationIntegrationTest extends PostgresIntegrationTestBase {
         userRepository.saveAndFlush(user);
 
         mockMvc.perform(get("/api/v1/auth/session/me").cookie(session))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -141,9 +143,11 @@ class SessionAuthenticationIntegrationTest extends PostgresIntegrationTestBase {
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/auth/session/me").cookie(first))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
         mockMvc.perform(get("/api/v1/auth/session/me").cookie(second))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -177,9 +181,11 @@ class SessionAuthenticationIntegrationTest extends PostgresIntegrationTestBase {
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/auth/session/me").cookie(current))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
         mockMvc.perform(get("/api/v1/auth/session/me").cookie(second))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").doesNotExist());
 
         mockMvc.perform(post("/api/v1/auth/session/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -208,8 +214,11 @@ class SessionAuthenticationIntegrationTest extends PostgresIntegrationTestBase {
 
         Cookie anonymousSession = result.getResponse().getCookie("JSESSIONID");
         if (anonymousSession != null) {
+            // 200 with a null payload, not 401: "no session yet" is the expected outcome
+            // of this check, not a client error — see getSessionUser's javadoc.
             mockMvc.perform(get("/api/v1/auth/session/me").cookie(anonymousSession))
-                    .andExpect(status().isUnauthorized());
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data").doesNotExist());
         }
     }
 
