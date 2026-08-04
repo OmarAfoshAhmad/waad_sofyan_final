@@ -37,8 +37,12 @@ public class ClaimFinancialSnapshotService {
         BigDecimal payable = companyBeforeDiscount.subtract(discount).max(BigDecimal.ZERO);
 
         if (claim.getMember() != null && claim.getMember().getBenefitPolicy() != null) {
+            // excludeClaimId = claim.getId(): this claim may already exist as a row (e.g. the
+            // direct-entry path saves it before finalizeSnapshot runs), so the "previously
+            // used" aggregation must not count this claim's own amount against itself.
             benefitPolicyCoverageService.validateAmountLimits(
-                    claim.getMember(), claim.getMember().getBenefitPolicy(), payable, claim.getServiceDate());
+                    claim.getMember(), claim.getMember().getBenefitPolicy(), payable, claim.getServiceDate(),
+                    claim.getId());
         }
 
         claim.setApprovedAmount(scale(payable));

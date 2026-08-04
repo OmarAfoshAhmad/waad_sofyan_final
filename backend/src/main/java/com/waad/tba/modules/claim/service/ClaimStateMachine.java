@@ -84,6 +84,7 @@ public class ClaimStateMachine {
     private static final String ROLE_EMPLOYER = "EMPLOYER_ADMIN";
     private static final String ROLE_REVIEWER = "MEDICAL_REVIEWER";
     private static final String ROLE_PROVIDER = "PROVIDER_STAFF";
+    private static final String ROLE_DATA_ENTRY = "DATA_ENTRY";
 
     private static final Set<ClaimStatus> HARD_LOCKED_FINAL_STATES = Set.of(
             ClaimStatus.REJECTED,
@@ -99,7 +100,12 @@ public class ClaimStateMachine {
      * NEEDS_CORRECTION -> SUBMITTED).
      */
     private static final Map<ClaimStatus, Set<ClaimStatus>> TRANSITION_MATRIX = Map.of(
-            ClaimStatus.DRAFT, Set.of(ClaimStatus.SUBMITTED),
+            // DRAFT -> APPROVED/REJECTED: the direct-entry model (no review workflow — see
+            // ClaimSubmissionSource.INTERNAL_DIRECT/PROVIDER_PORTAL direct claims). This claim
+            // never passes through SUBMITTED/UNDER_REVIEW; ClaimService decides APPROVED vs
+            // REJECTED right after finalizeSnapshot computes the real approved amount, and this
+            // transition enforces the same "totalApproved > 0" guard used by the reviewed path.
+            ClaimStatus.DRAFT, Set.of(ClaimStatus.SUBMITTED, ClaimStatus.APPROVED, ClaimStatus.REJECTED),
             ClaimStatus.SUBMITTED, Set.of(ClaimStatus.UNDER_REVIEW),
             ClaimStatus.UNDER_REVIEW,
             Set.of(ClaimStatus.APPROVAL_IN_PROGRESS, ClaimStatus.APPROVED, ClaimStatus.REJECTED,
@@ -115,6 +121,12 @@ public class ClaimStateMachine {
     private static final Map<String, Set<String>> TRANSITION_ROLE_POLICY = Map.ofEntries(
             Map.entry(key(ClaimStatus.DRAFT, ClaimStatus.SUBMITTED),
                     Set.of(ROLE_EMPLOYER, ROLE_ACCOUNTANT, ROLE_PROVIDER)),
+            // Same actor set allowed to create a direct-entry claim (see ClaimController's
+            // POST /claims @PreAuthorize) — SUPER_ADMIN bypasses this check anyway.
+            Map.entry(key(ClaimStatus.DRAFT, ClaimStatus.APPROVED),
+                    Set.of(ROLE_REVIEWER, ROLE_DATA_ENTRY, ROLE_PROVIDER)),
+            Map.entry(key(ClaimStatus.DRAFT, ClaimStatus.REJECTED),
+                    Set.of(ROLE_REVIEWER, ROLE_DATA_ENTRY, ROLE_PROVIDER)),
             Map.entry(key(ClaimStatus.SUBMITTED, ClaimStatus.UNDER_REVIEW), Set.of(ROLE_ACCOUNTANT, ROLE_REVIEWER)),
             Map.entry(key(ClaimStatus.UNDER_REVIEW, ClaimStatus.APPROVAL_IN_PROGRESS),
                     Set.of(ROLE_ACCOUNTANT, ROLE_REVIEWER)),

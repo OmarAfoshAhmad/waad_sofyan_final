@@ -203,7 +203,7 @@ class BenefitPolicyCoverageServiceTest {
     @DisplayName("Should throw exception if annual limit exceeded")
     void validateAmountLimits_Exceeded() {
         // Arrange
-        when(claimRepository.sumApprovedAmountByMemberAndYear(anyLong(), anyInt(), anyList()))
+        when(claimRepository.sumApprovedAmountByMemberAndYear(anyLong(), anyInt(), anyList(), isNull()))
                 .thenReturn(new BigDecimal("9500.00")); // Spent 9500 of 10000
 
         // Act & Assert
@@ -221,6 +221,59 @@ class BenefitPolicyCoverageServiceTest {
         // Act & Assert
         assertThrows(BusinessRuleException.class, () -> 
             coverageService.validateWaitingPeriods(testMember, testPolicy, null, LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("validateAmountLimits(excludeClaimId) must pass claimId to the annual-limit exclusion query")
+    void validateAmountLimits_PassesExcludeClaimIdToAnnualQuery() {
+        when(claimRepository.sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), eq(42L)))
+                .thenReturn(new BigDecimal("60.00"));
+
+        assertDoesNotThrow(() -> coverageService.validateAmountLimits(
+                testMember, testPolicy, new BigDecimal("100.00"), LocalDate.now(), 42L));
+
+        verify(claimRepository).sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), eq(42L));
+    }
+
+    @Test
+    @DisplayName("A claim already saved as APPROVED must not double-count itself: previously-used excludes it")
+    void validateAmountLimits_ExcludesOwnClaimFromPreviousUsage() {
+        // The 90 "previously used" already reflects the claim under validation having
+        // been persisted (id=42). Without excludeClaimId, this 90 would be summed AND
+        // the requested 90 compared against it a second time — failing a claim that
+        // should succeed (used=60 real usage + this 90 = 150, exactly at the 150 limit
+        // set on a per-member policy below).
+        testPolicy.setAnnualLimit(null); // isolate: only the per-member limit is under test
+        testPolicy.setPerMemberLimit(new BigDecimal("150.00"));
+        when(claimRepository.sumApprovedAmountByMember(eq(1L), anyList(), eq(42L)))
+                .thenReturn(new BigDecimal("60.00")); // real prior usage, this claim excluded
+
+        assertDoesNotThrow(() -> coverageService.validateAmountLimits(
+                testMember, testPolicy, new BigDecimal("90.00"), LocalDate.now(), 42L));
+    }
+
+    @Test
+    @DisplayName("Per-family limit exclusion query must receive the claim id being validated")
+    void validateAmountLimits_PassesExcludeClaimIdToFamilyQuery() {
+        testPolicy.setAnnualLimit(null); // isolate: only the per-family limit is under test
+        testPolicy.setPerFamilyLimit(new BigDecimal("200.00"));
+        when(claimRepository.sumApprovedAmountByFamilyAndYear(eq(1L), anyInt(), anyList(), eq(77L)))
+                .thenReturn(new BigDecimal("120.00"));
+
+        assertDoesNotThrow(() -> coverageService.validateAmountLimits(
+                testMember, testPolicy, new BigDecimal("80.00"), LocalDate.now(), 77L));
+
+        verify(claimRepository).sumApprovedAmountByFamilyAndYear(eq(1L), anyInt(), anyList(), eq(77L));
+    }
+
+    @Test
+    @DisplayName("Deprecated 4-arg overload must still work and imply no exclusion (null)")
+    void validateAmountLimits_LegacyOverload_PassesNullExclude() {
+        when(claimRepository.sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), isNull()))
+                .thenReturn(new BigDecimal("100.00"));
+
+        assertDoesNotThrow(() -> coverageService.validateAmountLimits(
+                testMember, testPolicy, new BigDecimal("50.00"), LocalDate.now()));
     }
 
     private CoverageDecision coveredDecision(BenefitPolicyRule rule, Long categoryId) {
