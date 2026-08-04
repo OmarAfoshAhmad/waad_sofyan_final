@@ -145,6 +145,7 @@ const Settings = Loadable(lazy(() => import('pages/settings')));
 const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSettingsPage')));
 const KinshipMismatchChecker = Loadable(lazy(() => import('pages/settings/KinshipMismatchChecker')));
 const MemberDuplicatesResolver = Loadable(lazy(() => import('pages/settings/MemberDuplicatesResolver')));
+const BackupSettingsTab = Loadable(lazy(() => import('pages/settings/BackupSettingsTab')));
 
 // ==============================|| LAZY LOADING - PROFILE ||============================== //
 
@@ -919,6 +920,14 @@ const MainRoutes = {
           element: (
             <PermissionGuard isRouteGuard>
               <MemberDuplicatesResolver />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'backup',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <BackupSettingsTab />
             </PermissionGuard>
           )
         }

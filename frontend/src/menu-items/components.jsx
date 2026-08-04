@@ -22,7 +22,8 @@ import {
   History as HistoryIcon,
   AccountBalanceWallet as AccountBalanceWalletIcon,
   MenuBook as MenuBookIcon,
-  ManageSearch as ManageSearchIcon
+  ManageSearch as ManageSearchIcon,
+  Backup as BackupIcon
 } from '@mui/icons-material';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -716,6 +717,23 @@ const menuItem = [
             chip: {
               label: 'هام',
               color: 'error',
+              size: 'small'
+            }
+          },
+          {
+            id: 'system-backup',
+            title: 'النسخ الاحتياطي',
+            titleEn: 'System Backup',
+            type: 'item',
+            url: '/settings/backup',
+            icon: BackupIcon,
+            // Deliberately not 'system_settings': a backup archive contains the whole
+            // database, so this must mirror the SUPER_ADMIN-only backend restriction.
+            resource: 'system_backup',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'primary',
               size: 'small'
             }
           }
