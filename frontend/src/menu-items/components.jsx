@@ -666,49 +666,60 @@ const menuItem = [
         }
       },
       {
-        id: 'kinship-mismatch',
-        title: 'تصحيح بيانات المستفيدين',
-        titleEn: 'Beneficiary Kinship Mismatch',
-        type: 'item',
-        url: '/settings/kinship-mismatch',
-        icon: PeopleAltIcon,
-        resource: 'system_settings',
-        action: 'view',
-        chip: {
-          label: 'جديد',
-          color: 'primary',
-          size: 'small'
-        }
-      },
-      {
-        id: 'medical-audit-logs',
-        title: 'سجل التدقيق الطبي',
-        titleEn: 'Medical Audit Logs',
-        type: 'item',
-        url: '/admin/users/medical-audit-logs',
+        id: 'maintenance',
+        title: 'الصيانة',
+        titleEn: 'Maintenance',
+        type: 'collapse',
         icon: HistoryIcon,
-        resource: 'users',
-        action: 'view',
-        chip: {
-          label: 'جديد',
-          color: 'warning',
-          size: 'small'
-        }
-      },
-      {
-        id: 'member-duplicates',
-        title: 'دمج السجلات المكررة',
-        titleEn: 'Member Duplicates Resolver',
-        type: 'item',
-        url: '/settings/member-duplicates',
-        icon: PeopleAltIcon,
         resource: 'system_settings',
         action: 'view',
-        chip: {
-          label: 'هام',
-          color: 'error',
-          size: 'small'
-        }
+        children: [
+          {
+            id: 'kinship-mismatch',
+            title: 'تصحيح بيانات المستفيدين',
+            titleEn: 'Beneficiary Kinship Mismatch',
+            type: 'item',
+            url: '/settings/kinship-mismatch',
+            icon: PeopleAltIcon,
+            resource: 'system_settings',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'primary',
+              size: 'small'
+            }
+          },
+          {
+            id: 'medical-audit-logs',
+            title: 'سجل التدقيق الطبي',
+            titleEn: 'Medical Audit Logs',
+            type: 'item',
+            url: '/admin/users/medical-audit-logs',
+            icon: HistoryIcon,
+            resource: 'users',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'warning',
+              size: 'small'
+            }
+          },
+          {
+            id: 'member-duplicates',
+            title: 'دمج السجلات المكررة',
+            titleEn: 'Member Duplicates Resolver',
+            type: 'item',
+            url: '/settings/member-duplicates',
+            icon: PeopleAltIcon,
+            resource: 'system_settings',
+            action: 'view',
+            chip: {
+              label: 'هام',
+              color: 'error',
+              size: 'small'
+            }
+          }
+        ]
       }
     ]
   }
