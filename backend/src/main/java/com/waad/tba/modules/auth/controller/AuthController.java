@@ -139,8 +139,13 @@ public class AuthController {
                 HttpSession session = request.getSession(false);
 
                 if (session == null || session.getAttribute("userId") == null) {
-                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                                        .body(ApiResponse.<LoginResponse.UserInfo>error("No active session"));
+                        // 200 with a null payload, not 401: this endpoint exists specifically to
+                        // check "is there a session yet?" on page load, and "not yet" is the normal,
+                        // expected outcome for every first-time visitor — not a client error. A 401
+                        // here shows up as a red failed-request entry in the browser console before
+                        // the user has done anything wrong. The frontend already treats a
+                        // success-with-no-data response as unauthenticated (see AuthContext.jsx).
+                        return ResponseEntity.ok(ApiResponse.success(null));
                 }
 
                 // AUDIT FIX (TASK A): Fetch current user data from DB (including latest roles)
