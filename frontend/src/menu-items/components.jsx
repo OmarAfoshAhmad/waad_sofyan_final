@@ -23,7 +23,9 @@ import {
   AccountBalanceWallet as AccountBalanceWalletIcon,
   MenuBook as MenuBookIcon,
   ManageSearch as ManageSearchIcon,
-  Backup as BackupIcon
+  Backup as BackupIcon,
+  NotificationsActive as NotificationsActiveIcon,
+  BugReport as BugReportIcon
 } from '@mui/icons-material';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -736,6 +738,36 @@ const menuItem = [
               color: 'primary',
               size: 'small'
             }
+          },
+          {
+            id: 'system-monitoring',
+            title: 'التنبيهات والمراقبة',
+            titleEn: 'Monitoring & Alerts',
+            type: 'item',
+            url: '/settings/monitoring',
+            icon: NotificationsActiveIcon,
+            resource: 'system_backup',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'primary',
+              size: 'small'
+            }
+          },
+          {
+            id: 'system-error-log',
+            title: 'سجل أخطاء النظام',
+            titleEn: 'System Error Log',
+            type: 'item',
+            url: '/settings/error-log',
+            icon: BugReportIcon,
+            resource: 'system_backup',
+            action: 'view',
+            chip: {
+              label: 'جديد',
+              color: 'primary',
+              size: 'small'
+            }
           }
         ]
       }
@@ -744,5 +776,3 @@ const menuItem = [
 ];
 
 export default menuItem;
-
-

@@ -29,10 +29,16 @@ import com.waad.tba.common.exception.ClaimStateTransitionException;
 import com.waad.tba.common.exception.CoverageValidationException;
 import com.waad.tba.common.exception.PolicyNotActiveException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
+import com.waad.tba.modules.errorlog.entity.ErrorLogSeverity;
+import com.waad.tba.modules.errorlog.entity.ErrorLogSource;
+import com.waad.tba.modules.errorlog.entity.SystemErrorLog;
+import com.waad.tba.modules.errorlog.service.SystemErrorLogService;
 import com.waad.tba.modules.rbac.exception.AccountLockedException;
 import com.waad.tba.modules.rbac.exception.EmailNotVerifiedException;
 import com.waad.tba.modules.rbac.exception.InvalidResetTokenException;
 import com.waad.tba.modules.rbac.exception.PasswordPolicyViolationException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,6 +58,15 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // Optional: errorlog is a maintenance-center module and must never be a hard
+    // dependency of the core exception-handling path. If it isn't present, the
+    // handler falls back to log-only behavior exactly as before this module existed.
+    private final SystemErrorLogService errorLogService;
+
+    public GlobalExceptionHandler(java.util.Optional<SystemErrorLogService> errorLogService) {
+        this.errorLogService = errorLogService.orElse(null);
+    }
 
     private String now() {
         return Instant.now().toString();
@@ -736,6 +751,7 @@ public class GlobalExceptionHandler {
         String trackingId = generateTrackingId();
         // Log the exception with full stack trace — server-side only
         log.error("Unexpected error occurred - Path: {}, TrackingId: {}", request.getRequestURI(), trackingId, ex);
+        recordServerError(ex, request, trackingId);
         // Return generic user message and safe technical details — never expose stack
         // trace
         Map<String, Object> details = new HashMap<>();
@@ -747,5 +763,58 @@ public class GlobalExceptionHandler {
 
         return build(HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR,
                 "An unexpected error occurred.", request, details);
+    }
+
+    /**
+     * Best-effort persistence of a 500 into the maintenance-center error log, so it
+     * shows up for follow-up instead of only existing in application logs. Never
+     * throws — a failure here must not mask the original error or the response.
+     */
+    private void recordServerError(Exception ex, HttpServletRequest request, String trackingId) {
+        if (errorLogService == null) {
+            return;
+        }
+        try {
+            String username = null;
+            String role = null;
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
+                username = auth.getName();
+                role = auth.getAuthorities() == null ? null
+                        : auth.getAuthorities().stream().map(Object::toString).findFirst().orElse(null);
+            }
+            errorLogService.record(SystemErrorLog.builder()
+                    .occurredAt(java.time.LocalDateTime.now())
+                    .source(ErrorLogSource.BACKEND)
+                    .severity(ErrorLogSeverity.ERROR)
+                    .correlationId(trackingId)
+                    .username(username)
+                    .role(role)
+                    .httpMethod(request.getMethod())
+                    .path(request.getRequestURI())
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .errorCode(ErrorCode.INTERNAL_ERROR.name())
+                    .userMessage("حدث خطأ غير متوقع. رقم التتبع: " + trackingId)
+                    .technicalMessage(ex.getMessage())
+                    .exceptionClass(ex.getClass().getName())
+                    .stackExcerpt(stackExcerpt(ex))
+                    .build());
+        } catch (Exception recordFailure) {
+            log.warn("Failed to record server error to error log: {}", recordFailure.getMessage());
+        }
+    }
+
+    private static String stackExcerpt(Throwable ex) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(ex.getClass().getName());
+        if (ex.getMessage() != null) {
+            sb.append(": ").append(ex.getMessage());
+        }
+        StackTraceElement[] trace = ex.getStackTrace();
+        int limit = Math.min(trace.length, 15);
+        for (int i = 0; i < limit; i++) {
+            sb.append("\n\tat ").append(trace[i]);
+        }
+        return sb.toString();
     }
 }

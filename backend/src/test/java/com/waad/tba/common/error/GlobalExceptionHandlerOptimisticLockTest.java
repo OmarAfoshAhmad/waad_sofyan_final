@@ -1,5 +1,7 @@
 package com.waad.tba.common.error;
 
+import java.util.Optional;
+
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -19,7 +21,7 @@ class GlobalExceptionHandlerOptimisticLockTest {
 
     @Test
     void optimisticLockConflictMapsToHttp409WithArabicMessage() {
-        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+        GlobalExceptionHandler handler = new GlobalExceptionHandler(Optional.empty());
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getRequestURI()).thenReturn("/api/v1/provider-contracts/42");
 

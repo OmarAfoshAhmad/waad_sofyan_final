@@ -146,6 +146,8 @@ const SystemSettingsPage = Loadable(lazy(() => import('pages/settings/SystemSett
 const KinshipMismatchChecker = Loadable(lazy(() => import('pages/settings/KinshipMismatchChecker')));
 const MemberDuplicatesResolver = Loadable(lazy(() => import('pages/settings/MemberDuplicatesResolver')));
 const BackupSettingsTab = Loadable(lazy(() => import('pages/settings/BackupSettingsTab')));
+const MonitoringSettingsTab = Loadable(lazy(() => import('pages/settings/MonitoringSettingsTab')));
+const SystemErrorLogTab = Loadable(lazy(() => import('pages/settings/SystemErrorLogTab')));
 
 // ==============================|| LAZY LOADING - PROFILE ||============================== //
 
@@ -930,6 +932,22 @@ const MainRoutes = {
               <BackupSettingsTab />
             </PermissionGuard>
           )
+        },
+        {
+          path: 'monitoring',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <MonitoringSettingsTab />
+            </PermissionGuard>
+          )
+        },
+        {
+          path: 'error-log',
+          element: (
+            <PermissionGuard isRouteGuard>
+              <SystemErrorLogTab />
+            </PermissionGuard>
+          )
         }
       ]
     },
@@ -1054,4 +1072,3 @@ const MainRoutes = {
 };
 
 export default MainRoutes;
-
