@@ -87,9 +87,11 @@ export default function AuthLogin({ isDemo = false }) {
             const landingRoute = getDefaultRouteForRole(primaryRole);
             navigate(landingRoute);
           } catch (err) {
-            console.error('Login error:', err);
+            if (import.meta.env.DEV) {
+              console.error('Login error:', err);
+            }
             setStatus({ success: false });
-            setErrors({ submit: err.message || 'بيانات الدخول غير صحيحة. يرجى المحاولة مرة أخرى.' });
+            setErrors({ submit: err.userMessage || err.response?.data?.messageAr || 'بيانات التسجيل خاطئة' });
             setSubmitting(false);
           }
         }}

@@ -80,8 +80,9 @@ axiosServices.interceptors.response.use(
       const isSessionCheck = url?.includes('/auth/session/me');
 
       if (isLoginRequest) {
-        const backendMessage = errorData?.message || errorData?.error;
-        error.userMessage = backendMessage || 'بيانات الدخول غير صحيحة';
+        // Always show a fixed Arabic message for failed login attempts — the backend's
+        // 401 body (e.g. "Bad credentials") is a technical string, not meant for users.
+        error.userMessage = 'بيانات التسجيل خاطئة';
         error.errorType = ErrorType.AUTHENTICATION;
         return Promise.reject(error);
       }

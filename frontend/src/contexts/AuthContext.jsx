@@ -87,7 +87,9 @@ export const AuthProvider = ({ children }) => {
 
     const intervalId = setInterval(() => {
       if (Date.now() - lastActivity > TIMEOUT_MS) {
-        console.warn('⚠️ Session timeout due to inactivity');
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ Session timeout due to inactivity');
+        }
         openSnackbar({
           message: 'انتهت الجلسة بسبب عدم النشاط',
           alert: { color: 'warning' }
@@ -104,7 +106,9 @@ export const AuthProvider = ({ children }) => {
     const handleUnauthorized = () => {
       // Only if we think we are logged in
       if (authStatus === AUTH_STATUS.AUTHENTICATED) {
-        console.warn('⚠️ Session expired (401) - Force Logout');
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ Session expired (401) - Force Logout');
+        }
         openSnackbar({
           message: 'انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى',
           alert: { color: 'error' }
@@ -134,7 +138,9 @@ export const AuthProvider = ({ children }) => {
 
     channel.onmessage = (event) => {
       if (event.data?.type === 'LOGOUT') {
-        console.info('🔄 Logout detected in another tab');
+        if (import.meta.env.DEV) {
+          console.info('🔄 Logout detected in another tab');
+        }
         setUser(null);
         setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
         useRBACStore.getState().clear();
@@ -162,7 +168,9 @@ export const AuthProvider = ({ children }) => {
           setUser(response.data);
           setAuthStatus(AUTH_STATUS.AUTHENTICATED);
           useRBACStore.getState().initialize(response.data);
-          console.info('✅ Session restored:', response.data.username);
+          if (import.meta.env.DEV) {
+            console.info('✅ Session restored:', response.data.username);
+          }
         } else {
           // Expected: no session means user needs to login
           setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
@@ -199,7 +207,9 @@ export const AuthProvider = ({ children }) => {
     try {
       await authService.logout();
     } catch (error) {
-      console.warn('Logout API failed (likely already expired)', error);
+      if (import.meta.env.DEV) {
+        console.warn('Logout API failed (likely already expired)', error);
+      }
     }
 
     // 🔒 CRITICAL: Clean ALL auth data
