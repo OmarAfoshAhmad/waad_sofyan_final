@@ -10,6 +10,8 @@ import com.waad.tba.common.excel.dto.ExcelTemplateColumn.ColumnType;
 import com.waad.tba.common.excel.service.ExcelParserService;
 import com.waad.tba.common.excel.service.ExcelTemplateService;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.member.entity.Member;
@@ -50,6 +52,7 @@ public class MemberExcelTemplateService {
     private final EmployerRepository employerRepository;
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final CardNumberGeneratorService cardNumberGeneratorService;
+    private final BenefitPolicyRepository benefitPolicyRepository;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // TEMPLATE GENERATION
@@ -1168,6 +1171,37 @@ public class MemberExcelTemplateService {
             }
         }
 
+        // A member is created ACTIVE below, and "members" has a DB-level check
+        // constraint (chk_active_member_requires_policy) forbidding an active
+        // member with no benefit_policy_id. Resolve it here rather than letting
+        // that constraint be the first thing to catch a missing policy — by then
+        // the row is already inside a batch insert and the failure is reported
+        // against whichever row triggered the flush, not the actual culprit.
+        BenefitPolicy benefitPolicy = null;
+        if (!hasErrors) {
+            if (isDependent) {
+                benefitPolicy = parent != null ? parent.getBenefitPolicy() : null;
+                if (benefitPolicy == null) {
+                    errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "card_number",
+                            "العضو الرئيسي لهذا التابع بلا وثيقة منافع، فلا يمكن ربط التابع بأي وثيقة",
+                            "The dependent's principal has no benefit policy to link the dependent to",
+                            excelCardNumber, fullName));
+                    hasErrors = true;
+                }
+            } else if (employer != null) {
+                benefitPolicy = benefitPolicyRepository
+                        .findActiveEffectivePolicyForEmployer(employer.getId(), LocalDate.now())
+                        .orElse(null);
+                if (benefitPolicy == null) {
+                    errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "employer",
+                            "لا توجد وثيقة منافع نشطة وفعّالة لجهة العمل " + employer.getName(),
+                            "No active, effective benefit policy exists for this employer",
+                            employerName, fullName));
+                    hasErrors = true;
+                }
+            }
+        }
+
         if (hasErrors) {
             return null;
         }
@@ -1178,8 +1212,9 @@ public class MemberExcelTemplateService {
                 .cardNumber(excelCardNumber)
                 .birthDate(birthDate)
                 .status(MemberStatus.ACTIVE)
+                .benefitPolicy(benefitPolicy)
                 .build();
-        
+
         if (isDependent) {
             member.setRelationship(relationship);
             member.setParent(parent);

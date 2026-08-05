@@ -132,7 +132,7 @@ public class EmployerImportRowProcessor {
         Integer coveragePercent = row.getCoveragePercent() != null ? row.getCoveragePercent() : 100;
 
         BenefitPolicyCreateDto policyDto = BenefitPolicyCreateDto.builder()
-                .name("وثيقة (مسودة) - " + employer.getName())
+                .name("وثيقة - " + employer.getName())
                 .employerOrgId(employer.getId())
                 .startDate(startDate)
                 .endDate(endDate)
