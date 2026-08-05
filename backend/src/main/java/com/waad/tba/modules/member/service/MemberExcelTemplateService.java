@@ -129,6 +129,18 @@ public class MemberExcelTemplateService {
                         .build(),
 
                 ExcelTemplateColumn.builder()
+                        .name("member_status")
+                        .nameAr("حالة العضوية")
+                        .type(ColumnType.TEXT)
+                        .required(false)
+                        .example("نشط")
+                        .description("Membership eligibility status; benefit exhaustion is imported separately")
+                        .descriptionAr("حالة العضوية فقط؛ اكتمال سقف منفعة لا يوقف المستفيد")
+                        .allowedValues(List.of("نشط", "موقوف", "منتهي", "قيد المراجعة", "ACTIVE", "SUSPENDED", "TERMINATED", "PENDING"))
+                        .width(18)
+                        .build(),
+
+                ExcelTemplateColumn.builder()
                         .name("birth_date")
                         .nameAr("تاريخ الميلاد")
                         .type(ColumnType.DATE)

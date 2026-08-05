@@ -122,6 +122,11 @@ public class MemberImportFieldConfig {
                     "marital_status", "marital", "status_marital",
                     "الحالة الاجتماعية", "الحالة الزوجية"
             }),
+            // Membership status - never use benefit-consumption labels such as "مكتمل"
+            Map.entry("memberStatus", new String[] {
+                    "member_status", "membership_status", "beneficiary_status", "member status",
+                    "membership status", "beneficiary status", "حالة العضوية", "حالة المستفيد", "الحالة"
+            }),
             // Relationship - الصلة
             Map.entry("relationship", new String[] {
                     "relationship", "relation", "relative_relation", "rel",

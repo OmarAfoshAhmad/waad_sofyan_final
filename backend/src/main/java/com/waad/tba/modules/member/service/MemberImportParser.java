@@ -12,6 +12,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.springframework.stereotype.Component;
 
 import com.waad.tba.modules.member.entity.Member.Gender;
+import com.waad.tba.modules.member.entity.Member.MemberStatus;
 import com.waad.tba.modules.member.entity.Member.Relationship;
 
 import lombok.extern.slf4j.Slf4j;
@@ -169,6 +170,25 @@ public class MemberImportParser {
             return Relationship.MOTHER;
         }
         return null;
+    }
+
+    /**
+     * Parses membership eligibility only. Legacy benefit-consumption labels
+     * (notably "مكتمل") deliberately remain ACTIVE: exhausting one benefit
+     * bucket must never suspend the member from every other benefit.
+     */
+    public MemberStatus parseMemberStatus(String value) {
+        if (value == null || value.isBlank()) {
+            return MemberStatus.ACTIVE;
+        }
+        String val = normalizeExcelValue(value).toLowerCase();
+        return switch (val) {
+            case "نشط", "فعال", "active", "مكتمل", "completed" -> MemberStatus.ACTIVE;
+            case "موقوف", "معلق", "suspended", "blocked" -> MemberStatus.SUSPENDED;
+            case "منتهي", "ملغي", "terminated", "inactive" -> MemberStatus.TERMINATED;
+            case "قيد المراجعه", "قيد المراجعة", "pending" -> MemberStatus.PENDING;
+            default -> throw new IllegalArgumentException("حالة عضوية غير معروفة: " + value);
+        };
     }
 
 

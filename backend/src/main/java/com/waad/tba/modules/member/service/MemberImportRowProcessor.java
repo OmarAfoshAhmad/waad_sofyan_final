@@ -71,6 +71,7 @@ public class MemberImportRowProcessor {
         String fullName = parser.getFieldValue(row, fieldToColumnIndex, "fullName");
         String employerName = parser.getFieldValue(row, fieldToColumnIndex, "employer");
         String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
+        String membershipStatus = parser.getFieldValue(row, fieldToColumnIndex, "memberStatus");
 
         if (fullName == null || fullName.isBlank()) {
             rowErrors.add("الاسم الكامل مطلوب (Full name is required)");
@@ -122,6 +123,23 @@ public class MemberImportRowProcessor {
             }
         }
 
+        if (membershipStatus != null && !membershipStatus.isBlank()) {
+            try {
+                parser.parseMemberStatus(membershipStatus);
+                String normalized = parser.normalizeExcelValue(membershipStatus).toLowerCase();
+                if (normalized.equals("مكتمل") || normalized.equals("completed")) {
+                    rowWarnings.add("مكتمل هي حالة استهلاك سقف وليست حالة عضوية؛ سيبقى المستفيد نشطًا ويجب استيراد الرصيد في ورقة الأرصدة الافتتاحية");
+                    hasWarning = true;
+                }
+            } catch (IllegalArgumentException ex) {
+                rowErrors.add(ex.getMessage());
+                validationErrors.add(ImportValidationErrorDto.builder()
+                        .rowNumber(rowNum).field("member_status").value(membershipStatus).severity("ERROR")
+                        .message(ex.getMessage()).build());
+                hasError = true;
+            }
+        }
+
         // Attributes
         for (Map.Entry<String, Integer> entry : fieldToColumnIndex.entrySet()) {
             if (entry.getKey().startsWith("attr:")) {
@@ -156,6 +174,8 @@ public class MemberImportRowProcessor {
         String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
         String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
         String startDateStr = parser.getFieldValue(row, fieldToColumnIndex, "startDate");
+        String memberStatusStr = parser.getFieldValue(row, fieldToColumnIndex, "memberStatus");
+        MemberStatus importedStatus = parser.parseMemberStatus(memberStatusStr);
 
         if (fullName == null || fullName.isBlank()) {
             throw new BusinessRuleException("الصف " + rowNum + ": الاسم الكامل مطلوب");
@@ -193,18 +213,22 @@ public class MemberImportRowProcessor {
             member.setBenefitPolicy(finalPolicy);
             member.setParent(parent);
             member.setRelationship(relationship);
-            member.setStatus(MemberStatus.ACTIVE);
-            member.setCardStatus(Member.CardStatus.ACTIVE);
-            member.setActive(true);
+            member.setStatus(importedStatus);
+            member.setCardStatus(importedStatus == MemberStatus.TERMINATED
+                    ? Member.CardStatus.INACTIVE : Member.CardStatus.ACTIVE);
+            // Suspended/Pending remain visible in operational lists; eligibility
+            // is denied by MemberStatus, while TERMINATED is the archival state.
+            member.setActive(importedStatus != MemberStatus.TERMINATED);
             member.getAttributes().clear();
         } else {
             member = Member.builder()
                     .fullName(fullName)
                     .employer(finalEmployer)
                     .benefitPolicy(finalPolicy)
-                    .status(MemberStatus.ACTIVE)
-                    .cardStatus(Member.CardStatus.ACTIVE)
-                    .active(true)
+                    .status(importedStatus)
+                    .cardStatus(importedStatus == MemberStatus.TERMINATED
+                            ? Member.CardStatus.INACTIVE : Member.CardStatus.ACTIVE)
+                    .active(importedStatus != MemberStatus.TERMINATED)
                     .parent(parent)
                     .relationship(relationship)
                     .build();
