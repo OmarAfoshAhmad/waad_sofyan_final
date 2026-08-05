@@ -65,9 +65,7 @@ import {
   restorePolicyRule,
   deletePolicyRule,
   hardDeletePolicyRule,
-  applyPolicyTemplate,
   copyPolicyRules,
-  getAvailableTemplates,
   downloadPolicyRulesTemplate,
   importPolicyRulesFromExcel
 } from 'services/api/benefit-policy-rules.service';
@@ -875,10 +873,8 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   // ═══════════════════════════════════════════════════════════════════════════
 
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [templates, setTemplates] = useState([]);
   const [policies, setPolicies] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [sourceType, setSourceType] = useState('TEMPLATE');
   const [applyMode, setApplyMode] = useState('UPDATE');
   const [confirmText, setConfirmText] = useState('');
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -953,19 +949,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setTemplateDialogOpen(true);
     setLoadingTemplates(true);
     try {
-      const [tplData, polData] = await Promise.all([getAvailableTemplates(policyId), getBenefitPoliciesSelector()]);
-      setTemplates(tplData || []);
-      const filteredPols = (polData || []).filter((p) => String(p.id) !== String(policyId));
+      const polData = await getBenefitPoliciesSelector();
+      const filteredPols = (polData || []).filter((p) => String(p.id) !== String(policyId) && p.hasRules);
       setPolicies(filteredPols);
-
-      const defaultTpl = tplData?.find((t) => t.isDefault) || tplData?.[0];
-      if (defaultTpl) {
-        setSelectedTemplateId(defaultTpl.id);
-        setSourceType('TEMPLATE');
-      } else if (filteredPols.length > 0) {
-        setSelectedTemplateId(filteredPols[0].id);
-        setSourceType('POLICY');
-      }
+      setSelectedTemplateId(filteredPols[0]?.id || '');
       setApplyMode('UPDATE');
       setConfirmText('');
     } catch (err) {
@@ -982,11 +969,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     }
     setApplyingTemplate(true);
     try {
-      if (sourceType === 'TEMPLATE') {
-        await applyPolicyTemplate(policyId, selectedTemplateId, applyMode);
-      } else {
-        await copyPolicyRules(policyId, selectedTemplateId, applyMode);
-      }
+      await copyPolicyRules(policyId, selectedTemplateId, applyMode);
       enqueueSnackbar('تم تطبيق قواعد التغطية بنجاح', { variant: 'success' });
       setTemplateDialogOpen(false);
       refetchRules();
@@ -1207,14 +1190,33 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 <Typography variant="subtitle2" fontWeight={700} color="secondary.main">
                   {rule.nameAr}
                 </Typography>
-                <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                <Stack spacing={0.5} sx={{ borderRight: '2px solid', borderColor: 'secondary.light', pr: 1 }}>
                   {rule.groupMembers?.filter(member => {
                     const deletedRaw = member.deleted;
                     const rIsDeleted = deletedRaw === true || deletedRaw === 1 || deletedRaw === '1' || String(deletedRaw).toLowerCase() === 'true';
                     return viewMode === 'DELETED' ? true : !rIsDeleted;
-                  }).map(member => (
-                    <Chip key={member.id} size="small" label={member.medicalCategoryName || member.medicalServiceName || '-'} variant="outlined" sx={{ fontSize: '0.7rem' }} />
-                  ))}
+                  }).map(member => {
+                    const memberCoverage = member.coveragePercent ?? member.effectiveCoveragePercent ?? policyDefaultCoveragePercent ?? 100;
+                    const individualLimit = member.individualLimitLink?.bucket;
+                    const limitParts = [];
+                    if (individualLimit?.amountLimit != null) limitParts.push(`${individualLimit.amountLimit} د.ل`);
+                    if (individualLimit?.timesLimit != null) limitParts.push(`${individualLimit.timesLimit} مرة`);
+                    if (individualLimit?.daysLimit != null) limitParts.push(`${individualLimit.daysLimit} يوم`);
+                    return (
+                      <Box
+                        key={member.id}
+                        sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, py: 0.25 }}
+                      >
+                        <Typography variant="caption" fontWeight={600}>
+                          {member.nameAr}
+                        </Typography>
+                        <Chip size="small" label={`${memberCoverage}%`} color={memberCoverage === 100 ? 'success' : 'warning'} sx={{ height: 20, fontSize: '0.68rem' }} />
+                        {limitParts.length > 0 && (
+                          <Chip size="small" variant="outlined" color="info" label={`سقف فردي: ${limitParts.join(' / ')}`} sx={{ height: 20, fontSize: '0.68rem' }} />
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Stack>
               </Stack>
             );
@@ -1459,9 +1461,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
       const changedAt = rule.updatedAt || rule.lastModifiedAt || rule.modifiedAt || rule.createdAt || null;
       const bucketLinks = structureLinksByRuleId.get(rule.id) || [];
-      const individualLimitLink = bucketLinks.find((link) => link.aggregationMode === 'INDIVIDUAL' || String(link.groupCode || '').startsWith('AUTO-BEN-')) || null;
+      // Only AUTO-BEN groups are implementation details for a rule's individual cap.
+      // An explicitly configured group must remain a real group membership even if
+      // its aggregation mode is INDIVIDUAL.
+      const individualLimitLinks = bucketLinks.filter((link) => String(link.groupCode || '').startsWith('AUTO-BEN-'));
+      const individualLimitLink = individualLimitLinks[0] || null;
       const individualLimit = individualLimitLink?.bucket || null;
-      const groupBucketLinks = bucketLinks.filter((link) => link !== individualLimitLink);
+      const groupBucketLinks = bucketLinks.filter((link) => !String(link.groupCode || '').startsWith('AUTO-BEN-'));
       const linkSearch = groupBucketLinks.map((link) => `${link.groupName || ''} ${link.bucket?.nameAr || ''}`).join(' ');
       const linkedDaysLimits = bucketLinks
         .map((link) => link.bucket?.daysLimit)
@@ -1499,6 +1505,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         isDeleted
       };
     });
+    const benefitRowsByRuleId = new Map(benefitRows.map((row) => [String(row.id), row]));
     const groupRows = (benefitStructure.groups || [])
       .filter((group) => !String(group.code || '').startsWith('AUTO-BEN-'))
       .map((group) => {
@@ -1509,7 +1516,12 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           const linkGroupId = link.bucket?.benefitGroupId ?? link.benefitGroupId;
           return bucketIds.has(Number(linkBucketId)) || Number(linkGroupId) === Number(group.id);
         });
-        const groupMembers = memberLinks.map((link) => rules.find((rule) => rule.id === link.ruleId)).filter(Boolean);
+        const groupMembers = [...new Map(
+          memberLinks
+            .map((link) => benefitRowsByRuleId.get(String(link.ruleId)))
+            .filter(Boolean)
+            .map((member) => [String(member.id), member])
+        ).values()];
         const memberNames = groupMembers.map((member) => member.medicalCategoryName || member.medicalServiceName || '');
         const bucketLinks = buckets.map((bucket) => ({ id: `group-bucket-${bucket.id}`, groupName: group.nameAr, bucket }));
         const days = buckets.map((bucket) => bucket.daysLimit).filter((value) => value != null);
@@ -1532,8 +1544,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         };
       });
       
-    // X-OR Architecture Enforcement:
-    // Only show rules that are NOT in a shared group at the root level.
+    // A rule linked to a visible, explicitly configured group is rendered only
+    // beneath that group. AUTO-BEN links represent an individual cap and must not
+    // remove an otherwise standalone rule from the root list.
     const standaloneRules = benefitRows.filter(r => r.bucketLinks.length === 0);
     return [...standaloneRules, ...groupRows];
   }, [rules, categoryMap, structureLinksByRuleId, benefitStructure.groups, benefitStructure.buckets, benefitStructure.links]);
@@ -2325,7 +2338,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
-          <DialogContentText sx={{ mb: 3 }}>يمكنك تطبيق القواعد من قوالب قياسية أو نسخ القواعد من وثائق شركات أخرى.</DialogContentText>
+          <DialogContentText sx={{ mb: 3 }}>يمكنك نسخ قواعد التغطية من وثيقة شركة أخرى تحتوي على قواعد مضبوطة مسبقاً.</DialogContentText>
 
           {loadingTemplates ? (
             <Box display="flex" justifyContent="center" p={3}>
@@ -2333,61 +2346,16 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             </Box>
           ) : (
             <Stack spacing={3}>
-              <FormControl component="fieldset">
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  المصدر
-                </Typography>
-                <Stack direction="row" spacing={2}>
-                  <Chip
-                    label="قالب قياسي"
-                    color="primary"
-                    variant={sourceType === 'TEMPLATE' ? 'filled' : 'outlined'}
-                    onClick={() => {
-                      setSourceType('TEMPLATE');
-                      setSelectedTemplateId(templates[0]?.id || '');
-                    }}
-                    sx={{ cursor: 'pointer', flex: 1, height: '36px', fontSize: '1rem' }}
-                  />
-                  <Chip
-                    label="وثيقة شركة أخرى"
-                    color="primary"
-                    variant={sourceType === 'POLICY' ? 'filled' : 'outlined'}
-                    onClick={() => {
-                      setSourceType('POLICY');
-                      setSelectedTemplateId(policies[0]?.id || '');
-                    }}
-                    sx={{ cursor: 'pointer', flex: 1, height: '36px', fontSize: '1rem' }}
-                  />
-                </Stack>
-              </FormControl>
-
-              <FormControl fullWidth size="medium">
-                <InputLabel id="template-select-label">{sourceType === 'TEMPLATE' ? 'اختر القالب' : 'اختر الوثيقة'}</InputLabel>
-                <Select
-                  labelId="template-select-label"
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  label={sourceType === 'TEMPLATE' ? 'اختر القالب' : 'اختر الوثيقة'}
-                >
-                  {sourceType === 'TEMPLATE' &&
-                    templates.map((tpl) => (
-                      <MenuItem key={tpl.id} value={tpl.id}>
-                        {tpl.name} {tpl.isDefault ? '(افتراضي)' : ''}
-                      </MenuItem>
-                    ))}
-                  {sourceType === 'POLICY' &&
-                    policies.map((pol) => (
-                      <MenuItem key={pol.id} value={pol.id}>
-                        {pol.label}
-                      </MenuItem>
-                    ))}
-                  {(sourceType === 'TEMPLATE' ? templates : policies).length === 0 && (
-                    <MenuItem disabled value="">
-                      لا توجد بيانات متاحة
-                    </MenuItem>
-                  )}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                fullWidth
+                options={policies}
+                getOptionLabel={(opt) => opt.label || ''}
+                isOptionEqualToValue={(opt, val) => String(opt.id) === String(val?.id)}
+                value={policies.find((o) => String(o.id) === String(selectedTemplateId)) || null}
+                onChange={(e, newValue) => setSelectedTemplateId(newValue?.id || '')}
+                noOptionsText="لا توجد وثائق تحتوي على قواعد تغطية"
+                renderInput={(params) => <TextField {...params} label="اختر الوثيقة" />}
+              />
 
               <FormControl component="fieldset">
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>

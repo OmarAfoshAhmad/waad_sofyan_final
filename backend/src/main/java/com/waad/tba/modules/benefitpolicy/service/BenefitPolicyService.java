@@ -188,6 +188,7 @@ public class BenefitPolicyService {
                         .label(bp.getName())
                         .policyCode(bp.getPolicyCode())
                         .effective(bp.isEffective())
+                        .hasRules(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(bp.getId()) > 0)
                         .build())
                 .collect(Collectors.toList());
     }
@@ -205,6 +206,7 @@ public class BenefitPolicyService {
                         .label(bp.getName())
                         .policyCode(bp.getPolicyCode())
                         .effective(bp.isEffective())
+                        .hasRules(benefitPolicyRuleRepository.countByBenefitPolicyIdAndDeletedFalseAndActiveTrue(bp.getId()) > 0)
                         .build())
                 .collect(Collectors.toList());
     }

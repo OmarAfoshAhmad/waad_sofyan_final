@@ -21,6 +21,7 @@ import { createContext, useEffect, useState, useContext } from 'react';
 import authService from 'services/api/auth.service';
 import { useRBACStore } from 'api/rbac';
 import { openSnackbar } from 'api/snackbar';
+import { bumpSessionEpoch } from 'utils/session-epoch';
 
 // ==============================|| AUTH STATUS ENUM ||============================== //
 
@@ -115,6 +116,7 @@ export const AuthProvider = ({ children }) => {
         });
 
         // Force clean local state without calling backend (backend already said 401)
+        bumpSessionEpoch();
         setUser(null);
         setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
         useRBACStore.getState().clear();
@@ -191,6 +193,7 @@ export const AuthProvider = ({ children }) => {
     const response = await authService.login(credentials);
 
     if (response.status === 'success' && response.data) {
+      bumpSessionEpoch();
       setUser(response.data);
       setAuthStatus(AUTH_STATUS.AUTHENTICATED);
       useRBACStore.getState().initialize(response.data);
@@ -213,6 +216,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     // 🔒 CRITICAL: Clean ALL auth data
+    bumpSessionEpoch();
     setUser(null);
     setAuthStatus(AUTH_STATUS.UNAUTHENTICATED);
     useRBACStore.getState().clear();

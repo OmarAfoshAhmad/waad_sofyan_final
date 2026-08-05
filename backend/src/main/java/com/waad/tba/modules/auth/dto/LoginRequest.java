@@ -20,4 +20,6 @@ public class LoginRequest {
     @NotBlank(message = "Password is required")
     @Size(max = 200, message = "Password too long")
     private String password;
+
+    private boolean rememberMe;
 }

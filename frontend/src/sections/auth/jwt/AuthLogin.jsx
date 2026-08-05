@@ -76,7 +76,8 @@ export default function AuthLogin({ isDemo = false }) {
             const trimmedIdentifier = values.email.trim();
             const user = await login({
               identifier: trimmedIdentifier,
-              password: values.password
+              password: values.password,
+              rememberMe: checked
             });
 
             setStatus({ success: true });
@@ -196,7 +197,13 @@ export default function AuthLogin({ isDemo = false }) {
                 )}
               </Grid>
 
-              {/* Remember Me & Forgot Password (Removed) */}
+              {/* Remember Me */}
+              <Grid size={12}>
+                <FormControlLabel
+                  control={<Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} name="rememberMe" color="primary" />}
+                  label="تذكرني"
+                />
+              </Grid>
 
               {/* Error Message */}
               {errors.submit && (

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { logError, getUserFriendlyMessage, ErrorType } from 'services/errorLogger';
 import { normalizeApiError } from 'utils/api-error';
+import { getSessionEpoch } from 'utils/session-epoch';
 
 // ==============================|| AXIOS CLIENT - CLEAN DOCKER VERSION ||============================== //
 
@@ -38,6 +39,12 @@ axiosServices.interceptors.request.use(
     }
 
     // Web auth is session-based (HttpOnly cookie via withCredentials).
+
+    // Stamp the session epoch active when this request was SENT, so a 401 that
+    // resolves late (from a request fired under a session that has since been
+    // replaced by a fresh login) can be told apart from a real expiration of
+    // the CURRENT session — see utils/session-epoch.js.
+    config.__sessionEpoch = getSessionEpoch();
 
     return config;
   },
@@ -88,6 +95,14 @@ axiosServices.interceptors.response.use(
       }
 
       if (isSessionCheck) {
+        return Promise.reject(error);
+      }
+
+      // A 401 from a request stamped with an OLDER session epoch belongs to a
+      // session that a later login/logout has already replaced — it does not
+      // mean the CURRENT session expired, so it must not force a logout.
+      const requestEpoch = error.config?.__sessionEpoch;
+      if (typeof requestEpoch === 'number' && requestEpoch !== getSessionEpoch()) {
         return Promise.reject(error);
       }
 

@@ -30,4 +30,9 @@ public class BenefitPolicySelectorDto {
      * Whether the policy is currently effective
      */
     private boolean effective;
+
+    /**
+     * Whether the policy has at least one active coverage rule
+     */
+    private boolean hasRules;
 }

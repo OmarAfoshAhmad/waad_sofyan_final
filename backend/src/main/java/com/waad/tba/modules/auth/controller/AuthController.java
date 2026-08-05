@@ -67,6 +67,7 @@ public class AuthController {
 
         private static final String PASSWORD_RESET_METHOD_OTP = "OTP";
         private static final String PASSWORD_RESET_METHOD_TOKEN = "TOKEN";
+        private static final int REMEMBER_ME_SESSION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
         private boolean isOtpFlowEnabled() {
                 return PASSWORD_RESET_METHOD_OTP.equals(systemSettingsService.getPasswordResetMethod());
@@ -125,6 +126,14 @@ public class AuthController {
                 session.setAttribute("employerId", userInfo.getEmployerId());
                 // Ensure providerId is persisted for provider-level isolation
                 session.setAttribute("providerId", userInfo.getProviderId());
+
+                // Remember Me: extend both the server-side session lifetime and the
+                // JSESSIONID cookie's Max-Age so the login survives beyond the default
+                // 30-minute inactivity window (see RememberMeAwareCookieSerializer).
+                session.setAttribute("rememberMe", request.isRememberMe());
+                if (request.isRememberMe()) {
+                        session.setMaxInactiveInterval(REMEMBER_ME_SESSION_SECONDS);
+                }
 
                 return ResponseEntity.ok(ApiResponse.success("Login successful", userInfo));
         }
