@@ -34,6 +34,12 @@ public class SettingsInitializationService {
     public static final String FONT_SIZE_BASE_KEY = "FONT_SIZE_BASE";
     public static final String SYSTEM_NAME_AR_KEY = "SYSTEM_NAME_AR";
     public static final String SYSTEM_NAME_EN_KEY = "SYSTEM_NAME_EN";
+    public static final String PRIMARY_COLOR_KEY = "PRIMARY_COLOR";
+    public static final String SECONDARY_COLOR_KEY = "SECONDARY_COLOR";
+    public static final String INFO_COLOR_KEY = "INFO_COLOR";
+    public static final String SUCCESS_COLOR_KEY = "SUCCESS_COLOR";
+    public static final String WARNING_COLOR_KEY = "WARNING_COLOR";
+    public static final String ERROR_COLOR_KEY = "ERROR_COLOR";
 
     public static final String BENEFICIARY_NUMBER_FORMAT_KEY = "BENEFICIARY_NUMBER_FORMAT";
     public static final String BENEFICIARY_NUMBER_PREFIX_KEY = "BENEFICIARY_NUMBER_PREFIX";
@@ -168,6 +174,18 @@ public class SettingsInitializationService {
                 "Arabic system display name", "UI", true, "");
         ensureDefaultSetting(SYSTEM_NAME_EN_KEY, "TBA WAAD System", SystemSetting.SettingValueType.STRING,
                 "English system display name", "UI", true, "");
+        ensureDefaultSetting(PRIMARY_COLOR_KEY, "#00838F", SystemSetting.SettingValueType.STRING,
+                "Primary brand color", "UI", true, "");
+        ensureDefaultSetting(SECONDARY_COLOR_KEY, "#42A5F5", SystemSetting.SettingValueType.STRING,
+                "Secondary action color", "UI", true, "");
+        ensureDefaultSetting(INFO_COLOR_KEY, "#00A2AE", SystemSetting.SettingValueType.STRING,
+                "Informational semantic color", "UI", true, "");
+        ensureDefaultSetting(SUCCESS_COLOR_KEY, "#00A854", SystemSetting.SettingValueType.STRING,
+                "Success and approval semantic color", "UI", true, "");
+        ensureDefaultSetting(WARNING_COLOR_KEY, "#FFBF00", SystemSetting.SettingValueType.STRING,
+                "Warning and review semantic color", "UI", true, "");
+        ensureDefaultSetting(ERROR_COLOR_KEY, "#F04134", SystemSetting.SettingValueType.STRING,
+                "Error and rejection semantic color", "UI", true, "");
 
         ensureDefaultSetting(BENEFICIARY_NUMBER_FORMAT_KEY, "PREFIX_SEQUENCE", SystemSetting.SettingValueType.STRING,
                 "Beneficiary number generation format", "MEMBERS", true, "enum:PREFIX_SEQUENCE");

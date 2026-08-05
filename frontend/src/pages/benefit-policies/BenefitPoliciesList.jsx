@@ -283,9 +283,9 @@ const BenefitPoliciesList = () => {
         case 'employerName':
           return <Typography variant="body2">{row.employerName || '-'}</Typography>;
         case 'startDate':
-          return row.startDate ? <Chip label={dayjs(row.startDate).format('YYYY-MM-DD')} size="small" variant="outlined" /> : '-';
+          return row.startDate ? <Chip label={dayjs(row.startDate).format('DD-MM-YYYY')} size="small" variant="outlined" /> : '-';
         case 'endDate':
-          return row.endDate ? <Chip label={dayjs(row.endDate).format('YYYY-MM-DD')} size="small" variant="outlined" /> : '-';
+          return row.endDate ? <Chip label={dayjs(row.endDate).format('DD-MM-YYYY')} size="small" variant="outlined" /> : '-';
         case 'status': {
           const status = STATUS_CONFIG[row.status] || { label: row.status || '-', color: 'default' };
           return <Chip label={status.label} color={status.color} size="small" />;

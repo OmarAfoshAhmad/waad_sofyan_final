@@ -14,7 +14,7 @@ export const INSURANCE_TERMS = {
     en: 'Insured Member'
   },
   principal: {
-    ar: 'المؤمَّن الرئيسي',
+    ar: 'الموظف',
     en: 'Primary Insured'
   },
   dependent: {

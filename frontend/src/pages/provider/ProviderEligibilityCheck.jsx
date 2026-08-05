@@ -951,7 +951,7 @@ export default function ProviderEligibilityCheck() {
                                         {member.fullName}
                                       </Typography>
                                       {member.isPrincipal && (
-                                        <Chip label="رئيسي" size="small" color="primary" sx={{ height: '1.125rem', fontSize: '0.75rem' }} />
+                                        <Chip label="موظف" size="small" color="primary" sx={{ height: '1.125rem', fontSize: '0.75rem' }} />
                                       )}
                                     </Box>
                                   </Stack>

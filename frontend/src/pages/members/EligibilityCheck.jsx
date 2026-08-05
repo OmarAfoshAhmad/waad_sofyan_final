@@ -53,6 +53,7 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import MemberAvatar from 'components/tba/MemberAvatar';
 import { checkEligibility, GENDERS } from 'services/api/unified-members.service';
+import { formatDate } from 'utils/formatters';
 import { openSnackbar } from 'api/snackbar';
 
 /**
@@ -173,7 +174,7 @@ const EligibilityCheck = () => {
           <MainCard>
             <Stack spacing={3}>
               <Alert severity="info" icon={<QrCodeIcon />}>
-                أدخل Barcode المنتفع الرئيسي للتحقق من أهلية جميع أفراد العائلة (الصيغة: WAHA-YYYY-NNNNNN)
+                أدخل Barcode الموظف للتحقق من أهلية جميع أفراد العائلة (الصيغة: WAHA-YYYY-NNNNNN)
               </Alert>
 
               <Grid container spacing={2} alignItems="flex-start">
@@ -234,7 +235,7 @@ const EligibilityCheck = () => {
                             {familyData.principal?.fullName}
                           </Typography>
                           <Stack direction="row" spacing={1}>
-                            <Chip label="منتفع رئيسي" color="primary" size="small" />
+                            <Chip label="موظف" color="primary" size="small" />
                             <Chip
                               label={familyData.principal?.eligible ? 'مؤهل' : 'غير مؤهل'}
                               color={familyData.principal?.eligible ? 'success' : 'error'}
@@ -351,7 +352,7 @@ const EligibilityCheck = () => {
                         <Typography variant="caption" color="text.secondary">
                           تاريخ الميلاد
                         </Typography>
-                        <Typography variant="body1">{familyData.principal?.birthDate || '-'}</Typography>
+                        <Typography variant="body1" dir="ltr">{formatDate(familyData.principal?.birthDate)}</Typography>
                       </Stack>
                     </Grid>
 
@@ -447,7 +448,7 @@ const EligibilityCheck = () => {
                                 {dep.cardNumber}
                               </Typography>
                             </TableCell>
-                            <TableCell>{dep.birthDate || '-'}</TableCell>
+                            <TableCell dir="ltr">{formatDate(dep.birthDate)}</TableCell>
                             <TableCell>{dep.gender === GENDERS.MALE ? 'ذكر' : 'أنثى'}</TableCell>
                             <TableCell>{dep.annualLimit?.toLocaleString() || '0'} د.ل</TableCell>
                             <TableCell>

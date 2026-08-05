@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Chip,
   CircularProgress,
   FormControlLabel,
   Grid,
@@ -63,7 +64,12 @@ const KEYS = {
   tableHeaderText: 'TABLE_HEADER_TEXT',
   tableRowEven: 'TABLE_ROW_EVEN',
   selectionColor: 'SELECTION_COLOR',
-  primaryColor: 'PRIMARY_COLOR'
+  primaryColor: 'PRIMARY_COLOR',
+  secondaryColor: 'SECONDARY_COLOR',
+  infoColor: 'INFO_COLOR',
+  successColor: 'SUCCESS_COLOR',
+  warningColor: 'WARNING_COLOR',
+  errorColor: 'ERROR_COLOR'
 };
 
 const PROVIDER_PORTAL_FLAG_KEY = 'PROVIDER_PORTAL_ENABLED';
@@ -193,6 +199,11 @@ const SystemSettingsPage = () => {
     tableRowEven: (visualSettings || {}).tableRowEven || 'rgba(224,242,241,0.45)',
     selectionColor: (visualSettings || {}).selectionColor || 'rgba(0,131,143,0.08)',
     primaryColor: ensureHash((visualSettings || {}).primaryColor, '#00838F'),
+    secondaryColor: ensureHash((visualSettings || {}).secondaryColor, '#42A5F5'),
+    infoColor: ensureHash((visualSettings || {}).infoColor, '#00A2AE'),
+    successColor: ensureHash((visualSettings || {}).successColor, '#00A854'),
+    warningColor: ensureHash((visualSettings || {}).warningColor, '#FFBF00'),
+    errorColor: ensureHash((visualSettings || {}).errorColor, '#F04134'),
     claimSlaDays: 10,
     preApprovalSlaDays: 3,
     claimBackdatedMonths: 3,
@@ -280,6 +291,11 @@ const SystemSettingsPage = () => {
         tableRowEven: byKey.get(KEYS.tableRowEven) || (visualSettings || {}).tableRowEven || 'rgba(224,242,241,0.45)',
         selectionColor: byKey.get(KEYS.selectionColor) || (visualSettings || {}).selectionColor || 'rgba(0,131,143,0.08)',
         primaryColor: ensureHash(byKey.get(KEYS.primaryColor) || (visualSettings || {}).primaryColor, '#00838F'),
+        secondaryColor: ensureHash(byKey.get(KEYS.secondaryColor) || (visualSettings || {}).secondaryColor, '#42A5F5'),
+        infoColor: ensureHash(byKey.get(KEYS.infoColor) || (visualSettings || {}).infoColor, '#00A2AE'),
+        successColor: ensureHash(byKey.get(KEYS.successColor) || (visualSettings || {}).successColor, '#00A854'),
+        warningColor: ensureHash(byKey.get(KEYS.warningColor) || (visualSettings || {}).warningColor, '#FFBF00'),
+        errorColor: ensureHash(byKey.get(KEYS.errorColor) || (visualSettings || {}).errorColor, '#F04134'),
         // Report Settings Fields
         pdfSettingsId: reportSettingsResponse?.id,
         claimReportTitle: reportSettingsResponse?.claimReportTitle || 'نظام وعد الطبي',
@@ -374,6 +390,11 @@ const SystemSettingsPage = () => {
         saveSettingIfExists(KEYS.tableRowEven, dataToSave.tableRowEven),
         saveSettingIfExists(KEYS.selectionColor, dataToSave.selectionColor),
         saveSettingIfExists(KEYS.primaryColor, dataToSave.primaryColor),
+        saveSettingIfExists(KEYS.secondaryColor, dataToSave.secondaryColor),
+        saveSettingIfExists(KEYS.infoColor, dataToSave.infoColor),
+        saveSettingIfExists(KEYS.successColor, dataToSave.successColor),
+        saveSettingIfExists(KEYS.warningColor, dataToSave.warningColor),
+        saveSettingIfExists(KEYS.errorColor, dataToSave.errorColor),
         // Save Report Settings
         ...(dataToSave.pdfSettingsId
           ? [
@@ -416,7 +437,12 @@ const SystemSettingsPage = () => {
         tableHeaderText: dataToSave.tableHeaderText,
         tableRowEven: dataToSave.tableRowEven,
         selectionColor: dataToSave.selectionColor,
-        primaryColor: dataToSave.primaryColor
+        primaryColor: dataToSave.primaryColor,
+        secondaryColor: dataToSave.secondaryColor,
+        infoColor: dataToSave.infoColor,
+        successColor: dataToSave.successColor,
+        warningColor: dataToSave.warningColor,
+        errorColor: dataToSave.errorColor
       });
 
       refreshSystemConfig();
@@ -998,24 +1024,27 @@ const SystemSettingsPage = () => {
 
           <TabPanel value={tabValue} index={4}>
             <Box sx={{ p: '1.0rem' }}>
-              <Stack spacing={1.5} sx={{ maxWidth: '47.5rem' }}>
-                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
-                  <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="success.main">
+              <Grid container spacing={1.5} alignItems="stretch">
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', width: '100%' }}>
+                  <FieldGroup title="إظهار/إخفاء بوابة مقدم الخدمة" icon={ProviderPortalIcon} color="primary.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التعطيل تختفي بوابة مقدم الخدمة من القائمة الجانبية. عند التفعيل تظهر للمستخدمين المخولين.
                     </Typography>
 
                     <Stack direction="row" alignItems="center" spacing={2}>
-                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isToggling} color="success" />
-                      <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'success.main' : 'text.primary'}>
+                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isToggling} color="primary" />
+                      <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'primary.main' : 'text.primary'}>
                         {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
                       </Typography>
                       {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
+                </Grid>
 
-                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', width: '100%' }}>
                   <FieldGroup title="تفعيل إضافة المطالبات المباشرة" icon={ReportIcon} color="primary.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التفعيل، سيتمكن مزودو الخدمة من تقديم مطالبات جديدة مباشرة عبر البوابة.
@@ -1035,8 +1064,10 @@ const SystemSettingsPage = () => {
                     </Stack>
                   </FieldGroup>
                 </Paper>
+                </Grid>
 
-                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', width: '100%' }}>
                   <FieldGroup title="تفعيل إضافة الموافقات المسبقة المباشرة" icon={SecurityIcon} color="primary.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التفعيل، سيتمكن مزودو الخدمة من طلب موافقات مسبقة جديدة مباشرة عبر البوابة.
@@ -1056,25 +1087,29 @@ const SystemSettingsPage = () => {
                     </Stack>
                   </FieldGroup>
                 </Paper>
+                </Grid>
 
-                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
-                  <FieldGroup title="إظهار مسار دفعات المطالبات الداخلي" icon={ReportIcon} color="warning.main">
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', width: '100%' }}>
+                  <FieldGroup title="إظهار مسار دفعات المطالبات الداخلي" icon={ReportIcon} color="primary.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التعطيل، تختفي واجهة إدخال المطالبات بالدفعات ويغلق مسارها البرمجي. استخدم هذا الخيار عند الانتقال التشغيلي إلى
                       بوابة مقدم الخدمة.
                     </Typography>
 
                     <Stack direction="row" alignItems="center" spacing={2}>
-                      <Switch checked={batchClaimsEnabled} onChange={handleToggleBatchClaims} disabled={isToggling} color="warning" />
-                      <Typography variant="subtitle1" fontWeight={700} color={batchClaimsEnabled ? 'warning.main' : 'text.primary'}>
+                      <Switch checked={batchClaimsEnabled} onChange={handleToggleBatchClaims} disabled={isToggling} color="primary" />
+                      <Typography variant="subtitle1" fontWeight={700} color={batchClaimsEnabled ? 'primary.main' : 'text.primary'}>
                         {batchClaimsEnabled ? 'الدفعات مفعلة' : 'الدفعات مخفية ومعطلة'}
                       </Typography>
                       {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
+                </Grid>
 
-                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem' }}>
+                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Paper variant="outlined" sx={{ p: '0.75rem', borderRadius: '0.25rem', width: '100%' }}>
                   <FieldGroup title="أصناف بموافقة مسبقة" icon={SecurityIcon} color="primary.main">
                     <Typography variant="body2" color="text.secondary" sx={{ mb: '0.75rem' }}>
                       عند التفعيل، سيتم فلترة الخدمات لتشمل فقط الأصناف التي تتطلب موافقة مسبقة. وعند التعطيل سيتم عرض جميع الأصناف.
@@ -1094,7 +1129,8 @@ const SystemSettingsPage = () => {
                     </Stack>
                   </FieldGroup>
                 </Paper>
-              </Stack>
+                </Grid>
+              </Grid>
             </Box>
           </TabPanel>
 
@@ -1222,12 +1258,17 @@ const SystemSettingsPage = () => {
                       {/* منتقيات الألوان - عمودياً */}
                       <Grid size={{ xs: 12, md: 5 }}>
                         <Paper variant="outlined" sx={{ p: '0.5rem 0.75rem', borderRadius: '0.25rem' }}>
-                          <FieldGroup title="ألوان الجداول" icon={PaletteIcon} color="primary.main">
+                          <FieldGroup title="لوحة الهوية والألوان الدلالية" icon={PaletteIcon} color="primary.main">
                             <Stack spacing={0.75}>
                               {[
+                                { label: 'اللون الرئيسي', key: 'primaryColor' },
+                                { label: 'اللون المساعد', key: 'secondaryColor' },
+                                { label: 'المعلومات', key: 'infoColor' },
+                                { label: 'النجاح', key: 'successColor' },
+                                { label: 'التحذير', key: 'warningColor' },
+                                { label: 'الخطأ والرفض', key: 'errorColor' },
                                 { label: 'خلفية الترويسة', key: 'tableHeaderBg' },
                                 { label: 'نص الترويسة', key: 'tableHeaderText' },
-                                { label: 'اللون الرئيسي', key: 'primaryColor' },
                                 { label: 'لون التحديد', key: 'selectionColor' },
                                 { label: 'صفوف بديلة', key: 'tableRowEven' }
                               ].map(({ label, key }) => {
@@ -1353,6 +1394,17 @@ const SystemSettingsPage = () => {
                                 ● نموذج أيقونة/نص
                               </Typography>
                             </Box>
+                            <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 1.25 }}>
+                              {[
+                                ['معلومات', 'infoColor'],
+                                ['نجاح/معتمد', 'successColor'],
+                                ['تحذير/مراجعة', 'warningColor'],
+                                ['خطأ/مرفوض', 'errorColor'],
+                                ['إجراء مساعد', 'secondaryColor']
+                              ].map(([label, key]) => (
+                                <Chip key={key} size="small" label={label} sx={{ bgcolor: formData[key], color: '#fff', fontWeight: 700 }} />
+                              ))}
+                            </Stack>
                           </FieldGroup>
                         </Paper>
                       </Grid>

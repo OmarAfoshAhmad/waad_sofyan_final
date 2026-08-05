@@ -33,7 +33,7 @@ const GregorianDatePicker = ({ label, name, value, onChange, ...props }) => {
         label={label}
         value={value ? dayjs(value) : null}
         onChange={handleDateChange}
-        format="DD/MM/YYYY"
+        format="DD-MM-YYYY"
         slotProps={{
           textField: {
             fullWidth: true,

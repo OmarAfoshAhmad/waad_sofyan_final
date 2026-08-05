@@ -7,7 +7,7 @@
  *
  * CRITICAL RULES:
  * - All numbers: English digits (1234567890)
- * - All dates: English format (DD/MM/YYYY)
+ * - All displayed dates: English digits in DD-MM-YYYY format
  * - All currency: Libyan Dinar (د.ل or LYD)
  * - Locale: 'en-US' for all formatters
  *
@@ -69,9 +69,9 @@ export const formatPercentage = (value, decimals = 1) => {
 // ============================================================================
 
 /**
- * Format date with English digits (DD/MM/YYYY)
+ * Format date with English digits (DD-MM-YYYY)
  * @param {string|Date} date - Date to format
- * @returns {string} Formatted date (e.g., "15/01/2024")
+ * @returns {string} Formatted date (e.g., "15-01-2024")
  */
 export const formatDate = (date) => {
   if (!date) return '-';
@@ -83,7 +83,7 @@ export const formatDate = (date) => {
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
-    return `${day}/${month}/${year}`;
+    return `${day}-${month}-${year}`;
   } catch (error) {
     console.error('Date formatting error:', error);
     return '-';
@@ -97,7 +97,7 @@ export const formatDate = (date) => {
 export const formatCurrencyLYD = (value) => formatCurrency(value);
 
 /**
- * Format date with time (DD/MM/YYYY HH:MM)
+ * Format date with time (DD-MM-YYYY HH:MM)
  * @param {string|Date} date - Date to format
  * @returns {string} Formatted date and time
  */
@@ -108,7 +108,7 @@ export const formatDateTime = (date) => {
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return '-';
 
-    return new Intl.DateTimeFormat(LOCALE, {
+    const formatted = new Intl.DateTimeFormat(LOCALE, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -116,6 +116,7 @@ export const formatDateTime = (date) => {
       minute: '2-digit',
       hour12: false
     }).format(d);
+    return formatted.replace(/\//g, '-').replace(',', '');
   } catch (error) {
     console.error('DateTime formatting error:', error);
     return '-';

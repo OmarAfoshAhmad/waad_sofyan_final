@@ -67,7 +67,7 @@ public class MemberImportFieldConfig {
                     "principal card number", "principal-card-number",
                     "رقم البطاقة", "رقم العضوية", "رقم التأمين", "رقم العضو", "رقم بطاقة التأمين",
                     "الباركود", "رقم الشارة", "رقم بطاقة المستفيد", "رقم بطاقة المؤمن عليه", "رقم الكارت",
-                    "رقم بطاقة الرئيسي"
+                    "رقم بطاقة الموظف"
             }),
             // Birth Date - تاريخ الميلاد
             Map.entry("birthDate", new String[] {

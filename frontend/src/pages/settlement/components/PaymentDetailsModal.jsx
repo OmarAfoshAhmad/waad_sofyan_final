@@ -135,7 +135,7 @@ const PaymentDetailsModal = ({ open, onClose, summary, onPaymentChanged }) => {
                   {records?.length > 0 ? (
                     records.map((row) => (
                       <TableRow key={row.id}>
-                        <TableCell>{dayjs(row.paymentDate).format('YYYY-MM-DD')}</TableCell>
+                        <TableCell>{dayjs(row.paymentDate).format('DD-MM-YYYY')}</TableCell>
                         <TableCell>
                           <Typography fontWeight="bold" color="primary">
                             {formatCurrency(row.amount)}

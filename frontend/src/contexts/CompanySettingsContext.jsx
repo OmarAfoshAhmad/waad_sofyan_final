@@ -24,6 +24,10 @@ const DEFAULT_SETTINGS = {
   logoBase64: null,
   primaryColor: '#00838F',
   secondaryColor: '#42a5f5',
+  infoColor: '#00A2AE',
+  successColor: '#00A854',
+  warningColor: '#FFBF00',
+  errorColor: '#F04134',
   headerStyle: 'gradient',
   phone: '',
   email: '',
@@ -47,7 +51,10 @@ function loadSettings() {
     if (stored) {
       const parsed = JSON.parse(stored);
       // تصحيح ألوان الـ hex المخزنة بدون # (مثل '409c86' → '#409c86')
-      const hexFields = ['primaryColor', 'secondaryColor', 'tableHeaderBg', 'tableHeaderText'];
+      const hexFields = [
+        'primaryColor', 'secondaryColor', 'infoColor', 'successColor', 'warningColor', 'errorColor',
+        'tableHeaderBg', 'tableHeaderText'
+      ];
       for (const field of hexFields) {
         if (parsed[field] && /^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(String(parsed[field]).trim())) {
           parsed[field] = `#${parsed[field].trim()}`;

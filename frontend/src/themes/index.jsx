@@ -32,6 +32,18 @@ export default function ThemeCustomization({ children }) {
     const companyPrimaryColor = settings?.primaryColor;
     if (!companyPrimaryColor) return base;
 
+    const buildSemanticScale = (main, fallback, darkMode = false) => {
+      const shades = generate(main || fallback);
+      return extendPaletteWithChannels({
+        lighter: darkMode ? shades[9] : shades[0],
+        light: darkMode ? shades[6] : shades[3],
+        main: darkMode ? shades[4] : (main || fallback),
+        dark: darkMode ? shades[3] : shades[6],
+        darker: darkMode ? shades[1] : shades[8],
+        contrastText: '#fff'
+      });
+    };
+
     // Generate a 10-shade scale from the company primary color
     const lightShades = generate(companyPrimaryColor);
     const contrastText = '#fff';
@@ -66,19 +78,41 @@ export default function ThemeCustomization({ children }) {
       contrastText
     });
 
+    const semanticLight = {
+      secondary: buildSemanticScale(settings?.secondaryColor, '#42A5F5'),
+      info: buildSemanticScale(settings?.infoColor, '#00A2AE'),
+      success: buildSemanticScale(settings?.successColor, '#00A854'),
+      warning: buildSemanticScale(settings?.warningColor, '#FFBF00'),
+      error: buildSemanticScale(settings?.errorColor, '#F04134')
+    };
+    const semanticDark = {
+      secondary: buildSemanticScale(settings?.secondaryColor, '#42A5F5', true),
+      info: buildSemanticScale(settings?.infoColor, '#00A2AE', true),
+      success: buildSemanticScale(settings?.successColor, '#00A854', true),
+      warning: buildSemanticScale(settings?.warningColor, '#FFBF00', true),
+      error: buildSemanticScale(settings?.errorColor, '#F04134', true)
+    };
     const alertLight = {
-      infoStandardBg: primaryLight.lighter,
-      infoIconColor: primaryLight.main,
-      infoColor: primaryLight.dark,
-      infoFilledBg: primaryLight.main,
+      infoStandardBg: semanticLight.info.lighter,
+      infoIconColor: semanticLight.info.main,
+      infoColor: semanticLight.info.dark,
+      infoFilledBg: semanticLight.info.main,
       infoFilledColor: contrastText
     };
 
     return {
-      light: { ...base.light, primary: primaryLight, Alert: alertLight },
-      dark: { ...base.dark, primary: primaryDark }
+      light: { ...base.light, primary: primaryLight, ...semanticLight, Alert: alertLight },
+      dark: { ...base.dark, primary: primaryDark, ...semanticDark }
     };
-  }, [state.presetColor, settings?.primaryColor]);
+  }, [
+    state.presetColor,
+    settings?.primaryColor,
+    settings?.secondaryColor,
+    settings?.infoColor,
+    settings?.successColor,
+    settings?.warningColor,
+    settings?.errorColor
+  ]);
 
   const themeOptions = useMemo(
     () => ({
@@ -128,15 +162,15 @@ export default function ThemeCustomization({ children }) {
     <StyledEngineProvider injectFirst>
       <ThemeProvider disableTransitionOnChange theme={themes} modeStorageKey="theme-mode" defaultMode={DEFAULT_THEME_MODE}>
         <CssBaseline enableColorScheme />
-        {/* Override MUI Alert info severity to follow the theme's primary color instead of hardcoded info (blue) */}
+        {/* Keep informational alerts aligned with the configurable semantic palette. */}
         <GlobalStyles
           styles={(theme) => ({
             '.MuiAlert-standardInfo': {
-              backgroundColor: theme.palette.primary.lighter,
-              color: theme.palette.primary.dark
+              backgroundColor: theme.palette.info.lighter,
+              color: theme.palette.info.dark
             },
             '.MuiAlert-standardInfo .MuiAlert-icon': {
-              color: theme.palette.primary.main
+              color: theme.palette.info.main
             }
           })}
         />

@@ -27,6 +27,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitGroup;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
+import com.waad.tba.modules.benefitpolicy.entity.BenefitRuleBucket;
 import com.waad.tba.modules.benefitpolicy.enums.AggregationMode;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
@@ -111,6 +112,41 @@ class BenefitStructureServiceTest {
         assertThat(bucket.getValue().getCountingMethod()).isEqualTo(CountingMethod.EACH_UNIT);
         assertThat(bucket.getValue().getTimesLimit()).isEqualTo(20);
         verify(linkRepository).save(any());
+    }
+
+    @Test
+    void updateGroup_withSameMembers_updatesLinksWithoutDeleteAndReinsert() {
+        BenefitGroup group = BenefitGroup.builder().id(20L).policy(policy).code("GRP-TEST")
+                .nameAr("مجموعة اختبار").contextType(EncounterType.OUTPATIENT)
+                .aggregationMode(AggregationMode.SHARED).active(true).build();
+        BenefitLimitBucket bucket = BenefitLimitBucket.builder().id(30L).policy(policy).benefitGroup(group)
+                .code("AUTO-GRP-GRP-TEST").nameAr("مجموعة اختبار")
+                .contextType(EncounterType.OUTPATIENT).periodType(LimitPeriodType.ANNUAL)
+                .countingMethod(CountingMethod.EACH_UNIT).build();
+        BenefitPolicyRule first = BenefitPolicyRule.builder().id(101L).benefitPolicy(policy)
+                .encounterType(EncounterType.OUTPATIENT).build();
+        BenefitPolicyRule second = BenefitPolicyRule.builder().id(102L).benefitPolicy(policy)
+                .encounterType(EncounterType.OUTPATIENT).build();
+        BenefitRuleBucket firstLink = BenefitRuleBucket.builder().rule(first).bucket(bucket).consumptionOrder(1).build();
+        BenefitRuleBucket secondLink = BenefitRuleBucket.builder().rule(second).bucket(bucket).consumptionOrder(2).build();
+
+        when(groupRepository.findById(20L)).thenReturn(Optional.of(group));
+        when(groupRepository.findByPolicyIdAndNameArIgnoreCase(10L, "مجموعة اختبار معدلة")).thenReturn(Optional.empty());
+        when(groupRepository.save(any(BenefitGroup.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(bucketRepository.findByBenefitGroupId(20L)).thenReturn(List.of(bucket));
+        when(bucketRepository.save(any(BenefitLimitBucket.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(linkRepository.findByBucketId(30L)).thenReturn(List.of(firstLink, secondLink));
+        when(ruleRepository.findById(101L)).thenReturn(Optional.of(first));
+        when(ruleRepository.findById(102L)).thenReturn(Optional.of(second));
+
+        service.updateGroup(10L, 20L, new GroupRequest(null, "مجموعة اختبار معدلة", EncounterType.OUTPATIENT,
+                AggregationMode.SHARED, true, new BigDecimal("500"), 1, null, LimitPeriodType.ANNUAL, 1,
+                CountingMethod.EACH_UNIT, List.of(101L, 102L)));
+
+        verify(linkRepository, org.mockito.Mockito.never()).deleteAll(any());
+        verify(linkRepository, org.mockito.Mockito.never()).save(any());
+        assertThat(firstLink.getConsumptionOrder()).isEqualTo(1);
+        assertThat(secondLink.getConsumptionOrder()).isEqualTo(2);
     }
 
     @Test

@@ -26,6 +26,9 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @Query("SELECT m FROM Member m WHERE m.id = :id")
        Optional<Member> findByIdWithLock(@Param("id") Long id);
 
+       @Query("SELECT DISTINCT m.employer.id FROM Member m")
+       List<Long> findDistinctEmployerIds();
+
        Optional<Member> findByCivilId(String civilId);
 
        Optional<Member> findByNationalNumber(String nationalNumber);

@@ -424,7 +424,7 @@ const ProviderVisitLog = () => {
         );
 
       case 'visitDate':
-        return <Typography variant="body2">{visit.visitDate ? dayjs(visit.visitDate).format('DD/MM/YYYY') : '-'}</Typography>;
+        return <Typography variant="body2">{visit.visitDate ? dayjs(visit.visitDate).format('DD-MM-YYYY') : '-'}</Typography>;
 
       case 'visitType':
         return (

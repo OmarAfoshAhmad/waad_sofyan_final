@@ -132,8 +132,6 @@ const UnifiedMemberEdit = () => {
     if (index === 0) {
       return (
         (errors.fullName ? 1 : 0) +
-        (errors.birthDate ? 1 : 0) +
-        (errors.gender ? 1 : 0) +
         (errors.nationalNumber ? 1 : 0) +
         (errors.relationship ? 1 : 0)
       );
@@ -269,8 +267,6 @@ const UnifiedMemberEdit = () => {
   const validateForm = () => {
     const newErrors = {};
     if (!form.fullName?.trim()) newErrors.fullName = 'الاسم الكامل مطلوب';
-    if (!form.birthDate) newErrors.birthDate = 'تاريخ الميلاد مطلوب';
-    if (!form.gender) newErrors.gender = 'الجنس مطلوب';
 
     if (isPrincipal && !form.employerId) newErrors.employerId = 'جهة العمل مطلوبة';
     if (!isPrincipal && !form.relationship) newErrors.relationship = 'صلة القرابة مطلوبة';
@@ -285,7 +281,7 @@ const UnifiedMemberEdit = () => {
 
     setErrors(newErrors);
 
-    if (newErrors.fullName || newErrors.birthDate || newErrors.gender || newErrors.nationalNumber || newErrors.relationship) {
+    if (newErrors.fullName || newErrors.nationalNumber || newErrors.relationship) {
       setTabValue(0);
     } else if (newErrors.employerId) {
       setTabValue(1);
@@ -394,7 +390,7 @@ const UnifiedMemberEdit = () => {
   return (
     <>
       <ModernPageHeader
-        title={`تعديل بيانات ${isPrincipal ? 'المنتفع الرئيسي' : 'المنتفع التابع'}`}
+        title={`تعديل بيانات ${isPrincipal ? 'الموظف' : 'المنتفع التابع'}`}
         subtitle={form.fullName}
         icon={<EditIcon />}
         actions={
@@ -525,13 +521,12 @@ const UnifiedMemberEdit = () => {
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <DatePicker
-                        label="تاريخ الميلاد *"
+                        label="تاريخ الميلاد"
                         value={form.birthDate}
                         onChange={handleChange('birthDate')}
                         slotProps={{
                           textField: {
                             fullWidth: true,
-                            required: true,
                             error: !!errors.birthDate,
                             helperText: errors.birthDate,
                             size: 'small'
@@ -540,7 +535,7 @@ const UnifiedMemberEdit = () => {
                       />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
-                      <FormControl fullWidth required error={!!errors.gender} size="small">
+                      <FormControl fullWidth error={!!errors.gender} size="small">
                         <InputLabel>الجنس</InputLabel>
                         <Select value={form.gender} onChange={handleChange('gender')} label="الجنس" MenuProps={menuProps}>
                           <MenuItem value="">

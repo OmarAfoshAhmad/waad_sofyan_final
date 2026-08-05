@@ -193,8 +193,8 @@ export default function MemberDuplicatesResolver() {
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             {group.isPrincipal
-                              ? `موظف رئيسي - جهة العمل: ${group.employerName}`
-                              : `تابع - رقم بطاقة الرئيسي: ${group.parentCardNumber}`}
+                              ? `موظف - جهة العمل: ${group.employerName}`
+                              : `تابع - رقم بطاقة الموظف: ${group.parentCardNumber}`}
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -213,7 +213,7 @@ export default function MemberDuplicatesResolver() {
                       <Divider sx={{ mb: 2 }} />
 
                       <Typography variant="subtitle2" mb={1} color="text.primary">
-                        اختر السجل الصحيح (الرئيسي) الذي تريد الاحتفاظ به:
+                        اختر سجل الموظف الصحيح الذي تريد الاحتفاظ به:
                       </Typography>
 
                       <FormControl component="fieldset" fullWidth>
@@ -320,7 +320,7 @@ export default function MemberDuplicatesResolver() {
               ) : (
                 <>
                   <Typography variant="subtitle1" fontWeight="bold" color="primary" mb={1}>
-                    بيانات المشترك الرئيسي (رب الأسرة):
+                    بيانات الموظف (رب الأسرة):
                   </Typography>
                   <Box sx={{ p: 1.5, bgcolor: 'background.default', borderRadius: 1, border: '1px solid #eee' }}>
                     <Typography variant="body2" mb={1}>
@@ -331,7 +331,7 @@ export default function MemberDuplicatesResolver() {
                     </Typography>
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-                    جميع هذه السجلات المكررة تعتبر (تابع) لنفس المشترك الرئيسي الموضح أعلاه. يمكنك اختيار أي سجل للاحتفاظ به بناءً على عدد
+                    جميع هذه السجلات المكررة تعتبر (تابع) لنفس الموظف الموضح أعلاه. يمكنك اختيار أي سجل للاحتفاظ به بناءً على عدد
                     الحركات.
                   </Typography>
                 </>

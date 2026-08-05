@@ -243,7 +243,7 @@ public class MemberExcelExportService {
         createCell(row, colNum++, member.getNationality(), normalStyle);
 
         // Member Type
-        String memberType = member.getParent() == null ? "رئيسي / Principal" : "تابع / Dependent";
+        String memberType = member.getParent() == null ? "موظف / Employee" : "تابع / Dependent";
         createCell(row, colNum++, memberType, normalStyle);
 
         // Active/Deleted

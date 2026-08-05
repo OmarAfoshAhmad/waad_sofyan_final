@@ -998,10 +998,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       enqueueSnackbar('تعذر تحديد رقم المجموعة للحذف', { variant: 'error' });
       return;
     }
-    const memberIds = (rule.groupMembers || [])
-      .map((member) => member.id)
-      .filter((id) => id !== undefined && id !== null);
-    setBulkDeleteDialog({ open: true, validIds: [...new Set(memberIds)], groupIds: [groupId] });
+    // Delete only the shared group structure. Its member rules stay active and
+    // become standalone rows again after the structure query is refreshed.
+    setBulkDeleteDialog({ open: true, validIds: [], groupIds: [groupId] });
   }, [enqueueSnackbar]);
 
   const handleEditGroup = useCallback((rule) => {
@@ -1025,16 +1024,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       if (strId.startsWith('group-')) {
         const groupId = parseInt(strId.replace('group-', ''), 10);
         if (!Number.isNaN(groupId)) groupIds.push(groupId);
-        const buckets = (benefitStructure.buckets || []).filter(b => Number(b.benefitGroupId) === Number(groupId));
-        const bucketIds = new Set(buckets.map(b => Number(b.id)));
-        const links = (benefitStructure.links || []).filter((link) => {
-          const linkBucketId = link.bucket?.id ?? link.bucketId ?? link.benefitBucketId;
-          const linkGroupId = link.bucket?.benefitGroupId ?? link.benefitGroupId;
-          return bucketIds.has(Number(linkBucketId)) || Number(linkGroupId) === Number(groupId);
-        });
-        links.forEach(l => {
-          if (l.ruleId) validIds.push(l.ruleId);
-        });
       } else if (!strId.startsWith('group')) {
         validIds.push(id);
       }
@@ -1052,7 +1041,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     }
 
     setBulkDeleteDialog({ open: true, validIds, groupIds });
-  }, [selectedRowIds, benefitStructure, enqueueSnackbar]);
+  }, [selectedRowIds, enqueueSnackbar]);
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     const { validIds = [], groupIds = [] } = bulkDeleteDialog;
@@ -1072,11 +1061,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         }
         await Promise.all(hardDeleteIds.map((id) => hardDeletePolicyRule(policyId, id)));
         await Promise.all(groupIds.map((id) => deleteBenefitGroup(policyId, id)));
-        enqueueSnackbar(`تم الحذف النهائي لـ (${hardDeleteIds.length}) قاعدة و(${groupIds.length}) مجموعة${skipped ? `، وتخطي (${skipped}) معطلة مالياً` : ''}`, { variant: 'success' });
+        enqueueSnackbar(`تم حذف (${hardDeleteIds.length}) قاعدة و(${groupIds.length}) مجموعة مع إبقاء منافع المجموعات كقواعد مستقلة${skipped ? `، وتخطي (${skipped}) معطلة مالياً` : ''}`, { variant: 'success' });
       } else {
         await Promise.all(validIds.map((id) => deletePolicyRule(policyId, id)));
         await Promise.all(groupIds.map((id) => deleteBenefitGroup(policyId, id)));
-        enqueueSnackbar(`تم نقل (${validIds.length}) قاعدة لسلة المحذوفات وحذف (${groupIds.length}) مجموعة/وعاء فارغ`, { variant: 'success' });
+        enqueueSnackbar(`تم نقل (${validIds.length}) قاعدة للسلة وحذف (${groupIds.length}) مجموعة؛ بقيت منافع المجموعات كقواعد مستقلة`, { variant: 'success' });
       }
       setSelectedRowIds([]);
       await refetchRules();
@@ -1169,7 +1158,6 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       { id: 'classification', label: 'التصنيف الطبي / المجموعة', sortable: true, minWidth: '20rem' },
       { id: 'encounterType', label: 'السياق', sortable: true, minWidth: '8rem', align: 'center' },
       { id: 'coveragePercent', label: 'نسبة التغطية', sortable: true, minWidth: '10rem', align: 'center' },
-      { id: 'daysLimit', label: 'حد الأيام', sortable: true, minWidth: '7rem', align: 'center' },
       { id: 'timesLimit', label: 'عدد المرات', sortable: true, minWidth: '7rem', align: 'center' },
       { id: 'amountLimit', label: 'سقف المنفعة (د.ل)', sortable: true, minWidth: '10rem', align: 'center' },
       { id: 'limitPeriod', label: 'مدة السقف', sortable: true, minWidth: '9rem', align: 'center' },
@@ -1335,9 +1323,9 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   size="small"
                   disabled={!canEdit || toggleMutation.isPending}
                   sx={{
-                    '& .MuiSwitch-switchBase.Mui-checked': { color: '#0f9d76' },
-                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#19c18f', opacity: 1 },
-                    '& .MuiSwitch-track': { backgroundColor: '#b7bfcb', opacity: 1 }
+                    '& .MuiSwitch-switchBase.Mui-checked': { color: 'success.main' },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: 'success.main', opacity: 1 },
+                    '& .MuiSwitch-track': { backgroundColor: 'grey.400', opacity: 1 }
                   }}
                 />
               </span>
@@ -1354,7 +1342,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   </IconButton>
                   </span>
                 </Tooltip>
-                <Tooltip title={viewMode === 'DELETED' ? 'حذف نهائي للمجموعة/الأوعية' : 'حذف المجموعة/الأوعية مع نقل منافعها للسلة'}>
+                <Tooltip title="حذف المجموعة وسقفها المشترك مع إبقاء المنافع كقواعد مستقلة">
                   <span>
                   <IconButton size="small" color="error" onClick={() => handleDeleteGroup(rule)} disabled={!canEdit}>
                      <DeleteIcon fontSize="small" />

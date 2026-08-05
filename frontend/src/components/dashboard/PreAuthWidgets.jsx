@@ -230,7 +230,7 @@ export const HighPriorityQueue = ({ data, loading, onView, onEdit, onDelete }) =
       field: 'submittedDate',
       headerName: 'تاريخ التقديم',
       width: '8.75rem',
-      renderCell: (params) => dayjs(params.value).format('DD/MM/YYYY')
+      renderCell: (params) => dayjs(params.value).format('DD-MM-YYYY')
     },
     {
       field: 'actions',
@@ -355,7 +355,7 @@ export const ExpiringSoonAlerts = ({ data, loading, withinDays = 7 }) => {
                   <Stack alignItems="center" spacing={0.5}>
                     <Chip icon={<Schedule />} label={`${daysLeft} يوم`} color={isUrgent ? 'error' : 'warning'} size="small" />
                     <Typography variant="caption" color="text.secondary">
-                      ينتهي {dayjs(item.expiryDate).format('DD/MM/YYYY')}
+                      ينتهي {dayjs(item.expiryDate).format('DD-MM-YYYY')}
                     </Typography>
                   </Stack>
                 </Stack>

@@ -20,7 +20,7 @@ import {
   Grid
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { createPolicyRule, updatePolicyRule, deletePolicyRule } from 'services/api/benefit-policy-rules.service';
+import { createPolicyRule, updatePolicyRule } from 'services/api/benefit-policy-rules.service';
 import { createBenefitGroup, updateBenefitGroup, upsertIndividualBenefitLimit } from 'services/api/benefit-structure.service';
 
 const UnifiedCoverageModal = ({
@@ -177,23 +177,6 @@ const UnifiedCoverageModal = ({
           // Edit Group Mode
           const groupId = initialData.id.toString().replace('group-', '');
           const existingMembersList = initialData.groupMembers || initialData.rules || [];
-          const selectedCatIds = selectedCategories.map((c) => Number(c.id));
-
-          // Clean up rules for categories removed from the group
-          const removedMembers = existingMembersList.filter((m) => {
-            const catId = m.medicalCategoryId || m.categoryId;
-            return catId && !selectedCatIds.includes(Number(catId));
-          });
-
-          for (const member of removedMembers) {
-            if (member.id) {
-              try {
-                await deletePolicyRule(policyId, member.id);
-              } catch (e) {
-                console.warn('Failed to delete removed group rule:', e);
-              }
-            }
-          }
 
           const rulePromises = selectedCategories.map((cat) => {
             const existingMember = existingMembersList.find(

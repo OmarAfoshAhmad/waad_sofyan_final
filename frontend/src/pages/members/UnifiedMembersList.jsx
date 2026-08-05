@@ -24,6 +24,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -63,7 +64,6 @@ import {
   Search as SearchIcon,
   Close as CloseIcon,
   UploadFile as UploadFileIcon,
-  Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
   Undo as UndoIcon
 } from '@mui/icons-material';
@@ -76,7 +76,6 @@ import MembersBulkUploadDialog from 'components/members/MembersBulkUploadDialog'
 import DataExportWizard from 'components/tba/DataExportWizard';
 import {
   searchMembers,
-  downloadTemplate,
   exportMembers,
   deleteMember,
   bulkDeleteMembers,
@@ -87,6 +86,7 @@ import {
 } from 'services/api/unified-members.service';
 import axiosClient from 'utils/axios';
 import { RELATIONSHIP_CONFIG } from 'components/insurance/MemberTypeIndicator';
+import { formatDate } from 'utils/formatters';
 
 const MIN_MEMBER_SEARCH_LENGTH = 3;
 const MAX_SELECT_ALL_MEMBERS = 5000;
@@ -185,7 +185,7 @@ const UnifiedMembersList = () => {
 
   const fetchEmployers = async () => {
     try {
-      const response = await axiosClient.get('/employers/selectors');
+      const response = await axiosClient.get('/employers/selectors/with-members');
       setEmployers(response.data?.data || []);
     } catch (error) {
       console.error('Error fetching employers:', error);
@@ -232,23 +232,6 @@ const UnifiedMembersList = () => {
   };
 
   // Import/Export Handlers
-  const handleDownloadTemplate = async () => {
-    try {
-      const blob = await downloadTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'members_template.xlsx');
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      enqueueSnackbar('تم تحميل القالب بنجاح', { variant: 'success' });
-    } catch (error) {
-      console.error('Error downloading template:', error);
-      enqueueSnackbar('فشل تحميل القالب', { variant: 'error' });
-    }
-  };
-
   const handleImportClick = () => {
     setImportDialogOpen(true);
   };
@@ -347,7 +330,7 @@ const UnifiedMembersList = () => {
     setConfirmDialog({
       open: true,
       title: 'حذف المستفيدين المحددين',
-      content: `هل أنت متأكد من حذف ${selectedMembers.length} مستفيد؟ سيتم حذف التابعين أيضاً إذا كان هناك موظف رئيسي محدد.`,
+      content: `هل أنت متأكد من حذف ${selectedMembers.length} مستفيد؟ سيتم حذف التابعين أيضاً إذا كان هناك موظف محدد.`,
       severity: 'error',
       confirmText: 'حذف',
       cancelText: 'إلغاء',
@@ -446,7 +429,7 @@ const UnifiedMembersList = () => {
       align: 'center',
       sortable: true
     },
-    { id: 'type', label: 'النوع', minWidth: '6.25rem', sortable: true, align: 'center' },
+    { id: 'relationship', label: 'صلة القرابة', minWidth: '6.25rem', sortable: true, align: 'center' },
     { id: 'status', label: 'الحالة', minWidth: '6.25rem', sortable: true, align: 'center' },
     {
       id: 'employerName',
@@ -504,13 +487,13 @@ const UnifiedMembersList = () => {
         );
 
       case 'birthDate':
-        return <Typography variant="body2">{member.birthDate || '-'}</Typography>;
+        return <Typography variant="body2" dir="ltr">{formatDate(member.birthDate)}</Typography>;
 
-      case 'type': {
+      case 'relationship': {
         if (member.type === MEMBER_TYPES.PRINCIPAL) {
           return (
             <Chip
-              label="رئيسي"
+              label="موظف"
               color="primary"
               size="small"
               sx={{ width: '5.0rem', minWidth: '5.0rem', fontWeight: 600, justifyContent: 'center' }}
@@ -552,7 +535,7 @@ const UnifiedMembersList = () => {
       case 'dependentsCount':
         if (member.type === MEMBER_TYPES.DEPENDENT) {
           return (
-            <Tooltip title={`عرض المستفيد الرئيسي (${member.parentFullName || 'غير محدد'})`}>
+            <Tooltip title={`عرض الموظف (${member.parentFullName || 'غير محدد'})`}>
               <IconButton
                 size="small"
                 color="info"
@@ -668,23 +651,7 @@ const UnifiedMembersList = () => {
               </Button>
             )}
 
-            {/* Excel Buttons Group */}
-            <Button
-              variant="outlined"
-              onClick={handleDownloadTemplate}
-              startIcon={<DownloadIcon />}
-              sx={{
-                minWidth: '9.6875rem',
-                color: '#1b5e20',
-                borderColor: '#1b5e20',
-                '&:hover': {
-                  backgroundColor: '#1b5e2010',
-                  borderColor: '#1b5e20'
-                }
-              }}
-            >
-              تحميل القالب
-            </Button>
+            {/* Excel Buttons Group — template download is available inside the import dialog. */}
             <Button
               variant="outlined"
               onClick={handleImportClick}
@@ -787,31 +754,23 @@ const UnifiedMembersList = () => {
             </Tooltip>
 
             {/* Employer Filter */}
-            <TextField
-              select
+            <Autocomplete
               size="small"
-              label="جهة العمل"
-              value={filters.organizationId}
-              onChange={(e) => handleFilterChange('organizationId', e.target.value)}
-              sx={{ minWidth: '8.75rem', bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: '2.5rem' } }}
-              InputLabelProps={{ shrink: true }}
-            >
-              <MenuItem value="">
-                <em>الكل</em>
-              </MenuItem>
-              {employers.map((emp) => (
-                <MenuItem key={emp.id} value={emp.id}>
-                  {emp.label}
-                </MenuItem>
-              ))}
-            </TextField>
+              options={employers}
+              getOptionLabel={(opt) => opt.label || ''}
+              isOptionEqualToValue={(opt, val) => String(opt.id) === String(val?.id)}
+              value={employers.find((emp) => String(emp.id) === String(filters.organizationId)) || null}
+              onChange={(e, newValue) => handleFilterChange('organizationId', newValue?.id || '')}
+              sx={{ minWidth: '13.75rem', bgcolor: 'background.paper' }}
+              noOptionsText="لا توجد جهات عمل"
+              renderInput={(params) => <TextField {...params} label="جهة العمل" InputLabelProps={{ shrink: true }} />}
+            />
 
             {/* Type Filter */}
             <TextField
               select
               size="small"
-              label="النوع"
+              label="صلة القرابة"
               value={filters.type}
               onChange={(e) => handleFilterChange('type', e.target.value)}
               sx={{ minWidth: '6.875rem', bgcolor: 'background.paper' }}
@@ -821,14 +780,14 @@ const UnifiedMembersList = () => {
               <MenuItem value="">
                 <em>الكل</em>
               </MenuItem>
-              <MenuItem value={MEMBER_TYPES.PRINCIPAL}>رئيسي</MenuItem>
-              <MenuItem value={MEMBER_TYPES.DEPENDENT}>تابع (الكل)</MenuItem>
-              <MenuItem value="WIFE">تابع - زوجة</MenuItem>
-              <MenuItem value="HUSBAND">تابع - زوج</MenuItem>
-              <MenuItem value="SON">تابع - ابن</MenuItem>
-              <MenuItem value="DAUGHTER">تابع - ابنة</MenuItem>
-              <MenuItem value="FATHER">تابع - أب</MenuItem>
-              <MenuItem value="MOTHER">تابع - أم</MenuItem>
+              <MenuItem value={MEMBER_TYPES.PRINCIPAL}>موظف</MenuItem>
+              <MenuItem value={MEMBER_TYPES.DEPENDENT}>عائلة</MenuItem>
+              <MenuItem value="WIFE">زوجة</MenuItem>
+              <MenuItem value="HUSBAND">زوج</MenuItem>
+              <MenuItem value="SON">ابن</MenuItem>
+              <MenuItem value="DAUGHTER">ابنة</MenuItem>
+              <MenuItem value="FATHER">أب</MenuItem>
+              <MenuItem value="MOTHER">أم</MenuItem>
             </TextField>
 
             {/* Status Filter */}

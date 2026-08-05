@@ -101,19 +101,19 @@ public class MemberExcelTemplateService {
                         .required(false)
                         .example("ابن")
                         .description("Relationship for dependents (optional for principal)")
-                        .descriptionAr("صلة القرابة (رئيسي، ابن، ابنة، زوجة، زوج، أب، أم)")
-                        .allowedValues(List.of("رئيسي", "ابن", "ابنة", "زوجة", "زوج", "أب", "أم", "PRINCIPAL", "SON", "DAUGHTER", "WIFE", "HUSBAND", "FATHER", "MOTHER"))
+                        .descriptionAr("صلة القرابة (موظف، ابن، ابنة، زوجة، زوج، أب، أم)")
+                        .allowedValues(List.of("موظف", "رئيسي", "ابن", "ابنة", "زوجة", "زوج", "أب", "أم", "PRINCIPAL", "SON", "DAUGHTER", "WIFE", "HUSBAND", "FATHER", "MOTHER"))
                         .width(20)
                         .build(),
 
                 ExcelTemplateColumn.builder()
                         .name("principal_card_number")
-                        .nameAr("رقم بطاقة الرئيسي")
+                        .nameAr("رقم بطاقة الموظف")
                         .type(ColumnType.TEXT)
                         .required(false)
                         .example("JFZ202500001")
                         .description("Principal card number (required for dependents to link them to their principal)")
-                        .descriptionAr("رقم بطاقة العضو الرئيسي (مطلوب للتابعين لربطهم بالعائل)")
+                        .descriptionAr("رقم بطاقة الموظف (مطلوب للتابعين لربطهم بالعائل)")
                         .width(25)
                         .build(),
 
@@ -1157,7 +1157,7 @@ public class MemberExcelTemplateService {
 
             if (parent == null) {
                 errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "card_number",
-                        "لم يتم العثور على العضو الرئيسي للتابع (رقم البطاقة الأساسي غير موجود أو لم يسبقه سجل رئيسي)",
+                        "لم يتم العثور على الموظف للتابع (رقم البطاقة الأساسي غير موجود أو لم يسبقه سجل موظف)",
                         "Principal member not found for dependent (invalid base card and no preceding principal row)",
                         excelCardNumber, fullName));
                 hasErrors = true;
@@ -1183,7 +1183,7 @@ public class MemberExcelTemplateService {
                 benefitPolicy = parent != null ? parent.getBenefitPolicy() : null;
                 if (benefitPolicy == null) {
                     errors.add(createError(rowNum, ErrorType.MISSING_REQUIRED, "card_number",
-                            "العضو الرئيسي لهذا التابع بلا وثيقة منافع، فلا يمكن ربط التابع بأي وثيقة",
+                            "الموظف المرتبط بهذا التابع بلا وثيقة منافع، فلا يمكن ربط التابع بأي وثيقة",
                             "The dependent's principal has no benefit policy to link the dependent to",
                             excelCardNumber, fullName));
                     hasErrors = true;

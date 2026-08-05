@@ -120,7 +120,7 @@ const ar = {
     policyNumber: 'رقم الوثيقة',
     membershipPeriod: 'فترة العضوية',
     familyMembers: 'أفراد العائلة',
-    principalMember: 'العضو الرئيسي',
+    principalMember: 'الموظف',
     dependent: 'تابع'
   },
 

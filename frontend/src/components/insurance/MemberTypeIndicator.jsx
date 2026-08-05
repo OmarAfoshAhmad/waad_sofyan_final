@@ -94,8 +94,8 @@ const MemberTypeIndicator = ({
 
   const labels = {
     ar: {
-      principal: 'المؤمَّن الرئيسي',
-      principalShort: 'رئيسي',
+      principal: 'الموظف',
+      principalShort: 'موظف',
       dependent: 'تابع',
       dependents: 'التابعين'
     },

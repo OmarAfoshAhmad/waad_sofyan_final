@@ -134,7 +134,7 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
                   <DatePicker
                     {...field}
                     label="تاريخ الدفع"
-                    format="DD/MM/YYYY"
+                    format="DD-MM-YYYY"
                     slotProps={{ textField: { size: 'small', fullWidth: true, error: !!errors.paymentDate } }}
                   />
                 )}

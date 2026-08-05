@@ -121,7 +121,7 @@ const ValidityCountdown = ({
     if (isExpired) {
       return (
         <Typography variant="body2" color="error.main" fontWeight={500}>
-          {t.expiredOn}: {expiryDate.format('DD/MM/YYYY')}
+          {t.expiredOn}: {expiryDate.format('DD-MM-YYYY')}
         </Typography>
       );
     }

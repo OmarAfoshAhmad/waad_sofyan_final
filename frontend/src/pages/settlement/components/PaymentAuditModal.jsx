@@ -73,7 +73,7 @@ const PaymentAuditModal = ({ open, onClose, paymentId }) => {
                 {logs?.length > 0 ? (
                   logs.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell>{dayjs(row.timestamp).format('YYYY-MM-DD hh:mm A')}</TableCell>
+                      <TableCell>{dayjs(row.timestamp).format('DD-MM-YYYY hh:mm A')}</TableCell>
                       <TableCell>{row.userId}</TableCell>
                       <TableCell>
                         <Chip

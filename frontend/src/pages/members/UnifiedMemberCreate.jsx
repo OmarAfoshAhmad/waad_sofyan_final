@@ -381,7 +381,7 @@ const UnifiedMemberCreate = () => {
 
       openSnackbar({
         open: true,
-        message: 'تم إضافة المنتفع الرئيسي بنجاح',
+        message: 'تمت إضافة الموظف بنجاح',
         variant: 'alert',
         alert: { color: 'success' }
       });
@@ -407,7 +407,7 @@ const UnifiedMemberCreate = () => {
   return (
     <>
       <ModernPageHeader
-        title={principalForm.isFastTrack ? 'تسجيل طارئ / VIP (مسار سريع)' : 'إضافة منتفع رئيسي جديد'}
+        title={principalForm.isFastTrack ? 'تسجيل طارئ / VIP (مسار سريع)' : 'إضافة موظف جديد'}
         icon={principalForm.isFastTrack ? <FlashIcon sx={{ color: '#ff9100' }} /> : <PersonAddIcon />}
         breadcrumbs={[
           { label: 'الرئيسية', href: '/' },
@@ -450,7 +450,7 @@ const UnifiedMemberCreate = () => {
       />
 
       <MainCard
-        title="بيانات المنتفع الرئيسي"
+        title="بيانات الموظف"
         content={false}
         sx={{
           height: 'calc(100vh - 180px)',

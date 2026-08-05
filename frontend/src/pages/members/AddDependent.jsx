@@ -75,14 +75,14 @@ const AddDependent = () => {
       const data = await getMember(principalId);
 
       if (data.type !== 'PRINCIPAL') {
-        setFetchError('يمكن إضافة تابع فقط للمنتفع الرئيسي');
+        setFetchError('يمكن إضافة تابع فقط للموظف');
         return;
       }
 
       setPrincipal(data);
     } catch (error) {
       console.error('Error fetching principal:', error);
-      setFetchError(error.response?.data?.message || 'فشل في تحميل بيانات المنتفع الرئيسي');
+      setFetchError(error.response?.data?.message || 'فشل في تحميل بيانات الموظف');
     } finally {
       setLoading(false);
     }
@@ -219,7 +219,7 @@ const AddDependent = () => {
     <>
       <ModernPageHeader
         title="إضافة تابع جديد"
-        subtitle={`إضافة تابع للمنتفع الرئيسي: ${principal?.fullName}`}
+        subtitle={`إضافة تابع للموظف: ${principal?.fullName}`}
         icon={<PersonAddIcon />}
         breadcrumbs={[
           { label: 'الرئيسية', href: '/' },
@@ -244,7 +244,7 @@ const AddDependent = () => {
         <MainCard content={false} sx={{ p: '1.0rem', bgcolor: 'primary.lighter', border: '1px dashed', borderColor: 'primary.main' }}>
           <Stack direction="row" spacing={2} alignItems="center">
             <Typography variant="subtitle2" color="primary.main">
-              <strong>إضافة تابع للمنتفع الرئيسي:</strong> {principal?.fullName}
+              <strong>إضافة تابع للموظف:</strong> {principal?.fullName}
             </Typography>
             <Chip label={principal?.cardNumber} size="small" color="primary" />
           </Stack>

@@ -74,6 +74,7 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TablePagination } from '@mui/material';
 import dayjs from 'dayjs';
+import { formatDate } from 'utils/formatters';
 
 // Projects Imports
 import MainCard from 'components/MainCard';
@@ -451,7 +452,7 @@ const UnifiedMemberView = () => {
 
       openSnackbar({
         open: true,
-        message: isPrincipal ? 'تم حذف المنتفع الرئيسي وجميع تابعيه بنجاح' : 'تم حذف المنتفع التابع بنجاح',
+        message: isPrincipal ? 'تم حذف الموظف وجميع تابعيه بنجاح' : 'تم حذف المنتفع التابع بنجاح',
         variant: 'alert',
         alert: { color: 'success' }
       });
@@ -500,7 +501,7 @@ const UnifiedMemberView = () => {
     <>
       <ModernPageHeader
         title={member.fullName}
-        subtitle={isPrincipal ? 'منتفع رئيسي' : 'منتفع تابع'}
+        subtitle={isPrincipal ? 'موظف' : 'منتفع تابع'}
         icon={isPrincipal ? <BadgeIcon /> : <FamilyRestroomIcon />}
         breadcrumbs={[{ label: 'الرئيسية', href: '/' }, { label: 'المنتفعين', href: '/members' }, { label: member.fullName }]}
         actions={
@@ -589,7 +590,7 @@ const UnifiedMemberView = () => {
                     <Stack spacing={1.5} alignItems="center" width="100%">
                       <Stack direction="row" spacing={1.5} justifyContent="center" width="100%">
                         <Chip
-                          label={isPrincipal ? 'رئيسي' : 'تابع'}
+                          label={isPrincipal ? 'موظف' : 'تابع'}
                           color={isPrincipal ? 'primary' : 'secondary'}
                           size="small"
                           sx={{ height: '1.5rem', fontSize: '0.75rem' }}
@@ -713,7 +714,7 @@ const UnifiedMemberView = () => {
                           <Typography variant="caption" color="text.secondary">
                             تاريخ الميلاد
                           </Typography>
-                          <Typography variant="body2">{member.birthDate || '-'}</Typography>
+                          <Typography variant="body2" dir="ltr">{formatDate(member.birthDate)}</Typography>
                         </Grid>
                         <Grid size={{ xs: 6, md: 2 }}>
                           <Typography variant="caption" color="text.secondary">
@@ -911,7 +912,7 @@ const UnifiedMemberView = () => {
                                   <TableCell align="center">
                                     {dep.gender === GENDERS.MALE ? 'ذكر' : dep.gender === GENDERS.FEMALE ? 'أنثى' : '-'}
                                   </TableCell>
-                                  <TableCell align="center">{dep.birthDate || '-'}</TableCell>
+                                  <TableCell align="center" dir="ltr">{formatDate(dep.birthDate)}</TableCell>
                                   <TableCell align="center">
                                     <Tooltip
                                       title={
@@ -1126,7 +1127,7 @@ const UnifiedMemberView = () => {
                               <TableCell align="center">
                                 <Chip icon={event.icon} label={event.typeLabel} size="small" variant="outlined" color="primary" />
                               </TableCell>
-                              <TableCell align="center">{event.date ? dayjs(event.date).format('YYYY/MM/DD') : '-'}</TableCell>
+                              <TableCell align="center" dir="ltr">{formatDate(event.date)}</TableCell>
                               <TableCell align="center">
                                 <Typography variant="caption" fontFamily="monospace">
                                   {event.reference || '-'}
@@ -1257,7 +1258,7 @@ const UnifiedMemberView = () => {
           <DialogContentText>
             {deletingMember?.type === MEMBER_TYPES.PRINCIPAL ? (
               <>
-                هل أنت متأكد من حذف المنتفع الرئيسي <strong>{deletingMember?.fullName}</strong>؟
+                هل أنت متأكد من حذف الموظف <strong>{deletingMember?.fullName}</strong>؟
                 <Alert severity="warning" sx={{ mt: '1.0rem' }}>
                   <strong>تنبيه:</strong> سيتم حذف جميع التابعين ({member.dependentsCount || 0}) تلقائياً (CASCADE DELETE).
                 </Alert>

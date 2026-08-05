@@ -156,6 +156,18 @@ public class EmployerService {
     }
 
     /**
+     * Get employer selectors restricted to employers that actually have at
+     * least one member -- for filter dropdowns where showing every registered
+     * employer (including ones with no beneficiaries yet) is noise.
+     */
+    public List<EmployerSelectorDto> getSelectorsWithMembers() {
+        java.util.Set<Long> employerIdsWithMembers = new java.util.HashSet<>(memberRepository.findDistinctEmployerIds());
+        return getSelectors().stream()
+                .filter(sel -> employerIdsWithMembers.contains(sel.getId()))
+                .toList();
+    }
+
+    /**
      * Get employer by ID
      */
     public EmployerResponseDto getById(Long id) {

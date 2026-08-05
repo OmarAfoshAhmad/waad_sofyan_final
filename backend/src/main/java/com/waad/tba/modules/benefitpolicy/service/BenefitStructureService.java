@@ -135,7 +135,18 @@ public class BenefitStructureService {
         bucket.setActive(request.active() == null || request.active());
         BenefitLimitBucket savedBucket = bucketRepository.save(bucket);
 
-        ruleBucketRepository.deleteAll(ruleBucketRepository.findByBucketId(savedBucket.getId()));
+        List<BenefitRuleBucket> existingLinks = ruleBucketRepository.findByBucketId(savedBucket.getId());
+        Map<Long, BenefitRuleBucket> existingLinksByRuleId = new HashMap<>();
+        for (BenefitRuleBucket link : existingLinks) {
+            existingLinksByRuleId.put(link.getRule().getId(), link);
+        }
+        Set<Long> requestedRuleIds = new LinkedHashSet<>(ruleIds);
+        List<BenefitRuleBucket> removedLinks = existingLinks.stream()
+                .filter(link -> !requestedRuleIds.contains(link.getRule().getId()))
+                .toList();
+        if (!removedLinks.isEmpty()) {
+            ruleBucketRepository.deleteAll(removedLinks);
+        }
         int order = 1;
         for (Long ruleId : ruleIds) {
             BenefitPolicyRule rule = ruleRepository.findById(ruleId)
@@ -144,9 +155,16 @@ public class BenefitStructureService {
             if (rule.getEncounterType() != request.contextType()
                     && request.contextType() != com.waad.tba.modules.providercontract.enums.EncounterType.ANY)
                 throw new BusinessRuleException("سياق إحدى المنافع لا يطابق نطاق المجموعة: " + ruleId);
-            ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(savedBucket)
-                    .consumptionOrder(order++).consumptionMode(com.waad.tba.modules.benefitpolicy.enums.ConsumptionMode.PRIMARY)
-                    .mandatory(true).build());
+            BenefitRuleBucket existingLink = existingLinksByRuleId.get(ruleId);
+            if (existingLink != null) {
+                existingLink.setConsumptionOrder(order++);
+                existingLink.setConsumptionMode(com.waad.tba.modules.benefitpolicy.enums.ConsumptionMode.PRIMARY);
+                existingLink.setMandatory(true);
+            } else {
+                ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(savedBucket)
+                        .consumptionOrder(order++).consumptionMode(com.waad.tba.modules.benefitpolicy.enums.ConsumptionMode.PRIMARY)
+                        .mandatory(true).build());
+            }
         }
         return groupResponse(savedGroup);
     }
@@ -484,7 +502,6 @@ public class BenefitStructureService {
                 b.isShared(), b.isActive());
     }
 }
-
 
 
 

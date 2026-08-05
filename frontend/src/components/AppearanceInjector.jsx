@@ -23,7 +23,12 @@ const DEFAULTS = {
   tableHeaderText: '#004D50',
   tableRowEven: 'rgba(224,242,241,0.45)',
   selectionColor: 'rgba(0,131,143,0.08)',
-  primaryColor: '#00838F'
+  primaryColor: '#00838F',
+  secondaryColor: '#42A5F5',
+  infoColor: '#00A2AE',
+  successColor: '#00A854',
+  warningColor: '#FFBF00',
+  errorColor: '#F04134'
 };
 
 export function AppearanceInjector() {
@@ -38,6 +43,11 @@ export function AppearanceInjector() {
     const rowEven = s.tableRowEven || DEFAULTS.tableRowEven;
     const sel = s.selectionColor || DEFAULTS.selectionColor;
     const primary = s.primaryColor || DEFAULTS.primaryColor;
+    const secondary = s.secondaryColor || DEFAULTS.secondaryColor;
+    const info = s.infoColor || DEFAULTS.infoColor;
+    const success = s.successColor || DEFAULTS.successColor;
+    const warning = s.warningColor || DEFAULTS.warningColor;
+    const error = s.errorColor || DEFAULTS.errorColor;
 
     // إعداد متغيرات CSS كـ inline style على <html> (أعلى أولوية من أي selector)
     root.style.setProperty('--tba-th-bg', thBg);
@@ -45,6 +55,11 @@ export function AppearanceInjector() {
     root.style.setProperty('--tba-row-even', rowEven);
     root.style.setProperty('--tba-selection', sel);
     root.style.setProperty('--tba-primary', primary);
+    root.style.setProperty('--tba-secondary', secondary);
+    root.style.setProperty('--tba-info', info);
+    root.style.setProperty('--tba-success', success);
+    root.style.setProperty('--tba-warning', warning);
+    root.style.setProperty('--tba-error', error);
     // تجاوز لون MUI primary في وقت التشغيل (يؤثر على الأزرار والأيقونات)
     root.style.setProperty('--palette-primary-main', primary);
 
@@ -136,7 +151,8 @@ export function AppearanceInjector() {
         background-color: var(--tba-primary) !important;
       }
       .MuiSwitch-colorPrimary.Mui-checked {
-        color: var(--tba-primary) !important;
+        /* Keep the thumb visually distinct from the active track. */
+        color: #fff !important;
       }
 
       /* Link primary */

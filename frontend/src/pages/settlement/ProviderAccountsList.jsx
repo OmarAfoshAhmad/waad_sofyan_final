@@ -493,7 +493,7 @@ export default function ProviderAccountsList() {
         align: 'center',
         cell: ({ row }) => {
           const value = row.original.visitDate || row.original.serviceDate;
-          return value ? dayjs(value).format('DD/MM/YYYY') : '-';
+          return value ? dayjs(value).format('DD-MM-YYYY') : '-';
         }
       },
       {
@@ -707,7 +707,7 @@ export default function ProviderAccountsList() {
               onChange={(newValue) =>
                 setFilters((prev) => ({ ...prev, dateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
               }
-              format="DD/MM/YYYY"
+              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
@@ -724,7 +724,7 @@ export default function ProviderAccountsList() {
               label="إلى إدخال المطالبة"
               value={filters.dateTo ? dayjs(filters.dateTo) : null}
               onChange={(newValue) => setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))}
-              format="DD/MM/YYYY"
+              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
@@ -743,7 +743,7 @@ export default function ProviderAccountsList() {
               onChange={(newValue) =>
                 setFilters((prev) => ({ ...prev, serviceDateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
               }
-              format="DD/MM/YYYY"
+              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
@@ -762,7 +762,7 @@ export default function ProviderAccountsList() {
               onChange={(newValue) =>
                 setFilters((prev) => ({ ...prev, serviceDateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
               }
-              format="DD/MM/YYYY"
+              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
