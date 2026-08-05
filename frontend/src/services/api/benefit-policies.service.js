@@ -231,6 +231,12 @@ export const suspendBenefitPolicy = async (id) => {
   return unwrap(response);
 };
 
+/** Reverts an ACTIVE/SUSPENDED policy back to DRAFT so its coverage structure can be re-imported or edited. */
+export const revertBenefitPolicyToDraft = async (id) => {
+  const response = await axiosClient.post(`${BASE_URL}/${id}/revert-to-draft`);
+  return unwrap(response);
+};
+
 /**
  * Cancel a benefit policy
  * Endpoint: POST /api/benefit-policies/{id}/cancel
@@ -341,6 +347,7 @@ export default {
   activateBenefitPolicy,
   deactivateBenefitPolicy,
   suspendBenefitPolicy,
+  revertBenefitPolicyToDraft,
   cancelBenefitPolicy,
   deleteBenefitPolicy,
   bulkDeleteBenefitPolicies,

@@ -366,6 +366,15 @@ public class BenefitPolicyController {
         return ResponseEntity.ok(ApiResponse.success("Benefit policy suspended", result));
     }
 
+    @PostMapping("/{id:\\d+}/revert-to-draft")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Revert an active/suspended policy back to draft so its coverage structure can be re-imported or edited")
+    public ResponseEntity<ApiResponse<BenefitPolicyResponseDto>> revertToDraft(@PathVariable("id") Long id) {
+        log.info("Reverting benefit policy to draft: {}", id);
+        BenefitPolicyResponseDto result = benefitPolicyService.revertToDraft(id);
+        return ResponseEntity.ok(ApiResponse.success("Benefit policy reverted to draft", result));
+    }
+
     @PostMapping("/{id:\\d+}/cancel")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Cancel a benefit policy")

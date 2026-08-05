@@ -47,6 +47,7 @@ import {
   getBenefitPolicyById,
   activateBenefitPolicy,
   suspendBenefitPolicy,
+  revertBenefitPolicyToDraft,
   cancelBenefitPolicy,
   deleteBenefitPolicy,
   checkPolicyEditability
@@ -68,6 +69,7 @@ const STATUS_CONFIG = {
     labelEn: 'Draft',
     canActivate: true,
     canSuspend: false,
+    canRevertToDraft: false,
     canCancel: true,
     canDelete: true
   },
@@ -77,6 +79,7 @@ const STATUS_CONFIG = {
     labelEn: 'Active',
     canActivate: false,
     canSuspend: true,
+    canRevertToDraft: true,
     canCancel: true,
     canDelete: false
   },
@@ -86,6 +89,7 @@ const STATUS_CONFIG = {
     labelEn: 'Suspended',
     canActivate: true,
     canSuspend: false,
+    canRevertToDraft: true,
     canCancel: true,
     canDelete: false
   },
@@ -95,6 +99,7 @@ const STATUS_CONFIG = {
     labelEn: 'Expired',
     canActivate: false,
     canSuspend: false,
+    canRevertToDraft: false,
     canCancel: false,
     canDelete: true
   },
@@ -316,6 +321,18 @@ const BenefitPolicyView = () => {
     }
   });
 
+  const revertToDraftMutation = useMutation({
+    mutationFn: () => revertBenefitPolicyToDraft(id),
+    onSuccess: async () => {
+      enqueueSnackbar('تم إرجاع الوثيقة إلى مسودة — يمكنك الآن استيراد أو تعديل قواعد التغطية', { variant: 'success' });
+      await queryClient.invalidateQueries({ queryKey: ['benefit-policy', id], exact: true });
+      refetch();
+    },
+    onError: (err) => {
+      enqueueSnackbar(err.response?.data?.message || 'فشل إرجاع الوثيقة إلى مسودة', { variant: 'error' });
+    }
+  });
+
   const cancelMutation = useMutation({
     mutationFn: () => cancelBenefitPolicy(id),
     onSuccess: async () => {
@@ -359,6 +376,9 @@ const BenefitPolicyView = () => {
       case 'suspend':
         suspendMutation.mutate();
         break;
+      case 'revertToDraft':
+        revertToDraftMutation.mutate();
+        break;
       case 'cancel':
         cancelMutation.mutate();
         break;
@@ -369,7 +389,7 @@ const BenefitPolicyView = () => {
         break;
     }
     closeDialog();
-  }, [dialogState.action, activateMutation, suspendMutation, cancelMutation, deleteMutation, closeDialog]);
+  }, [dialogState.action, activateMutation, suspendMutation, revertToDraftMutation, cancelMutation, deleteMutation, closeDialog]);
 
   const handleActivate = () => {
     openConfirmDialog('activate', 'تفعيل الوثيقة', 'سيتم فحص جاهزية المنافع والمجموعات والسقوف وعدم وجود وثيقة نشطة متداخلة. هل تريد المتابعة؟');
@@ -380,6 +400,14 @@ const BenefitPolicyView = () => {
       'suspend',
       'إيقاف الوثيقة مؤقتاً',
       'هل أنت متأكد من إيقاف هذه الوثيقة مؤقتاً؟ لن يتمكن الأعضاء من تقديم مطالبات جديدة.'
+    );
+  };
+
+  const handleRevertToDraft = () => {
+    openConfirmDialog(
+      'revertToDraft',
+      'إرجاع الوثيقة إلى مسودة',
+      'سيتم إرجاع الوثيقة إلى حالة مسودة لتتمكن من استيراد أو تعديل قواعد التغطية عليها. لن تُطبَّق تغطية هذه الوثيقة على أي مطالبات جديدة حتى تُفعَّل من جديد. هل تريد المتابعة؟'
     );
   };
 
@@ -433,7 +461,12 @@ const BenefitPolicyView = () => {
   }
 
   const statusConfig = STATUS_CONFIG[policy?.status] || STATUS_CONFIG.DRAFT;
-  const isLoading_Action = activateMutation.isPending || suspendMutation.isPending || cancelMutation.isPending || deleteMutation.isPending;
+  const isLoading_Action =
+    activateMutation.isPending ||
+    suspendMutation.isPending ||
+    revertToDraftMutation.isPending ||
+    cancelMutation.isPending ||
+    deleteMutation.isPending;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -495,6 +528,20 @@ const BenefitPolicyView = () => {
                 disabled={isLoading_Action}
               >
                 إيقاف مؤقت
+              </Button>
+            )}
+
+            {/* Revert to Draft Button */}
+            {statusConfig.canRevertToDraft && (
+              <Button
+                startIcon={<EditIcon />}
+                onClick={handleRevertToDraft}
+                variant="outlined"
+                color="secondary"
+                size="small"
+                disabled={isLoading_Action}
+              >
+                إرجاع إلى مسودة
               </Button>
             )}
 

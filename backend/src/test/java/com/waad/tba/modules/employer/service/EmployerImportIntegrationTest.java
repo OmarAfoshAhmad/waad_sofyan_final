@@ -43,6 +43,9 @@ class EmployerImportIntegrationTest extends PostgresIntegrationTestBase {
     private EmployerImportService importService;
 
     @Autowired
+    private EmployerService employerService;
+
+    @Autowired
     private EmployerRepository employerRepository;
 
     @Autowired
@@ -175,6 +178,42 @@ class EmployerImportIntegrationTest extends PostgresIntegrationTestBase {
         Employer created = employerRepository.findByNameIgnoreCase(name).orElseThrow();
         var policy = benefitPolicyRepository.findByEmployerIdAndActiveTrue(created.getId()).get(0);
         assertThat(policy.getAnnualLimit()).isEqualByComparingTo(new BigDecimal("100000"));
+    }
+
+    @Test
+    void reimportingAnArchivedEmployerReactivatesIt() throws Exception {
+        String unique = "IT-" + System.nanoTime();
+        String name = "شركة مؤرشفة " + unique;
+
+        // Created directly (not via import) and archived immediately, so it never
+        // gets a benefit policy attached -- archive() refuses an employer with any
+        // policy (even DRAFT) linked, which the import flow always creates.
+        com.waad.tba.modules.employer.dto.EmployerCreateDto createDto =
+                new com.waad.tba.modules.employer.dto.EmployerCreateDto();
+        createDto.setCode(employerService.generateNextCode());
+        createDto.setName(name);
+        createDto.setPhone("0955555555");
+        createDto.setEmail("archived@" + unique + ".ly");
+        createDto.setAddress("سبها");
+        var created = employerService.create(createDto);
+
+        employerService.archive(created.getId());
+        Employer archived = employerRepository.findById(created.getId()).orElseThrow();
+        assertThat(archived.getActive()).isFalse();
+
+        // Re-import the exact same, unchanged data -- only the archived status differs.
+        MockMultipartFile secondFile = buildWorkbook(new String[][]{
+                {name, created.getCode(), "0955555555", "archived@" + unique + ".ly", "سبها", null, null}
+        });
+        EmployerImportPreviewResultDto secondPreview = importService.preview(secondFile);
+        assertThat(secondPreview.getRows().get(0).getAction()).isEqualTo(Action.UPDATE);
+        assertThat(secondPreview.getRows().get(0).getChangedFields()).contains("الحالة (سيُعاد تفعيلها)");
+
+        EmployerImportConfirmResultDto secondResult = importService.confirm(secondPreview.getSessionId());
+        assertThat(secondResult.getSuccessCount()).isEqualTo(1);
+
+        Employer reactivated = employerRepository.findById(created.getId()).orElseThrow();
+        assertThat(reactivated.getActive()).isTrue();
     }
 
     @Test

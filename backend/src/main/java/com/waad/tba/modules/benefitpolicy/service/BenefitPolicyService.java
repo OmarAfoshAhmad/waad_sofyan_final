@@ -465,6 +465,43 @@ public class BenefitPolicyService {
     }
 
     /**
+     * Revert an ACTIVE/SUSPENDED policy back to DRAFT so its coverage
+     * structure (rules/groups/buckets) can be re-imported or edited freely.
+     * There was previously no path back to DRAFT at all once a policy had
+     * been activated -- update() explicitly refuses any status transition,
+     * and BenefitStructureImportService only accepts an import for a DRAFT
+     * policy, or an ACTIVE/SUSPENDED one with no existing structure yet, so
+     * a populated active policy was permanently locked out of re-import.
+     *
+     * Reuses the same financial-linkage guard as everywhere else that
+     * mutates a policy's structure: a policy that has ever had a real claim
+     * or pre-authorization against it must never be pulled back out of
+     * ACTIVE, since claims resolve coverage against the policy's current
+     * rules and a DRAFT policy is invisible to that resolution.
+     */
+    @Transactional
+    public BenefitPolicyResponseDto revertToDraft(Long id) {
+        log.info("Reverting benefit policy to draft: {}", id);
+
+        BenefitPolicy policy = benefitPolicyRepository.findById(id)
+                .orElseThrow(() -> new BusinessRuleException("Benefit policy not found: " + id));
+
+        if (policy.getStatus() != BenefitPolicyStatus.ACTIVE
+                && policy.getStatus() != BenefitPolicyStatus.SUSPENDED) {
+            throw new BusinessRuleException("لا يمكن إرجاع الوثيقة إلى مسودة إلا إذا كانت نشطة أو موقوفة مؤقتًا");
+        }
+        if (!canPolicyBeEdited(id)) {
+            throw new BusinessRuleException(
+                    "لا يمكن إرجاع هذه الوثيقة إلى مسودة لارتباطها بمطالبات أو موافقات مسبقة فعلية");
+        }
+        policy.setStatus(BenefitPolicyStatus.DRAFT);
+        policy = benefitPolicyRepository.save(policy);
+        log.info("✅ Reverted benefit policy to draft: {}", id);
+
+        return BenefitPolicyResponseDto.fromEntity(policy);
+    }
+
+    /**
      * Cancel a benefit policy
      */
     @Transactional

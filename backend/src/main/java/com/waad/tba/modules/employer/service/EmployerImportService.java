@@ -333,6 +333,12 @@ public class EmployerImportService {
             if (differs(phone, existing.getPhone())) changed.add("الهاتف");
             if (differs(email, existing.getEmail())) changed.add("البريد الإلكتروني");
             if (differs(address, existing.getAddress())) changed.add("العنوان");
+            // A matched employer that's currently archived is always reactivated by
+            // the row processor regardless of whether any visible field also
+            // changed (see EmployerImportRowProcessor) — reflect that here so the
+            // preview never claims "no change" for a row that will in fact
+            // un-archive the employer.
+            if (!Boolean.TRUE.equals(existing.getActive())) changed.add("الحالة (سيُعاد تفعيلها)");
 
             b.code(code).name(name).phone(phone).email(email).address(address).annualLimit(annualLimit)
                     .existingEmployerId(existing.getId())

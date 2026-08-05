@@ -90,10 +90,23 @@ public class EmployerImportRowProcessor {
         return employerService.create(dto);
     }
 
-    /** Only calls update() when at least one field actually differs — see {@link EmployerImportRowDto#getAction()}. */
+    /**
+     * Only calls update() when at least one field actually differs — see
+     * {@link EmployerImportRowDto#getAction()}. Reactivation is a separate
+     * concern from field changes: a matched employer that's currently
+     * archived (active=false) is always restored regardless of whether any
+     * visible field also changed, since importing a company's data is itself
+     * a clear signal it should be usable again -- leaving it archived after
+     * a "successful" import would silently defeat the entire import.
+     */
     private EmployerResponseDto updateEmployerIfChanged(EmployerImportRowDto row) {
         Employer existing = employerRepository.findById(row.getExistingEmployerId())
                 .orElseThrow(() -> new BusinessRuleException("جهة العمل لم تعد موجودة"));
+
+        boolean wasArchived = !Boolean.TRUE.equals(existing.getActive());
+        if (wasArchived) {
+            employerService.restore(existing.getId());
+        }
 
         if (row.getAction() != EmployerImportRowDto.Action.UPDATE) {
             return employerService.getById(existing.getId());
