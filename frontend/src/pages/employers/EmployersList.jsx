@@ -39,6 +39,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -48,6 +49,7 @@ import MainCard from 'components/MainCard';
 import { UnifiedMedicalTable } from 'components/common';
 import { ModernPageHeader, SoftDeleteToggle, DataExportWizard, ActionConfirmDialog } from 'components/tba';
 import PermissionGuard from 'components/PermissionGuard';
+import EmployerImportDialog from './components/EmployerImportDialog';
 
 // Services
 import {
@@ -87,6 +89,7 @@ const EmployersList = () => {
   const [filters, setFilters] = useState({ active: '' });
   const [showArchived, setShowArchived] = useState(false);
   const [exportWizardOpen, setExportWizardOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, confirmColor: 'primary' });
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkResultDialog, setBulkResultDialog] = useState({ open: false, result: null });
@@ -373,7 +376,16 @@ const EmployersList = () => {
   // ========================================
 
   return (
-    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%', px: { xs: 2, sm: 3 } }}>
+    <Box
+      sx={{
+        height: 'calc(100vh - 120px)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        width: '100%',
+        px: { xs: 2, sm: 3 }
+      }}
+    >
       <PermissionGuard resource="employers" action="view">
         <ModernPageHeader
           title="جهات العمل"
@@ -408,6 +420,17 @@ const EmployersList = () => {
               >
                 تصدير لإكسل
               </Button>
+
+              <PermissionGuard resource="employers" action="create">
+                <Button
+                  variant="outlined"
+                  onClick={() => setImportDialogOpen(true)}
+                  startIcon={<FileUploadIcon />}
+                  sx={{ minWidth: '8.125rem' }}
+                >
+                  استيراد من إكسل
+                </Button>
+              </PermissionGuard>
 
               <SoftDeleteToggle showDeleted={showArchived} onToggle={() => setShowArchived(!showArchived)} />
 
@@ -554,6 +577,13 @@ const EmployersList = () => {
         title="تصدير جهات العمل"
         fileName={`TBA_Employers_${new Date().toISOString().split('T')[0]}.xlsx`}
         params={{ searchTerm, status: filters.active, deleted: showArchived }}
+      />
+
+      {/* Bulk Import Dialog */}
+      <EmployerImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImportComplete={() => queryClient.invalidateQueries({ queryKey: [QUERY_KEY] })}
       />
 
       {/* Action Confirmation Dialog */}

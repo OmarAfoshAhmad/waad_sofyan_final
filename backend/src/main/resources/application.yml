@@ -175,6 +175,10 @@ waad:
       - image/jpg
       - application/dicom
       - application/x-dicom
+  employer-import:
+    # Used when a bulk-import row doesn't specify an annual limit for its
+    # auto-created default insurance policy.
+    default-annual-limit: ${WAAD_EMPLOYER_IMPORT_DEFAULT_ANNUAL_LIMIT:100000}
 
 management:
   endpoints:

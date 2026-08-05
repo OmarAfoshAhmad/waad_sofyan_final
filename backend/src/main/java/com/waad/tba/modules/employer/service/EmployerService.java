@@ -452,6 +452,16 @@ public class EmployerService {
      * @param providedCode Code from DTO (may be null)
      * @return Normalized code or auto-generated code
      */
+    /**
+     * Generates the next sequential employer code (EMP-01, EMP-02, ...). Public
+     * so callers that must resolve a code before building an EmployerCreateDto
+     * (e.g. bulk Excel import, where the column is optional) can reuse the exact
+     * same numbering as manual creation instead of re-implementing it.
+     */
+    public String generateNextCode() {
+        return normalizeAndGenerateCode(null);
+    }
+
     private String normalizeAndGenerateCode(String providedCode) {
         // If code provided, use it (trim whitespace)
         if (providedCode != null && !providedCode.trim().isEmpty()) {

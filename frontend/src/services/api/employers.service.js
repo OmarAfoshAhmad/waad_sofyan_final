@@ -794,6 +794,75 @@ export const exportEmployers = async (params = {}) => {
 };
 
 // ============================================================================
+// BULK IMPORT — Employers (template + two-stage smart-column import)
+// ============================================================================
+
+const IMPORT_BASE_URL = '/employers/import';
+
+/**
+ * Download the Excel template for bulk-importing employers.
+ * Endpoint: GET /api/v1/employers/import/template
+ */
+export const downloadEmployerImportTemplate = async () => {
+  const response = await axiosClient.get(`${IMPORT_BASE_URL}/template`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'قالب_استيراد_جهات_العمل.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+/**
+ * Stage 1: upload the file — columns are detected regardless of order/wording,
+ * every row is matched against existing employers and validated, nothing is persisted.
+ * Endpoint: POST /api/v1/employers/import/preview
+ * @returns {Promise<Object>} EmployerImportPreviewResultDto { sessionId, totalRows, validCount, invalidCount, rows }
+ */
+export const previewEmployerImport = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await axiosClient.post(`${IMPORT_BASE_URL}/preview`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300_000
+  });
+  return unwrap(response);
+};
+
+/**
+ * Stage 2: apply only the valid rows from a previewed session — creates new employers,
+ * merges changed fields into existing ones (never erasing on blank cells), and ensures
+ * every employer ends up with exactly one ACTIVE insurance policy.
+ * Endpoint: POST /api/v1/employers/import/confirm
+ * @returns {Promise<Object>} EmployerImportConfirmResultDto
+ */
+export const confirmEmployerImport = async (sessionId) => {
+  const response = await axiosClient.post(`${IMPORT_BASE_URL}/confirm`, null, {
+    params: { sessionId },
+    timeout: 300_000
+  });
+  return unwrap(response);
+};
+
+/**
+ * Download an Excel report listing only the rows that failed validation, with their errors.
+ * Endpoint: GET /api/v1/employers/import/errors/{sessionId}
+ */
+export const downloadEmployerImportErrors = async (sessionId) => {
+  const response = await axiosClient.get(`${IMPORT_BASE_URL}/errors/${sessionId}`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'تقرير_أخطاء_استيراد_جهات_العمل.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+// ============================================================================
 // DEFAULT EXPORT
 // ============================================================================
 
@@ -814,6 +883,12 @@ const employersService = {
   getEmployerSelectors,
   getEmployerCount,
   exportEmployers,
+
+  // Bulk Import
+  downloadEmployerImportTemplate,
+  previewEmployerImport,
+  confirmEmployerImport,
+  downloadEmployerImportErrors,
 
   // Normalization Utilities (exported for advanced usage)
   normalizeEmployerRequest,
