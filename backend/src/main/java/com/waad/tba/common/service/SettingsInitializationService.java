@@ -40,6 +40,10 @@ public class SettingsInitializationService {
     public static final String SUCCESS_COLOR_KEY = "SUCCESS_COLOR";
     public static final String WARNING_COLOR_KEY = "WARNING_COLOR";
     public static final String ERROR_COLOR_KEY = "ERROR_COLOR";
+    public static final String TABLE_HEADER_BG_KEY = "TABLE_HEADER_BG";
+    public static final String TABLE_HEADER_TEXT_KEY = "TABLE_HEADER_TEXT";
+    public static final String TABLE_ROW_EVEN_KEY = "TABLE_ROW_EVEN";
+    public static final String SELECTION_COLOR_KEY = "SELECTION_COLOR";
 
     public static final String BENEFICIARY_NUMBER_FORMAT_KEY = "BENEFICIARY_NUMBER_FORMAT";
     public static final String BENEFICIARY_NUMBER_PREFIX_KEY = "BENEFICIARY_NUMBER_PREFIX";
@@ -186,6 +190,14 @@ public class SettingsInitializationService {
                 "Warning and review semantic color", "UI", true, "");
         ensureDefaultSetting(ERROR_COLOR_KEY, "#F04134", SystemSetting.SettingValueType.STRING,
                 "Error and rejection semantic color", "UI", true, "");
+        ensureDefaultSetting(TABLE_HEADER_BG_KEY, "#E0F2F1", SystemSetting.SettingValueType.STRING,
+                "Table header background color", "UI", true, "");
+        ensureDefaultSetting(TABLE_HEADER_TEXT_KEY, "#004D50", SystemSetting.SettingValueType.STRING,
+                "Table header text color", "UI", true, "");
+        ensureDefaultSetting(TABLE_ROW_EVEN_KEY, "rgba(224,242,241,0.45)", SystemSetting.SettingValueType.STRING,
+                "Alternating table row color", "UI", true, "");
+        ensureDefaultSetting(SELECTION_COLOR_KEY, "rgba(0,131,143,0.08)", SystemSetting.SettingValueType.STRING,
+                "Selected row and item highlight color", "UI", true, "");
 
         ensureDefaultSetting(BENEFICIARY_NUMBER_FORMAT_KEY, "PREFIX_SEQUENCE", SystemSetting.SettingValueType.STRING,
                 "Beneficiary number generation format", "MEMBERS", true, "enum:PREFIX_SEQUENCE");
