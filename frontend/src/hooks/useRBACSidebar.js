@@ -17,8 +17,8 @@ const useRBACSidebar = () => {
 
   const sidebarGroups = useMemo(() => {
     if (!user) return [];
-    return filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED);
-  }, [user, role, flags.PROVIDER_PORTAL_ENABLED]);
+    return filterMenuItemsByRole(menuItem, role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED);
+  }, [user, role, flags.PROVIDER_PORTAL_ENABLED, flags.BATCH_CLAIMS_ENABLED]);
 
   const sidebarItems = useMemo(() => {
     const items = [];

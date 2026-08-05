@@ -166,7 +166,6 @@ const SystemSettingsPage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isToggling, setIsToggling] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -409,8 +408,13 @@ const SystemSettingsPage = () => {
                 claimReportSigLeftBottom: dataToSave.claimReportSigLeftBottom
               })
             ]
-          : []),
-        axios.post('/admin/settings/email', emailToSave)
+           : []),
+        axios.post('/admin/settings/email', emailToSave),
+        featureFlagsService.toggleFlag(PROVIDER_PORTAL_FLAG_KEY, providerPortalEnabled),
+        featureFlagsService.toggleFlag('DIRECT_CLAIM_SUBMISSION_ENABLED', claimSubmissionEnabled),
+        featureFlagsService.toggleFlag('DIRECT_PREAUTH_SUBMISSION_ENABLED', preAuthSubmissionEnabled),
+        featureFlagsService.toggleFlag('BATCH_CLAIMS_ENABLED', batchClaimsEnabled),
+        featureFlagsService.toggleFlag('PROVIDER_PRE_APPROVAL_ITEMS_ONLY', preApprovalItemsOnly)
       ]);
 
       if (dataToSave.fontFamily) setField('fontFamily', dataToSave.fontFamily);
@@ -445,6 +449,14 @@ const SystemSettingsPage = () => {
         errorColor: dataToSave.errorColor
       });
 
+      applyFlags({
+        PROVIDER_PORTAL_ENABLED: providerPortalEnabled,
+        DIRECT_CLAIM_SUBMISSION_ENABLED: claimSubmissionEnabled,
+        DIRECT_PREAUTH_SUBMISSION_ENABLED: preAuthSubmissionEnabled,
+        BATCH_CLAIMS_ENABLED: batchClaimsEnabled,
+        PROVIDER_PRE_APPROVAL_ITEMS_ONLY: preApprovalItemsOnly
+      });
+
       refreshSystemConfig();
       setSuccess('تم حفظ الإعدادات بنجاح وتحديث النظام');
       setTimeout(() => setSuccess(null), 3000);
@@ -456,90 +468,15 @@ const SystemSettingsPage = () => {
     }
   };
 
-  const handleToggleProviderPortal = async (event) => {
-    const next = event.target.checked;
-    try {
-      setIsToggling(true);
-      setError(null);
-      await featureFlagsService.toggleFlag(PROVIDER_PORTAL_FLAG_KEY, next);
-      setProviderPortalEnabled(next);
-      // ✅ تحديث فوري — تظهر/تختفي البوابة من القائمة فوراً بدون انتظار API
-      applyFlags({ PROVIDER_PORTAL_ENABLED: next });
-      refreshSystemConfig();
-      setSuccess(next ? 'تم إظهار بوابة مقدم الخدمة' : 'تم إخفاء بوابة مقدم الخدمة');
-    } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث بوابة مقدم الخدمة');
-    } finally {
-      setIsToggling(false);
-    }
-  };
+  const handleToggleProviderPortal = (event) => setProviderPortalEnabled(event.target.checked);
 
-  const handleToggleClaimSubmission = async (event) => {
-    const next = event.target.checked;
-    try {
-      setIsToggling(true);
-      setError(null);
-      await featureFlagsService.toggleFlag('DIRECT_CLAIM_SUBMISSION_ENABLED', next);
-      setClaimSubmissionEnabled(next);
-      applyFlags({ DIRECT_CLAIM_SUBMISSION_ENABLED: next });
-      refreshSystemConfig();
-      setSuccess(next ? 'تم تفعيل إضافة المطالبات' : 'تم تعطيل إضافة المطالبات');
-    } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث خيار المطالبات');
-    } finally {
-      setIsToggling(false);
-    }
-  };
+  const handleToggleClaimSubmission = (event) => setClaimSubmissionEnabled(event.target.checked);
 
-  const handleTogglePreAuthSubmission = async (event) => {
-    const next = event.target.checked;
-    try {
-      setIsToggling(true);
-      setError(null);
-      await featureFlagsService.toggleFlag('DIRECT_PREAUTH_SUBMISSION_ENABLED', next);
-      setPreAuthSubmissionEnabled(next);
-      applyFlags({ DIRECT_PREAUTH_SUBMISSION_ENABLED: next });
-      refreshSystemConfig();
-      setSuccess(next ? 'تم تفعيل إضافة الموافقات المسبقة' : 'تم تعطيل إضافة الموافقات المسبقة');
-    } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث خيار الموافقات المسبقة');
-    } finally {
-      setIsToggling(false);
-    }
-  };
+  const handleTogglePreAuthSubmission = (event) => setPreAuthSubmissionEnabled(event.target.checked);
 
-  const handleToggleBatchClaims = async (event) => {
-    const next = event.target.checked;
-    try {
-      setIsToggling(true);
-      setError(null);
-      await featureFlagsService.toggleFlag('BATCH_CLAIMS_ENABLED', next);
-      setBatchClaimsEnabled(next);
-      applyFlags({ BATCH_CLAIMS_ENABLED: next });
-      refreshSystemConfig();
-      setSuccess(next ? 'تم تفعيل مسار دفعات المطالبات الداخلي' : 'تم إخفاء مسار دفعات المطالبات الداخلي');
-    } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث خيار دفعات المطالبات');
-    } finally {
-      setIsToggling(false);
-    }
-  };
+  const handleToggleBatchClaims = (event) => setBatchClaimsEnabled(event.target.checked);
 
-  const handleTogglePreApprovalItemsOnly = async (event) => {
-    const next = event.target.checked;
-    setIsToggling(true);
-    try {
-      await featureFlagsService.toggleFlag('PROVIDER_PRE_APPROVAL_ITEMS_ONLY', next);
-      setPreApprovalItemsOnly(next);
-      applyFlags({ PROVIDER_PRE_APPROVAL_ITEMS_ONLY: next });
-      refreshSystemConfig();
-      setSuccess(next ? 'تم تفعيل فلترة الأصناف التي تتطلب موافقة مسبقة فقط' : 'تم تفعيل إظهار جميع الأصناف في طلب الموافقة المسبقة');
-    } catch (e) {
-      setError(e?.response?.data?.message || 'فشل تحديث حالة عرض الأصناف');
-    } finally {
-      setIsToggling(false);
-    }
-  };
+  const handleTogglePreApprovalItemsOnly = (event) => setPreApprovalItemsOnly(event.target.checked);
 
   if (isLoading) {
     return (
@@ -1033,11 +970,10 @@ const SystemSettingsPage = () => {
                     </Typography>
 
                     <Stack direction="row" alignItems="center" spacing={2}>
-                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isToggling} color="primary" />
+                      <Switch checked={providerPortalEnabled} onChange={handleToggleProviderPortal} disabled={isSaving} color="primary" />
                       <Typography variant="subtitle1" fontWeight={700} color={providerPortalEnabled ? 'primary.main' : 'text.primary'}>
                         {providerPortalEnabled ? 'البوابة ظاهرة' : 'البوابة مخفية'}
                       </Typography>
-                      {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
@@ -1054,13 +990,12 @@ const SystemSettingsPage = () => {
                       <Switch
                         checked={claimSubmissionEnabled}
                         onChange={handleToggleClaimSubmission}
-                        disabled={isToggling}
+                        disabled={isSaving}
                         color="primary"
                       />
                       <Typography variant="subtitle1" fontWeight={700} color={claimSubmissionEnabled ? 'primary.main' : 'text.primary'}>
                         {claimSubmissionEnabled ? 'مفعل' : 'معطل'}
                       </Typography>
-                      {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
@@ -1077,13 +1012,12 @@ const SystemSettingsPage = () => {
                       <Switch
                         checked={preAuthSubmissionEnabled}
                         onChange={handleTogglePreAuthSubmission}
-                        disabled={isToggling}
+                        disabled={isSaving}
                         color="primary"
                       />
                       <Typography variant="subtitle1" fontWeight={700} color={preAuthSubmissionEnabled ? 'primary.main' : 'text.primary'}>
                         {preAuthSubmissionEnabled ? 'مفعل' : 'معطل'}
                       </Typography>
-                      {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
@@ -1098,11 +1032,10 @@ const SystemSettingsPage = () => {
                     </Typography>
 
                     <Stack direction="row" alignItems="center" spacing={2}>
-                      <Switch checked={batchClaimsEnabled} onChange={handleToggleBatchClaims} disabled={isToggling} color="primary" />
+                      <Switch checked={batchClaimsEnabled} onChange={handleToggleBatchClaims} disabled={isSaving} color="primary" />
                       <Typography variant="subtitle1" fontWeight={700} color={batchClaimsEnabled ? 'primary.main' : 'text.primary'}>
                         {batchClaimsEnabled ? 'الدفعات مفعلة' : 'الدفعات مخفية ومعطلة'}
                       </Typography>
-                      {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
@@ -1119,13 +1052,12 @@ const SystemSettingsPage = () => {
                       <Switch
                         checked={preApprovalItemsOnly}
                         onChange={handleTogglePreApprovalItemsOnly}
-                        disabled={isToggling}
+                        disabled={isSaving}
                         color="primary"
                       />
                       <Typography variant="subtitle1" fontWeight={700} color={preApprovalItemsOnly ? 'primary.main' : 'text.primary'}>
                         {preApprovalItemsOnly ? 'مفعل (أصناف بموافقة مسبقة فقط)' : 'معطل (عرض جميع الأصناف)'}
                       </Typography>
-                      {isToggling && <CircularProgress size={18} />}
                     </Stack>
                   </FieldGroup>
                 </Paper>
