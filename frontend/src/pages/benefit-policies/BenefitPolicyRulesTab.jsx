@@ -1837,6 +1837,19 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 </Tooltip>
               )}
 
+              <Tooltip title="تطبيق قواعد من قالب قياسي أو نسخها من وثيقة شركة أخرى كما هي">
+                <span>
+                <IconButton
+                  color="primary"
+                  onClick={handleOpenTemplateDialog}
+                  disabled={!canEdit}
+                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                >
+                  <AutoAwesomeIcon fontSize="small" />
+                </IconButton>
+                </span>
+              </Tooltip>
+
               <Tooltip title={downloadingTemplate ? 'جاري تنزيل القالب...' : 'تنزيل القالب القياسي للمنافع والمجموعات'}>
                 <span>
                 <IconButton

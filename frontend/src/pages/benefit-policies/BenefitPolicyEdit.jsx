@@ -393,29 +393,6 @@ const BenefitPolicyEdit = () => {
                       </TextField>
                     </Grid>
 
-                    <Grid size={{ xs: 12, md: 4 }}>
-                      <TextField
-                        fullWidth
-                        select
-                        size="small"
-                        label="حالة الوثيقة"
-                        name="status"
-                        value={values.status}
-                        onChange={(e) => setFieldValue('status', e.target.value)}
-                        disabled={!isDynamicallyEditable}
-                        helperText={!isDynamicallyEditable ? "الوثيقة مرتبطة بمطالبات فعلية، لا يمكن تغيير حالتها من هنا" : "غيّر الحالة (تأكد من توافق ذلك مع دورة حياة الوثيقة)"}
-                      >
-                        <MenuItem value="DRAFT" sx={{ fontSize: '0.8125rem' }}>
-                          مسودة (Draft)
-                        </MenuItem>
-                        <MenuItem value="ACTIVE" sx={{ fontSize: '0.8125rem' }}>
-                          نشط (Active)
-                        </MenuItem>
-                        <MenuItem value="SUSPENDED">موقوفة مؤقتًا</MenuItem>
-                        <MenuItem value="EXPIRED">منتهية</MenuItem>
-                        <MenuItem value="CANCELLED">ملغاة</MenuItem>
-                      </TextField>
-                    </Grid>
 
                     {/* ── Section 2: مدة السريان ── */}
                     <Grid size={{ xs: 12 }}>
