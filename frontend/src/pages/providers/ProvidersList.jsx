@@ -86,7 +86,8 @@ const PROVIDER_TYPES = [
   { value: 'LAB', label: 'مختبر طبي' },
   { value: 'PHARMACY', label: 'صيدلية' },
   { value: 'RADIOLOGY', label: 'مركز أشعة' },
-  { value: 'PHYSIOTHERAPY', label: 'علاج طبيعي' }
+  { value: 'PHYSIOTHERAPY', label: 'علاج طبيعي' },
+  { value: 'OPTICS', label: 'بصريات وعيون' }
 ];
 
 // Provider Type Labels (Arabic)
@@ -98,7 +99,8 @@ const PROVIDER_TYPE_LABELS_AR = {
   LABORATORY: 'مختبر تحاليل',
   PHARMACY: 'صيدلية',
   RADIOLOGY: 'مركز أشعة',
-  PHYSIOTHERAPY: 'مركز علاج طبيعي'
+  PHYSIOTHERAPY: 'مركز علاج طبيعي',
+  OPTICS: 'مركز بصريات وعيون'
 };
 
 // Provider Type Colors
@@ -110,7 +112,8 @@ const PROVIDER_TYPE_COLORS = {
   LABORATORY: 'warning',
   PHARMACY: 'success',
   RADIOLOGY: 'info',
-  PHYSIOTHERAPY: 'secondary'
+  PHYSIOTHERAPY: 'secondary',
+  OPTICS: 'primary'
 };
 
 // ============================================================================

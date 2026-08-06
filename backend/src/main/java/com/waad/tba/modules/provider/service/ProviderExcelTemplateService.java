@@ -81,8 +81,12 @@ public class ProviderExcelTemplateService {
                 .nameAr("نوع المقدم")
                 .type(ColumnType.ENUM)
                 .required(true)
-                .allowedValues(Arrays.asList("HOSPITAL", "CLINIC", "LAB", "PHARMACY", "RADIOLOGY",
-                                            "مستشفى", "عيادة", "مختبر", "صيدلية", "أشعة"))
+                // English codes only: parseProviderType matches literally, and mixing
+                // Arabic labels into the dropdown previously let values through that
+                // the parser could not resolve. CLINIC_DEN/PHYSIOTHERAPY were also
+                // missing here even though the enum and DB constraint accept them.
+                .allowedValues(Arrays.asList("HOSPITAL", "CLINIC", "CLINIC_DEN", "LAB",
+                                            "PHARMACY", "RADIOLOGY", "PHYSIOTHERAPY", "OPTICS"))
                 .example("HOSPITAL")
                 .description("Provider type (select from dropdown)")
                 .descriptionAr("نوع مقدم الخدمة (اختر من القائمة)")
@@ -169,8 +173,9 @@ public class ProviderExcelTemplateService {
             ExcelTemplateColumn.builder()
                 .name("network")
                 .nameAr("الشبكة")
-                .type(ColumnType.TEXT)
+                .type(ColumnType.ENUM)
                 .required(false)
+                .allowedValues(Arrays.asList("داخل الشبكة", "خارج الشبكة"))
                 .example("داخل الشبكة")
                 .description("Network status (Inside Network / Outside Network), default is Inside")
                 .descriptionAr("حالة الشبكة (داخل الشبكة / خارج الشبكة)، الافتراضي داخل الشبكة")
@@ -180,8 +185,9 @@ public class ProviderExcelTemplateService {
             ExcelTemplateColumn.builder()
                 .name("allow_all_employers")
                 .nameAr("شبكة عامة")
-                .type(ColumnType.TEXT)
+                .type(ColumnType.ENUM)
                 .required(false)
+                .allowedValues(Arrays.asList("نعم", "لا"))
                 .example("نعم")
                 .description("Is global network (نعم / لا), default is نعم")
                 .descriptionAr("هل هي شبكة عامة (نعم / لا)، الافتراضي نعم")
@@ -259,7 +265,8 @@ public class ProviderExcelTemplateService {
                 Arrays.asList("LAB", "مختبر تحاليل"),
                 Arrays.asList("PHARMACY", "صيدلية"),
                 Arrays.asList("RADIOLOGY", "مركز أشعة"),
-                Arrays.asList("PHYSIOTHERAPY", "مركز علاج طبيعي")
+                Arrays.asList("PHYSIOTHERAPY", "مركز علاج طبيعي"),
+                Arrays.asList("OPTICS", "مركز بصريات وعيون")
             ))
             .description("Valid provider types")
             .descriptionAr("أنواع مقدمي الخدمة الصالحة")
@@ -662,8 +669,10 @@ public class ProviderExcelTemplateService {
             return ProviderType.RADIOLOGY;
         } else if (normalized.equals("PHYSIOTHERAPY") || normalized.equals("مركز علاج طبيعي")) {
             return ProviderType.PHYSIOTHERAPY;
+        } else if (normalized.equals("OPTICS") || normalized.equals("مركز بصريات") || normalized.equals("بصريات")) {
+            return ProviderType.OPTICS;
         }
-        
+
         return null;
     }
     

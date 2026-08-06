@@ -36,6 +36,7 @@ const VISIT_TYPE_LABELS_AR = {
   DENTAL_COSMETIC: 'اسنان تجميلي',
   RADIOLOGY: 'اشعة',
   PHYSIOTHERAPY: 'علاج طبيعي',
+  OPTICS: 'بصريات وعيون',
 
   // Backward compatibility with existing backend enum values
   EMERGENCY: 'عمليات',
@@ -60,6 +61,7 @@ const VISIT_TYPE_COLORS = {
   DENTAL_COSMETIC: 'success',
   RADIOLOGY: 'secondary',
   PHYSIOTHERAPY: 'default',
+  OPTICS: 'primary',
 
   // Backward compatibility with existing backend enum values
   EMERGENCY: 'error',

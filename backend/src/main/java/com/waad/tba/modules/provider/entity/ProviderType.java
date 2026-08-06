@@ -39,5 +39,10 @@ public enum ProviderType {
     /**
      * مركز علاج طبيعي - Physiotherapy
      */
-    PHYSIOTHERAPY
+    PHYSIOTHERAPY,
+
+    /**
+     * مركز بصريات وعيون - Optics / Ophthalmology
+     */
+    OPTICS
 }

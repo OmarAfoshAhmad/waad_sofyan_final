@@ -63,7 +63,8 @@ const PROVIDER_TYPE_LABELS = {
   LAB: 'مختبر تحاليل',
   PHARMACY: 'صيدلية',
   RADIOLOGY: 'مركز أشعة',
-  PHYSIOTHERAPY: 'مركز علاج طبيعي'
+  PHYSIOTHERAPY: 'مركز علاج طبيعي',
+  OPTICS: 'مركز بصريات وعيون'
 };
 
 const PROVIDER_TYPE_COLORS = {
@@ -73,7 +74,8 @@ const PROVIDER_TYPE_COLORS = {
   LAB: 'warning',
   PHARMACY: 'success',
   RADIOLOGY: 'info',
-  PHYSIOTHERAPY: 'secondary'
+  PHYSIOTHERAPY: 'secondary',
+  OPTICS: 'primary'
 };
 
 // Status Labels (Arabic)

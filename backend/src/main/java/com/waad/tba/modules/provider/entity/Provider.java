@@ -126,7 +126,8 @@ public class Provider {
         LAB,
         PHARMACY,
         RADIOLOGY,
-        PHYSIOTHERAPY
+        PHYSIOTHERAPY,
+        OPTICS
     }
 
     public enum NetworkTier {

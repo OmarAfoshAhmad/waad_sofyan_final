@@ -76,7 +76,8 @@ const PROVIDER_TYPES = [
   { value: 'LAB', label: 'مختبر تحاليل', icon: '🔬' },
   { value: 'PHARMACY', label: 'صيدلية', icon: '💊' },
   { value: 'RADIOLOGY', label: 'مركز أشعة', icon: '📷' },
-  { value: 'PHYSIOTHERAPY', label: 'مركز علاج طبيعي', icon: '💆' }
+  { value: 'PHYSIOTHERAPY', label: 'مركز علاج طبيعي', icon: '💆' },
+  { value: 'OPTICS', label: 'مركز بصريات وعيون', icon: '👓' }
 ];
 
 const NETWORK_STATUS_OPTIONS = [

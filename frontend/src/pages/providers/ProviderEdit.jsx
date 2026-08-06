@@ -88,7 +88,8 @@ const PROVIDER_TYPES = [
   { value: 'LAB', label: 'مختبر تحاليل' },
   { value: 'PHARMACY', label: 'صيدلية' },
   { value: 'RADIOLOGY', label: 'مركز أشعة' },
-  { value: 'PHYSIOTHERAPY', label: 'مركز علاج طبيعي' }
+  { value: 'PHYSIOTHERAPY', label: 'مركز علاج طبيعي' },
+  { value: 'OPTICS', label: 'مركز بصريات وعيون' }
 ];
 
 const NETWORK_STATUS_OPTIONS = [
