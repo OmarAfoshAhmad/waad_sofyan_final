@@ -82,6 +82,13 @@ export const getMember = async (id) => {
   }
 };
 
+export const getMemberBenefitUsage = async (id, asOfDate) => {
+  const response = await api.get(`${UNIFIED_MEMBERS_BASE_URL}/${id}/benefit-usage`, {
+    params: asOfDate ? { asOfDate } : undefined
+  });
+  return response.data;
+};
+
 /**
  * Get all members with pagination and filtering
  *
