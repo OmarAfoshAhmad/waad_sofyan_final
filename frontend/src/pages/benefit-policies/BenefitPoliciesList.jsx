@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -90,12 +91,20 @@ const BenefitPoliciesList = () => {
 
   const fetchEmployers = useCallback(async () => {
     try {
-      const response = await axiosClient.get('/employers/selectors');
-      setEmployers(response.data?.data || []);
+      const response = await axiosClient.get('/benefit-policies/employer-selectors', { params: { deleted: showDeleted } });
+      const availableEmployers = response.data?.data || [];
+      setEmployers(availableEmployers);
+      setFilters((previous) => {
+        if (!previous.employerId) return previous;
+        const stillAvailable = availableEmployers.some(
+          (employer) => String(employer.id || employer.value) === String(previous.employerId)
+        );
+        return stillAvailable ? previous : { ...previous, employerId: '' };
+      });
     } catch (error) {
       console.error('[BenefitPolicies] Failed to load employer selectors:', error);
     }
-  }, []);
+  }, [showDeleted]);
 
   const fetchPolicies = useCallback(async () => {
     setLoading(true);
@@ -421,28 +430,20 @@ const BenefitPoliciesList = () => {
               }}
             />
 
-            <TextField
-              select
+            <Autocomplete
               size="small"
-              label="الشريك"
-              value={filters.employerId}
-              onChange={(event) => {
-                setFilters((prev) => ({ ...prev, employerId: event.target.value }));
+              options={employers}
+              getOptionLabel={(opt) => opt.name || opt.label || ''}
+              isOptionEqualToValue={(opt, val) => String(opt.id || opt.value) === String(val?.id || val?.value)}
+              value={employers.find((employer) => String(employer.id || employer.value) === String(filters.employerId)) || null}
+              onChange={(event, newValue) => {
+                setFilters((prev) => ({ ...prev, employerId: newValue?.id || newValue?.value || '' }));
                 setPage(0);
               }}
               sx={{ minWidth: '11.25rem', bgcolor: 'background.paper' }}
-              InputProps={{ sx: { height: '2.5rem' } }}
-              InputLabelProps={{ shrink: true }}
-            >
-              <MenuItem value="">
-                <em>الكل</em>
-              </MenuItem>
-              {employers.map((employer) => (
-                <MenuItem key={employer.id || employer.value} value={employer.id || employer.value}>
-                  {employer.name || employer.label}
-                </MenuItem>
-              ))}
-            </TextField>
+              noOptionsText="لا توجد جهات عمل"
+              renderInput={(params) => <TextField {...params} label="الشريك" InputLabelProps={{ shrink: true }} />}
+            />
 
             <TextField
               select

@@ -14,12 +14,20 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import com.waad.tba.modules.employer.entity.Employer;
 
 /**
  * Repository for BenefitPolicy entity.
  */
 @Repository
 public interface BenefitPolicyRepository extends JpaRepository<BenefitPolicy, Long> {
+
+    @Query("SELECT DISTINCT bp.employer FROM BenefitPolicy bp " +
+           "WHERE bp.active = :active " +
+           "AND (:employerId IS NULL OR bp.employer.id = :employerId) " +
+           "ORDER BY bp.employer.name")
+    List<Employer> findDistinctEmployersWithPolicies(@Param("active") boolean active,
+                                                       @Param("employerId") Long employerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select bp from BenefitPolicy bp where bp.id = :id")

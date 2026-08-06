@@ -30,6 +30,7 @@ import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicySelectorDto;
 import com.waad.tba.modules.benefitpolicy.dto.BenefitPolicyUpdateDto;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyService;
+import com.waad.tba.modules.employer.dto.EmployerSelectorDto;
 import com.waad.tba.modules.rbac.entity.User;
 import com.waad.tba.security.AuthorizationService;
 
@@ -82,6 +83,19 @@ public class BenefitPolicyController {
     // ═══════════════════════════════════════════════════════════════════════════
     // READ ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    @GetMapping("/employer-selectors")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','EMPLOYER_ADMIN','ACCOUNTANT','MEDICAL_REVIEWER')")
+    @Operation(summary = "Get employers represented in the benefit-policy list")
+    public ResponseEntity<ApiResponse<List<EmployerSelectorDto>>> getEmployerSelectors(
+            @RequestParam(name = "deleted", defaultValue = "false") boolean deleted) {
+        User currentUser = authorizationService.getCurrentUser();
+        Long employerScope = currentUser != null && authorizationService.isEmployerAdmin(currentUser)
+                ? authorizationService.getEmployerFilterForUser(currentUser)
+                : null;
+        return ResponseEntity.ok(ApiResponse.success(
+                benefitPolicyService.getEmployerSelectorsWithPolicies(deleted, employerScope)));
+    }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','EMPLOYER_ADMIN','ACCOUNTANT','MEDICAL_REVIEWER')")

@@ -5,6 +5,7 @@ import com.waad.tba.common.guard.DeletionGuard;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
+import com.waad.tba.modules.employer.dto.EmployerSelectorDto;
 import com.waad.tba.modules.benefitpolicy.dto.*;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
@@ -47,6 +48,17 @@ public class BenefitPolicyService {
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
     // ═══════════════════════════════════════════════════════════════════════════
+
+    @Transactional(readOnly = true)
+    public List<EmployerSelectorDto> getEmployerSelectorsWithPolicies(boolean deleted, Long employerId) {
+        return benefitPolicyRepository.findDistinctEmployersWithPolicies(!deleted, employerId).stream()
+                .map(employer -> EmployerSelectorDto.builder()
+                        .id(employer.getId())
+                        .label(employer.getName())
+                        .code(employer.getCode())
+                        .build())
+                .toList();
+    }
 
     /**
      * Get all benefit policies (paginated)
