@@ -1,6 +1,7 @@
 package com.waad.tba.modules.benefitpolicy.service;
 
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -39,6 +40,66 @@ public class BenefitOpeningBalanceImportService {
     private final BenefitBucketAdjustmentRepository adjustmentRepository;
     private final BenefitBucketUsageService usageService;
     private final AuthorizationService authorizationService;
+
+    @Transactional(readOnly = true)
+    public byte[] generateTemplate(Long policyId) throws Exception {
+        BenefitPolicy policy = policyRepository.findById(policyId)
+                .orElseThrow(() -> new BusinessRuleException("وثيقة المنافع غير موجودة"));
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet data = workbook.createSheet("الأرصدة الافتتاحية");
+            data.setRightToLeft(true);
+            String[] headers = {"رقم البطاقة", "رمز السقف", "تاريخ الرصيد", "السقف الأصلي",
+                    "المبلغ المستخدم", "الرصيد المتبقي", "عدد المرات", "عدد الأيام", "مرجع المصدر"};
+            CellStyle headerStyle = workbook.createCellStyle();
+            headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true); headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            org.apache.poi.ss.usermodel.Row header = data.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = header.createCell(i); cell.setCellValue(headers[i]); cell.setCellStyle(headerStyle);
+                data.setColumnWidth(i, switch (i) { case 0, 1, 8 -> 24 * 256; default -> 18 * 256; });
+            }
+            data.createFreezePane(0, 1);
+            data.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, headers.length - 1));
+
+            Sheet guide = workbook.createSheet("دليل السقوف");
+            guide.setRightToLeft(true);
+            org.apache.poi.ss.usermodel.Row guideHeader = guide.createRow(0);
+            String[] guideHeaders = {"رمز السقف", "اسم السقف", "نوع الفترة", "السقف المالي", "حد المرات", "حد الأيام"};
+            for (int i = 0; i < guideHeaders.length; i++) {
+                Cell cell = guideHeader.createCell(i); cell.setCellValue(guideHeaders[i]); cell.setCellStyle(headerStyle);
+                guide.setColumnWidth(i, i == 1 ? 34 * 256 : 18 * 256);
+            }
+            int rowIndex = 1;
+            for (BenefitLimitBucket bucket : bucketRepository.findByPolicyIdOrderByCode(policyId)) {
+                if (!bucket.isActive()) continue;
+                org.apache.poi.ss.usermodel.Row row = guide.createRow(rowIndex++);
+                row.createCell(0).setCellValue(bucket.getCode());
+                row.createCell(1).setCellValue(bucket.getNameAr());
+                row.createCell(2).setCellValue(bucket.getPeriodType() == null ? "ANNUAL" : bucket.getPeriodType().name());
+                if (bucket.getAmountLimit() != null) row.createCell(3).setCellValue(bucket.getAmountLimit().doubleValue());
+                if (bucket.getTimesLimit() != null) row.createCell(4).setCellValue(bucket.getTimesLimit());
+                if (bucket.getDaysLimit() != null) row.createCell(5).setCellValue(bucket.getDaysLimit());
+            }
+            Sheet instructions = workbook.createSheet("تعليمات");
+            instructions.setRightToLeft(true);
+            String[] notes = {
+                    "الوثيقة: " + policy.getPolicyCode() + " - " + policy.getName(),
+                    "هذه الورقة ترحّل استهلاك السقوف فقط ولا تنشئ مطالبات أو دفعات أو تسويات مالية.",
+                    "حالة مكتمل لا تُكتب هنا؛ أدخل السقف الأصلي والمتبقي وسيحسب النظام المستخدم.",
+                    "يجب أن يساوي: المبلغ المستخدم = السقف الأصلي - الرصيد المتبقي.",
+                    "صيغة تاريخ الرصيد: dd-mm-yyyy. يجب استخدام رمز السقف من ورقة دليل السقوف.",
+                    "إعادة رفع السجل نفسه آمنة؛ مفتاح منع التكرار هو المستفيد + الوثيقة + السقف + الفترة."
+            };
+            for (int i = 0; i < notes.length; i++) instructions.createRow(i).createCell(0).setCellValue(notes[i]);
+            instructions.setColumnWidth(0, 110 * 256);
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
 
     @Transactional(readOnly = true)
     public Preview preview(MultipartFile file, Long policyId, String requestedBatchId) throws Exception {
