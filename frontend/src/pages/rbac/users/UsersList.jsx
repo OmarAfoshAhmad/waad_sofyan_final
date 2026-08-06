@@ -8,7 +8,7 @@
  * - View and Edit actions
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -34,7 +34,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  InputAdornment,
+  MenuItem
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -44,14 +46,17 @@ import {
   Block as BlockIcon,
   CheckCircle as CheckCircleIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
-  PeopleAlt as PeopleAltIcon
+  PeopleAlt as PeopleAltIcon,
+  Search as SearchIcon,
+  FilterAltOff as FilterAltOffIcon,
+  UploadFile as UploadFileIcon
 } from '@mui/icons-material';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import usersService from 'services/rbac/users.service';
 import { openSnackbar } from 'api/snackbar';
-import { getRoleDisplayName } from 'constants/rbac';
+import { getRoleDisplayName, SystemRole } from 'constants/rbac';
 import ProviderUsersImportModal from './ProviderUsersImportModal';
 
 /**
@@ -83,11 +88,19 @@ const getRoleColor = (roleName) => {
   return roleColors[roleName] || 'default';
 };
 
+const TABLE_BADGE_SX = {
+  width: '8.125rem',
+  maxWidth: '100%',
+  justifyContent: 'center',
+  fontWeight: 600
+};
+
 /**
  * Users List Component
  */
 const UsersList = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // State
   const [loading, setLoading] = useState(true);
@@ -101,6 +114,9 @@ const UsersList = () => {
   // Search
   const [searchTerm, setSearchTerm] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [selectedRole, setSelectedRole] = useState(searchParams.get('role') || '');
+  const [activeFilter, setActiveFilter] = useState('');
+  const [providerLinkFilter, setProviderLinkFilter] = useState('');
 
   // Toggle Status Dialog
   const [toggleDialog, setToggleDialog] = useState({ open: false, user: null });
@@ -109,22 +125,16 @@ const UsersList = () => {
   // Import Dialog
   const [importModalOpen, setImportModalOpen] = useState(false);
 
-  // Fetch users
-  const [searchParams] = useSearchParams();
-  const roleFilter = searchParams.get('role');
-
-  useEffect(() => {
-    fetchUsers();
-  }, [page, rowsPerPage, roleFilter, appliedSearch]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const result = await usersService.getUsersTable({
         page: page + 1,
         size: rowsPerPage,
         search: appliedSearch,
-        role: roleFilter || ''
+        role: selectedRole,
+        active: activeFilter,
+        providerLink: providerLinkFilter
       });
 
       setUsers(result.items || []);
@@ -140,18 +150,19 @@ const UsersList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, rowsPerPage, appliedSearch, selectedRole, activeFilter, providerLinkFilter]);
 
-  const handleSearch = () => {
-    setPage(0);
-    setAppliedSearch(searchTerm.trim());
-  };
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
-  const handleSearchKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(0);
+      setAppliedSearch(searchTerm.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
@@ -206,7 +217,7 @@ const UsersList = () => {
 
   const getStatusChip = (user) => {
     const isActive = user?.active !== false;
-    return <Chip label={isActive ? 'نشط' : 'معطل'} color={isActive ? 'success' : 'default'} size="small" />;
+    return <Chip label={isActive ? 'نشط' : 'معطل'} color={isActive ? 'success' : 'default'} size="small" sx={TABLE_BADGE_SX} />;
   };
 
   const isSuperAdmin = (user) => {
@@ -214,78 +225,157 @@ const UsersList = () => {
   };
 
   return (
-    <Box>
+    <Box sx={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', width: '100%' }}>
       {/* Page Header */}
       <ModernPageHeader
         title="إدارة المستخدمين"
         subtitle="عرض وإدارة المستخدمين وصلاحياتهم"
-        icon={PeopleAltIcon}
+        icon={<PeopleAltIcon />}
         breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'المستخدمين' }]}
         actions={
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefresh}>
-              تحديث
-            </Button>
-            <Button variant="outlined" color="secondary" onClick={() => setImportModalOpen(true)}>
+          <Stack direction="row" spacing={1} flexWrap="nowrap" sx={{ overflowX: 'auto', maxWidth: '100%' }}>
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<UploadFileIcon />}
+              onClick={() => setImportModalOpen(true)}
+              sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap' }}
+            >
               استيراد مستخدمي المرافق
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/admin/users/create')}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/admin/users/create')}
+              sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap' }}
+            >
               إضافة مستخدم
             </Button>
           </Stack>
         }
+        sx={{ mb: 0.5 }}
       />
 
-      <Grid container spacing={3}>
+      <Grid container spacing={1} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* Search */}
-        <Grid size={12}>
-          <MainCard title="البحث">
-            <Grid container spacing={2} alignItems="center">
-              <Grid size={{ xs: 12, md: 6 }}>
+        <Grid size={12} sx={{ flexShrink: 0 }}>
+          <MainCard sx={{ mb: 1 }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
+              <Tooltip title="تحديث">
+                <IconButton
+                  onClick={handleRefresh}
+                  color="primary"
+                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem' }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
+              <Chip
+                icon={<PeopleAltIcon fontSize="small" />}
+                label={`${totalElements} مستخدم`}
+                variant="outlined"
+                color="primary"
+                sx={{ height: '2.5rem', borderRadius: 1, fontWeight: 'bold', fontSize: '0.875rem', px: 1 }}
+              />
+              <Box sx={{ flexGrow: 1, minWidth: { md: '12.5rem' } }}>
                 <TextField
                   fullWidth
-                  label="بحث"
+                  size="small"
                   placeholder="اسم المستخدم، الاسم الكامل، البريد الإلكتروني..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 2 }}>
-                <Button fullWidth variant="contained" onClick={handleSearch}>
-                  بحث
-                </Button>
-              </Grid>
-              <Grid size={{ xs: 12, md: 2 }}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setAppliedSearch('');
-                    setPage(0);
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon color="action" />
+                      </InputAdornment>
+                    ),
+                    sx: { height: '2.5rem' }
                   }}
-                >
-                  إعادة تعيين
-                </Button>
-              </Grid>
-            </Grid>
+                />
+              </Box>
+              <TextField
+                select
+                size="small"
+                label="الدور"
+                value={selectedRole}
+                onChange={(event) => {
+                  setSelectedRole(event.target.value);
+                  setPage(0);
+                }}
+                sx={{ minWidth: '11rem', bgcolor: 'background.paper' }}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                {Object.values(SystemRole).map((role) => (
+                  <MenuItem key={role} value={role}>
+                    {getRoleDisplayName(role, 'ar')}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="الحالة"
+                value={activeFilter}
+                onChange={(event) => {
+                  setActiveFilter(event.target.value);
+                  setPage(0);
+                }}
+                sx={{ minWidth: '8rem', bgcolor: 'background.paper' }}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                <MenuItem value="true">نشط</MenuItem>
+                <MenuItem value="false">معطل</MenuItem>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="الارتباط بالمرفق"
+                value={providerLinkFilter}
+                onChange={(event) => {
+                  setProviderLinkFilter(event.target.value);
+                  setPage(0);
+                }}
+                sx={{ minWidth: '10rem', bgcolor: 'background.paper' }}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
+              >
+                <MenuItem value="">الكل</MenuItem>
+                <MenuItem value="LINKED">مرتبط</MenuItem>
+                <MenuItem value="UNLINKED">غير مرتبط</MenuItem>
+              </TextField>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<FilterAltOffIcon />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setAppliedSearch('');
+                  setSelectedRole('');
+                  setActiveFilter('');
+                  setProviderLinkFilter('');
+                  setPage(0);
+                }}
+                sx={{ minWidth: '7.5rem', height: '2.5rem' }}
+              >
+                إعادة ضبط
+              </Button>
+            </Stack>
           </MainCard>
         </Grid>
 
         {/* Users Table */}
-        <Grid size={12}>
-          <MainCard
-            content={false}
-            title={
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="h5">المستخدمين ({totalElements})</Typography>
-                {loading && <CircularProgress size={24} />}
-              </Stack>
-            }
+        <Grid size={12} sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
+          <Paper
+            variant="outlined"
+            sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 1 }}
           >
-            <TableContainer component={Paper} elevation={0}>
-              <Table aria-label="users table">
+            <TableContainer sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <Table stickyHeader aria-label="users table">
                 <TableHead>
                   <TableRow>
                     <TableCell width="5%">#</TableCell>
@@ -362,6 +452,7 @@ const UsersList = () => {
                                     color={getRoleColor(role?.name)}
                                     variant="outlined"
                                     icon={<AdminPanelSettingsIcon sx={{ fontSize: '14px !important' }} />}
+                                    sx={TABLE_BADGE_SX}
                                   />
                                 ))}
                                 {userRoles.length > 3 && <Chip label={`+${userRoles.length - 3}`} size="small" variant="outlined" />}
@@ -375,9 +466,9 @@ const UsersList = () => {
                         </TableCell>
                         <TableCell>
                           {user?.providerName ? (
-                            <Chip label={user.providerName} size="small" color="primary" variant="outlined" />
+                            <Chip label={user.providerName} size="small" color="primary" variant="outlined" sx={TABLE_BADGE_SX} />
                           ) : user?.providerId ? (
-                            <Chip label={`مرفق #${user.providerId}`} size="small" color="warning" variant="outlined" />
+                            <Chip label={`مرفق #${user.providerId}`} size="small" color="warning" variant="outlined" sx={TABLE_BADGE_SX} />
                           ) : (
                             <Typography variant="caption" color="text.disabled">
                               —
@@ -428,8 +519,9 @@ const UsersList = () => {
               rowsPerPageOptions={[10, 20, 50, 100]}
               labelRowsPerPage="عدد الصفوف:"
               labelDisplayedRows={({ from, to, count }) => `${from}-${to} من ${count !== -1 ? count : `أكثر من ${to}`}`}
+              sx={{ flexShrink: 0, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}
             />
-          </MainCard>
+          </Paper>
         </Grid>
       </Grid>
 

@@ -256,11 +256,12 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponseDto> searchPaginated(String query, String role, Pageable pageable) {
-        log.debug("Searching users with pagination, query: {}, role: {}", query, role);
+    public Page<UserResponseDto> searchPaginated(String query, String role, Boolean active, String providerLink, Pageable pageable) {
+        log.debug("Searching users with pagination, query: {}, role: {}, active: {}, providerLink: {}", query, role, active, providerLink);
         String normalizedQuery = query == null ? "" : query.trim();
         String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
-        Page<User> users = userRepository.searchUsersFiltered(normalizedQuery, normalizedRole, pageable);
+        String normalizedProviderLink = providerLink == null ? "" : providerLink.trim().toUpperCase(Locale.ROOT);
+        Page<User> users = userRepository.searchUsersFiltered(normalizedQuery, normalizedRole, active, normalizedProviderLink, pageable);
         Map<Long, String> providerNames = loadProviderNames(users.getContent());
         return users.map(user -> enrichProviderName(userMapper.toResponseDto(user), providerNames));
     }

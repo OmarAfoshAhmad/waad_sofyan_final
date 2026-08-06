@@ -42,11 +42,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE " +
            "(:role IS NULL OR :role = '' OR u.userType = :role) AND (" +
+           ":active IS NULL OR u.active = :active) AND (" +
+           ":providerLink IS NULL OR :providerLink = '' OR " +
+           "(:providerLink = 'LINKED' AND u.providerId IS NOT NULL) OR " +
+           "(:providerLink = 'UNLINKED' AND u.providerId IS NULL)) AND (" +
            ":query IS NULL OR :query = '' OR " +
            "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')))")
-    Page<User> searchUsersFiltered(@Param("query") String query, @Param("role") String role, Pageable pageable);
+    Page<User> searchUsersFiltered(@Param("query") String query,
+                                   @Param("role") String role,
+                                   @Param("active") Boolean active,
+                                   @Param("providerLink") String providerLink,
+                                   Pageable pageable);
     
     Optional<User> findByUsernameOrEmail(String username, String email);
     

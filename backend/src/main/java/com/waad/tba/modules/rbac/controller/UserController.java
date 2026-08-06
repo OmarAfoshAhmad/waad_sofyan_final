@@ -156,9 +156,11 @@ public class UserController {
         public ResponseEntity<ApiResponse<Page<UserResponseDto>>> searchUsersPaginated(
                         @Parameter(name = "query", description = "Search query") @RequestParam(name = "query", required = false) String query,
                         @Parameter(name = "role", description = "Role filter") @RequestParam(name = "role", required = false) String role,
+                        @Parameter(name = "active", description = "Active status filter") @RequestParam(name = "active", required = false) Boolean active,
+                        @Parameter(name = "providerLink", description = "Provider link filter: LINKED or UNLINKED") @RequestParam(name = "providerLink", required = false) String providerLink,
                         @Parameter(name = "page", description = "Page number (0-based)") @RequestParam(name = "page", defaultValue = "0") int page,
                         @Parameter(name = "size", description = "Page size") @RequestParam(name = "size", defaultValue = "10") int size) {
-                Page<UserResponseDto> users = userService.searchPaginated(query, role, safePageRequest(page, size));
+                Page<UserResponseDto> users = userService.searchPaginated(query, role, active, providerLink, safePageRequest(page, size));
                 return ResponseEntity.ok(ApiResponse.success(users));
         }
 
