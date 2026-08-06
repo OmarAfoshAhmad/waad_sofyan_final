@@ -262,11 +262,11 @@ public class BenefitOpeningBalanceImportService {
                 case "رقم البطاقة", "card number", "card_number" -> "card_number";
                 case "رمز السقف", "bucket code", "bucket_code" -> "bucket_code";
                 case "تاريخ الرصيد", "as of date", "as_of_date" -> "as_of_date";
-                case "السقف الأصلي", "amount limit", "amount_limit" -> "amount_limit";
+                case "السقف الاصلي", "amount limit", "amount_limit" -> "amount_limit";
                 case "المبلغ المستخدم", "used amount", "used_amount" -> "used_amount";
                 case "الرصيد المتبقي", "remaining amount", "remaining_amount" -> "remaining_amount";
                 case "عدد المرات", "used times", "used_times" -> "used_times";
-                case "عدد الأيام", "used days", "used_days" -> "used_days";
+                case "عدد الايام", "used days", "used_days" -> "used_days";
                 case "مرجع المصدر", "source reference", "source_reference" -> "source_reference";
                 default -> null;
             };

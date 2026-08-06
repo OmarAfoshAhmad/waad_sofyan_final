@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import {
   Alert,
@@ -44,14 +44,6 @@ export default function MemberBenefitUsageDrawer({ open, memberId, onClose }) {
     };
   }, [open, memberId]);
 
-  const totals = useMemo(() => {
-    const finite = (data?.buckets || []).filter((item) => item.amountLimit != null);
-    return finite.reduce(
-      (acc, item) => ({ limit: acc.limit + Number(item.amountLimit || 0), used: acc.used + Number(item.usedAmount || 0) }),
-      { limit: 0, used: 0 }
-    );
-  }, [data]);
-
   return (
     <Drawer
       anchor="right"
@@ -88,9 +80,9 @@ export default function MemberBenefitUsageDrawer({ open, memberId, onClose }) {
         {!loading && data && (
           <>
             <Stack direction="row" divider={<Divider orientation="vertical" flexItem />} sx={{ mb: 2.5 }}>
-              <Box sx={{ flex: 1 }}><Typography variant="caption" color="text.secondary">إجمالي السقوف المحدودة</Typography><Typography fontWeight={600}>{money(totals.limit)}</Typography></Box>
-              <Box sx={{ flex: 1, px: 2 }}><Typography variant="caption" color="text.secondary">إجمالي المستخدم</Typography><Typography fontWeight={600}>{money(totals.used)}</Typography></Box>
-              <Box sx={{ flex: 1, px: 2 }}><Typography variant="caption" color="text.secondary">المتبقي</Typography><Typography fontWeight={600}>{money(Math.max(0, totals.limit - totals.used))}</Typography></Box>
+              <Box sx={{ flex: 1 }}><Typography variant="caption" color="text.secondary">سقوف متاحة</Typography><Typography fontWeight={600}>{data.buckets.filter((item) => item.status === 'UNUSED' || item.status === 'PARTIALLY_USED').length}</Typography></Box>
+              <Box sx={{ flex: 1, px: 2 }}><Typography variant="caption" color="text.secondary">مستهلكة بالكامل</Typography><Typography fontWeight={600}>{data.buckets.filter((item) => item.status === 'EXHAUSTED').length}</Typography></Box>
+              <Box sx={{ flex: 1, px: 2 }}><Typography variant="caption" color="text.secondary">غير محدودة</Typography><Typography fontWeight={600}>{data.buckets.filter((item) => item.status === 'UNLIMITED').length}</Typography></Box>
             </Stack>
 
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -153,4 +145,3 @@ MemberBenefitUsageDrawer.propTypes = {
   memberId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   onClose: PropTypes.func.isRequired
 };
-
