@@ -69,8 +69,7 @@ import {
   ReceiptLong as ClaimIcon,
   FactCheck as PreAuthIcon,
   Search as SearchIcon,
-  Visibility as VisibilityIcon,
-  AccountBalanceWallet as AccountBalanceWalletIcon
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TablePagination } from '@mui/material';
@@ -82,7 +81,6 @@ import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import MemberAvatar from 'components/tba/MemberAvatar';
 import DependentModal from './DependentModal';
-import MemberBenefitUsageDrawer from 'components/members/MemberBenefitUsageDrawer';
 import {
   getMember,
   deleteMember,
@@ -191,7 +189,6 @@ const UnifiedMemberView = () => {
   const [statusMenuTargetId, setStatusMenuTargetId] = useState(null);
   const [statusChangeDialog, setStatusChangeDialog] = useState({ open: false, targetId: null, targetStatus: null, reason: '' });
   const [statusChangeLoading, setStatusChangeLoading] = useState(false);
-  const [benefitUsageOpen, setBenefitUsageOpen] = useState(false);
 
   const MEMBER_STATUS_OPTIONS = [
     { value: 'ACTIVE', label: 'نشط' },
@@ -515,17 +512,12 @@ const UnifiedMemberView = () => {
             <Button variant="outlined" color="primary" startIcon={<EditIcon />} onClick={() => navigate(`/members/${id}/edit`)}>
               تعديل
             </Button>
-            <Button variant="outlined" startIcon={<AccountBalanceWalletIcon />} onClick={() => setBenefitUsageOpen(true)}>
-              حالة السقوف
-            </Button>
             <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => handleDeleteConfirm(member)}>
               حذف
             </Button>
           </Stack>
         }
       />
-
-      <MemberBenefitUsageDrawer open={benefitUsageOpen} memberId={member.id} onClose={() => setBenefitUsageOpen(false)} />
 
       <MainCard
         content={false}
