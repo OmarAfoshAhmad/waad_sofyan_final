@@ -382,7 +382,6 @@ const UsersList = () => {
                     <TableCell width="25%">المستخدم</TableCell>
                     <TableCell width="20%">البريد الإلكتروني</TableCell>
                     <TableCell width="20%">الأدوار</TableCell>
-                    <TableCell width="15%">المرفق المرتبط</TableCell>
                     <TableCell width="10%">الحالة</TableCell>
                     <TableCell align="center" width="10%">
                       إجراءات
@@ -392,7 +391,7 @@ const UsersList = () => {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: '5.0rem' }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: '5.0rem' }}>
                         <CircularProgress />
                         <Typography variant="body2" color="text.secondary" sx={{ mt: '1.0rem' }}>
                           جاري تحميل المستخدمين...
@@ -401,7 +400,7 @@ const UsersList = () => {
                     </TableRow>
                   ) : users.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: '5.0rem' }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: '5.0rem' }}>
                         <Typography variant="h6" color="text.secondary">
                           لا توجد نتائج
                         </Typography>
@@ -463,17 +462,6 @@ const UsersList = () => {
                               </Typography>
                             );
                           })()}
-                        </TableCell>
-                        <TableCell>
-                          {user?.providerName ? (
-                            <Chip label={user.providerName} size="small" color="primary" variant="outlined" sx={TABLE_BADGE_SX} />
-                          ) : user?.providerId ? (
-                            <Chip label={`مرفق #${user.providerId}`} size="small" color="warning" variant="outlined" sx={TABLE_BADGE_SX} />
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">
-                              —
-                            </Typography>
-                          )}
                         </TableCell>
                         <TableCell>{getStatusChip(user)}</TableCell>
                         <TableCell align="center">

@@ -28,6 +28,7 @@ public class SettingsInitializationService {
     public static final String PASSWORD_RESET_TOKEN_EXPIRY_MINUTES_KEY = "PASSWORD_RESET_TOKEN_EXPIRY_MINUTES";
     public static final String PASSWORD_RESET_OTP_EXPIRY_MINUTES_KEY = "PASSWORD_RESET_OTP_EXPIRY_MINUTES";
     public static final String PASSWORD_RESET_OTP_LENGTH_KEY = "PASSWORD_RESET_OTP_LENGTH";
+    public static final String PROVIDER_USER_EMAIL_DOMAIN_KEY = "PROVIDER_USER_EMAIL_DOMAIN";
 
     public static final String LOGO_URL_KEY = "LOGO_URL";
     public static final String FONT_FAMILY_KEY = "FONT_FAMILY";
@@ -205,6 +206,9 @@ public class SettingsInitializationService {
                 "Beneficiary number prefix", "MEMBERS", true, "");
         ensureDefaultSetting(BENEFICIARY_NUMBER_DIGITS_KEY, "6", SystemSetting.SettingValueType.INTEGER,
                 "Beneficiary sequence digit count", "MEMBERS", true, "min:3,max:12");
+
+        ensureDefaultSetting(PROVIDER_USER_EMAIL_DOMAIN_KEY, "tpa.local", SystemSetting.SettingValueType.STRING,
+                "Domain appended to automatically generated provider user email addresses", "PROVIDERS", true, "");
 
         ensureDefaultSetting(ELIGIBILITY_STRICT_MODE_KEY, "false", SystemSetting.SettingValueType.BOOLEAN,
                 "Use strict eligibility checks", "ELIGIBILITY", true, "");

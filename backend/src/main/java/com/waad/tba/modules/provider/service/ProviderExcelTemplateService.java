@@ -10,6 +10,7 @@ import com.waad.tba.common.excel.dto.ExcelTemplateColumn.ColumnType;
 import com.waad.tba.common.excel.service.ExcelParserService;
 import com.waad.tba.common.excel.service.ExcelTemplateService;
 import com.waad.tba.common.exception.BusinessRuleException;
+import com.waad.tba.common.repository.SystemSettingRepository;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
@@ -49,6 +50,10 @@ public class ProviderExcelTemplateService {
     private final ProviderRepository providerRepository;
     private final ProviderContractService contractService;
     private final UserService userService;
+    private final SystemSettingRepository systemSettingRepository;
+
+    private static final String PROVIDER_USER_EMAIL_DOMAIN_KEY = "PROVIDER_USER_EMAIL_DOMAIN";
+    private static final String DEFAULT_PROVIDER_USER_EMAIL_DOMAIN = "tpa.local";
     
     // ═══════════════════════════════════════════════════════════════════════════
     // TEMPLATE GENERATION
@@ -132,8 +137,8 @@ public class ProviderExcelTemplateService {
                 .type(ColumnType.TEXT)
                 .required(false)
                 .example("info@alsalam.ly")
-                .description("Email address")
-                .descriptionAr("البريد الإلكتروني")
+                .description("Provider/user email. If empty, the provider user email is generated using the configured domain.")
+                .descriptionAr("بريد المرفق وحساب المستخدم. إذا تُرك فارغاً يُولّد بريد المستخدم وفق النطاق المحدد في إعدادات النظام.")
                 .width(25)
                 .build(),
                 
@@ -428,11 +433,15 @@ public class ProviderExcelTemplateService {
                                     username = (englishName.isEmpty() ? licenseNumber.trim().toLowerCase() : englishName) + "@tpa";
                                 }
                                 
+                                String userEmail = email != null && !email.trim().isEmpty()
+                                        ? email.trim()
+                                        : generateProviderUserEmail(username, licenseNumber);
+
                                 UserCreateDto userDto = UserCreateDto.builder()
                                         .username(username)
                                         .password(initialPassword.trim())
                                         .fullName(name.trim())
-                                        .email(email != null && !email.trim().isEmpty() ? email.trim() : username + ".local")
+                                        .email(userEmail)
                                         .userType("PROVIDER_STAFF")
                                         .providerId(provider.getId())
                                         .build();
@@ -482,6 +491,31 @@ public class ProviderExcelTemplateService {
         }
     }
     
+    private String generateProviderUserEmail(String username, String licenseNumber) {
+        String configuredDomain = systemSettingRepository.findBySettingKey(PROVIDER_USER_EMAIL_DOMAIN_KEY)
+                .map(setting -> setting.getSettingValue())
+                .orElse(DEFAULT_PROVIDER_USER_EMAIL_DOMAIN);
+        String domain = configuredDomain == null ? "" : configuredDomain.trim().toLowerCase(Locale.ROOT);
+        domain = domain.replaceFirst("^@+", "");
+        if (!domain.matches("[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")) {
+            log.warn("[ProviderImport] Invalid {} value '{}'; using default domain {}",
+                    PROVIDER_USER_EMAIL_DOMAIN_KEY, configuredDomain, DEFAULT_PROVIDER_USER_EMAIL_DOMAIN);
+            domain = DEFAULT_PROVIDER_USER_EMAIL_DOMAIN;
+        }
+
+        String usernameLocalPart = username == null ? "" : username.split("@", 2)[0];
+        String localPart = usernameLocalPart.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9._-]", "");
+        if (localPart.isBlank()) {
+            localPart = licenseNumber == null ? "provider" : licenseNumber.trim().toLowerCase(Locale.ROOT)
+                    .replaceAll("[^a-z0-9._-]", "");
+        }
+        if (localPart.isBlank()) {
+            localPart = "provider";
+        }
+        return localPart + "@" + domain;
+    }
+
     private Map<String, Integer> findColumnIndices(Row headerRow) {
         Map<String, Integer> indices = new HashMap<>();
         

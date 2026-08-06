@@ -56,6 +56,7 @@ const KEYS = {
   beneficiaryNumberFormat: 'BENEFICIARY_NUMBER_FORMAT',
   beneficiaryNumberPrefix: 'BENEFICIARY_NUMBER_PREFIX',
   beneficiaryNumberDigits: 'BENEFICIARY_NUMBER_DIGITS',
+  providerUserEmailDomain: 'PROVIDER_USER_EMAIL_DOMAIN',
   eligibilityStrictMode: 'ELIGIBILITY_STRICT_MODE',
   waitingPeriodDaysDefault: 'WAITING_PERIOD_DAYS_DEFAULT',
   eligibilityGracePeriodDays: 'ELIGIBILITY_GRACE_PERIOD_DAYS',
@@ -209,6 +210,7 @@ const SystemSettingsPage = () => {
     beneficiaryNumberFormat: '[PRO]-[COMP]-[YEAR]-[EMP_NO][REL_SUFFIX]',
     beneficiaryNumberPrefix: 'TD',
     beneficiaryNumberDigits: 8,
+    providerUserEmailDomain: 'tpa.local',
     eligibilityStrictMode: true,
     waitingPeriodDaysDefault: 0,
     eligibilityGracePeriodDays: 0
@@ -281,6 +283,7 @@ const SystemSettingsPage = () => {
         beneficiaryNumberFormat: byKey.get(KEYS.beneficiaryNumberFormat) || '[PRO]-[COMP]-[YEAR]-[EMP_NO][REL_SUFFIX]',
         beneficiaryNumberPrefix: byKey.get(KEYS.beneficiaryNumberPrefix) || 'TD',
         beneficiaryNumberDigits: toInt(byKey.get(KEYS.beneficiaryNumberDigits), 8),
+        providerUserEmailDomain: byKey.get(KEYS.providerUserEmailDomain) || 'tpa.local',
         eligibilityStrictMode: toBool(byKey.get(KEYS.eligibilityStrictMode), true),
         waitingPeriodDaysDefault: toInt(byKey.get(KEYS.waitingPeriodDaysDefault), 0),
         eligibilityGracePeriodDays: toInt(byKey.get(KEYS.eligibilityGracePeriodDays), 0),
@@ -380,6 +383,7 @@ const SystemSettingsPage = () => {
         saveSettingIfExists(KEYS.beneficiaryNumberFormat, dataToSave.beneficiaryNumberFormat),
         saveSettingIfExists(KEYS.beneficiaryNumberPrefix, dataToSave.beneficiaryNumberPrefix),
         saveSettingIfExists(KEYS.beneficiaryNumberDigits, dataToSave.beneficiaryNumberDigits),
+        saveSettingIfExists(KEYS.providerUserEmailDomain, dataToSave.providerUserEmailDomain),
         saveSettingIfExists(KEYS.eligibilityStrictMode, dataToSave.eligibilityStrictMode),
         saveSettingIfExists(KEYS.waitingPeriodDaysDefault, dataToSave.waitingPeriodDaysDefault),
         saveSettingIfExists(KEYS.eligibilityGracePeriodDays, dataToSave.eligibilityGracePeriodDays),
@@ -791,6 +795,17 @@ const SystemSettingsPage = () => {
                               inputProps={{ min: 0, max: 24 }}
                               value={formData.claimBackdatedMonths}
                               onChange={(e) => setFormData((p) => ({ ...p, claimBackdatedMonths: Number(e.target.value) }))}
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, sm: 6 }}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              label="نطاق بريد مستخدمي المرافق"
+                              placeholder="tpa.local"
+                              helperText="النص الذي يُضاف بعد @ عند ترك بريد المرفق فارغاً في قالب الاستيراد"
+                              value={formData.providerUserEmailDomain}
+                              onChange={updateField('providerUserEmailDomain')}
                             />
                           </Grid>
                           <Grid size={{ xs: 12, sm: 8 }}>
