@@ -1000,7 +1000,7 @@ export default function ProvidersList() {
         open={isImportDialogOpen}
         onClose={() => setIsImportDialogOpen(false)}
         title="استيراد مقدمي الخدمات من إكسل"
-        templateFilename="Providers_Import_Template.xlsx"
+        templateFilename="قالب_استيراد_سجل_المرافق.xlsx"
         onDownloadTemplate={() => providersService.downloadImportTemplate()}
         onImport={async (file) => {
           const result = await providersService.importProvidersFromExcel(file);

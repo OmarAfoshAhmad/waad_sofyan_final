@@ -57,6 +57,19 @@ public class ProviderContractPricingExcelController {
     private final ProviderContractPricingExcelService importService;
     private final BulkPriceListImportService bulkImportService;
 
+    @GetMapping("/bulk-import/template")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT')")
+    @Operation(summary = "Download canonical multi-provider services and prices template")
+    public ResponseEntity<byte[]> downloadBulkImportTemplate() throws IOException {
+        byte[] content = bulkImportService.generateTemplate();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=Bulk_Provider_Services_Prices_Template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(content.length)
+                .body(content);
+    }
+
     /**
      * Download contract-specific Excel template for pricing import
      * 

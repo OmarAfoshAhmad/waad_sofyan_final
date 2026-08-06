@@ -17,12 +17,14 @@ import com.github.pjfanning.xlsx.StreamingReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
@@ -98,6 +100,66 @@ public class BulkPriceListImportService {
     }
 
     private final PlatformTransactionManager     transactionManager;
+
+    /** Generate the canonical multi-provider services and prices import template. */
+    public byte[] generateTemplate() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Sheet data = workbook.createSheet(PRIMARY_SHEET);
+            data.setRightToLeft(true);
+
+            String[] headers = {
+                    "المرفق", "المجلد", "الكود الأصلي", "اسم الخدمة عربي",
+                    "اسم الخدمة إنجليزي", "السعر", "التصنيف التأميني الرئيسي",
+                    "الاختصاص/البند التأميني", "كود CAT"
+            };
+            String[] example = {
+                    "مستشفى السلام", "مستشفى", "SRV-001", "كشف اختصاصي",
+                    "Specialist consultation", "50", "العيادات الخارجية",
+                    "الكشوفات الطبية", "CAT-DIAGNOSTIC"
+            };
+
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            Row header = data.createRow(0);
+            Row sample = data.createRow(1);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = header.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+                sample.createCell(i).setCellValue(example[i]);
+                data.setColumnWidth(i, Math.min(45, Math.max(16, headers[i].length() + 5)) * 256);
+            }
+            data.createFreezePane(0, 1);
+            data.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, headers.length - 1));
+
+            Sheet instructions = workbook.createSheet("تعليمات");
+            instructions.setRightToLeft(true);
+            String[] notes = {
+                    "تعليمات استيراد الخدمات والأسعار الجماعي",
+                    "• لا تغيّر أسماء الأعمدة أو صف العناوين.",
+                    "• المرفق واسم خدمة واحد على الأقل مطلوبان في كل صف.",
+                    "• الكود الأصلي يجب أن يكون ثابتًا وفريدًا داخل المرفق؛ يعاد استخدامه لتحديث الخدمة.",
+                    "• السعر رقم بالدينار الليبي دون نص العملة.",
+                    "• كود CAT هو كود التصنيف الطبي المعتمد في النظام، مثل CAT-LAB.",
+                    "• المجلد يساعد النظام على استنتاج نوع المرفق عند إنشائه تلقائيًا.",
+                    "• الصف الثاني مثال توضيحي؛ احذفه قبل تعبئة البيانات الحقيقية.",
+                    "• الاستيراد يطابق المرفق بالاسم؛ وحّد الاسم تمامًا مع سجل المرافق لتجنب إنشاء مرفق مكرر."
+            };
+            for (int i = 0; i < notes.length; i++) instructions.createRow(i).createCell(0).setCellValue(notes[i]);
+            instructions.setColumnWidth(0, 110 * 256);
+
+            workbook.setActiveSheet(0);
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // PUBLIC API
@@ -595,8 +657,9 @@ public class BulkPriceListImportService {
             if (v.equals(KW_PROVIDER.toLowerCase()) || v.contains("اسم المرفق"))         cols.put("provider", i);
             else if (v.equals(KW_FOLDER.toLowerCase()))                                    cols.put("folder", i);
             else if (v.equals(KW_CODE.toLowerCase()) || v.equals("service_code / الكود") || (v.contains("الكود") && !v.contains("المرفق")))  cols.put("code", i);
-            else if (v.equals(KW_NAME_AR.toLowerCase()) || v.contains("اسم الخدمة"))       cols.put("nameAr", i);
             else if (v.equals(KW_NAME_EN.toLowerCase()))                                   cols.put("nameEn", i);
+            else if (v.equals(KW_NAME_AR.toLowerCase()) ||
+                    (v.contains("اسم الخدمة") && !v.contains("إنجليزي") && !v.contains("انجليزي"))) cols.put("nameAr", i);
             else if (v.equals(KW_PRICE.toLowerCase()) || v.contains("سعر العقد"))          cols.put("price", i);
             else if (v.equals(KW_MAIN_CAT.toLowerCase()) || v.contains("التصنيف الرئيسي")) cols.put("mainCat", i);
             else if (v.contains("البند") || v.contains("الاختصاص") || v.contains("التصنيف الفرعي")) cols.put("subCat", i);

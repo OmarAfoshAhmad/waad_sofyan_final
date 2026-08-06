@@ -38,8 +38,9 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CloseIcon from '@mui/icons-material/Close';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
+import DownloadIcon from '@mui/icons-material/Download';
 
-import { bulkImportPriceList } from 'services/api/provider-contracts.service';
+import { bulkImportPriceList, downloadBulkPriceListTemplate } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +140,21 @@ const BulkPriceListImportDialog = ({ open, onClose, onImportComplete }) => {
   const [uploadPct, setUploadPct] = useState(0);
   const [result, setResult]       = useState(null);
   const [error, setError]         = useState(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    setTemplateLoading(true);
+    setError(null);
+    try {
+      await downloadBulkPriceListTemplate();
+    } catch (err) {
+      const message = err?.response?.data?.message || err?.message || 'فشل تنزيل القالب';
+      setError(message);
+      enqueueSnackbar(message, { variant: 'error' });
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
 
   const handleClose = useCallback(() => {
     if (loading) return;
@@ -254,6 +270,21 @@ const BulkPriceListImportDialog = ({ open, onClose, onImportComplete }) => {
         {/* ── Upload zone ── */}
         {!result && (
           <>
+            <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700}>الخطوة 1: تنزيل القالب المعتمد</Typography>
+                <Typography variant="caption" color="text.secondary">استخدم القالب لضمان مطابقة أسماء الأعمدة والتصنيفات.</Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                startIcon={templateLoading ? <CircularProgress size={16} /> : <DownloadIcon />}
+                onClick={handleDownloadTemplate}
+                disabled={loading || templateLoading}
+              >
+                تنزيل قالب الخدمات والأسعار
+              </Button>
+            </Stack>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>الخطوة 2: رفع الملف المعبّأ</Typography>
             <Box
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}

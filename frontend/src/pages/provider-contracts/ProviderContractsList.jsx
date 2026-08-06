@@ -54,8 +54,7 @@ import {
   deleteProviderContract,
   bulkUpdateProviderContracts,
   bulkDeleteProviderContracts,
-  CONTRACT_STATUS_CONFIG,
-  PRICING_MODEL_CONFIG
+  CONTRACT_STATUS_CONFIG
 } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
 import BulkPriceListImportDialog from './components/BulkPriceListImportDialog';
@@ -64,6 +63,16 @@ import BulkEditContractsDialog from './components/BulkEditContractsDialog';
 
 const QUERY_KEY = 'provider-contracts';
 const MODULE_NAME = 'provider-contracts';
+
+const HEADER_ACTION_BUTTON_SX = {
+  height: 36,
+  minHeight: 36,
+  px: 2,
+  whiteSpace: 'nowrap',
+  fontWeight: 700,
+  flexShrink: 0,
+  '& .MuiButton-startIcon svg': { fontSize: 18 }
+};
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-';
@@ -341,12 +350,6 @@ const ProviderContractsList = () => {
         sortable: false
       },
       {
-        id: 'pricingModel',
-        label: 'نموذج التسعير',
-        minWidth: '9.375rem',
-        sortable: false
-      },
-      {
         id: 'discountPercent',
         label: 'نسبة الخصم',
         minWidth: '7.5rem',
@@ -442,14 +445,6 @@ const ProviderContractsList = () => {
         case 'status':
           const config = CONTRACT_STATUS_CONFIG[contract.status] || { label: contract.status, color: 'default' };
           return <Chip label={config.label} color={config.color} size="small" />;
-
-        case 'pricingModel':
-          const modelConfig = PRICING_MODEL_CONFIG[contract.pricingModel] || { label: contract.pricingModel };
-          return (
-            <Typography variant="body2" color="text.secondary">
-              {modelConfig.label || '-'}
-            </Typography>
-          );
 
         case 'discountPercent':
           return contract.discountPercent !== null && contract.discountPercent !== undefined ? (
@@ -558,7 +553,13 @@ const ProviderContractsList = () => {
           icon={<DescriptionIcon />}
           breadcrumbs={[{ label: 'الرئيسية', href: '/dashboard' }, { label: 'عقود مقدمي الخدمة' }]}
           actions={
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="nowrap"
+              sx={{ overflowX: 'auto', maxWidth: '100%', pb: 0.25, '& > *': { flexShrink: 0 } }}
+            >
               {selectedIds.length > 0 && (
                 <Button
                   variant="contained"
@@ -566,7 +567,7 @@ const ProviderContractsList = () => {
                   startIcon={<EditIcon />}
                   size="small"
                   onClick={() => setBulkEditOpen(true)}
-                  sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+                  sx={HEADER_ACTION_BUTTON_SX}
                 >
                   تعديل جماعي ({selectedIds.length})
                 </Button>
@@ -578,7 +579,7 @@ const ProviderContractsList = () => {
                   startIcon={<DeleteIcon />}
                   size="small"
                   onClick={handleBulkDelete}
-                  sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+                  sx={HEADER_ACTION_BUTTON_SX}
                 >
                   حذف جماعي ({selectedIds.length})
                 </Button>
@@ -589,7 +590,7 @@ const ProviderContractsList = () => {
                 startIcon={<FileUploadIcon />}
                 size="small"
                 onClick={() => setContractImportOpen(true)}
-                sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+                sx={HEADER_ACTION_BUTTON_SX}
               >
                 استيراد عقود جديدة
               </Button>
@@ -599,12 +600,18 @@ const ProviderContractsList = () => {
                 startIcon={<FileUploadIcon />}
                 size="small"
                 onClick={() => setBulkImportOpen(true)}
-                sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
+                sx={HEADER_ACTION_BUTTON_SX}
               >
                 استيراد قوائم أسعار
               </Button>
               <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
-              <Button variant="contained" startIcon={<DescriptionIcon />} size="small" onClick={handleNavigateAdd}>
+              <Button
+                variant="contained"
+                startIcon={<DescriptionIcon />}
+                size="small"
+                onClick={handleNavigateAdd}
+                sx={HEADER_ACTION_BUTTON_SX}
+              >
                 إنشاء عقد جديد
               </Button>
             </Stack>
@@ -614,7 +621,7 @@ const ProviderContractsList = () => {
 
         <MainCard sx={{ mb: 1, flexShrink: 0 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField
                 fullWidth
                 size="small"

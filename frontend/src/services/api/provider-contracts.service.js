@@ -781,6 +781,18 @@ export const bulkImportPriceList = async (file, onUploadProgress) => {
   return unwrap(response);
 };
 
+export const downloadBulkPriceListTemplate = async () => {
+  const response = await axiosClient.get(`${BASE_URL}/bulk-import/template`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', 'قالب_استيراد_الخدمات_والأسعار_الجماعي.xlsx');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // BULK IMPORT — New Provider Contracts (template + two-stage validation)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -884,6 +896,7 @@ const providerContractsService = {
   runRawCoverageSimulation,
   downloadSimulationReport,
   bulkImportPriceList,
+  downloadBulkPriceListTemplate,
   getContractCategoriesSummary,
   bulkUpdatePricingCategories,
   exportPricingToExcel
