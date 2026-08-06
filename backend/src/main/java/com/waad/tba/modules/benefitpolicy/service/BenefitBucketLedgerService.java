@@ -35,6 +35,7 @@ public class BenefitBucketLedgerService {
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitLimitBucketRepository bucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
+    private final BenefitBucketUsageService usageService;
 
     /**
      * One-time operational repair for an already approved legacy claim.
@@ -186,10 +187,10 @@ public class BenefitBucketLedgerService {
     private void validateAvailableBalance(BenefitLimitBucket bucket, Long memberId, LocalDate serviceDate,
                                           Period period, BigDecimal consumedAmount, int consumedTimes,
                                           boolean validateDay) {
-        BigDecimal usedAmount = consumptionRepository.sumCommittedAmount(memberId, bucket.getId(),
+        BenefitBucketUsageService.UsageTotals usage = usageService.totals(memberId, bucket.getId(),
                 period.start(), period.end(), null);
-        Integer usedTimes = consumptionRepository.sumCommittedTimes(memberId, bucket.getId(),
-                period.start(), period.end(), null);
+        BigDecimal usedAmount = usage.amount();
+        Integer usedTimes = usage.times();
 
         if (bucket.getAmountLimit() != null
                 && usedAmount.add(consumedAmount).compareTo(bucket.getAmountLimit()) > 0) {
@@ -203,8 +204,7 @@ public class BenefitBucketLedgerService {
         }
         if (validateDay && bucket.getDaysLimit() != null
                 && !consumptionRepository.existsCommittedForServiceDay(memberId, bucket.getId(), serviceDate, null)) {
-            long usedDays = consumptionRepository.countCommittedServiceDays(memberId, bucket.getId(),
-                    period.start(), period.end(), null);
+            long usedDays = usage.days();
             if (usedDays + 1 > bucket.getDaysLimit()) {
                 throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز حد الأيام للوعاء «"
                         + bucket.getNameAr() + "». أعد احتساب المطالبة ثم حاول مجددًا.");
@@ -233,4 +233,3 @@ public class BenefitBucketLedgerService {
 
     private record Period(LocalDate start, LocalDate end) {}
 }
-

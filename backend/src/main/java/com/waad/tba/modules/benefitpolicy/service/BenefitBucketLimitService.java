@@ -20,6 +20,7 @@ import java.util.*;
 public class BenefitBucketLimitService {
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
+    private final BenefitBucketUsageService usageService;
     private final BenefitPolicyRuleRepository policyRuleRepository;
     private final ClaimRepository claimRepository;
 
@@ -48,12 +49,11 @@ public class BenefitBucketLimitService {
             if (!bucket.isActive() || (bucket.getContextType() != EncounterType.ANY
                     && bucket.getContextType() != encounterType)) continue;
             Period period = period(bucket, date);
-            BigDecimal usedAmount = consumptionRepository.sumCommittedAmount(memberId, bucket.getId(),
+            BenefitBucketUsageService.UsageTotals usage = usageService.totals(memberId, bucket.getId(),
                     period.start(), period.end(), excludeClaimId);
-            Integer usedTimes = consumptionRepository.sumCommittedTimes(memberId, bucket.getId(),
-                    period.start(), period.end(), excludeClaimId);
-            long usedDays = consumptionRepository.countCommittedServiceDays(memberId, bucket.getId(),
-                    period.start(), period.end(), excludeClaimId);
+            BigDecimal usedAmount = usage.amount();
+            Integer usedTimes = usage.times();
+            long usedDays = usage.days();
             boolean serviceDayAlreadyUsed = consumptionRepository.existsCommittedForServiceDay(
                     memberId, bucket.getId(), date, excludeClaimId);
             result.add(new LimitSnapshot(bucket.getId(), bucket.getNameAr(), bucket.getAmountLimit(),
@@ -105,4 +105,3 @@ public class BenefitBucketLimitService {
     }
     private record Period(LocalDate start, LocalDate end) {}
 }
-

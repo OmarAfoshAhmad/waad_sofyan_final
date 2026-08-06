@@ -33,6 +33,7 @@ class BenefitBucketLedgerServiceTest {
     @Mock BenefitRuleBucketRepository ruleBucketRepository;
     @Mock BenefitLimitBucketRepository bucketRepository;
     @Mock BenefitBucketConsumptionRepository consumptionRepository;
+    @Mock BenefitBucketAdjustmentRepository adjustmentRepository;
 
     private BenefitBucketLedgerService service;
     private BenefitPolicy policy;
@@ -42,8 +43,15 @@ class BenefitBucketLedgerServiceTest {
 
     @BeforeEach
     void setUp() {
+        BenefitBucketUsageService usageService = new BenefitBucketUsageService(
+                consumptionRepository, adjustmentRepository);
         service = new BenefitBucketLedgerService(
-                claimRepository, benefitPolicyRepository, ruleBucketRepository, bucketRepository, consumptionRepository);
+                claimRepository, benefitPolicyRepository, ruleBucketRepository, bucketRepository,
+                consumptionRepository, usageService);
+
+        lenient().when(adjustmentRepository.sumActive(anyLong(), anyLong(), any(), any()))
+                .thenReturn(new BenefitBucketAdjustmentRepository.UsageTotals(
+                        BigDecimal.ZERO, 0L, 0L));
 
         policy = BenefitPolicy.builder()
                 .id(1L)
@@ -313,4 +321,3 @@ class BenefitBucketLedgerServiceTest {
         assertEquals(LocalDate.of(2031, 3, 17), captor.getValue().getPeriodEnd());
     }
 }
-
