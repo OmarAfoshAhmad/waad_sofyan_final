@@ -3,7 +3,6 @@ package com.waad.tba.modules.benefitpolicy.controller;
 import static com.waad.tba.modules.benefitpolicy.dto.BenefitOpeningBalanceImportDto.*;
 
 import org.springframework.http.MediaType;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,16 +19,6 @@ import lombok.RequiredArgsConstructor;
 @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
 public class BenefitOpeningBalanceImportController {
     private final BenefitOpeningBalanceImportService service;
-
-    @GetMapping("/template")
-    public ResponseEntity<byte[]> template(@RequestParam("policyId") Long policyId) throws Exception {
-        byte[] content = service.generateTemplate(policyId);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Benefit_Opening_Balances.xlsx")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(content.length)
-                .body(content);
-    }
 
     @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<Preview>> preview(@RequestParam("file") MultipartFile file,

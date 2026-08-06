@@ -19,12 +19,6 @@ public class BenefitBucketUsageService {
     @Transactional(readOnly = true)
     public UsageTotals totals(Long memberId, Long bucketId, LocalDate periodStart,
                               LocalDate periodEnd, Long excludeClaimId) {
-        return breakdown(memberId, bucketId, periodStart, periodEnd, excludeClaimId).totals();
-    }
-
-    @Transactional(readOnly = true)
-    public UsageBreakdown breakdown(Long memberId, Long bucketId, LocalDate periodStart,
-                                    LocalDate periodEnd, Long excludeClaimId) {
         BigDecimal claimAmount = consumptionRepository.sumCommittedAmount(
                 memberId, bucketId, periodStart, periodEnd, excludeClaimId);
         Integer claimTimes = consumptionRepository.sumCommittedTimes(
@@ -33,11 +27,10 @@ public class BenefitBucketUsageService {
                 memberId, bucketId, periodStart, periodEnd, excludeClaimId);
         BenefitBucketAdjustmentRepository.UsageTotals opening = adjustmentRepository.sumActive(
                 memberId, bucketId, periodStart, periodEnd);
-        UsageTotals claims = new UsageTotals(safe(claimAmount), safe(claimTimes), safe(claimDays));
-        UsageTotals adjustments = new UsageTotals(opening.amount(), Math.toIntExact(opening.times()), opening.days());
-        return new UsageBreakdown(claims, adjustments, new UsageTotals(
-                claims.amount().add(adjustments.amount()),
-                claims.times() + adjustments.times(), claims.days() + adjustments.days()));
+        return new UsageTotals(
+                safe(claimAmount).add(opening.amount()),
+                safe(claimTimes) + Math.toIntExact(opening.times()),
+                safe(claimDays) + opening.days());
     }
 
     private BigDecimal safe(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
@@ -45,5 +38,4 @@ public class BenefitBucketUsageService {
     private long safe(Long value) { return value == null ? 0L : value; }
 
     public record UsageTotals(BigDecimal amount, Integer times, Long days) {}
-    public record UsageBreakdown(UsageTotals claims, UsageTotals adjustments, UsageTotals totals) {}
 }
