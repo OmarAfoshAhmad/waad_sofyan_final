@@ -15,7 +15,6 @@ import {
   Stack,
   Tooltip,
   Typography,
-  Grid,
   TextField,
   MenuItem,
   InputAdornment,
@@ -65,13 +64,9 @@ const QUERY_KEY = 'provider-contracts';
 const MODULE_NAME = 'provider-contracts';
 
 const HEADER_ACTION_BUTTON_SX = {
-  height: 36,
-  minHeight: 36,
-  px: 2,
+  minWidth: '9.6875rem',
   whiteSpace: 'nowrap',
-  fontWeight: 700,
-  flexShrink: 0,
-  '& .MuiButton-startIcon svg': { fontSize: 18 }
+  flexShrink: 0
 };
 
 const formatDate = (dateStr) => {
@@ -358,7 +353,7 @@ const ProviderContractsList = () => {
       },
       {
         id: 'discountTiming',
-        label: 'آلية الخصم',
+        label: 'خصم المرفوض',
         minWidth: '7.5rem',
         align: 'center',
         sortable: false
@@ -456,19 +451,16 @@ const ProviderContractsList = () => {
         case 'discountTiming':
           const isBefore = contract.discountBeforeRejection !== false; // Default to true (Before)
           return (
-            <Typography
-              variant="caption"
+            <Chip
+              label={isBefore ? 'قبل' : 'بعد'}
+              size="small"
               sx={{
-                px: 1,
-                py: 0.5,
-                borderRadius: 1,
                 bgcolor: isBefore ? 'rgba(76, 175, 80, 0.08)' : 'rgba(244, 67, 54, 0.08)',
                 color: isBefore ? 'success.main' : 'error.main',
-                fontWeight: 600
+                fontWeight: 700,
+                minWidth: 48
               }}
-            >
-              {isBefore ? 'قبل المرفوض' : 'بعد المرفوض'}
-            </Typography>
+            />
           );
 
         case 'pricingItemsCount':
@@ -558,14 +550,18 @@ const ProviderContractsList = () => {
               spacing={1}
               alignItems="center"
               flexWrap="nowrap"
-              sx={{ overflowX: 'auto', maxWidth: '100%', pb: 0.25, '& > *': { flexShrink: 0 } }}
+              sx={{
+                overflowX: 'auto',
+                maxWidth: '100%',
+                pb: 0.25,
+                '& > *': { flexShrink: 0 }
+              }}
             >
               {selectedIds.length > 0 && (
                 <Button
                   variant="contained"
                   color="primary"
                   startIcon={<EditIcon />}
-                  size="small"
                   onClick={() => setBulkEditOpen(true)}
                   sx={HEADER_ACTION_BUTTON_SX}
                 >
@@ -577,7 +573,6 @@ const ProviderContractsList = () => {
                   variant="contained"
                   color="error"
                   startIcon={<DeleteIcon />}
-                  size="small"
                   onClick={handleBulkDelete}
                   sx={HEADER_ACTION_BUTTON_SX}
                 >
@@ -588,7 +583,6 @@ const ProviderContractsList = () => {
                 variant="outlined"
                 color="secondary"
                 startIcon={<FileUploadIcon />}
-                size="small"
                 onClick={() => setContractImportOpen(true)}
                 sx={HEADER_ACTION_BUTTON_SX}
               >
@@ -598,7 +592,6 @@ const ProviderContractsList = () => {
                 variant="contained"
                 color="secondary"
                 startIcon={<FileUploadIcon />}
-                size="small"
                 onClick={() => setBulkImportOpen(true)}
                 sx={HEADER_ACTION_BUTTON_SX}
               >
@@ -608,7 +601,6 @@ const ProviderContractsList = () => {
               <Button
                 variant="contained"
                 startIcon={<DescriptionIcon />}
-                size="small"
                 onClick={handleNavigateAdd}
                 sx={HEADER_ACTION_BUTTON_SX}
               >
@@ -620,8 +612,8 @@ const ProviderContractsList = () => {
         />
 
         <MainCard sx={{ mb: 1, flexShrink: 0 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }} sx={{ width: '100%' }}>
+            <Box sx={{ flexGrow: 1, minWidth: { md: '12.5rem' } }}>
               <TextField
                 fullWidth
                 size="small"
@@ -633,11 +625,12 @@ const ProviderContractsList = () => {
                     <InputAdornment position="start">
                       <SearchIcon fontSize="small" />
                     </InputAdornment>
-                  )
+                  ),
+                  sx: { height: '2.5rem' }
                 }}
               />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            </Box>
+            <Box sx={{ minWidth: { md: '10rem' } }}>
               <TextField
                 select
                 fullWidth
@@ -645,6 +638,8 @@ const ProviderContractsList = () => {
                 label="الحالة"
                 value={tableState.columnFilters.status || ''}
                 onChange={(e) => tableState.setFilter('status', e.target.value)}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
               >
                 <MenuItem value="">الكل</MenuItem>
                 {Object.entries(CONTRACT_STATUS_CONFIG).map(([key, config]) => (
@@ -653,8 +648,8 @@ const ProviderContractsList = () => {
                   </MenuItem>
                 ))}
               </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            </Box>
+            <Box sx={{ minWidth: { md: '10rem' } }}>
               <TextField
                 select
                 fullWidth
@@ -662,27 +657,31 @@ const ProviderContractsList = () => {
                 label="نطاق العقد"
                 value={tableState.columnFilters.pricingScope || ''}
                 onChange={(e) => tableState.setFilter('pricingScope', e.target.value)}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
               >
                 <MenuItem value="">الكل</MenuItem>
                 <MenuItem value="EMPLOYER_SPECIFIC">خاص</MenuItem>
                 <MenuItem value="GLOBAL">الكل</MenuItem>
               </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            </Box>
+            <Box sx={{ minWidth: { md: '10rem' } }}>
               <TextField
                 select
                 fullWidth
                 size="small"
-                label="آلية الخصم"
+                label="خصم المرفوض"
                 value={tableState.columnFilters.discountBeforeRejection || ''}
                 onChange={(e) => tableState.setFilter('discountBeforeRejection', e.target.value)}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
               >
                 <MenuItem value="">الكل</MenuItem>
-                <MenuItem value="true">قبل المرفوض</MenuItem>
-                <MenuItem value="false">بعد المرفوض</MenuItem>
+                <MenuItem value="true">قبل</MenuItem>
+                <MenuItem value="false">بعد</MenuItem>
               </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            </Box>
+            <Box sx={{ minWidth: { md: '9rem' } }}>
               <TextField
                 type="number"
                 fullWidth
@@ -691,9 +690,11 @@ const ProviderContractsList = () => {
                 placeholder="مثال: 10"
                 value={tableState.columnFilters.discountPercentage || ''}
                 onChange={(e) => tableState.setFilter('discountPercentage', e.target.value)}
+                InputProps={{ sx: { height: '2.5rem' } }}
+                InputLabelProps={{ shrink: true }}
               />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+            </Box>
+            <Box sx={{ minWidth: { md: '7.5rem' } }}>
               <Button
                 variant="outlined"
                 color="secondary"
@@ -706,12 +707,12 @@ const ProviderContractsList = () => {
                   tableState.setFilter('discountPercentage', '');
                 }}
                 fullWidth
-                sx={{ height: '40px' }}
+                sx={{ height: '2.5rem' }}
               >
                 إعادة ضبط
               </Button>
-            </Grid>
-          </Grid>
+            </Box>
+          </Stack>
         </MainCard>
 
         <TableErrorBoundary>
@@ -730,7 +731,8 @@ const ProviderContractsList = () => {
             enableRowSelection={true}
             selectedRowIds={selectedIds}
             onRowSelectionChange={setSelectedIds}
-            tableContainerSx={{ flexGrow: 1, minHeight: 0 }}
+            sx={{ flex: 1, minHeight: 0 }}
+            tableContainerSx={{ flex: 1, minHeight: 0 }}
           />
         </TableErrorBoundary>
 

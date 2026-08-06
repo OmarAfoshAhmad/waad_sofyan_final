@@ -772,12 +772,23 @@ export default function ProvidersList() {
           icon={<LocalHospitalIcon />}
           breadcrumbs={[{ label: 'الرئيسية', path: '/' }, { label: 'مقدمي الخدمات' }]}
           actions={
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-              <Button variant="outlined" color="secondary" startIcon={<FileUploadIcon />} onClick={() => setIsImportDialogOpen(true)}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" sx={{ overflowX: 'auto', maxWidth: '100%' }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={<FileUploadIcon />}
+                onClick={() => setIsImportDialogOpen(true)}
+                sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
                 استيراد من إكسل
               </Button>
               <SoftDeleteToggle showDeleted={showDeleted} onToggle={() => setShowDeleted((v) => !v)} />
-              <Button variant="contained" startIcon={<AddIcon />} onClick={handleNavigateAdd}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleNavigateAdd}
+                sx={{ minWidth: '9.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
                 إضافة مقدم خدمة
               </Button>
             </Stack>
@@ -800,12 +811,13 @@ export default function ProvidersList() {
                   <InputAdornment position="start">
                     <SearchIcon fontSize="small" />
                   </InputAdornment>
-                )
+                ),
+                sx: { height: '2.5rem' }
               }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: '2.5rem' } }}>
               <InputLabel id="provider-type-label">نوع المرفق</InputLabel>
               <Select
                 labelId="provider-type-label"
@@ -823,7 +835,7 @@ export default function ProvidersList() {
             </FormControl>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: '2.5rem' } }}>
               <InputLabel id="provider-network-label">الشبكة</InputLabel>
               <Select
                 labelId="provider-network-label"
@@ -838,7 +850,7 @@ export default function ProvidersList() {
             </FormControl>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: '2.5rem' } }}>
               <InputLabel id="provider-status-label">الحالة</InputLabel>
               <Select
                 labelId="provider-status-label"
@@ -865,7 +877,7 @@ export default function ProvidersList() {
                 tableState.setFilter('status', '');
               }}
               fullWidth
-              sx={{ height: '40px' }}
+              sx={{ height: '2.5rem' }}
             >
               إعادة ضبط
             </Button>
