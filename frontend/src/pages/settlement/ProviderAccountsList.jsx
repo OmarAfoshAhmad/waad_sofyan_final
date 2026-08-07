@@ -16,7 +16,8 @@ import {
   TextField,
   MenuItem,
   Grid,
-  CircularProgress
+  CircularProgress,
+  Divider
 } from '@mui/material';
 import {
   ReceiptLong as ReceiptIcon,
@@ -26,7 +27,10 @@ import {
   Print as PrintIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  InfoOutlined as InfoIcon,
+  CheckCircle as CheckCircleIcon,
+  WarningAmber as WarningIcon
 } from '@mui/icons-material';
 
 // Project Components
@@ -41,7 +45,6 @@ import useTableState from 'hooks/useTableState';
 // Services
 import { claimsService } from 'services/api/claims.service';
 import { providersService } from 'services/api';
-import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
 import { getEmployers } from 'services/api/employers.service';
 
 // Utils
@@ -68,8 +71,6 @@ const STATUS_COLORS = {
   SETTLED: 'primary'
 };
 
-const COMPANY_SHARE_PERCENT = 10;
-
 const formatCurrency = (value) => {
   if (value === null || value === undefined || isNaN(value)) return formatCurrencyGlobal(0);
   return formatCurrencyGlobal(value);
@@ -86,19 +87,59 @@ const getRefusedAmount = (row) => {
   return Number.isFinite(refused) && refused > 0 ? refused : 0;
 };
 
-const getPayableAmount = (row) => {
-  // إذا كان approvedAmount موجوداً صراحةً (حتى لو صفر = مرفوضة بالكامل) نستخدمه
-  if (row?.approvedAmount !== null && row?.approvedAmount !== undefined) {
-    const approved = Number(row.approvedAmount);
-    return Number.isFinite(approved) && approved >= 0 ? approved : 0;
+// نسبة خصم العقد كما هي محفوظة على المطالبة (لقطة عند الإنشاء) — بلا أي جلب إضافي للعقد.
+const getDiscountPercent = (row) => {
+  const value = Number(row?.providerDiscountPercent);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+const getDiscountTiming = (row) => {
+  if (row?.discountBeforeRejection === true) {
+    return { label: 'قبل المرفوض', shortLabel: 'قبل', tooltip: 'يُطبَّق الخصم قبل احتساب المرفوض', known: true };
   }
-  // فولباك: المبلغ المطلوب بعد حذف المرفوض
-  const requested = Number(row?.requestedAmount);
-  if (Number.isFinite(requested) && requested > 0) {
-    const payableAfterRefused = requested - getRefusedAmount(row);
-    return payableAfterRefused > 0 ? payableAfterRefused : 0;
+  if (row?.discountBeforeRejection === false) {
+    return { label: 'بعد المرفوض', shortLabel: 'بعد', tooltip: 'يُطبَّق الخصم بعد احتساب المرفوض', known: true };
   }
-  return 0;
+  return { label: 'غير محدد', shortLabel: 'غير محدد', tooltip: 'توقيت الخصم غير محفوظ في هذه المطالبة القديمة', known: false };
+};
+
+// حصة الشركة (ربح الخصم التعاقدي) = Claim.companyDiscountAmount المحفوظة فعلياً،
+// وليست 10% ثابتة ولا أي نسبة مُعاد اشتقاقها. هذا هو نفس الحقل الذي يعتمده
+// "تقرير أرباح الخصومات" و"الخلاصة المالية المجمعة".
+const getCompanyDiscountAmount = (row) => {
+  const value = Number(row?.companyDiscountAmount);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
+// نصيب المرفق الصافي = Claim.netProviderAmount (يساوي approvedAmount دائماً —
+// الخصم والمرفوض ونصيب المستفيد مطروحون منه بالفعل في الباك-إند، فلا يُطرح هنا
+// أي نسبة مرة أخرى). نفس فولباك الباك-إند نفسه: COALESCE(netProviderAmount, approvedAmount).
+const getFacilityShareAmount = (row) => {
+  const net = row?.netProviderAmount !== null && row?.netProviderAmount !== undefined ? row.netProviderAmount : row?.approvedAmount;
+  const value = Number(net);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+};
+
+// حصة التأمين قبل خصم العقد = حصة الشركة + نصيب المرفق.
+// مُشتقة بالجمع فقط من قيمتين محفوظتين فعلياً على المطالبة — لا افتراض ولا نسبة
+// مخترعة. بحكم الثابت المالي الذي يفرضه الباك-إند (Claim.validateFinancialIdentity)
+// هذا يساوي دائماً: requestedAmount − patientCoPay − refusedAmount.
+const getPayableAmount = (row) => getCompanyDiscountAmount(row) + getFacilityShareAmount(row);
+
+// تحقق مرئي من توازن اللقطة المالية للمطالبة — يعكس بالضبط الثابت الذي يفرضه
+// Claim.validateFinancialIdentity() في الباك-إند (بنفس هامش التسامح 0.05)، لكشف
+// أي مطالبة قديمة/شاذة سُجّلت قبل تفعيل هذا التحقق بدل الثقة الصامتة بالأرقام.
+const getBalanceCheck = (row) => {
+  const rawValues = [row?.requestedAmount, row?.patientCoPay, row?.refusedAmount, row?.companyDiscountAmount];
+  const facilityRaw = row?.netProviderAmount ?? row?.approvedAmount;
+  const complete = rawValues.every((value) => value !== null && value !== undefined) && facilityRaw !== null && facilityRaw !== undefined;
+  const values = [...rawValues, facilityRaw].map(Number);
+  const valid = complete && values.every(Number.isFinite) && values.every((value) => value >= 0);
+  const [requested = 0, patient = 0, refused = 0, discount = 0, facility = 0] = values;
+  const requestedCents = Math.round(requested * 100);
+  const componentsCents = [patient, refused, discount, facility].reduce((sum, value) => sum + Math.round(value * 100), 0);
+  const diffCents = Math.abs(requestedCents - componentsCents);
+  return { balanced: valid && diffCents <= 5, complete, valid, diff: diffCents / 100 };
 };
 
 const sortFieldMap = {
@@ -224,68 +265,21 @@ export default function ProviderAccountsList() {
   const claims = claimsData?.items || claimsData?.content || [];
   const totalElements = claimsData?.total ?? claimsData?.totalElements ?? 0;
 
-  const providerIdsInPage = useMemo(() => {
-    const ids = claims.map((row) => Number(row.providerId)).filter((id) => Number.isFinite(id) && id > 0);
-    return [...new Set(ids)];
-  }, [claims]);
-
-  const { data: providerDiscountMap = {} } = useQuery({
-    queryKey: ['active-contract-discounts', providerIdsInPage],
-    enabled: providerIdsInPage.length > 0,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const pairs = await Promise.all(
-        providerIdsInPage.map(async (providerId) => {
-          try {
-            const contract = await getActiveContractByProvider(providerId);
-            const discount = Number(contract?.discountPercent);
-            return [providerId, Number.isFinite(discount) ? discount : 0];
-          } catch {
-            return [providerId, 0];
-          }
-        })
-      );
-
-      return Object.fromEntries(pairs);
-    }
-  });
-
-  const getDiscountPercent = (row) => {
-    const fromRow = Number(row?.providerDiscountPercent);
-    if (Number.isFinite(fromRow) && fromRow > 0) return fromRow;
-
-    const providerId = Number(row?.providerId);
-    if (!Number.isFinite(providerId)) return 0;
-
-    const fromContract = Number(providerDiscountMap[providerId]);
-    return Number.isFinite(fromContract) ? fromContract : 0;
-  };
-
-  const getFacilityShareAmount = (row) => {
-    const payable = getPayableAmount(row);
-    const discount = getDiscountPercent(row);
-    const facilityShare = payable - (payable * discount) / 100;
-    return facilityShare > 0 ? facilityShare : 0;
-  };
-
-  const getCompanyShareAmount = (row) => {
-    const payable = getPayableAmount(row);
-    return (payable * COMPANY_SHARE_PERCENT) / 100;
-  };
-
-  // الإجماليات: العدد من الـ pagination (دقيق لكل الفلاتر)، المبالغ من financial-summary API
+  // الإجماليات: العدد من الـ pagination (دقيق لكل الفلاتر)، المبالغ من financial-summary API.
+  // حصة الشركة ونصيب المرفق يُقرآن مباشرة من مجموعين محفوظين في الباك-إند
+  // (totalCompanyDiscountAmount / totalApprovedAmount) على نفس فلتر الحالة — بلا أي
+  // نسبة ثابتة أو اشتقاق في الواجهة.
   const totals = useMemo(() => {
     const s = summaryData || {};
-    const payable = Number(s.totalApprovedAmount) || 0;
-    const paid = Number(s.totalPaidAmount) || 0;
-    const companyShare = (payable * COMPANY_SHARE_PERCENT) / 100;
+    const companyShare = Number(s.totalCompanyDiscountAmount) || 0;
+    const facilityShare = Number(s.totalApprovedAmount) || 0;
     return {
       count: totalElements,
       gross: Number(s.totalClaimsAmount) || 0,
       refused: Number(s.totalRefusedAmount) || 0,
-      payable,
-      companyShare, // 10% من إجمالي المستحق = حصة الشركة
-      facilityShare: payable - companyShare // 90% من إجمالي المستحق = حصة المرفق
+      payable: companyShare + facilityShare,
+      companyShare,
+      facilityShare
     };
   }, [summaryData, totalElements]);
 
@@ -369,19 +363,24 @@ export default function ProviderAccountsList() {
       });
       const allClaims = allData?.items || allData?.content || [];
       if (!allClaims.length) return;
-      const exportRows = allClaims.map((item) => ({
-        'رقم المطالبة': item.claimNumber || `CLM-${item.id}`,
-        'الوثيقة (جهة العمل)': item.employerName || '',
-        'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
-        'مقدم الخدمة': item.providerName || '',
-        'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
-        'نسبة التخفيض (%)': Number(item.providerDiscountPercent) || 0,
-        'المبلغ المرفوض': getRefusedAmount(item),
-        'القيمة المستحقة': getPayableAmount(item),
-        'حصة الشركة (10%)': getCompanyShareAmount(item),
-        'نصيب المرفق': getFacilityShareAmount(item),
-        الحالة: STATUS_LABELS[item.status] || item.status || ''
-      }));
+      const exportRows = allClaims.map((item) => {
+        const balance = getBalanceCheck(item);
+        return {
+          'رقم المطالبة': item.claimNumber || `CLM-${item.id}`,
+          'الوثيقة (جهة العمل)': item.employerName || '',
+          'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
+          'مقدم الخدمة': item.providerName || '',
+          'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
+          'نسبة الخصم التعاقدي (%)': getDiscountPercent(item),
+          'آلية الخصم': getDiscountTiming(item).label,
+          'المبلغ المرفوض': getRefusedAmount(item),
+          'حصة التأمين قبل خصم العقد': getPayableAmount(item),
+          'خصم العقد (ربح الشركة)': getCompanyDiscountAmount(item),
+          'نصيب المرفق': getFacilityShareAmount(item),
+          الحالة: STATUS_LABELS[item.status] || item.status || '',
+          'مطابقة اللقطة المالية': balance.balanced ? 'متوازنة' : `⚠ فرق ${balance.diff.toFixed(2)} د.ل`
+        };
+      });
       exportToExcel(exportRows, `مطالبات_مقدمي_الخدمة_${dayjs().format('YYYY-MM-DD')}`);
     } catch (err) {
       console.error('فشل التصدير:', err);
@@ -396,7 +395,7 @@ export default function ProviderAccountsList() {
         const discount = getDiscountPercent(row);
         const payable = getPayableAmount(row);
         const facilityShare = getFacilityShareAmount(row);
-        const companyShare = getCompanyShareAmount(row);
+        const companyShare = getCompanyDiscountAmount(row);
         const status = STATUS_LABELS[row.status] || row.status || '';
         return `<tr>
         <td>${idx + 1}</td>
@@ -405,7 +404,7 @@ export default function ProviderAccountsList() {
         <td>${row.visitDate || row.serviceDate || '-'}</td>
         <td>${row.providerName || '-'}</td>
         <td>${formatCurrency(row.requestedAmount)}</td>
-        <td>${discount}%</td>
+        <td>${discount}% (${getDiscountTiming(row).label})</td>
         <td style="color:#cf1322">${formatCurrency(getRefusedAmount(row))}</td>
         <td><b>${formatCurrency(payable)}</b></td>
         <td style="color:#d46b08">${formatCurrency(companyShare)}</td>
@@ -442,7 +441,7 @@ export default function ProviderAccountsList() {
       <tr>
         <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
         <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة الخصم</th>
-        <th>المرفوض</th><th>المستحق</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
+        <th>المرفوض</th><th>حصة التأمين قبل خصم العقد</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
       </tr>
     </thead>
     <tbody>${printRows}</tbody>
@@ -512,12 +511,22 @@ export default function ProviderAccountsList() {
       },
       {
         accessorKey: 'providerDiscountPercent',
-        header: 'نسبة التخفيض',
-        minWidth: '7.5rem',
+        header: 'نسبة الخصم التعاقدي',
+        minWidth: '8.5rem',
         align: 'center',
         cell: ({ row }) => {
           const discount = getDiscountPercent(row.original);
-          return <Chip label={`${discount}%`} size="small" color={discount > 0 ? 'primary' : 'default'} variant="outlined" />;
+          const timing = getDiscountTiming(row.original);
+          return (
+            <Tooltip title={timing.tooltip}>
+              <Chip
+                label={`${discount}% (${timing.shortLabel})`}
+                size="small"
+                color={!timing.known ? 'warning' : discount > 0 ? 'primary' : 'default'}
+                variant="outlined"
+              />
+            </Tooltip>
+          );
         }
       },
       {
@@ -533,7 +542,7 @@ export default function ProviderAccountsList() {
       },
       {
         accessorKey: 'payableAmount',
-        header: 'القيمة المستحقة',
+        header: 'حصة التأمين قبل خصم العقد',
         minWidth: '8.75rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
@@ -545,7 +554,7 @@ export default function ProviderAccountsList() {
         align: 'center',
         cell: ({ row }) => (
           <Typography color="warning.main" fontWeight="bold">
-            {formatCurrency(getCompanyShareAmount(row.original))}
+            {formatCurrency(getCompanyDiscountAmount(row.original))}
           </Typography>
         )
       },
@@ -559,6 +568,31 @@ export default function ProviderAccountsList() {
             {formatCurrency(getFacilityShareAmount(row.original))}
           </Typography>
         )
+      },
+      {
+        accessorKey: 'balanceCheck',
+        header: 'مطابقة اللقطة',
+        minWidth: '6.25rem',
+        align: 'center',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const balance = getBalanceCheck(row.original);
+          return balance.balanced ? (
+            <Tooltip title="اللقطة المالية متوازنة (المطلوب = التحمل + المرفوض + خصم العقد + نصيب المرفق)">
+              <CheckCircleIcon fontSize="small" color="success" />
+            </Tooltip>
+          ) : (
+            <Tooltip
+              title={
+                !balance.complete
+                  ? 'اللقطة المالية غير مكتملة — توجد قيمة مالية قديمة غير محفوظة، راجع المطالبة قبل التسوية'
+                  : `تعارض في اللقطة المالية بمقدار ${formatCurrency(balance.diff)} — راجع المطالبة قبل التسوية`
+              }
+            >
+              <WarningIcon fontSize="small" color="warning" />
+            </Tooltip>
+          );
+        }
       },
       {
         accessorKey: 'status',
@@ -578,7 +612,7 @@ export default function ProviderAccountsList() {
         }
       }
     ],
-    [providerDiscountMap]
+    []
   );
 
   return (
@@ -623,26 +657,33 @@ export default function ProviderAccountsList() {
                 isSummaryLoading
               )}
               {renderSummaryCard(
-                'إجمالي المستحق',
+                'حصة التأمين قبل خصم العقد',
                 formatCurrency(totals.payable),
                 <PaymentsIcon fontSize="small" color="secondary" />,
                 'secondary.main',
                 isSummaryLoading
               )}
-              {renderSummaryCard(
-                'حصة الشركة',
-                formatCurrency(totals.companyShare),
-                <PaymentsIcon fontSize="small" color="warning" />,
-                'warning.main',
-                isSummaryLoading
-              )}
-              {renderSummaryCard(
-                'حصة المرفق',
-                formatCurrency(totals.facilityShare),
-                <PaymentsIcon fontSize="small" color="success" />,
-                'success.main',
-                isSummaryLoading
-              )}
+
+              {/* فاصل بصري: ما يسبق هذا الخط هو أرقام المطالبة الخام، وما يليه توزيع
+                  "حصة التأمين قبل خصم العقد" بين خصم الشركة وصافي المرفق */}
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderStyle: 'dashed' }} />
+
+              <Stack direction="row" spacing={1} sx={{ bgcolor: 'action.hover', borderRadius: 1, p: 0.5 }}>
+                {renderSummaryCard(
+                  'حصة الشركة',
+                  formatCurrency(totals.companyShare),
+                  <PaymentsIcon fontSize="small" color="warning" />,
+                  'warning.main',
+                  isSummaryLoading
+                )}
+                {renderSummaryCard(
+                  'حصة المرفق',
+                  formatCurrency(totals.facilityShare),
+                  <PaymentsIcon fontSize="small" color="success" />,
+                  'success.main',
+                  isSummaryLoading
+                )}
+              </Stack>
             </Box>
           }
         />
@@ -794,6 +835,35 @@ export default function ProviderAccountsList() {
             </Tooltip>
 
             <Box sx={{ flexGrow: 1 }} />
+
+            <Tooltip
+              title={
+                <Box sx={{ p: 0.5 }}>
+                  <Typography variant="caption" display="block" fontWeight={700}>
+                    أساس الحساب:
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    حصة التأمين قبل خصم العقد = خصم العقد + نصيب المرفق
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    خصم العقد = ربح وعد الفعلي المحفوظ على كل مطالبة (وليس نسبة ثابتة)
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    نصيب المرفق = صافي المستحق له بعد التحمل والمرفوض والخصم
+                  </Typography>
+                  <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                    عمود «مطابقة اللقطة» يقارن هذه الأرقام بالمبلغ الإجمالي للتحقق من عدم وجود تعارض.
+                  </Typography>
+                </Box>
+              }
+            >
+              <IconButton
+                color="default"
+                sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, width: '2.5rem', height: '2.5rem', flexShrink: 0 }}
+              >
+                <InfoIcon />
+              </IconButton>
+            </Tooltip>
 
             <Tooltip title="تحديث">
               <IconButton
