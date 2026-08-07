@@ -228,8 +228,10 @@ public class ProviderAccount {
      * explained by neither the payment documents nor the ledger. Such an account
      * cannot have its payments reversed (the reversal guard refuses to drive
      * totalPaid negative), so without an explicit, audited correction the
-     * operator would be stuck. Always paired with an ADJUSTMENT ledger entry by
-     * the calling service — the amount never moves silently.
+     * operator would be stuck. Always paired with a ProviderAccountReconciliationAudit
+     * record by the calling service — deliberately not an account_transactions
+     * entry, so the correction can never be summed into the ledger it was
+     * measured against.
      *
      * @param signedDelta positive raises totalPaid, negative lowers it
      */

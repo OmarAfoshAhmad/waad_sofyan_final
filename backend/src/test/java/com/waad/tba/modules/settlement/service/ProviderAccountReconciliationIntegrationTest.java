@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,10 +22,12 @@ import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.settlement.dto.ProviderReconciliationDto;
 import com.waad.tba.modules.settlement.dto.ProviderReconciliationDto.Finding;
+import com.waad.tba.modules.settlement.entity.AccountTransaction;
 import com.waad.tba.modules.settlement.entity.PaymentMethod;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.entity.ProviderPayment;
 import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
+import com.waad.tba.modules.settlement.repository.ProviderAccountReconciliationAuditRepository;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
 import com.waad.tba.modules.settlement.repository.ProviderPaymentRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -50,6 +53,8 @@ class ProviderAccountReconciliationIntegrationTest extends PostgresIntegrationTe
     @Autowired ProviderPaymentRepository payments;
     @Autowired ProviderAccountRepository accounts;
     @Autowired AccountTransactionRepository transactions;
+    @Autowired ProviderAccountReconciliationAuditRepository reconciliationAudits;
+    @Autowired ProviderAccountService providerAccountService;
     @Autowired ProviderRepository providers;
     @Autowired JdbcTemplate jdbc;
 
@@ -203,7 +208,7 @@ class ProviderAccountReconciliationIntegrationTest extends PostgresIntegrationTe
         assertThat(result.getAdjustmentAmount()).isEqualByComparingTo("300.00"); // 400 ledger - 100 account
         assertThat(result.getTotalPaidAfter()).isEqualByComparingTo("400.00");
         assertThat(result.getLedgerVsAccountDriftAfter()).isEqualByComparingTo("0.00");
-        assertThat(transactions.findById(result.getLedgerTransactionId())).isPresent();
+        assertThat(reconciliationAudits.findById(result.getReconciliationAuditId())).isPresent();
 
         // After: the same reversal now succeeds, so the guard was never a dead end.
         ProviderAccount corrected = accounts.findById(account.getId()).orElseThrow();
@@ -214,16 +219,20 @@ class ProviderAccountReconciliationIntegrationTest extends PostgresIntegrationTe
     }
 
     @Test
-    void adjustmentLeavesAnAuditableLedgerEntryAndKeepsTheBalanceEquation() {
+    void adjustmentLeavesAnAuditableTrailWithoutTouchingTheLedgerAndKeepsTheBalanceEquation() {
         postedPayment("400.00");
         injectHistoricalDrift("900.00", "100.00");
         ProviderAccount drifted = accounts.findById(account.getId()).orElseThrow();
         long ledgerBefore = transactions.count();
+        BigDecimal ledgerNetBefore = reconciliation.reconcile(providerId).getLedgerNet();
 
         var result = adjustment.alignPaidTotalWithLedger(providerId,
                 "فرق موروث من النظام السابق", drifted.getVersion(), "supervisor", 88L);
 
-        assertThat(transactions.count()).isEqualTo(ledgerBefore + 1);
+        // The correction must never write to the financial ledger — that is exactly
+        // the loop that would make it recreate the drift it just closed.
+        assertThat(transactions.count()).isEqualTo(ledgerBefore);
+        assertThat(reconciliationAudits.findById(result.getReconciliationAuditId())).isPresent();
         assertThat(result.getAdjustmentAmount()).isEqualByComparingTo("-500.00");
 
         ProviderAccount after = accounts.findById(account.getId()).orElseThrow();
@@ -231,8 +240,90 @@ class ProviderAccountReconciliationIntegrationTest extends PostgresIntegrationTe
         // The equation must survive the correction, not be traded away for it.
         assertThat(after.getRunningBalance())
                 .isEqualByComparingTo(after.getTotalApproved().subtract(after.getTotalPaid()));
-        assertThat(reconciliation.reconcile(providerId).getLedgerVsAccountDrift())
-                .isEqualByComparingTo("0.00");
+        ProviderReconciliationDto reconciled = reconciliation.reconcile(providerId);
+        assertThat(reconciled.getLedgerVsAccountDrift()).isEqualByComparingTo("0.00");
+        // ledgerNet itself never moved — only the account's derived totalPaid did.
+        assertThat(reconciled.getLedgerNet()).isEqualByComparingTo(ledgerNetBefore);
+    }
+
+    /**
+     * The exact scenario the correction exists to protect against: a naive
+     * implementation that logs the correction as an ordinary ledger entry would
+     * make the SECOND, independent reconciliation see the correction itself as
+     * new drift of the same size. Each call below runs and commits in its own
+     * transaction (no surrounding @Transactional on this test), so this is a
+     * genuine round trip, not one connection's cached view.
+     */
+    @Test
+    void reconciliationIsStableAcrossASecondIndependentRunAfterAdjustment() {
+        postedPayment("400.00");
+        injectHistoricalDrift("900.00", "100.00");
+        ProviderAccount drifted = accounts.findById(account.getId()).orElseThrow();
+
+        adjustment.alignPaidTotalWithLedger(providerId,
+                "تسوية انحراف تاريخي", drifted.getVersion(), "supervisor", 88L);
+
+        ProviderReconciliationDto second = reconciliation.reconcile(providerId);
+
+        // postedPayment() never allocates the payment to a period, so UNDER_ALLOCATED
+        // legitimately remains — it is orthogonal to the drift this test closes.
+        assertThat(second.getFindings()).doesNotContain(Finding.BALANCE_DRIFT,
+                Finding.DOCUMENT_WITHOUT_LEDGER, Finding.LEDGER_WITHOUT_DOCUMENT,
+                Finding.BALANCE_EQUATION_BROKEN);
+        assertThat(second.getAccountTotalPaid()).isEqualByComparingTo(second.getLedgerNet());
+
+        // The account_transactions history stays an unbroken chain: every entry's
+        // balanceBefore equals the previous entry's balanceAfter.
+        List<AccountTransaction> ledger = transactions
+                .findByProviderAccountIdOrderByCreatedAtDesc(account.getId(),
+                        org.springframework.data.domain.Pageable.unpaged())
+                .stream().sorted(java.util.Comparator.comparing(AccountTransaction::getId)).toList();
+        BigDecimal running = null;
+        for (AccountTransaction tx : ledger) {
+            if (running != null) {
+                assertThat(tx.getBalanceBefore()).isEqualByComparingTo(running);
+            }
+            running = tx.getBalanceAfter();
+        }
+        ProviderAccount finalAccount = accounts.findById(account.getId()).orElseThrow();
+        assertThat(running).isEqualByComparingTo(finalAccount.getRunningBalance());
+    }
+
+    // ── تجميد المسار القديم ──────────────────────────────────────────────────
+
+    @Test
+    void frozenInstallmentPathRefusesToWriteAndLeavesTheAccountUntouched() {
+        ProviderAccount before = accounts.findById(account.getId()).orElseThrow();
+
+        assertThatThrownBy(() -> providerAccountService.debitOnInstallmentPayment(
+                providerId, new BigDecimal("50.00"), "قسط", 88L))
+                .hasMessageContaining("مسار دفعات مقدم الخدمة الجديد");
+
+        assertThatThrownBy(() -> providerAccountService.settleRemainingBalanceByProvider(
+                providerId, "تسوية يدوية", 88L))
+                .hasMessageContaining("مسار دفعات مقدم الخدمة الجديد");
+
+        ProviderAccount after = accounts.findById(account.getId()).orElseThrow();
+        assertThat(after.getVersion()).isEqualTo(before.getVersion());
+        assertThat(after.getTotalPaid()).isEqualByComparingTo(before.getTotalPaid());
+        assertThat(transactions.findByProviderAccountIdOrderByCreatedAtDesc(account.getId(),
+                org.springframework.data.domain.Pageable.unpaged())).isEmpty();
+    }
+
+    /** Simulates data the frozen legacy path (or any other ADJUSTMENT writer) left behind. */
+    @Test
+    void historicalAdjustmentEntryIsNeverCountedAsAProviderPaymentByReconciliation() {
+        BigDecimal balanceBefore = account.getRunningBalance();
+        transactions.saveAndFlush(AccountTransaction.createAdjustment(
+                account.getId(), new BigDecimal("250.00"), false, balanceBefore,
+                "دفعة قسطية قديمة (بيانات محاكاة)", 88L));
+
+        ProviderReconciliationDto report = reconciliation.reconcile(providerId);
+
+        // ledgerNet only ever counts PROVIDER_PAYMENT/PROVIDER_PAYMENT_REVERSAL —
+        // a legacy ADJUSTMENT-typed entry is invisible to it by construction.
+        assertThat(report.getLedgerNet()).isEqualByComparingTo("0.00");
+        assertThat(report.getDocumentsTotal()).isEqualByComparingTo("0.00");
     }
 
     @Test

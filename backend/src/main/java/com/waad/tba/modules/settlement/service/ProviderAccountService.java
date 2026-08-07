@@ -315,88 +315,39 @@ public class ProviderAccountService {
          * @param userId     User performing the action
          * @return The created debit transaction
          */
+        /**
+         * FROZEN. This wrote an untyped {@code ADJUSTMENT} debit that raised
+         * {@code totalPaid} with no relation to a {@code ProviderPayment} document, no
+         * idempotency key, and no allocation to any claim period — invisible to
+         * {@code ProviderAccountReconciliationService}, whose ledgerNet only counts
+         * {@code PROVIDER_PAYMENT}/{@code PROVIDER_PAYMENT_REVERSAL}. Left calling this
+         * would make an account's paid total permanently unexplainable by the ledger,
+         * which {@code ProviderAccountAdjustmentService} would then be tempted to
+         * "correct" — silently absorbing a real payment into what looks like a fix for
+         * an error. Fails closed instead: use the new provider-payment path
+         * ({@code ProviderPaymentPostingService.post}) for any real transfer.
+         *
+         * Not deleted yet — kept so the method signature and its historical ledger
+         * entries stay readable while callers are migrated off it.
+         */
         @Transactional
         public AccountTransaction debitOnInstallmentPayment(Long providerId, BigDecimal amount,
                         String note, Long userId) {
-                ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
-                                .orElseThrow(() -> new EntityNotFoundException(
-                                                "Provider account not found for provider: " + providerId));
-
-                if (!account.isActive()) {
-                        throw new IllegalStateException(
-                                        "Cannot debit inactive account for provider " + providerId);
-                }
-
-                BigDecimal balance = account.getRunningBalance();
-                if (balance == null) {
-                        throw new IllegalStateException(
-                                        "CRITICAL: Running balance is null for provider " + providerId
-                                                        + ". Possible data corruption — investigate immediately.");
-                }
-                if (balance.compareTo(amount) < 0) {
-                        throw new IllegalStateException(
-                                        "Insufficient balance for installment. Provider: " + providerId
-                                                        + ", Balance: " + balance + ", Requested: " + amount);
-                }
-
-                BigDecimal balanceBefore = balance;
-                account.debit(amount);
-                accountRepository.save(account);
-
-                AccountTransaction transaction = transactionService.createAdjustment(
-                                account,
-                                amount,
-                                false, // DEBIT
-                                balanceBefore,
-                                note != null && !note.isBlank() ? note : "دفعة قسطية",
-                                userId);
-
-                log.info("INSTALLMENT DEBIT: provider={}, amount={}, newBalance={}",
-                                providerId, amount, account.getRunningBalance());
-
-                return transaction;
+                throw new com.waad.tba.common.exception.BusinessRuleException(
+                                "دفعة التقسيط اليدوية معطّلة: استخدم مسار دفعات مقدم الخدمة الجديد "
+                                                + "(ProviderPayment) بدلاً من قيد تسوية عام لا يظهر في المطابقة");
         }
 
         /**
-         * Settle the full remaining balance using a manual adjustment debit.
-         * Used for legacy outstanding balances when no claim-level settlement
-         * candidates exist.
+         * FROZEN — see {@link #debitOnInstallmentPayment}: same untyped
+         * {@code ADJUSTMENT} debit, same invisibility to reconciliation's ledgerNet.
+         * Use the new provider-payment path instead.
          */
         @Transactional
         public AccountTransaction settleRemainingBalanceByProvider(Long providerId, String reason, Long userId) {
-                ProviderAccount account = accountRepository.findByProviderIdForUpdate(providerId)
-                                .orElseThrow(() -> new EntityNotFoundException(
-                                                "Provider account not found for provider: " + providerId));
-
-                if (!account.isActive()) {
-                        throw new IllegalStateException("Cannot settle inactive account for provider " + providerId);
-                }
-
-                BigDecimal remainingBalance = account.getRunningBalance();
-                if (remainingBalance == null || remainingBalance.compareTo(BigDecimal.ZERO) <= 0) {
-                        throw new IllegalStateException("No outstanding balance to settle for provider " + providerId);
-                }
-
-                BigDecimal balanceBefore = account.getRunningBalance();
-                account.debit(remainingBalance);
-                accountRepository.save(account);
-
-                String adjustmentReason = (reason == null || reason.trim().isEmpty())
-                                ? "Manual settlement of remaining legacy balance"
-                                : reason.trim();
-
-                AccountTransaction transaction = transactionService.createAdjustment(
-                                account,
-                                remainingBalance,
-                                false,
-                                balanceBefore,
-                                adjustmentReason,
-                                userId);
-
-                log.warn("MANUAL SETTLEMENT: provider={}, account={}, amount={}, reason={}",
-                                providerId, account.getId(), remainingBalance, adjustmentReason);
-
-                return transaction;
+                throw new com.waad.tba.common.exception.BusinessRuleException(
+                                "تسوية الرصيد المتبقي يدوياً معطّلة: استخدم مسار دفعات مقدم الخدمة الجديد "
+                                                + "(ProviderPayment) بدلاً من قيد تسوية عام لا يظهر في المطابقة");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -913,8 +864,10 @@ public class ProviderAccountService {
          *
          * For that, use {@code ProviderAccountReconciliationService} to diagnose and
          * {@code ProviderAccountAdjustmentService} to correct. The two operations are
-         * separate on purpose: reconciliation never writes, correction always leaves an
-         * ADJUSTMENT ledger entry with a reason and an actor.
+         * separate on purpose: reconciliation never writes, correction always leaves a
+         * {@code ProviderAccountReconciliationAudit} entry with a reason and an actor —
+         * deliberately not an account_transactions row, so the correction can never be
+         * summed into the very ledger total it was measured against.
          *
          * This is the correct repair path. Simply recalculating from transactions would
          * yield the same stale result because the orphaned credits are still in the

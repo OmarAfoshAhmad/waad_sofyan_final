@@ -10,9 +10,9 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.finance.Money;
 import com.waad.tba.modules.settlement.dto.ProviderAccountAdjustmentResultDto;
 import com.waad.tba.modules.settlement.dto.ProviderReconciliationDto;
-import com.waad.tba.modules.settlement.entity.AccountTransaction;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
-import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
+import com.waad.tba.modules.settlement.entity.ProviderAccountReconciliationAudit;
+import com.waad.tba.modules.settlement.repository.ProviderAccountReconciliationAuditRepository;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -27,17 +27,21 @@ import lombok.RequiredArgsConstructor;
  * permanently blocked, which is the failure mode this project has already hit
  * once (a guard whose message named procedures that did not exist).
  *
- * Deliberately narrow: it only closes a measured ledger-vs-account gap. It never
- * invents an amount, never touches totalApproved, and always writes an
- * ADJUSTMENT ledger entry carrying the reason and the actor. Nothing here moves
- * money silently.
+ * Deliberately narrow: it only closes a measured ledger-vs-account gap, never
+ * invents an amount, never touches totalApproved. The correction is recorded in
+ * {@link ProviderAccountReconciliationAudit} — NOT {@code account_transactions}.
+ * The amount here is, by construction, exactly the drift reconciliation measured
+ * against the ledger; writing it back into that same ledger as an ordinary entry
+ * would make the next reconciliation see the correction itself as new drift of
+ * the same size. The audit table exists precisely so this correction can never
+ * be summed into ledgerNet, or mistaken for a provider payment.
  */
 @Service
 @RequiredArgsConstructor
 public class ProviderAccountAdjustmentService {
 
     private final ProviderAccountRepository accounts;
-    private final AccountTransactionRepository transactions;
+    private final ProviderAccountReconciliationAuditRepository audits;
     private final ProviderAccountReconciliationService reconciliation;
 
     /**
@@ -78,20 +82,26 @@ public class ProviderAccountAdjustmentService {
         account.applyPaidTotalCorrection(drift);
         accounts.saveAndFlush(account);
 
-        // A raised paid total means more money left the company: a DEBIT.
-        boolean isCredit = drift.signum() < 0;
-        AccountTransaction entry = transactions.saveAndFlush(AccountTransaction.createAdjustment(
-                account.getId(), drift.abs(), isCredit, runningBalanceBefore,
-                String.format("تسوية معتمدة لمطابقة المدفوع مع دفتر الحركات (%s): %s",
-                        drift.toPlainString(), reason.trim()),
-                actorUserId));
+        ProviderAccountReconciliationAudit audit = audits.saveAndFlush(ProviderAccountReconciliationAudit.builder()
+                .providerAccountId(account.getId())
+                .providerId(providerId)
+                .adjustmentAmount(drift)
+                .totalPaidBefore(totalPaidBefore)
+                .totalPaidAfter(account.getTotalPaid())
+                .runningBalanceBefore(runningBalanceBefore)
+                .runningBalanceAfter(account.getRunningBalance())
+                .ledgerVsAccountDriftBefore(drift)
+                .reason(reason.trim())
+                .performedBy(actorUsername.trim())
+                .performedByUserId(actorUserId)
+                .build());
 
         ProviderReconciliationDto after = reconciliation.reconcile(providerId);
 
         return ProviderAccountAdjustmentResultDto.builder()
                 .providerId(providerId)
                 .providerAccountId(account.getId())
-                .ledgerTransactionId(entry.getId())
+                .reconciliationAuditId(audit.getId())
                 .adjustmentAmount(drift)
                 .totalPaidBefore(totalPaidBefore)
                 .totalPaidAfter(account.getTotalPaid())

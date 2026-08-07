@@ -13,7 +13,9 @@ public class ProviderAccountAdjustmentResultDto {
 
     private Long providerId;
     private Long providerAccountId;
-    private Long ledgerTransactionId;
+
+    /** Id in the independent, non-financial audit trail — never an account_transactions id. */
+    private Long reconciliationAuditId;
 
     /** Signed: positive raised totalPaid, negative lowered it. */
     private BigDecimal adjustmentAmount;
