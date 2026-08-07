@@ -95,8 +95,8 @@ public class ProviderPaymentPostingService {
 
     private void revalidateAndRefreshSnapshots(ProviderPayment payment) {
         Map<Target, BigDecimal> outstanding = new HashMap<>();
-        for (OutstandingPeriod row : payments.findOutstandingPeriodsForAllocation(
-                payment.getProviderId(), payment.getPaymentDate())) {
+        for (OutstandingPeriod row : payments.findOutstandingPeriodsForPosting(
+                payment.getProviderId(), payment.getId())) {
             outstanding.put(new Target(row.getEmployerId(), row.getTargetYear(), row.getTargetMonth()),
                     Money.normalize(row.getOutstandingAmount()));
         }

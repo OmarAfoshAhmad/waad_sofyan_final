@@ -42,7 +42,7 @@ public class ProviderPaymentAllocationSuggestionService {
         validate(providerId, paymentAmount, asOfDate);
         BigDecimal normalizedPayment = Money.normalize(paymentAmount);
         List<OutstandingBucket> outstanding = payments
-                .findOutstandingPeriodsForAllocation(providerId, asOfDate).stream()
+                .findOutstandingPeriodsForSuggestion(providerId, asOfDate).stream()
                 .map(OutstandingBucket::from)
                 .filter(bucket -> bucket.amount().signum() > 0)
                 .sorted(OutstandingBucket.ORDER)

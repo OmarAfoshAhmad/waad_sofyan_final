@@ -105,8 +105,53 @@ public interface ProviderPaymentRepository extends JpaRepository<ProviderPayment
             WHERE d.due_amount - COALESCE(a.allocated_amount, 0) > 0
             ORDER BY d.target_year, d.target_month, d.employer_id
             """, nativeQuery = true)
-    List<OutstandingPeriod> findOutstandingPeriodsForAllocation(
+    List<OutstandingPeriod> findOutstandingPeriodsForSuggestion(
             @Param("providerId") Long providerId, @Param("asOfDate") LocalDate asOfDate);
+
+    /**
+     * Posting-time liability is deliberately not an as-of report. Every POSTED
+     * allocation must be subtracted regardless of its bank/payment date, otherwise
+     * a backdated draft can allocate an already-settled period a second time.
+     */
+    @Query(value = """
+            WITH due AS (
+                SELECT m.employer_id,
+                       EXTRACT(YEAR FROM c.service_date)::int AS target_year,
+                       EXTRACT(MONTH FROM c.service_date)::int AS target_month,
+                       SUM(COALESCE(c.net_provider_amount, c.approved_amount, 0)) AS due_amount
+                FROM claims c
+                JOIN members m ON m.id = c.member_id
+                WHERE c.active = true
+                  AND c.provider_id = :providerId
+                  AND c.status IN ('APPROVED', 'BATCHED', 'SETTLED')
+                GROUP BY m.employer_id,
+                         EXTRACT(YEAR FROM c.service_date),
+                         EXTRACT(MONTH FROM c.service_date)
+            ), allocated AS (
+                SELECT a.employer_id, a.target_year, a.target_month,
+                       SUM(a.amount) AS allocated_amount
+                FROM provider_payment_allocations a
+                JOIN provider_payments p ON p.id = a.payment_id
+                WHERE p.provider_id = :providerId
+                  AND p.status = 'POSTED'
+                  AND p.id <> :excludedPaymentId
+                GROUP BY a.employer_id, a.target_year, a.target_month
+            )
+            SELECT d.employer_id AS "employerId",
+                   d.target_year AS "targetYear",
+                   d.target_month AS "targetMonth",
+                   GREATEST(d.due_amount - COALESCE(a.allocated_amount, 0), 0) AS "outstandingAmount"
+            FROM due d
+            LEFT JOIN allocated a
+              ON a.employer_id = d.employer_id
+             AND a.target_year = d.target_year
+             AND a.target_month = d.target_month
+            WHERE d.due_amount - COALESCE(a.allocated_amount, 0) > 0
+            ORDER BY d.target_year, d.target_month, d.employer_id
+            """, nativeQuery = true)
+    List<OutstandingPeriod> findOutstandingPeriodsForPosting(
+            @Param("providerId") Long providerId,
+            @Param("excludedPaymentId") Long excludedPaymentId);
 
     interface OutstandingPeriod {
         Long getEmployerId();
