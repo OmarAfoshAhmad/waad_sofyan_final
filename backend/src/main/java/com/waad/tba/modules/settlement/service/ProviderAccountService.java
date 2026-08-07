@@ -789,10 +789,7 @@ public class ProviderAccountService {
          * Return all provider IDs that have an account (for bulk repair operations).
          */
         public java.util.List<Long> getAllProviderIds() {
-                return accountRepository.findAll().stream()
-                                .map(ProviderAccount::getProviderId)
-                                .filter(java.util.Objects::nonNull)
-                                .collect(java.util.stream.Collectors.toList());
+                return accountRepository.findAllProviderIds();
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -834,9 +831,28 @@ public class ProviderAccountService {
                 List<AccountTransaction> approvalCredits = transactionRepository
                                 .findClaimTransactionsByAccount(account.getId());
 
+                // Batch both reads that used to happen once PER credit inside the loop
+                // below (one existsByReferenceTypeAndReferenceId + one claim lookup each)
+                // into two queries total, regardless of how many credits this account has.
+                java.util.Set<Long> claimIds = approvalCredits.stream()
+                                .map(AccountTransaction::getReferenceId)
+                                .filter(java.util.Objects::nonNull)
+                                .collect(java.util.stream.Collectors.toSet());
+                java.util.Set<Long> claimIdsWithReversal = claimIds.isEmpty()
+                                ? java.util.Set.of()
+                                : transactionRepository.findExistingReferenceIds(
+                                                AccountTransaction.ReferenceType.CLAIM_REVERSAL, claimIds);
+                java.util.Map<Long, Claim> claimsById = claimIds.isEmpty()
+                                ? java.util.Map.of()
+                                : claimRepository.findAllById(claimIds).stream()
+                                                .collect(java.util.stream.Collectors.toMap(Claim::getId, c -> c));
+
                 BigDecimal oldBalance = account.getRunningBalance();
                 int reversedCount = 0;
                 BigDecimal reversedTotal = BigDecimal.ZERO;
+
+                final Set<ClaimStatus> CREDIT_BEARING_STATUSES = EnumSet.of(
+                                ClaimStatus.APPROVED, ClaimStatus.BATCHED, ClaimStatus.SETTLED);
 
                 for (AccountTransaction credit : approvalCredits) {
                         Long claimId = credit.getReferenceId();
@@ -844,19 +860,16 @@ public class ProviderAccountService {
                                 continue;
 
                         // Skip if a CLAIM_REVERSAL already exists for this claim (idempotent)
-                        if (transactionService.existsForReference(
-                                        AccountTransaction.ReferenceType.CLAIM_REVERSAL, claimId)) {
+                        if (claimIdsWithReversal.contains(claimId)) {
                                 continue;
                         }
 
                         // Check whether the claim is active with a status that legitimately holds
                         // credit
-                        final Set<ClaimStatus> CREDIT_BEARING_STATUSES = EnumSet.of(
-                                        ClaimStatus.APPROVED, ClaimStatus.BATCHED, ClaimStatus.SETTLED);
-                        boolean claimIsActive = claimRepository.findById(claimId)
-                                        .map(c -> Boolean.TRUE.equals(c.getActive())
-                                                        && CREDIT_BEARING_STATUSES.contains(c.getStatus()))
-                                        .orElse(false); // hard-deleted → not found → false
+                        Claim claim = claimsById.get(claimId); // hard-deleted → not found → null
+                        boolean claimIsActive = claim != null
+                                        && Boolean.TRUE.equals(claim.getActive())
+                                        && CREDIT_BEARING_STATUSES.contains(claim.getStatus());
 
                         if (claimIsActive) {
                                 // Claim is still live — credit is legitimate, skip

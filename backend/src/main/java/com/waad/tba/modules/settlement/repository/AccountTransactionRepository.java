@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Repository for Account Transactions
@@ -61,6 +62,16 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
         * Check if a reference already has a transaction
         */
        boolean existsByReferenceTypeAndReferenceId(ReferenceType referenceType, Long referenceId);
+
+       /**
+        * Batch form of existsByReferenceTypeAndReferenceId: returns which of the
+        * given referenceIds already have a transaction of this type, in one query
+        * instead of one round trip per id.
+        */
+       @Query("SELECT DISTINCT t.referenceId FROM AccountTransaction t "
+                     + "WHERE t.referenceType = :referenceType AND t.referenceId IN :referenceIds")
+       Set<Long> findExistingReferenceIds(
+                     @Param("referenceType") ReferenceType referenceType, @Param("referenceIds") Set<Long> referenceIds);
 
        /**
         * Count transactions for a specific reference (cycle-safe idempotency).

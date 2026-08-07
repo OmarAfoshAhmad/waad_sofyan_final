@@ -28,6 +28,10 @@ import java.util.Optional;
 @Repository
 public interface ProviderAccountRepository extends JpaRepository<ProviderAccount, Long> {
 
+       /** Provider ids only — avoids loading every ProviderAccount entity for bulk repair tooling. */
+       @Query("SELECT pa.providerId FROM ProviderAccount pa WHERE pa.providerId IS NOT NULL")
+       List<Long> findAllProviderIds();
+
        // ═══════════════════════════════════════════════════════════════════════════
        // LOCKING QUERIES (for financial operations)
        // ═══════════════════════════════════════════════════════════════════════════

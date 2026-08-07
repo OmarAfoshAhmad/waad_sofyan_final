@@ -430,11 +430,13 @@ public class ProviderContractPricingItemService {
     public List<ContractServiceDto> findServicesByProviderAndCategory(Long providerId, Long categoryId) {
         log.debug("Finding contracted services for provider: {}, category: {}", providerId, categoryId);
 
-        var pricingItems = pricingRepository.findAllServicesByProvider(providerId);
+        // The repository query already applies the same active/contract/date filters
+        // as findAllServicesByProvider plus the category match in SQL — filtering in
+        // Java here would fetch every one of the provider's services just to discard
+        // all but one category's worth.
+        var pricingItems = pricingRepository.findServicesByProviderAndCategory(providerId, categoryId);
 
         return pricingItems.stream()
-                .filter(p -> p.getMedicalCategory() != null
-                        && Objects.equals(p.getMedicalCategory().getId(), categoryId))
                 .map(p -> ContractServiceDto.builder()
                         .id(p.getId())
                         .pricingItemId(p.getId())
