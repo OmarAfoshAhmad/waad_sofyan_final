@@ -13,14 +13,39 @@
 --
 -- هذا التدقيق يقيس الضرر الفعلي ليقرر: إصلاح كود فقط، أم كود + هجرة تصحيح بيانات.
 --
--- التشغيل:
---   docker compose exec -T db psql -U postgres -d tba_waad_system \
---     -f /path/phase0_payment_ledger_audit.sql
---   أو:  \i phase0_payment_ledger_audit.sql   داخل psql
--- ═══════════════════════════════════════════════════════════════════════════════
+-- ─────────────────────────────────────────────────────────────────────────────
+-- التشغيل
+-- ─────────────────────────────────────────────────────────────────────────────
+-- على قاعدة محلية (psql مباشرة — عدّل اسم المستخدم/القاعدة عند الحاجة):
+--
+--   psql -v ON_ERROR_STOP=1 -U postgres -d tba_waad_system \
+--     -f backend/docs/audit/phase0_payment_ledger_audit.sql \
+--     | tee "phase0_payment_audit_$(date +%F_%H%M%S).txt"
+--
+-- على الإنتاج (الملف على المضيف لا داخل الحاوية، لذا يُمرَّر عبر stdin):
+--
+--   cd /opt/waadapp
+--   docker compose exec -T db \
+--     psql -v ON_ERROR_STOP=1 -U postgres -d tba_waad_system \
+--     < backend/docs/audit/phase0_payment_ledger_audit.sql \
+--     | tee "phase0_payment_audit_$(date +%F_%H%M%S).txt"
+--
+-- ثم تحقق من رمز الخروج:  echo $?   ← يجب أن يكون 0
+--
+-- ملاحظة: -f داخل الحاوية لا يعمل لأن الملف غير موجود في نظام ملفاتها.
+-- ─────────────────────────────────────────────────────────────────────────────
 
+\set ON_ERROR_STOP on
 \pset pager off
 \timing off
+
+-- الأمان مفروض من PostgreSQL نفسه، لا مجرد افتراض بأن الاستعلامات لا تكتب:
+--   • READ ONLY  → أي محاولة كتابة تفشل بخطأ من المحرك
+--   • ROLLBACK   → لا شيء يُثبَّت حتى لو حدث ما لم يُتوقَّع
+--   • timeouts   → لا استعلام أو قفل يعلّق الإنتاج
+SET statement_timeout = '60s';
+SET lock_timeout = '5s';
+BEGIN TRANSACTION READ ONLY;
 
 \echo '════════════════════════════════════════════════════════════════'
 \echo ' [1] حجم الاستخدام — هل استُخدم مسار الدفعات إنتاجياً أصلاً؟'
@@ -222,7 +247,10 @@ WHERE NOT pr.is_deleted
 GROUP BY pr.provider_id, p.name
 ORDER BY payment_amount DESC;
 
+ROLLBACK;
+
 \echo ''
 \echo '════════════════════════════════════════════════════════════════'
-\echo ' انتهى التدقيق — لم تُعدَّل أي بيانات.'
+\echo ' انتهى التدقيق — المعاملة READ ONLY أُلغيت (ROLLBACK).'
+\echo ' لم تُعدَّل أي بيانات، ولا يمكن أن تُعدَّل بحكم قيد المحرك نفسه.'
 \echo '════════════════════════════════════════════════════════════════'
