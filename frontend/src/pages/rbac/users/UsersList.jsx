@@ -14,7 +14,6 @@ import {
   Box,
   Button,
   Chip,
-  Grid,
   IconButton,
   Paper,
   Stack,
@@ -36,7 +35,8 @@ import {
   DialogContentText,
   DialogActions,
   InputAdornment,
-  MenuItem
+  MenuItem,
+  useMediaQuery
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -89,10 +89,11 @@ const getRoleColor = (roleName) => {
 };
 
 const TABLE_BADGE_SX = {
-  width: '8.125rem',
-  maxWidth: '100%',
+  width: '10.625rem',
+  maxWidth: 'none',
   justifyContent: 'center',
-  fontWeight: 600
+  fontWeight: 600,
+  '& .MuiChip-label': { px: 1.25, whiteSpace: 'nowrap', overflow: 'visible', textOverflow: 'clip' }
 };
 
 /**
@@ -101,6 +102,7 @@ const TABLE_BADGE_SX = {
 const UsersList = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const preferredPageSize = useMediaQuery('(max-height:900px)') ? 6 : 7;
 
   // State
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ const UsersList = () => {
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [rowsPerPage, setRowsPerPage] = useState(preferredPageSize);
 
   // Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -155,6 +157,11 @@ const UsersList = () => {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    setRowsPerPage((currentSize) => (currentSize === 6 || currentSize === 7 ? preferredPageSize : currentSize));
+    setPage(0);
+  }, [preferredPageSize]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -256,9 +263,9 @@ const UsersList = () => {
         sx={{ mb: 0.5 }}
       />
 
-      <Grid container spacing={1} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 1, overflow: 'hidden' }}>
         {/* Search */}
-        <Grid size={12} sx={{ flexShrink: 0 }}>
+        <Box sx={{ flexShrink: 0 }}>
           <MainCard sx={{ mb: 1 }}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
               <Tooltip title="تحديث">
@@ -366,16 +373,16 @@ const UsersList = () => {
               </Button>
             </Stack>
           </MainCard>
-        </Grid>
+        </Box>
 
         {/* Users Table */}
-        <Grid size={12} sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
           <Paper
             variant="outlined"
             sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 1 }}
           >
             <TableContainer sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              <Table stickyHeader aria-label="users table">
+              <Table stickyHeader size="small" aria-label="users table">
                 <TableHead>
                   <TableRow>
                     <TableCell width="5%">#</TableCell>
@@ -504,14 +511,14 @@ const UsersList = () => {
               onPageChange={handlePageChange}
               rowsPerPage={rowsPerPage}
               onRowsPerPageChange={handleRowsPerPageChange}
-              rowsPerPageOptions={[10, 20, 50, 100]}
+              rowsPerPageOptions={[6, 7, 10, 20, 50]}
               labelRowsPerPage="عدد الصفوف:"
               labelDisplayedRows={({ from, to, count }) => `${from}-${to} من ${count !== -1 ? count : `أكثر من ${to}`}`}
               sx={{ flexShrink: 0, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}
             />
           </Paper>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Toggle Status Confirmation Dialog */}
       <Dialog open={toggleDialog.open} onClose={handleToggleClose}>
