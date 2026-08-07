@@ -87,6 +87,20 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
                      @Param("providerId") Long providerId,
                      @Param("employerId") Long employerId);
 
+       @Query("SELECT c FROM ModernProviderContract c WHERE c.provider.id = :providerId " +
+                     "AND c.pricingScope = 'GLOBAL' AND c.active = true AND c.status <> 'DRAFT' " +
+                     "AND c.startDate <= :date AND (c.endDate IS NULL OR c.endDate >= :date)")
+       Optional<ProviderContract> findEffectiveGlobalContract(
+                     @Param("providerId") Long providerId, @Param("date") LocalDate date);
+
+       @Query("SELECT c FROM ModernProviderContract c WHERE c.provider.id = :providerId " +
+                     "AND c.pricingScope = 'EMPLOYER_SPECIFIC' AND c.employer.id = :employerId " +
+                     "AND c.active = true AND c.status <> 'DRAFT' " +
+                     "AND c.startDate <= :date AND (c.endDate IS NULL OR c.endDate >= :date)")
+       Optional<ProviderContract> findEffectiveEmployerContract(
+                     @Param("providerId") Long providerId, @Param("employerId") Long employerId,
+                     @Param("date") LocalDate date);
+
        /**
         * Return distinct provider IDs that have at least one currently ACTIVE
         * contract.

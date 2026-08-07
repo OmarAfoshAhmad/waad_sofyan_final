@@ -139,10 +139,25 @@ public class ClaimResponse {
     private BigDecimal patientCoPay;
 
     /**
-     * Net provider amount (amount to be paid to provider)
-     * READ-ONLY - Calculated by backend (approvedAmount - patientCoPay)
+     * Net provider amount (amount to be paid to provider) — equals approvedAmount.
+     * approvedAmount is already net: requested minus patient share, minus refused,
+     * minus the contract discount. It is NOT approvedAmount - patientCoPay; that
+     * would double-subtract the patient's share, which approvedAmount already
+     * excludes. See Claim.validateFinancialIdentity() for the enforced identity:
+     * requestedAmount == patientCoPay + refusedAmount + companyDiscountAmount + netProviderAmount
+     * READ-ONLY - Calculated by backend
      */
     private BigDecimal netProviderAmount;
+
+    /**
+     * Contract discount amount (وعد's share of the claim) — the actual persisted
+     * value from Claim.companyDiscountAmount, not a client-side re-derivation.
+     * This is the figure the company profit report (تقرير أرباح الخصومات) and
+     * the financial consolidation matrix both treat as "company profit"; it must
+     * be displayed as-is everywhere, never re-computed from providerDiscountPercent.
+     * READ-ONLY - Calculated by backend
+     */
+    private BigDecimal companyDiscountAmount;
 
     /**
      * Co-pay percentage applied

@@ -50,6 +50,12 @@ public class ProviderContractUpdateDto {
 
     private Boolean discountBeforeRejection;
 
+    /** First service date affected by a financial-terms amendment. Defaults to today. */
+    private LocalDate termsEffectiveFrom;
+
+    @Size(max = 1000)
+    private String termsChangeReason;
+
     /**
      * Contract start date
      */

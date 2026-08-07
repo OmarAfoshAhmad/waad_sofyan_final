@@ -66,6 +66,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     @Autowired MemberRepository memberRepository;
     @Autowired ProviderRepository providerRepository;
     @Autowired ProviderContractRepository contractRepository;
+    @Autowired com.waad.tba.modules.providercontract.service.ProviderContractTermsService termsService;
     @Autowired ProviderContractPricingItemRepository pricingRepository;
     @Autowired MedicalCategoryRepository categoryRepository;
     @Autowired MedicalServiceRepository serviceRepository;
@@ -292,6 +293,10 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .provider(provider).startDate(LocalDate.now().minusDays(1))
                 .endDate(LocalDate.now().plusYears(1)).status(ContractStatus.ACTIVE)
                 .active(true).build());
+        // Mirrors production: every contract-creating path must also create its
+        // effective terms row. The resolver fails closed, so a contract saved
+        // without terms makes claim creation impossible for that provider.
+        termsService.ensureEffectiveTerms(contract, "TEST");
         pricingRepository.save(ProviderContractPricingItem.builder()
                 .contract(contract).serviceCode(service.getCode()).serviceName(service.getName())
                 .medicalCategory(category).basePrice(new BigDecimal("60"))

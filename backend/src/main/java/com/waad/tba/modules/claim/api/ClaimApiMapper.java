@@ -249,6 +249,8 @@ public class ClaimApiMapper {
                                 .deductibleApplied(dto.getDeductibleApplied())
                                 // نسبة خصم العقد — لقطة محفوظة عند إنشاء المطالبة
                                 .providerDiscountPercent(dto.getProviderDiscountPercent())
+                                // قيمة خصم العقد المحفوظة فعلياً (ربح الشركة) — Claim.companyDiscountAmount
+                                .companyDiscountAmount(dto.getCompanyDiscountAmount())
                                 .discountBeforeRejection(dto.getDiscountBeforeRejection())
 
                                 // Settlement information (READ-ONLY)

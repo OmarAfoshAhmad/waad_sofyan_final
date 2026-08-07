@@ -21,6 +21,16 @@ public class FinancialSummaryDto {
     private BigDecimal totalRefusedAmount;
     private BigDecimal totalPaidAmount;
     private BigDecimal outstandingAmount;
+
+    /**
+     * Sum of Claim.companyDiscountAmount (contract discount / company profit)
+     * across the same claim set as totalApprovedAmount — same status filter
+     * (APPROVED/BATCHED/SETTLED). NOT derived from any fixed percentage; this
+     * is the persisted per-claim value, matching the company profit report
+     * and the financial consolidation matrix.
+     */
+    private BigDecimal totalCompanyDiscountAmount;
+
     private long claimsCount;
     private long approvedCount;
     private long settledCount;

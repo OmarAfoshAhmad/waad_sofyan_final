@@ -120,9 +120,12 @@ public class ClaimViewDto {
     private BigDecimal providerDiscountPercent;
 
     /**
-     * قيمة الخصم بناءً على النسبة
+     * قيمة خصم عقد مقدم الخدمة (ربح الشركة) — القيمة المحفوظة فعلياً على المطالبة
+     * (Claim.companyDiscountAmount)، وليست معادة الحساب من النسبة. تدخل ضمن
+     * الثابت المالي الذي تفرضه Claim.validateFinancialIdentity():
+     * requestedAmount == patientCoPay + refusedAmount + companyDiscountAmount + netProviderAmount
      */
-    private BigDecimal providerDiscountAmount;
+    private BigDecimal companyDiscountAmount;
 
     // ========== Financial Snapshot (MVP Phase) ==========
 

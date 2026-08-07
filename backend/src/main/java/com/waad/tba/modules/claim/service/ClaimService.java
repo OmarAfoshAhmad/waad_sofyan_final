@@ -501,6 +501,12 @@ public class ClaimService {
         User currentUser = authorizationService.getCurrentUser();
         ClaimStatus previousStatus = claim.getStatus();
 
+        if (previousStatus == ClaimStatus.APPROVED || previousStatus == ClaimStatus.BATCHED
+                || previousStatus == ClaimStatus.SETTLED || previousStatus == ClaimStatus.REJECTED) {
+            throw new BusinessRuleException(
+                    "لا يمكن إعادة كتابة مطالبة نهائية. استخدم مسار العكس أو التسوية التصحيحية المخصص.");
+        }
+
         // ══════════════════════════════════════════════════════════════════════════
         // MEDICAL REVIEWER ISOLATION: Validation (Update)
         // ══════════════════════════════════════════════════════════════════════════
@@ -629,8 +635,7 @@ public class ClaimService {
 
         // PART 2 — CLAIM SAFETY: Protect Claim Modification After Submission
         if (claim.getStatus() != ClaimStatus.DRAFT &&
-                claim.getStatus() != ClaimStatus.NEEDS_CORRECTION &&
-                claim.getStatus() != ClaimStatus.APPROVED) {
+                claim.getStatus() != ClaimStatus.NEEDS_CORRECTION) {
             throw new IllegalStateException(
                     "Claim cannot be modified in current status: " + claim.getStatus());
         }
@@ -646,8 +651,7 @@ public class ClaimService {
         reviewerIsolationService.validateReviewerAccess(currentUser, claim.getProviderId());
 
         // SECURITY: Verify claim is in editable status
-        if (!claim.getStatus().allowsEdit() &&
-                claim.getStatus() != ClaimStatus.APPROVED) {
+        if (!claim.getStatus().allowsEdit()) {
             throw new BusinessRuleException(
                     String.format("Cannot edit claim in %s status.",
                             claim.getStatus()));
@@ -1720,6 +1724,7 @@ public class ClaimService {
                         .totalRefusedAmount(BigDecimal.ZERO)
                         .totalPaidAmount(BigDecimal.ZERO)
                         .outstandingAmount(BigDecimal.ZERO)
+                        .totalCompanyDiscountAmount(BigDecimal.ZERO)
                         .claimsCount(0L)
                         .approvedCount(0L)
                         .settledCount(0L)
@@ -1734,6 +1739,7 @@ public class ClaimService {
                         .totalRefusedAmount(BigDecimal.ZERO)
                         .totalPaidAmount(BigDecimal.ZERO)
                         .outstandingAmount(BigDecimal.ZERO)
+                        .totalCompanyDiscountAmount(BigDecimal.ZERO)
                         .claimsCount(0L)
                         .approvedCount(0L)
                         .settledCount(0L)
@@ -1747,6 +1753,7 @@ public class ClaimService {
                         .totalRefusedAmount(BigDecimal.ZERO)
                         .totalPaidAmount(BigDecimal.ZERO)
                         .outstandingAmount(BigDecimal.ZERO)
+                        .totalCompanyDiscountAmount(BigDecimal.ZERO)
                         .claimsCount(0L)
                         .approvedCount(0L)
                         .settledCount(0L)
@@ -1764,6 +1771,7 @@ public class ClaimService {
                     .totalRefusedAmount(BigDecimal.ZERO)
                     .totalPaidAmount(BigDecimal.ZERO)
                     .outstandingAmount(BigDecimal.ZERO)
+                    .totalCompanyDiscountAmount(BigDecimal.ZERO)
                     .claimsCount(0L)
                     .approvedCount(0L)
                     .settledCount(0L)
@@ -1782,8 +1790,10 @@ public class ClaimService {
         BigDecimal totalRefused = (len > 3 && result[3] != null) ? new BigDecimal(result[3].toString())
                 : BigDecimal.ZERO;
         BigDecimal totalPaid = (len > 4 && result[4] != null) ? new BigDecimal(result[4].toString()) : BigDecimal.ZERO;
-        long approvedCount = (len > 5 && result[5] != null) ? ((Number) result[5]).longValue() : 0L;
-        long settledCount = (len > 6 && result[6] != null) ? ((Number) result[6]).longValue() : 0L;
+        BigDecimal totalCompanyDiscount = (len > 5 && result[5] != null) ? new BigDecimal(result[5].toString())
+                : BigDecimal.ZERO;
+        long approvedCount = (len > 6 && result[6] != null) ? ((Number) result[6]).longValue() : 0L;
+        long settledCount = (len > 7 && result[7] != null) ? ((Number) result[7]).longValue() : 0L;
 
         return FinancialSummaryDto.builder()
                 .claimsCount(totalClaimsCount)
@@ -1792,6 +1802,7 @@ public class ClaimService {
                 .totalRefusedAmount(totalRefused)
                 .totalPaidAmount(totalPaid)
                 .outstandingAmount(totalApproved.subtract(totalPaid))
+                .totalCompanyDiscountAmount(totalCompanyDiscount)
                 .approvedCount(approvedCount)
                 .settledCount(settledCount)
                 .build();

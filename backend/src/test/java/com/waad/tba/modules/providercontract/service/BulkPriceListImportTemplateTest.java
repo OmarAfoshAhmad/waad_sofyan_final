@@ -22,6 +22,7 @@ class BulkPriceListImportTemplateTest {
                 mock(ProviderContractRepository.class),
                 mock(ProviderContractPricingItemRepository.class),
                 mock(MedicalCategoryRepository.class),
+                mock(ProviderContractTermsService.class),
                 mock(PlatformTransactionManager.class));
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(service.generateTemplate()))) {

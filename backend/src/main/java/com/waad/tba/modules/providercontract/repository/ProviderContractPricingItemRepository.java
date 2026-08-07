@@ -181,6 +181,30 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      @Param("pricingItemId") Long pricingItemId,
                      @Param("date") LocalDate date);
 
+       @Query("SELECT p FROM ProviderContractPricingItem p WHERE p.contract.id = :contractId " +
+                     "AND p.id = :pricingItemId AND p.active = true " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
+       Optional<ProviderContractPricingItem> findEffectiveInContractById(
+                     @Param("contractId") Long contractId, @Param("pricingItemId") Long pricingItemId,
+                     @Param("date") LocalDate date);
+
+       @Query("SELECT p FROM ProviderContractPricingItem p WHERE p.contract.id = :contractId " +
+                     "AND p.active = true AND LOWER(p.serviceCode) = LOWER(:serviceCode) " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
+       Optional<ProviderContractPricingItem> findEffectiveInContractByCode(
+                     @Param("contractId") Long contractId, @Param("serviceCode") String serviceCode,
+                     @Param("date") LocalDate date);
+
+       @Query("SELECT p FROM ProviderContractPricingItem p WHERE p.contract.id = :contractId " +
+                     "AND p.active = true AND LOWER(p.serviceName) = LOWER(:serviceName) " +
+                     "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
+                     "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
+       Optional<ProviderContractPricingItem> findEffectiveInContractByName(
+                     @Param("contractId") Long contractId, @Param("serviceName") String serviceName,
+                     @Param("date") LocalDate date);
+
        /**
         * Find effective pricing for a service code at a provider on a specific date.
         */

@@ -55,6 +55,7 @@ public class ProviderContractService {
     private final ProviderRepository providerRepository;
     private final EmployerRepository employerRepository;
     private final AuditLogService auditLogService;
+    private final ProviderContractTermsService termsService;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -262,6 +263,7 @@ public class ProviderContractService {
                 .build();
 
         contract = contractRepository.save(contract);
+        termsService.createInitial(contract, getCurrentUsername());
         log.info("Created provider contract: {}", contract.getContractCode());
         logAudit("CREATE", contract.getId(), "Created contract " + contract.getContractCode()
                 + " for providerId=" + contract.getProvider().getId() + ", status=" + contract.getStatus());
@@ -283,6 +285,16 @@ public class ProviderContractService {
         ProviderContract contract = contractRepository.findById(id)
                 .filter(c -> Boolean.TRUE.equals(c.getActive()))
                 .orElseThrow(() -> new BusinessRuleException("Provider contract not found: " + id));
+
+        BigDecimal currentDiscount = contract.getDiscountPercent() == null
+                ? BigDecimal.ZERO : contract.getDiscountPercent();
+        BigDecimal requestedDiscount = dto.getDiscountPercent() == null
+                ? currentDiscount : dto.getDiscountPercent();
+        boolean requestedTiming = dto.getDiscountBeforeRejection() == null
+                ? Boolean.TRUE.equals(contract.getDiscountBeforeRejection())
+                : Boolean.TRUE.equals(dto.getDiscountBeforeRejection());
+        boolean financialTermsChanged = currentDiscount.compareTo(requestedDiscount) != 0
+                || Boolean.TRUE.equals(contract.getDiscountBeforeRejection()) != requestedTiming;
 
         // Cannot update terminated contracts
         if (contract.getStatus() == ContractStatus.TERMINATED) {
@@ -370,6 +382,20 @@ public class ProviderContractService {
 
         contract.setUpdatedBy(getCurrentUsername());
         contract = contractRepository.save(contract);
+        if (financialTermsChanged) {
+            if (contract.getStatus() != ContractStatus.DRAFT
+                    && (dto.getTermsChangeReason() == null || dto.getTermsChangeReason().isBlank())) {
+                throw new BusinessRuleException("سبب تعديل شروط الخصم مطلوب للتدقيق المالي");
+            }
+            LocalDate termsFrom = contract.getStatus() == ContractStatus.DRAFT
+                    ? contract.getStartDate()
+                    : (dto.getTermsEffectiveFrom() != null ? dto.getTermsEffectiveFrom() : LocalDate.now());
+            if (contract.getStatus() != ContractStatus.DRAFT && termsFrom.isBefore(LocalDate.now())) {
+                throw new BusinessRuleException("لا يمكن تطبيق تعديل شروط العقد بأثر رجعي؛ اختر تاريخ اليوم أو تاريخاً لاحقاً");
+            }
+            termsService.amend(contract, termsFrom, contract.getDiscountPercent(),
+                    contract.getDiscountBeforeRejection(), dto.getTermsChangeReason(), getCurrentUsername());
+        }
 
         log.info("Updated provider contract: {}", contract.getContractCode());
         logAudit("UPDATE", contract.getId(), "Updated contract " + contract.getContractCode());

@@ -21,7 +21,6 @@ import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
-import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +57,6 @@ public class ProviderSettlementReportService {
 
         private final ClaimRepository claimRepository;
         private final ProviderRepository providerRepository;
-        private final ProviderContractRepository contractRepository;
 
         /**
          * Generate Provider Settlement Report.
@@ -190,23 +188,17 @@ public class ProviderSettlementReportService {
                 // Generate report number
                 String reportNumber = generateReportNumber(providerId, toDate != null ? toDate : LocalDate.now());
 
-                // Apply provider contract discount to match actual credited amounts
-                BigDecimal discountPercent = contractRepository.findActiveContractByProvider(providerId)
-                                .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent() : BigDecimal.ZERO)
-                                .orElse(BigDecimal.ZERO);
-
-                BigDecimal contractDiscountAmount;
-                BigDecimal actualProviderShare;
-                if (discountPercent.compareTo(BigDecimal.ZERO) > 0) {
-                        BigDecimal providerRatio = BigDecimal.ONE
-                                        .subtract(discountPercent.divide(new BigDecimal("100"), 4,
-                                                        RoundingMode.HALF_EVEN));
-                        actualProviderShare = netProvider.multiply(providerRatio).setScale(2, RoundingMode.HALF_EVEN);
-                        contractDiscountAmount = netProvider.subtract(actualProviderShare);
-                } else {
-                        contractDiscountAmount = BigDecimal.ZERO;
-                        actualProviderShare = netProvider;
-                }
+                // Historical report law: aggregate persisted claim snapshots only.
+                // Never re-read today's contract and never discount netProviderAmount again.
+                BigDecimal contractDiscountAmount = claims.stream()
+                                .map(c -> c.getCompanyDiscountAmount() != null
+                                                ? c.getCompanyDiscountAmount() : BigDecimal.ZERO)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal actualProviderShare = netProvider;
+                BigDecimal discountBasis = contractDiscountAmount.add(actualProviderShare);
+                BigDecimal discountPercent = discountBasis.signum() == 0 ? BigDecimal.ZERO
+                                : contractDiscountAmount.multiply(new BigDecimal("100"))
+                                                .divide(discountBasis, 2, RoundingMode.HALF_UP);
 
                 // Build report DTO
                 ProviderSettlementReportDto report = ProviderSettlementReportDto.builder()

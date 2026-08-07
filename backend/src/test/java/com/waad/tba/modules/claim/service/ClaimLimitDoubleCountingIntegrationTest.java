@@ -51,6 +51,7 @@ import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.providercontract.service.ProviderContractTermsService;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
 import com.waad.tba.modules.visit.entity.Visit;
@@ -95,6 +96,9 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
 
     @Autowired
     private ProviderContractRepository contractRepository;
+
+    @Autowired
+    private ProviderContractTermsService termsService;
 
     @Autowired
     private ProviderContractPricingItemRepository pricingRepository;
@@ -209,6 +213,10 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
                 .status(ContractStatus.ACTIVE)
                 .active(true)
                 .build());
+        // Mirrors production: every contract-creating path must also create its
+        // effective terms row. The resolver fails closed, so a contract saved
+        // without terms makes claim creation impossible for that provider.
+        termsService.ensureEffectiveTerms(contract, "TEST");
     }
 
     /**
@@ -307,22 +315,30 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
         assertThat(totalApproved).isEqualByComparingTo("60.00");
     }
 
+    /**
+     * APPROVED claims are no longer editable at all: the financial snapshot is
+     * immutable once the claim is finalized, so contract/pricing changes can never
+     * silently rewrite a claim that has already consumed benefit limits (and, for
+     * SETTLED claims, already moved money). This test previously asserted that the
+     * limit re-validation rejected an over-limit edit; that path is now closed one
+     * level earlier — the edit itself is refused regardless of amount, which is a
+     * strictly stronger guarantee and also closes the double-counting vector by
+     * construction.
+     */
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void editingApprovedClaimLinesBeyondRemainingLimit_isRejected() {
+    void editingApprovedClaimLines_isRejectedOutright() {
         // Other real usage: 60 (a separate claim, untouched by the edit under test).
         Visit visitA = newVisitWithPricedService("A", new BigDecimal("60.00"));
         createDirectClaim(visitA, new BigDecimal("60.00"), "A");
 
-        // Claim under test: approved at 50. Remaining after both = 150 - 110 = 40.
+        // Claim under test: approved at 50.
         Visit visitB = newVisitWithPricedService("B", new BigDecimal("50.00"));
         ClaimViewDto claimB = createDirectClaim(visitB, new BigDecimal("50.00"), "B");
         assertThat(claimB.getApprovedAmount()).isEqualByComparingTo("50.00");
 
-        // Re-price claim B's own line to 100. Excluding claim B's own old 50, the
-        // other real usage is only 60 (claim A), so remaining = 150 - 60 = 90 — and
-        // 100 > 90 must be rejected. Before this fix, updateClaimData never
-        // re-validated limits at all, so this edit would have silently succeeded.
+        // Attempt to re-price claim B's own line to 100 (over the remaining limit).
+        // The amount is now irrelevant: an APPROVED claim cannot be edited at all.
         MedicalService repricedService = medicalServiceRepository.save(MedicalService.builder()
                 .code("SRV-" + suffix + "-B2")
                 .name("Service B2")
@@ -361,8 +377,8 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
         org.springframework.test.context.transaction.TestTransaction.end();
 
         assertThatThrownBy(() -> claimService.updateClaimData(claimB.getId(), editDto))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("90");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("APPROVED");
 
         // The rejected edit must not have persisted a partial/higher amount.
         ClaimViewDto reloaded = claimService.getClaim(claimB.getId());

@@ -72,6 +72,13 @@ public class ClaimLine {
     @Column(name = "pricing_item_id")
     private Long pricingItemId;
 
+    @Column(name = "contract_terms_id")
+    private Long contractTermsId;
+
+    /** Contract price snapshot used for this line; never re-read for final claims. */
+    @Column(name = "contract_unit_price", precision = 15, scale = 2)
+    private BigDecimal contractUnitPrice;
+
     /**
      * Service code (denormalized snapshot for reports/queries)
      */

@@ -89,9 +89,15 @@ class ClaimServiceCorrectionTransitionSecurityTest {
     void genericUpdateCannotReopenApprovedClaimForCorrection() {
         ClaimUpdateDto dto = ClaimUpdateDto.builder().status(ClaimStatus.NEEDS_CORRECTION).build();
 
+        // The guard now rejects ANY update to a finalized claim (APPROVED/BATCHED/
+        // SETTLED/REJECTED) up front, rather than only blocking the correction
+        // transition -- so the message changed from naming the request-correction
+        // endpoint to naming the reversal/corrective-settlement paths. The intent
+        // this test protects is unchanged: a generic update must never reopen a
+        // finalized claim, and must not touch the state machine or the ledger.
         assertThatThrownBy(() -> claimService.updateClaim(900L, dto))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("request-correction");
+                .hasMessageContaining("لا يمكن إعادة كتابة مطالبة نهائية");
 
         verify(claimStateMachine, never()).transition(
                 org.mockito.ArgumentMatchers.eq(approvedClaim),

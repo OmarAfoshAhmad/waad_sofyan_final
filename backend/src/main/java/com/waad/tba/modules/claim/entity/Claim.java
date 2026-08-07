@@ -276,6 +276,17 @@ public class Claim {
     @Column(name = "applied_discount_percent", precision = 5, scale = 2)
     private BigDecimal appliedDiscountPercent;
 
+    /** Exact provider contract selected by serviceDate and scope. */
+    @Column(name = "provider_contract_id")
+    private Long providerContractId;
+
+    /** Exact immutable-in-time contract terms selected for this calculation. */
+    @Column(name = "contract_terms_id")
+    private Long contractTermsId;
+
+    @Column(name = "financial_calculated_at")
+    private LocalDateTime financialCalculatedAt;
+
     /**
      * القيمة المستحقة للشركة (قيمة الخصم التعاقدي).
      * تُحسب آلياً بناءً على appliedDiscountPercent ولا يدخلها المستخدم.

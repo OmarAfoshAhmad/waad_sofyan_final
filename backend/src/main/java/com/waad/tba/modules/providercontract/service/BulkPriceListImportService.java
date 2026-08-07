@@ -80,10 +80,14 @@ public class BulkPriceListImportService {
 
     private static final int MAX_ERRORS_PER_PROVIDER = 50;
 
+    /** Recorded as the approver on any contract terms this import creates or amends. */
+    private static final String BULK_IMPORT_ACTOR = "BULK_PRICE_LIST_IMPORT";
+
     private final ProviderRepository             providerRepository;
     private final ProviderContractRepository     contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final MedicalCategoryRepository      medicalCategoryRepository;
+    private final ProviderContractTermsService   termsService;
 
     @lombok.Data
     private static class ParsedRow {
@@ -440,6 +444,7 @@ public class BulkPriceListImportService {
                 pac.contract.setDiscountPercent(new BigDecimal("10.00"));
                 contractRepository.save(pac.contract);
             }
+            termsService.ensureEffectiveTerms(pac.contract, BULK_IMPORT_ACTOR);
         } else {
             // Check if any contract exists (DRAFT / SUSPENDED) to reuse
             List<ProviderContract> anyContracts =
@@ -455,6 +460,7 @@ public class BulkPriceListImportService {
                     pac.contract.setDiscountPercent(new BigDecimal("10.00"));
                 }
                 contractRepository.save(pac.contract);
+                termsService.ensureEffectiveTerms(pac.contract, BULK_IMPORT_ACTOR);
                 pac.contractActivated = true;
                 log.info("[BulkImport] Activated existing contract {} for provider {}",
                         pac.contract.getContractCode(), providerName);
@@ -476,6 +482,10 @@ public class BulkPriceListImportService {
                         .build();
 
                 pac.contract = contractRepository.save(newContract);
+                // Mandatory: the effective-contract resolver fails closed, so a contract
+                // created without terms makes every future claim for this provider
+                // unwritable.
+                termsService.ensureEffectiveTerms(pac.contract, BULK_IMPORT_ACTOR);
                 pac.contractCreated = true;
                 log.info("[BulkImport] Created contract {} for provider {} (status=ACTIVE, discount=10%)",
                         contractCode, providerName);

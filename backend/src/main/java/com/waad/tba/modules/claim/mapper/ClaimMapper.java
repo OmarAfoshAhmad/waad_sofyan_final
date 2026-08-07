@@ -15,7 +15,7 @@ import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
-import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.claim.service.CoverageEngineService;
 import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
@@ -51,7 +51,7 @@ public class ClaimMapper {
         private final MedicalCategoryRepository medicalCategoryRepository;
         private final MedicalServiceRepository medicalServiceRepository;
         private final ProviderContractPricingItemRepository pricingItemRepository;
-        private final ProviderContractRepository providerContractRepository;
+        private final EffectiveProviderContractResolver effectiveContractResolver;
         private final ClaimBatchRepository claimBatchRepository;
         private final CoverageEngineService coverageEngineService;
         private final AuthorizationService authorizationService;
@@ -142,11 +142,17 @@ public class ClaimMapper {
 
                 List<ClaimLine> lines = new ArrayList<>();
                 BigDecimal totalRequestedAmount = BigDecimal.ZERO;
-                BigDecimal contractDiscountPercent = resolveActiveProviderDiscountPercent(claim.getProviderId());
-                claim.setAppliedDiscountPercent(contractDiscountPercent);
                 Long claimEmployerId = claim.getMember() != null && claim.getMember().getEmployer() != null
                                 ? claim.getMember().getEmployer().getId()
                                 : null;
+                var resolvedContract = effectiveContractResolver.resolve(
+                                claim.getProviderId(), claimEmployerId, claim.getServiceDate());
+                BigDecimal contractDiscountPercent = scale2(resolvedContract.terms().getDiscountPercent());
+                claim.setProviderContractId(resolvedContract.contract().getId());
+                claim.setContractTermsId(resolvedContract.terms().getId());
+                claim.setAppliedDiscountPercent(contractDiscountPercent);
+                claim.setDiscountBeforeRejection(resolvedContract.terms().getDiscountBeforeRejection());
+                claim.setFinancialCalculatedAt(LocalDateTime.now());
 
                 for (ClaimLineDto lineDto : lineDtos) {
                         BigDecimal enteredUnitPrice = lineDto.getUnitPrice() != null ? lineDto.getUnitPrice()
@@ -172,8 +178,7 @@ public class ClaimMapper {
                         }
 
                         ProviderContractPricingItem matchedPricingItem = resolvePricingItemForLine(
-                                        claim.getProviderId(),
-                                        claimEmployerId,
+                                        resolvedContract.contract().getId(), claim.getServiceDate(),
                                         resolvedPricingItemId,
                                         codeToLookup,
                                         resolvedServiceName);
@@ -395,6 +400,8 @@ public class ClaimMapper {
                                                         : (resolvedServiceName != null ? resolvedServiceName
                                                                         : "Unknown Service"))
                                         .pricingItemId(resolvedPricingItemId)
+                                        .contractTermsId(resolvedContract.terms().getId())
+                                        .contractUnitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
                                         .serviceCategoryId(serviceCatIdForCoverage)
                                         .serviceCategoryName(serviceCatName)
                                         .originalServiceCategoryId(pricingItemCategoryId)
@@ -553,20 +560,6 @@ public class ClaimMapper {
                 }
         }
 
-        private BigDecimal resolveActiveProviderDiscountPercent(Long providerId) {
-                if (providerId == null) {
-                        return ZERO;
-                }
-                BigDecimal discount = providerContractRepository.findActiveContractByProvider(providerId)
-                                .map(c -> c.getDiscountPercent() != null ? c.getDiscountPercent() : BigDecimal.ZERO)
-                                .orElse(BigDecimal.ZERO);
-                if (discount.compareTo(BigDecimal.ZERO) < 0 || discount.compareTo(HUNDRED) > 0) {
-                        throw new IllegalStateException("Invalid provider discount percent for provider " + providerId
-                                        + ": " + discount);
-                }
-                return scale2(discount);
-        }
-
         private BigDecimal scale2(BigDecimal value) {
                 return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
         }
@@ -633,9 +626,6 @@ public class ClaimMapper {
                 var employer = (member != null) ? member.getEmployer() : null;
 
                 BigDecimal appliedDiscount = claim.getAppliedDiscountPercent();
-                if (appliedDiscount == null) {
-                        appliedDiscount = resolveActiveProviderDiscountPercent(claim.getProviderId());
-                }
 
                 return ClaimViewDto.builder()
                                 .id(claim.getId())
@@ -658,19 +648,10 @@ public class ClaimMapper {
                                 .approvedAmount(claim.getApprovedAmount())
                                 .refusedAmount(claim.getRefusedAmount())
                                 .providerDiscountPercent(appliedDiscount)
-                                // خصم العقد يُطبق على حصة المرفق (الإجمالي - نصيب المستفيد)
-                                // وليس على كامل الإجمالي
-                                .providerDiscountAmount(
-                                                claim.getRequestedAmount() != null
-                                                                && claim.getPatientCoPay() != null
-                                                                && appliedDiscount != null
-                                                                                ? scale2(claim.getRequestedAmount()
-                                                                                                .subtract(claim.getPatientCoPay())
-                                                                                                .max(BigDecimal.ZERO)
-                                                                                                .multiply(appliedDiscount)
-                                                                                                .divide(HUNDRED, 2,
-                                                                                                                RoundingMode.HALF_UP))
-                                                                                : BigDecimal.ZERO)
+                                // القيمة المحفوظة فعلياً على المطالبة (companyDiscountAmount)، لا إعادة
+                                // حساب من النسبة — إعادة الحساب كانت تتجاهل refusedAmount وتوقيت الخصم
+                                // (قبل/بعد المرفوض)، فتنحرف عن اللقطة المالية الحقيقية للمطالبة.
+                                .companyDiscountAmount(claim.getCompanyDiscountAmount())
                                 .patientCoPay(claim.getPatientCoPay())
                                 .netProviderAmount(claim.getNetProviderAmount())
                                 .discountBeforeRejection(claim.getDiscountBeforeRejection())
@@ -751,71 +732,27 @@ public class ClaimMapper {
         }
 
         private ProviderContractPricingItem resolvePricingItemForLine(
-                        Long providerId,
-                        Long employerId,
+                        Long contractId,
+                        LocalDate serviceDate,
                         Long explicitPricingItemId,
                         String serviceCode,
                         String serviceName) {
                 if (explicitPricingItemId != null) {
-                        return pricingItemRepository.findById(explicitPricingItemId)
-                                        .filter(item -> Boolean.TRUE.equals(item.getActive()))
-                                        .orElse(null);
+                        return pricingItemRepository.findEffectiveInContractById(
+                                        contractId, explicitPricingItemId, serviceDate).orElse(null);
                 }
 
                 if (!hasBusinessValue(serviceCode) && !hasBusinessValue(serviceName)) {
                         return null;
                 }
 
-                return pricingItemRepository.findAllServicesByProvider(providerId).stream()
-                                .filter(item -> pricingItemAppliesToEmployer(item, employerId))
-                                .filter(item -> matchesPricingItem(item, serviceCode, serviceName))
-                                .sorted(Comparator.comparingInt(item -> pricingScopeRank(item, employerId)))
-                                .findFirst()
-                                .orElse(null);
-        }
-
-        private boolean matchesPricingItem(ProviderContractPricingItem item, String serviceCode, String serviceName) {
-                if (item == null) {
-                        return false;
-                }
-                if (hasBusinessValue(serviceCode) && hasBusinessValue(item.getServiceCode())
-                                && item.getServiceCode().trim().equalsIgnoreCase(serviceCode.trim())) {
-                        return true;
+                if (hasBusinessValue(serviceCode)) {
+                        var byCode = pricingItemRepository.findEffectiveInContractByCode(contractId, serviceCode, serviceDate);
+                        if (byCode.isPresent()) return byCode.get();
                 }
                 return hasBusinessValue(serviceName)
-                                && hasBusinessValue(item.getServiceName())
-                                && item.getServiceName().trim().equalsIgnoreCase(serviceName.trim());
-        }
-
-        private boolean pricingItemAppliesToEmployer(ProviderContractPricingItem item, Long employerId) {
-                if (item == null || item.getContract() == null || item.getContract().getPricingScope() == null) {
-                        return true;
-                }
-                String scope = item.getContract().getPricingScope().name();
-                if ("GLOBAL".equals(scope)) {
-                        return true;
-                }
-                return "EMPLOYER_SPECIFIC".equals(scope)
-                                && employerId != null
-                                && item.getContract().getEmployer() != null
-                                && employerId.equals(item.getContract().getEmployer().getId());
-        }
-
-        private int pricingScopeRank(ProviderContractPricingItem item, Long employerId) {
-                if (item == null || item.getContract() == null || item.getContract().getPricingScope() == null) {
-                        return 2;
-                }
-                String scope = item.getContract().getPricingScope().name();
-                if ("EMPLOYER_SPECIFIC".equals(scope)
-                                && employerId != null
-                                && item.getContract().getEmployer() != null
-                                && employerId.equals(item.getContract().getEmployer().getId())) {
-                        return 0;
-                }
-                if ("GLOBAL".equals(scope)) {
-                        return 1;
-                }
-                return 2;
+                                ? pricingItemRepository.findEffectiveInContractByName(contractId, serviceName, serviceDate).orElse(null)
+                                : null;
         }
 
         private boolean hasBusinessValue(String value) {

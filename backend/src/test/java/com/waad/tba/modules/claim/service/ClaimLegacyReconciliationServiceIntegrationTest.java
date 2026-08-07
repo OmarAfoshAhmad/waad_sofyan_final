@@ -47,6 +47,7 @@ import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
+import com.waad.tba.modules.providercontract.service.ProviderContractTermsService;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
 import com.waad.tba.modules.visit.entity.Visit;
@@ -99,6 +100,9 @@ class ClaimLegacyReconciliationServiceIntegrationTest extends PostgresIntegratio
 
     @Autowired
     private ProviderContractRepository contractRepository;
+
+    @Autowired
+    private ProviderContractTermsService termsService;
 
     @Autowired
     private ProviderContractPricingItemRepository pricingRepository;
@@ -167,6 +171,10 @@ class ClaimLegacyReconciliationServiceIntegrationTest extends PostgresIntegratio
                 .contractCode("CON-" + suffix).contractNumber("CNT-" + suffix).provider(provider)
                 .startDate(LocalDate.now().minusMonths(1)).endDate(LocalDate.now().plusMonths(11))
                 .status(ContractStatus.ACTIVE).active(true).build());
+        // Mirrors production: every contract-creating path must also create its
+        // effective terms row. The resolver fails closed, so a contract saved
+        // without terms makes claim creation impossible for that provider.
+        termsService.ensureEffectiveTerms(contract, "TEST");
     }
 
     private ClaimViewDto createApprovedClaim(BigDecimal price, String label) {

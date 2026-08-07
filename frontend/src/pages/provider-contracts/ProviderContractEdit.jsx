@@ -80,6 +80,8 @@ const ProviderContractEdit = () => {
         pricingModel: 'DISCOUNT',
         discountPercent: 0,
         discountBeforeRejection: false,
+        termsEffectiveFrom: new Date(),
+        termsChangeReason: '',
         notes: ''
       };
     }
@@ -93,6 +95,8 @@ const ProviderContractEdit = () => {
       pricingModel: contract.pricingModel || 'DISCOUNT',
       discountPercent: contract.discountPercent ?? 0,
       discountBeforeRejection: contract.discountBeforeRejection ?? false,
+      termsEffectiveFrom: new Date(),
+      termsChangeReason: '',
       notes: contract.notes || ''
     };
   }, [contract]);
@@ -111,6 +115,13 @@ const ProviderContractEdit = () => {
   }, [contract, employers, formData?.employerId]);
 
   const canChangeScope = contract?.status === 'DRAFT';
+  const financialTermsChanged = useMemo(() => {
+    if (!contract || !formData) return false;
+    return (
+      Number(formData.discountPercent || 0) !== Number(contract.discountPercent || 0) ||
+      Boolean(formData.discountBeforeRejection) !== Boolean(contract.discountBeforeRejection)
+    );
+  }, [contract, formData]);
 
   const updateMutation = useMutation({
     mutationFn: (payload) => updateProviderContract(id, payload),
@@ -177,6 +188,16 @@ const ProviderContractEdit = () => {
       }
     }
 
+    if (financialTermsChanged && contract?.status !== 'DRAFT') {
+      if (!formData?.termsEffectiveFrom) nextErrors.termsEffectiveFrom = 'تاريخ سريان تعديل الخصم مطلوب';
+      if (!formData?.termsChangeReason?.trim()) nextErrors.termsChangeReason = 'سبب تعديل الخصم مطلوب للتدقيق المالي';
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (formData?.termsEffectiveFrom && formData.termsEffectiveFrom < today) {
+        nextErrors.termsEffectiveFrom = 'لا يمكن تطبيق تعديل الخصم بأثر رجعي';
+      }
+    }
+
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -196,6 +217,8 @@ const ProviderContractEdit = () => {
       pricingModel: formData.pricingModel,
       discountPercent: formData.pricingModel === 'DISCOUNT' ? Number(formData.discountPercent) : null,
       discountBeforeRejection: formData.discountBeforeRejection,
+      termsEffectiveFrom: financialTermsChanged && contract.status !== 'DRAFT' ? format(formData.termsEffectiveFrom, 'yyyy-MM-dd') : null,
+      termsChangeReason: financialTermsChanged ? formData.termsChangeReason?.trim() || null : null,
       notes: formData.notes || null
     };
 
@@ -374,6 +397,46 @@ const ProviderContractEdit = () => {
                 />
               </Tooltip>
             </Grid>
+
+            {financialTermsChanged && contract.status !== 'DRAFT' && (
+              <>
+                <Grid size={12}>
+                  <Alert severity="warning">
+                    سيُحفظ تعديل الخصم كنسخة جديدة من تاريخ السريان أدناه. المطالبات السابقة تحتفظ بنسبة وتوقيت الخصم المحفوظين عليها.
+                  </Alert>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns}>
+                    <DatePicker
+                      label="تاريخ سريان تعديل الخصم *"
+                      value={formData.termsEffectiveFrom}
+                      minDate={new Date()}
+                      format="dd-MM-yyyy"
+                      onChange={handleDateChange('termsEffectiveFrom')}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          error: !!errors.termsEffectiveFrom,
+                          helperText: errors.termsEffectiveFrom || 'يطبق على الخدمات من هذا التاريخ فقط'
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField
+                    fullWidth
+                    required
+                    label="سبب تعديل الخصم"
+                    value={formData.termsChangeReason}
+                    onChange={handleInputChange('termsChangeReason')}
+                    error={!!errors.termsChangeReason}
+                    helperText={errors.termsChangeReason || 'يظهر في سجل التدقيق المالي'}
+                    inputProps={{ maxLength: 1000 }}
+                  />
+                </Grid>
+              </>
+            )}
 
             <Grid size={12}>
               <TextField fullWidth multiline rows={4} label="ملاحظات" value={formData.notes} onChange={handleInputChange('notes')} />

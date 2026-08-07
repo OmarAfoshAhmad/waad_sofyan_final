@@ -939,12 +939,20 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         /**
          * Get financial summary statistics for reports.
          * Returns: [totalCount, totalRequested, totalApproved, totalRefused, totalPaid,
-         * approvedCount, settledCount]
+         * totalCompanyDiscount, approvedCount, settledCount]
          *
          * NOTE: approvedAmount is summed for ALL non-DRAFT statuses PLUS DRAFT claims
          * that already
          * have an approvedAmount set (batch-entry backlog claims created directly as
          * processed).
+         *
+         * totalCompanyDiscount sums Claim.companyDiscountAmount under the SAME status
+         * filter as totalApproved/totalPaid — it is the persisted per-claim contract
+         * discount (company profit), not a derived percentage. Keeping it on the same
+         * status filter as the other totals lets callers present the persisted
+         * provider net and contract discount without reconstructing either value.
+         * Note: totalPaid currently mirrors netProviderAmount for historical reasons;
+         * it is not actual cash disbursement and must not be added to totalApproved.
          */
         @Query("SELECT COUNT(c), " +
                         "COALESCE(SUM(c.requestedAmount), 0), " +
@@ -954,6 +962,8 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         "               THEN c.refusedAmount ELSE 0 END), 0), " +
                         "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) THEN COALESCE(c.netProviderAmount, c.approvedAmount) ELSE 0 END), 0), "
                         +
+                        "COALESCE(SUM(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED) " +
+                        "               THEN c.companyDiscountAmount ELSE 0 END), 0), " +
                         "COUNT(CASE WHEN c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) THEN 1 END), "
                         +
                         "COUNT(CASE WHEN c.status = com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED THEN 1 END) "
