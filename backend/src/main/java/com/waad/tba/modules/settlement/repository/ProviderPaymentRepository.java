@@ -3,12 +3,14 @@ package com.waad.tba.modules.settlement.repository;
 import com.waad.tba.modules.settlement.entity.ProviderPayment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 
 public interface ProviderPaymentRepository extends JpaRepository<ProviderPayment, Long> {
 
@@ -22,6 +24,11 @@ public interface ProviderPaymentRepository extends JpaRepository<ProviderPayment
      */
     @Query("SELECT p FROM ProviderPayment p LEFT JOIN FETCH p.allocations WHERE p.id = :id")
     Optional<ProviderPayment> findByIdWithAllocations(@Param("id") Long id);
+
+    /** Lock order during posting: provider account first, then this payment. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT DISTINCT p FROM ProviderPayment p LEFT JOIN FETCH p.allocations WHERE p.id = :id")
+    Optional<ProviderPayment> findByIdWithAllocationsForUpdate(@Param("id") Long id);
 
     List<ProviderPayment> findByProviderIdOrderByPaymentDateDesc(Long providerId);
 

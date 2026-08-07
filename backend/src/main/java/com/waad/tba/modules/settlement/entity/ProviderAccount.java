@@ -159,6 +159,24 @@ public class ProviderAccount {
     }
 
     /**
+     * Records one real provider transfer. Unlike legacy batch debit, a transfer
+     * may exceed the current liability; the negative running balance is an
+     * explicit provider credit and must not be hidden by clamping to zero.
+     */
+    public void recordProviderPayment(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Provider payment amount must be positive");
+        }
+        if (status != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Cannot pay provider account with status: " + status);
+        }
+        this.runningBalance = this.runningBalance.subtract(amount);
+        this.totalPaid = this.totalPaid.add(amount);
+        this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
+    }
+
+    /**
      * Reverse a prior credit (claim reversal / deletion of approved claim).
      * Decreases both running_balance and total_approved so UI totals stay accurate.
      * Does NOT touch total_paid (which represents actual settlement payments only).

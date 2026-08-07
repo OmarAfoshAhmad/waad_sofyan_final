@@ -197,6 +197,24 @@ public class AccountTransaction {
                 .build();
     }
 
+    /** One immutable ledger debit for one provider bank transfer. */
+    public static AccountTransaction createProviderPaymentDebit(
+            Long accountId, Long paymentId, BigDecimal amount,
+            BigDecimal balanceBefore, LocalDate paymentDate, Long userId) {
+        return AccountTransaction.builder()
+                .providerAccountId(accountId)
+                .transactionType(TransactionType.DEBIT)
+                .amount(amount)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceBefore.subtract(amount))
+                .referenceType(ReferenceType.PROVIDER_PAYMENT)
+                .referenceId(paymentId)
+                .description(String.format("دفعة مباشرة لمقدم الخدمة رقم %d - خصم %s", paymentId, amount))
+                .transactionDate(paymentDate)
+                .createdBy(userId)
+                .build();
+    }
+
     /**
      * Create an ADJUSTMENT transaction (manual correction)
      */
