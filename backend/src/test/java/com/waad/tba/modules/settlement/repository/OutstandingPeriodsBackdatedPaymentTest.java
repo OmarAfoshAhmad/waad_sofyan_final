@@ -26,6 +26,7 @@ import com.waad.tba.modules.settlement.entity.PaymentMethod;
 import com.waad.tba.modules.settlement.entity.ProviderPayment;
 import com.waad.tba.modules.settlement.entity.ProviderPaymentAllocation;
 import com.waad.tba.modules.settlement.service.ProviderPaymentPostingService;
+import com.waad.tba.modules.settlement.service.ProviderPaymentReversalService;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -55,6 +56,7 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
     @Autowired ProviderAccountRepository accounts;
     @Autowired AccountTransactionRepository transactions;
     @Autowired ProviderPaymentPostingService postingService;
+    @Autowired ProviderPaymentReversalService reversalService;
 
     private Long providerId;
     private Long employerId;
@@ -126,6 +128,8 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
 
         jdbc.update("UPDATE provider_payments SET status = 'POSTED', ledger_transaction_id = ?, posted_by = 'test' WHERE id = ?",
                 ledgerId, paymentId);
+        jdbc.update("UPDATE provider_accounts SET running_balance = 0.00, total_paid = 1000.00, "
+                + "version = version + 1 WHERE provider_id = ?", providerId);
     }
 
     private BigDecimal juneOutstandingAsOf(LocalDate asOfDate) {
@@ -208,6 +212,28 @@ class OutstandingPeriodsBackdatedPaymentTest extends PostgresIntegrationTestBase
                 .isEqualTo(ProviderPayment.Status.DRAFT);
         assertThat(transactions.count()).isEqualTo(ledgerBefore);
         assertThat(accounts.findById(account.getId()).orElseThrow().getRunningBalance())
-                .isEqualByComparingTo("1000.00");
+                .isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void reversingPaymentReopensItsAllocatedPeriodForPosting() {
+        jdbc.update("""
+                INSERT INTO provider_accounts (provider_id, running_balance, total_approved, total_paid,
+                                               status, created_at, updated_at, version)
+                VALUES (?, 1000.00, 1000.00, 0.00, 'ACTIVE', now(), now(), 0)
+                """, providerId);
+        postLaterPaymentCoveringJune();
+        ProviderPayment posted = payments.findByProviderIdOrderByPaymentDateDesc(providerId).getFirst();
+        var account = accounts.findByProviderId(providerId).orElseThrow();
+        assertThat(payments.findOutstandingPeriodsForPosting(providerId, -1L)).isEmpty();
+
+        reversalService.reverse(posted.getId(), "إلغاء حوالة الاختبار", posted.getVersion(),
+                account.getVersion(), "supervisor", 88L);
+
+        BigDecimal reopened = payments.findOutstandingPeriodsForPosting(providerId, -1L).stream()
+                .filter(r -> r.getEmployerId().equals(employerId)
+                        && r.getTargetYear() == 2026 && r.getTargetMonth() == 6)
+                .map(OutstandingPeriod::getOutstandingAmount).findFirst().orElse(BigDecimal.ZERO);
+        assertThat(reopened).isEqualByComparingTo("1000.00");
     }
 }

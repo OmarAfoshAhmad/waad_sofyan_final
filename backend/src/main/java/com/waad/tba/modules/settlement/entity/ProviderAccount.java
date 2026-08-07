@@ -54,16 +54,14 @@ public class ProviderAccount {
     private BigDecimal runningBalance = BigDecimal.ZERO;
 
     /**
-     * Cumulative total of all approved claim amounts
-     * Only increases, never decreases
+     * Net total of approved claim amounts; claim reversals decrease it.
      */
     @Column(name = "total_approved", nullable = false, precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal totalApproved = BigDecimal.ZERO;
 
     /**
-     * Cumulative total of all settlement payments
-     * Only increases, never decreases
+     * Net total of posted settlement payments; payment reversals decrease it.
      */
     @Column(name = "total_paid", nullable = false, precision = 15, scale = 2)
     @Builder.Default
@@ -172,6 +170,24 @@ public class ProviderAccount {
         }
         this.runningBalance = this.runningBalance.subtract(amount);
         this.totalPaid = this.totalPaid.add(amount);
+        this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
+    }
+
+    /** Neutralises a posted provider transfer; both sides of the balance formula move. */
+    public void reverseProviderPayment(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Provider payment reversal amount must be positive");
+        }
+        if (status != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Cannot reverse payment on account with status: " + status);
+        }
+        if (totalPaid.compareTo(amount) < 0) {
+            throw new IllegalStateException(String.format(
+                    "Recorded total paid (%s) is less than reversal amount (%s)", totalPaid, amount));
+        }
+        this.runningBalance = this.runningBalance.add(amount);
+        this.totalPaid = this.totalPaid.subtract(amount);
         this.lastTransactionAt = LocalDateTime.now();
         assertBalanceInvariant();
     }

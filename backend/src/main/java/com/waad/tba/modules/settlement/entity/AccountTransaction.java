@@ -215,6 +215,24 @@ public class AccountTransaction {
                 .build();
     }
 
+    /** Append-only credit that neutralises one provider payment debit. */
+    public static AccountTransaction createProviderPaymentReversalCredit(
+            Long accountId, Long paymentId, BigDecimal amount,
+            BigDecimal balanceBefore, LocalDate reversalDate, String reason, Long userId) {
+        return AccountTransaction.builder()
+                .providerAccountId(accountId)
+                .transactionType(TransactionType.CREDIT)
+                .amount(amount)
+                .balanceBefore(balanceBefore)
+                .balanceAfter(balanceBefore.add(amount))
+                .referenceType(ReferenceType.PROVIDER_PAYMENT_REVERSAL)
+                .referenceId(paymentId)
+                .description(String.format("عكس دفعة مقدم الخدمة رقم %d: %s", paymentId, reason))
+                .transactionDate(reversalDate)
+                .createdBy(userId)
+                .build();
+    }
+
     /**
      * Create an ADJUSTMENT transaction (manual correction)
      */
