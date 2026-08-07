@@ -34,7 +34,11 @@ public class PaymentRecord {
     @Column(name = "target_month", nullable = false)
     private Integer targetMonth;
 
-    @Column(name = "amount", precision = 12, scale = 3, nullable = false)
+    // Money is NUMERIC(15,2) system-wide (see V66 for the actual column). The
+    // previous scale = 3 did not match the schema and implied a sub-cent precision
+    // the database cannot store, so a third decimal would have been silently
+    // rounded away on write. Libyan dinar amounts are never finer than 0.01.
+    @Column(name = "amount", precision = 15, scale = 2, nullable = false)
     private BigDecimal amount;
 
     @Column(name = "payment_date", nullable = false)

@@ -26,10 +26,14 @@ public class PaymentAuditLog {
     @Column(name = "action_type", nullable = false, length = 50)
     private String actionType; // CREATE, UPDATE, DELETE
 
-    @Column(name = "old_amount", precision = 12, scale = 3)
+    // Money is NUMERIC(15,2) system-wide (see V66 for the actual columns). The
+    // previous scale = 3 did not match the schema and implied a sub-cent precision
+    // the database cannot store, so a third decimal would have been silently
+    // rounded away on write.
+    @Column(name = "old_amount", precision = 15, scale = 2)
     private BigDecimal oldAmount;
 
-    @Column(name = "new_amount", precision = 12, scale = 3)
+    @Column(name = "new_amount", precision = 15, scale = 2)
     private BigDecimal newAmount;
 
     @Column(name = "reason", length = 1000)
