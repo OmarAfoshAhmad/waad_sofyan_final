@@ -220,6 +220,37 @@ public class ProviderAccount {
     /**
      * Suspend the account (temporary hold)
      */
+    /**
+     * Corrects the recorded paid total to match the ledger, keeping the balance
+     * equation intact by moving runningBalance the opposite way.
+     *
+     * Exists because the phase-0 audit found accounts whose totalPaid is
+     * explained by neither the payment documents nor the ledger. Such an account
+     * cannot have its payments reversed (the reversal guard refuses to drive
+     * totalPaid negative), so without an explicit, audited correction the
+     * operator would be stuck. Always paired with an ADJUSTMENT ledger entry by
+     * the calling service — the amount never moves silently.
+     *
+     * @param signedDelta positive raises totalPaid, negative lowers it
+     */
+    public void applyPaidTotalCorrection(BigDecimal signedDelta) {
+        if (signedDelta == null || signedDelta.signum() == 0) {
+            throw new IllegalArgumentException("Adjustment delta must be non-zero");
+        }
+        if (status != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Cannot adjust account with status: " + status);
+        }
+        BigDecimal correctedPaid = this.totalPaid.add(signedDelta);
+        if (correctedPaid.signum() < 0) {
+            throw new IllegalStateException(String.format(
+                    "Correction would make total paid negative: %s + %s", this.totalPaid, signedDelta));
+        }
+        this.totalPaid = correctedPaid;
+        this.runningBalance = this.runningBalance.subtract(signedDelta);
+        this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
+    }
+
     public void suspend() {
         if (status == AccountStatus.CLOSED) {
             throw new IllegalStateException("Cannot suspend a closed account");

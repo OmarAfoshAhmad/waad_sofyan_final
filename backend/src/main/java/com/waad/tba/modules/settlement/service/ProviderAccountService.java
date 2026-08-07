@@ -904,6 +904,18 @@ public class ProviderAccountService {
          * soft-deleted (active=false), create the missing CLAIM_REVERSAL debit so the
          * running_balance reflects reality.
          *
+         * ⚠ NAME IS NARROWER THAN IT SOUNDS. Despite being called
+         * "recalculateBalance", this only repairs orphaned claim credits. It does not
+         * look at payment documents or the payment ledger at all, and therefore cannot
+         * detect or repair a mismatch between provider_payments, PROVIDER_PAYMENT
+         * ledger entries and ProviderAccount.totalPaid — the split the phase-0 audit
+         * actually found in production.
+         *
+         * For that, use {@code ProviderAccountReconciliationService} to diagnose and
+         * {@code ProviderAccountAdjustmentService} to correct. The two operations are
+         * separate on purpose: reconciliation never writes, correction always leaves an
+         * ADJUSTMENT ledger entry with a reason and an actor.
+         *
          * This is the correct repair path. Simply recalculating from transactions would
          * yield the same stale result because the orphaned credits are still in the
          * transaction log. We must create the matching debit entries.
