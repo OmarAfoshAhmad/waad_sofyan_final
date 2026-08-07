@@ -253,6 +253,38 @@ public class ProviderAccount {
         assertBalanceInvariant();
     }
 
+    /**
+     * Applies a change to an already-approved claim's amount. Moves totalApproved
+     * and runningBalance together by the same signed delta; totalPaid is never
+     * touched, because no money moved — the company's liability simply changed.
+     *
+     * A prior implementation used {@link #debit(BigDecimal)} for the decrease
+     * case, which raised totalPaid as if a payment had occurred. That corrupted
+     * totalPaid, produced phantom drift in reconciliation, and could block a
+     * legitimate later reversal under the Phase 6 guard.
+     *
+     * @param delta positive when the approved amount increased, negative when it decreased
+     */
+    public void adjustApprovedAmount(BigDecimal delta) {
+        if (delta == null || delta.signum() == 0) {
+            throw new IllegalArgumentException("Approved amount adjustment delta must be non-zero");
+        }
+        if (status != AccountStatus.ACTIVE) {
+            throw new IllegalStateException("Cannot adjust approved amount on account with status: " + status);
+        }
+        BigDecimal correctedApproved = this.totalApproved.add(delta);
+        if (correctedApproved.signum() < 0) {
+            throw new IllegalStateException(String.format(
+                    "Adjustment would make total approved negative: %s + %s", this.totalApproved, delta));
+        }
+        this.totalApproved = correctedApproved;
+        // A prior negative running balance (provider credit) is a legitimate state
+        // (V139) and must not block reducing the approved amount that caused it.
+        this.runningBalance = this.runningBalance.add(delta);
+        this.lastTransactionAt = LocalDateTime.now();
+        assertBalanceInvariant();
+    }
+
     public void suspend() {
         if (status == AccountStatus.CLOSED) {
             throw new IllegalStateException("Cannot suspend a closed account");

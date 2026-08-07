@@ -26,8 +26,6 @@ import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 
-import com.waad.tba.modules.settlement.event.ClaimAmountAdjustedEvent;
-import org.springframework.context.event.EventListener;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
@@ -431,62 +429,12 @@ public class ProviderAccountService {
                 return tx;
         }
 
-        /**
-         * Handle claim amount adjustments for already approved/settled claims.
-         * Processes the delta (difference) and updates the account balance.
-         */
-        @EventListener
-        @Transactional
-        public void handleClaimAmountAdjusted(ClaimAmountAdjustedEvent event) {
-                log.info("📊 Processing amount adjustment for claim {}: old={}, new={}, delta={}",
-                                event.getClaimId(), event.getOldApprovedAmount(), 
-                                event.getNewApprovedAmount(), event.getDeltaAmount());
-
-                BigDecimal delta = event.getDeltaAmount();
-                if (delta.compareTo(BigDecimal.ZERO) == 0) {
-                        return; // No financial change
-                }
-
-                ProviderAccount account = accountRepository.findByProviderIdForUpdate(event.getProviderId())
-                                .orElseThrow(() -> new EntityNotFoundException(
-                                                "Provider account not found for provider: " + event.getProviderId()));
-
-                if (!account.isActive()) {
-                        throw new IllegalStateException("Cannot adjust inactive account for provider " + event.getProviderId());
-                }
-
-                BigDecimal balanceBefore = account.getRunningBalance();
-                String note;
-
-                if (delta.compareTo(BigDecimal.ZERO) > 0) {
-                        // Amount increased -> Credit the difference
-                        account.credit(delta);
-                        note = String.format("تسوية إضافة فارق تعديل مطالبة (الرقم: %d). القديم: %s، الجديد: %s", 
-                                        event.getClaimId(), event.getOldApprovedAmount(), event.getNewApprovedAmount());
-                        
-                        accountRepository.save(account);
-                        transactionService.createAdjustment(account, delta, true, balanceBefore, note, event.getUserId());
-                        log.info("📈 Account credited with delta {} for claim {}", delta, event.getClaimId());
-                } else {
-                        // Amount decreased -> Debit the absolute difference
-                        BigDecimal debitAmount = delta.abs();
-                        
-                        if (balanceBefore.compareTo(debitAmount) < 0) {
-                                log.warn("⚠️ Insufficient balance to debit delta for claim {}. Required: {}, Available: {}. Proceeding anyway to fix anomaly.", 
-                                                event.getClaimId(), debitAmount, balanceBefore);
-                                // Depending on system rules, you might allow negative balance or throw exception. 
-                                // We allow it to maintain financial identity.
-                        }
-                        
-                        account.debit(debitAmount);
-                        note = String.format("تسوية خصم فارق تعديل مطالبة (الرقم: %d). القديم: %s، الجديد: %s", 
-                                        event.getClaimId(), event.getOldApprovedAmount(), event.getNewApprovedAmount());
-                        
-                        accountRepository.save(account);
-                        transactionService.createAdjustment(account, debitAmount, false, balanceBefore, note, event.getUserId());
-                        log.info("📉 Account debited with delta {} for claim {}", debitAmount, event.getClaimId());
-                }
-        }
+        // Claim amount adjustments for already-approved claims are handled by
+        // ClaimAmountAdjustmentService — moved out (Phase 7.1). The prior version
+        // here called account.debit() when an approved amount decreased, which
+        // raised totalPaid as if a payment had occurred. See that class for the
+        // corrected accounting (totalApproved/runningBalance only) and the
+        // (claimId, claimVersion) idempotency key a bare claimId cannot provide.
 
         /**
          * Debit the provider account when a claim is individually settled (paid

@@ -607,7 +607,7 @@ public class ClaimService {
                 eventPublisher.publishEvent(new ClaimAmountAdjustedEvent(
                         this, updatedClaim.getId(), updatedClaim.getProviderId(),
                         oldApprovedAmount, updatedClaim.getApprovedAmount(),
-                        currentUser != null ? currentUser.getId() : null));
+                        currentUser != null ? currentUser.getId() : null, updatedClaim.getVersion()));
             }
         }
 
@@ -807,7 +807,7 @@ public class ClaimService {
             eventPublisher.publishEvent(new ClaimAmountAdjustedEvent(
                     this, updatedClaim.getId(), updatedClaim.getProviderId(),
                     oldApprovedAmount, updatedClaim.getApprovedAmount(),
-                    currentUser != null ? currentUser.getId() : null));
+                    currentUser != null ? currentUser.getId() : null, updatedClaim.getVersion()));
             log.info("📤 ClaimAmountAdjustedEvent published for edited approved claim {}: {} -> {}",
                     updatedClaim.getId(), oldApprovedAmount, updatedClaim.getApprovedAmount());
         }
