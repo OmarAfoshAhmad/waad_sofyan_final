@@ -323,6 +323,25 @@ public class AccountTransaction {
          */
         CLAIM_REVERSAL("عكس اعتماد مطالبة"),
 
+        /**
+         * Direct bank transfer to a provider — DEBIT. reference_id is a
+         * ProviderPayment id.
+         *
+         * Deliberately NOT reused from SETTLEMENT_PAYMENT: that type means a
+         * SettlementBatch payment and carries a batch id in reference_id, and the
+         * existing idempotency guard looks up (SETTLEMENT_PAYMENT, referenceId).
+         * Sharing the type would let provider payment #5 collide with settlement
+         * batch #5 and be silently treated as an already-recorded transaction.
+         */
+        PROVIDER_PAYMENT("دفعة مباشرة لمقدم خدمة"),
+
+        /**
+         * Compensating CREDIT that neutralises a PROVIDER_PAYMENT. A separate
+         * entry rather than an edit of the original, keeping the ledger
+         * append-only.
+         */
+        PROVIDER_PAYMENT_REVERSAL("عكس دفعة مقدم خدمة"),
+
         /** Manual adjustment */
         ADJUSTMENT("تسوية يدوية");
 

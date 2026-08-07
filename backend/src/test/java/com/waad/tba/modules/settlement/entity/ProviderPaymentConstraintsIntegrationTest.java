@@ -167,6 +167,7 @@ class ProviderPaymentConstraintsIntegrationTest extends PostgresIntegrationTestB
     @Test
     void reversedPaymentWithoutReasonIsRejected() {
         ProviderPayment payment = draft("100.00")
+                .idempotencyKey("REVERSED-CHECK-" + UUID.randomUUID())
                 .status(ProviderPayment.Status.REVERSED)
                 .reversedAt(java.time.LocalDateTime.now())
                 .build();

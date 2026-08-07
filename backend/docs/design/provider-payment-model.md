@@ -189,7 +189,7 @@ GET    /providers/{id}/reconciliation     حالة المطابقة
 
 **رأس الدفعة**: `id · providerId/Name · amount · paymentDate · method · referenceNumber ·
 status · allocatedAmount · unallocatedAmount · notes · attachmentPath · ledgerTransactionId ·
-postedAt/By · reversedAt/By/Reason · version`
+reversalLedgerTransactionId · postedAt/By · reversedAt/By/Reason · version`
 
 **التخصيص**: `id · employerId/Name · targetYear · targetMonth · amount · outstandingAtAllocation ·
 allocationMethod (AUTO_FIFO|AUTO_PROPORTIONAL|MANUAL) · overrideReason`
@@ -222,7 +222,7 @@ DOCUMENT_WITHOUT_LEDGER · UNDER_ALLOCATED · OVER_ALLOCATED · BALANCE_DRIFT ·
 |---|---|---|
 | 0 | تدقيق الإنتاج | ✅ نُفِّذ — أثبت الانفصال البنيوي: 257 د.ل مستندات مقابل **صفر قيد دفتر**، و`total_paid = 2,012` لا يفسّره أي منهما |
 | 1 | توحيد الدقة المالية | ✅ `309e4548` |
-| 2 | الجداول والحالات | ✅ `V137` + الكيانات + 13 اختبار قيود على PostgreSQL حقيقي |
+| 2 | الجداول والحالات | ✅ `V137` للنموذج + `V138` لآلة الحالات والتجميد وصحة قيود الدفتر؛ 32 اختبار PostgreSQL حقيقي |
 | 3 | هجرة البيانات | ❌ **مُلغاة** — لا بيانات إنتاج (انظر §6) |
 | 4 | توزيع FIFO | |
 | 5 | ربط الدفعة بالدفتر | |

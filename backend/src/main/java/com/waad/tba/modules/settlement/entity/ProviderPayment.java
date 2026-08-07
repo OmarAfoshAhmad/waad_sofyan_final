@@ -81,9 +81,17 @@ public class ProviderPayment {
     @Column(name = "attachment_path", length = 500)
     private String attachmentPath;
 
-    /** The one ledger entry produced by posting this payment. */
+    /** The one ledger entry produced by posting this payment (DEBIT). */
     @Column(name = "ledger_transaction_id")
     private Long ledgerTransactionId;
+
+    /**
+     * The compensating ledger entry produced by reversing this payment (CREDIT).
+     * Separate from {@link #ledgerTransactionId} because a reversal is its own
+     * append-only movement, not an edit of the original entry.
+     */
+    @Column(name = "reversal_ledger_transaction_id")
+    private Long reversalLedgerTransactionId;
 
     @Column(name = "posted_at")
     private LocalDateTime postedAt;
