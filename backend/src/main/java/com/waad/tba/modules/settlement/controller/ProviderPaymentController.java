@@ -77,8 +77,8 @@ public class ProviderPaymentController {
 
     @GetMapping("/by-provider/{providerId}")
     public ResponseEntity<ApiResponse<List<ProviderPaymentDto>>> listByProvider(@PathVariable Long providerId) {
-        List<ProviderPaymentDto> dtos = payments.findByProviderIdOrderByPaymentDateDesc(providerId).stream()
-                .map(ProviderPaymentDto::from).toList();
+        List<ProviderPaymentDto> dtos = payments.findByProviderIdWithAllocationsOrderByPaymentDateDesc(providerId)
+                .stream().map(ProviderPaymentDto::from).toList();
         return ResponseEntity.ok(ApiResponse.success(dtos));
     }
 

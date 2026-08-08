@@ -32,6 +32,11 @@ public interface ProviderPaymentRepository extends JpaRepository<ProviderPayment
 
     List<ProviderPayment> findByProviderIdOrderByPaymentDateDesc(Long providerId);
 
+    /** Fetch-joined so callers that read allocations (e.g. a payment list view) don't hit LazyInitializationException. */
+    @Query("SELECT DISTINCT p FROM ProviderPayment p LEFT JOIN FETCH p.allocations "
+            + "WHERE p.providerId = :providerId ORDER BY p.paymentDate DESC, p.id DESC")
+    List<ProviderPayment> findByProviderIdWithAllocationsOrderByPaymentDateDesc(@Param("providerId") Long providerId);
+
     /**
      * What the provider has actually been paid, per the payment documents.
      * Only POSTED counts: drafts have no ledger effect and reversals are
