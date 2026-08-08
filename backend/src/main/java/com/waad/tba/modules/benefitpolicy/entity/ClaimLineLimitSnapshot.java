@@ -38,8 +38,13 @@ public class ClaimLineLimitSnapshot {
     /** Mirrors WaadFinancialEngine.Result's need to distinguish what kind of limit this is. */
     public enum LimitScopeType { SERVICE, CATEGORY, GROUP, POLICY_GENERAL, FAMILY, LIFETIME }
 
-    /** Where the effective limit value for this row came from. */
-    public enum SourceType { POLICY_DEFAULT, EMPLOYER_OVERRIDE, MEMBER_OVERRIDE, PREAUTH_RESERVATION }
+    /**
+     * Where the effective limit VALUE for this row came from. Deliberately
+     * excludes reservations: a pre-authorization reservation reduces
+     * availableBefore (via reservedBefore), it does not set the limit value
+     * itself, so it is not a "source" in this sense.
+     */
+    public enum SourceType { POLICY_DEFAULT, EMPLOYER_OVERRIDE, MEMBER_OVERRIDE }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -125,8 +130,9 @@ public class ClaimLineLimitSnapshot {
     @Builder.Default
     private BigDecimal reservedBefore = BigDecimal.ZERO;
 
-    @Column(name = "binding_available_before", nullable = false, precision = 15, scale = 2)
-    private BigDecimal bindingAvailableBefore;
+    /** This limit's own available amount before this line's consumption -- carried on every row, not only the binding one. */
+    @Column(name = "available_before", nullable = false, precision = 15, scale = 2)
+    private BigDecimal availableBefore;
 
     /** WaadFinancialEngine.Result.settlementBase for this line -- repeated on every row for this line; do not sum across rows. */
     @Column(name = "line_settlement_base", nullable = false, precision = 15, scale = 2)
@@ -146,7 +152,14 @@ public class ClaimLineLimitSnapshot {
     @Column(name = "available_after", nullable = false, precision = 15, scale = 2)
     private BigDecimal availableAfter;
 
-    /** True for exactly the one limit (across this line's rows) that actually constrained the result. */
+    /**
+     * True for every row (across this line's applicable-limit rows) whose
+     * availableBefore equals the line's bindingAvailableLimit. Usually
+     * exactly one row, but ties are legitimate (e.g. a service bucket and
+     * its parent group bucket both at the same available amount) and
+     * produce more than one binding row; zero rows are binding when
+     * limitMode is UNLIMITED.
+     */
     @Column(name = "is_binding", nullable = false)
     @Builder.Default
     private boolean binding = false;

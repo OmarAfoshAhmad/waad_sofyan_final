@@ -189,7 +189,7 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
                 .effectiveLimit(new BigDecimal("500.00"))
                 .consumedBefore(BigDecimal.ZERO)
                 .reservedBefore(BigDecimal.ZERO)
-                .bindingAvailableBefore(new BigDecimal("500.00"))
+                .availableBefore(new BigDecimal("500.00"))
                 .lineSettlementBase(new BigDecimal("100.00"))
                 .lineInsideLimit(new BigDecimal("100.00"))
                 .limitConsumption(new BigDecimal("100.00"))
@@ -243,7 +243,7 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
     @Transactional
-    void availableAfterMustEqualBindingAvailableBeforeMinusConsumption() {
+    void availableAfterMustEqualAvailableBeforeMinusConsumption() {
         Fixture f = buildApprovedClaimWithBucket();
 
         ClaimLineLimitSnapshot wrongArithmetic = buildSnapshot(f, true).toBuilder()
@@ -280,6 +280,25 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
 
     private org.springframework.transaction.PlatformTransactionManager transactionManager() {
         return transactionManagerBean;
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
+    @Transactional
+    void tiedLimitsCanBothBeBinding_noConstraintForcesExactlyOne() {
+        Fixture f = buildApprovedClaimWithBucket();
+
+        ClaimLineLimitSnapshot serviceRow = buildSnapshot(f, true);
+        ClaimLineLimitSnapshot groupRow = buildSnapshot(f, true).toBuilder()
+                .limitScopeType(LimitScopeType.GROUP)
+                .limitSemanticKey("GROUP:" + f.bucket().getBenefitGroup().getId())
+                .consumptionOrder(2)
+                .build();
+
+        List<ClaimLineLimitSnapshot> saved = snapshotService.saveAll(List.of(serviceRow, groupRow));
+
+        assertThat(saved).hasSize(2);
+        assertThat(saved).allMatch(ClaimLineLimitSnapshot::isBinding);
     }
 
     @Test
