@@ -358,12 +358,15 @@ public class ClaimMapper {
                         // discount, rejection, net company share) flows through this single
                         // pure engine -- see ClaimLineFinancialEngine for why the ordering
                         // between the discount and the rejection is not interchangeable.
+                        // maximumCompanyShare is not wired yet (finance-00: annual-ceiling
+                        // engine integration is a separate, tracked follow-up) -- null here
+                        // means "no ceiling constraint", identical to today's behavior.
                         ClaimLineFinancialEngine.Result calc = claimLineFinancialEngine.evaluate(
                                         new ClaimLineFinancialEngine.Input(
                                                         effectiveGross, coveragePercent, manualRefused,
                                                         result.getPriceRefused(), result.getLimitRefused(),
                                                         contractDiscountPercent, beforeRejection, isRejected,
-                                                        quantity));
+                                                        quantity, null));
 
                         BigDecimal patientShare = calc.patientShare();
                         BigDecimal finalPayable = calc.companyShare();

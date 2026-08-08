@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  *
  * Invariant enforced by construction (not just by convention): for every
  * result, requestedAmount == patientShare + refusedAmount +
- * companyDiscountAmount + companyShare.
+ * companyDiscountAmount + companyShare + limitExceededAmount.
  */
 @Component
 public class ClaimLineFinancialEngine {
@@ -55,6 +55,16 @@ public class ClaimLineFinancialEngine {
      *                              rejection candidate, ignoring manualRefusedAmount
      * @param quantity              the line's quantity, used only to report
      *                              approvedQuantity (0 when nothing is payable)
+     * @param maximumCompanyShare   the annual policy ceiling's remaining balance,
+     *                              or null when no ceiling applies. This is the
+     *                              ONLY number the caller passes in for the
+     *                              ceiling -- the engine decides how it interacts
+     *                              with the discount, not the caller. Cutting
+     *                              companyShare down to this value AFTER calling
+     *                              evaluate() would be wrong: in AFTER-rejection
+     *                              mode the discount base must already reflect
+     *                              the ceiling cut, exactly like it must reflect
+     *                              the rejection.
      */
     public record Input(
             BigDecimal grossAmount,
@@ -65,7 +75,8 @@ public class ClaimLineFinancialEngine {
             BigDecimal discountPercent,
             boolean discountBeforeRejection,
             boolean fullyRejected,
-            int quantity) {
+            int quantity,
+            BigDecimal maximumCompanyShare) {
     }
 
     /**
@@ -80,6 +91,14 @@ public class ClaimLineFinancialEngine {
      *                              rejection actually applied (capped at what
      *                              remained available to reject)
      * @param companyDiscountAmount the provider contract's discount actually applied
+     * @param limitExceededAmount   the portion that would otherwise have gone to
+     *                              companyShare but did not fit under
+     *                              maximumCompanyShare. Deliberately NOT folded
+     *                              into patientShare (the member did not agree
+     *                              to absorb it) or refusedAmount (it is not a
+     *                              medical or price refusal) -- who ultimately
+     *                              bears it is a policy decision made elsewhere,
+     *                              not by this engine.
      * @param approvedQuantity      quantity when companyShare is positive, else 0
      */
     public record Result(
@@ -89,6 +108,7 @@ public class ClaimLineFinancialEngine {
             BigDecimal companyShare,
             BigDecimal refusedAmount,
             BigDecimal companyDiscountAmount,
+            BigDecimal limitExceededAmount,
             int approvedQuantity) {
     }
 
@@ -116,29 +136,54 @@ public class ClaimLineFinancialEngine {
         BigDecimal rejectedAmount;
         BigDecimal companyShare;
         BigDecimal companyDiscountAmount;
+        BigDecimal limitExceededAmount;
+        BigDecimal maximumCompanyShare = input.maximumCompanyShare() == null
+                ? null : maxZero(scale2(input.maximumCompanyShare()));
 
         if (input.discountBeforeRejection()) {
-            // MODE: BEFORE (discount on the full provider share, then subtract the rejection)
+            // MODE: BEFORE. Order: discount on the full provider share -> subtract
+            // the rejection -> THEN cap at the ceiling last, exactly as worked
+            // through by hand: providerShare=800, discount=80 -> net=720,
+            // reject=0 -> 720, ceiling=600 -> companyShare=600, exceeded=120.
             companyDiscountAmount = scale2(
                     providerShare.multiply(discountPercent).divide(HUNDRED, 2, RoundingMode.HALF_UP));
             BigDecimal providerNet = maxZero(scale2(providerShare.subtract(companyDiscountAmount)));
             rejectedAmount = min(providerNet, rejectionCandidate);
-            companyShare = maxZero(scale2(providerNet.subtract(rejectedAmount)));
+            BigDecimal afterRejection = maxZero(scale2(providerNet.subtract(rejectedAmount)));
+            if (maximumCompanyShare != null && afterRejection.compareTo(maximumCompanyShare) > 0) {
+                limitExceededAmount = scale2(afterRejection.subtract(maximumCompanyShare));
+                companyShare = maximumCompanyShare;
+            } else {
+                limitExceededAmount = ZERO;
+                companyShare = afterRejection;
+            }
         } else {
-            // MODE: AFTER (subtract the rejection first, then discount only the remainder)
+            // MODE: AFTER. Order: subtract the rejection -> cap at the ceiling ->
+            // THEN discount only what's left, because the discount base must
+            // reflect every exclusion that came before it, the ceiling included
+            // -- the same rule already applied to the rejection.
             BigDecimal candidateToSubtract = min(providerShare, rejectionCandidate);
             BigDecimal afterRejection = maxZero(scale2(providerShare.subtract(candidateToSubtract)));
-            companyDiscountAmount = scale2(
-                    afterRejection.multiply(discountPercent).divide(HUNDRED, 2, RoundingMode.HALF_UP));
             rejectedAmount = candidateToSubtract;
-            companyShare = maxZero(scale2(afterRejection.subtract(companyDiscountAmount)));
+
+            BigDecimal discountBase;
+            if (maximumCompanyShare != null && afterRejection.compareTo(maximumCompanyShare) > 0) {
+                limitExceededAmount = scale2(afterRejection.subtract(maximumCompanyShare));
+                discountBase = maximumCompanyShare;
+            } else {
+                limitExceededAmount = ZERO;
+                discountBase = afterRejection;
+            }
+            companyDiscountAmount = scale2(
+                    discountBase.multiply(discountPercent).divide(HUNDRED, 2, RoundingMode.HALF_UP));
+            companyShare = maxZero(scale2(discountBase.subtract(companyDiscountAmount)));
         }
 
         BigDecimal refusedAmount = scale2(priceRefused.add(limitRefused).add(rejectedAmount));
         int approvedQuantity = companyShare.compareTo(BigDecimal.ZERO) > 0 ? input.quantity() : 0;
 
         return new Result(requestedAmount, allowedAmount, patientShare, companyShare,
-                refusedAmount, companyDiscountAmount, approvedQuantity);
+                refusedAmount, companyDiscountAmount, limitExceededAmount, approvedQuantity);
     }
 
     private static BigDecimal scale2(BigDecimal value) {
