@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,7 +22,11 @@ import com.waad.tba.common.guard.FeatureGuard;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.settlement.dto.AdjustProviderAccountRequest;
 import com.waad.tba.modules.settlement.dto.CreateProviderPaymentRequest;
+import com.waad.tba.modules.settlement.dto.PostProviderPaymentRequest;
+import com.waad.tba.modules.settlement.dto.ReverseProviderPaymentRequest;
+import com.waad.tba.modules.settlement.dto.ProviderPaymentDto;
 import com.waad.tba.modules.settlement.entity.PaymentMethod;
 import com.waad.tba.modules.systemadmin.service.FeatureFlagService;
 import com.waad.tba.support.PostgresIntegrationTestBase;
@@ -37,6 +42,7 @@ import com.waad.tba.support.PostgresIntegrationTestBase;
 class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBase {
 
     @Autowired ProviderPaymentController controller;
+    @Autowired ProviderAccountReconciliationController reconciliationController;
     @Autowired FeatureFlagService featureFlagService;
     @Autowired ProviderRepository providers;
 
@@ -81,5 +87,76 @@ class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBas
         request.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
 
         assertThatCode(() -> controller.createDraft(request)).doesNotThrowAnyException();
+    }
+
+    // ── تعطيل العلم أثناء جلسة مفتوحة ────────────────────────────────────────
+
+    /**
+     * A draft created while the flag was ON must not become postable just
+     * because the client's screen was opened before an admin turned the flag
+     * back off — the gate must be re-checked at every write, not just at the
+     * moment a session began.
+     */
+    @Test
+    @WithMockUser(roles = "ACCOUNTANT")
+    void aDraftOpenedWhileEnabledCannotBePostedAfterTheFlagIsDisabledMidSession() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Long providerId = providers.save(Provider.builder().name("MidSession Hospital " + suffix)
+                .providerType(ProviderType.HOSPITAL).licenseNumber("MID-" + suffix)
+                .allowAllEmployers(true).active(true).build()).getId();
+
+        featureFlagService.toggleFeatureFlag(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, true, "test");
+
+        var createRequest = new CreateProviderPaymentRequest();
+        createRequest.setProviderId(providerId);
+        createRequest.setAmount(new BigDecimal("50.00"));
+        createRequest.setPaymentDate(LocalDate.now());
+        createRequest.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
+        ProviderPaymentDto draft = controller.createDraft(createRequest).getBody().getData();
+        assertThat(draft).isNotNull();
+
+        // The flag flips off mid-session, as if an admin disabled it while this
+        // draft's tab stayed open.
+        featureFlagService.toggleFeatureFlag(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, false, "test");
+
+        var postRequest = new PostProviderPaymentRequest();
+        postRequest.setExpectedPaymentVersion(draft.getVersion());
+        postRequest.setExpectedAccountVersion(0L);
+
+        assertThatThrownBy(() -> controller.post(draft.getId(), postRequest))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("503");
+    }
+
+    // ── صلاحيات المستخدمين المختلفة ──────────────────────────────────────────
+
+    @Test
+    @WithMockUser(roles = "EMPLOYER_ADMIN")
+    void aRoleWithoutAccountantOrSuperAdminIsDeniedOnEveryWriteEndpoint() {
+        featureFlagService.toggleFeatureFlag(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, true, "test");
+
+        var createRequest = new CreateProviderPaymentRequest();
+        createRequest.setProviderId(1L);
+        createRequest.setAmount(new BigDecimal("10.00"));
+        createRequest.setPaymentDate(LocalDate.now());
+        createRequest.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
+        assertThatThrownBy(() -> controller.createDraft(createRequest))
+                .isInstanceOf(AccessDeniedException.class);
+
+        assertThatThrownBy(() -> controller.post(1L, new PostProviderPaymentRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        assertThatThrownBy(() -> controller.reverse(1L, new ReverseProviderPaymentRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        assertThatThrownBy(() -> reconciliationController.adjust(1L, new AdjustProviderAccountRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "EMPLOYER_ADMIN")
+    void aRoleWithoutWritePermissionCanStillReadEverything() {
+        assertThatCode(() -> controller.listByProvider(1L)).doesNotThrowAnyException();
+        assertThatCode(() -> reconciliationController.reconcileAll()).doesNotThrowAnyException();
     }
 }
