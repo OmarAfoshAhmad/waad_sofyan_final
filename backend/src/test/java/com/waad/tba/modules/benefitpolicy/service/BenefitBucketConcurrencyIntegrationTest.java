@@ -73,6 +73,8 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
     @Autowired VisitRepository visitRepository;
     @Autowired ClaimRepository claimRepository;
     @Autowired UserRepository userRepository;
+    @Autowired EffectiveLimitResolver effectiveLimitResolver;
+    @Autowired LimitBalanceReader limitBalanceReader;
 
     @BeforeEach
     void ensureAuthenticatedUserExists() {
@@ -212,6 +214,74 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
         }
     }
 
+    @Test
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
+    void principalAndDependentHaveIndependentBalancesFromTheSamePolicyLimits() {
+        Fixture principal = createFixture(new BigDecimal("1000.00"), null, null);
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Member dependentMember = memberRepository.save(Member.builder()
+                .fullName("Dependent Member").barcode("DEP-BC-" + suffix)
+                .nationalNumber("DEP-NAT-" + suffix).employer(principal.member().getEmployer())
+                .benefitPolicy(principal.policy()).parent(principal.member())
+                .relationship(Member.Relationship.SON).active(true).build());
+        Fixture dependent = new Fixture(dependentMember, principal.provider(), principal.service(),
+                principal.bucket(), principal.policy(), principal.rule());
+
+        Long principalClaimId = createClaim(principal, createVisit(principal, LocalDate.now()), LocalDate.now());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var claim = claimRepository.findById(principalClaimId).orElseThrow();
+            claim.setStatus(ClaimStatus.APPROVED);
+            claimRepository.save(claim);
+            ledgerService.commitClaim(principalClaimId);
+        });
+
+        Long dependentDraftClaimId = createClaim(dependent, createVisit(dependent, LocalDate.now()), LocalDate.now());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            var dependentDraftClaim = claimRepository.findById(dependentDraftClaimId).orElseThrow();
+            var dependentDraftLine = dependentDraftClaim.getLines().get(0);
+            consumptionRepository.save(BenefitBucketConsumption.builder()
+                    .claim(dependentDraftClaim).claimLine(dependentDraftLine).policy(principal.policy())
+                    .memberId(dependent.member().getId()).bucket(principal.bucket())
+                    .periodStart(LocalDate.of(LocalDate.now().getYear(), 1, 1))
+                    .periodEnd(LocalDate.of(LocalDate.now().getYear(), 12, 31))
+                    .approvedAmount(new BigDecimal("48.00")).timesConsumed(1)
+                    .status(BenefitBucketConsumption.Status.RESERVED)
+                    .calculationVersion(dependentDraftLine.getCalculationVersion())
+                    .idempotencyKey("TEST:RESERVED:" + dependentDraftClaimId).build());
+        });
+
+        var principalLimits = effectiveLimitResolver.resolve(principal.policy().getId(), principal.rule().getId(),
+                principal.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
+        var dependentLimits = effectiveLimitResolver.resolve(dependent.policy().getId(), dependent.rule().getId(),
+                dependent.member().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
+        var principalBalances = limitBalanceReader.read(principal.member().getId(), principalLimits, null);
+        var dependentBalances = limitBalanceReader.read(dependent.member().getId(), dependentLimits, null);
+
+        assertThat(principalLimits).extracting(EffectiveLimitResolver.EffectiveLimit::effectiveLimit)
+                .containsExactlyElementsOf(dependentLimits.stream()
+                        .map(EffectiveLimitResolver.EffectiveLimit::effectiveLimit).toList());
+        assertThat(balance(principalBalances, "BUCKET:" + principal.bucket().getId()).committed())
+                .isEqualByComparingTo("48.00");
+        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
+        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).reserved())
+                .isEqualByComparingTo("48.00");
+        assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).signedAvailable())
+                .isEqualByComparingTo("952.00");
+        assertThat(balance(principalBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed())
+                .isEqualByComparingTo("48.00");
+        assertThat(balance(dependentBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();
+
+        var excludingCurrent = limitBalanceReader.read(principal.member().getId(), principalLimits, principalClaimId);
+        assertThat(balance(excludingCurrent, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
+        assertThat(balance(excludingCurrent, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();
+    }
+
+    private LimitBalanceReader.LimitBalance balance(LimitBalanceReader.BalanceSet set, String semanticKey) {
+        return set.limits().stream()
+                .filter(value -> value.limit().definition().semanticKey().equals(semanticKey))
+                .findFirst().orElseThrow();
+    }
+
     private List<Boolean> commitConcurrently(Long firstClaim, Long secondClaim) throws Exception {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -318,9 +388,9 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
                 .shared(true).active(true).build());
         ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(bucket).build());
-        return new Fixture(member, provider, service, bucket);
+        return new Fixture(member, provider, service, bucket, policy, rule);
     }
 
     private record Fixture(Member member, Provider provider, MedicalService service,
-                           BenefitLimitBucket bucket) {}
+                           BenefitLimitBucket bucket, BenefitPolicy policy, BenefitPolicyRule rule) {}
 }

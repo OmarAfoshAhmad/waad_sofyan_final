@@ -25,9 +25,9 @@ import java.util.Map;
 /**
  * WAAD-FIN-1.0: answers exactly one question -- "what limits apply to this
  * claim line, on this service date?" -- and nothing else. Purely structural:
- * no override selection (see the not-yet-built LimitSourceProvider family),
- * no consumption/reservation reading (see the not-yet-built
- * LimitBalanceReader), no financial calculation, no persistence. Those stay
+ * no override selection (see {@link EffectiveLimitResolver}), no
+ * consumption/reservation reading (see {@link LimitBalanceReader}), no
+ * financial calculation, no persistence. Those stay
  * separate on purpose so each can be tested, reasoned about, and eventually
  * replaced independently -- see backend/docs/design/FINANCIAL_CONSTITUTION.md.
  *
