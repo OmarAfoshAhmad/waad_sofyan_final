@@ -175,11 +175,12 @@ public class BenefitStructureImportService {
             read(workbook, "Groups", 5, (row, n) -> p.groups.add(new GroupRow(
                     text(row, 0), text(row, 1), benefitContext(row, 2, n),
                     enumValue(AggregationMode.class, row, 3, n), bool(row, 4, true), n)));
-            read(workbook, "Buckets", 14, (row, n) -> p.buckets.add(new BucketRow(
+            read(workbook, "Buckets", 15, (row, n) -> p.buckets.add(new BucketRow(
                     text(row, 0), text(row, 1), text(row, 2), benefitContext(row, 3, n),
                     decimal(row, 4), integer(row, 5), integer(row, 6), enumValue(LimitPeriodType.class, row, 7, n), integer(row, 8, 1),
                     enumValue(CountingMethod.class, row, 9, n), enumValue(ConsumptionBasis.class, row, 10, n),
-                    text(row, 11), bool(row, 12, false), bool(row, 13, true), n)));
+                    enumValue(BenefitScopeType.class, row, 11, n), text(row, 12),
+                    bool(row, 13, false), bool(row, 14, true), n)));
             read(workbook, "Links", 6, (row, n) -> p.links.add(new LinkRow(
                     text(row, 0), benefitContext(row, 1, n), text(row, 2),
                     integer(row, 3, 1), enumValue(ConsumptionMode.class, row, 4, n), bool(row, 5, true), n)));
@@ -223,7 +224,7 @@ public class BenefitStructureImportService {
                         amount, times, days, enumOrDefault(LimitPeriodType.class, row, 9, n, LimitPeriodType.POLICY_PERIOD),
                         benefitsHasPeriodValue ? integer(row, 10, 1) : 1,
                         enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
-                        null, false, bool(row, activeColumn, true), n));
+                        BenefitScopeType.CATEGORY, null, false, bool(row, activeColumn, true), n));
                 p.links.add(new LinkRow(category, context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
             }
         });
@@ -239,7 +240,7 @@ public class BenefitStructureImportService {
                         enumOrDefault(LimitPeriodType.class, row, 7, n, LimitPeriodType.POLICY_PERIOD),
                         groupsHasPeriodValue ? integer(row, 8, 1) : 1,
                         enumOrDefault(CountingMethod.class, row, countingColumn, n, CountingMethod.EACH_UNIT), ConsumptionBasis.COMPANY_SHARE,
-                        null, true, active, n));
+                        BenefitScopeType.GROUP, null, true, active, n));
                 String members = text(row, 3);
                 if (members != null) for (String member : members.split("[,،]"))
                     if (!member.isBlank()) p.links.add(new LinkRow(member.trim(), context, bucketCode, 1, ConsumptionMode.PRIMARY, true, n));
@@ -282,6 +283,8 @@ public class BenefitStructureImportService {
                 errors.add("Buckets صف " + b.row + ": bucket_code أو bucket_name فارغ — code=" + b.code + ", name=" + b.name);
             if (!groupCodes.contains(b.groupCode))
                 errors.add("Buckets صف " + b.row + ": group_code «" + b.groupCode + "» غير موجود في ورقة Groups");
+            if (b.benefitScopeType == null)
+                errors.add("Buckets صف " + b.row + ": benefit_scope_type مطلوب (SERVICE/CATEGORY/GROUP)");
             if (!blank(b.parentCode) && !bucketCodes.contains(b.parentCode))
                 errors.add("Buckets صف " + b.row + ": الوعاء الأب غير موجود " + b.parentCode);
             if (requiresPeriodValue(b.period) && (b.periodValue == null || b.periodValue < 2))
@@ -341,6 +344,7 @@ public class BenefitStructureImportService {
             bucket.setBenefitGroup(group); bucket.setNameAr(row.name); bucket.setContextType(EncounterType.SPECIAL);
             bucket.setAmountLimit(row.amount); bucket.setTimesLimit(row.times); bucket.setPeriodType(row.period); bucket.setPeriodValue(1);
             bucket.setCountingMethod(CountingMethod.EACH_LINE); bucket.setConsumptionBasis(ConsumptionBasis.COMPANY_SHARE);
+            bucket.setBenefitScopeType(BenefitScopeType.SERVICE);
             bucket.setShared(false); bucket.setActive(row.active); bucketRepository.save(bucket);
         }
         Map<String, BenefitLimitBucket> buckets = new HashMap<>();
@@ -351,6 +355,7 @@ public class BenefitStructureImportService {
             b.setBenefitGroup(groups.get(row.groupCode)); b.setNameAr(row.name); b.setContextType(row.context);
             b.setAmountLimit(row.amount); b.setTimesLimit(row.times); b.setDaysLimit(row.days); b.setPeriodType(row.period); b.setPeriodValue(row.periodValue);
             b.setCountingMethod(row.counting); b.setConsumptionBasis(row.basis); b.setShared(row.shared); b.setActive(row.active);
+            b.setBenefitScopeType(row.benefitScopeType);
             buckets.put(row.code, bucketRepository.save(b));
         }
         for (BucketRow row : p.buckets) if (!blank(row.parentCode)) {
@@ -508,7 +513,7 @@ public class BenefitStructureImportService {
     private interface RowConsumer { void accept(Row row, int number); }
     private record RuleRow(String categoryCode,String categoryName,EncounterType context,Integer coverage,BigDecimal copay,Integer waitingDays,boolean preApproval,Integer priority,String notes,boolean active,int row){}
     private record GroupRow(String code,String name,EncounterType context,AggregationMode mode,boolean active,int row){}
-    private record BucketRow(String code,String name,String groupCode,EncounterType context,BigDecimal amount,Integer times,Integer days,LimitPeriodType period,Integer periodValue,CountingMethod counting,ConsumptionBasis basis,String parentCode,boolean shared,boolean active,int row){}
+    private record BucketRow(String code,String name,String groupCode,EncounterType context,BigDecimal amount,Integer times,Integer days,LimitPeriodType period,Integer periodValue,CountingMethod counting,ConsumptionBasis basis,BenefitScopeType benefitScopeType,String parentCode,boolean shared,boolean active,int row){}
     private record LinkRow(String categoryCode,EncounterType context,String bucketCode,Integer order,ConsumptionMode mode,boolean mandatory,int row){}
     private record SpecialRow(String definitionCode,String name,Integer coverage,BigDecimal copay,BigDecimal amount,Integer times,LimitPeriodType period,boolean preApproval,String notes,String sourceClause,boolean active,int row){}
     private static class Parsed { List<RuleRow> rules=new ArrayList<>(); List<GroupRow> groups=new ArrayList<>(); List<BucketRow> buckets=new ArrayList<>(); List<LinkRow> links=new ArrayList<>(); List<SpecialRow> specials=new ArrayList<>(); List<String> warnings=new ArrayList<>(); List<String> reviewErrors=new ArrayList<>(); }

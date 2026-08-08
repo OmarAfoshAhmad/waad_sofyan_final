@@ -2,6 +2,8 @@ package com.waad.tba.modules.benefitpolicy.entity;
 
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -35,9 +37,6 @@ import java.time.LocalDateTime;
 @Getter @Setter @Builder(toBuilder = true) @NoArgsConstructor @AllArgsConstructor
 public class ClaimLineLimitSnapshot {
 
-    /** Mirrors WaadFinancialEngine.Result's need to distinguish what kind of limit this is. */
-    public enum LimitScopeType { SERVICE, CATEGORY, GROUP, POLICY_GENERAL, FAMILY, LIFETIME }
-
     /**
      * Where the effective limit VALUE for this row came from. Deliberately
      * excludes reservations: a pre-authorization reservation reduces
@@ -62,8 +61,13 @@ public class ClaimLineLimitSnapshot {
     private Integer calculationVersion;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "limit_scope_type", nullable = false, length = 20)
-    private LimitScopeType limitScopeType;
+    @Column(name = "benefit_scope_type", nullable = false, length = 20)
+    private BenefitScopeType benefitScopeType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "beneficiary_scope_type", nullable = false, length = 20)
+    @Builder.Default
+    private BeneficiaryScopeType beneficiaryScopeType = BeneficiaryScopeType.MEMBER;
 
     /**
      * Stable identity for this limit independent of whether it is a real
@@ -75,7 +79,7 @@ public class ClaimLineLimitSnapshot {
     @Column(name = "limit_semantic_key", nullable = false, length = 200)
     private String limitSemanticKey;
 
-    /** Null exactly when limitScopeType == POLICY_GENERAL (DB-enforced, see the CHECK constraint). */
+    /** Null exactly when benefitScopeType == POLICY_GENERAL (DB-enforced). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bucket_id")
     private BenefitLimitBucket bucket;

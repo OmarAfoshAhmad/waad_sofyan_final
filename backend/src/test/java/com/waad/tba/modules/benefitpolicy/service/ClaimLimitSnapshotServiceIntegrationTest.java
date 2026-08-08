@@ -24,7 +24,8 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot;
-import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot.LimitScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType;
 import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot.SourceType;
 import com.waad.tba.modules.benefitpolicy.enums.AggregationMode;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
@@ -142,7 +143,9 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
                 .policy(policy).benefitGroup(group).code("BUC-" + suffix).nameAr("سقف الاختبار")
                 .contextType(EncounterType.OUTPATIENT).amountLimit(new BigDecimal("500.00"))
                 .periodType(LimitPeriodType.ANNUAL).countingMethod(CountingMethod.EACH_LINE)
-                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE).shared(false).active(true).build());
+                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE)
+                .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.SERVICE)
+                .shared(false).active(true).build());
 
         ProviderContract contract = contractRepository.save(ProviderContract.builder()
                 .contractCode("CON-" + suffix).contractNumber("CNT-" + suffix).provider(provider)
@@ -178,7 +181,7 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
                 .claim(f.claim())
                 .claimLine(claimLineRefOnly(f.claimLineId()))
                 .calculationVersion(1)
-                .limitScopeType(LimitScopeType.SERVICE)
+                .benefitScopeType(BenefitScopeType.SERVICE)
                 .limitSemanticKey("BUCKET:" + f.bucket().getId())
                 .bucket(f.bucket())
                 .policy(f.policy())
@@ -222,6 +225,21 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
         assertThat(row.isBinding()).isTrue();
         assertThat(row.getAvailableAfter()).isEqualByComparingTo("400.00");
         assertThat(row.getLimitSemanticKey()).isEqualTo("BUCKET:" + f.bucket().getId());
+        assertThat(row.getBeneficiaryScopeType()).isEqualTo(BeneficiaryScopeType.MEMBER);
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
+    @Transactional
+    void familySharingFailsClosedUntilItsFinancialPolicyIsImplemented() {
+        Fixture f = buildApprovedClaimWithBucket();
+
+        ClaimLineLimitSnapshot unsupported = buildSnapshot(f, false).toBuilder()
+                .beneficiaryScopeType(BeneficiaryScopeType.FAMILY)
+                .build();
+
+        assertThatThrownBy(() -> snapshotService.saveAll(List.of(unsupported)))
+                .isInstanceOf(DataAccessException.class);
     }
 
     @Test
@@ -232,7 +250,7 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
 
         // POLICY_GENERAL with a non-null bucket must be rejected by the CHECK constraint.
         ClaimLineLimitSnapshot invalid = buildSnapshot(f, false).toBuilder()
-                .limitScopeType(LimitScopeType.POLICY_GENERAL)
+                .benefitScopeType(BenefitScopeType.POLICY_GENERAL)
                 .limitSemanticKey("POLICY_GENERAL:" + f.policy().getId())
                 .build(); // bucket is still set from buildSnapshot -- must fail
 
@@ -290,7 +308,7 @@ class ClaimLimitSnapshotServiceIntegrationTest extends PostgresIntegrationTestBa
 
         ClaimLineLimitSnapshot serviceRow = buildSnapshot(f, true);
         ClaimLineLimitSnapshot groupRow = buildSnapshot(f, true).toBuilder()
-                .limitScopeType(LimitScopeType.GROUP)
+                .benefitScopeType(BenefitScopeType.GROUP)
                 .limitSemanticKey("GROUP:" + f.bucket().getBenefitGroup().getId())
                 .consumptionOrder(2)
                 .build();

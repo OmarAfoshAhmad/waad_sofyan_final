@@ -200,7 +200,9 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .policy(policy).benefitGroup(group).code("BUC-" + suffix).nameAr("سقف مسار المراجعة")
                 .contextType(EncounterType.OUTPATIENT).amountLimit(new BigDecimal("100000.00"))
                 .periodType(LimitPeriodType.ANNUAL).countingMethod(CountingMethod.EACH_LINE)
-                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE).shared(false).active(true).build());
+                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE)
+                .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
+                .shared(false).active(true).build());
         benefitRuleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(bucket).build());
 
         // 10% contract discount, BEFORE mode -- the same ordering rule that was

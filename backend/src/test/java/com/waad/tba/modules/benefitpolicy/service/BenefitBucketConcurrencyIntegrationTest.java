@@ -314,7 +314,9 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .contextType(EncounterType.OUTPATIENT).amountLimit(amountLimit)
                 .timesLimit(timesLimit).daysLimit(daysLimit)
                 .periodType(LimitPeriodType.ANNUAL).countingMethod(CountingMethod.EACH_LINE)
-                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE).shared(true).active(true).build());
+                .consumptionBasis(ConsumptionBasis.COMPANY_SHARE)
+                .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
+                .shared(true).active(true).build());
         ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(bucket).build());
         return new Fixture(member, provider, service, bucket);
     }

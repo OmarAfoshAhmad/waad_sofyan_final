@@ -5,7 +5,8 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitLimitBucket.LimitRole;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitRuleBucket;
-import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot.LimitScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BeneficiaryScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitRuleBucketRepository;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
@@ -47,14 +48,13 @@ public class ApplicableLimitResolver {
      * One resolved limit definition -- structural only, no balance/consumption
      * data. {@code hierarchyDepth} is 0 for a bucket directly linked to the
      * rule via {@link BenefitRuleBucket}, and increases by 1 per
-     * {@code parentBucket} hop. {@code scopeType} maps depth 0 to SERVICE and
-     * depth &gt;= 1 to GROUP for now -- the bucket data model does not itself
-     * carry a CATEGORY/FAMILY/LIFETIME distinction, so this mapping is a
-     * provisional convention pending confirmation, not a schema-backed fact.
+     * {@code parentBucket} hop. Scope is an explicit bucket property and is
+     * never inferred from hierarchy depth.
      */
     public record ApplicableLimitDefinition(
             String semanticKey,
-            LimitScopeType scopeType,
+            BenefitScopeType benefitScopeType,
+            BeneficiaryScopeType beneficiaryScopeType,
             Long bucketId,
             Long policyId,
             Long benefitRuleId,
@@ -105,6 +105,12 @@ public class ApplicableLimitResolver {
             }
             if (!bucket.isActive()) continue;
             if (bucket.getContextType() != EncounterType.ANY && bucket.getContextType() != encounterType) continue;
+            if (bucket.getBenefitScopeType() == null) {
+                throw new IllegalStateException("BUCKET_SCOPE_NOT_CLASSIFIED: bucket id=" + bucket.getId());
+            }
+            if (bucket.getBeneficiaryScopeType() == null) {
+                throw new IllegalStateException("BUCKET_BENEFICIARY_SCOPE_NOT_CLASSIFIED: bucket id=" + bucket.getId());
+            }
 
             if (bucket.getAmountLimit() == null || bucket.getAmountLimit().signum() < 0) {
                 throw new IllegalStateException("BUCKET_LIMIT_VALUE_MISSING: bucket id=" + bucket.getId()
@@ -114,7 +120,7 @@ public class ApplicableLimitResolver {
             BucketPeriodCalculator.Period period = BucketPeriodCalculator.resolve(bucket, policy, serviceDate);
             result.add(new ApplicableLimitDefinition(
                     "BUCKET:" + bucket.getId(),
-                    rb.hierarchyDepth == 0 ? LimitScopeType.SERVICE : LimitScopeType.GROUP,
+                    bucket.getBenefitScopeType(), bucket.getBeneficiaryScopeType(),
                     bucket.getId(), policyId, benefitRuleId,
                     bucket.getBenefitGroup() != null ? bucket.getBenefitGroup().getId() : null,
                     bucket.getAmountLimit(), bucket.getPeriodType().name(),
@@ -127,7 +133,7 @@ public class ApplicableLimitResolver {
                     com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.ANNUAL, 1, policy, serviceDate);
             result.add(new ApplicableLimitDefinition(
                     "POLICY_GENERAL:" + policyId,
-                    LimitScopeType.POLICY_GENERAL,
+                    BenefitScopeType.POLICY_GENERAL, BeneficiaryScopeType.MEMBER,
                     null, policyId, benefitRuleId, null,
                     policy.getAnnualLimit(), "ANNUAL",
                     annualPeriod.start(), annualPeriod.end(),

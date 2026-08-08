@@ -43,6 +43,12 @@ public class BenefitLimitBucket {
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "parent_bucket_id") private BenefitLimitBucket parentBucket;
     @Enumerated(EnumType.STRING) @Column(name = "limit_role", nullable = false, length = 30)
     @Builder.Default private LimitRole limitRole = LimitRole.STANDARD;
+    /** Explicit medical meaning; never inferred from parent depth. Mirrors are excluded from resolution. */
+    @Enumerated(EnumType.STRING) @Column(name = "benefit_scope_type", length = 20)
+    private BenefitScopeType benefitScopeType;
+    /** Who shares the accumulator. FAMILY remains DB-disabled until its policy is implemented. */
+    @Enumerated(EnumType.STRING) @Column(name = "beneficiary_scope_type", nullable = false, length = 20)
+    @Builder.Default private BeneficiaryScopeType beneficiaryScopeType = BeneficiaryScopeType.MEMBER;
     @Column(nullable = false) @Builder.Default private boolean shared = false;
     @Column(nullable = false) @Builder.Default private boolean active = true;
     @Version private Long version;

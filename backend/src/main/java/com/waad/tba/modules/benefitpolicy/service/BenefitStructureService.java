@@ -76,6 +76,7 @@ public class BenefitStructureService {
                             ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT
                             : request.countingMethod())
                     .consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
                     .shared(ruleIds.size() > 1).active(request.active() == null || request.active()).build();
             BenefitLimitBucket savedBucket = bucketRepository.save(bucket);
             int order = 1;
@@ -121,6 +122,7 @@ public class BenefitStructureService {
                 .findFirst().orElseGet(() -> BenefitLimitBucket.builder()
                         .policy(group.getPolicy()).benefitGroup(group).code("AUTO-GRP-" + group.getCode())
                         .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                        .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP)
                         .build());
         bucket.setNameAr(name);
         bucket.setContextType(request.contextType());
@@ -132,6 +134,7 @@ public class BenefitStructureService {
         bucket.setCountingMethod(request.countingMethod() == null
                 ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT : request.countingMethod());
         bucket.setShared(true);
+        bucket.setBenefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.GROUP);
         bucket.setActive(request.active() == null || request.active());
         BenefitLimitBucket savedBucket = bucketRepository.save(bucket);
 
@@ -200,6 +203,7 @@ public class BenefitStructureService {
                 .contextType(request.contextType()).amountLimit(request.amountLimit()).timesLimit(request.timesLimit())
                 .daysLimit(request.daysLimit()).periodType(request.periodType()).periodValue(request.periodValue() == null ? 1 : request.periodValue()).countingMethod(request.countingMethod())
                 .consumptionBasis(request.consumptionBasis()).parentBucket(parent)
+                .benefitScopeType(request.benefitScopeType())
                 .shared(Boolean.TRUE.equals(request.shared())).active(request.active() == null || request.active()).build();
         return bucketResponse(bucketRepository.save(bucket));
     }
@@ -270,6 +274,7 @@ public class BenefitStructureService {
             bucket = BenefitLimitBucket.builder().policy(rule.getBenefitPolicy()).benefitGroup(group)
                     .code("AUTO-BEN-LIMIT-RULE-" + ruleId).nameAr(rule.getLabel()).contextType(rule.getEncounterType())
                     .periodValue(request.periodValue() == null ? 1 : request.periodValue()).consumptionBasis(com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis.COMPANY_SHARE)
+                    .benefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.CATEGORY)
                     .shared(false).active(true).build();
         } else {
             bucket = existingLink.getBucket();
@@ -288,6 +293,7 @@ public class BenefitStructureService {
                 ? com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType.POLICY_PERIOD : request.periodType());
         bucket.setCountingMethod(request.countingMethod() == null
                 ? com.waad.tba.modules.benefitpolicy.enums.CountingMethod.EACH_UNIT : request.countingMethod());
+        bucket.setBenefitScopeType(com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType.CATEGORY);
         bucket = bucketRepository.save(bucket);
         if (existingLink == null) {
             ruleBucketRepository.save(BenefitRuleBucket.builder().rule(rule).bucket(bucket).consumptionOrder(1)
@@ -498,7 +504,8 @@ public class BenefitStructureService {
     private BucketResponse bucketResponse(BenefitLimitBucket b) {
         return new BucketResponse(b.getId(), b.getBenefitGroup().getId(), b.getCode(), b.getNameAr(), b.getContextType(),
                 b.getAmountLimit(), b.getTimesLimit(), b.getDaysLimit(), b.getPeriodType(), b.getPeriodValue(), b.getCountingMethod(),
-                b.getConsumptionBasis(), b.getParentBucket() == null ? null : b.getParentBucket().getId(),
+                b.getConsumptionBasis(), b.getBenefitScopeType(), b.getBeneficiaryScopeType(),
+                b.getParentBucket() == null ? null : b.getParentBucket().getId(),
                 b.isShared(), b.isActive());
     }
 }

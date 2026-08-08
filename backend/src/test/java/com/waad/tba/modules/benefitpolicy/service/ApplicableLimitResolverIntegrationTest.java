@@ -22,7 +22,7 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitRuleBucket;
-import com.waad.tba.modules.benefitpolicy.entity.ClaimLineLimitSnapshot.LimitScopeType;
+import com.waad.tba.modules.benefitpolicy.enums.BenefitScopeType;
 import com.waad.tba.modules.benefitpolicy.enums.AggregationMode;
 import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
@@ -88,12 +88,14 @@ class ApplicableLimitResolverIntegrationTest extends PostgresIntegrationTestBase
 
     private BenefitLimitBucket bucket(Fixture f, String code, BigDecimal amount, LimitPeriodType periodType,
                                        BenefitLimitBucket parent, LimitRole role) {
+        BenefitScopeType scope = code.startsWith("GRP") ? BenefitScopeType.GROUP : BenefitScopeType.CATEGORY;
         return benefitLimitBucketRepository.save(BenefitLimitBucket.builder()
                 .policy(f.policy()).benefitGroup(f.group()).code(code + "-" + UUID.randomUUID().toString().substring(0, 6))
                 .nameAr(code).contextType(EncounterType.OUTPATIENT).amountLimit(amount)
                 .periodType(periodType).countingMethod(CountingMethod.EACH_LINE)
                 .consumptionBasis(ConsumptionBasis.COMPANY_SHARE).parentBucket(parent)
-                .limitRole(role).shared(false).active(true).build());
+                .limitRole(role).benefitScopeType(role == LimitRole.POLICY_GENERAL_MIRROR ? null : scope)
+                .shared(false).active(true).build());
     }
 
     private void link(Fixture f, BenefitLimitBucket bucket, int order) {
@@ -112,10 +114,10 @@ class ApplicableLimitResolverIntegrationTest extends PostgresIntegrationTestBase
                 resolver.resolve(f.policy().getId(), f.rule().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
 
         assertThat(result).hasSize(2);
-        assertThat(result.get(0).scopeType()).isEqualTo(LimitScopeType.SERVICE);
+        assertThat(result.get(0).benefitScopeType()).isEqualTo(BenefitScopeType.CATEGORY);
         assertThat(result.get(0).semanticKey()).isEqualTo("BUCKET:" + serviceBucket.getId());
         assertThat(result.get(0).defaultLimit()).isEqualByComparingTo("500.00");
-        assertThat(result.get(1).scopeType()).isEqualTo(LimitScopeType.POLICY_GENERAL);
+        assertThat(result.get(1).benefitScopeType()).isEqualTo(BenefitScopeType.POLICY_GENERAL);
         assertThat(result.get(1).semanticKey()).isEqualTo("POLICY_GENERAL:" + f.policy().getId());
         assertThat(result.get(1).defaultLimit()).isEqualByComparingTo("1000.00");
         assertThat(result.get(1).bucketId()).isNull();
@@ -132,13 +134,34 @@ class ApplicableLimitResolverIntegrationTest extends PostgresIntegrationTestBase
         List<ApplicableLimitResolver.ApplicableLimitDefinition> result =
                 resolver.resolve(f.policy().getId(), f.rule().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
 
-        // child (depth 0, SERVICE) + parent (depth 1, GROUP) + POLICY_GENERAL
+        // child (depth 0, CATEGORY) + parent (depth 1, GROUP) + POLICY_GENERAL
         assertThat(result).hasSize(3);
         assertThat(result).extracting(ApplicableLimitResolver.ApplicableLimitDefinition::bucketId)
                 .containsExactlyInAnyOrder(child.getId(), parent.getId(), null);
         var parentDef = result.stream().filter(d -> parent.getId().equals(d.bucketId())).findFirst().orElseThrow();
-        assertThat(parentDef.scopeType()).isEqualTo(LimitScopeType.GROUP);
+        assertThat(parentDef.benefitScopeType()).isEqualTo(BenefitScopeType.GROUP);
         assertThat(parentDef.hierarchyDepth()).isEqualTo(1);
+    }
+
+    @Test
+    @Transactional
+    void preservesExplicitScopeRegardlessOfHierarchyDepth() {
+        Fixture f = buildPolicyAndRule(new BigDecimal("1000.00"));
+        BenefitLimitBucket parentCategory = bucket(f, "CAT-PARENT", new BigDecimal("800.00"),
+                LimitPeriodType.ANNUAL, null, LimitRole.STANDARD);
+        BenefitLimitBucket directGroup = bucket(f, "GRP-DIRECT", new BigDecimal("500.00"),
+                LimitPeriodType.ANNUAL, parentCategory, LimitRole.STANDARD);
+        link(f, directGroup, 1);
+
+        List<ApplicableLimitResolver.ApplicableLimitDefinition> result =
+                resolver.resolve(f.policy().getId(), f.rule().getId(), LocalDate.now(), EncounterType.OUTPATIENT);
+
+        var direct = result.stream().filter(d -> directGroup.getId().equals(d.bucketId())).findFirst().orElseThrow();
+        var parent = result.stream().filter(d -> parentCategory.getId().equals(d.bucketId())).findFirst().orElseThrow();
+        assertThat(direct.hierarchyDepth()).isZero();
+        assertThat(direct.benefitScopeType()).isEqualTo(BenefitScopeType.GROUP);
+        assertThat(parent.hierarchyDepth()).isEqualTo(1);
+        assertThat(parent.benefitScopeType()).isEqualTo(BenefitScopeType.CATEGORY);
     }
 
     @Test
@@ -155,7 +178,7 @@ class ApplicableLimitResolverIntegrationTest extends PostgresIntegrationTestBase
 
         assertThat(result).extracting(ApplicableLimitResolver.ApplicableLimitDefinition::bucketId)
                 .containsExactlyInAnyOrder(real.getId(), null);
-        assertThat(result).filteredOn(d -> d.scopeType() == LimitScopeType.POLICY_GENERAL)
+        assertThat(result).filteredOn(d -> d.benefitScopeType() == BenefitScopeType.POLICY_GENERAL)
                 .hasSize(1)
                 .first().satisfies(d -> assertThat(d.defaultLimit()).isEqualByComparingTo("1000.00"));
     }
@@ -185,7 +208,8 @@ class ApplicableLimitResolverIntegrationTest extends PostgresIntegrationTestBase
         BenefitLimitBucket wrongContext = benefitLimitBucketRepository.save(BenefitLimitBucket.builder()
                 .policy(f.policy()).benefitGroup(f.group()).code("INPT-" + UUID.randomUUID().toString().substring(0, 6))
                 .nameAr("INPT").contextType(EncounterType.INPATIENT).amountLimit(new BigDecimal("400.00"))
-                .periodType(LimitPeriodType.ANNUAL).limitRole(LimitRole.STANDARD).active(true).build());
+                .periodType(LimitPeriodType.ANNUAL).limitRole(LimitRole.STANDARD)
+                .benefitScopeType(BenefitScopeType.CATEGORY).active(true).build());
         link(f, wrongContext, 2);
 
         List<ApplicableLimitResolver.ApplicableLimitDefinition> result =
@@ -193,7 +217,7 @@ class ApplicableLimitResolverIntegrationTest extends PostgresIntegrationTestBase
 
         // only the synthetic POLICY_GENERAL entry survives
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).scopeType()).isEqualTo(LimitScopeType.POLICY_GENERAL);
+        assertThat(result.get(0).benefitScopeType()).isEqualTo(BenefitScopeType.POLICY_GENERAL);
     }
 
     @Test
