@@ -19,6 +19,7 @@ import com.waad.tba.modules.providercontract.service.EffectiveProviderContractRe
 import com.waad.tba.modules.claim.service.CoverageEngineService;
 import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
 import com.waad.tba.modules.claim.service.finance.ClaimLineFinancialEngine;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
 import com.waad.tba.security.AuthorizationService;
 import java.math.BigDecimal;
@@ -57,6 +58,7 @@ public class ClaimMapper {
         private final CoverageEngineService coverageEngineService;
         private final AuthorizationService authorizationService;
         private final ClaimLineFinancialEngine claimLineFinancialEngine;
+        private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
 
         private static final BigDecimal HUNDRED = new BigDecimal("100.00");
         private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -506,35 +508,12 @@ public class ClaimMapper {
                 claim.setCompanyDiscountAmount(totalDiscount);
                 claim.setDifferenceAmount(scale2(totalRequested.subtract(totalApproved)));
 
-                // Validate line-level balance: for each line, companyShare + patientShare + refusedAmount == requestedTotal
-                validateLineBalances(lines);
-        }
-
-        /**
-         * Validates that each line's financial components sum correctly:
-         *   companyShare + patientShare + refusedAmount ≈ requestedTotal
-         *
-         * This is the correct validation for Option 2 rejected lines where:
-         *   - patientShare = coveragePercent (e.g. 25%) of requestedTotal
-         *   - refusedAmount = providerShare after discount (e.g. 75%)
-         *   - companyShare = 0 (rejected, company pays nothing)
-         */
-        private void validateLineBalances(List<ClaimLine> lines) {
-                BigDecimal epsilon = new BigDecimal("0.05");
-                for (ClaimLine l : lines) {
-                        BigDecimal req = l.getRequestedTotal() != null ? l.getRequestedTotal() : BigDecimal.ZERO;
-                        BigDecimal company = l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO;
-                        BigDecimal patient = l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO;
-                        BigDecimal refused = l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO;
-                        BigDecimal sum = scale2(company.add(patient).add(refused));
-                        BigDecimal diff = req.subtract(sum).abs();
-                        if (diff.compareTo(epsilon) > 0) {
-                                log.warn("⚠️ [MAPPER] Line balance mismatch: req={}, company={}, patient={}, refused={}, diff={}",
-                                        req, company, patient, refused, diff);
-                                // Adjust company share to absorb rounding diff rather than hard fail
-                                // (Hard fail would block legitimate saves due to rounding)
-                        }
-                }
+                // GUARD 1 (finance-00 step 3): fails closed here, at the moment the
+                // claim's aggregate fields are derived from its own lines. This proves
+                // the aggregation is correct right now -- it does NOT prove nothing
+                // rewrites these fields afterward; see GUARD 2 at the approval gate
+                // in ClaimFinancialSnapshotService.finalizeSnapshot for that half.
+                claimFinancialInvariantGuard.assertConsistent(claim);
         }
 
         private BigDecimal scale2(BigDecimal value) {

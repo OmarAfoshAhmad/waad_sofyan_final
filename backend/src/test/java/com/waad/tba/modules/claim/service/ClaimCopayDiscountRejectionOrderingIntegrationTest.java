@@ -284,33 +284,23 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
         assertThat(claim.getNetProviderAmount()).isEqualByComparingTo("0.00");
     }
 
-    // ── The ledger (correct) vs. the claim total (overwritten) diverge today ──
+    // ── Closure proof: the ledger and the claim total now agree ──────────────
 
     /**
-     * CHARACTERIZATION TEST for the finance-00 defect, not a spec of desired
-     * behavior: proves that {@code Claim.approvedAmount} (what the annual
-     * policy ceiling in BenefitBucketLedgerService.validatePolicyAnnualLimit
-     * sums across a member's claims) and
-     * {@code SUM(BenefitBucketConsumption.approvedAmount)} for the SAME claim
-     * (what the benefit bucket ledger actually committed, sourced from
-     * ClaimLine.companyShare -- never touched by ClaimFinancialSnapshotService)
-     * are DIFFERENT NUMBERS for the identical approved claim.
-     *
-     * This is the concrete mechanism behind "قد تُحسب المطالبة نفسها برقمين
-     * مختلفين": the general annual ceiling is trustworthy only to the extent
-     * that Claim.approvedAmount is trustworthy, and today it is not, because
-     * ClaimFinancialSnapshotService.finalizeSnapshot silently overwrites the
-     * per-line, contract-discount-timing-aware total that ClaimMapper already
-     * computed correctly.
-     *
-     * When finance-00 makes Claim.approvedAmount == Sigma ClaimLine.companyShare
-     * an enforced invariant, this test's two assertions must both pass with
-     * the SAME value -- flip them from "differ" to "equal" as the closure
-     * proof for that specific claim.
+     * CLOSURE PROOF for the finance-00 defect (was a characterization test
+     * before step 3/4; the divergence it documented is now fixed): proves
+     * that {@code Claim.approvedAmount} (what the annual policy ceiling in
+     * BenefitBucketLedgerService.validatePolicyAnnualLimit sums across a
+     * member's claims) and {@code SUM(BenefitBucketConsumption.approvedAmount)}
+     * for the SAME claim (what the benefit bucket ledger actually committed,
+     * sourced from ClaimLine.companyShare) are now the SAME NUMBER for the
+     * identical approved claim -- because ClaimFinancialSnapshotService no
+     * longer recomputes anything; it only locks, guards, and validates the
+     * ceiling against the number ClaimMapper already computed correctly.
      */
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void claimApprovedAmountDivergesFromWhatTheBenefitBucketLedgerActuallyCommitted() {
+    void claimApprovedAmountNowMatchesWhatTheBenefitBucketLedgerActuallyCommitted() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
 
         userRepository.findByUsername("admin").orElseGet(() -> userRepository.save(
@@ -426,12 +416,12 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
         // this is finalizeSnapshot's own recomputation, not ClaimMapper's.
         BigDecimal actualClaimApprovedAmount = claim.getApprovedAmount();
 
-        // THE DEFECT: the ledger (correct) and the claim total (used for the
-        // general annual ceiling) disagree for the identical approved claim.
+        // THE CLOSURE: the ledger and the claim total (used for the general
+        // annual ceiling) now agree for the identical approved claim.
         assertThat(actualClaimApprovedAmount)
-                .as("Claim.approvedAmount should equal what the benefit ledger actually "
-                        + "committed for this claim, but finalizeSnapshot overwrites it with "
-                        + "an independently recomputed number")
-                .isNotEqualByComparingTo(committedInLedger);
+                .as("Claim.approvedAmount must equal what the benefit ledger actually "
+                        + "committed for this claim")
+                .isEqualByComparingTo(committedInLedger)
+                .isEqualByComparingTo("350.00");
     }
 }
