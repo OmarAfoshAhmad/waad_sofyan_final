@@ -443,9 +443,130 @@ export const providerPaymentsService = {
   }
 };
 
+// ==============================|| NEW PROVIDER-PAYMENT MODEL (Phase 9) ||=========================== //
+// One transfer per provider, allocated by employer/period, posted once, reversible.
+// Reads are always available. Writes (create/post/reverse/adjust) are gated server-side by
+// PROVIDER_PAYMENT_POSTING_ENABLED — calling them while the flag is off returns HTTP 503.
+
+const PROVIDER_PAYMENTS_V2_URL = '/provider-payments';
+const RECONCILIATION_URL = '/provider-accounts/reconciliation';
+
+export const providerPaymentsV2Service = {
+  /** Read-only FIFO preview. Never saves anything. */
+  suggest: async (providerId, amount, asOfDate) => {
+    try {
+      const response = await axiosClient.get(`${PROVIDER_PAYMENTS_V2_URL}/by-provider/${providerId}/suggestion`, {
+        params: { amount, asOfDate }
+      });
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  listByProvider: async (providerId) => {
+    try {
+      const response = await axiosClient.get(`${PROVIDER_PAYMENTS_V2_URL}/by-provider/${providerId}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  getById: async (id) => {
+    try {
+      const response = await axiosClient.get(`${PROVIDER_PAYMENTS_V2_URL}/${id}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  /** Gated: 503 while PROVIDER_PAYMENT_POSTING_ENABLED is off. */
+  createDraft: async (payload) => {
+    try {
+      const response = await axiosClient.post(PROVIDER_PAYMENTS_V2_URL, payload);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  /** Gated. Echoes back the payment/account versions the caller last saw. */
+  post: async (id, { expectedPaymentVersion, expectedAccountVersion }) => {
+    try {
+      const response = await axiosClient.post(`${PROVIDER_PAYMENTS_V2_URL}/${id}/post`, {
+        expectedPaymentVersion,
+        expectedAccountVersion
+      });
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  /** Gated. Reason is the sole audit record — required. */
+  reverse: async (id, { reason, expectedPaymentVersion, expectedAccountVersion }) => {
+    try {
+      const response = await axiosClient.post(`${PROVIDER_PAYMENTS_V2_URL}/${id}/reverse`, {
+        reason,
+        expectedPaymentVersion,
+        expectedAccountVersion
+      });
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  }
+};
+
+export const reconciliationService = {
+  reconcileByProvider: async (providerId) => {
+    try {
+      const response = await axiosClient.get(`${RECONCILIATION_URL}/by-provider/${providerId}`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  reconcileAll: async () => {
+    try {
+      const response = await axiosClient.get(RECONCILIATION_URL);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  discrepancies: async () => {
+    try {
+      const response = await axiosClient.get(`${RECONCILIATION_URL}/discrepancies`);
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  },
+
+  /** Gated. The amount is never supplied by the caller — the backend re-measures the drift. */
+  adjust: async (providerId, { reason, expectedAccountVersion }) => {
+    try {
+      const response = await axiosClient.post(`${RECONCILIATION_URL}/by-provider/${providerId}/adjust`, {
+        reason,
+        expectedAccountVersion
+      });
+      return unwrap(response);
+    } catch (error) {
+      throw handleSettlementErrors(error);
+    }
+  }
+};
+
 // Default export for convenience
 export default {
   providerAccounts: providerAccountsService,
   batches: settlementBatchesService,
-  providerPayments: providerPaymentsService
+  providerPayments: providerPaymentsService,
+  providerPaymentsV2: providerPaymentsV2Service,
+  reconciliation: reconciliationService
 };

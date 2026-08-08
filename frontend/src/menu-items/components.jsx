@@ -504,6 +504,21 @@ const menuItem = [
             }
           },
           {
+            id: 'provider-payment-reconciliation',
+            title: 'مطابقة ودفعات مقدمي الخدمة (تجريبي)',
+            titleEn: 'Provider Payment Reconciliation (Preview)',
+            type: 'item',
+            url: '/settlement/reconciliation',
+            icon: AccountBalanceWalletIcon,
+            resource: 'provider_accounts',
+            action: 'view',
+            chip: {
+              label: 'تجريبي',
+              color: 'warning',
+              size: 'small'
+            }
+          },
+          {
             id: 'financial-consolidation',
             title: 'الخلاصة المالية المجمعة',
             titleEn: 'Financial Consolidation',

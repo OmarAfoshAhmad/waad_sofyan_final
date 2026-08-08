@@ -181,6 +181,7 @@ const ProviderAccountsList = Loadable(lazy(() => import('pages/settlement/Provid
 const ProviderPaymentsList = Loadable(lazy(() => import('pages/settlement/ProviderPaymentsList')));
 const ProviderAccountView = Loadable(lazy(() => import('pages/settlement/ProviderAccountView')));
 const PaymentsManagement = Loadable(lazy(() => import('pages/settlement/PaymentsManagement')));
+const ProviderPaymentReconciliation = Loadable(lazy(() => import('pages/settlement/reconciliation/ProviderReconciliationList')));
 
 // ==============================|| MAIN ROUTING ||============================== //
 
@@ -388,6 +389,18 @@ const MainRoutes = {
           element: (
             <PermissionGuard resource="provider_accounts" action="view" isRouteGuard>
               <PaymentsManagement />
+            </PermissionGuard>
+          )
+        },
+        {
+          // Phase 9 preview: unified master/detail reconciliation UI for the new
+          // ProviderPayment model. Read-only for everyone until the
+          // PROVIDER_PAYMENT_POSTING_ENABLED flag is turned on in Phase 11 — the
+          // write buttons inside this page are individually gated, not the route.
+          path: 'reconciliation',
+          element: (
+            <PermissionGuard resource="provider_accounts" action="view" isRouteGuard>
+              <ProviderPaymentReconciliation />
             </PermissionGuard>
           )
         }
@@ -1045,4 +1058,3 @@ const MainRoutes = {
 };
 
 export default MainRoutes;
-
