@@ -178,14 +178,14 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(second.getApprovedAmount()).isEqualByComparingTo("400.00");
 
         // Cumulative is now exactly 1000.00 -- the ceiling. One more cent must be
-        // refused. The system's real fail-closed behavior here is NOT a thrown
-        // exception: BenefitBucketLimitService's synthetic annual-ceiling bucket
-        // catches this during coverage calculation itself (it always tracks real
-        // prior approvedAmount, so it correctly sees the 1000.00 already used),
-        // refusing the line's entire amount and making the claim auto-REJECT --
-        // the same "totalApproved > 0" gate that rejects any zero-payable claim.
-        ClaimViewDto third = submit(f, new BigDecimal("0.01"));
-        assertThat(third.getStatus()).isEqualTo(ClaimStatus.REJECTED);
+        // refused, and per product decision the WHOLE claim is rejected, not
+        // partially filled: BenefitPolicyCoverageService.validateAmountLimits
+        // (inside ClaimFinancialSnapshotService.finalizeSnapshot) throws before
+        // the claim can ever reach APPROVED, so createClaim propagates the
+        // exception and nothing is persisted (the surrounding @Transactional
+        // rolls the whole attempt back).
+        assertThatThrownBy(() -> submit(f, new BigDecimal("0.01")))
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
@@ -195,93 +195,49 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
         // gross=1000, coverage=80% -> patient=200, providerShare=800. 10%
         // discount BEFORE mode -> discount=80, companyShare=720.
         //
-        // The ceiling is set to 800.00, NOT 720.00: BenefitBucketLimitService's
-        // synthetic annual-ceiling bucket checks THIS claim's own basis at
-        // coverage-calculation time using coveragePercent-scaled gross
-        // (800 = 1000*80%) -- it is not discount-aware, because the contract
-        // discount is only known/applied afterward in ClaimLineFinancialEngine.
-        // Setting the ceiling below 800 would pre-emptively refuse part of THIS
-        // claim's own gross before the discount ever runs. Setting it to exactly
-        // 800 lets this claim pass through untouched (800 is not > 800), so the
-        // discount is what determines the final companyShare, and it is THAT
-        // number -- 720, not 800 -- that gets recorded as consumed against the
-        // ceiling for every claim that follows.
-        Fixture f = buildFixture(suffix, new BigDecimal("800.00"), 80, new BigDecimal("10.00"), true);
+        // The ceiling is set to the CORRECT definition -- 720.00, the real net
+        // companyShare -- not 800.00 (pre-discount) and not 1000.00 (gross).
+        // This is only possible because the coverage-time synthetic ceiling
+        // bucket (discount-blind) has been removed; the ceiling is now enforced
+        // exactly once, by BenefitPolicyCoverageService.validateAmountLimits
+        // inside finalizeSnapshot, against the correct post-discount figure.
+        Fixture f = buildFixture(suffix, new BigDecimal("720.00"), 80, new BigDecimal("10.00"), true);
 
         ClaimViewDto claim = submit(f, new BigDecimal("1000.00"));
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(claim.getApprovedAmount()).isEqualByComparingTo("720.00");
         assertThat(claim.getPatientCoPay()).isEqualByComparingTo("200.00");
         assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("80.00");
+        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("0.00");
 
-        // Positive proof that the remaining headroom is exactly 800.00 - 720.00
-        // = 80.00, not 0.00 (which wrong gross/pre-discount tracking would leave):
-        // a second claim requesting precisely that much basis (gross=100 at 80%
-        // coverage = 80 basis) must still be approved in full, with no
-        // coverage-time refusal at all.
-        ClaimViewDto second = submit(f, new BigDecimal("100.00"));
-        assertThat(second.getStatus()).isEqualTo(ClaimStatus.APPROVED);
-        assertThat(second.getRefusedAmount()).isEqualByComparingTo("0.00");
-        // 100 gross * 80% coverage = 80 providerShare, minus 10% discount (8) = 72.
-        assertThat(second.getApprovedAmount()).isEqualByComparingTo("72.00");
-
-        // A third claim whose own basis (200 gross * 80% = 160) comfortably
-        // exceeds what remains (800.00 - 720.00 - 72.00 = 8.00) must be refused
-        // for at least the excess -- the annual-ceiling bucket partially fills
-        // rather than outright blocking, so this asserts a real coverage-time
-        // limitRefused was applied, not full rejection.
-        ClaimViewDto third = submit(f, new BigDecimal("200.00"));
-        assertThat(third.getRefusedAmount()).isGreaterThan(BigDecimal.ZERO);
+        // The 720.00 ceiling is now exactly exhausted. Per product decision
+        // (full rejection, not partial fill), even a tiny second claim for the
+        // same member must be refused entirely, not shrunk to fit.
+        assertThatThrownBy(() -> submit(f, new BigDecimal("1.00")))
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     /**
-     * CHARACTERIZATION TEST, NOT AN ACCEPTED SPEC. Documents a second source of
-     * financial truth that finance-00 steps 1-4 did NOT close:
-     * BenefitBucketLimitService injects a synthetic "annual ceiling" bucket
-     * directly into coverage calculation (CoverageEngineService.computeBucketUsage),
-     * whose consumption basis is coveragePercent-scaled GROSS -- computed
-     * BEFORE ClaimLineFinancialEngine ever applies the contract discount. That
-     * means setting BenefitPolicy.annualLimit to the CORRECT, already-proven
-     * definition of "what the ceiling consumes" (Claim.approvedAmount == Sigma
-     * ClaimLine.companyShare, i.e. the value AFTER coverage, co-pay, rejection
-     * AND the contract discount) causes this earlier, discount-blind gate to
-     * pre-emptively refuse part of the SAME claim's own gross amount before the
-     * discount that would have made it fit ever runs -- producing a companyShare
-     * strictly less than the ceiling that was supposedly just barely sufficient.
-     *
-     * gross=1000, coverage=80% (patient=200), 10% contract discount BEFORE
-     * mode. If the ceiling genuinely consumed only the correct net (720), a
-     * ceiling set to exactly 720.00 should approve this single claim for
-     * exactly 720.00. It does not: it approves 648.00. This is NOT the
-     * financial definition finance-00 established; it must not be read as
-     * "the system works" just because the assertions below match today's
-     * numbers. See ClaimAnnualCeilingIntegrationTest's other two tests for the
-     * documented workaround (setting the ceiling to the PRE-discount amount)
-     * that this same defect currently forces every caller to use.
+     * CLOSURE PROOF for the pre-discount annual-ceiling defect (was a
+     * characterization test before the fix; see commit
+     * "characterize the pre-discount annual ceiling bucket defect"). Same
+     * exact scenario -- gross=1000, coverage=80%, 10% discount BEFORE mode,
+     * ceiling set to the correct net definition (720.00) -- now approves
+     * exactly 720.00 with zero coverage-time refusal, because
+     * BenefitBucketLimitService no longer injects a discount-blind synthetic
+     * bucket into coverage calculation.
      */
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void CHARACTERIZATION_theSyntheticAnnualCeilingBucketConsumesPreDiscountGrossNotThePostDiscountCompanyShare() {
+    void theAnnualCeilingNowApprovesExactlyTheCorrectNetAmountWithNoPreDiscountRefusal() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        // The ceiling is deliberately set to the CORRECT definition (720.00 --
-        // what the claim's real companyShare should be) to expose the defect.
         Fixture f = buildFixture(suffix, new BigDecimal("720.00"), 80, new BigDecimal("10.00"), true);
 
         ClaimViewDto claim = submit(f, new BigDecimal("1000.00"));
-        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
 
-        // What SHOULD happen if the ceiling consumed the correct net figure:
-        // the claim fits exactly, companyShare == 720.00, patientCoPay stays
-        // 200.00, and there is no coverage-time limit refusal at all.
-        //
-        // What ACTUALLY happens today: the synthetic bucket sees
-        // requestedBasis = 1000 * 80% = 800 > available (720), refuses the
-        // gross-equivalent excess (100.00) BEFORE the discount runs, shrinking
-        // patientCoPay to 180.00 and the discount base along with it, so the
-        // final companyShare (648.00) ends up well under the 720.00 ceiling
-        // that should have been exactly sufficient.
-        assertThat(claim.getApprovedAmount()).isEqualByComparingTo("648.00");
-        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("180.00");
-        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("100.00");
+        assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+        assertThat(claim.getApprovedAmount()).isEqualByComparingTo("720.00");
+        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("200.00");
+        assertThat(claim.getRefusedAmount()).isEqualByComparingTo("0.00");
     }
 }

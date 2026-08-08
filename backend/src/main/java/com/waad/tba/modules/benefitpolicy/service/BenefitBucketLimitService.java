@@ -4,7 +4,6 @@ import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.enums.*;
 import com.waad.tba.modules.benefitpolicy.repository.*;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +20,6 @@ public class BenefitBucketLimitService {
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
     private final BenefitPolicyRuleRepository policyRuleRepository;
-    private final ClaimRepository claimRepository;
 
     @Transactional(readOnly = true)
     public List<LimitSnapshot> findApplicable(Long ruleId, Long memberId, LocalDate serviceDate,
@@ -63,15 +61,22 @@ public class BenefitBucketLimitService {
                     bucket.getConsumptionBasis() != null ? bucket.getConsumptionBasis() : ConsumptionBasis.COMPANY_SHARE,
                     directlyLinkedBucketIds.contains(bucket.getId())));
         }
-        if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().signum() > 0) {
-            LocalDate yearStart = LocalDate.of(date.getYear(), 1, 1);
-            LocalDate yearEnd = LocalDate.of(date.getYear(), 12, 31);
-            BigDecimal used = claimRepository.sumApprovedAmountsByMemberAndYearExcludingClaim(
-                    memberId, yearStart, yearEnd, excludeClaimId);
-            result.add(new LimitSnapshot(-policy.getId(), "السقف العام السنوي للوثيقة",
-                    policy.getAnnualLimit(), null, null, used, 0, 0, false,
-                    CountingMethod.EACH_LINE, ConsumptionBasis.COMPANY_SHARE, false));
-        }
+        // finance-00: the general annual ceiling is deliberately NOT injected as a
+        // coverage-time limit bucket here. Its consumption basis would have to be
+        // coveragePercent-scaled GROSS, computed before ClaimLineFinancialEngine
+        // ever applies the contract discount -- so a ceiling set to the correct,
+        // single source of truth for "what the ceiling consumes"
+        // (Claim.approvedAmount == Sigma ClaimLine.companyShare, i.e. AFTER
+        // coverage, co-pay, rejection AND the discount) would pre-emptively
+        // refuse part of a claim's own gross before the discount that makes it
+        // fit ever runs, landing on a companyShare strictly less than a ceiling
+        // that should have been exactly sufficient. The ceiling is enforced
+        // instead, once and only once against the correct post-discount figure,
+        // by BenefitPolicyCoverageService.validateAmountLimits (inside
+        // ClaimFinancialSnapshotService.finalizeSnapshot, under the member lock)
+        // and BenefitBucketLedgerService.validatePolicyAnnualLimit (at ledger
+        // commit, under the policy lock) -- both already reject the whole claim
+        // on overflow, never a partial fill.
         return result;
     }
 
