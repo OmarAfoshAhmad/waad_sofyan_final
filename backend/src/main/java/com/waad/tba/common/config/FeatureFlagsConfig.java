@@ -35,4 +35,14 @@ public class FeatureFlagsConfig {
      * Is the Batches mode active?
      */
     private boolean batchClaimsEnabled = true;
+
+    /**
+     * Master switch for the new provider-payment write path (draft/post/reverse,
+     * account-adjustment). Off by default: Phase 9 builds the UI and wires its
+     * reads, but no write action may reach ProviderPaymentPostingService /
+     * ProviderPaymentReversalService / ProviderAccountAdjustmentService until
+     * Phase 11 explicitly turns this on. Reads (suggestion, reconciliation) are
+     * never gated by this flag — only actions that move money or write the ledger.
+     */
+    private boolean providerPaymentPostingEnabled = false;
 }

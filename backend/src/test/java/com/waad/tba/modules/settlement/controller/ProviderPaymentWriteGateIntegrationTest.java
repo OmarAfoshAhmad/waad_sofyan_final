@@ -1,0 +1,85 @@
+package com.waad.tba.modules.settlement.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.UUID;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.waad.tba.TbaWaadApplication;
+import com.waad.tba.common.guard.FeatureGuard;
+import com.waad.tba.modules.provider.entity.Provider;
+import com.waad.tba.modules.provider.entity.Provider.ProviderType;
+import com.waad.tba.modules.provider.repository.ProviderRepository;
+import com.waad.tba.modules.settlement.dto.CreateProviderPaymentRequest;
+import com.waad.tba.modules.settlement.entity.PaymentMethod;
+import com.waad.tba.modules.systemadmin.service.FeatureFlagService;
+import com.waad.tba.support.PostgresIntegrationTestBase;
+
+/**
+ * Proves the real V143 seed + FeatureGuard wiring end to end — not just the
+ * mocked gate checks in ProviderPaymentControllerGateTest. Confirms the flag
+ * is genuinely OFF by default straight from the database, and that toggling it
+ * through the same service the admin UI uses genuinely flips the endpoint.
+ */
+@SpringBootTest(classes = TbaWaadApplication.class)
+@ActiveProfiles("test")
+class ProviderPaymentWriteGateIntegrationTest extends PostgresIntegrationTestBase {
+
+    @Autowired ProviderPaymentController controller;
+    @Autowired FeatureFlagService featureFlagService;
+    @Autowired ProviderRepository providers;
+
+    @AfterEach
+    void resetFlag() {
+        featureFlagService.toggleFeatureFlag(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, false, "test-cleanup");
+    }
+
+    @Test
+    void v143SeedsTheFlagDisabledByDefault() {
+        assertThat(featureFlagService.isFlagEnabled(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, true)).isFalse();
+    }
+
+    @Test
+    @WithMockUser(roles = "ACCOUNTANT")
+    void createDraftFailsClosedByDefault() {
+        var request = new CreateProviderPaymentRequest();
+        request.setProviderId(1L);
+        request.setAmount(new BigDecimal("50.00"));
+        request.setPaymentDate(LocalDate.now());
+        request.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
+
+        assertThatThrownBy(() -> controller.createDraft(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("503");
+    }
+
+    @Test
+    @WithMockUser(roles = "ACCOUNTANT")
+    void createDraftSucceedsOnceTheFlagIsExplicitlyEnabled() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        Long providerId = providers.save(Provider.builder().name("Gate Hospital " + suffix)
+                .providerType(ProviderType.HOSPITAL).licenseNumber("GATE-" + suffix)
+                .allowAllEmployers(true).active(true).build()).getId();
+
+        featureFlagService.toggleFeatureFlag(FeatureGuard.FLAG_PROVIDER_PAYMENT_POSTING, true, "test");
+
+        var request = new CreateProviderPaymentRequest();
+        request.setProviderId(providerId);
+        request.setAmount(new BigDecimal("50.00"));
+        request.setPaymentDate(LocalDate.now());
+        request.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
+
+        assertThatCode(() -> controller.createDraft(request)).doesNotThrowAnyException();
+    }
+}

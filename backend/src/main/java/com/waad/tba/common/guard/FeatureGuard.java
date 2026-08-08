@@ -27,6 +27,7 @@ public class FeatureGuard {
     public static final String FLAG_DIRECT_CLAIM_SUBMISSION = "DIRECT_CLAIM_SUBMISSION_ENABLED";
     public static final String FLAG_DIRECT_PREAUTH_SUBMISSION = "DIRECT_PREAUTH_SUBMISSION_ENABLED";
     public static final String FLAG_BATCH_CLAIMS = "BATCH_CLAIMS_ENABLED";
+    public static final String FLAG_PROVIDER_PAYMENT_POSTING = "PROVIDER_PAYMENT_POSTING_ENABLED";
 
     private final FeatureFlagsConfig flags;
     private final FeatureFlagService featureFlagService;
@@ -94,6 +95,27 @@ public class FeatureGuard {
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "نظام دفعات المطالبات معطل حالياً. يرجى استخدام بوابة مقدم الخدمة لاستقبال المطالبات.");
         }
+    }
+
+    /**
+     * Guard access to the new provider-payment write path (draft/post/reverse,
+     * account-adjustment). Applies to EVERYONE, including internal staff — unlike
+     * the portal guards above, this is not about hiding a surface from external
+     * users; it is about not implicitly activating a new financial write path
+     * before Phase 11's sign-off, for any caller.
+     */
+    public void requireProviderPaymentPosting() {
+        if (!isProviderPaymentPostingEnabled()) {
+            log.warn("🚫 [FEATURE-GUARD] Blocked provider-payment write action (flag disabled).");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "مسار دفعات مقدم الخدمة الجديد غير مُفعَّل للكتابة بعد.");
+        }
+    }
+
+    /** DB-first check with yml fallback */
+    public boolean isProviderPaymentPostingEnabled() {
+        return featureFlagService.isFlagEnabled(FLAG_PROVIDER_PAYMENT_POSTING, flags.isProviderPaymentPostingEnabled());
     }
 
     /** DB-first check with yml fallback */
