@@ -23,7 +23,7 @@ import java.util.List;
  *
  * This service does not build snapshot rows itself: it has no opinion on
  * which limits are applicable, what their balances are, or which one binds.
- * Resolving that is EffectiveLimitResolver's job (not yet built); this class
+ * Resolving that is EffectiveLimitResolver's and LimitBalanceReader's job; this class
  * only ever receives already-complete entities and writes them, unedited,
  * exactly once.
  */

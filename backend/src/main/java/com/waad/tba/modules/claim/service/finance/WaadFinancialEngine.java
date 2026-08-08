@@ -10,11 +10,8 @@ import org.springframework.stereotype.Component;
  * (backend/docs/design/FINANCIAL_CONSTITUTION.md), in the exact order fixed
  * by its S12. This is a standalone, isolated deliverable per the
  * constitution's critical path: proven correct by the golden test and a unit
- * matrix BEFORE any data model or ClaimMapper wiring exists. It is not yet
- * called from production code -- {@link ClaimLineFinancialEngine} remains
- * the live engine behind ClaimMapper until the "unified limit semantics" /
- * "snapshot model" phase replaces the call site and the persisted columns
- * together.
+ * matrix before wiring, and now connected to ClaimMapper exclusively through
+ * {@link ClaimFinancialAdjudicationService}.
  *
  * finance-02.1 hardening (contract review before the Result shape is frozen
  * into database columns): strict input validation (fail closed, never

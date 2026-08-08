@@ -47,6 +47,18 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("yearEnd") LocalDate yearEnd,
                         @Param("excludeClaimId") Long excludeClaimId);
 
+        /** WAAD-FIN-1.0: the policy ceiling consumes settlement value, not insurer payment. */
+        @Query("SELECT COALESCE(SUM(cl.limitConsumption), 0) FROM ClaimLine cl " +
+                        "WHERE cl.claim.active = true AND cl.claim.member.id = :memberId " +
+                        "AND cl.claim.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) " +
+                        "AND cl.claim.serviceDate BETWEEN :periodStart AND :periodEnd " +
+                        "AND (:excludeClaimId IS NULL OR cl.claim.id <> :excludeClaimId)")
+        java.math.BigDecimal sumLimitConsumptionByMemberAndPeriodExcludingClaim(
+                        @Param("memberId") Long memberId,
+                        @Param("periodStart") LocalDate periodStart,
+                        @Param("periodEnd") LocalDate periodEnd,
+                        @Param("excludeClaimId") Long excludeClaimId);
+
         /**
          * Legacy-data repair candidates, case A: an APPROVED claim with no qualifying
          * amount — never actually consumed anything, so it must not permanently sit as

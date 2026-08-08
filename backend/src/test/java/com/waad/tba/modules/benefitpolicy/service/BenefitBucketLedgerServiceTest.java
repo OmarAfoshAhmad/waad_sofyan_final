@@ -56,6 +56,7 @@ class BenefitBucketLedgerServiceTest {
                 .appliedRuleId(50L)
                 .companyShare(new BigDecimal("200.00"))
                 .approvedAmount(new BigDecimal("200.00"))
+                .limitConsumption(new BigDecimal("200.00"))
                 .totalPrice(new BigDecimal("400.00"))
                 .limitRefused(new BigDecimal("200.00"))
                 .quantity(1)

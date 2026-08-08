@@ -97,8 +97,16 @@ public class BenefitBucketLedgerService {
                 if (consumptionRepository.existsByIdempotencyKey(key)) continue;
                 Period period = period(bucket, policy, serviceDate);
                 int times = consumedTimes(bucket, line, countedOnce);
-                BigDecimal consumedAmount = bucket.getConsumptionBasis() == ConsumptionBasis.COMPANY_SHARE
-                        ? amount(line) : eligibleAmount(line);
+                BigDecimal consumedAmount;
+                if (bucket.getAmountLimit() != null) {
+                    consumedAmount = Optional.ofNullable(line.getLimitConsumption()).orElseThrow(() ->
+                            new IllegalStateException("CANONICAL_LIMIT_CONSUMPTION_MISSING: claimLine=" + line.getId()));
+                } else {
+                    // Count/day-only buckets retain their historical informational
+                    // amount; their monetary meaning is deliberately not invented.
+                    consumedAmount = bucket.getConsumptionBasis() == ConsumptionBasis.COMPANY_SHARE
+                            ? amount(line) : eligibleAmount(line);
+                }
                 validateAvailableBalance(bucket, memberId, serviceDate, period, consumedAmount, times,
                         validatedDays.add(bucket.getId()));
                 consumptionRepository.save(BenefitBucketConsumption.builder()
@@ -126,9 +134,11 @@ public class BenefitBucketLedgerService {
         BenefitPolicy lockedPolicy = benefitPolicyRepository.findByIdForUpdate(policy.getId()).orElseThrow();
         LocalDate yearStart = LocalDate.of(serviceDate.getYear(), 1, 1);
         LocalDate yearEnd = LocalDate.of(serviceDate.getYear(), 12, 31);
-        BigDecimal previouslyUsed = claimRepository.sumApprovedAmountsByMemberAndYearExcludingClaim(
+        BigDecimal previouslyUsed = claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
                 memberId, yearStart, yearEnd, claim.getId());
-        BigDecimal current = Optional.ofNullable(claim.getApprovedAmount()).orElse(BigDecimal.ZERO);
+        BigDecimal current = claim.getLines().stream()
+                .map(line -> Optional.ofNullable(line.getLimitConsumption()).orElse(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (previouslyUsed.add(current).compareTo(lockedPolicy.getAnnualLimit()) > 0) {
             throw new BusinessRuleException("تغير الرصيد أثناء الاعتماد وتجاوز السقف العام السنوي للوثيقة. أعد احتساب المطالبة ثم حاول مجددًا.");
         }

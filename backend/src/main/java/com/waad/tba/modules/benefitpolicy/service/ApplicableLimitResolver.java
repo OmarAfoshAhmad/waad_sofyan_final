@@ -112,9 +112,20 @@ public class ApplicableLimitResolver {
                 throw new IllegalStateException("BUCKET_BENEFICIARY_SCOPE_NOT_CLASSIFIED: bucket id=" + bucket.getId());
             }
 
-            if (bucket.getAmountLimit() == null || bucket.getAmountLimit().signum() < 0) {
+            if (bucket.getAmountLimit() == null) {
+                if (bucket.getTimesLimit() != null || bucket.getDaysLimit() != null) {
+                    // This resolver feeds the monetary WAAD-FIN engine. Count/day-only
+                    // buckets remain enforced by CoverageEngineService and the bucket
+                    // ledger; assigning them a synthetic monetary value would silently
+                    // invent policy. Their unified quantity semantics are a separate
+                    // constitutional decision (POLICY_DECISION_REQUIRED-03).
+                    continue;
+                }
                 throw new IllegalStateException("BUCKET_LIMIT_VALUE_MISSING: bucket id=" + bucket.getId()
                         + " is active and applicable but has no valid amountLimit");
+            }
+            if (bucket.getAmountLimit().signum() < 0) {
+                throw new IllegalStateException("BUCKET_LIMIT_VALUE_INVALID: bucket id=" + bucket.getId());
             }
 
             BucketPeriodCalculator.Period period = BucketPeriodCalculator.resolve(bucket, policy, serviceDate);

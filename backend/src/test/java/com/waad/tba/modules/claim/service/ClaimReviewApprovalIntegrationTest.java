@@ -152,7 +152,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void fullReviewCycleProducesTheSameNumberEverywhereAndCommitsTheLedgerExactlyOnce() {
+    void fullReviewCycleSeparatesLimitConsumptionFromPaymentAndCommitsEachExactlyOnce() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
 
         userRepository.findByUsername("admin").orElseGet(() -> userRepository.save(
@@ -280,11 +280,12 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .subtract(approved.getPatientCoPay()).subtract(approved.getRefusedAmount()))
                 .isEqualByComparingTo("80.00");
 
-        // 3) The bucket ledger committed exactly once, for the correct amount.
+        // 3) The bucket ledger commits settlementBase once (1000), deliberately
+        // distinct from insurerFinalPayment (720).
         List<BenefitBucketConsumption> committed = benefitBucketConsumptionRepository
                 .findByClaimIdAndStatus(claimId, BenefitBucketConsumption.Status.COMMITTED);
         assertThat(committed).hasSize(1);
-        assertThat(committed.get(0).getApprovedAmount()).isEqualByComparingTo("720.00");
+        assertThat(committed.get(0).getApprovedAmount()).isEqualByComparingTo("1000.00");
 
         // 4) The provider account was credited the identical amount.
         ProviderAccount refreshedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();

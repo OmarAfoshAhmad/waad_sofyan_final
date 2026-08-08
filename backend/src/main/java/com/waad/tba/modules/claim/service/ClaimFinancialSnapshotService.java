@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
  * Canonical finalizer for claim money -- COMMIT-AND-VALIDATE ONLY (finance-00
  * step 4). Every financial number on the claim (approvedAmount,
  * netProviderAmount, patientCoPay, refusedAmount, companyDiscountAmount) was
- * already computed correctly per line by ClaimLineFinancialEngine and
+ * already computed correctly per line by ClaimFinancialAdjudicationService and
  * aggregated by ClaimMapper.calculateClaimTotals before this method ever
  * runs. This method must never recompute any of them.
  *

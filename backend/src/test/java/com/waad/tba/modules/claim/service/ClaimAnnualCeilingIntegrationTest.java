@@ -163,7 +163,7 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void sequentialClaimsConsumeTheAnnualCeilingByCompanyShareAndAThirdOverTheLineIsRejected() {
+    void sequentialClaimsConsumeSettlementValueAndExhaustionMovesTheExcessToThePatient() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         // 100% coverage, no discount: companyShare == gross exactly, isolating
         // the ceiling arithmetic itself from any split logic.
@@ -177,44 +177,36 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(second.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(second.getApprovedAmount()).isEqualByComparingTo("400.00");
 
-        // Cumulative is now exactly 1000.00 -- the ceiling. One more cent must be
-        // refused, and per product decision the WHOLE claim is rejected, not
-        // partially filled: BenefitPolicyCoverageService.validateAmountLimits
-        // (inside ClaimFinancialSnapshotService.finalizeSnapshot) throws before
-        // the claim can ever reach APPROVED, so createClaim propagates the
-        // exception and nothing is persisted (the surrounding @Transactional
-        // rolls the whole attempt back).
-        assertThatThrownBy(() -> submit(f, new BigDecimal("0.01")))
-                .isInstanceOf(BusinessRuleException.class);
+        // The ceiling is exhausted. The next service value is entirely patient
+        // limit excess; with no insurer payment the direct-entry claim is stored
+        // as REJECTED instead of manufacturing a zero-value approval.
+        ClaimViewDto third = submit(f, new BigDecimal("0.01"));
+        assertThat(third.getStatus()).isEqualTo(ClaimStatus.REJECTED);
+        assertThat(third.getApprovedAmount()).isZero();
+        assertThat(third.getPatientCoPay()).isEqualByComparingTo("0.01");
     }
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void annualCeilingIsConsumedByTheNetCompanyShareNotByTheGrossOrPreDiscountAmount() {
+    void annualCeilingConsumesSettlementValueBeforeCoverageAndDiscount() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         // gross=1000, coverage=80% -> patient=200, providerShare=800. 10%
         // discount BEFORE mode -> discount=80, companyShare=720.
         //
-        // The ceiling is set to the CORRECT definition -- 720.00, the real net
-        // companyShare -- not 800.00 (pre-discount) and not 1000.00 (gross).
-        // This is only possible because the coverage-time synthetic ceiling
-        // bucket (discount-blind) has been removed; the ceiling is now enforced
-        // exactly once, by BenefitPolicyCoverageService.validateAmountLimits
-        // inside finalizeSnapshot, against the correct post-discount figure.
+        // WAAD-FIN-1.0: the 720 ceiling caps settlementBase before the 80/20
+        // split and before the provider discount. Excess 280 belongs to patient.
         Fixture f = buildFixture(suffix, new BigDecimal("720.00"), 80, new BigDecimal("10.00"), true);
 
         ClaimViewDto claim = submit(f, new BigDecimal("1000.00"));
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
-        assertThat(claim.getApprovedAmount()).isEqualByComparingTo("720.00");
-        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("200.00");
-        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("80.00");
+        assertThat(claim.getApprovedAmount()).isEqualByComparingTo("518.40");
+        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("424.00");
+        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("57.60");
         assertThat(claim.getRefusedAmount()).isEqualByComparingTo("0.00");
 
-        // The 720.00 ceiling is now exactly exhausted. Per product decision
-        // (full rejection, not partial fill), even a tiny second claim for the
-        // same member must be refused entirely, not shrunk to fit.
-        assertThatThrownBy(() -> submit(f, new BigDecimal("1.00")))
-                .isInstanceOf(BusinessRuleException.class);
+        ClaimViewDto next = submit(f, new BigDecimal("1.00"));
+        assertThat(next.getStatus()).isEqualTo(ClaimStatus.REJECTED);
+        assertThat(next.getPatientCoPay()).isEqualByComparingTo("1.00");
     }
 
     /**
@@ -229,15 +221,16 @@ class ClaimAnnualCeilingIntegrationTest extends PostgresIntegrationTestBase {
      */
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void theAnnualCeilingNowApprovesExactlyTheCorrectNetAmountWithNoPreDiscountRefusal() {
+    void annualCeilingResultReconstructsTheRequestUnderTheConstitution() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         Fixture f = buildFixture(suffix, new BigDecimal("720.00"), 80, new BigDecimal("10.00"), true);
 
         ClaimViewDto claim = submit(f, new BigDecimal("1000.00"));
 
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
-        assertThat(claim.getApprovedAmount()).isEqualByComparingTo("720.00");
-        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("200.00");
+        assertThat(claim.getApprovedAmount()).isEqualByComparingTo("518.40");
+        assertThat(claim.getPatientCoPay()).isEqualByComparingTo("424.00");
+        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("57.60");
         assertThat(claim.getRefusedAmount()).isEqualByComparingTo("0.00");
     }
 }

@@ -18,7 +18,7 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractPricingI
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.claim.service.CoverageEngineService;
 import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
-import com.waad.tba.modules.claim.service.finance.ClaimLineFinancialEngine;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
 import com.waad.tba.security.AuthorizationService;
@@ -57,7 +57,7 @@ public class ClaimMapper {
         private final ClaimBatchRepository claimBatchRepository;
         private final CoverageEngineService coverageEngineService;
         private final AuthorizationService authorizationService;
-        private final ClaimLineFinancialEngine claimLineFinancialEngine;
+        private final ClaimFinancialAdjudicationService financialAdjudicationService;
         private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
 
         private static final BigDecimal HUNDRED = new BigDecimal("100.00");
@@ -347,32 +347,6 @@ public class ClaimMapper {
                                         ? lineDto.getManualRefusedAmount()
                                         : BigDecimal.ZERO;
 
-                        int coveragePercent = result.getCoveragePercent() != null ? result.getCoveragePercent() : 0;
-
-                        BigDecimal effectiveGross = result.getEffectiveTotal() != null
-                                        ? scale2(result.getEffectiveTotal())
-                                        : scale2(lineRequestedTotal);
-                        boolean beforeRejection = claim.getDiscountBeforeRejection() != Boolean.FALSE;
-
-                        // Every line-level financial number below (patient co-pay, contract
-                        // discount, rejection, net company share) flows through this single
-                        // pure engine -- see ClaimLineFinancialEngine for why the ordering
-                        // between the discount and the rejection is not interchangeable.
-                        // maximumCompanyShare is not wired yet (finance-00: annual-ceiling
-                        // engine integration is a separate, tracked follow-up) -- null here
-                        // means "no ceiling constraint", identical to today's behavior.
-                        ClaimLineFinancialEngine.Result calc = claimLineFinancialEngine.evaluate(
-                                        new ClaimLineFinancialEngine.Input(
-                                                        effectiveGross, coveragePercent, manualRefused,
-                                                        result.getPriceRefused(), result.getLimitRefused(),
-                                                        contractDiscountPercent, beforeRejection, isRejected,
-                                                        quantity, null));
-
-                        BigDecimal patientShare = calc.patientShare();
-                        BigDecimal finalPayable = calc.companyShare();
-                        BigDecimal contractDiscount = calc.companyDiscountAmount();
-                        BigDecimal financialRefused = calc.refusedAmount();
-
                         ClaimLine line = ClaimLine.builder()
                                         .claim(claim)
                                         .serviceCode(result.getServiceCode() != null ? result.getServiceCode()
@@ -423,10 +397,10 @@ public class ClaimMapper {
                                         .approvedUnitPrice(result.getEffectiveUnitPrice())
                                         .quantity(quantity)
                                         .requestedTotal(lineRequestedTotal)
-                                        .approvedAmount(finalPayable)
-                                        .companyShare(finalPayable)
-                                        .patientShare(patientShare)
-                                        .refusedAmount(financialRefused)
+                                        .approvedAmount(ZERO)
+                                        .companyShare(ZERO)
+                                        .patientShare(ZERO)
+                                        .refusedAmount(ZERO)
                                         .priceExcessRefused(isRejected ? BigDecimal.ZERO
                                                         : maxZero(result.getPriceRefused()))
                                         .limitRefused(isRejected ? BigDecimal.ZERO : maxZero(result.getLimitRefused()))
@@ -436,7 +410,7 @@ public class ClaimMapper {
                                                                         ? effectiveLineRejectionReason
                                                                         : (isRejected ? "مرفوض كلياً من قبل المراجع"
                                                                                         : result.getRefusalReason()))
-                                        .approvedQuantity(calc.approvedQuantity())
+                                        .approvedQuantity(null)
                                         .build();
 
                         lines.add(line);
@@ -480,6 +454,7 @@ public class ClaimMapper {
                 } else {
                         claim.setLines(lines);
                 }
+                financialAdjudicationService.adjudicate(claim);
                 claim.setRequestedAmount(totalRequestedAmount);
                 calculateClaimTotals(claim);
         }
@@ -500,8 +475,11 @@ public class ClaimMapper {
                                 .map(l -> l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                 totalApproved = scale2(totalApproved);
-                BigDecimal totalDiscount = maxZero(scale2(
-                                totalRequested.subtract(totalPatientShare).subtract(totalRefused).subtract(totalApproved)));
+                BigDecimal totalDiscount = lines.stream()
+                                .map(l -> l.getProviderContractDiscount() != null
+                                                ? l.getProviderContractDiscount() : BigDecimal.ZERO)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                totalDiscount = scale2(totalDiscount);
 
                 claim.setRequestedAmount(totalRequested);
                 claim.setRefusedAmount(totalRefused);

@@ -114,7 +114,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                     f.member().getId(), f.bucket().getId(),
                     LocalDate.of(LocalDate.now().getYear(), 1, 1),
                     LocalDate.of(LocalDate.now().getYear(), 12, 31), null);
-            assertThat(committed).isEqualByComparingTo("48.00");
+            assertThat(committed).isEqualByComparingTo("60.00");
 
             Long acceptedClaim = outcomes.get(0) ? firstClaim : secondClaim;
             reverseInTransaction(acceptedClaim);
@@ -200,7 +200,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
             }
             long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000;
 
-            assertThat(accepted).isEqualTo(5);
+            assertThat(accepted).isEqualTo(4);
             BigDecimal committed = consumptionRepository.sumCommittedAmount(
                     f.member().getId(), f.bucket().getId(),
                     LocalDate.of(LocalDate.now().getYear(), 1, 1),
@@ -244,7 +244,7 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                     .memberId(dependent.member().getId()).bucket(principal.bucket())
                     .periodStart(LocalDate.of(LocalDate.now().getYear(), 1, 1))
                     .periodEnd(LocalDate.of(LocalDate.now().getYear(), 12, 31))
-                    .approvedAmount(new BigDecimal("48.00")).timesConsumed(1)
+                    .approvedAmount(new BigDecimal("60.00")).timesConsumed(1)
                     .status(BenefitBucketConsumption.Status.RESERVED)
                     .calculationVersion(dependentDraftLine.getCalculationVersion())
                     .idempotencyKey("TEST:RESERVED:" + dependentDraftClaimId).build());
@@ -261,19 +261,55 @@ class BenefitBucketConcurrencyIntegrationTest extends PostgresIntegrationTestBas
                 .containsExactlyElementsOf(dependentLimits.stream()
                         .map(EffectiveLimitResolver.EffectiveLimit::effectiveLimit).toList());
         assertThat(balance(principalBalances, "BUCKET:" + principal.bucket().getId()).committed())
-                .isEqualByComparingTo("48.00");
+                .isEqualByComparingTo("60.00");
         assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
         assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).reserved())
-                .isEqualByComparingTo("48.00");
+                .isEqualByComparingTo("60.00");
         assertThat(balance(dependentBalances, "BUCKET:" + principal.bucket().getId()).signedAvailable())
-                .isEqualByComparingTo("952.00");
+                .isEqualByComparingTo("940.00");
         assertThat(balance(principalBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed())
-                .isEqualByComparingTo("48.00");
+                .isEqualByComparingTo("60.00");
         assertThat(balance(dependentBalances, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();
 
         var excludingCurrent = limitBalanceReader.read(principal.member().getId(), principalLimits, principalClaimId);
         assertThat(balance(excludingCurrent, "BUCKET:" + principal.bucket().getId()).committed()).isZero();
         assertThat(balance(excludingCurrent, "POLICY_GENERAL:" + principal.policy().getId()).committed()).isZero();
+    }
+
+    @Test
+    @WithMockUser(username = "superadmin", roles = "SUPER_ADMIN")
+    void liveClaimPathCoordinatesTwoLinesAgainstEverySharedBucket() {
+        Fixture f = createFixture(new BigDecimal("70.00"), null, null);
+        Visit visit = createVisit(f, LocalDate.now());
+
+        ClaimViewDto created = claimService.createClaim(ClaimCreateDto.builder()
+                .visitId(visit.getId()).serviceDate(LocalDate.now()).status(ClaimStatus.SUBMITTED)
+                .encounterType(EncounterType.OUTPATIENT)
+                .lines(List.of(
+                        ClaimLineDto.builder().medicalServiceId(f.service().getId()).quantity(1).build(),
+                        ClaimLineDto.builder().medicalServiceId(f.service().getId()).quantity(1).build()))
+                .build());
+
+        assertThat(created.getApprovedAmount()).isEqualByComparingTo("56.00");
+        record Canonical(BigDecimal firstInside, BigDecimal secondInside,
+                         BigDecimal secondExcess, BigDecimal firstPayment, BigDecimal secondPayment,
+                         String firstMode, String secondMode) {}
+        Canonical canonical = new TransactionTemplate(transactionManager).execute(status -> {
+            var persisted = claimRepository.findById(created.getId()).orElseThrow();
+            var first = persisted.getLines().get(0);
+            var second = persisted.getLines().get(1);
+            return new Canonical(first.getInsideLimit(), second.getInsideLimit(), second.getPatientLimitExcess(),
+                    first.getInsurerFinalPayment(), second.getInsurerFinalPayment(),
+                    first.getLimitMode(), second.getLimitMode());
+        });
+        assertThat(canonical).isNotNull();
+        assertThat(canonical.firstInside()).isEqualByComparingTo("60.00");
+        assertThat(canonical.secondInside()).isEqualByComparingTo("10.00");
+        assertThat(canonical.secondExcess()).isEqualByComparingTo("50.00");
+        assertThat(canonical.firstPayment()).isEqualByComparingTo("48.00");
+        assertThat(canonical.secondPayment()).isEqualByComparingTo("8.00");
+        assertThat(canonical.firstMode()).isEqualTo("LIMITED");
+        assertThat(canonical.secondMode()).isEqualTo("LIMITED");
     }
 
     private LimitBalanceReader.LimitBalance balance(LimitBalanceReader.BalanceSet set, String semanticKey) {

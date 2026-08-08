@@ -69,7 +69,7 @@ public class LimitBalanceReader {
             BigDecimal committed;
             BigDecimal reserved;
             if (definition.benefitScopeType() == BenefitScopeType.POLICY_GENERAL) {
-                committed = claimRepository.sumApprovedAmountsByMemberAndYearExcludingClaim(
+                committed = claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
                         memberId, definition.periodStart(), definition.periodEnd(), excludeClaimId);
                 // General reservations will remain zero until the pre-authorization reservation
                 // ledger is connected; manufacturing them from bucket rows would double count.
