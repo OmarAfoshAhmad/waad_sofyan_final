@@ -129,6 +129,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private AccountTransactionRepository accountTransactionRepository;
     @Autowired private ClaimApprovalOrchestrator claimApprovalOrchestrator;
     @Autowired private ClaimReversalOrchestrator claimReversalOrchestrator;
+    @Autowired private ClaimFinancialSnapshotService claimFinancialSnapshotService;
     @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private ClaimRepository claimRepository;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -369,6 +370,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
             corrected.getLines().forEach(line -> line.setCalculationVersion(
                     (line.getCalculationVersion() == null ? 1 : line.getCalculationVersion()) + 1));
             claimRepository.saveAndFlush(corrected);
+            claimFinancialSnapshotService.finalizeSnapshot(corrected);
             claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
         });
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
@@ -379,6 +381,9 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(financialOutboxEventRepository
                 .findByAggregateTypeAndAggregateIdAndEventType(
                         "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE)).hasSize(2);
+        assertThat(claimLineLimitSnapshotRepository
+                .findByClaimIdOrderByClaimLineIdAscConsumptionOrderAsc(claimId))
+                .hasSize(snapshots.size() * 2);
         ProviderAccount reapprovedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
         assertThat(reapprovedAccount.getTotalApproved()).isEqualByComparingTo("720.00");
         assertThat(reapprovedAccount.getRunningBalance()).isEqualByComparingTo("720.00");
