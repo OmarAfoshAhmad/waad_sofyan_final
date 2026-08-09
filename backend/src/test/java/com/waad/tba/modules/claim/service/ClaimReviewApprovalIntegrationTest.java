@@ -319,6 +319,21 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(refreshedAccount.getTotalApproved()).isEqualByComparingTo("720.00");
         assertThat(refreshedAccount.getRunningBalance()).isEqualByComparingTo("720.00");
 
+        // The provider ledger is append-only at the database boundary, not just
+        // by service convention. Both mutations must be rejected by PostgreSQL.
+        Long approvalTransactionId = accountTransactionRepository
+                .findFirstByReferenceTypeAndReferenceIdOrderByCreatedAtDesc(
+                        com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_APPROVAL,
+                        claimId)
+                .orElseThrow().getId();
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(ignored ->
+                jdbcTemplate.update("UPDATE account_transactions SET description = ? WHERE id = ?",
+                        "forbidden rewrite", approvalTransactionId)))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(ignored ->
+                jdbcTemplate.update("DELETE FROM account_transactions WHERE id = ?", approvalTransactionId)))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+
         // 6) Durable integration event exists exactly once in the same committed
         // financial cycle; external delivery may happen later without data loss.
         var outbox = financialOutboxEventRepository
