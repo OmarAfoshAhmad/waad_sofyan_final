@@ -260,6 +260,12 @@ public class AccountTransactionService {
         return transactionRepository.countByReferenceTypeAndReferenceId(referenceType, referenceId);
     }
 
+    @Transactional(readOnly = true)
+    public AccountTransaction findLatestByReference(ReferenceType referenceType, Long referenceId) {
+        return transactionRepository.findFirstByReferenceTypeAndReferenceIdOrderByCreatedAtDesc(
+                referenceType, referenceId).orElse(null);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // AGGREGATION QUERIES
     // ═══════════════════════════════════════════════════════════════════════════

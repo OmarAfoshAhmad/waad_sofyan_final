@@ -64,6 +64,8 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractReposito
 import com.waad.tba.modules.providercontract.repository.ProviderContractTermRepository;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
+import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.entity.VisitStatus;
 import com.waad.tba.modules.visit.repository.VisitRepository;
@@ -124,6 +126,9 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private BenefitBucketConsumptionRepository benefitBucketConsumptionRepository;
     @Autowired private ClaimLineLimitSnapshotRepository claimLineLimitSnapshotRepository;
     @Autowired private FinancialOutboxEventRepository financialOutboxEventRepository;
+    @Autowired private AccountTransactionRepository accountTransactionRepository;
+    @Autowired private ClaimApprovalOrchestrator claimApprovalOrchestrator;
+    @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private ClaimRepository claimRepository;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
@@ -318,5 +323,20 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(outbox.get(0).getCalculationVersion())
                 .isEqualTo(approved.getLines().get(0).getCalculationVersion());
         assertThat(outbox.get(0).getPayload()).contains("\"approvedAmount\": 720.00");
+
+        // 7) Delivery/retry replay is harmless. The same approved cycle may be
+        // presented more than once, but every ledger remains exactly-once.
+        transactionTemplate.executeWithoutResult(ignored -> {
+            claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
+            claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
+        });
+        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
+        assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
+                com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_APPROVAL,
+                claimId)).isEqualTo(1);
+        assertThat(financialOutboxEventRepository
+                .findByAggregateTypeAndAggregateIdAndEventType(
+                        "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE)).hasSize(1);
     }
 }

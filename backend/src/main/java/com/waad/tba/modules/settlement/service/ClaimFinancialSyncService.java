@@ -39,17 +39,8 @@ public class ClaimFinancialSyncService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void creditForClaim(Long claimId, Long userId) {
         log.info("💰 [SYNC] creditForClaim: claimId={}, userId={}", claimId, userId);
-        try {
-            providerAccountService.creditOnClaimApproval(claimId, userId);
-            log.info("✅ [SYNC] Provider account credited for claim {}", claimId);
-        } catch (IllegalStateException e) {
-            if (e.getMessage() != null && e.getMessage().contains("already been credited")) {
-                log.warn("⚠️ [SYNC] Claim {} already credited — skipping (idempotent)", claimId);
-            } else {
-                log.error("❌ [SYNC] Failed to credit provider account for claim {}: {}", claimId, e.getMessage());
-                throw e;
-            }
-        }
+        providerAccountService.creditOnClaimApproval(claimId, userId);
+        log.info("✅ [SYNC] Provider account credit present for claim {}", claimId);
     }
 
     /**

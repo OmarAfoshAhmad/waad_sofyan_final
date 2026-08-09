@@ -158,9 +158,7 @@ public class ProviderAccountService {
                 long approvalCount = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 long reversalCount = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
                 if (approvalCount > reversalCount) {
-                        throw new IllegalStateException(
-                                        "Claim " + claimId
-                                                        + " has an active (unreversed) credit. Cannot credit twice.");
+                        return transactionService.findLatestByReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 }
 
                 // 4. Get net amount to credit (already calculated by claim financial pipeline)
@@ -217,9 +215,7 @@ public class ProviderAccountService {
                 long approvalCountLocked = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 long reversalCountLocked = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
                 if (approvalCountLocked > reversalCountLocked) {
-                        throw new IllegalStateException(
-                                        "Claim " + claimId
-                                                        + " has an active credit (concurrent request). Cannot credit twice.");
+                        return transactionService.findLatestByReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 }
 
                 // 6. Validate account is active
