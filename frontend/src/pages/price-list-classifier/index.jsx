@@ -724,6 +724,14 @@ export default function PriceListClassifierPage() {
     [visibleRows]
   );
   const selectedKeySet = useMemo(() => new Set(selectedSourceKeys), [selectedSourceKeys]);
+  const selectedDisplayRowCount = useMemo(
+    () =>
+      contractDisplayRows.filter((row) => {
+        const keys = row.sourceKeys || [rowKey(row)];
+        return keys.length > 0 && keys.every((key) => selectedKeySet.has(key));
+      }).length,
+    [contractDisplayRows, selectedKeySet]
+  );
   const allVisibleSelected = visibleSourceKeys.length > 0 && visibleSourceKeys.every((key) => selectedKeySet.has(key));
   const someVisibleSelected = visibleSourceKeys.some((key) => selectedKeySet.has(key));
 
@@ -1491,10 +1499,10 @@ export default function PriceListClassifierPage() {
                   variant="contained"
                   color="success"
                   startIcon={postingContract ? <CircularProgress size={18} color="inherit" /> : <PlaylistAddCheckIcon />}
-                  disabled={!selectedSourceKeys.length || postingContract || savingSession}
+                  disabled={!selectedDisplayRowCount || postingContract || savingSession}
                   onClick={postApprovedRowsToSelectedProviderContract}
                 >
-                  ترحيل المحدد للعقد ({selectedSourceKeys.length})
+                  ترحيل المحدد للعقد ({selectedDisplayRowCount})
                 </Button>
                 <Button
                   variant="contained"
