@@ -68,6 +68,7 @@ import { alpha } from '@mui/material/styles';
 // Components
 import { ModernPageHeader } from 'components/tba';
 import { UnifiedAttachmentViewer, MedicalReviewLayout } from 'components/medical-review';
+import ClaimPendingServicesPanel from './components/ClaimPendingServicesPanel';
 
 // Services
 import { claimsService } from 'services/api';
@@ -1110,6 +1111,16 @@ const ClaimViewMedicalReview = () => {
               لا توجد خدمات
             </Typography>
           )}
+        </SectionCard>
+
+        <SectionCard title="الخدمات الجديدة أثناء المراجعة" icon={ServiceIcon}>
+          <ClaimPendingServicesPanel
+            claimId={id}
+            claimStatus={normalizedClaim.status}
+            canDecide={canFinalizeApproval}
+            locked={reviewLock.locked}
+            onChanged={fetchClaim}
+          />
         </SectionCard>
 
         {/* Diagnosis */}
