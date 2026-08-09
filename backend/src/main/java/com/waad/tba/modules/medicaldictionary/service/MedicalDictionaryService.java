@@ -993,6 +993,18 @@ public class MedicalDictionaryService {
                 row.getSectionName(), row.getSectionNames(), row.getNotes(),
                 row.getFacilityName() == null || row.getFacilityName().isBlank() ? requestProviderName : row.getFacilityName()));
         String status = result.status().name();
+        MedicalCategory category = result.categoryCode().isBlank()
+                ? null : medicalCategoryRepository.findActiveByCode(result.categoryCode()).orElse(null);
+        MedicalDictionaryMatchResponse bestMatch = category == null ? null : MedicalDictionaryMatchResponse.builder()
+                .entryId(null)
+                .canonicalName(result.unifiedAr().isBlank() ? result.unifiedEn() : result.unifiedAr())
+                .medicalCategoryId(category.getId())
+                .medicalCategoryCode(category.getCode())
+                .medicalCategoryName(categoryName(category))
+                .matchedText(row.getServiceName())
+                .matchType(result.matchMethod())
+                .confidence(result.confidence().movePointRight(2).intValue())
+                .build();
 
         return PriceListClassificationResponse.Item.builder()
                 .rowNumber(row.getRowNumber())
@@ -1005,8 +1017,8 @@ public class MedicalDictionaryService {
                 .priceLabel(row.getPriceLabel())
                 .status(status)
                 .statusLabel(statusLabel(status))
-                .bestMatch(null)
-                .matches(List.of())
+                .bestMatch(bestMatch)
+                .matches(bestMatch == null ? List.of() : List.of(bestMatch))
                 .duplicateName(normalizedCounts.getOrDefault(normalized, 0L) > 1)
                 .dictionaryReleaseId(result.releaseId())
                 .dictionaryVersion(result.dictionaryVersion())

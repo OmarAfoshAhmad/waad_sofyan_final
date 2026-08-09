@@ -34,6 +34,7 @@ import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import { useSearchParams } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
+import providersService from 'services/api/providers.service';
 
 const loadXlsx = async () => import('xlsx');
 
@@ -241,9 +242,27 @@ const extractRowsFromWorkbook = (workbook, XLSX) => {
 };
 
 const statusColor = {
+  AUTO_APPROVED: 'success',
+  STRONG_SUGGESTION: 'warning',
+  REVIEW_REQUIRED: 'warning',
+  SPLIT_REQUIRED: 'error',
+  QUARANTINED_NON_SERVICE: 'default',
+  EXCLUDED_COSMETIC: 'error',
   HIGH_CONFIDENCE: 'success',
   NEEDS_REVIEW: 'warning',
   UNKNOWN: 'error'
+};
+
+const v50StatusLabel = {
+  AUTO_APPROVED: 'معتمد آلياً — V50',
+  STRONG_SUGGESTION: 'اقتراح قوي — يحتاج مراجعة',
+  REVIEW_REQUIRED: 'يحتاج مراجعة بشرية',
+  SPLIT_REQUIRED: 'يجب تقسيم السطر',
+  QUARANTINED_NON_SERVICE: 'ليس خدمة طبية',
+  EXCLUDED_COSMETIC: 'تجميلي مستبعد',
+  HIGH_CONFIDENCE: 'تصنيف قديم',
+  NEEDS_REVIEW: 'تحتاج مراجعة',
+  UNKNOWN: 'غير معروف'
 };
 
 const sessionStatusLabel = {
@@ -263,7 +282,7 @@ const rowKey = (item) => `${item.sourceSheet || '-'}-${item.rowNumber || '-'}-${
 
 const getEffectiveCategory = (item) => item.manualCategory || item.bestMatch;
 
-const getEffectiveStatusLabel = (item) => (item.manualCategory ? 'مراجع يدوياً' : item.statusLabel);
+const getEffectiveStatusLabel = (item) => (item.manualCategory ? 'معتمد يدوياً' : v50StatusLabel[item.status] || item.statusLabel);
 
 const getCanonicalExportName = (item) => item.bestMatch?.canonicalName || '';
 const getProviderServiceName = (item) => item.serviceName || item.bestMatch?.canonicalName || '';
@@ -346,16 +365,17 @@ const buildContractReadyRows = (items) => {
 
   const resolveMergedStatus = (rawStatuses) => {
     const statuses = new Set(rawStatuses || []);
-    if (statuses.has('UNKNOWN')) return 'UNKNOWN';
-    if (statuses.has('NEEDS_REVIEW')) return 'NEEDS_REVIEW';
-    if (statuses.has('HIGH_CONFIDENCE')) return 'HIGH_CONFIDENCE';
-    return 'HIGH_CONFIDENCE';
+    if (statuses.has('QUARANTINED_NON_SERVICE')) return 'QUARANTINED_NON_SERVICE';
+    if (statuses.has('EXCLUDED_COSMETIC')) return 'EXCLUDED_COSMETIC';
+    if (statuses.has('SPLIT_REQUIRED')) return 'SPLIT_REQUIRED';
+    if (statuses.has('REVIEW_REQUIRED')) return 'REVIEW_REQUIRED';
+    if (statuses.has('STRONG_SUGGESTION')) return 'STRONG_SUGGESTION';
+    if (statuses.has('UNKNOWN') || statuses.has('NEEDS_REVIEW')) return 'REVIEW_REQUIRED';
+    return 'AUTO_APPROVED';
   };
 
   const statusLabel = {
-    HIGH_CONFIDENCE: 'ثقة عالية',
-    NEEDS_REVIEW: 'تحتاج مراجعة',
-    UNKNOWN: 'غير معروف'
+    ...v50StatusLabel
   };
 
   return Array.from(groups.values()).map((group) => {
@@ -401,7 +421,7 @@ const buildContractRowsWithoutMerge = (items) =>
       return {
         sourceKeys: [rowKey(item)],
         rawStatuses: item.status ? [item.status] : [],
-        display_status: item.status || 'HIGH_CONFIDENCE',
+        display_status: item.status || 'REVIEW_REQUIRED',
         display_status_label: getEffectiveStatusLabel(item),
         confidence: item.bestMatch?.confidence ?? null,
         service_name: getProviderServiceName(item),
@@ -424,9 +444,9 @@ const buildContractRowsWithoutMerge = (items) =>
 
 const buildSummary = (items) => ({
   total: items.length,
-  highConfidence: items.filter((item) => item.status === 'HIGH_CONFIDENCE').length,
-  needsReview: items.filter((item) => item.status === 'NEEDS_REVIEW').length,
-  unknown: items.filter((item) => item.status === 'UNKNOWN').length,
+  highConfidence: items.filter((item) => item.status === 'AUTO_APPROVED').length,
+  needsReview: items.filter((item) => ['STRONG_SUGGESTION', 'REVIEW_REQUIRED', 'SPLIT_REQUIRED'].includes(item.status)).length,
+  unknown: items.filter((item) => ['QUARANTINED_NON_SERVICE', 'EXCLUDED_COSMETIC'].includes(item.status)).length,
   duplicateNames: items.filter((item) => item.duplicateName).length,
   rangedPrices: items.filter((item) => hasPriceRange(item)).length
 });
@@ -443,6 +463,14 @@ const mapBackendSessionItems = (session) =>
     priceLabel: item.priceLabel,
     status: item.status,
     statusLabel: item.status,
+    dictionaryReleaseId: item.dictionaryReleaseId,
+    dictionaryVersion: item.dictionaryVersion,
+    conceptCode: item.dictionaryConceptCode,
+    matchMethod: item.classificationMethod,
+    reason: item.classificationReason,
+    exceptionType: item.classificationExceptionType,
+    evidenceId: item.classificationEvidenceId,
+    excludeFromPrecision: Boolean(item.classificationExcludePrecision),
     duplicateName: Boolean(item.duplicateName),
     manualCategory: item.medicalCategoryId
       ? {
@@ -584,6 +612,8 @@ export default function PriceListClassifierPage() {
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [sessionInfo, setSessionInfo] = useState(null);
+  const [providers, setProviders] = useState([]);
+  const [selectedProvider, setSelectedProvider] = useState(null);
 
   const items = useMemo(() => result?.items || [], [result?.items]);
   const manualReviewedCount = items.filter((item) => item.manualCategory).length;
@@ -654,6 +684,13 @@ export default function PriceListClassifierPage() {
     return () => {
       mounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    providersService
+      .getSelector()
+      .then((data) => setProviders(Array.isArray(data) ? data : data?.content || []))
+      .catch(() => setError('تعذر تحميل قائمة مقدمي الخدمة؛ لا يمكن تنفيذ مطابقة V50 الخاصة بالمرفق'));
   }, []);
 
   useEffect(() => {
@@ -801,6 +838,10 @@ export default function PriceListClassifierPage() {
 
   const classifyRows = async () => {
     if (!rawRows.length) return;
+    if (!selectedProvider?.name) {
+      setError('اختر مقدم الخدمة أولاً؛ اسم المرفق جزء أساسي من دقة مطابقة V50.');
+      return;
+    }
     setLoading(true);
     setError('');
     setSuccess('');
@@ -823,7 +864,10 @@ export default function PriceListClassifierPage() {
 
       for (let index = startIndex; index < rawRows.length; index += CLASSIFICATION_BATCH_SIZE) {
         const chunk = rawRows.slice(index, index + CLASSIFICATION_BATCH_SIZE);
-        const response = await medicalDictionaryService.classifyPriceListWithDictionary({ rows: chunk });
+        const response = await medicalDictionaryService.classifyPriceListWithDictionary({
+          providerName: selectedProvider.name,
+          rows: chunk
+        });
         allItems.push(...(response.items || []));
         startIndex = Math.min(index + chunk.length, rawRows.length);
 
@@ -875,6 +919,8 @@ export default function PriceListClassifierPage() {
     sessionId: sessionInfo?.backendSessionId || null,
     sessionName: fileName ? `تنظيم قائمة أسعار - ${fileName}` : `تنظيم قائمة أسعار - ${new Date().toLocaleDateString('ar-LY')}`,
     originalFileName: fileName || '',
+    providerId: selectedProvider?.id || null,
+    providerName: selectedProvider?.name || '',
     items: items.map((item) => {
       const effectiveCategory = getEffectiveCategory(item);
       const isManual = Boolean(item.manualCategory);
@@ -889,6 +935,14 @@ export default function PriceListClassifierPage() {
         medicalCategoryCode: effectiveCategory?.medicalCategoryCode || '',
         medicalCategoryName: effectiveCategory?.medicalCategoryName || '',
         confidence: isManual ? 95 : item.bestMatch?.confidence || 0,
+        dictionaryReleaseId: item.dictionaryReleaseId || null,
+        dictionaryVersion: item.dictionaryVersion || null,
+        dictionaryConceptCode: item.conceptCode || null,
+        classificationMethod: item.matchMethod || null,
+        classificationReason: item.reason || null,
+        classificationExceptionType: item.exceptionType || null,
+        classificationEvidenceId: item.evidenceId || null,
+        classificationExcludePrecision: Boolean(item.excludeFromPrecision),
         status: isManual ? 'MANUALLY_REVIEWED' : item.status,
         price: item.price ?? getPriceMin(item),
         minPrice: getPriceMin(item),
@@ -932,7 +986,7 @@ export default function PriceListClassifierPage() {
   };
 
   const promoteReviewRowsToDictionarySuggestions = async () => {
-    const reviewRows = items.filter((item) => item.status !== 'HIGH_CONFIDENCE');
+    const reviewRows = items.filter((item) => item.status !== 'AUTO_APPROVED');
     if (!reviewRows.length) {
       setSuccess('لا توجد خدمات تحتاج ترحيل للاقتراحات.');
       return;
@@ -1070,7 +1124,7 @@ export default function PriceListClassifierPage() {
                   variant="contained"
                   color="secondary"
                   startIcon={loading ? <CircularProgress size={18} /> : <ManageSearchIcon />}
-                  disabled={!rawRows.length || loading}
+                  disabled={!rawRows.length || !selectedProvider || loading}
                   onClick={classifyRows}
                   fullWidth
                 >
@@ -1078,6 +1132,15 @@ export default function PriceListClassifierPage() {
                     ? 'متابعة التصنيف'
                     : 'تصنيف الخدمات'}
                 </Button>
+                <Autocomplete
+                  sx={{ mt: 1.5 }}
+                  options={providers}
+                  value={selectedProvider}
+                  onChange={(event, value) => setSelectedProvider(value)}
+                  getOptionLabel={(option) => option?.name || ''}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  renderInput={(params) => <TextField {...params} label="مقدم الخدمة (إلزامي لدقة V50)" />}
+                />
               </CardContent>
             </Card>
           </Grid>
@@ -1206,9 +1269,13 @@ export default function PriceListClassifierPage() {
                 />
                 <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} sx={{ minWidth: 190 }}>
                   <MenuItem value="ALL">كل النتائج</MenuItem>
-                  <MenuItem value="HIGH_CONFIDENCE">ثقة عالية</MenuItem>
-                  <MenuItem value="NEEDS_REVIEW">تحتاج مراجعة</MenuItem>
-                  <MenuItem value="UNKNOWN">غير معروف</MenuItem>
+                  {Object.entries(v50StatusLabel)
+                    .slice(0, 6)
+                    .map(([value, label]) => (
+                      <MenuItem key={value} value={value}>
+                        {label}
+                      </MenuItem>
+                    ))}
                 </Select>
                 <Select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} sx={{ minWidth: 190 }}>
                   <MenuItem value="ALL">كل الأسعار</MenuItem>
@@ -1216,7 +1283,12 @@ export default function PriceListClassifierPage() {
                   <MenuItem value="SINGLE">سعر مفرد</MenuItem>
                   <MenuItem value="MISSING">بدون سعر</MenuItem>
                 </Select>
-                <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={() => downloadTemplate(categories)} sx={{ minWidth: 130 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownloadIcon />}
+                  onClick={() => downloadTemplate(categories)}
+                  sx={{ minWidth: 130 }}
+                >
                   قالب Excel
                 </Button>
                 <Button
@@ -1250,7 +1322,7 @@ export default function PriceListClassifierPage() {
                   variant="contained"
                   color="warning"
                   startIcon={promoting ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
-                  disabled={!items.some((item) => item.status !== 'HIGH_CONFIDENCE') || promoting}
+                  disabled={!items.some((item) => item.status !== 'AUTO_APPROVED') || promoting}
                   onClick={promoteReviewRowsToDictionarySuggestions}
                 >
                   ترحيل للمراجعة
@@ -1394,7 +1466,15 @@ export default function PriceListClassifierPage() {
                                 renderInput={(params) => <TextField {...params} placeholder="ابحث في التصنيفات..." />}
                               />
                             </TableCell>
-                            <TableCell>{item.duplicateName ? <Chip size="small" color="info" label="اسم مكرر" /> : '-'}</TableCell>
+                            <TableCell>
+                              <Stack spacing={0.25}>
+                                {item.duplicateName && <Chip size="small" color="info" label="اسم مكرر" />}
+                                <Typography variant="caption" color="text.secondary">
+                                  {item.dictionaryVersion ? `${item.dictionaryVersion} • ${item.matchMethod || '-'}` : item.reason || '-'}
+                                </Typography>
+                                {item.reason && <Typography variant="caption">{item.reason}</Typography>}
+                              </Stack>
+                            </TableCell>
                           </TableRow>
                         ))}
                   </TableBody>
