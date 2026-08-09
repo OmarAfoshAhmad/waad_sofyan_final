@@ -16,8 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * كيف تعمل:
  * - تُستدعى من ClaimApprovalEventListener و ClaimReversalEventListener
- * - كلا المستمعَين يشتغلان بعد COMMIT مباشرة (بدون Async)
- * - REQUIRES_NEW يفتح transaction جديدة مستقلة لكل عملية
+ * - اعتماد المطالبة يشتغل قبل COMMIT داخل نفس المعاملة المالية
+ * - MANDATORY يمنع إنشاء قيد مقدم خدمة خارج معاملة الاعتماد
+ * - مسار العكس القديم ما زال مستقلاً مؤقتاً إلى أن تُبنى بوابة العكس الذرية
  *
  * عمليات:
  * creditForClaim() ← عند إضافة مطالبة معتمدة أو استعادتها
@@ -32,9 +33,10 @@ public class ClaimFinancialSyncService {
 
     /**
      * إضافة قيد دائن لحساب مقدم الخدمة عند اعتماد مطالبة أو استعادتها.
-     * يعمل في transaction مستقلة بعد commit المطالبة مباشرة (synchronous).
+     * يعمل داخل نفس معاملة اعتماد المطالبة. إذا فشل قيد مقدم الخدمة، تفشل
+     * المطالبة ودفتر السقوف معها؛ لا توجد حالة اعتماد مالي جزئية.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void creditForClaim(Long claimId, Long userId) {
         log.info("💰 [SYNC] creditForClaim: claimId={}, userId={}", claimId, userId);
         try {

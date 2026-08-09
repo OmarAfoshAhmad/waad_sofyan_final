@@ -17,7 +17,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * ║ ║
  * ║ TRIGGERS: ║
  * ║ When: ClaimApprovedEvent is published (after claim saved with APPROVED) ║
- * ║ Phase: AFTER_COMMIT (ensures claim save is committed first) ║
+ * ║ Phase: BEFORE_COMMIT (same transaction as claim approval) ║
  * ║ ║
  * ║ ACTIONS: ║
  * ║ 1. Get the approved claim ║
@@ -26,8 +26,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * ║ ║
  * ║ PROTECTIONS: ║
  * ║ - Double Credit Prevention (checked in ProviderAccountService) ║
- * ║ - Runs in separate transaction (REQUIRES_NEW) ║
- * ║ - Async execution (does not block approval response) ║
+ * ║ - Failure rolls back the claim approval and benefit-ledger writes ║
+ * ║ - Synchronous: no partially-approved financial state can escape ║
  * ╚═══════════════════════════════════════════════════════════════════════════════╝
  * 
  * @since Phase 3A - Backend Integration
@@ -43,7 +43,7 @@ public class ClaimApprovalEventListener {
      * Handle claim approval event - delegates to ClaimFinancialSyncService.
      * Synchronous (no @Async) → account updated before HTTP response returns.
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleClaimApproved(ClaimApprovedEvent event) {
         if (event.getProviderId() == null) {
             log.warn("⚠️ [EVENT] Skipping credit - provider ID is null for claim {}", event.getClaimId());
