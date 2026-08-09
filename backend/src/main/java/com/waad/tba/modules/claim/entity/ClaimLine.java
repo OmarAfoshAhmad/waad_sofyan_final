@@ -9,6 +9,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -78,6 +79,28 @@ public class ClaimLine {
     /** Contract price snapshot used for this line; never re-read for final claims. */
     @Column(name = "contract_unit_price", precision = 15, scale = 2)
     private BigDecimal contractUnitPrice;
+
+    /** Immutable pricing/classification evidence selected by serviceDate. */
+    @Column(name = "pricing_effective_from")
+    private LocalDate pricingEffectiveFrom;
+
+    @Column(name = "pricing_effective_to")
+    private LocalDate pricingEffectiveTo;
+
+    @Column(name = "dictionary_release_id")
+    private Long dictionaryReleaseId;
+
+    @Column(name = "dictionary_version", length = 40)
+    private String dictionaryVersion;
+
+    @Column(name = "dictionary_concept_code", length = 100)
+    private String dictionaryConceptCode;
+
+    @Column(name = "classification_method_v50", length = 80)
+    private String classificationMethodV50;
+
+    @Column(name = "classification_evidence_id")
+    private Long classificationEvidenceId;
 
     /**
      * Service code (denormalized snapshot for reports/queries)

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -38,6 +39,15 @@ public class ClaimLineDto {
      * Optional: Pricing Item ID (from Provider Contract Pricing Items)
      */
     private Long pricingItemId;
+
+    // Auditable price/dictionary snapshot selected by serviceDate (read-only).
+    private LocalDate pricingEffectiveFrom;
+    private LocalDate pricingEffectiveTo;
+    private Long dictionaryReleaseId;
+    private String dictionaryVersion;
+    private String dictionaryConceptCode;
+    private String classificationMethodV50;
+    private Long classificationEvidenceId;
 
     /**
      * REQUIRED: Quantity of service

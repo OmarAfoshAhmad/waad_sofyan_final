@@ -188,6 +188,11 @@ public class ClaimMapper {
                                         codeToLookup,
                                         resolvedServiceName);
 
+                        if (resolvedPricingItemId != null && matchedPricingItem == null) {
+                                throw new BusinessRuleException(
+                                                "سعر الخدمة المحدد غير ساري في تاريخ الخدمة أو لا يتبع عقد مقدم الخدمة الفعال");
+                        }
+
                         if (matchedPricingItem != null) {
                                 resolvedPricingItemId = matchedPricingItem.getId();
                                 if (!hasBusinessValue(codeToLookup)) {
@@ -219,21 +224,6 @@ public class ClaimMapper {
                                                 : resolvedUnitPrice;
                         }
 
-                        if (resolvedUnitPrice == null && resolvedPricingItemId != null) {
-                                ProviderContractPricingItem resolvedItem = pricingItemRepository.findById(resolvedPricingItemId)
-                                                .orElse(null);
-                                if (resolvedItem != null) {
-                                        resolvedUnitPrice = resolvedItem.getContractPrice() != null
-                                                        ? resolvedItem.getContractPrice()
-                                                        : enteredUnitPrice;
-                                        resolvedMaxUnitPrice = resolvedItem.getMaxContractPrice() != null
-                                                        ? resolvedItem.getMaxContractPrice()
-                                                        : resolvedUnitPrice;
-                                } else {
-                                        resolvedUnitPrice = enteredUnitPrice;
-                                }
-                        }
-
                         Integer quantity = lineDto.getQuantity() != null ? lineDto.getQuantity() : 1;
                         BigDecimal requestedUnitPrice = enteredUnitPrice.compareTo(BigDecimal.ZERO) > 0
                                         ? enteredUnitPrice
@@ -247,15 +237,6 @@ public class ClaimMapper {
                                 pricingItemCategoryName = matchedPricingItem.getMedicalCategory().getNameAr() != null
                                                 ? matchedPricingItem.getMedicalCategory().getNameAr()
                                                 : matchedPricingItem.getMedicalCategory().getName();
-                        } else if (resolvedPricingItemId != null) {
-                                ProviderContractPricingItem resolvedItem = pricingItemRepository.findById(resolvedPricingItemId)
-                                                .orElse(null);
-                                if (resolvedItem != null && resolvedItem.getMedicalCategory() != null) {
-                                        pricingItemCategoryId = resolvedItem.getMedicalCategory().getId();
-                                        pricingItemCategoryName = resolvedItem.getMedicalCategory().getNameAr() != null
-                                                        ? resolvedItem.getMedicalCategory().getNameAr()
-                                                        : resolvedItem.getMedicalCategory().getName();
-                                }
                         }
 
                         var currentUser = authorizationService.getCurrentUser();
@@ -359,6 +340,13 @@ public class ClaimMapper {
                                         .pricingItemId(resolvedPricingItemId)
                                         .contractTermsId(resolvedContract.terms().getId())
                                         .contractUnitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
+                                        .pricingEffectiveFrom(matchedPricingItem == null ? null : matchedPricingItem.getEffectiveFrom())
+                                        .pricingEffectiveTo(matchedPricingItem == null ? null : matchedPricingItem.getEffectiveTo())
+                                        .dictionaryReleaseId(matchedPricingItem == null ? null : matchedPricingItem.getDictionaryReleaseId())
+                                        .dictionaryVersion(matchedPricingItem == null ? null : matchedPricingItem.getDictionaryVersion())
+                                        .dictionaryConceptCode(matchedPricingItem == null ? null : matchedPricingItem.getDictionaryConceptCode())
+                                        .classificationMethodV50(matchedPricingItem == null ? null : matchedPricingItem.getClassificationMethodV50())
+                                        .classificationEvidenceId(matchedPricingItem == null ? null : matchedPricingItem.getClassificationEvidenceId())
                                         .serviceCategoryId(serviceCatIdForCoverage)
                                         .serviceCategoryName(serviceCatName)
                                         .originalServiceCategoryId(pricingItemCategoryId)
@@ -521,6 +509,13 @@ public class ClaimMapper {
                         inputs.add(ClaimLineDto.builder()
                                         .id(line.getId())
                                         .pricingItemId(line.getPricingItemId())
+                                        .pricingEffectiveFrom(line.getPricingEffectiveFrom())
+                                        .pricingEffectiveTo(line.getPricingEffectiveTo())
+                                        .dictionaryReleaseId(line.getDictionaryReleaseId())
+                                        .dictionaryVersion(line.getDictionaryVersion())
+                                        .dictionaryConceptCode(line.getDictionaryConceptCode())
+                                        .classificationMethodV50(line.getClassificationMethodV50())
+                                        .classificationEvidenceId(line.getClassificationEvidenceId())
                                         .serviceCode(line.getServiceCode())
                                         .serviceName(line.getServiceName())
                                         .serviceCategoryId(line.getServiceCategoryId())
@@ -616,6 +611,13 @@ public class ClaimMapper {
                 return ClaimLineDto.builder()
                                 .id(line.getId())
                                 .pricingItemId(line.getPricingItemId())
+                                .pricingEffectiveFrom(line.getPricingEffectiveFrom())
+                                .pricingEffectiveTo(line.getPricingEffectiveTo())
+                                .dictionaryReleaseId(line.getDictionaryReleaseId())
+                                .dictionaryVersion(line.getDictionaryVersion())
+                                .dictionaryConceptCode(line.getDictionaryConceptCode())
+                                .classificationMethodV50(line.getClassificationMethodV50())
+                                .classificationEvidenceId(line.getClassificationEvidenceId())
                                 .serviceCode(line.getServiceCode())
                                 .serviceName(line.getServiceName())
                                 .serviceCategoryId(line.getServiceCategoryId())

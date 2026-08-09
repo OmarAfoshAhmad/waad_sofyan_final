@@ -340,6 +340,13 @@ public class ClaimApiMapper {
                                 .reviewerNotes(dto.getReviewerNotes())
                                 .notes(dto.getReviewerNotes()) // Map reviewerNotes to legacy notes field
                                 .pricingItemId(dto.getPricingItemId())
+                                .pricingEffectiveFrom(dto.getPricingEffectiveFrom())
+                                .pricingEffectiveTo(dto.getPricingEffectiveTo())
+                                .dictionaryReleaseId(dto.getDictionaryReleaseId())
+                                .dictionaryVersion(dto.getDictionaryVersion())
+                                .dictionaryConceptCode(dto.getDictionaryConceptCode())
+                                .classificationMethodV50(dto.getClassificationMethodV50())
+                                .classificationEvidenceId(dto.getClassificationEvidenceId())
                                 .active(true)
                                 .build();
         }

@@ -668,6 +668,12 @@ public class MedicalDictionaryService {
                         : ClassificationStatus.AUTO)
                 .confidenceLevel(confidence >= 85 ? ConfidenceLevel.HIGH : (confidence >= 60 ? ConfidenceLevel.MEDIUM : ConfidenceLevel.LOW))
                 .classificationSource("MEDICAL_DICTIONARY_PRICE_LIST")
+                .sourcePriceListItemId(item.getId())
+                .dictionaryReleaseId(item.getDictionaryReleaseId())
+                .dictionaryVersion(item.getDictionaryVersion())
+                .dictionaryConceptCode(item.getDictionaryConceptCode())
+                .classificationMethodV50(item.getClassificationMethod())
+                .classificationEvidenceId(item.getClassificationEvidenceId())
                 .approvedBy(actorId)
                 .approvedAt(LocalDateTime.now())
                 .createdBy(actorId == null ? null : actorId.toString())
@@ -700,6 +706,12 @@ public class MedicalDictionaryService {
                 : ClassificationStatus.AUTO);
         pricingItem.setConfidenceLevel(confidence >= 85 ? ConfidenceLevel.HIGH : (confidence >= 60 ? ConfidenceLevel.MEDIUM : ConfidenceLevel.LOW));
         pricingItem.setClassificationSource("MEDICAL_DICTIONARY_PRICE_LIST");
+        pricingItem.setSourcePriceListItemId(item.getId());
+        pricingItem.setDictionaryReleaseId(item.getDictionaryReleaseId());
+        pricingItem.setDictionaryVersion(item.getDictionaryVersion());
+        pricingItem.setDictionaryConceptCode(item.getDictionaryConceptCode());
+        pricingItem.setClassificationMethodV50(item.getClassificationMethod());
+        pricingItem.setClassificationEvidenceId(item.getClassificationEvidenceId());
         pricingItem.setApprovedBy(actorId);
         pricingItem.setApprovedAt(LocalDateTime.now());
         pricingItem.setUpdatedBy(actorId == null ? null : actorId.toString());

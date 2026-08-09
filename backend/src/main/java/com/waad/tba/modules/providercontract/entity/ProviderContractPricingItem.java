@@ -175,6 +175,25 @@ public class ProviderContractPricingItem {
     @Column(name = "imported_sub_category", length = 255)
     private String importedSubCategory;
 
+    /** Auditable source and V50 decision copied from the classified price-list row. */
+    @Column(name = "source_price_list_item_id")
+    private Long sourcePriceListItemId;
+
+    @Column(name = "dictionary_release_id")
+    private Long dictionaryReleaseId;
+
+    @Column(name = "dictionary_version", length = 40)
+    private String dictionaryVersion;
+
+    @Column(name = "dictionary_concept_code", length = 100)
+    private String dictionaryConceptCode;
+
+    @Column(name = "classification_method_v50", length = 80)
+    private String classificationMethodV50;
+
+    @Column(name = "classification_evidence_id")
+    private Long classificationEvidenceId;
+
     @PrePersist
     @PreUpdate
     public void calculateDiscountPercent() {

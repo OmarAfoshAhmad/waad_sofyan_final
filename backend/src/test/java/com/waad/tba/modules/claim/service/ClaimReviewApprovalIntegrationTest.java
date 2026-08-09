@@ -235,10 +235,26 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .code("SRV-" + suffix).name("Service " + suffix).categoryId(category.getId())
                 .cost(new BigDecimal("1000.00")).active(true).build());
 
-        pricingRepository.save(ProviderContractPricingItem.builder()
+        Long dictionaryReleaseId = jdbcTemplate.queryForObject("""
+                INSERT INTO medical_dictionary_releases
+                    (version, source_filename, source_sha256, status,
+                     category_count, concept_count, alias_count, exception_count)
+                VALUES (?, 'claim-review-v50.json', ?, 'RETIRED', 0, 0, 0, 0)
+                RETURNING id
+                """, Long.class, "V50-CLAIM-" + suffix,
+                (suffix + "0".repeat(64)).substring(0, 64));
+
+        ProviderContractPricingItem selectedPrice = pricingRepository.save(ProviderContractPricingItem.builder()
                 .contract(contract).serviceCode(service.getCode()).serviceName(service.getName())
                 .medicalCategory(category).basePrice(new BigDecimal("1000.00"))
-                .contractPrice(new BigDecimal("1000.00")).active(true).build());
+                .contractPrice(new BigDecimal("1000.00"))
+                .effectiveFrom(contract.getStartDate())
+                .dictionaryReleaseId(dictionaryReleaseId)
+                .dictionaryVersion("V50-CLAIM-" + suffix)
+                .dictionaryConceptCode("WAC-CLAIM-TEST")
+                .classificationMethodV50("PROVIDER_CODE_NAME_EXACT")
+                .classificationEvidenceId(900001L)
+                .active(true).build());
 
         Visit visit = visitRepository.save(Visit.builder()
                 .member(member).providerId(provider.getId()).visitDate(LocalDate.now())
@@ -287,6 +303,14 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(approved.getApprovedAmount()).isEqualByComparingTo(sumCompanyShare);
         assertThat(approved.getApprovedAmount()).isEqualByComparingTo("720.00");
         assertThat(approved.getPatientCoPay()).isEqualByComparingTo("200.00");
+        assertThat(approved.getLines().get(0).getPricingItemId()).isEqualTo(selectedPrice.getId());
+        assertThat(approved.getLines().get(0).getPricingEffectiveFrom()).isEqualTo(contract.getStartDate());
+        assertThat(approved.getLines().get(0).getDictionaryReleaseId()).isEqualTo(dictionaryReleaseId);
+        assertThat(approved.getLines().get(0).getDictionaryVersion()).isEqualTo("V50-CLAIM-" + suffix);
+        assertThat(approved.getLines().get(0).getDictionaryConceptCode()).isEqualTo("WAC-CLAIM-TEST");
+        assertThat(approved.getLines().get(0).getClassificationMethodV50())
+                .isEqualTo("PROVIDER_CODE_NAME_EXACT");
+        assertThat(approved.getLines().get(0).getClassificationEvidenceId()).isEqualTo(900001L);
 
         // 2) The approval gate did not recompute: the BEFORE-mode discount
         // (80, not 65) is exactly what ClaimLineFinancialEngine produces.
