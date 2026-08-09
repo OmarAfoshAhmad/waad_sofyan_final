@@ -20,6 +20,7 @@ import com.waad.tba.modules.claim.service.CoverageEngineService;
 import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
 import com.waad.tba.security.AuthorizationService;
 import java.math.BigDecimal;
@@ -460,34 +461,7 @@ public class ClaimMapper {
         }
 
         private void calculateClaimTotals(Claim claim) {
-                List<ClaimLine> lines = claim.getLines();
-                BigDecimal totalRequested = lines.stream()
-                                .map(l -> l.getRequestedTotal() != null ? l.getRequestedTotal() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal totalRefused = lines.stream()
-                                .map(l -> l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal totalPatientShare = lines.stream()
-                                .map(l -> l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                BigDecimal totalApproved = lines.stream()
-                                .map(l -> l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                totalApproved = scale2(totalApproved);
-                BigDecimal totalDiscount = lines.stream()
-                                .map(l -> l.getProviderContractDiscount() != null
-                                                ? l.getProviderContractDiscount() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                totalDiscount = scale2(totalDiscount);
-
-                claim.setRequestedAmount(totalRequested);
-                claim.setRefusedAmount(totalRefused);
-                claim.setApprovedAmount(totalApproved);
-                claim.setNetProviderAmount(totalApproved);
-                claim.setPatientCoPay(totalPatientShare);
-                claim.setCompanyDiscountAmount(totalDiscount);
-                claim.setDifferenceAmount(scale2(totalRequested.subtract(totalApproved)));
+                ClaimFinancialTotals.aggregate(claim);
 
                 // GUARD 1 (finance-00 step 3): fails closed here, at the moment the
                 // claim's aggregate fields are derived from its own lines. This proves

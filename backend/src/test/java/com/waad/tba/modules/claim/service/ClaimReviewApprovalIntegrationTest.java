@@ -28,6 +28,7 @@ import com.waad.tba.modules.benefitpolicy.enums.ConsumptionBasis;
 import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
+import com.waad.tba.modules.benefitpolicy.repository.ClaimLineLimitSnapshotRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitGroupRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
@@ -120,6 +121,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private BenefitLimitBucketRepository benefitLimitBucketRepository;
     @Autowired private BenefitRuleBucketRepository benefitRuleBucketRepository;
     @Autowired private BenefitBucketConsumptionRepository benefitBucketConsumptionRepository;
+    @Autowired private ClaimLineLimitSnapshotRepository claimLineLimitSnapshotRepository;
     @Autowired private ClaimRepository claimRepository;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
@@ -287,7 +289,20 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(committed).hasSize(1);
         assertThat(committed.get(0).getApprovedAmount()).isEqualByComparingTo("1000.00");
 
-        // 4) The provider account was credited the identical amount.
+        // 4) Every applicable monetary limit is explained by an append-only
+        // approval-time snapshot using the same settlement consumption.
+        var snapshots = claimLineLimitSnapshotRepository
+                .findByClaimIdOrderByClaimLineIdAscConsumptionOrderAsc(claimId);
+        assertThat(snapshots).isNotEmpty();
+        assertThat(snapshots).allSatisfy(snapshot -> {
+            assertThat(snapshot.getClaimLine().getId()).isEqualTo(lineId);
+            assertThat(snapshot.getLineSettlementBase()).isEqualByComparingTo("1000.00");
+            assertThat(snapshot.getLimitConsumption()).isEqualByComparingTo("1000.00");
+            assertThat(snapshot.getAvailableAfter()).isEqualByComparingTo(
+                    snapshot.getAvailableBefore().subtract(snapshot.getLimitConsumption()));
+        });
+
+        // 5) The provider account was credited the identical amount.
         ProviderAccount refreshedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
         assertThat(refreshedAccount.getTotalApproved()).isEqualByComparingTo("720.00");
         assertThat(refreshedAccount.getRunningBalance()).isEqualByComparingTo("720.00");

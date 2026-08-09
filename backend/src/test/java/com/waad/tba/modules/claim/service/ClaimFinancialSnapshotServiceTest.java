@@ -27,6 +27,9 @@ import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
+import com.waad.tba.modules.claim.service.finance.ClaimLimitSnapshotFactory;
+import com.waad.tba.modules.benefitpolicy.service.ClaimLimitSnapshotService;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 
@@ -45,6 +48,12 @@ class ClaimFinancialSnapshotServiceTest {
     private BenefitPolicyCoverageService benefitPolicyCoverageService;
     @Mock
     private ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
+    @Mock
+    private ClaimFinancialAdjudicationService financialAdjudicationService;
+    @Mock
+    private ClaimLimitSnapshotFactory limitSnapshotFactory;
+    @Mock
+    private ClaimLimitSnapshotService limitSnapshotService;
     @Mock
     private MemberRepository memberRepository;
     @InjectMocks

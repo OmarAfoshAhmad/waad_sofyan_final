@@ -36,6 +36,7 @@ public class MultiLineMultiBucketEngine {
             LimitBalanceReader.BalanceSet balances) {}
 
     public record LimitAllocation(
+            LimitBalanceReader.LimitBalance balance,
             String semanticKey,
             BigDecimal effectiveLimit,
             BigDecimal committedBeforeClaim,
@@ -107,7 +108,7 @@ public class MultiLineMultiBucketEngine {
                             + " consumption=" + consumption);
                 }
                 boolean isBinding = binding != null && before.compareTo(binding) == 0;
-                allocations.add(new LimitAllocation(key, balance.limit().effectiveLimit(),
+                allocations.add(new LimitAllocation(balance, key, balance.limit().effectiveLimit(),
                         balance.committed(), balance.reserved(), before, consumption, after, isBinding));
                 currentAvailable.put(key, after);
             }

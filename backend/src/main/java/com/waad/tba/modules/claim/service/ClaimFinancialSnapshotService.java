@@ -8,6 +8,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
+import com.waad.tba.modules.claim.service.finance.ClaimLimitSnapshotFactory;
+import com.waad.tba.modules.benefitpolicy.service.ClaimLimitSnapshotService;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.common.exception.ResourceNotFoundException;
@@ -45,6 +49,9 @@ public class ClaimFinancialSnapshotService {
 
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
     private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
+    private final ClaimFinancialAdjudicationService financialAdjudicationService;
+    private final ClaimLimitSnapshotFactory limitSnapshotFactory;
+    private final ClaimLimitSnapshotService limitSnapshotService;
     private final MemberRepository memberRepository;
 
     @Transactional
@@ -56,6 +63,12 @@ public class ClaimFinancialSnapshotService {
             // could jointly exceed it.
             Member lockedMember = memberRepository.findByIdWithLock(claim.getMember().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Member", "id", claim.getMember().getId()));
+
+            // The draft calculation is only a preview. Approval must resolve the
+            // balances again after locking this member, then derive every claim total
+            // from those freshly adjudicated canonical line results.
+            var adjudication = financialAdjudicationService.adjudicate(claim);
+            ClaimFinancialTotals.aggregate(claim);
 
             // GUARD 2 (finance-00 step 3): the approval gate. This is the LAST
             // point before the caller flips the claim's status to APPROVED, and
@@ -73,6 +86,10 @@ public class ClaimFinancialSnapshotService {
                         lockedMember, lockedMember.getBenefitPolicy(), claim.getApprovedAmount(),
                         claim.getServiceDate(), claim.getId());
             }
+
+            // Append-only explanation rows are written before APPROVED and in the
+            // same transaction as the later bucket/provider ledger listeners.
+            limitSnapshotService.saveAll(limitSnapshotFactory.build(claim, adjudication));
         } else {
             claimFinancialInvariantGuard.assertConsistent(claim);
         }
