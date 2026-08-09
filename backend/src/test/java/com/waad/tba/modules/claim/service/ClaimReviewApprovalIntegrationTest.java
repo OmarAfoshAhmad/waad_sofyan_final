@@ -38,6 +38,7 @@ import com.waad.tba.modules.benefitpolicy.repository.BenefitRuleBucketRepository
 import com.waad.tba.modules.claim.dto.ClaimApproveDto;
 import com.waad.tba.modules.claim.dto.ClaimApproveDto.LineDecision;
 import com.waad.tba.modules.claim.dto.ClaimCreateDto;
+import com.waad.tba.modules.claim.dto.ClaimDataUpdateDto;
 import com.waad.tba.modules.claim.dto.ClaimLineDto;
 import com.waad.tba.modules.claim.dto.ClaimLineReviewDecision;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
@@ -341,13 +342,21 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 .findByAggregateTypeAndAggregateIdAndEventType(
                         "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE)).hasSize(1);
 
-        // 8) Financial reversal is one atomic, idempotent gate too. Replaying it
-        // cannot restore the ceiling twice, debit the provider twice, or emit a
-        // second durable reversal event.
-        transactionTemplate.executeWithoutResult(ignored -> {
-            claimReversalOrchestrator.reverseClaim(claimId, 1L);
-            claimReversalOrchestrator.reverseClaim(claimId, 1L);
-        });
+        // 8) Use the actual application correction command, not the internal
+        // orchestrator. This must reverse every financial effect before the claim
+        // becomes editable.
+        transactionTemplate.executeWithoutResult(ignored ->
+                claimReviewService.requestCorrection(claimId, "تصحيح مالي اختباري"));
+        var correction = claimRepository.findById(claimId).orElseThrow();
+        assertThat(correction.getStatus()).isEqualTo(ClaimStatus.NEEDS_CORRECTION);
+        assertThat(correction.getApprovedAmount()).isNull();
+        assertThat(correction.getPatientCoPay()).isNull();
+        assertThat(correction.getNetProviderAmount()).isNull();
+        assertThat(correction.getCompanyDiscountAmount()).isNull();
+        assertThat(correction.getRefusedAmount()).isNull();
+        // Difference is derived (requested - payable), so while no payable
+        // snapshot exists the full requested amount is intentionally exposed.
+        assertThat(correction.getDifferenceAmount()).isEqualByComparingTo("1000.00");
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
                 claimId, BenefitBucketConsumption.Status.COMMITTED)).isEmpty();
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
@@ -362,17 +371,16 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(reversedAccount.getTotalApproved()).isEqualByComparingTo("0.00");
         assertThat(reversedAccount.getRunningBalance()).isEqualByComparingTo("0.00");
 
-        // 9) A corrected calculation is a new financial cycle, not resurrection
-        // or mutation of the old one. Its new calculationVersion must allow one
-        // fresh approval while retaining all original and reversal history.
-        transactionTemplate.executeWithoutResult(ignored -> {
-            var corrected = claimRepository.findByIdForFinancialUpdate(claimId).orElseThrow();
-            corrected.getLines().forEach(line -> line.setCalculationVersion(
-                    (line.getCalculationVersion() == null ? 1 : line.getCalculationVersion()) + 1));
-            claimRepository.saveAndFlush(corrected);
-            claimFinancialSnapshotService.finalizeSnapshot(corrected);
-            claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
-        });
+        // 9) Re-approve through the real trusted correction endpoint. The service,
+        // not this test, owns calculation-version advancement and snapshotting.
+        transactionTemplate.executeWithoutResult(ignored -> claimService.updateClaimData(
+                claimId,
+                ClaimDataUpdateDto.builder()
+                        .diagnosisCode("Z00.0")
+                        .status(ClaimStatus.APPROVED)
+                        .build()));
+        assertThat(claimRepository.findById(claimId).orElseThrow().getStatus())
+                .isEqualTo(ClaimStatus.APPROVED);
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
                 claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
         assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(

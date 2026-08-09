@@ -687,8 +687,6 @@ public class ClaimService {
                 && claim.getSubmissionSource() != com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL;
         if (internalCorrectionReapproval) {
             claim.setReviewerComment(null);
-            claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
-            log.info("✅ Internal claim {} corrected and re-approved", id);
         } else if (dto.getStatus() == ClaimStatus.APPROVED
                 && prevStatus == ClaimStatus.NEEDS_CORRECTION
                 && claim.getSubmissionSource() == com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL) {
@@ -707,6 +705,8 @@ public class ClaimService {
             // enforce invariants and append the new limit snapshots before the
             // ClaimApprovedEvent commits every ledger through the single gate.
             financialSnapshotService.finalizeSnapshot(claim);
+            claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
+            log.info("✅ Internal claim {} corrected and re-approved", id);
         }
 
         // Save and return

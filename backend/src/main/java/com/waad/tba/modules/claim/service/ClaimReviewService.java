@@ -191,6 +191,11 @@ public class ClaimReviewService {
 
         claimReversalOrchestrator.reverseClaim(
                 id, currentUser != null ? currentUser.getId() : null);
+        // A correction always starts a fresh financial cycle, even when the user
+        // changes only metadata. Cycle identity belongs to the whole claim, so all
+        // retained lines advance together before any new snapshots are created.
+        claim.getLines().forEach(line -> line.setCalculationVersion(
+                (line.getCalculationVersion() == null ? 1 : line.getCalculationVersion()) + 1));
         claim.setReviewerComment(reason.trim());
         claim.setReviewPaused(false);
         claim.setReviewPauseReason(null);
@@ -204,6 +209,8 @@ public class ClaimReviewService {
         claim.setApprovedAmount(null);
         claim.setPatientCoPay(null);
         claim.setNetProviderAmount(null);
+        claim.setCompanyDiscountAmount(null);
+        claim.setRefusedAmount(null);
         Claim saved = claimRepository.save(claim);
 
         claimAuditService.recordStatusChange(saved, previousStatus, currentUser,
