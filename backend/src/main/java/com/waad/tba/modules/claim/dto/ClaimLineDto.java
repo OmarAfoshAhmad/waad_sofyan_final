@@ -39,6 +39,7 @@ public class ClaimLineDto {
      * Optional: Pricing Item ID (from Provider Contract Pricing Items)
      */
     private Long pricingItemId;
+    private Long pendingServiceId;
 
     // Auditable price/dictionary snapshot selected by serviceDate (read-only).
     private LocalDate pricingEffectiveFrom;

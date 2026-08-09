@@ -72,6 +72,7 @@ public class ClaimApiMapper {
                 return ClaimLineDto.builder()
                                 .medicalServiceId(lineRequest.getMedicalServiceId())
                                 .pricingItemId(lineRequest.getPricingItemId())
+                                .pendingServiceId(lineRequest.getPendingServiceId())
                                 .serviceCode(lineRequest.getServiceCode())
                                 .serviceName(lineRequest.getServiceName())
                                 .serviceCategoryId(lineRequest.getServiceCategoryId())
@@ -122,6 +123,7 @@ public class ClaimApiMapper {
                                                                 .id(line.getId())
                                                                 .medicalServiceId(line.getMedicalServiceId())
                                                                 .pricingItemId(line.getPricingItemId())
+                                                                .pendingServiceId(line.getPendingServiceId())
                                                                 .serviceCode(line.getServiceCode())
                                                                 .serviceName(line.getServiceName())
                                                                 .quantity(line.getQuantity())
@@ -340,6 +342,7 @@ public class ClaimApiMapper {
                                 .reviewerNotes(dto.getReviewerNotes())
                                 .notes(dto.getReviewerNotes()) // Map reviewerNotes to legacy notes field
                                 .pricingItemId(dto.getPricingItemId())
+                                .pendingServiceId(dto.getPendingServiceId())
                                 .pricingEffectiveFrom(dto.getPricingEffectiveFrom())
                                 .pricingEffectiveTo(dto.getPricingEffectiveTo())
                                 .dictionaryReleaseId(dto.getDictionaryReleaseId())

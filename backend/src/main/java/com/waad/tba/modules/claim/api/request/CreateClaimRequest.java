@@ -181,6 +181,10 @@ public class CreateClaimRequest {
          */
         private Long pricingItemId;
 
+        /** Service proposed by a reviewer and awaiting/following head decision. */
+        @Positive(message = "Pending service ID must be positive")
+        private Long pendingServiceId;
+
         /**
          * Quantity of service (e.g., number of sessions)
          */

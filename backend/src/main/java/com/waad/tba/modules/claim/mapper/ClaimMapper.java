@@ -22,6 +22,7 @@ import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationServ
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
 import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
+import com.waad.tba.modules.claim.repository.ClaimPendingServiceRepository;
 import com.waad.tba.security.AuthorizationService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -56,6 +57,7 @@ public class ClaimMapper {
         private final ProviderContractPricingItemRepository pricingItemRepository;
         private final EffectiveProviderContractResolver effectiveContractResolver;
         private final ClaimBatchRepository claimBatchRepository;
+        private final ClaimPendingServiceRepository pendingServiceRepository;
         private final CoverageEngineService coverageEngineService;
         private final AuthorizationService authorizationService;
         private final ClaimFinancialAdjudicationService financialAdjudicationService;
@@ -168,6 +170,41 @@ public class ClaimMapper {
                         String codeToLookup = lineDto.getServiceCode();
                         String resolvedServiceName = lineDto.getServiceName();
                         Long catalogCategoryId = lineDto.getServiceCategoryId();
+                        ClaimPendingService pendingService = null;
+                        boolean pendingDirectPrice = false;
+                        boolean pendingRejected = false;
+
+                        if (lineDto.getPendingServiceId() != null) {
+                                if (claim.getId() == null) {
+                                        throw new BusinessRuleException(
+                                                        "يجب حفظ المطالبة واستلامها للمراجعة قبل إضافة خدمة جديدة إليها");
+                                }
+                                pendingService = pendingServiceRepository
+                                                .findByIdAndClaimId(lineDto.getPendingServiceId(), claim.getId())
+                                                .orElseThrow(() -> new BusinessRuleException(
+                                                                "الخدمة المقترحة لا تتبع هذه المطالبة"));
+                                if (!Objects.equals(pendingService.getProviderId(), claim.getProviderId())) {
+                                        throw new BusinessRuleException(
+                                                        "الخدمة المقترحة لا تتبع مقدم خدمة المطالبة");
+                                }
+
+                                if (pendingService.getStatus() == PendingServiceStatus.LINKED_EXISTING) {
+                                        resolvedPricingItemId = pendingService.getLinkedPricingItemId();
+                                } else {
+                                        pendingDirectPrice = true;
+                                        enteredUnitPrice = pendingService.effectiveUnitPrice();
+                                        resolvedUnitPrice = enteredUnitPrice;
+                                        resolvedMaxUnitPrice = enteredUnitPrice;
+                                        codeToLookup = pendingService.getFinalServiceCode() != null
+                                                        ? pendingService.getFinalServiceCode()
+                                                        : pendingService.getProposedServiceCode();
+                                        resolvedServiceName = pendingService.getFinalServiceName() != null
+                                                        ? pendingService.getFinalServiceName()
+                                                        : pendingService.getProposedServiceName();
+                                        catalogCategoryId = pendingService.effectiveCategoryId();
+                                        pendingRejected = pendingService.getStatus() == PendingServiceStatus.REJECTED;
+                                }
+                        }
 
                         // The public DTO accepts the unified-catalog service ID as its
                         // canonical input. Resolve its denormalized values server-side;
@@ -182,11 +219,12 @@ public class ClaimMapper {
                                 catalogCategoryId = catalogService.getCategoryId();
                         }
 
-                        ProviderContractPricingItem matchedPricingItem = resolvePricingItemForLine(
-                                        resolvedContract.contract().getId(), claim.getServiceDate(),
-                                        resolvedPricingItemId,
-                                        codeToLookup,
-                                        resolvedServiceName);
+                        ProviderContractPricingItem matchedPricingItem = pendingDirectPrice ? null
+                                        : resolvePricingItemForLine(
+                                                        resolvedContract.contract().getId(), claim.getServiceDate(),
+                                                        resolvedPricingItemId,
+                                                        codeToLookup,
+                                                        resolvedServiceName);
 
                         if (resolvedPricingItemId != null && matchedPricingItem == null) {
                                 throw new BusinessRuleException(
@@ -202,7 +240,7 @@ public class ClaimMapper {
 
                         if ("GEN-MEDICATION".equals(codeToLookup) || "GEN-MEDICAL-SERVICE".equals(codeToLookup)) {
                                 resolvedUnitPrice = enteredUnitPrice;
-                        } else if (hasBusinessValue(codeToLookup)) {
+                        } else if (!pendingDirectPrice && hasBusinessValue(codeToLookup)) {
                                 EffectivePriceResponseDto priceResponse = providerContractService.getEffectivePrice(
                                                 claim.getProviderId(), claimEmployerId, codeToLookup, claim.getServiceDate());
 
@@ -283,7 +321,7 @@ public class ClaimMapper {
                                         && !lineDto.getRejectionReason().isBlank()
                                                         ? lineDto.getRejectionReason()
                                                         : claim.getReviewerComment();
-                        boolean isRejected = claimRejected || Boolean.TRUE.equals(lineDto.getRejected());
+                        boolean isRejected = claimRejected || pendingRejected || Boolean.TRUE.equals(lineDto.getRejected());
                         BigDecimal contractCapForEngine = resolvedMaxUnitPrice != null
                                         ? resolvedMaxUnitPrice
                                         : resolvedUnitPrice;
@@ -338,15 +376,21 @@ public class ClaimMapper {
                                                         : (resolvedServiceName != null ? resolvedServiceName
                                                                         : "Unknown Service"))
                                         .pricingItemId(resolvedPricingItemId)
+                                        .pendingServiceId(pendingService == null ? null : pendingService.getId())
                                         .contractTermsId(resolvedContract.terms().getId())
                                         .contractUnitPrice(resolvedUnitPrice != null ? resolvedUnitPrice : enteredUnitPrice)
                                         .pricingEffectiveFrom(matchedPricingItem == null ? null : matchedPricingItem.getEffectiveFrom())
                                         .pricingEffectiveTo(matchedPricingItem == null ? null : matchedPricingItem.getEffectiveTo())
-                                        .dictionaryReleaseId(matchedPricingItem == null ? null : matchedPricingItem.getDictionaryReleaseId())
-                                        .dictionaryVersion(matchedPricingItem == null ? null : matchedPricingItem.getDictionaryVersion())
-                                        .dictionaryConceptCode(matchedPricingItem == null ? null : matchedPricingItem.getDictionaryConceptCode())
-                                        .classificationMethodV50(matchedPricingItem == null ? null : matchedPricingItem.getClassificationMethodV50())
-                                        .classificationEvidenceId(matchedPricingItem == null ? null : matchedPricingItem.getClassificationEvidenceId())
+                                        .dictionaryReleaseId(pendingService != null ? pendingService.getDictionaryReleaseId()
+                                                        : matchedPricingItem == null ? null : matchedPricingItem.getDictionaryReleaseId())
+                                        .dictionaryVersion(pendingService != null ? pendingService.getDictionaryVersion()
+                                                        : matchedPricingItem == null ? null : matchedPricingItem.getDictionaryVersion())
+                                        .dictionaryConceptCode(pendingService != null ? pendingService.getDictionaryConceptCode()
+                                                        : matchedPricingItem == null ? null : matchedPricingItem.getDictionaryConceptCode())
+                                        .classificationMethodV50(pendingService != null ? pendingService.getClassificationMethod()
+                                                        : matchedPricingItem == null ? null : matchedPricingItem.getClassificationMethodV50())
+                                        .classificationEvidenceId(pendingService != null ? pendingService.getClassificationEvidenceId()
+                                                        : matchedPricingItem == null ? null : matchedPricingItem.getClassificationEvidenceId())
                                         .serviceCategoryId(serviceCatIdForCoverage)
                                         .serviceCategoryName(serviceCatName)
                                         .originalServiceCategoryId(pricingItemCategoryId)
@@ -509,6 +553,7 @@ public class ClaimMapper {
                         inputs.add(ClaimLineDto.builder()
                                         .id(line.getId())
                                         .pricingItemId(line.getPricingItemId())
+                                        .pendingServiceId(line.getPendingServiceId())
                                         .pricingEffectiveFrom(line.getPricingEffectiveFrom())
                                         .pricingEffectiveTo(line.getPricingEffectiveTo())
                                         .dictionaryReleaseId(line.getDictionaryReleaseId())
@@ -611,6 +656,7 @@ public class ClaimMapper {
                 return ClaimLineDto.builder()
                                 .id(line.getId())
                                 .pricingItemId(line.getPricingItemId())
+                                .pendingServiceId(line.getPendingServiceId())
                                 .pricingEffectiveFrom(line.getPricingEffectiveFrom())
                                 .pricingEffectiveTo(line.getPricingEffectiveTo())
                                 .dictionaryReleaseId(line.getDictionaryReleaseId())

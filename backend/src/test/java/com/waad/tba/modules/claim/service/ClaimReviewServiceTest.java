@@ -33,6 +33,7 @@ import com.waad.tba.modules.claim.entity.ClaimSubmissionSource;
 import com.waad.tba.modules.claim.dto.ClaimLineReviewDecision;
 import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.claim.repository.ClaimPendingServiceRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
@@ -45,6 +46,8 @@ class ClaimReviewServiceTest {
 
     @Mock
     private ClaimRepository claimRepository;
+    @Mock
+    private ClaimPendingServiceRepository pendingServiceRepository;
     @Mock
     private ClaimMapper claimMapper;
     @Mock
@@ -298,6 +301,26 @@ class ClaimReviewServiceTest {
         assertThatThrownBy(() -> claimReviewService.requestApproval(100L, dto))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("قرار واضح لكل بند");
+    }
+
+    @Test
+    void requestApproval_unresolvedPendingService_shouldFailClosedBeforeFinancialApproval() {
+        claim.setStatus(ClaimStatus.UNDER_REVIEW);
+        claim.setLines(List.of(ClaimLine.builder().id(501L).claim(claim).build()));
+        ClaimApproveDto dto = ClaimApproveDto.builder()
+                .lineDecisions(List.of(ClaimApproveDto.LineDecision.builder()
+                        .lineId(501L)
+                        .decision(ClaimLineReviewDecision.APPROVE)
+                        .build()))
+                .build();
+
+        when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+        when(pendingServiceRepository.existsByClaimIdAndStatusIn(eq(100L), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> claimReviewService.requestApproval(100L, dto))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("حسم جميع الخدمات الجديدة");
     }
 
     @Test

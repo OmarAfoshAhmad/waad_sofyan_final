@@ -73,6 +73,9 @@ public class ClaimLine {
     @Column(name = "pricing_item_id")
     private Long pricingItemId;
 
+    @Column(name = "pending_service_id")
+    private Long pendingServiceId;
+
     @Column(name = "contract_terms_id")
     private Long contractTermsId;
 

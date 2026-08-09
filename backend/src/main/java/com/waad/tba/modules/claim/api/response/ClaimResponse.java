@@ -422,6 +422,7 @@ public class ClaimResponse {
         private String reviewerNotes;
 
         private Long pricingItemId;
+        private Long pendingServiceId;
         private LocalDate pricingEffectiveFrom;
         private LocalDate pricingEffectiveTo;
         private Long dictionaryReleaseId;

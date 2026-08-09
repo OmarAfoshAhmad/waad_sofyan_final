@@ -13,9 +13,11 @@ import com.waad.tba.modules.claim.dto.*;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
+import com.waad.tba.modules.claim.entity.PendingServiceStatus;
 import com.waad.tba.modules.claim.event.ClaimApprovalRequestedEvent;
 import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.claim.repository.ClaimPendingServiceRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.rbac.entity.User;
@@ -56,6 +58,7 @@ import java.util.Set;
 public class ClaimReviewService {
 
     private final ClaimRepository claimRepository;
+    private final ClaimPendingServiceRepository pendingServiceRepository;
     private final ClaimMapper claimMapper;
     private final MemberRepository memberRepository;
     private final AuthorizationService authorizationService;
@@ -235,6 +238,14 @@ public class ClaimReviewService {
 
         if (Boolean.TRUE.equals(claim.getReviewPaused())) {
             throw new BusinessRuleException("يجب استئناف المراجعة المعلقة قبل اعتماد المطالبة");
+        }
+
+        if (pendingServiceRepository.existsByClaimIdAndStatusIn(claim.getId(), List.of(
+                PendingServiceStatus.PRELIMINARY,
+                PendingServiceStatus.NEEDS_INFO,
+                PendingServiceStatus.SPLIT_REQUIRED))) {
+            throw new BusinessRuleException(
+                    "لا يمكن اعتماد المطالبة قبل حسم جميع الخدمات الجديدة من رئيس قسم المراجعين أو مدير التأمين");
         }
 
         applyLineReviewDecisions(claim, dto.getLineDecisions());
