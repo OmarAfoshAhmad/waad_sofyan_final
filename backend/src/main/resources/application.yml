@@ -24,8 +24,11 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:60MB}
-      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:60MB}
+      # The immutable verified V50 seed is ~100 MiB. Keep enough room for
+      # multipart framing; the import endpoint is SUPER_ADMIN-only and also
+      # enforces the frozen SHA-256 before writing any dictionary rows.
+      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:128MB}
+      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:128MB}
 
   main:
     allow-circular-references: false
