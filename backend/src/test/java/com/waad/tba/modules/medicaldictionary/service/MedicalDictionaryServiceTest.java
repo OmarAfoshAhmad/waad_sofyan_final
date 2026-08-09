@@ -33,6 +33,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -154,6 +155,53 @@ class MedicalDictionaryServiceTest {
         assertThat(diff.getItems().get(0).getAction()).isEqualTo("UPDATE");
         assertThat(diff.getItems().get(0).getCurrentMinPrice()).isEqualByComparingTo("100.00");
         assertThat(diff.getItems().get(0).getNewMinPrice()).isEqualByComparingTo("150.00");
+    }
+
+    @Test
+    void listPriceListSessions_keepsManagedOrphanRemovalCollectionWhenRepairingStalePostLink() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        List<PriceListClassificationItem> managedItems = new ArrayList<>();
+        PriceListClassificationItem stalePostedItem = priceListItem("كشف طبي", new BigDecimal("100.00"));
+        stalePostedItem.setSession(session);
+        stalePostedItem.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
+        stalePostedItem.setPostedPricingItemId(999L);
+        managedItems.add(stalePostedItem);
+        session.setItems(managedItems);
+
+        when(priceListSessionRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(session)));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(stalePostedItem));
+        when(providerContractPricingItemRepository.existsByIdAndActiveTrue(999L)).thenReturn(false);
+        when(priceListSessionRepository.save(session)).thenReturn(session);
+
+        service.listPriceListSessions(null, Pageable.ofSize(20));
+
+        assertThat(session.getItems()).isSameAs(managedItems);
+        assertThat(stalePostedItem.getPostedPricingItemId()).isNull();
+    }
+
+    @Test
+    void diffPriceListSessionWithContract_processesOnlyExplicitlySelectedItems() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        ProviderContract contract = contract();
+        PriceListClassificationItem first = priceListItem("خدمة أولى", new BigDecimal("100.00"));
+        PriceListClassificationItem selected = priceListItem("خدمة محددة", new BigDecimal("200.00"));
+        selected.setId(2L);
+        PriceListSessionPostRequest request = postRequest();
+        request.setItemIds(List.of(2L));
+
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+        when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(first, selected));
+        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category()));
+
+        PriceListSessionDiffResponse diff = service.diffPriceListSessionWithContract(100L, request);
+
+        assertThat(diff.getTotal()).isEqualTo(1);
+        assertThat(diff.getCreateCount()).isEqualTo(1);
+        assertThat(diff.getItems()).extracting(PriceListSessionDiffResponse.ItemDiff::getServiceName)
+                .containsExactly("خدمة محددة");
     }
 
     private MedicalDictionaryService newService() {

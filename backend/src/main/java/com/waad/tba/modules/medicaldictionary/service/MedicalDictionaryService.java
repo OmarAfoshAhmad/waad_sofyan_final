@@ -321,7 +321,7 @@ public class MedicalDictionaryService {
                 .filter(c -> Boolean.TRUE.equals(c.getActive()))
                 .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
 
-        List<PriceListClassificationItem> items = priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(session.getId());
+        List<PriceListClassificationItem> items = resolveRequestedSessionItems(session.getId(), request);
         List<PriceListSessionDiffResponse.ItemDiff> diffs = new ArrayList<>();
         int createCount = 0;
         int updateCount = 0;
@@ -369,7 +369,7 @@ public class MedicalDictionaryService {
 
         var currentUser = authorizationService.getCurrentUser();
         Long actorId = currentUser == null ? null : currentUser.getId();
-        List<PriceListClassificationItem> items = priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(sessionId);
+        List<PriceListClassificationItem> items = resolveRequestedSessionItems(sessionId, request);
         List<PriceListSessionPostResponse.ItemResult> results = new ArrayList<>();
         int created = 0;
         int updated = 0;
@@ -511,6 +511,24 @@ public class MedicalDictionaryService {
             throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يكون بعد نهاية العقد");
         }
         return effectiveFrom;
+    }
+
+    private List<PriceListClassificationItem> resolveRequestedSessionItems(Long sessionId,
+                                                                            PriceListSessionPostRequest request) {
+        List<PriceListClassificationItem> allItems = priceListItemRepository
+                .findBySession_IdOrderByRowNumberAscIdAsc(sessionId);
+        if (request.getItemIds() == null) return allItems;
+        if (request.getItemIds().isEmpty()) {
+            throw new IllegalArgumentException("حدد خدمة واحدة على الأقل للترحيل");
+        }
+        Set<Long> requestedIds = Set.copyOf(request.getItemIds());
+        List<PriceListClassificationItem> selected = allItems.stream()
+                .filter(item -> item.getId() != null && requestedIds.contains(item.getId()))
+                .toList();
+        if (selected.size() != requestedIds.size()) {
+            throw new IllegalArgumentException("تتضمن الخدمات المحددة بنداً لا ينتمي إلى جلسة قائمة الأسعار");
+        }
+        return selected;
     }
 
     private String validatePostableItem(PriceListClassificationItem item, boolean onlyReviewedItems) {
@@ -842,7 +860,11 @@ public class MedicalDictionaryService {
     }
 
     private void recalculateSessionSummary(PriceListClassificationSession session) {
-        List<PriceListClassificationItem> items = session.getItems() == null ? List.of() : session.getItems();
+        recalculateSessionSummary(session, session.getItems() == null ? List.of() : session.getItems());
+    }
+
+    private void recalculateSessionSummary(PriceListClassificationSession session,
+                                           List<PriceListClassificationItem> items) {
         int high = 0;
         int review = 0;
         int unknown = 0;
@@ -908,8 +930,9 @@ public class MedicalDictionaryService {
         }
 
         if (changed) {
-            session.setItems(items);
-            recalculateSessionSummary(session);
+            // Never replace the Hibernate-managed orphanRemoval collection. Doing so
+            // makes even a read of the sessions page fail during transaction flush.
+            recalculateSessionSummary(session, items);
             priceListItemRepository.saveAll(items);
             return priceListSessionRepository.save(session);
         }

@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class PriceListSessionPostRequest {
@@ -26,4 +27,10 @@ public class PriceListSessionPostRequest {
      * يمنع ترحيل السطور المعلقة أو غير المعروفة. الافتراضي أكثر أماناً مالياً.
      */
     private boolean onlyReviewedItems = true;
+
+    /**
+     * بنود محددة من الجلسة. null يعني كل البنود (للتوافق مع شاشة الجلسات)،
+     * والقائمة الفارغة مرفوضة حتى لا تتحول نقرة بلا تحديد إلى ترحيل شامل.
+     */
+    private List<Long> itemIds;
 }

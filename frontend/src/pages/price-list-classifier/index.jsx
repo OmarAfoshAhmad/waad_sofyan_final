@@ -291,6 +291,7 @@ const getProviderServiceName = (item) => item.serviceName || item.bestMatch?.can
 
 const isContractEligible = (item) => {
   if (!getEffectiveCategory(item)?.medicalCategoryId || getPriceMin(item) == null) return false;
+  if (item.status === 'POSTED_TO_CONTRACT' || item.postedPricingItemId) return true;
   if (item.manualCategory) return true;
   return (
     item.status === 'AUTO_APPROVED' && Boolean(item.dictionaryReleaseId && item.dictionaryVersion && item.matchMethod && item.evidenceId)
@@ -354,7 +355,8 @@ const buildContractReadyRows = (items) => {
         sourceKeys: [],
         rawStatuses: new Set(),
         confidenceValues: [],
-        statuses: new Set()
+        statuses: new Set(),
+        postedCount: 0
       });
     }
 
@@ -371,6 +373,7 @@ const buildContractReadyRows = (items) => {
     if (item.status) group.rawStatuses.add(item.status);
     if (item.bestMatch?.confidence != null) group.confidenceValues.push(item.bestMatch.confidence);
     group.statuses.add(getEffectiveStatusLabel(item));
+    if (item.postedPricingItemId || item.status === 'POSTED_TO_CONTRACT') group.postedCount += 1;
   });
 
   const resolveMergedStatus = (rawStatuses) => {
@@ -396,6 +399,7 @@ const buildContractReadyRows = (items) => {
       rawStatuses,
       display_status: displayStatus,
       display_status_label: statusLabel[displayStatus] || displayStatus,
+      posting_status: group.postedCount === group.sourceKeys.length ? 'POSTED' : group.postedCount > 0 ? 'PARTIAL' : 'UNPOSTED',
       confidence: group.confidenceValues.length ? Math.max(...group.confidenceValues) : null,
       service_name: group.service_name,
       service_code: group.service_code,
@@ -431,6 +435,7 @@ const buildContractRowsWithoutMerge = (items) =>
       rawStatuses: item.status ? [item.status] : [],
       display_status: item.status || 'REVIEW_REQUIRED',
       display_status_label: getEffectiveStatusLabel(item),
+      posting_status: item.postedPricingItemId || item.status === 'POSTED_TO_CONTRACT' ? 'POSTED' : 'UNPOSTED',
       confidence: item.bestMatch?.confidence ?? null,
       service_name: getProviderServiceName(item),
       service_code: item.serviceCode || '',
@@ -461,6 +466,7 @@ const buildSummary = (items) => ({
 
 const mapBackendSessionItems = (session) =>
   (session?.items || []).map((item) => ({
+    id: item.id,
     rowNumber: item.rowNumber,
     sourceSheet: item.sourceSheet,
     serviceCode: item.serviceCode,
@@ -479,14 +485,17 @@ const mapBackendSessionItems = (session) =>
     exceptionType: item.classificationExceptionType,
     evidenceId: item.classificationEvidenceId,
     excludeFromPrecision: Boolean(item.classificationExcludePrecision),
+    postedPricingItemId: item.postedPricingItemId,
+    postedAt: item.postedAt,
     duplicateName: Boolean(item.duplicateName),
-    manualCategory: item.medicalCategoryId
-      ? {
-          medicalCategoryId: item.medicalCategoryId,
-          medicalCategoryCode: item.medicalCategoryCode,
-          medicalCategoryName: item.medicalCategoryName
-        }
-      : null,
+    manualCategory:
+      item.status === 'MANUALLY_REVIEWED' && item.medicalCategoryId
+        ? {
+            medicalCategoryId: item.medicalCategoryId,
+            medicalCategoryCode: item.medicalCategoryCode,
+            medicalCategoryName: item.medicalCategoryName
+          }
+        : null,
     bestMatch: item.medicalCategoryId
       ? {
           entryId: item.dictionaryEntryId,
@@ -617,6 +626,8 @@ export default function PriceListClassifierPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [priceFilter, setPriceFilter] = useState('ALL');
+  const [postingStatusFilter, setPostingStatusFilter] = useState('ALL');
+  const [selectedSourceKeys, setSelectedSourceKeys] = useState([]);
   const [mergeDuplicatesForContracts, setMergeDuplicatesForContracts] = useState(true);
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
@@ -649,6 +660,7 @@ export default function PriceListClassifierPage() {
     const q = deferredSearch.trim().toLowerCase();
     return contractDisplayRows.filter((row) => {
       if (statusFilter !== 'ALL' && row.display_status !== statusFilter) return false;
+      if (postingStatusFilter !== 'ALL' && row.posting_status !== postingStatusFilter) return false;
       const priceRange = parsePriceRange(row.contract_price);
       const isRange = priceRange.min != null && priceRange.max != null && Number(priceRange.max) > Number(priceRange.min);
       if (priceFilter === 'RANGE' && !isRange) return false;
@@ -666,11 +678,13 @@ export default function PriceListClassifierPage() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [contractDisplayRows, deferredSearch, statusFilter, priceFilter]);
+  }, [contractDisplayRows, deferredSearch, statusFilter, priceFilter, postingStatusFilter]);
   const filteredItems = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return items.filter((item) => {
       if (statusFilter !== 'ALL' && item.status !== statusFilter) return false;
+      const postingStatus = item.postedPricingItemId || item.status === 'POSTED_TO_CONTRACT' ? 'POSTED' : 'UNPOSTED';
+      if (postingStatusFilter !== 'ALL' && postingStatus !== postingStatusFilter) return false;
       if (priceFilter === 'RANGE' && !hasPriceRange(item)) return false;
       if (priceFilter === 'SINGLE' && (hasPriceRange(item) || getPriceMin(item) == null)) return false;
       if (priceFilter === 'MISSING' && getPriceMin(item) != null) return false;
@@ -687,7 +701,7 @@ export default function PriceListClassifierPage() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [items, deferredSearch, statusFilter, priceFilter]);
+  }, [items, deferredSearch, statusFilter, priceFilter, postingStatusFilter]);
   const visibleRows = mergeDuplicatesForContracts ? filteredMergedContractRows : filteredItems;
   const pagedRows = useMemo(
     () => visibleRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
@@ -696,7 +710,34 @@ export default function PriceListClassifierPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [deferredSearch, statusFilter, priceFilter, mergeDuplicatesForContracts]);
+  }, [deferredSearch, statusFilter, priceFilter, postingStatusFilter, mergeDuplicatesForContracts]);
+
+  const visibleSourceKeys = useMemo(
+    () => Array.from(new Set(visibleRows.flatMap((row) => row.sourceKeys || [rowKey(row)]))),
+    [visibleRows]
+  );
+  const selectedKeySet = useMemo(() => new Set(selectedSourceKeys), [selectedSourceKeys]);
+  const allVisibleSelected = visibleSourceKeys.length > 0 && visibleSourceKeys.every((key) => selectedKeySet.has(key));
+  const someVisibleSelected = visibleSourceKeys.some((key) => selectedKeySet.has(key));
+
+  const toggleAllVisibleRows = () => {
+    setSelectedSourceKeys((current) => {
+      const currentSet = new Set(current);
+      if (allVisibleSelected) visibleSourceKeys.forEach((key) => currentSet.delete(key));
+      else visibleSourceKeys.forEach((key) => currentSet.add(key));
+      return Array.from(currentSet);
+    });
+  };
+
+  const toggleRowSelection = (keys) => {
+    const normalizedKeys = keys || [];
+    setSelectedSourceKeys((current) => {
+      const currentSet = new Set(current);
+      const selected = normalizedKeys.length > 0 && normalizedKeys.every((key) => currentSet.has(key));
+      normalizedKeys.forEach((key) => (selected ? currentSet.delete(key) : currentSet.add(key)));
+      return Array.from(currentSet);
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -741,6 +782,9 @@ export default function PriceListClassifierPage() {
       done: session.done || 0,
       total: session.total || session.rawRows.length
     });
+    if (session.providerId || session.providerName) {
+      setSelectedProvider({ id: session.providerId || null, name: session.providerName || '' });
+    }
     if (session.status === 'COMPLETED') {
       setSuccess(`تم استرجاع آخر نتيجة محفوظة: ${session.done || 0} خدمة مصنفة.`);
     } else if ((session.done || 0) > 0) {
@@ -786,6 +830,9 @@ export default function PriceListClassifierPage() {
           status: 'COMPLETED',
           savedAtBackend: session.updatedAt
         });
+        if (session.providerId || session.providerName) {
+          setSelectedProvider({ id: session.providerId || null, name: session.providerName || '' });
+        }
         setClassificationProgress({ done: mappedItems.length, total: mappedItems.length });
         setSuccess(`تم فتح جلسة قائمة الأسعار #${session.id}`);
       })
@@ -886,6 +933,8 @@ export default function PriceListClassifierPage() {
       saveClassificationSession({
         status: 'RUNNING',
         fileName,
+        providerId: selectedProvider.id,
+        providerName: selectedProvider.name,
         rawRows,
         items: allItems,
         done: startIndex,
@@ -912,6 +961,8 @@ export default function PriceListClassifierPage() {
         saveClassificationSession({
           status: startIndex >= rawRows.length ? 'COMPLETED' : 'RUNNING',
           fileName,
+          providerId: selectedProvider.id,
+          providerName: selectedProvider.name,
           rawRows,
           items: allItems,
           done: startIndex,
@@ -1023,8 +1074,8 @@ export default function PriceListClassifierPage() {
       setError('اختر مقدم الخدمة أولاً حتى يحدد النظام عقده النشط.');
       return;
     }
-    if (!unmergedContractRows.length) {
-      setError('لا توجد خدمات معتمدة ومكتملة السعر والدليل قابلة للترحيل إلى العقد.');
+    if (!selectedSourceKeys.length) {
+      setError('حدد كل الخدمات المطلوبة أو اختر خدمة واحدة على الأقل قبل الترحيل.');
       return;
     }
 
@@ -1033,6 +1084,13 @@ export default function PriceListClassifierPage() {
     setSuccess('');
     try {
       const saved = await medicalDictionaryService.savePriceListClassificationSession(buildBackendSessionPayload());
+      const selectedItemIds = (saved.items || [])
+        .filter((item) => selectedKeySet.has(rowKey(item)))
+        .map((item) => item.id)
+        .filter(Boolean);
+      if (!selectedItemIds.length || selectedItemIds.length !== selectedKeySet.size) {
+        throw new Error('تعذر ربط بعض الخدمات المحددة بالجلسة المحفوظة؛ أعد تحديدها ثم حاول مجدداً.');
+      }
       const contract = await getActiveContractByProvider(selectedProvider.id);
       if (!contract?.id) throw new Error('لا يوجد عقد نشط لمقدم الخدمة المختار. أنشئ العقد أو فعّله أولاً.');
       const today = new Date().toISOString().slice(0, 10);
@@ -1045,7 +1103,8 @@ export default function PriceListClassifierPage() {
         contractId: contract.id,
         effectiveFrom,
         replaceEffectivePrices: false,
-        onlyReviewedItems: true
+        onlyReviewedItems: true,
+        itemIds: selectedItemIds
       });
       const accepted = (diff.createCount || 0) + (diff.updateCount || 0) + (diff.identicalCount || 0);
       const message =
@@ -1060,7 +1119,8 @@ export default function PriceListClassifierPage() {
         contractId: contract.id,
         effectiveFrom,
         replaceEffectivePrices: false,
-        onlyReviewedItems: true
+        onlyReviewedItems: true,
+        itemIds: selectedItemIds
       });
       setSuccess(
         `تم الترحيل إلى العقد ${contract.contractCode || contract.id}: أُنشئ ${posted.created || 0}، حُدّث ${
@@ -1068,6 +1128,7 @@ export default function PriceListClassifierPage() {
         }، مطابق ${posted.skipped || 0}، ورُفض ${posted.rejected || 0}.`
       );
       setSessionInfo((current) => ({ ...(current || {}), backendSessionId: saved.id, backendStatus: posted.session?.status }));
+      setSelectedSourceKeys([]);
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || 'فشل ترحيل الخدمات المعتمدة إلى عقد مقدم الخدمة');
     } finally {
@@ -1173,8 +1234,8 @@ export default function PriceListClassifierPage() {
           </Alert>
         )}
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+          <Box>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
@@ -1199,9 +1260,9 @@ export default function PriceListClassifierPage() {
                 {fileName && <Chip sx={{ mt: 2 }} label={fileName} variant="outlined" />}
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={4}>
+          <Box>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
@@ -1233,9 +1294,9 @@ export default function PriceListClassifierPage() {
                 />
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
 
-          <Grid item xs={12} md={4}>
+          <Box>
             <Card sx={{ height: '100%' }}>
               <CardContent>
                 <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
@@ -1266,8 +1327,8 @@ export default function PriceListClassifierPage() {
                 </Button>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         {loading && (
           <LinearProgress
@@ -1373,6 +1434,12 @@ export default function PriceListClassifierPage() {
                   <MenuItem value="SINGLE">سعر مفرد</MenuItem>
                   <MenuItem value="MISSING">بدون سعر</MenuItem>
                 </Select>
+                <Select value={postingStatusFilter} onChange={(e) => setPostingStatusFilter(e.target.value)} sx={{ minWidth: 190 }}>
+                  <MenuItem value="ALL">كل حالات الترحيل</MenuItem>
+                  <MenuItem value="UNPOSTED">غير مرحلة</MenuItem>
+                  <MenuItem value="POSTED">مرحلة للعقد</MenuItem>
+                  {mergeDuplicatesForContracts && <MenuItem value="PARTIAL">مرحلة جزئياً</MenuItem>}
+                </Select>
                 <Chip
                   color="info"
                   variant="outlined"
@@ -1409,10 +1476,10 @@ export default function PriceListClassifierPage() {
                   variant="contained"
                   color="success"
                   startIcon={postingContract ? <CircularProgress size={18} color="inherit" /> : <PlaylistAddCheckIcon />}
-                  disabled={!unmergedContractRows.length || postingContract || savingSession || !selectedProvider?.id}
+                  disabled={!selectedSourceKeys.length || postingContract || savingSession || !selectedProvider?.id}
                   onClick={postApprovedRowsToSelectedProviderContract}
                 >
-                  ترحيل المعتمد للعقد
+                  ترحيل المحدد للعقد ({selectedSourceKeys.length})
                 </Button>
                 <Button
                   variant="contained"
@@ -1438,10 +1505,19 @@ export default function PriceListClassifierPage() {
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={allVisibleSelected}
+                          indeterminate={!allVisibleSelected && someVisibleSelected}
+                          onChange={toggleAllVisibleRows}
+                          inputProps={{ 'aria-label': 'تحديد كل الخدمات المعروضة' }}
+                        />
+                      </TableCell>
                       <TableCell>#</TableCell>
                       <TableCell>خدمة المرفق</TableCell>
                       <TableCell>السعر</TableCell>
                       <TableCell>الحالة</TableCell>
+                      <TableCell>حالة الترحيل</TableCell>
                       <TableCell>الثقة</TableCell>
                       <TableCell>الاسم الموحد</TableCell>
                       <TableCell>التصنيف</TableCell>
@@ -1453,6 +1529,14 @@ export default function PriceListClassifierPage() {
                     {mergeDuplicatesForContracts
                       ? pagedRows.map((row, index) => (
                           <TableRow key={`${row.service_code || '-'}-${row.service_name}-${row.medical_category_code}-${index}`} hover>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={
+                                  (row.sourceKeys || []).length > 0 && (row.sourceKeys || []).every((key) => selectedKeySet.has(key))
+                                }
+                                onChange={() => toggleRowSelection(row.sourceKeys || [])}
+                              />
+                            </TableCell>
                             <TableCell>{page * rowsPerPage + index + 1}</TableCell>
                             <TableCell>
                               <Stack spacing={0.25}>
@@ -1473,6 +1557,21 @@ export default function PriceListClassifierPage() {
                                 />
                                 {row.sourceKeys?.length > 1 && <Chip size="small" color="info" variant="outlined" label="مدموج" />}
                               </Stack>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                color={
+                                  row.posting_status === 'POSTED' ? 'success' : row.posting_status === 'PARTIAL' ? 'warning' : 'default'
+                                }
+                                label={
+                                  row.posting_status === 'POSTED'
+                                    ? 'مرحلة للعقد'
+                                    : row.posting_status === 'PARTIAL'
+                                      ? 'مرحلة جزئياً'
+                                      : 'غير مرحلة'
+                                }
+                              />
                             </TableCell>
                             <TableCell>{row.confidence ?? '-'}</TableCell>
                             <TableCell>{row.canonical_service_name || '-'}</TableCell>
@@ -1516,6 +1615,9 @@ export default function PriceListClassifierPage() {
                         ))
                       : pagedRows.map((item, index) => (
                           <TableRow key={`${item.sourceSheet}-${item.rowNumber}-${index}`} hover>
+                            <TableCell padding="checkbox">
+                              <Checkbox checked={selectedKeySet.has(rowKey(item))} onChange={() => toggleRowSelection([rowKey(item)])} />
+                            </TableCell>
                             <TableCell>{item.rowNumber}</TableCell>
                             <TableCell>
                               <Stack spacing={0.25}>
@@ -1532,6 +1634,13 @@ export default function PriceListClassifierPage() {
                                 size="small"
                                 color={item.manualCategory ? 'secondary' : statusColor[item.status] || 'default'}
                                 label={getEffectiveStatusLabel(item)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                color={item.postedPricingItemId || item.status === 'POSTED_TO_CONTRACT' ? 'success' : 'default'}
+                                label={item.postedPricingItemId || item.status === 'POSTED_TO_CONTRACT' ? 'مرحلة للعقد' : 'غير مرحلة'}
                               />
                             </TableCell>
                             <TableCell>{item.bestMatch?.confidence ?? '-'}</TableCell>
