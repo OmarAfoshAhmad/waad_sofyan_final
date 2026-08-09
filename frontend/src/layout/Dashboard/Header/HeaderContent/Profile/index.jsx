@@ -29,6 +29,7 @@ const ROLE_TRANSLATIONS = {
   SUPER_ADMIN: 'مدير النظام',
   ACCOUNTANT: 'محاسب',
   MEDICAL_REVIEWER: 'مراجع طبي',
+  MEDICAL_REVIEW_HEAD: 'رئيس قسم المراجعين',
   PROVIDER_STAFF: 'موظف مقدم خدمة',
   EMPLOYER_ADMIN: 'مدير جهة العمل',
   DATA_ENTRY: 'مدخل بيانات',

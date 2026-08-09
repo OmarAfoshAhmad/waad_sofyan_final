@@ -2,7 +2,7 @@
  * System Role Definitions — Phase 5 (Static Role-Based Auth)
  *
  * AUTHORITATIVE source for role constants in frontend.
- * Mirrors backend SystemRole enum exactly (7 roles).
+ * Mirrors backend SystemRole enum exactly (8 roles).
  *
  * ARCHITECTURE (2026-02-18):
  * - Backend removed dynamic RBAC (permissions table, roles table)
@@ -18,6 +18,7 @@
 export const SystemRole = Object.freeze({
   SUPER_ADMIN: 'SUPER_ADMIN',
   MEDICAL_REVIEWER: 'MEDICAL_REVIEWER',
+  MEDICAL_REVIEW_HEAD: 'MEDICAL_REVIEW_HEAD',
   ACCOUNTANT: 'ACCOUNTANT',
   PROVIDER_STAFF: 'PROVIDER_STAFF',
   EMPLOYER_ADMIN: 'EMPLOYER_ADMIN',
@@ -32,6 +33,7 @@ export const SystemRole = Object.freeze({
 export const RoleDisplayNames = Object.freeze({
   [SystemRole.SUPER_ADMIN]: { ar: 'مدير النظام', en: 'Super Admin' },
   [SystemRole.MEDICAL_REVIEWER]: { ar: 'مراجع طبي', en: 'Medical Reviewer' },
+  [SystemRole.MEDICAL_REVIEW_HEAD]: { ar: 'رئيس قسم المراجعين', en: 'Medical Review Head' },
   [SystemRole.ACCOUNTANT]: { ar: 'محاسب', en: 'Accountant' },
   [SystemRole.PROVIDER_STAFF]: { ar: 'موظف مقدم خدمة', en: 'Provider Staff' },
   [SystemRole.EMPLOYER_ADMIN]: { ar: 'مدير جهة العمل', en: 'Employer Admin' },
@@ -46,6 +48,7 @@ export const RoleDisplayNames = Object.freeze({
 export const RolePrivilegeLevel = Object.freeze({
   [SystemRole.SUPER_ADMIN]: 999,
   [SystemRole.MEDICAL_REVIEWER]: 80,
+  [SystemRole.MEDICAL_REVIEW_HEAD]: 90,
   [SystemRole.ACCOUNTANT]: 70,
   [SystemRole.DATA_ENTRY]: 60,
   [SystemRole.FINANCE_VIEWER]: 50,

@@ -76,6 +76,7 @@ export const ReviewerProvider = ({ children }) => {
     const roles = user?.roles || [];
     const canReview =
       roles.includes('ROLE_MEDICAL_REVIEWER') ||
+      roles.includes('ROLE_MEDICAL_REVIEW_HEAD') ||
       roles.includes('ROLE_REVIEWER') ||
       roles.includes('ROLE_INSURANCE_ADMIN') ||
       roles.includes('ROLE_SUPER_ADMIN');

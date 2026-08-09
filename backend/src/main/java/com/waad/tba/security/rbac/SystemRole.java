@@ -10,6 +10,7 @@ package com.waad.tba.security.rbac;
  * ROLES:
  *   SUPER_ADMIN      — Full system access, unrestricted
  *   MEDICAL_REVIEWER — Review/approve claims and pre-authorizations
+ *   MEDICAL_REVIEW_HEAD — Reviewer access plus department-head decisions
  *   ACCOUNTANT       — Financial operations (settlements, provider accounts)
  *   PROVIDER_STAFF   — Provider portal access (visits, claims submission)
  *   EMPLOYER_ADMIN   — Employer data access (members, claims for their company)
@@ -23,6 +24,7 @@ public enum SystemRole {
 
     SUPER_ADMIN("مدير النظام", "System Super Administrator"),
     MEDICAL_REVIEWER("مراجع طبي", "Medical Claims Reviewer"),
+    MEDICAL_REVIEW_HEAD("رئيس قسم المراجعين", "Medical Review Department Head"),
     ACCOUNTANT("محاسب", "Financial Accountant"),
     PROVIDER_STAFF("موظف مقدم خدمة", "Healthcare Provider Staff"),
     EMPLOYER_ADMIN("مدير صاحب العمل", "Employer Administrator"),

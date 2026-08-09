@@ -51,6 +51,7 @@ const getRoleColor = (roleName) => {
     SUPER_ADMIN: 'error',
     ACCOUNTANT: 'warning',
     MEDICAL_REVIEWER: 'secondary',
+    MEDICAL_REVIEW_HEAD: 'primary',
     PROVIDER_STAFF: 'info',
     EMPLOYER_ADMIN: 'primary',
     DATA_ENTRY: 'default',

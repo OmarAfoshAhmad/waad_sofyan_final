@@ -1,0 +1,12 @@
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;
+
+ALTER TABLE users ADD CONSTRAINT users_user_type_check CHECK (user_type IN (
+    'SUPER_ADMIN',
+    'EMPLOYER_ADMIN',
+    'MEDICAL_REVIEWER',
+    'MEDICAL_REVIEW_HEAD',
+    'PROVIDER_STAFF',
+    'ACCOUNTANT',
+    'FINANCE_VIEWER',
+    'DATA_ENTRY'
+));

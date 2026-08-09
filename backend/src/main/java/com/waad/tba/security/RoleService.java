@@ -33,7 +33,8 @@ public class RoleService {
         if (user == null || user.getUserType() == null) {
             return false;
         }
-        return "MEDICAL_REVIEWER".equals(user.getUserType());
+        return "MEDICAL_REVIEWER".equals(user.getUserType())
+                || "MEDICAL_REVIEW_HEAD".equals(user.getUserType());
     }
 
     public boolean isDataEntry(User user) {

@@ -16,6 +16,7 @@ export const ROLE_RESOURCE_ACCESS = Object.freeze({
   SUPER_ADMIN: ['*'],
 
   MEDICAL_REVIEWER: ['claims', 'pre_auth', 'approvals_dashboard', 'documents', 'report_claims', 'report_pre_approvals'],
+  MEDICAL_REVIEW_HEAD: ['claims', 'pre_auth', 'approvals_dashboard', 'documents', 'report_claims', 'report_pre_approvals'],
 
   ACCOUNTANT: ['settlements', 'provider_accounts', 'documents', 'report_financial', 'report_provider_settlement'],
 

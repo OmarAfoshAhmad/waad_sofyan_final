@@ -44,7 +44,7 @@ public class User {
 
     /**
      * The user's role in the system. Maps directly to SystemRole enum.
-     * Valid values: SUPER_ADMIN, MEDICAL_REVIEWER, ACCOUNTANT, PROVIDER_STAFF,
+     * Valid values: SUPER_ADMIN, MEDICAL_REVIEWER, MEDICAL_REVIEW_HEAD, ACCOUNTANT, PROVIDER_STAFF,
      *              EMPLOYER_ADMIN, DATA_ENTRY, FINANCE_VIEWER
      */
     @Column(name = "user_type", nullable = false)

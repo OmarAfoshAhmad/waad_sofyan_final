@@ -374,6 +374,7 @@ const ar = {
   roles: {
     SUPER_ADMIN: { name: 'مدير النظام', desc: 'صلاحيات كاملة على النظام' },
     MEDICAL_REVIEWER: { name: 'المراجع الطبي', desc: 'مراجعة المطالبات والموافقات' },
+    MEDICAL_REVIEW_HEAD: { name: 'رئيس قسم المراجعين', desc: 'الاعتماد النهائي لقرارات المراجعة الطبية' },
     ACCOUNTANT: { name: 'المحاسب المالي', desc: 'الاعتماد المالي للمطالبات' },
     EMPLOYER_ADMIN: { name: 'مدير جهة العمل', desc: 'إدارة موظفي الشركة' },
     PROVIDER: { name: 'مقدم الخدمة', desc: 'إدارة المطالبات والخدمات' },
