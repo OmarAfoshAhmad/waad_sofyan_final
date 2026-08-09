@@ -223,6 +223,8 @@ const ClaimViewMedicalReview = () => {
 
   const currentUserName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'المراجع الطبي';
   const currentUserRole = currentUser?.role || (Array.isArray(currentUser?.roles) ? currentUser.roles[0] : null) || 'MEDICAL_REVIEWER';
+  const normalizedCurrentUserRole = `${currentUserRole}`.replace(/^ROLE_/, '');
+  const canFinalizeApproval = ['SUPER_ADMIN', 'INSURANCE_MANAGER', 'MEDICAL_REVIEW_HEAD'].includes(normalizedCurrentUserRole);
 
   const mapAttachment = useCallback(async (attachment) => {
     const directUrl = attachment.fileUrl || attachment.url || attachment.downloadUrl || '';
@@ -1326,16 +1328,18 @@ const ClaimViewMedicalReview = () => {
               </Stack>
             ) : (
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<ApproveIcon />}
-                  onClick={() => handleApprove(medicalNotes)}
-                  disabled={submitting || selectedServicesCount <= 0}
-                  sx={{ boxShadow: 2 }}
-                >
-                  موافقة
-                </Button>
+                {canFinalizeApproval && (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<ApproveIcon />}
+                    onClick={() => handleApprove(medicalNotes)}
+                    disabled={submitting || selectedServicesCount <= 0}
+                    sx={{ boxShadow: 2 }}
+                  >
+                    موافقة
+                  </Button>
+                )}
                 <Button
                   variant="contained"
                   color="error"

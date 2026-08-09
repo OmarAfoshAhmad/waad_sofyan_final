@@ -25,6 +25,7 @@ public enum SystemRole {
     SUPER_ADMIN("مدير النظام", "System Super Administrator"),
     MEDICAL_REVIEWER("مراجع طبي", "Medical Claims Reviewer"),
     MEDICAL_REVIEW_HEAD("رئيس قسم المراجعين", "Medical Review Department Head"),
+    INSURANCE_MANAGER("مدير التأمين", "Insurance Manager"),
     ACCOUNTANT("محاسب", "Financial Accountant"),
     PROVIDER_STAFF("موظف مقدم خدمة", "Healthcare Provider Staff"),
     EMPLOYER_ADMIN("مدير صاحب العمل", "Employer Administrator"),

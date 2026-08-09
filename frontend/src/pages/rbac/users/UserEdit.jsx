@@ -89,6 +89,7 @@ const getRoleColor = (roleName) => {
     ACCOUNTANT: 'warning',
     MEDICAL_REVIEWER: 'secondary',
     MEDICAL_REVIEW_HEAD: 'primary',
+    INSURANCE_MANAGER: 'primary',
     PROVIDER_STAFF: 'info',
     EMPLOYER_ADMIN: 'primary',
     DATA_ENTRY: 'default',

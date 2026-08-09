@@ -42,6 +42,7 @@ export const getDefaultRouteForRole = (role) => {
     ACCOUNTANT: '/settlement/batches',
     MEDICAL_REVIEWER: '/claims/batches',
     MEDICAL_REVIEW_HEAD: '/claims/batches',
+    INSURANCE_MANAGER: '/claims/batches',
     PROVIDER: '/claims/batches',
     PROVIDER_STAFF: '/provider',
     EMPLOYER_ADMIN: '/member-portal/family',

@@ -26,8 +26,10 @@ public class MethodSecurityConfig {
      */
     @Bean
     RoleHierarchy roleHierarchy() {
-        return RoleHierarchyImpl.fromHierarchy(
-                "ROLE_MEDICAL_REVIEW_HEAD > ROLE_MEDICAL_REVIEWER");
+        return RoleHierarchyImpl.fromHierarchy("""
+                ROLE_INSURANCE_MANAGER > ROLE_MEDICAL_REVIEW_HEAD
+                ROLE_MEDICAL_REVIEW_HEAD > ROLE_MEDICAL_REVIEWER
+                """);
     }
 
     /**

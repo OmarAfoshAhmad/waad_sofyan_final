@@ -20,6 +20,16 @@ class MedicalReviewRoleHierarchyTest {
     }
 
     @Test
+    void insuranceManagerInheritsHeadAndReviewerAuthorities() {
+        var reachable = hierarchy.getReachableGrantedAuthorities(
+                new TestingAuthenticationToken("manager", "n/a", "ROLE_INSURANCE_MANAGER")
+                        .getAuthorities()).stream().map(authority -> authority.getAuthority()).toList();
+
+        assertThat(reachable)
+                .contains("ROLE_INSURANCE_MANAGER", "ROLE_MEDICAL_REVIEW_HEAD", "ROLE_MEDICAL_REVIEWER");
+    }
+
+    @Test
     void medicalReviewerDoesNotInheritDepartmentHeadAuthority() {
         var reachable = hierarchy.getReachableGrantedAuthorities(
                 new TestingAuthenticationToken("reviewer", "n/a", "ROLE_MEDICAL_REVIEWER")
@@ -27,6 +37,6 @@ class MedicalReviewRoleHierarchyTest {
 
         assertThat(reachable)
                 .contains("ROLE_MEDICAL_REVIEWER")
-                .doesNotContain("ROLE_MEDICAL_REVIEW_HEAD");
+                .doesNotContain("ROLE_MEDICAL_REVIEW_HEAD", "ROLE_INSURANCE_MANAGER");
     }
 }

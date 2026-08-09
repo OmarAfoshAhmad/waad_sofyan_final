@@ -384,7 +384,7 @@ public class ClaimController {
      * NetProviderAmount
      */
     @PostMapping("/{id:\\d+}/approve")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'INSURANCE_MANAGER', 'MEDICAL_REVIEW_HEAD')")
     @Operation(summary = "Approve claim (async)", description = "Request claim approval. Returns immediately with APPROVAL_IN_PROGRESS status. "
             +
             "Poll /api/v1/claims/{id} for final result. " +

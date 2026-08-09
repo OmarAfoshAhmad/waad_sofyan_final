@@ -34,7 +34,8 @@ public class RoleService {
             return false;
         }
         return "MEDICAL_REVIEWER".equals(user.getUserType())
-                || "MEDICAL_REVIEW_HEAD".equals(user.getUserType());
+                || "MEDICAL_REVIEW_HEAD".equals(user.getUserType())
+                || "INSURANCE_MANAGER".equals(user.getUserType());
     }
 
     public boolean isDataEntry(User user) {
