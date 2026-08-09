@@ -1,7 +1,6 @@
 package com.waad.tba.modules.settlement.event;
 
-import com.waad.tba.modules.settlement.service.ClaimFinancialSyncService;
-import com.waad.tba.modules.claim.service.ClaimApprovalOutboxService;
+import com.waad.tba.modules.claim.service.ClaimApprovalOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -38,8 +37,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class ClaimApprovalEventListener {
 
-    private final ClaimFinancialSyncService claimFinancialSyncService;
-    private final ClaimApprovalOutboxService claimApprovalOutboxService;
+    private final ClaimApprovalOrchestrator claimApprovalOrchestrator;
 
     /**
      * Handle claim approval event - delegates to ClaimFinancialSyncService.
@@ -52,7 +50,6 @@ public class ClaimApprovalEventListener {
             return;
         }
         log.info("🎯 [EVENT] ClaimApprovedEvent → sync: claimId={}", event.getClaimId());
-        claimFinancialSyncService.creditForClaim(event.getClaimId(), event.getUserId());
-        claimApprovalOutboxService.record(event.getClaimId(), event.getUserId());
+        claimApprovalOrchestrator.commitApprovedClaim(event.getClaimId(), event.getUserId());
     }
 }
