@@ -80,10 +80,7 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
         */
        long countByReferenceTypeAndReferenceId(ReferenceType referenceType, Long referenceId);
 
-       /**
-        * Idempotency check for reference types keyed by (referenceId, referenceVersion)
-        * rather than referenceId alone — currently only CLAIM_AMOUNT_ADJUSTMENT.
-        */
+       /** Idempotency check keyed by reference and financial calculation cycle. */
        boolean existsByReferenceTypeAndReferenceIdAndReferenceVersion(
                      ReferenceType referenceType, Long referenceId, Long referenceVersion);
 

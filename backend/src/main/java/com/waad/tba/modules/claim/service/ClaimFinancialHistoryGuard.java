@@ -18,8 +18,7 @@ public class ClaimFinancialHistoryGuard {
     private static final EnumSet<ReferenceType> CLAIM_REFERENCES = EnumSet.of(
             ReferenceType.CLAIM_APPROVAL,
             ReferenceType.CLAIM_REVERSAL,
-            ReferenceType.CLAIM_SETTLEMENT,
-            ReferenceType.CLAIM_AMOUNT_ADJUSTMENT);
+            ReferenceType.CLAIM_SETTLEMENT);
 
     private final BenefitBucketConsumptionRepository consumptions;
     private final ClaimLineLimitSnapshotRepository snapshots;

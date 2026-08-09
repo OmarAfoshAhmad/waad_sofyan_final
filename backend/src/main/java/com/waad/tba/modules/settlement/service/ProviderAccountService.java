@@ -435,13 +435,6 @@ public class ProviderAccountService {
                 return tx;
         }
 
-        // Claim amount adjustments for already-approved claims are handled by
-        // ClaimAmountAdjustmentService — moved out (Phase 7.1). The prior version
-        // here called account.debit() when an approved amount decreased, which
-        // raised totalPaid as if a payment had occurred. See that class for the
-        // corrected accounting (totalApproved/runningBalance only) and the
-        // (claimId, claimVersion) idempotency key a bare claimId cannot provide.
-
         /**
          * Debit the provider account when a claim is individually settled (paid
          * directly).
