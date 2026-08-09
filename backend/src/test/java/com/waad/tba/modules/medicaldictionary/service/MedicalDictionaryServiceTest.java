@@ -158,6 +158,51 @@ class MedicalDictionaryServiceTest {
     }
 
     @Test
+    void diffPriceListSessionWithContract_rejectsChangedEffectivePriceWhenReplacementNotExplicit() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        MedicalCategory category = category();
+        ProviderContract contract = contract();
+        PriceListClassificationItem item = priceListItem("كشف طبي", new BigDecimal("150.00"));
+        ProviderContractPricingItem existingPrice = pricingItem(contract, category, "كشف طبي", new BigDecimal("100.00"));
+        PriceListSessionPostRequest request = postRequest();
+        request.setReplaceEffectivePrices(false);
+
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+        when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(item));
+        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category));
+        when(providerContractPricingItemRepository.findEffectiveInContractByName(
+                200L, "كشف طبي", LocalDate.of(2026, 1, 1))).thenReturn(Optional.of(existingPrice));
+
+        PriceListSessionDiffResponse diff = service.diffPriceListSessionWithContract(100L, request);
+
+        assertThat(diff.isHasChanges()).isFalse();
+        assertThat(diff.getRejectedCount()).isEqualTo(1);
+        assertThat(diff.getItems().get(0).getAction()).isEqualTo("REJECTED");
+    }
+
+    @Test
+    void diffPriceListSessionWithContract_rejectsDuplicateIdentityInsideSameRequest() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationItem first = priceListItem("كشف طبي", new BigDecimal("100.00"));
+        PriceListClassificationItem duplicate = priceListItem("كشف طبي", new BigDecimal("120.00"));
+        duplicate.setId(2L);
+
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(priceListSession()));
+        when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract()));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(first, duplicate));
+        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category()));
+
+        PriceListSessionDiffResponse diff = service.diffPriceListSessionWithContract(100L, postRequest());
+
+        assertThat(diff.getCreateCount()).isEqualTo(1);
+        assertThat(diff.getRejectedCount()).isEqualTo(1);
+        assertThat(diff.getItems()).extracting(PriceListSessionDiffResponse.ItemDiff::getAction)
+                .containsExactly("CREATE", "REJECTED");
+    }
+
+    @Test
     void listPriceListSessions_keepsManagedOrphanRemovalCollectionWhenRepairingStalePostLink() {
         MedicalDictionaryService service = newService();
         PriceListClassificationSession session = priceListSession();

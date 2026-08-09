@@ -781,6 +781,11 @@ export const bulkImportPriceList = async (file, onUploadProgress) => {
   return unwrap(response);
 };
 
+export const getProviderContractDiscountPercentages = async () => {
+  const response = await axiosClient.get(`${BASE_URL}/discount-percentages`);
+  return unwrap(response) || [];
+};
+
 export const downloadBulkPriceListTemplate = async () => {
   const response = await axiosClient.get(`${BASE_URL}/bulk-import/template`, { responseType: 'blob' });
   const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -868,6 +873,7 @@ const providerContractsService = {
   getProviderContractByCode,
   getContractsByProvider,
   getActiveContractByProvider,
+  getProviderContractDiscountPercentages,
   createProviderContract,
   updateProviderContract,
   restoreProviderContract,

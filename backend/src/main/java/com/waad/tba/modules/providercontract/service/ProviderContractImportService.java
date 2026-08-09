@@ -333,7 +333,7 @@ public class ProviderContractImportService {
         b.pricingModel(pricingModel);
 
         // --- Discount percent ---
-        BigDecimal discountPercent = numCell(row, COL_DISCOUNT_PERCENT);
+        BigDecimal discountPercent = percentCell(row, COL_DISCOUNT_PERCENT);
         if (discountPercent != null && (discountPercent.compareTo(BigDecimal.ZERO) < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0)) {
             errors.add("نسبة الخصم يجب أن تكون بين 0 و100");
         }
@@ -542,6 +542,26 @@ public class ProviderContractImportService {
             String value = cellToString(cell);
             if (value == null || value.isBlank()) return null;
             return new BigDecimal(value.trim().replace(",", ""));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private BigDecimal percentCell(Row row, int col) {
+        if (row == null) return null;
+        Cell cell = row.getCell(col);
+        if (cell == null || cell.getCellType() == CellType.BLANK) return null;
+        try {
+            if (cell.getCellType() == CellType.NUMERIC) {
+                BigDecimal value = BigDecimal.valueOf(cell.getNumericCellValue());
+                String format = cell.getCellStyle() == null ? null : cell.getCellStyle().getDataFormatString();
+                return format != null && format.contains("%") ? value.multiply(BigDecimal.valueOf(100)) : value;
+            }
+            String value = cellToString(cell);
+            if (value == null || value.isBlank()) return null;
+            String normalized = value.trim().replace(",", "");
+            if (normalized.endsWith("%")) normalized = normalized.substring(0, normalized.length() - 1).trim();
+            return new BigDecimal(normalized);
         } catch (Exception e) {
             return null;
         }

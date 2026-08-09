@@ -111,12 +111,21 @@ public class ProviderContractController {
             @Parameter(description = "Filter by status") @RequestParam(name = "status", required = false) ContractStatus status,
             @Parameter(description = "Filter by pricing scope (GLOBAL/EMPLOYER_SPECIFIC)") @RequestParam(name = "pricingScope", required = false) PricingScope pricingScope,
             @Parameter(description = "Filter by rejection-timing: true=before, false=after") @RequestParam(name = "discountBeforeRejection", required = false) Boolean discountBeforeRejection,
+            @Parameter(description = "Exact discount percentage on the 0-100 scale") @RequestParam(name = "discountPercentage", required = false) java.math.BigDecimal discountPercentage,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         log.debug("REST request to search contracts: q={}, status={}, pricingScope={}, discountBeforeRejection={}",
                 q, status, pricingScope, discountBeforeRejection);
-        Page<ProviderContractResponseDto> result = contractService.search(q, status, pricingScope, discountBeforeRejection, pageable);
+        Page<ProviderContractResponseDto> result = contractService.search(q, status, pricingScope, discountBeforeRejection, discountPercentage, pageable);
         return ResponseEntity.ok(ApiResponse.success("Search completed", result));
+    }
+
+    @GetMapping("/discount-percentages")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ACCOUNTANT', 'MEDICAL_REVIEWER')")
+    public ResponseEntity<ApiResponse<List<java.math.BigDecimal>>> getDiscountPercentages() {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Discount percentages retrieved successfully",
+                contractService.findDistinctDiscountPercentages()));
     }
 
     /**

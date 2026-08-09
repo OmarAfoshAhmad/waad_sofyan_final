@@ -395,6 +395,33 @@ export default function ProvidersList() {
     [queryClient]
   );
 
+  const confirmBulkAction = useCallback(
+    ({ title, message, confirmText, confirmColor, action, successMessage, errorMessage }) => {
+      const ids = [...selectedIds];
+      setConfirmState({
+        open: true,
+        title,
+        message: `${message}\n\nعدد المرافق المحددة: ${ids.length}`,
+        confirmText,
+        cancelText: 'إلغاء',
+        confirmColor,
+        onConfirm: async () => {
+          try {
+            await action(ids);
+            openSnackbar({ message: successMessage, variant: 'success' });
+            setSelectedIds([]);
+            await queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+          } catch (error) {
+            openSnackbar({ message: error?.response?.data?.message || error?.message || errorMessage, variant: 'error' });
+          } finally {
+            setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+          }
+        }
+      });
+    },
+    [queryClient, selectedIds]
+  );
+
 
   // ========================================
   // DATA FETCHING WITH REACT QUERY
@@ -901,11 +928,12 @@ export default function ProvidersList() {
                         color="success"
                         variant="contained"
                         startIcon={<RefreshIcon />}
-                        onClick={() => providersService.bulkRestore(selectedIds).then(() => {
-                          openSnackbar({ message: 'تم استعادة المرافق المحددة', variant: 'success' });
-                          setSelectedIds([]);
-                          queryClient.invalidateQueries([QUERY_KEY]);
-                        }).catch(e => openSnackbar({ message: e.message || 'خطأ', variant: 'error' }))}
+                        onClick={() => confirmBulkAction({
+                          title: 'تأكيد استعادة المرافق',
+                          message: 'ستُعاد المرافق المحددة إلى السجل النشط.',
+                          confirmText: 'استعادة', confirmColor: 'success', action: providersService.bulkRestore,
+                          successMessage: 'تمت استعادة المرافق المحددة', errorMessage: 'تعذرت استعادة المرافق المحددة'
+                        })}
                       >
                         استعادة المحدد
                       </Button>
@@ -914,11 +942,12 @@ export default function ProvidersList() {
                         color="error"
                         variant="contained"
                         startIcon={<DeleteForeverIcon />}
-                        onClick={() => providersService.bulkHardDelete(selectedIds).then(() => {
-                          openSnackbar({ message: 'تم الحذف النهائي بنجاح', variant: 'success' });
-                          setSelectedIds([]);
-                          queryClient.invalidateQueries([QUERY_KEY]);
-                        }).catch(e => openSnackbar({ message: e.message || 'خطأ', variant: 'error' }))}
+                        onClick={() => confirmBulkAction({
+                          title: 'تأكيد الحذف النهائي',
+                          message: 'سيُحذف المحدد نهائياً ولا يمكن التراجع عن هذه العملية.',
+                          confirmText: 'حذف نهائي', confirmColor: 'error', action: providersService.bulkHardDelete,
+                          successMessage: 'تم الحذف النهائي للمرافق المحددة', errorMessage: 'تعذر الحذف النهائي'
+                        })}
                       >
                         حذف نهائي للمحدد
                       </Button>
@@ -931,11 +960,12 @@ export default function ProvidersList() {
                       color="primary"
                       variant="contained"
                       startIcon={<VerifiedUserIcon />}
-                      onClick={() => providersService.bulkAllowAllEmployers(selectedIds).then(() => {
-                        openSnackbar({ message: 'تم تفعيل جميع الجهات للمرافق المحددة بنجاح', variant: 'success' });
-                        setSelectedIds([]);
-                        queryClient.invalidateQueries([QUERY_KEY]);
-                      }).catch(e => openSnackbar({ message: e.message || 'حدث خطأ', variant: 'error' }))}
+                      onClick={() => confirmBulkAction({
+                        title: 'تأكيد إتاحة جميع جهات العمل',
+                        message: 'سيُسمح لكل جهات العمل بالتعامل مع المرافق المحددة.',
+                        confirmText: 'تفعيل الجميع', confirmColor: 'success', action: providersService.bulkAllowAllEmployers,
+                        successMessage: 'تم تفعيل جميع الجهات للمرافق المحددة بنجاح', errorMessage: 'تعذر تفعيل جميع الجهات'
+                      })}
                     >
                       تفعيل جميع الجهات للمحدد
                     </Button>
@@ -944,11 +974,12 @@ export default function ProvidersList() {
                       color="warning"
                       variant="contained"
                       startIcon={<CloseIcon />}
-                      onClick={() => providersService.bulkRemoveEmployers(selectedIds).then(() => {
-                        openSnackbar({ message: 'تمت إزالة جهات العمل من المرافق المحددة بنجاح', variant: 'success' });
-                        setSelectedIds([]);
-                        queryClient.invalidateQueries([QUERY_KEY]);
-                      }).catch(e => openSnackbar({ message: e.message || 'حدث خطأ', variant: 'error' }))}
+                      onClick={() => confirmBulkAction({
+                        title: 'تأكيد إزالة جهات العمل',
+                        message: 'ستُزال جميع ارتباطات جهات العمل من المرافق المحددة. العقود لا تُحذف بهذه العملية.',
+                        confirmText: 'إزالة الارتباطات', confirmColor: 'warning', action: providersService.bulkRemoveEmployers,
+                        successMessage: 'تمت إزالة جهات العمل من المرافق المحددة بنجاح', errorMessage: 'تعذرت إزالة جهات العمل'
+                      })}
                     >
                       إزالة جهات العمل من المحدد
                     </Button>
@@ -957,11 +988,13 @@ export default function ProvidersList() {
                       color="error"
                       variant="contained"
                       startIcon={<DeleteIcon />}
-                      onClick={() => providersService.bulkDeactivate(selectedIds).then(() => {
-                        openSnackbar({ message: 'تم حذف المرافق المحددة وعقودها الفارغة بنجاح', variant: 'success' });
-                        setSelectedIds([]);
-                        queryClient.invalidateQueries([QUERY_KEY]);
-                      }).catch(e => openSnackbar({ message: e.message || 'يوجد مرفق يحتوي على عقد مسعر يمنع الحذف', variant: 'error' }))}
+                      onClick={() => confirmBulkAction({
+                        title: 'تأكيد حذف المرافق المحددة',
+                        message: 'ستُنقل المرافق المحددة إلى سجل المحذوفات. يمنع النظام حذف أي مرفق لديه عقد مسعّر مستخدم.',
+                        confirmText: 'حذف المحدد', confirmColor: 'error', action: providersService.bulkDeactivate,
+                        successMessage: 'تم حذف المرافق المحددة وعقودها الفارغة بنجاح',
+                        errorMessage: 'يوجد مرفق يحتوي على عقد مسعّر يمنع الحذف'
+                      })}
                     >
                       حذف المحدد (مع عقوده)
                     </Button>

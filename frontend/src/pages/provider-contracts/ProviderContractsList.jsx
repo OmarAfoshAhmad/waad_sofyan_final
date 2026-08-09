@@ -53,6 +53,7 @@ import {
   deleteProviderContract,
   bulkUpdateProviderContracts,
   bulkDeleteProviderContracts,
+  getProviderContractDiscountPercentages,
   CONTRACT_STATUS_CONFIG
 } from 'services/api/provider-contracts.service';
 import { useSnackbar } from 'notistack';
@@ -82,12 +83,23 @@ const formatDate = (dateStr) => {
   }
 };
 
+const formatPercent = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '-';
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(number)}%`;
+};
+
 const ProviderContractsList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   const [showDeleted, setShowDeleted] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const { data: discountPercentages = [] } = useQuery({
+    queryKey: [QUERY_KEY, 'discount-percentages'],
+    queryFn: getProviderContractDiscountPercentages,
+    staleTime: 60_000
+  });
   const [contractImportOpen, setContractImportOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -443,7 +455,7 @@ const ProviderContractsList = () => {
 
         case 'discountPercent':
           return contract.discountPercent !== null && contract.discountPercent !== undefined ? (
-            <Chip label={`${contract.discountPercent}%`} size="small" variant="outlined" color="info" />
+            <Chip label={formatPercent(contract.discountPercent)} size="small" variant="outlined" color="info" />
           ) : (
             <Typography variant="body2">-</Typography>
           );
@@ -683,16 +695,22 @@ const ProviderContractsList = () => {
             </Box>
             <Box sx={{ minWidth: { md: '9rem' } }}>
               <TextField
-                type="number"
+                select
                 fullWidth
                 size="small"
                 label="نسبة الخصم %"
-                placeholder="مثال: 10"
                 value={tableState.columnFilters.discountPercentage || ''}
                 onChange={(e) => tableState.setFilter('discountPercentage', e.target.value)}
                 InputProps={{ sx: { height: '2.5rem' } }}
                 InputLabelProps={{ shrink: true }}
-              />
+              >
+                <MenuItem value="">الكل</MenuItem>
+                {discountPercentages.map((value) => (
+                  <MenuItem key={String(value)} value={String(value)}>
+                    {formatPercent(value)}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Box>
             <Box sx={{ minWidth: { md: '7.5rem' } }}>
               <Button

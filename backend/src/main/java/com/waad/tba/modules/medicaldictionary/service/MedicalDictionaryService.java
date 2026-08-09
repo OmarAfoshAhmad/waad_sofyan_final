@@ -327,11 +327,17 @@ public class MedicalDictionaryService {
         int updateCount = 0;
         int identicalCount = 0;
         int rejectedCount = 0;
+        Set<String> seenIdentities = new java.util.HashSet<>();
 
         LocalDate effectiveFrom = resolveAndValidateEffectiveFrom(contract, request.getEffectiveFrom());
         for (PriceListClassificationItem item : items) {
+            if (!seenIdentities.add(postingIdentity(item))) {
+                diffs.add(priceListDiff(item, "REJECTED", "خدمة مكررة ضمن نفس القائمة؛ ادمج التكرارات قبل الترحيل", null, null));
+                rejectedCount++;
+                continue;
+            }
             PriceListSessionDiffResponse.ItemDiff diff = buildPriceListDiffItem(
-                    contract, item, request.isOnlyReviewedItems(), effectiveFrom);
+                    contract, item, request.isOnlyReviewedItems(), request.isReplaceEffectivePrices(), effectiveFrom);
             diffs.add(diff);
             switch (diff.getAction()) {
                 case "CREATE" -> createCount++;
@@ -376,8 +382,14 @@ public class MedicalDictionaryService {
         int superseded = 0;
         int skipped = 0;
         int rejected = 0;
+        Set<String> seenIdentities = new java.util.HashSet<>();
 
         for (PriceListClassificationItem item : items) {
+            if (!seenIdentities.add(postingIdentity(item))) {
+                rejected++;
+                results.add(postResult(item, "REJECTED", "خدمة مكررة ضمن نفس القائمة؛ ادمج التكرارات قبل الترحيل", null));
+                continue;
+            }
             String validationError = validatePostableItem(item, request.isOnlyReviewedItems());
             if (validationError != null) {
                 rejected++;
@@ -399,6 +411,11 @@ public class MedicalDictionaryService {
                     if (pricingItemMatches(postedPricingItem.get(), item, category)) {
                         skipped++;
                         results.add(postResult(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", postedPricingItem.get().getId()));
+                        continue;
+                    }
+                    if (!request.isReplaceEffectivePrices()) {
+                        rejected++;
+                        results.add(postResult(item, "REJECTED", "الخدمة مرحلة سابقاً وتغيّرت؛ راجع الفرق وأنشئ نسخة سعر مؤرخة صراحة", postedPricingItem.get().getId()));
                         continue;
                     }
                     applyPricingItemValues(postedPricingItem.get(), contract, category, item, actorId);
@@ -579,6 +596,12 @@ public class MedicalDictionaryService {
                 contractId, item.getProviderServiceName(), effectiveDate);
     }
 
+    private String postingIdentity(PriceListClassificationItem item) {
+        String code = blankToNull(item.getProviderServiceCode());
+        if (code != null) return "CODE:" + code.trim().toUpperCase(java.util.Locale.ROOT);
+        return "NAME:" + normalizer.normalize(item.getProviderServiceName());
+    }
+
     private Optional<ProviderContractPricingItem> findOwnedActivePostedPricingItem(PriceListClassificationItem item, Long contractId) {
         Long postedPricingItemId = item.getPostedPricingItemId();
         if (postedPricingItemId == null) return Optional.empty();
@@ -591,6 +614,7 @@ public class MedicalDictionaryService {
     private PriceListSessionDiffResponse.ItemDiff buildPriceListDiffItem(ProviderContract contract,
                                                                          PriceListClassificationItem item,
                                                                          boolean onlyReviewedItems,
+                                                                         boolean replaceEffectivePrices,
                                                                          LocalDate effectiveDate) {
         String validationError = validatePostableItem(item, onlyReviewedItems);
         if (validationError != null) {
@@ -618,6 +642,10 @@ public class MedicalDictionaryService {
         ProviderContractPricingItem current = existing.get();
         if (pricingItemMatches(current, item, category)) {
             return priceListDiff(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current, category);
+        }
+
+        if (!replaceEffectivePrices) {
+            return priceListDiff(item, "REJECTED", "يوجد سعر فعال مختلف لنفس الخدمة؛ لن يُستبدل دون قرار صريح", current, category);
         }
 
         return priceListDiff(item, "UPDATE", "سيتم تحديث سعر أو تصنيف الخدمة في عقد مقدم الخدمة", current, category);

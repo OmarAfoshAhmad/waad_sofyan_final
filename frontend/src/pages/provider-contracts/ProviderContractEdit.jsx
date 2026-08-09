@@ -210,8 +210,6 @@ const ProviderContractEdit = () => {
     const payload = {
       providerId: contract.providerId || contract.provider?.id,
       contractCode: formData.contractCode,
-      pricingScope: formData.pricingScope,
-      employerId: formData.pricingScope === 'EMPLOYER_SPECIFIC' ? formData.employerId : null,
       startDate: format(formData.startDate, 'yyyy-MM-dd'),
       endDate: format(formData.endDate, 'yyyy-MM-dd'),
       pricingModel: formData.pricingModel,
@@ -221,6 +219,13 @@ const ProviderContractEdit = () => {
       termsChangeReason: financialTermsChanged ? formData.termsChangeReason?.trim() || null : null,
       notes: formData.notes || null
     };
+
+    // Scope ownership is immutable after draft. Omitting it prevents a financial
+    // terms amendment from being misread as an attempted scope change.
+    if (canChangeScope) {
+      payload.pricingScope = formData.pricingScope;
+      payload.employerId = formData.pricingScope === 'EMPLOYER_SPECIFIC' ? formData.employerId : null;
+    }
 
     updateMutation.mutate(payload);
   };

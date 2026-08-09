@@ -248,6 +248,7 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
                      "AND (:status IS NULL OR c.status = :status) " +
                      "AND (:pricingScope IS NULL OR c.pricingScope = :pricingScope) " +
                      "AND (:discountBeforeRejection IS NULL OR c.discountBeforeRejection = :discountBeforeRejection) " +
+                     "AND (:discountPercent IS NULL OR c.discountPercent = :discountPercent) " +
                      "AND (:search IS NULL OR :search = '' " +
                      "     OR LOWER(c.contractCode) LIKE LOWER(CONCAT('%', :search, '%')) " +
                      "     OR LOWER(c.provider.name) LIKE LOWER(CONCAT('%', :search, '%')))")
@@ -256,7 +257,12 @@ public interface ProviderContractRepository extends JpaRepository<ProviderContra
                      @Param("status") ContractStatus status,
                      @Param("pricingScope") PricingScope pricingScope,
                      @Param("discountBeforeRejection") Boolean discountBeforeRejection,
+                     @Param("discountPercent") java.math.BigDecimal discountPercent,
                      Pageable pageable);
+
+       @Query("SELECT DISTINCT c.discountPercent FROM ModernProviderContract c " +
+                     "WHERE c.active = true AND c.discountPercent IS NOT NULL ORDER BY c.discountPercent")
+       List<java.math.BigDecimal> findDistinctActiveDiscountPercentages();
 
        // ═══════════════════════════════════════════════════════════════════════════
        // STATISTICS QUERIES

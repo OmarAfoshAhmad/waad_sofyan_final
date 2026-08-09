@@ -21,7 +21,9 @@ public class PriceListSessionPostRequest {
      * إذا كان true سيتم إغلاق السعر الفعال السابق لنفس كود/اسم الخدمة قبل إنشاء
      * السعر الجديد. إذا كان false سيتم رفض السطر عند وجود سعر فعال سابق.
      */
-    private boolean replaceEffectivePrices = true;
+    /** Fail closed by default: callers must explicitly opt into replacing an
+     * effective price after reviewing the dated diff. */
+    private boolean replaceEffectivePrices = false;
 
     /**
      * يمنع ترحيل السطور المعلقة أو غير المعروفة. الافتراضي أكثر أماناً مالياً.

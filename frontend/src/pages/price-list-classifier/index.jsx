@@ -724,14 +724,15 @@ export default function PriceListClassifierPage() {
     [visibleRows]
   );
   const selectedKeySet = useMemo(() => new Set(selectedSourceKeys), [selectedSourceKeys]);
-  const selectedDisplayRowCount = useMemo(
+  const selectedDisplayRows = useMemo(
     () =>
       contractDisplayRows.filter((row) => {
         const keys = row.sourceKeys || [rowKey(row)];
         return keys.length > 0 && keys.every((key) => selectedKeySet.has(key));
-      }).length,
+      }),
     [contractDisplayRows, selectedKeySet]
   );
+  const selectedDisplayRowCount = selectedDisplayRows.length;
   const allVisibleSelected = visibleSourceKeys.length > 0 && visibleSourceKeys.every((key) => selectedKeySet.has(key));
   const someVisibleSelected = visibleSourceKeys.some((key) => selectedKeySet.has(key));
 
@@ -1020,13 +1021,15 @@ export default function PriceListClassifierPage() {
     setSuccess('تم مسح جلسة التصنيف المحفوظة.');
   };
 
-  const buildBackendSessionPayload = () => ({
-    sessionId: sessionInfo?.backendSessionId || null,
-    sessionName: fileName ? `تنظيم قائمة أسعار - ${fileName}` : `تنظيم قائمة أسعار - ${new Date().toLocaleDateString('ar-LY')}`,
+  const buildBackendSessionPayload = (itemsToSave = items, options = {}) => ({
+    sessionId: options.sessionId === undefined ? sessionInfo?.backendSessionId || null : options.sessionId,
+    sessionName: fileName
+      ? `${options.selectedOnly ? 'ترحيل محدد' : 'تنظيم قائمة أسعار'} - ${fileName}`
+      : `${options.selectedOnly ? 'ترحيل محدد' : 'تنظيم قائمة أسعار'} - ${new Date().toLocaleDateString('ar-LY')}`,
     originalFileName: fileName || '',
     providerId: selectedProviderId,
     providerName: selectedProvider?.name || '',
-    items: items.map((item) => {
+    items: itemsToSave.map((item) => {
       const effectiveCategory = getEffectiveCategory(item);
       const isManual = Boolean(item.manualCategory);
       return {
@@ -1106,12 +1109,35 @@ export default function PriceListClassifierPage() {
     setError('');
     setSuccess('');
     try {
-      const saved = await medicalDictionaryService.savePriceListClassificationSession(buildBackendSessionPayload());
+      const itemsBySourceKey = new Map(items.map((item) => [rowKey(item), item]));
+      const selectedItems = mergeDuplicatesForContracts
+        ? selectedDisplayRows
+            .map((row) => {
+              const representative = (row.sourceKeys || []).map((key) => itemsBySourceKey.get(key)).find(Boolean);
+              if (!representative) return null;
+              const priceRange = parsePriceRange(row.contract_price);
+              return {
+                ...representative,
+                serviceCode: row.service_code || representative.serviceCode,
+                serviceName: row.service_name || representative.serviceName,
+                price: priceRange.min,
+                minPrice: priceRange.min,
+                maxPrice: priceRange.max,
+                priceLabel: row.contract_price,
+                duplicateName: (row.sourceKeys || []).length > 1
+              };
+            })
+            .filter(Boolean)
+        : items.filter((item) => selectedKeySet.has(rowKey(item)));
+      if (!selectedItems.length) throw new Error('لا توجد خدمات محددة قابلة للحفظ والترحيل.');
+      const saved = await medicalDictionaryService.savePriceListClassificationSession(
+        buildBackendSessionPayload(selectedItems, { sessionId: null, selectedOnly: true })
+      );
       const selectedItemIds = (saved.items || [])
         .filter((item) => selectedKeySet.has(rowKey(item)))
         .map((item) => item.id)
         .filter(Boolean);
-      if (!selectedItemIds.length || selectedItemIds.length !== selectedKeySet.size) {
+      if (!selectedItemIds.length || selectedItemIds.length !== selectedItems.length) {
         throw new Error('تعذر ربط بعض الخدمات المحددة بالجلسة المحفوظة؛ أعد تحديدها ثم حاول مجدداً.');
       }
       const contract = await getActiveContractByProvider(selectedProviderId);

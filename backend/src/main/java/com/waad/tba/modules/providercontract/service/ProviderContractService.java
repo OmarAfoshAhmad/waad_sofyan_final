@@ -140,7 +140,7 @@ public class ProviderContractService {
      */
     @Transactional(readOnly = true)
     public Page<ProviderContractResponseDto> search(String query, ContractStatus status, Pageable pageable) {
-        return search(query, status, null, null, pageable);
+        return search(query, status, null, null, null, pageable);
     }
 
     /**
@@ -149,17 +149,22 @@ public class ProviderContractService {
      */
     @Transactional(readOnly = true)
     public Page<ProviderContractResponseDto> search(String query, ContractStatus status, PricingScope pricingScope,
-            Boolean discountBeforeRejection, Pageable pageable) {
+            Boolean discountBeforeRejection, BigDecimal discountPercent, Pageable pageable) {
         log.debug("Searching contracts: query={}, status={}, pricingScope={}, discountBeforeRejection={}",
                 query, status, pricingScope, discountBeforeRejection);
 
         if ((query == null || query.trim().isEmpty()) && status == null && pricingScope == null
-                && discountBeforeRejection == null) {
+                && discountBeforeRejection == null && discountPercent == null) {
             return findAll(pageable);
         }
 
-        return contractRepository.searchWithFilters(query, status, pricingScope, discountBeforeRejection, pageable)
+        return contractRepository.searchWithFilters(query, status, pricingScope, discountBeforeRejection, discountPercent, pageable)
                 .map(ProviderContractResponseDto::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BigDecimal> findDistinctDiscountPercentages() {
+        return contractRepository.findDistinctActiveDiscountPercentages();
     }
 
     /**
@@ -301,14 +306,17 @@ public class ProviderContractService {
             throw new BusinessRuleException("Cannot update a terminated contract");
         }
 
-        boolean scopeChanged = dto.getPricingScope() != null
-                || dto.getEmployerId() != null;
         PricingScope targetScope = dto.getPricingScope() != null
                 ? dto.getPricingScope()
                 : (contract.getPricingScope() != null ? contract.getPricingScope() : PricingScope.GLOBAL);
         Long targetEmployerId = dto.getEmployerId() != null
                 ? dto.getEmployerId()
                 : (contract.getEmployer() != null ? contract.getEmployer().getId() : null);
+        PricingScope currentScope = contract.getPricingScope() != null
+                ? contract.getPricingScope() : PricingScope.GLOBAL;
+        Long currentEmployerId = contract.getEmployer() != null ? contract.getEmployer().getId() : null;
+        boolean scopeChanged = targetScope != currentScope
+                || !java.util.Objects.equals(targetEmployerId, currentEmployerId);
         Employer targetEmployer = scopeChanged
                 ? resolveEmployerForScope(targetScope, targetEmployerId)
                 : contract.getEmployer();

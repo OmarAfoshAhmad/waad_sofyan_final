@@ -241,7 +241,7 @@ export default function PriceListSessionsPage() {
         const diff = await medicalDictionaryService.diffPriceListClassificationSessionWithContract(session.id, {
           contractId: contract.id,
           effectiveFrom: effectiveFrom || null,
-          replaceEffectivePrices: true,
+          replaceEffectivePrices: false,
           onlyReviewedItems: true
         });
         responses.push(diff);
@@ -326,7 +326,7 @@ export default function PriceListSessionsPage() {
           const response = await medicalDictionaryService.postPriceListClassificationSessionToContract(session.id, {
             contractId: postDialog.contract.id,
             effectiveFrom: postDialog.effectiveFrom || null,
-            replaceEffectivePrices: true,
+            replaceEffectivePrices: false,
             onlyReviewedItems: true
           });
           created += response.created || 0;
