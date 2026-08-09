@@ -6,6 +6,7 @@ import com.waad.tba.modules.medicaldictionary.enums.DictionaryEntryStatus;
 import com.waad.tba.modules.medicaldictionary.enums.DictionarySuggestionStatus;
 import com.waad.tba.modules.medicaldictionary.enums.PriceListSessionStatus;
 import com.waad.tba.modules.medicaldictionary.service.MedicalDictionaryService;
+import com.waad.tba.modules.medicaldictionary.service.V50DictionaryReleaseImportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/medical-dictionary")
@@ -26,6 +29,16 @@ import java.util.List;
 public class MedicalDictionaryController {
 
     private final MedicalDictionaryService service;
+    private final V50DictionaryReleaseImportService v50ReleaseImportService;
+
+    @PostMapping(value = "/releases/v50/import-and-activate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<MedicalDictionaryReleaseResponse>> importAndActivateV50(
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(
+                "تم التحقق من قاموس V50 وتفعيله بالكامل",
+                v50ReleaseImportService.importAndActivate(file)));
+    }
 
     @GetMapping("/entries")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
