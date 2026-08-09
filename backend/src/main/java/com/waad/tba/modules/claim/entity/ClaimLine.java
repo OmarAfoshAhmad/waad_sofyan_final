@@ -176,6 +176,26 @@ public class ClaimLine {
     @Builder.Default
     private Integer calculationVersion = 1;
 
+    /** Current operational revision; superseded rows remain for financial audit. */
+    @Column(name = "current_line", nullable = false)
+    @Builder.Default
+    private Boolean currentLine = true;
+
+    @Column(name = "superseded_at")
+    private LocalDateTime supersededAt;
+
+    @Column(name = "superseded_by_calculation_version")
+    private Integer supersededByCalculationVersion;
+
+    public void supersedeBy(int nextCalculationVersion) {
+        if (!Boolean.TRUE.equals(currentLine)) {
+            throw new IllegalStateException("Claim line is already superseded: " + id);
+        }
+        this.currentLine = false;
+        this.supersededAt = LocalDateTime.now();
+        this.supersededByCalculationVersion = nextCalculationVersion;
+    }
+
     // ==================== QUANTITY & PRICING ====================
 
     /**

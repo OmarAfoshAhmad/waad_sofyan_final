@@ -49,7 +49,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
 
         /** WAAD-FIN-1.0: the policy ceiling consumes settlement value, not insurer payment. */
         @Query("SELECT COALESCE(SUM(cl.limitConsumption), 0) FROM ClaimLine cl " +
-                        "WHERE cl.claim.active = true AND cl.claim.member.id = :memberId " +
+                        "WHERE cl.currentLine = true AND cl.claim.active = true AND cl.claim.member.id = :memberId " +
                         "AND cl.claim.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) " +
                         "AND cl.claim.serviceDate BETWEEN :periodStart AND :periodEnd " +
                         "AND (:excludeClaimId IS NULL OR cl.claim.id <> :excludeClaimId)")
@@ -925,7 +925,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
          * Count service usage for a member in a given year.
          */
         @Query("SELECT COUNT(cl) FROM ClaimLine cl " +
-                        "WHERE cl.claim.member.id = :memberId " +
+                        "WHERE cl.currentLine = true AND cl.claim.member.id = :memberId " +
                         "AND cl.serviceCode = :serviceCode " +
                         "AND YEAR(cl.claim.serviceDate) = :year " +
                         "AND cl.claim.status IN :statuses " +

@@ -701,6 +701,11 @@ public class ClaimService {
 
         if (internalCorrectionReapproval) {
             // A corrected direct-entry claim is a complete new financial cycle.
+            // Even a metadata-only correction gets new immutable ClaimLine rows;
+            // the prior rows remain attached to their historical limit snapshots.
+            if (dto.getLines() == null) {
+                claimMapper.recalculateForApproval(claim);
+            }
             // Re-resolve balances under the member lock, re-adjudicate all lines,
             // enforce invariants and append the new limit snapshots before the
             // ClaimApprovedEvent commits every ledger through the single gate.

@@ -134,6 +134,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private ClaimRepository claimRepository;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     /**
      * Polls until the async approval listener has moved the claim into one of
@@ -378,22 +379,41 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                 ClaimDataUpdateDto.builder()
                         .diagnosisCode("Z00.0")
                         .status(ClaimStatus.APPROVED)
+                        .lines(List.of(ClaimLineDto.builder()
+                                .id(lineId)
+                                .medicalServiceId(service.getId())
+                                .quantity(2)
+                                .build()))
                         .build()));
         assertThat(claimRepository.findById(claimId).orElseThrow().getStatus())
                 .isEqualTo(ClaimStatus.APPROVED);
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
                 claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
+        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED).get(0).getApprovedAmount())
+                .isEqualByComparingTo("2000.00");
+        assertThat(claimRepository.findById(claimId).orElseThrow().getApprovedAmount())
+                .isEqualByComparingTo("1440.00");
         assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
                 com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_APPROVAL,
                 claimId)).isEqualTo(2);
         assertThat(financialOutboxEventRepository
                 .findByAggregateTypeAndAggregateIdAndEventType(
                         "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE)).hasSize(2);
-        assertThat(claimLineLimitSnapshotRepository
-                .findByClaimIdOrderByClaimLineIdAscConsumptionOrderAsc(claimId))
-                .hasSize(snapshots.size() * 2);
+        var allSnapshots = claimLineLimitSnapshotRepository
+                .findByClaimIdOrderByClaimLineIdAscConsumptionOrderAsc(claimId);
+        assertThat(allSnapshots).hasSize(snapshots.size() * 2);
+        assertThat(allSnapshots.stream().map(s -> s.getClaimLine().getId()).distinct().count())
+                .isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM claim_lines WHERE claim_id = ? AND current_line = true",
+                Long.class, claimId)).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM claim_lines WHERE claim_id = ? AND current_line = false "
+                        + "AND superseded_at IS NOT NULL AND superseded_by_calculation_version = 2",
+                Long.class, claimId)).isEqualTo(1L);
         ProviderAccount reapprovedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
-        assertThat(reapprovedAccount.getTotalApproved()).isEqualByComparingTo("720.00");
-        assertThat(reapprovedAccount.getRunningBalance()).isEqualByComparingTo("720.00");
+        assertThat(reapprovedAccount.getTotalApproved()).isEqualByComparingTo("1440.00");
+        assertThat(reapprovedAccount.getRunningBalance()).isEqualByComparingTo("1440.00");
     }
 }

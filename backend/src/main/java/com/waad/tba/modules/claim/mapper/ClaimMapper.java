@@ -420,6 +420,12 @@ public class ClaimMapper {
 
                 if (claim.getLines() != null) {
                         List<ClaimLine> persistedLines = new ArrayList<>(claim.getLines());
+                        boolean correctionCycle = claim.getStatus() == ClaimStatus.NEEDS_CORRECTION;
+                        int nextCalculationVersion = persistedLines.stream()
+                                        .map(ClaimLine::getCalculationVersion)
+                                        .filter(Objects::nonNull)
+                                        .max(Integer::compareTo)
+                                        .orElse(1) + (correctionCycle ? 1 : 0);
                         Map<Long, ClaimLine> persistedById = persistedLines.stream()
                                         .filter(existing -> existing.getId() != null)
                                         .collect(Collectors.toMap(ClaimLine::getId, existing -> existing));
@@ -440,16 +446,25 @@ public class ClaimMapper {
                                                         "بند المطالبة رقم " + requestedId + " لا يتبع هذه المطالبة.");
                                 }
 
-                                if (existing != null) {
-                                        BeanUtils.copyProperties(calculated, existing, "id", "version", "claim");
-                                        existing.setCalculationVersion(
-                                                        Optional.ofNullable(existing.getCalculationVersion()).orElse(1) + 1);
+                                if (correctionCycle) {
+                                        calculated.setCalculationVersion(nextCalculationVersion);
+                                        calculated.setCurrentLine(true);
+                                        reconciled.add(calculated);
+                                } else if (existing != null) {
+                                        BeanUtils.copyProperties(calculated, existing,
+                                                        "id", "version", "claim", "calculationVersion",
+                                                        "currentLine", "supersededAt",
+                                                        "supersededByCalculationVersion");
                                         reconciled.add(existing);
                                 } else {
+                                        calculated.setCalculationVersion(nextCalculationVersion);
                                         reconciled.add(calculated);
                                 }
                         }
 
+                        if (correctionCycle) {
+                                persistedLines.forEach(line -> line.supersedeBy(nextCalculationVersion));
+                        }
                         claim.getLines().clear();
                         claim.getLines().addAll(reconciled);
                 } else {
