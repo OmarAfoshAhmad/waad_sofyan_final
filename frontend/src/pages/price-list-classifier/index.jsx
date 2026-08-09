@@ -638,6 +638,13 @@ export default function PriceListClassifierPage() {
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const items = useMemo(() => result?.items || [], [result?.items]);
+  const selectedProviderId = useMemo(() => {
+    if (selectedProvider?.id) return selectedProvider.id;
+    if (selectedProvider?.providerId) return selectedProvider.providerId;
+    const selectedName = normalizeText(selectedProvider?.name || sessionInfo?.providerName).toLowerCase();
+    if (!selectedName) return null;
+    return providers.find((provider) => normalizeText(provider?.name).toLowerCase() === selectedName)?.id || null;
+  }, [selectedProvider, sessionInfo?.providerName, providers]);
   const deferredSearch = useDeferredValue(search);
   const itemStats = useMemo(
     () =>
@@ -761,9 +768,17 @@ export default function PriceListClassifierPage() {
   useEffect(() => {
     providersService
       .getSelector()
-      .then((data) => setProviders(Array.isArray(data) ? data : data?.content || []))
+      .then((data) => {
+        const options = Array.isArray(data) ? data : data?.content || [];
+        setProviders(options);
+        const selectedName = normalizeText(selectedProvider?.name || sessionInfo?.providerName).toLowerCase();
+        if (!selectedProvider?.id && selectedName) {
+          const restored = options.find((provider) => normalizeText(provider?.name).toLowerCase() === selectedName);
+          if (restored) setSelectedProvider(restored);
+        }
+      })
       .catch(() => setError('تعذر تحميل قائمة مقدمي الخدمة؛ لا يمكن تنفيذ مطابقة V50 الخاصة بالمرفق'));
-  }, []);
+  }, [selectedProvider?.id, selectedProvider?.name, sessionInfo?.providerName]);
 
   useEffect(() => {
     const backendSessionId = searchParams.get('sessionId');
@@ -1001,7 +1016,7 @@ export default function PriceListClassifierPage() {
     sessionId: sessionInfo?.backendSessionId || null,
     sessionName: fileName ? `تنظيم قائمة أسعار - ${fileName}` : `تنظيم قائمة أسعار - ${new Date().toLocaleDateString('ar-LY')}`,
     originalFileName: fileName || '',
-    providerId: selectedProvider?.id || null,
+    providerId: selectedProviderId,
     providerName: selectedProvider?.name || '',
     items: items.map((item) => {
       const effectiveCategory = getEffectiveCategory(item);
@@ -1070,8 +1085,8 @@ export default function PriceListClassifierPage() {
   };
 
   const postApprovedRowsToSelectedProviderContract = async () => {
-    if (!selectedProvider?.id) {
-      setError('اختر مقدم الخدمة أولاً حتى يحدد النظام عقده النشط.');
+    if (!selectedProviderId) {
+      setError('تعذر تحديد هوية مقدم الخدمة من الجلسة القديمة. أعد اختياره من حقل مقدم الخدمة ثم حاول مجدداً.');
       return;
     }
     if (!selectedSourceKeys.length) {
@@ -1091,7 +1106,7 @@ export default function PriceListClassifierPage() {
       if (!selectedItemIds.length || selectedItemIds.length !== selectedKeySet.size) {
         throw new Error('تعذر ربط بعض الخدمات المحددة بالجلسة المحفوظة؛ أعد تحديدها ثم حاول مجدداً.');
       }
-      const contract = await getActiveContractByProvider(selectedProvider.id);
+      const contract = await getActiveContractByProvider(selectedProviderId);
       if (!contract?.id) throw new Error('لا يوجد عقد نشط لمقدم الخدمة المختار. أنشئ العقد أو فعّله أولاً.');
       const today = new Date().toISOString().slice(0, 10);
       const effectiveFrom = contract.startDate && contract.startDate > today ? contract.startDate : today;
@@ -1476,7 +1491,7 @@ export default function PriceListClassifierPage() {
                   variant="contained"
                   color="success"
                   startIcon={postingContract ? <CircularProgress size={18} color="inherit" /> : <PlaylistAddCheckIcon />}
-                  disabled={!selectedSourceKeys.length || postingContract || savingSession || !selectedProvider?.id}
+                  disabled={!selectedSourceKeys.length || postingContract || savingSession}
                   onClick={postApprovedRowsToSelectedProviderContract}
                 >
                   ترحيل المحدد للعقد ({selectedSourceKeys.length})
