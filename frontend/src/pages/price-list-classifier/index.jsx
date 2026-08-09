@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -20,6 +20,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography
@@ -35,6 +36,7 @@ import { useSearchParams } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import providersService from 'services/api/providers.service';
+import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
 
 const loadXlsx = async () => import('xlsx');
 
@@ -287,6 +289,14 @@ const getEffectiveStatusLabel = (item) => (item.manualCategory ? 'معتمد ي�
 const getCanonicalExportName = (item) => item.bestMatch?.canonicalName || '';
 const getProviderServiceName = (item) => item.serviceName || item.bestMatch?.canonicalName || '';
 
+const isContractEligible = (item) => {
+  if (!getEffectiveCategory(item)?.medicalCategoryId || getPriceMin(item) == null) return false;
+  if (item.manualCategory) return true;
+  return (
+    item.status === 'AUTO_APPROVED' && Boolean(item.dictionaryReleaseId && item.dictionaryVersion && item.matchMethod && item.evidenceId)
+  );
+};
+
 const getPriceMin = (item) => {
   const candidates = [item.minPrice, item.price].map(Number).filter((value) => Number.isFinite(value) && value > 0);
   return candidates.length ? Math.min(...candidates) : null;
@@ -317,7 +327,7 @@ const normalizeMergeKeyPart = (value) =>
     .trim();
 
 const buildContractReadyRows = (items) => {
-  const acceptedItems = items.filter((item) => getEffectiveCategory(item)?.medicalCategoryId);
+  const acceptedItems = items.filter(isContractEligible);
   const groups = new Map();
 
   acceptedItems.forEach((item) => {
@@ -411,36 +421,34 @@ const buildContractReadyRows = (items) => {
 };
 
 const buildContractRowsWithoutMerge = (items) =>
-  items
-    .filter((item) => getEffectiveCategory(item)?.medicalCategoryId)
-    .map((item) => {
-      const effectiveCategory = getEffectiveCategory(item);
-      const min = getPriceMin(item);
-      const max = getPriceMax(item);
-      const canonicalServiceName = getCanonicalExportName(item);
-      return {
-        sourceKeys: [rowKey(item)],
-        rawStatuses: item.status ? [item.status] : [],
-        display_status: item.status || 'REVIEW_REQUIRED',
-        display_status_label: getEffectiveStatusLabel(item),
-        confidence: item.bestMatch?.confidence ?? null,
-        service_name: getProviderServiceName(item),
-        service_code: item.serviceCode || '',
-        canonical_service_name: canonicalServiceName,
-        contract_price: formatContractPrice(min, max),
-        medical_category_code: effectiveCategory?.medicalCategoryCode || '',
-        medical_category_name: effectiveCategory?.medicalCategoryName || '',
-        notes: [
-          canonicalServiceName ? `الاسم الموحد: ${canonicalServiceName}` : '',
-          min != null && max != null && min !== max ? `مجال سعري من المصدر: ${min}-${max}` : '',
-          item.bestMatch?.confidence != null ? `الثقة: ${item.bestMatch.confidence}` : '',
-          `الحالة: ${getEffectiveStatusLabel(item)}`,
-          `المصدر: ${item.sourceSheet || '-'} صف ${item.rowNumber || '-'}`
-        ]
-          .filter(Boolean)
-          .join(' | ')
-      };
-    });
+  items.filter(isContractEligible).map((item) => {
+    const effectiveCategory = getEffectiveCategory(item);
+    const min = getPriceMin(item);
+    const max = getPriceMax(item);
+    const canonicalServiceName = getCanonicalExportName(item);
+    return {
+      sourceKeys: [rowKey(item)],
+      rawStatuses: item.status ? [item.status] : [],
+      display_status: item.status || 'REVIEW_REQUIRED',
+      display_status_label: getEffectiveStatusLabel(item),
+      confidence: item.bestMatch?.confidence ?? null,
+      service_name: getProviderServiceName(item),
+      service_code: item.serviceCode || '',
+      canonical_service_name: canonicalServiceName,
+      contract_price: formatContractPrice(min, max),
+      medical_category_code: effectiveCategory?.medicalCategoryCode || '',
+      medical_category_name: effectiveCategory?.medicalCategoryName || '',
+      notes: [
+        canonicalServiceName ? `الاسم الموحد: ${canonicalServiceName}` : '',
+        min != null && max != null && min !== max ? `مجال سعري من المصدر: ${min}-${max}` : '',
+        item.bestMatch?.confidence != null ? `الثقة: ${item.bestMatch.confidence}` : '',
+        `الحالة: ${getEffectiveStatusLabel(item)}`,
+        `المصدر: ${item.sourceSheet || '-'} صف ${item.rowNumber || '-'}`
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    };
+  });
 
 const buildSummary = (items) => ({
   total: items.length,
@@ -603,6 +611,7 @@ export default function PriceListClassifierPage() {
   const [promoting, setPromoting] = useState(false);
   const [approvingSynonyms, setApprovingSynonyms] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
+  const [postingContract, setPostingContract] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -614,17 +623,30 @@ export default function PriceListClassifierPage() {
   const [sessionInfo, setSessionInfo] = useState(null);
   const [providers, setProviders] = useState([]);
   const [selectedProvider, setSelectedProvider] = useState(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const items = useMemo(() => result?.items || [], [result?.items]);
-  const manualReviewedCount = items.filter((item) => item.manualCategory).length;
-  const synonymReadyCount = items.filter(
-    (item) => item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName
-  ).length;
+  const deferredSearch = useDeferredValue(search);
+  const itemStats = useMemo(
+    () =>
+      items.reduce(
+        (stats, item) => {
+          if (item.manualCategory) stats.manualReviewed += 1;
+          if (item.bestMatch?.entryId && item.serviceName && item.serviceName !== item.bestMatch?.canonicalName) stats.synonymReady += 1;
+          return stats;
+        },
+        { manualReviewed: 0, synonymReady: 0 }
+      ),
+    [items]
+  );
+  const manualReviewedCount = itemStats.manualReviewed;
+  const synonymReadyCount = itemStats.synonymReady;
   const mergedContractRows = useMemo(() => buildContractReadyRows(items), [items]);
   const unmergedContractRows = useMemo(() => buildContractRowsWithoutMerge(items), [items]);
   const contractDisplayRows = mergeDuplicatesForContracts ? mergedContractRows : unmergedContractRows;
   const filteredMergedContractRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     return contractDisplayRows.filter((row) => {
       if (statusFilter !== 'ALL' && row.display_status !== statusFilter) return false;
       const priceRange = parsePriceRange(row.contract_price);
@@ -644,9 +666,9 @@ export default function PriceListClassifierPage() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [contractDisplayRows, search, statusFilter, priceFilter]);
+  }, [contractDisplayRows, deferredSearch, statusFilter, priceFilter]);
   const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     return items.filter((item) => {
       if (statusFilter !== 'ALL' && item.status !== statusFilter) return false;
       if (priceFilter === 'RANGE' && !hasPriceRange(item)) return false;
@@ -665,7 +687,16 @@ export default function PriceListClassifierPage() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [items, search, statusFilter, priceFilter]);
+  }, [items, deferredSearch, statusFilter, priceFilter]);
+  const visibleRows = mergeDuplicatesForContracts ? filteredMergedContractRows : filteredItems;
+  const pagedRows = useMemo(
+    () => visibleRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [visibleRows, page, rowsPerPage]
+  );
+
+  useEffect(() => {
+    setPage(0);
+  }, [deferredSearch, statusFilter, priceFilter, mergeDuplicatesForContracts]);
 
   useEffect(() => {
     let mounted = true;
@@ -978,10 +1009,69 @@ export default function PriceListClassifierPage() {
       saveClassificationSession(nextSession);
       setSessionInfo(nextSession);
       setSuccess(`تم حفظ القائمة المصنفة رقم ${saved.id}. الحالة الحالية: ${sessionStatusLabel[saved.status] || 'غير محددة'}.`);
+      return saved;
     } catch (err) {
       setError(err?.response?.data?.message || 'فشل حفظ جلسة تنظيم قائمة الأسعار في قاعدة البيانات');
     } finally {
       setSavingSession(false);
+    }
+    return null;
+  };
+
+  const postApprovedRowsToSelectedProviderContract = async () => {
+    if (!selectedProvider?.id) {
+      setError('اختر مقدم الخدمة أولاً حتى يحدد النظام عقده النشط.');
+      return;
+    }
+    if (!unmergedContractRows.length) {
+      setError('لا توجد خدمات معتمدة ومكتملة السعر والدليل قابلة للترحيل إلى العقد.');
+      return;
+    }
+
+    setPostingContract(true);
+    setError('');
+    setSuccess('');
+    try {
+      const saved = await medicalDictionaryService.savePriceListClassificationSession(buildBackendSessionPayload());
+      const contract = await getActiveContractByProvider(selectedProvider.id);
+      if (!contract?.id) throw new Error('لا يوجد عقد نشط لمقدم الخدمة المختار. أنشئ العقد أو فعّله أولاً.');
+      const today = new Date().toISOString().slice(0, 10);
+      const effectiveFrom = contract.startDate && contract.startDate > today ? contract.startDate : today;
+      if (contract.endDate && effectiveFrom > contract.endDate) {
+        throw new Error('انتهت مدة العقد النشط ولا يمكن إضافة أسعار جديدة إليه.');
+      }
+
+      const diff = await medicalDictionaryService.diffPriceListClassificationSessionWithContract(saved.id, {
+        contractId: contract.id,
+        effectiveFrom,
+        replaceEffectivePrices: false,
+        onlyReviewedItems: true
+      });
+      const accepted = (diff.createCount || 0) + (diff.updateCount || 0) + (diff.identicalCount || 0);
+      const message =
+        `العقد: ${contract.contractCode || contract.id}\n` +
+        `قابل للترحيل/مطابق: ${accepted}\n` +
+        `جديد: ${diff.createCount || 0}، تحديث: ${diff.updateCount || 0}، مطابق: ${diff.identicalCount || 0}\n` +
+        `مرفوض أو يحتاج مراجعة: ${diff.rejectedCount || 0}\n\n` +
+        'لن تُستبدل أسعار فعالة متعارضة تلقائياً. هل تريد المتابعة؟';
+      if (!window.confirm(message)) return;
+
+      const posted = await medicalDictionaryService.postPriceListClassificationSessionToContract(saved.id, {
+        contractId: contract.id,
+        effectiveFrom,
+        replaceEffectivePrices: false,
+        onlyReviewedItems: true
+      });
+      setSuccess(
+        `تم الترحيل إلى العقد ${contract.contractCode || contract.id}: أُنشئ ${posted.created || 0}، حُدّث ${
+          posted.updated || 0
+        }، مطابق ${posted.skipped || 0}، ورُفض ${posted.rejected || 0}.`
+      );
+      setSessionInfo((current) => ({ ...(current || {}), backendSessionId: saved.id, backendStatus: posted.session?.status }));
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || 'فشل ترحيل الخدمات المعتمدة إلى عقد مقدم الخدمة');
+    } finally {
+      setPostingContract(false);
     }
   };
 
@@ -1225,9 +1315,9 @@ export default function PriceListClassifierPage() {
                   { label: 'ثقة عالية', value: result.summary?.highConfidence || 0, color: 'success.main' },
                   { label: 'تحتاج مراجعة', value: result.summary?.needsReview || 0, color: 'warning.main' },
                   { label: 'غير معروف', value: result.summary?.unknown || 0, color: 'error.main' },
-                  { label: 'مكرر', value: result.summary?.duplicateNames || 0, color: 'info.main' },
+                  { label: 'تكرار حرفي', value: result.summary?.duplicateNames || 0, color: 'info.main' },
                   { label: 'أسعار بمجال', value: result.summary?.rangedPrices || 0, color: 'warning.main' },
-                  { label: 'جاهز للعقود', value: contractDisplayRows.length, color: 'success.main' },
+                  { label: 'جاهز قبل الدمج', value: unmergedContractRows.length, color: 'success.main' },
                   { label: 'بعد الدمج', value: mergedContractRows.length, color: 'success.main' },
                   { label: 'مراجع يدوياً', value: manualReviewedCount, color: 'secondary.main' },
                   { label: 'جاهز كمرادف', value: synonymReadyCount, color: 'primary.main' }
@@ -1283,6 +1373,12 @@ export default function PriceListClassifierPage() {
                   <MenuItem value="SINGLE">سعر مفرد</MenuItem>
                   <MenuItem value="MISSING">بدون سعر</MenuItem>
                 </Select>
+                <Chip
+                  color="info"
+                  variant="outlined"
+                  label={`النتائج المعروضة: ${visibleRows.length} من ${mergeDuplicatesForContracts ? mergedContractRows.length : items.length}`}
+                  sx={{ height: 40, px: 1, fontWeight: 800 }}
+                />
                 <Button
                   variant="outlined"
                   startIcon={<FileDownloadIcon />}
@@ -1308,6 +1404,15 @@ export default function PriceListClassifierPage() {
                   onClick={() => exportProviderContractReadyRows(items, categories, mergeDuplicatesForContracts)}
                 >
                   تصدير للعقود
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={postingContract ? <CircularProgress size={18} color="inherit" /> : <PlaylistAddCheckIcon />}
+                  disabled={!unmergedContractRows.length || postingContract || savingSession || !selectedProvider?.id}
+                  onClick={postApprovedRowsToSelectedProviderContract}
+                >
+                  ترحيل المعتمد للعقد
                 </Button>
                 <Button
                   variant="contained"
@@ -1346,9 +1451,9 @@ export default function PriceListClassifierPage() {
                   </TableHead>
                   <TableBody>
                     {mergeDuplicatesForContracts
-                      ? filteredMergedContractRows.map((row, index) => (
+                      ? pagedRows.map((row, index) => (
                           <TableRow key={`${row.service_code || '-'}-${row.service_name}-${row.medical_category_code}-${index}`} hover>
-                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>{page * rowsPerPage + index + 1}</TableCell>
                             <TableCell>
                               <Stack spacing={0.25}>
                                 <Typography sx={{ fontWeight: 700 }}>{row.service_name}</Typography>
@@ -1409,7 +1514,7 @@ export default function PriceListClassifierPage() {
                             </TableCell>
                           </TableRow>
                         ))
-                      : filteredItems.map((item, index) => (
+                      : pagedRows.map((item, index) => (
                           <TableRow key={`${item.sourceSheet}-${item.rowNumber}-${index}`} hover>
                             <TableCell>{item.rowNumber}</TableCell>
                             <TableCell>
@@ -1480,6 +1585,20 @@ export default function PriceListClassifierPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={visibleRows.length}
+                page={page}
+                onPageChange={(event, nextPage) => setPage(nextPage)}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={(event) => {
+                  setRowsPerPage(Number(event.target.value));
+                  setPage(0);
+                }}
+                rowsPerPageOptions={[10, 25, 50, 100]}
+                labelRowsPerPage="عدد الصفوف"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} من ${count}`}
+              />
             </CardContent>
           </Card>
         )}
