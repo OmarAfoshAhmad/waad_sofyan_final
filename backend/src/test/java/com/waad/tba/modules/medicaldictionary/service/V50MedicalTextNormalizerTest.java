@@ -28,4 +28,14 @@ class V50MedicalTextNormalizerTest {
         String first = normalizer.normalize("CBC (Complete Blood Count)");
         assertThat(normalizer.normalize(first)).isEqualTo(first);
     }
+
+    @Test
+    void reproducesV50TokenAndAbbreviationSemantics() {
+        assertThat(normalizer.tokenSetKey("Liver Function Test — SERUM"))
+                .isEqualTo("function liver serum test");
+        assertThat(normalizer.tokenSimilarity("CBC complete blood count", "complete blood count CBC"))
+                .isEqualTo(1d);
+        assertThat(normalizer.extractAbbreviation("Complete Blood Count (CBC)", "ALT"))
+                .isEqualTo("CBC");
+    }
 }
