@@ -10,7 +10,8 @@ import java.time.LocalDateTime;
 public record PendingServiceResponse(
         Long id, Long claimId, Long providerId,
         String proposedServiceCode, String proposedServiceName,
-        Long proposedCategoryId, BigDecimal proposedUnitPrice,
+        Long proposedCategoryId, String proposedCategoryCode, String proposedCategoryName,
+        Boolean newCategoryRequested, BigDecimal proposedUnitPrice,
         PendingServiceStatus status,
         Long dictionaryReleaseId, String dictionaryVersion,
         String dictionaryConceptCode, String classificationMethod,
@@ -24,7 +25,9 @@ public record PendingServiceResponse(
         return PendingServiceResponse.builder()
                 .id(e.getId()).claimId(e.getClaim().getId()).providerId(e.getProviderId())
                 .proposedServiceCode(e.getProposedServiceCode()).proposedServiceName(e.getProposedServiceName())
-                .proposedCategoryId(e.getProposedCategoryId()).proposedUnitPrice(e.getProposedUnitPrice())
+                .proposedCategoryId(e.getProposedCategoryId()).proposedCategoryCode(e.getProposedCategoryCode())
+                .proposedCategoryName(e.getProposedCategoryName()).newCategoryRequested(e.getNewCategoryRequested())
+                .proposedUnitPrice(e.getProposedUnitPrice())
                 .status(e.getStatus()).dictionaryReleaseId(e.getDictionaryReleaseId())
                 .dictionaryVersion(e.getDictionaryVersion()).dictionaryConceptCode(e.getDictionaryConceptCode())
                 .classificationMethod(e.getClassificationMethod()).classificationReason(e.getClassificationReason())

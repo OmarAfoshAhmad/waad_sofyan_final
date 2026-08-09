@@ -22,11 +22,12 @@ import claimPendingServicesService from 'services/api/claim-pending-services.ser
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import { formatCurrency } from 'utils/formatters';
 
-const OPEN_STATUSES = new Set(['PRELIMINARY', 'NEEDS_INFO', 'SPLIT_REQUIRED']);
+const OPEN_STATUSES = new Set(['PRELIMINARY', 'NEEDS_INFO', 'SPLIT_REQUIRED', 'CATEGORY_CREATED_PENDING_COVERAGE']);
 const STATUS_META = {
   PRELIMINARY: ['حساب مبدئي', 'warning'],
   NEEDS_INFO: ['يحتاج معلومات', 'info'],
   SPLIT_REQUIRED: ['يحتاج تقسيم', 'warning'],
+  CATEGORY_CREATED_PENDING_COVERAGE: ['التصنيف أُنشئ وينتظر قاعدة تغطية', 'warning'],
   APPROVED_CLAIM_ONLY: ['معتمد لهذه المطالبة', 'success'],
   APPROVED_FOR_CONTRACT: ['معتمد ومضاف للعقد', 'success'],
   LINKED_EXISTING: ['مرتبط بخدمة موجودة', 'success'],
@@ -40,7 +41,15 @@ const DECISIONS = [
   ['SPLIT_REQUIRED', 'إعادته للتقسيم إلى خدمات'],
   ['REJECTED', 'رفض الخدمة']
 ];
-const emptyCreate = { serviceCode: '', serviceName: '', proposedCategoryId: '', proposedUnitPrice: '' };
+const emptyCreate = {
+  serviceCode: '',
+  serviceName: '',
+  categoryMode: 'EXISTING',
+  proposedCategoryId: '',
+  proposedCategoryCode: '',
+  proposedCategoryName: '',
+  proposedUnitPrice: ''
+};
 const emptyDecision = {
   decision: 'APPROVED_CLAIM_ONLY',
   reason: '',
@@ -49,7 +58,8 @@ const emptyDecision = {
   finalCategoryId: '',
   finalUnitPrice: '',
   linkedPricingItemId: '',
-  contractEffectiveFrom: ''
+  contractEffectiveFrom: '',
+  createProposedCategory: false
 };
 
 const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, onChanged }) => {
@@ -83,8 +93,14 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
   }, [load]);
 
   const createService = async () => {
-    if (!createForm.serviceName.trim() || !createForm.proposedCategoryId || Number(createForm.proposedUnitPrice) <= 0) {
-      enqueueSnackbar('أدخل اسم الخدمة والتصنيف والسعر بصورة صحيحة', { variant: 'warning' });
+    const newCategory = createForm.categoryMode === 'NEW';
+    if (
+      !createForm.serviceName.trim() ||
+      (!newCategory && !createForm.proposedCategoryId) ||
+      (newCategory && !createForm.proposedCategoryName.trim()) ||
+      Number(createForm.proposedUnitPrice) <= 0
+    ) {
+      enqueueSnackbar('أدخل اسم الخدمة والتصنيف أو اسم التصنيف المقترح والسعر بصورة صحيحة', { variant: 'warning' });
       return;
     }
     try {
@@ -92,14 +108,20 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
       await claimPendingServicesService.create(claimId, {
         serviceCode: createForm.serviceCode.trim() || null,
         serviceName: createForm.serviceName.trim(),
-        proposedCategoryId: Number(createForm.proposedCategoryId),
+        proposedCategoryId: newCategory ? null : Number(createForm.proposedCategoryId),
+        proposedCategoryCode: newCategory ? createForm.proposedCategoryCode.trim() || null : null,
+        proposedCategoryName: newCategory ? createForm.proposedCategoryName.trim() : null,
+        newCategoryRequested: newCategory,
         proposedUnitPrice: Number(createForm.proposedUnitPrice)
       });
       setCreateOpen(false);
       setCreateForm(emptyCreate);
       await load();
       await onChanged?.();
-      enqueueSnackbar('أضيفت الخدمة وحُسبت مبدئياً دون استهلاك السقوف', { variant: 'success' });
+      enqueueSnackbar(
+        newCategory ? 'حُفظ الاقتراح بلا أثر مالي حتى اعتماد التصنيف والتغطية' : 'أضيفت الخدمة وحُسبت مبدئياً دون استهلاك السقوف',
+        { variant: 'success' }
+      );
     } catch (error) {
       enqueueSnackbar(error?.message || 'تعذر إضافة الخدمة', { variant: 'error' });
     } finally {
@@ -114,16 +136,21 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
       finalServiceCode: item.finalServiceCode || item.proposedServiceCode || '',
       finalServiceName: item.finalServiceName || item.proposedServiceName || '',
       finalCategoryId: item.finalCategoryId || item.proposedCategoryId || '',
-      finalUnitPrice: item.finalUnitPrice || item.proposedUnitPrice || ''
+      finalUnitPrice: item.finalUnitPrice || item.proposedUnitPrice || '',
+      createProposedCategory: false
     });
   };
-  const submitDecision = async () => {
+  const submitDecision = async (forceCreateCategory = false) => {
     if (!decisionForm.reason.trim()) {
       enqueueSnackbar('سبب القرار إلزامي', { variant: 'warning' });
       return;
     }
     const approved = ['APPROVED_CLAIM_ONLY', 'APPROVED_FOR_CONTRACT'].includes(decisionForm.decision);
-    if (approved && (!decisionForm.finalServiceName.trim() || !decisionForm.finalCategoryId || Number(decisionForm.finalUnitPrice) <= 0)) {
+    if (
+      approved &&
+      !forceCreateCategory &&
+      (!decisionForm.finalServiceName.trim() || !decisionForm.finalCategoryId || Number(decisionForm.finalUnitPrice) <= 0)
+    ) {
       enqueueSnackbar('الاسم والتصنيف والسعر النهائي مطلوبة للاعتماد', { variant: 'warning' });
       return;
     }
@@ -141,7 +168,8 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
         finalCategoryId: decisionForm.finalCategoryId ? Number(decisionForm.finalCategoryId) : null,
         finalUnitPrice: decisionForm.finalUnitPrice ? Number(decisionForm.finalUnitPrice) : null,
         linkedPricingItemId: decisionForm.linkedPricingItemId ? Number(decisionForm.linkedPricingItemId) : null,
-        contractEffectiveFrom: decisionForm.contractEffectiveFrom || null
+        contractEffectiveFrom: decisionForm.contractEffectiveFrom || null,
+        createProposedCategory: forceCreateCategory
       });
       setDecisionItem(null);
       await load();
@@ -190,6 +218,7 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
                     {item.dictionaryVersion && <Chip size="small" variant="outlined" label={`القاموس ${item.dictionaryVersion}`} />}
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
+                    التصنيف: {item.proposedCategoryName || categories.find((c) => c.id === item.proposedCategoryId)?.name || 'غير محدد'} —
                     السعر: {formatCurrency(item.finalUnitPrice || item.proposedUnitPrice || 0)}
                     {item.classificationReason ? ` — ${item.classificationReason}` : ''}
                   </Typography>
@@ -230,22 +259,61 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
                 onChange={(e) => setCreateForm({ ...createForm, serviceName: e.target.value })}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 7 }}>
+            <Grid size={12}>
               <TextField
-                required
                 select
                 fullWidth
-                label="التصنيف الطبي"
-                value={createForm.proposedCategoryId}
-                onChange={(e) => setCreateForm({ ...createForm, proposedCategoryId: e.target.value })}
+                label="طريقة تحديد التصنيف"
+                value={createForm.categoryMode}
+                onChange={(e) => setCreateForm({ ...createForm, categoryMode: e.target.value, proposedCategoryId: '' })}
               >
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name || c.nameAr}
-                  </MenuItem>
-                ))}
+                <MenuItem value="EXISTING">اختيار تصنيف موجود</MenuItem>
+                <MenuItem value="NEW">اقتراح تصنيف جديد</MenuItem>
               </TextField>
             </Grid>
+            {createForm.categoryMode === 'EXISTING' ? (
+              <Grid size={{ xs: 12, sm: 7 }}>
+                <TextField
+                  required
+                  select
+                  fullWidth
+                  label="التصنيف الطبي"
+                  value={createForm.proposedCategoryId}
+                  onChange={(e) => setCreateForm({ ...createForm, proposedCategoryId: e.target.value })}
+                >
+                  {categories.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name || c.nameAr}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            ) : (
+              <>
+                <Grid size={{ xs: 12, sm: 8 }}>
+                  <TextField
+                    required
+                    fullWidth
+                    label="اسم التصنيف المقترح"
+                    value={createForm.proposedCategoryName}
+                    onChange={(e) => setCreateForm({ ...createForm, proposedCategoryName: e.target.value })}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    fullWidth
+                    label="رمز مقترح (اختياري)"
+                    value={createForm.proposedCategoryCode}
+                    onChange={(e) => setCreateForm({ ...createForm, proposedCategoryCode: e.target.value })}
+                  />
+                </Grid>
+                <Grid size={12}>
+                  <Alert severity="info">
+                    الاقتراح لا يُحتسب مالياً. ينشئه رئيس المراجعين أولاً، ثم لا تُعتمد الخدمة إلا بعد وجود قاعدة تغطية موجبة في الوثيقة.
+                  </Alert>
+                </Grid>
+              </>
+            )}
             <Grid size={{ xs: 12, sm: 5 }}>
               <TextField
                 required
@@ -271,6 +339,11 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
       <Dialog open={Boolean(decisionItem)} onClose={() => !saving && setDecisionItem(null)} fullWidth maxWidth="md">
         <DialogTitle>قرار الخدمة المدخلة</DialogTitle>
         <DialogContent>
+          {decisionItem?.newCategoryRequested && !decisionItem?.finalCategoryId && (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              هذا تصنيف جديد. أنشئ التصنيف أولاً؛ ستبقى الخدمة معلقة حتى تُضاف له قاعدة تغطية موجبة، ثم افتح القرار مجدداً لاعتماد الخدمة.
+            </Alert>
+          )}
           <Grid container spacing={1.5} sx={{ mt: 0.25 }}>
             <Grid size={12}>
               <TextField
@@ -375,9 +448,19 @@ const ClaimPendingServicesPanel = ({ claimId, claimStatus, canDecide, locked, on
           <Button onClick={() => setDecisionItem(null)} disabled={saving}>
             إلغاء
           </Button>
-          <Button variant="contained" onClick={submitDecision} disabled={saving}>
+          <Button variant="contained" onClick={() => submitDecision(false)} disabled={saving}>
             حفظ القرار
           </Button>
+          {decisionItem?.newCategoryRequested && !decisionItem?.finalCategoryId && (
+            <Button
+              color="warning"
+              variant="contained"
+              disabled={saving || !decisionForm.reason.trim()}
+              onClick={() => submitDecision(true)}
+            >
+              إنشاء التصنيف أولاً
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Stack>

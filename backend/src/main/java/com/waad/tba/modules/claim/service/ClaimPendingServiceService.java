@@ -9,6 +9,10 @@ import com.waad.tba.modules.claim.mapper.ClaimMapper;
 import com.waad.tba.modules.medicaldictionary.dto.V50ClassificationInput;
 import com.waad.tba.modules.medicaldictionary.service.V50MedicalClassificationEngine;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.medicaltaxonomy.service.MedicalCategoryService;
+import com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryCreateDto;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 import com.waad.tba.modules.providercontract.repository.*;
 import com.waad.tba.security.AuthorizationService;
@@ -27,6 +31,9 @@ public class ClaimPendingServiceService {
     private final ClaimPendingServiceRepository pendingRepository;
     private final ClaimMapper claimMapper;
     private final MedicalCategoryRepository categoryRepository;
+    private final MedicalCategoryService categoryService;
+    private final BenefitPolicyRepository policyRepository;
+    private final BenefitPolicyRuleRepository ruleRepository;
     private final ProviderContractRepository contractRepository;
     private final ProviderContractPricingItemRepository pricingRepository;
     private final V50MedicalClassificationEngine classifier;
@@ -41,8 +48,18 @@ public class ClaimPendingServiceService {
         if (claim.getStatus() != ClaimStatus.UNDER_REVIEW) {
             throw new BusinessRuleException("لا يمكن إدخال خدمة مبدئية إلا بعد استلام المطالبة للمراجعة");
         }
-        categoryRepository.findActiveById(request.getProposedCategoryId())
-                .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المقترح غير موجود أو غير نشط"));
+        boolean newCategory = Boolean.TRUE.equals(request.getNewCategoryRequested());
+        if (newCategory) {
+            if (request.getProposedCategoryId() != null || blank(request.getProposedCategoryName()) == null) {
+                throw new BusinessRuleException("عند اقتراح تصنيف جديد أدخل اسمه ولا تختر تصنيفاً موجوداً");
+            }
+        } else {
+            if (request.getProposedCategoryId() == null) {
+                throw new BusinessRuleException("اختر تصنيفاً طبياً موجوداً أو فعّل اقتراح تصنيف جديد");
+            }
+            categoryRepository.findActiveById(request.getProposedCategoryId())
+                    .orElseThrow(() -> new BusinessRuleException("التصنيف الطبي المقترح غير موجود أو غير نشط"));
+        }
         var actor = authorizationService.getCurrentUser();
         if (actor == null) throw new BusinessRuleException("المستخدم غير معروف");
 
@@ -55,25 +72,20 @@ public class ClaimPendingServiceService {
                 .proposedServiceCode(blank(request.getServiceCode()))
                 .proposedServiceName(request.getServiceName().trim())
                 .proposedCategoryId(request.getProposedCategoryId())
+                .proposedCategoryCode(blank(request.getProposedCategoryCode()))
+                .proposedCategoryName(blank(request.getProposedCategoryName()))
+                .newCategoryRequested(newCategory)
                 .proposedUnitPrice(request.getProposedUnitPrice())
                 .dictionaryReleaseId(decision.releaseId()).dictionaryVersion(decision.dictionaryVersion())
                 .dictionaryConceptCode(decision.conceptCode()).classificationMethod(decision.matchMethod())
                 .classificationReason(decision.reason()).classificationEvidenceId(decision.evidenceId())
                 .enteredBy(actor.getId()).status(PendingServiceStatus.PRELIMINARY).build());
 
-        claim.addLine(ClaimLine.builder()
-                .claim(claim)
-                .pendingServiceId(saved.getId())
-                .serviceCode(saved.getProposedServiceCode())
-                .serviceName(saved.getProposedServiceName())
-                .serviceCategoryId(saved.getProposedCategoryId())
-                .quantity(1)
-                .requestedUnitPrice(saved.getProposedUnitPrice())
-                .unitPrice(saved.getProposedUnitPrice())
-                .rejected(false)
-                .build());
-        claimMapper.recalculateForApproval(claim);
-        claimRepository.save(claim);
+        if (!newCategory) {
+            addClaimLineIfMissing(claim, saved);
+            claimMapper.recalculateForApproval(claim);
+            claimRepository.save(claim);
+        }
         return PendingServiceResponse.from(saved);
     }
 
@@ -103,10 +115,28 @@ public class ClaimPendingServiceService {
         assertFinalApprover(actor.getUserType());
         PendingServiceStatus from = pending.getStatus();
 
+        if (Boolean.TRUE.equals(request.getCreateProposedCategory())) {
+            if (!Boolean.TRUE.equals(pending.getNewCategoryRequested()) || pending.getFinalCategoryId() != null) {
+                throw new BusinessRuleException("لا يوجد اقتراح تصنيف جديد قابل للإنشاء في هذا الطلب");
+            }
+            var created = categoryService.create(MedicalCategoryCreateDto.builder()
+                    .code(pending.getProposedCategoryCode())
+                    .name(pending.getProposedCategoryName())
+                    .context(claim.getEncounterType() == null ? "ANY" : claim.getEncounterType().name())
+                    .active(true).build());
+            pending.setFinalCategoryId(created.getId());
+            pending.setStatus(PendingServiceStatus.CATEGORY_CREATED_PENDING_COVERAGE);
+            pending.setDecisionReason(request.getReason().trim());
+            ClaimPendingService categoryApproved = pendingRepository.save(pending);
+            appendDecision(categoryApproved, from, actor.getId(), request.getReason());
+            return PendingServiceResponse.from(categoryApproved);
+        }
+
         pending.setFinalServiceCode(or(request.getFinalServiceCode(), pending.getProposedServiceCode()));
         pending.setFinalServiceName(or(request.getFinalServiceName(), pending.getProposedServiceName()));
         pending.setFinalCategoryId(request.getFinalCategoryId() != null
-                ? request.getFinalCategoryId() : pending.getProposedCategoryId());
+                ? request.getFinalCategoryId()
+                : pending.getFinalCategoryId() != null ? pending.getFinalCategoryId() : pending.getProposedCategoryId());
         pending.setFinalUnitPrice(request.getFinalUnitPrice() != null
                 ? request.getFinalUnitPrice() : pending.getProposedUnitPrice());
 
@@ -117,6 +147,7 @@ public class ClaimPendingServiceService {
             }
             categoryRepository.findActiveById(pending.effectiveCategoryId())
                     .orElseThrow(() -> new BusinessRuleException("التصنيف النهائي غير موجود أو غير نشط"));
+            assertPositiveCoverageRule(claim, pending.effectiveCategoryId());
             if (pending.getFinalUnitPrice() == null || pending.getFinalUnitPrice().signum() <= 0) {
                 throw new BusinessRuleException("السعر النهائي يجب أن يكون أكبر من صفر");
             }
@@ -149,9 +180,46 @@ public class ClaimPendingServiceService {
         }
         ClaimPendingService saved = pendingRepository.save(pending);
         appendDecision(saved, from, actor.getId(), request.getReason());
-        claimMapper.recalculateForApproval(claim);
-        claimRepository.save(claim);
+        if (request.getDecision() == PendingServiceStatus.APPROVED_CLAIM_ONLY
+                || request.getDecision() == PendingServiceStatus.APPROVED_FOR_CONTRACT) {
+            addClaimLineIfMissing(claim, saved);
+        }
+        if (claim.getLines() != null && !claim.getLines().isEmpty()) {
+            claimMapper.recalculateForApproval(claim);
+            claimRepository.save(claim);
+        }
         return PendingServiceResponse.from(saved);
+    }
+
+    private void addClaimLineIfMissing(Claim claim, ClaimPendingService pending) {
+        boolean exists = claim.getLines() != null && claim.getLines().stream()
+                .anyMatch(line -> Objects.equals(line.getPendingServiceId(), pending.getId()));
+        if (exists) return;
+        claim.addLine(ClaimLine.builder().claim(claim).pendingServiceId(pending.getId())
+                .serviceCode(or(pending.getFinalServiceCode(), pending.getProposedServiceCode()))
+                .serviceName(or(pending.getFinalServiceName(), pending.getProposedServiceName()))
+                .serviceCategoryId(pending.effectiveCategoryId()).quantity(1)
+                .requestedUnitPrice(pending.effectiveUnitPrice()).unitPrice(pending.effectiveUnitPrice())
+                .rejected(false).build());
+    }
+
+    private void assertPositiveCoverageRule(Claim claim, Long categoryId) {
+        var member = claim.getMember();
+        var policy = member == null ? null : member.getBenefitPolicy();
+        if (policy == null && member != null && member.getEmployer() != null) {
+            policy = policyRepository.findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), claim.getServiceDate())
+                    .orElse(null);
+        }
+        if (policy == null) throw new BusinessRuleException("لا توجد وثيقة سارية للمستفيد في تاريخ الخدمة");
+        var context = claim.getEncounterType() != null ? claim.getEncounterType()
+                : com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT;
+        var rule = ruleRepository.findBestRuleForContext(policy.getId(), categoryId, null, context,
+                        com.waad.tba.modules.providercontract.enums.EncounterType.ANY)
+                .orElseThrow(() -> new BusinessRuleException(
+                        "لا يمكن اعتماد الخدمة: التصنيف لا يملك قاعدة تغطية صريحة في الوثيقة. أضف قاعدة موجبة ثم أعد القرار."));
+        if (rule.getEffectiveCoveragePercent() <= 0) {
+            throw new BusinessRuleException("لا يمكن اعتماد خدمة بنسبة تغطية صفرية أو سالبة");
+        }
     }
 
     private ProviderContractPricingItem createContractPrice(Claim claim, ClaimPendingService pending, LocalDate requestedFrom) {

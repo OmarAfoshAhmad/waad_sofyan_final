@@ -13,6 +13,7 @@ public class PendingServiceDecisionRequest {
     private String finalServiceCode;
     private String finalServiceName;
     private Long finalCategoryId;
+    private Boolean createProposedCategory;
     @DecimalMin(value = "0.01") private BigDecimal finalUnitPrice;
     private Long linkedPricingItemId;
     private LocalDate contractEffectiveFrom;

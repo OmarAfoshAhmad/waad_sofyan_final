@@ -29,8 +29,12 @@ public class ClaimPendingService {
     private String proposedServiceCode;
     @Column(name = "proposed_service_name", nullable = false, length = 255)
     private String proposedServiceName;
-    @Column(name = "proposed_category_id", nullable = false)
+    @Column(name = "proposed_category_id")
     private Long proposedCategoryId;
+    @Column(name = "proposed_category_code", length = 50) private String proposedCategoryCode;
+    @Column(name = "proposed_category_name", length = 200) private String proposedCategoryName;
+    @Column(name = "new_category_requested", nullable = false)
+    @Builder.Default private Boolean newCategoryRequested = false;
     @Column(name = "proposed_unit_price", nullable = false, precision = 15, scale = 2)
     private BigDecimal proposedUnitPrice;
 

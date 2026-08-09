@@ -16,6 +16,9 @@ import com.waad.tba.modules.medicaldictionary.enums.V50ClassificationStatus;
 import com.waad.tba.modules.medicaldictionary.service.V50MedicalClassificationEngine;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
+import com.waad.tba.modules.medicaltaxonomy.service.MedicalCategoryService;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
+import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.modules.rbac.entity.User;
@@ -34,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +47,9 @@ class ClaimPendingServiceServiceTest {
     @Mock ClaimPendingServiceRepository pendingRepository;
     @Mock ClaimMapper claimMapper;
     @Mock MedicalCategoryRepository categoryRepository;
+    @Mock MedicalCategoryService categoryService;
+    @Mock BenefitPolicyRepository policyRepository;
+    @Mock BenefitPolicyRuleRepository ruleRepository;
     @Mock ProviderContractRepository contractRepository;
     @Mock ProviderContractPricingItemRepository pricingRepository;
     @Mock V50MedicalClassificationEngine classifier;
@@ -103,6 +110,64 @@ class ClaimPendingServiceServiceTest {
         assertThatThrownBy(() -> service.decide(10L, 50L, request))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("اعتماد الخدمة مسموح فقط");
+    }
+
+    @Test
+    void newCategoryProposalHasNoClaimLineAndNoFinancialRecalculation() {
+        Claim claim = Claim.builder().id(10L).providerId(20L).providerName("Provider")
+                .status(ClaimStatus.UNDER_REVIEW).build();
+        PendingServiceCreateRequest request = new PendingServiceCreateRequest();
+        request.setServiceName("خدمة بتصنيف جديد");
+        request.setNewCategoryRequested(true);
+        request.setProposedCategoryName("تصنيف مراجعة جديد");
+        request.setProposedUnitPrice(new BigDecimal("125.00"));
+
+        when(claimRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(claim));
+        when(authorizationService.getCurrentUser()).thenReturn(
+                User.builder().id(30L).userType("MEDICAL_REVIEWER").build());
+        when(classifier.classify(any())).thenReturn(classification());
+        when(pendingRepository.saveAndFlush(any())).thenAnswer(invocation -> {
+            ClaimPendingService pending = invocation.getArgument(0);
+            pending.setId(51L);
+            return pending;
+        });
+
+        var response = service.create(10L, request);
+
+        assertThat(response.newCategoryRequested()).isTrue();
+        assertThat(response.proposedCategoryName()).isEqualTo("تصنيف مراجعة جديد");
+        assertThat(claim.getLines()).isEmpty();
+        verify(claimMapper, never()).recalculateForApproval(any());
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    void seniorCreatesProposedCategoryButServiceRemainsOpenUntilCoverageRuleExists() throws Exception {
+        Claim claim = Claim.builder().id(10L).providerId(20L).status(ClaimStatus.UNDER_REVIEW).build();
+        ClaimPendingService pending = ClaimPendingService.builder().id(50L).claim(claim).providerId(20L)
+                .status(PendingServiceStatus.PRELIMINARY).proposedServiceName("خدمة")
+                .proposedCategoryName("تصنيف جديد").newCategoryRequested(true)
+                .proposedUnitPrice(new BigDecimal("100.00")).build();
+        PendingServiceDecisionRequest request = new PendingServiceDecisionRequest();
+        request.setDecision(PendingServiceStatus.APPROVED_CLAIM_ONLY);
+        request.setCreateProposedCategory(true);
+        request.setReason("اعتماد التصنيف تمهيداً لإضافة قاعدة التغطية");
+
+        when(claimRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(claim));
+        when(pendingRepository.findByIdAndClaimId(50L, 10L)).thenReturn(Optional.of(pending));
+        when(authorizationService.getCurrentUser()).thenReturn(
+                User.builder().id(31L).userType("MEDICAL_REVIEW_HEAD").build());
+        when(categoryService.create(any())).thenReturn(
+                com.waad.tba.modules.medicaltaxonomy.dto.MedicalCategoryResponseDto.builder().id(70L).build());
+        when(pendingRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        var response = service.decide(10L, 50L, request);
+
+        assertThat(response.status()).isEqualTo(PendingServiceStatus.CATEGORY_CREATED_PENDING_COVERAGE);
+        assertThat(response.finalCategoryId()).isEqualTo(70L);
+        assertThat(claim.getLines()).isEmpty();
+        verify(claimMapper, never()).recalculateForApproval(any());
     }
 
     private V50ClassificationResult classification() {
