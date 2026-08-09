@@ -176,6 +176,26 @@ public class ClaimLine {
     @Builder.Default
     private Integer calculationVersion = 1;
 
+    /** Current operational revision; superseded rows remain for financial audit. */
+    @Column(name = "current_line", nullable = false)
+    @Builder.Default
+    private Boolean currentLine = true;
+
+    @Column(name = "superseded_at")
+    private LocalDateTime supersededAt;
+
+    @Column(name = "superseded_by_calculation_version")
+    private Integer supersededByCalculationVersion;
+
+    public void supersedeBy(int nextCalculationVersion) {
+        if (!Boolean.TRUE.equals(currentLine)) {
+            throw new IllegalStateException("Claim line is already superseded: " + id);
+        }
+        this.currentLine = false;
+        this.supersededAt = LocalDateTime.now();
+        this.supersededByCalculationVersion = nextCalculationVersion;
+    }
+
     // ==================== QUANTITY & PRICING ====================
 
     /**
@@ -225,6 +245,43 @@ public class ClaimLine {
 
     @Column(name = "patient_share", precision = 15, scale = 2)
     private BigDecimal patientShare;
+
+    // WAAD-FIN-1.0 canonical result snapshot (V144). These are nullable only
+    // for rows created before the new engine was connected.
+    @Column(name = "contractual_price", precision = 15, scale = 2)
+    private BigDecimal contractualPrice;
+    @Column(name = "contractual_price_excess", precision = 15, scale = 2)
+    private BigDecimal contractualPriceExcess;
+    @Column(name = "settlement_base", precision = 15, scale = 2)
+    private BigDecimal settlementBase;
+    @Column(name = "limit_mode", length = 20)
+    private String limitMode;
+    @Column(name = "binding_available_limit", precision = 15, scale = 2)
+    private BigDecimal bindingAvailableLimit;
+    @Column(name = "inside_limit", precision = 15, scale = 2)
+    private BigDecimal insideLimit;
+    @Column(name = "patient_limit_excess", precision = 15, scale = 2)
+    private BigDecimal patientLimitExcess;
+    @Column(name = "limit_consumption", precision = 15, scale = 2)
+    private BigDecimal limitConsumption;
+    @Column(name = "binding_remaining_limit", precision = 15, scale = 2)
+    private BigDecimal bindingRemainingLimit;
+    @Column(name = "patient_coverage_share", precision = 15, scale = 2)
+    private BigDecimal patientCoverageShare;
+    @Column(name = "patient_total_responsibility", precision = 15, scale = 2)
+    private BigDecimal patientTotalResponsibility;
+    @Column(name = "insurer_gross_share", precision = 15, scale = 2)
+    private BigDecimal insurerGrossShare;
+    @Column(name = "provider_discount_percent", precision = 5, scale = 2)
+    private BigDecimal providerDiscountPercent;
+    @Column(name = "provider_contract_discount", precision = 15, scale = 2)
+    private BigDecimal providerContractDiscount;
+    @Column(name = "provider_net_before_rejection", precision = 15, scale = 2)
+    private BigDecimal providerNetBeforeRejection;
+    @Column(name = "provider_rejected_amount_v2", precision = 15, scale = 2)
+    private BigDecimal providerRejectedAmountV2;
+    @Column(name = "insurer_final_payment", precision = 15, scale = 2)
+    private BigDecimal insurerFinalPayment;
 
     // ==================== COVERAGE SNAPSHOT (FINANCIAL AUDIT TRAIL)
     // ====================

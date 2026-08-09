@@ -29,11 +29,13 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStat
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicyRule;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRuleRepository;
+import com.waad.tba.modules.benefitpolicy.repository.ClaimLineLimitSnapshotRepository;
 import com.waad.tba.modules.claim.dto.ClaimCreateDto;
 import com.waad.tba.modules.claim.dto.ClaimLineDto;
 import com.waad.tba.modules.claim.dto.ClaimViewDto;
 import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.claim.repository.FinancialOutboxEventRepository;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.medicaltaxonomy.entity.MedicalCategory;
@@ -54,6 +56,7 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractReposito
 import com.waad.tba.modules.providercontract.service.ProviderContractTermsService;
 import com.waad.tba.modules.settlement.entity.ProviderAccount;
 import com.waad.tba.modules.settlement.repository.ProviderAccountRepository;
+import com.waad.tba.modules.settlement.repository.AccountTransactionRepository;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.entity.VisitStatus;
 import com.waad.tba.modules.visit.repository.VisitRepository;
@@ -117,6 +120,15 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
 
     @Autowired
     private ClaimRepository claimRepository;
+
+    @Autowired
+    private ClaimLineLimitSnapshotRepository claimLineLimitSnapshotRepository;
+
+    @Autowired
+    private FinancialOutboxEventRepository financialOutboxEventRepository;
+
+    @Autowired
+    private AccountTransactionRepository accountTransactionRepository;
 
     private String suffix;
     private Employer employer;
@@ -387,16 +399,20 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
 
     /**
      * Two concurrent direct-entry claims for the SAME member, each requesting 70
-     * against a 100-remaining perMemberLimit (150 total, 50 already used by a
-     * committed prior claim) — only one may succeed. This proves the PESSIMISTIC_WRITE
-     * member lock already acquired by AtomicFinancialService.calculateCostsWithAtomicDeductible
-     * (inside finalizeSnapshot, before validateAmountLimits runs) actually serializes
-     * concurrent createClaim calls instead of both reading a stale "previously used"
-     * value and both being wrongly approved.
+     * against a 100-remaining annual ceiling (150 total, 50 already used by a
+     * committed prior claim). The member lock must serialize them: one consumes
+     * 70 and the other is partially filled at 30, rather than both consuming 70
+     * from the same stale balance and overdrawing the ceiling to 190.
      */
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void concurrentDirectEntryClaims_cannotJointlyExceedPerMemberLimit() throws Exception {
+    void concurrentDirectEntryClaims_serializeAndPartiallyFillTheRemainingAnnualLimit() throws Exception {
+        // Exercise the canonical POLICY_GENERAL ceiling, not the legacy
+        // perMemberLimit compatibility check.
+        policy.setAnnualLimit(new BigDecimal("150.00"));
+        policy.setPerMemberLimit(new BigDecimal("100000.00"));
+        benefitPolicyRepository.saveAndFlush(policy);
+
         // Committed prior usage: 50. Remaining before the race = 150 - 50 = 100.
         Visit visitPrior = newVisitWithPricedService("PRIOR", new BigDecimal("50.00"));
         createDirectClaim(visitPrior, new BigDecimal("50.00"), "PRIOR");
@@ -422,7 +438,7 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
             start.countDown();
 
             List<Boolean> outcomes = List.of(first.get(), second.get());
-            assertThat(outcomes).containsExactlyInAnyOrder(true, false);
+            assertThat(outcomes).containsExactly(true, true);
         } finally {
             pool.shutdownNow();
         }
@@ -431,9 +447,41 @@ class ClaimLimitDoubleCountingIntegrationTest extends PostgresIntegrationTestBas
                 member.getId(),
                 List.of(ClaimStatus.APPROVED, ClaimStatus.SETTLED, ClaimStatus.BATCHED),
                 null);
-        // Exactly one of the two 70s was accepted on top of the prior 50 — never both
-        // (which would total 190, over the 150 limit) and never neither.
-        assertThat(totalApproved).isEqualByComparingTo("120.00");
+        // The first racer consumes 70 and the second is recalculated under the
+        // member lock to consume only the remaining 30. Both requests complete,
+        // but the ceiling itself is never overdrawn (50 + 70 + 30 = 150).
+        assertThat(totalApproved).isEqualByComparingTo("150.00");
+
+        // Every committed partial/full result must appear exactly once on every
+        // financial surface.
+        var persistedClaims = claimRepository.findByMemberId(member.getId());
+        assertThat(persistedClaims).hasSize(3)
+                .allSatisfy(claim -> assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED));
+        assertThat(persistedClaims).extracting(c -> c.getApprovedAmount())
+                .usingElementComparator(BigDecimal::compareTo)
+                .containsExactlyInAnyOrder(
+                        new BigDecimal("50.00"), new BigDecimal("70.00"), new BigDecimal("30.00"));
+        assertThat(persistedClaims.stream()
+                .map(c -> c.getPatientCoPay() == null ? BigDecimal.ZERO : c.getPatientCoPay())
+                .reduce(BigDecimal.ZERO, BigDecimal::add)).isEqualByComparingTo("40.00");
+
+        var account = providerAccountRepository.findByProviderId(provider.getId()).orElseThrow();
+        assertThat(account.getTotalApproved()).isEqualByComparingTo("150.00");
+        assertThat(account.getRunningBalance()).isEqualByComparingTo("150.00");
+        assertThat(accountTransactionRepository.findClaimTransactionsByAccount(account.getId()))
+                .hasSize(3)
+                .extracting(com.waad.tba.modules.settlement.entity.AccountTransaction::getReferenceId)
+                .containsExactlyInAnyOrderElementsOf(persistedClaims.stream().map(c -> c.getId()).toList());
+
+        for (var claim : persistedClaims) {
+            assertThat(claimLineLimitSnapshotRepository
+                    .findByClaimIdOrderByClaimLineIdAscConsumptionOrderAsc(claim.getId()))
+                    .hasSize(1);
+            assertThat(financialOutboxEventRepository
+                    .findByAggregateTypeAndAggregateIdAndEventType(
+                            "CLAIM", claim.getId(), ClaimApprovalOutboxService.EVENT_TYPE))
+                    .hasSize(1);
+        }
     }
 
     private boolean attemptClaim(Visit visit, String label, SecurityContext callerContext,

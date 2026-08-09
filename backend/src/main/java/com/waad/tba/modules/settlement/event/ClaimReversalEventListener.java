@@ -1,6 +1,6 @@
 package com.waad.tba.modules.settlement.event;
 
-import com.waad.tba.modules.settlement.service.ClaimFinancialSyncService;
+import com.waad.tba.modules.claim.service.ClaimReversalOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,11 +18,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * ║ ║
  * ║ TRIGGERS: ║
  * ║ When: ClaimReversalEvent is published (APPROVED → REJECTED transition) ║
- * ║ Phase: AFTER_COMMIT (ensures the rejection is committed before debit) ║
+ * ║ Phase: BEFORE_COMMIT (all reversal effects are atomic) ║
  * ║ ║
  * ║ FAILURE HANDLING: ║
- * ║ - Failures are logged as CRITICAL errors for manual intervention. ║
- * ║ - The rejection itself is NOT rolled back (it already committed). ║
+ * ║ - Any failure rolls back the status change and every financial effect. ║
  * ╚═══════════════════════════════════════════════════════════════════════════════╝
  */
 @Slf4j
@@ -30,19 +29,19 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class ClaimReversalEventListener {
 
-    private final ClaimFinancialSyncService claimFinancialSyncService;
+    private final ClaimReversalOrchestrator claimReversalOrchestrator;
 
     /**
      * Handle claim reversal event - delegates to ClaimFinancialSyncService.
      * Synchronous (no @Async) → account updated before HTTP response returns.
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleClaimReversal(ClaimReversalEvent event) {
         if (event.getProviderId() == null) {
             log.warn("⚠️ [EVENT] Skipping reversal - provider ID is null for claim {}", event.getClaimId());
             return;
         }
         log.info("🔄 [EVENT] ClaimReversalEvent → sync: claimId={}", event.getClaimId());
-        claimFinancialSyncService.reverseForClaim(event.getClaimId(), event.getUserId());
+        claimReversalOrchestrator.reverseClaim(event.getClaimId(), event.getUserId());
     }
 }

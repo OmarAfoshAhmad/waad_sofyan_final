@@ -4,7 +4,6 @@ import com.waad.tba.modules.benefitpolicy.entity.*;
 import com.waad.tba.modules.benefitpolicy.enums.*;
 import com.waad.tba.modules.benefitpolicy.repository.*;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
-import com.waad.tba.modules.claim.repository.ClaimRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +20,6 @@ public class BenefitBucketLimitService {
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitBucketConsumptionRepository consumptionRepository;
     private final BenefitPolicyRuleRepository policyRuleRepository;
-    private final ClaimRepository claimRepository;
 
     @Transactional(readOnly = true)
     public List<LimitSnapshot> findApplicable(Long ruleId, Long memberId, LocalDate serviceDate,
@@ -40,9 +38,12 @@ public class BenefitBucketLimitService {
         }
         BenefitPolicy policy = policyRuleRepository.findById(ruleId)
                 .map(BenefitPolicyRule::getBenefitPolicy).orElse(null);
-        if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().signum() > 0) {
-            buckets.values().removeIf(bucket -> isLegacyPolicyAnnualMirror(bucket, policy));
+        for (BenefitLimitBucket bucket : buckets.values()) {
+            if (bucket.getLimitRole() == BenefitLimitBucket.LimitRole.POLICY_GENERAL_MIRROR) {
+                validatePolicyGeneralMirror(bucket, policy);
+            }
         }
+        buckets.values().removeIf(bucket -> bucket.getLimitRole() == BenefitLimitBucket.LimitRole.POLICY_GENERAL_MIRROR);
         List<LimitSnapshot> result = new ArrayList<>();
         for (BenefitLimitBucket bucket : buckets.values()) {
             if (!bucket.isActive() || (bucket.getContextType() != EncounterType.ANY
@@ -63,24 +64,42 @@ public class BenefitBucketLimitService {
                     bucket.getConsumptionBasis() != null ? bucket.getConsumptionBasis() : ConsumptionBasis.COMPANY_SHARE,
                     directlyLinkedBucketIds.contains(bucket.getId())));
         }
-        if (policy != null && policy.getAnnualLimit() != null && policy.getAnnualLimit().signum() > 0) {
-            LocalDate yearStart = LocalDate.of(date.getYear(), 1, 1);
-            LocalDate yearEnd = LocalDate.of(date.getYear(), 12, 31);
-            BigDecimal used = claimRepository.sumApprovedAmountsByMemberAndYearExcludingClaim(
-                    memberId, yearStart, yearEnd, excludeClaimId);
-            result.add(new LimitSnapshot(-policy.getId(), "السقف العام السنوي للوثيقة",
-                    policy.getAnnualLimit(), null, null, used, 0, 0, false,
-                    CountingMethod.EACH_LINE, ConsumptionBasis.COMPANY_SHARE, false));
-        }
+        // finance-00: the general annual ceiling is deliberately NOT injected as a
+        // coverage-time limit bucket here. Its consumption basis would have to be
+        // coveragePercent-scaled GROSS, computed before ClaimLineFinancialEngine
+        // ever applies the contract discount -- so a ceiling set to the correct,
+        // single source of truth for "what the ceiling consumes"
+        // (Claim.approvedAmount == Sigma ClaimLine.companyShare, i.e. AFTER
+        // coverage, co-pay, rejection AND the discount) would pre-emptively
+        // refuse part of a claim's own gross before the discount that makes it
+        // fit ever runs, landing on a companyShare strictly less than a ceiling
+        // that should have been exactly sufficient. The ceiling is enforced
+        // instead, once and only once against the correct post-discount figure,
+        // by BenefitPolicyCoverageService.validateAmountLimits (inside
+        // ClaimFinancialSnapshotService.finalizeSnapshot, under the member lock)
+        // and BenefitBucketLedgerService.validatePolicyAnnualLimit (at ledger
+        // commit, under the policy lock) -- both already reject the whole claim
+        // on overflow, never a partial fill.
         return result;
     }
 
-    private boolean isLegacyPolicyAnnualMirror(BenefitLimitBucket bucket, BenefitPolicy policy) {
-        return bucket.getPeriodType() == LimitPeriodType.ANNUAL
-                && bucket.getAmountLimit() != null
-                && bucket.getAmountLimit().compareTo(policy.getAnnualLimit()) == 0
-                && ("B-GENERAL".equalsIgnoreCase(bucket.getCode())
-                    || (bucket.getBenefitGroup() != null && "G-GENERAL".equalsIgnoreCase(bucket.getBenefitGroup().getCode())));
+    // WAAD-FIN-1.0 (V146): a POLICY_GENERAL_MIRROR bucket duplicates
+    // policy.annualLimit and is never treated as an independent limit. Any
+    // drift between the two -- amount mismatch, wrong period type, or a
+    // mirror on a policy with no annualLimit at all -- is a data-integrity
+    // fault, not something to silently pick a value for.
+    private void validatePolicyGeneralMirror(BenefitLimitBucket bucket, BenefitPolicy policy) {
+        if (policy == null || policy.getAnnualLimit() == null) {
+            throw new IllegalStateException("POLICY_GENERAL_MIRROR_MISMATCH: bucket id=" + bucket.getId()
+                    + " is tagged POLICY_GENERAL_MIRROR but its policy has no annualLimit");
+        }
+        if (bucket.getPeriodType() != LimitPeriodType.ANNUAL
+                || bucket.getAmountLimit() == null
+                || bucket.getAmountLimit().compareTo(policy.getAnnualLimit()) != 0) {
+            throw new IllegalStateException("POLICY_GENERAL_MIRROR_MISMATCH: bucket id=" + bucket.getId()
+                    + " (periodType=" + bucket.getPeriodType() + ", amountLimit=" + bucket.getAmountLimit()
+                    + ") does not match policy id=" + policy.getId() + " annualLimit=" + policy.getAnnualLimit());
+        }
     }
 
     private Period period(BenefitLimitBucket bucket, LocalDate date) {

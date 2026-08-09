@@ -18,6 +18,9 @@ import com.waad.tba.modules.providercontract.repository.ProviderContractPricingI
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
 import com.waad.tba.modules.claim.service.CoverageEngineService;
 import com.waad.tba.modules.claim.service.CoverageEngineService.BatchUsageAccumulator;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
 import com.waad.tba.modules.claim.repository.ClaimBatchRepository;
 import com.waad.tba.security.AuthorizationService;
 import java.math.BigDecimal;
@@ -55,6 +58,8 @@ public class ClaimMapper {
         private final ClaimBatchRepository claimBatchRepository;
         private final CoverageEngineService coverageEngineService;
         private final AuthorizationService authorizationService;
+        private final ClaimFinancialAdjudicationService financialAdjudicationService;
+        private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
 
         private static final BigDecimal HUNDRED = new BigDecimal("100.00");
         private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -343,54 +348,6 @@ public class ClaimMapper {
                                         ? lineDto.getManualRefusedAmount()
                                         : BigDecimal.ZERO;
 
-                        int coveragePercent = result.getCoveragePercent() != null ? result.getCoveragePercent() : 0;
-                        int normalizedCoverage = Math.min(100, Math.max(0, coveragePercent));
-                        BigDecimal patientRate = BigDecimal.valueOf(100 - normalizedCoverage);
-
-                        BigDecimal gross = scale2(lineRequestedTotal);
-                        BigDecimal effectiveGross = result.getEffectiveTotal() != null
-                                        ? scale2(result.getEffectiveTotal())
-                                        : gross;
-                        BigDecimal allowedGross = maxZero(scale2(
-                                        effectiveGross.subtract(maxZero(result.getLimitRefused()))));
-                        BigDecimal patientShare = scale2(
-                                        allowedGross.multiply(patientRate).divide(HUNDRED, 2, RoundingMode.HALF_UP));
-                        BigDecimal providerShare = maxZero(scale2(allowedGross.subtract(patientShare)));
-
-                        boolean beforeRejection = claim.getDiscountBeforeRejection() != Boolean.FALSE;
-                        BigDecimal rejectedAmount;
-                        BigDecimal finalPayable;
-                        BigDecimal contractDiscount;
-
-                        BigDecimal priceExcess = maxZero(result.getPriceRefused());
-                        BigDecimal manualRejection = maxZero(manualRefused);
-                        // Price and benefit-limit excesses have already reduced
-                        // effectiveGross/allowedGross. Applying them again here
-                        // would double-reject the same amount.
-                        BigDecimal rejectionCandidate = isRejected ? providerShare : manualRejection;
-
-                        if (beforeRejection) {
-                            // MODE: BEFORE (Discount on full provider share, then subtract rejection)
-                            contractDiscount = scale2(providerShare.multiply(contractDiscountPercent)
-                                    .divide(HUNDRED, 2, RoundingMode.HALF_UP));
-                            BigDecimal providerNet = maxZero(scale2(providerShare.subtract(contractDiscount)));
-                            rejectedAmount = min(providerNet, rejectionCandidate);
-                            finalPayable = maxZero(scale2(providerNet.subtract(rejectedAmount)));
-                        } else {
-                            // MODE: AFTER (Subtract rejection first, then discount on remainder)
-                            BigDecimal candidateToSubtract = min(providerShare, rejectionCandidate);
-                            BigDecimal afterRejection = maxZero(scale2(providerShare.subtract(candidateToSubtract)));
-                            contractDiscount = scale2(afterRejection.multiply(contractDiscountPercent)
-                                    .divide(HUNDRED, 2, RoundingMode.HALF_UP));
-                            rejectedAmount = candidateToSubtract;
-                            finalPayable = maxZero(scale2(afterRejection.subtract(contractDiscount)));
-                        }
-
-                        BigDecimal financialRefused = scale2(
-                                        priceExcess
-                                                        .add(maxZero(result.getLimitRefused()))
-                                                        .add(rejectedAmount));
-
                         ClaimLine line = ClaimLine.builder()
                                         .claim(claim)
                                         .serviceCode(result.getServiceCode() != null ? result.getServiceCode()
@@ -441,12 +398,12 @@ public class ClaimMapper {
                                         .approvedUnitPrice(result.getEffectiveUnitPrice())
                                         .quantity(quantity)
                                         .requestedTotal(lineRequestedTotal)
-                                        .approvedAmount(finalPayable)
-                                        .companyShare(finalPayable)
-                                        .patientShare(patientShare)
-                                        .refusedAmount(financialRefused)
+                                        .approvedAmount(ZERO)
+                                        .companyShare(ZERO)
+                                        .patientShare(ZERO)
+                                        .refusedAmount(ZERO)
                                         .priceExcessRefused(isRejected ? BigDecimal.ZERO
-                                                        : priceExcess)
+                                                        : maxZero(result.getPriceRefused()))
                                         .limitRefused(isRejected ? BigDecimal.ZERO : maxZero(result.getLimitRefused()))
                                         .rejected(isRejected)
                                         .rejectionReason(effectiveLineRejectionReason != null
@@ -454,7 +411,7 @@ public class ClaimMapper {
                                                                         ? effectiveLineRejectionReason
                                                                         : (isRejected ? "مرفوض كلياً من قبل المراجع"
                                                                                         : result.getRefusalReason()))
-                                        .approvedQuantity(finalPayable.compareTo(BigDecimal.ZERO) > 0 ? quantity : 0)
+                                        .approvedQuantity(null)
                                         .build();
 
                         lines.add(line);
@@ -463,6 +420,12 @@ public class ClaimMapper {
 
                 if (claim.getLines() != null) {
                         List<ClaimLine> persistedLines = new ArrayList<>(claim.getLines());
+                        boolean correctionCycle = claim.getStatus() == ClaimStatus.NEEDS_CORRECTION;
+                        int nextCalculationVersion = persistedLines.stream()
+                                        .map(ClaimLine::getCalculationVersion)
+                                        .filter(Objects::nonNull)
+                                        .max(Integer::compareTo)
+                                        .orElse(1) + (correctionCycle ? 1 : 0);
                         Map<Long, ClaimLine> persistedById = persistedLines.stream()
                                         .filter(existing -> existing.getId() != null)
                                         .collect(Collectors.toMap(ClaimLine::getId, existing -> existing));
@@ -483,81 +446,44 @@ public class ClaimMapper {
                                                         "بند المطالبة رقم " + requestedId + " لا يتبع هذه المطالبة.");
                                 }
 
-                                if (existing != null) {
-                                        BeanUtils.copyProperties(calculated, existing, "id", "version", "claim");
-                                        existing.setCalculationVersion(
-                                                        Optional.ofNullable(existing.getCalculationVersion()).orElse(1) + 1);
+                                if (correctionCycle) {
+                                        calculated.setCalculationVersion(nextCalculationVersion);
+                                        calculated.setCurrentLine(true);
+                                        reconciled.add(calculated);
+                                } else if (existing != null) {
+                                        BeanUtils.copyProperties(calculated, existing,
+                                                        "id", "version", "claim", "calculationVersion",
+                                                        "currentLine", "supersededAt",
+                                                        "supersededByCalculationVersion");
                                         reconciled.add(existing);
                                 } else {
+                                        calculated.setCalculationVersion(nextCalculationVersion);
                                         reconciled.add(calculated);
                                 }
                         }
 
+                        if (correctionCycle) {
+                                persistedLines.forEach(line -> line.supersedeBy(nextCalculationVersion));
+                        }
                         claim.getLines().clear();
                         claim.getLines().addAll(reconciled);
                 } else {
                         claim.setLines(lines);
                 }
+                financialAdjudicationService.adjudicate(claim);
                 claim.setRequestedAmount(totalRequestedAmount);
                 calculateClaimTotals(claim);
         }
 
         private void calculateClaimTotals(Claim claim) {
-                List<ClaimLine> lines = claim.getLines();
-                BigDecimal totalRequested = lines.stream()
-                                .map(l -> l.getRequestedTotal() != null ? l.getRequestedTotal() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal totalRefused = lines.stream()
-                                .map(l -> l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal totalPatientShare = lines.stream()
-                                .map(l -> l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                ClaimFinancialTotals.aggregate(claim);
 
-                BigDecimal totalApproved = lines.stream()
-                                .map(l -> l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                totalApproved = scale2(totalApproved);
-                BigDecimal totalDiscount = maxZero(scale2(
-                                totalRequested.subtract(totalPatientShare).subtract(totalRefused).subtract(totalApproved)));
-
-                claim.setRequestedAmount(totalRequested);
-                claim.setRefusedAmount(totalRefused);
-                claim.setApprovedAmount(totalApproved);
-                claim.setNetProviderAmount(totalApproved);
-                claim.setPatientCoPay(totalPatientShare);
-                claim.setCompanyDiscountAmount(totalDiscount);
-                claim.setDifferenceAmount(scale2(totalRequested.subtract(totalApproved)));
-
-                // Validate line-level balance: for each line, companyShare + patientShare + refusedAmount == requestedTotal
-                validateLineBalances(lines);
-        }
-
-        /**
-         * Validates that each line's financial components sum correctly:
-         *   companyShare + patientShare + refusedAmount ≈ requestedTotal
-         *
-         * This is the correct validation for Option 2 rejected lines where:
-         *   - patientShare = coveragePercent (e.g. 25%) of requestedTotal
-         *   - refusedAmount = providerShare after discount (e.g. 75%)
-         *   - companyShare = 0 (rejected, company pays nothing)
-         */
-        private void validateLineBalances(List<ClaimLine> lines) {
-                BigDecimal epsilon = new BigDecimal("0.05");
-                for (ClaimLine l : lines) {
-                        BigDecimal req = l.getRequestedTotal() != null ? l.getRequestedTotal() : BigDecimal.ZERO;
-                        BigDecimal company = l.getCompanyShare() != null ? l.getCompanyShare() : BigDecimal.ZERO;
-                        BigDecimal patient = l.getPatientShare() != null ? l.getPatientShare() : BigDecimal.ZERO;
-                        BigDecimal refused = l.getRefusedAmount() != null ? l.getRefusedAmount() : BigDecimal.ZERO;
-                        BigDecimal sum = scale2(company.add(patient).add(refused));
-                        BigDecimal diff = req.subtract(sum).abs();
-                        if (diff.compareTo(epsilon) > 0) {
-                                log.warn("⚠️ [MAPPER] Line balance mismatch: req={}, company={}, patient={}, refused={}, diff={}",
-                                        req, company, patient, refused, diff);
-                                // Adjust company share to absorb rounding diff rather than hard fail
-                                // (Hard fail would block legitimate saves due to rounding)
-                        }
-                }
+                // GUARD 1 (finance-00 step 3): fails closed here, at the moment the
+                // claim's aggregate fields are derived from its own lines. This proves
+                // the aggregation is correct right now -- it does NOT prove nothing
+                // rewrites these fields afterward; see GUARD 2 at the approval gate
+                // in ClaimFinancialSnapshotService.finalizeSnapshot for that half.
+                claimFinancialInvariantGuard.assertConsistent(claim);
         }
 
         private BigDecimal scale2(BigDecimal value) {

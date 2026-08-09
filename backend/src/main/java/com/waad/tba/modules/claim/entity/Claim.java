@@ -4,6 +4,7 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.preauthorization.entity.PreAuthorization;
 import com.waad.tba.modules.providercontract.enums.EncounterType;
 import jakarta.persistence.*;
+import org.hibernate.annotations.SQLRestriction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -92,7 +93,8 @@ public class Claim {
 
     // ==================== CLAIM DETAILS ====================
 
-    @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = false)
+    @SQLRestriction("current_line = true")
     @Builder.Default
     private List<ClaimLine> lines = new ArrayList<>();
 
@@ -514,7 +516,13 @@ public class Claim {
             }
         }
 
-        validateFinancialIdentity();
+        // NEEDS_CORRECTION is deliberately non-financial: the prior cycle has
+        // already been reversed and claim-level payable totals are cleared until
+        // a new calculation is approved. Every final/payable state remains
+        // fail-closed through the identity below.
+        if (status != ClaimStatus.NEEDS_CORRECTION) {
+            validateFinancialIdentity();
+        }
 
         // Auto-set reviewedAt when status changes from draft states
         if (status != null && status.requiresReviewerAction() && reviewedAt == null) {

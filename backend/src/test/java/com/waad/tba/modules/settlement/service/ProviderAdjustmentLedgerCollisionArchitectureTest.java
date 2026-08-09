@@ -20,11 +20,7 @@ import org.junit.jupiter.api.Test;
  * is not one thing. It is used for two structurally different purposes that must
  * never be able to grow a third caller by accident:
  *
- * 1. Real, pre-existing money movement with no relation to the new
- *    {@code ProviderPayment} model ({@code handleClaimAmountAdjusted}, claim
- *    amount corrections). Legitimate, still active, out of this test's scope to
- *    change.
- * 2. The now-frozen legacy payment paths ({@code debitOnInstallmentPayment},
+ * The now-frozen legacy payment paths ({@code debitOnInstallmentPayment},
  *    {@code settleRemainingBalanceByProvider}), which used to raise totalPaid
  *    through the same untyped entry, invisible to reconciliation's ledgerNet.
  *
@@ -94,5 +90,28 @@ class ProviderAdjustmentLedgerCollisionArchitectureTest {
                         + "reconciliation read. It must use ProviderAccountReconciliationAudit instead.")
                 .doesNotContain("AccountTransaction")
                 .doesNotContain("createAdjustment");
+    }
+
+    @Test
+    void finalClaimAmountAdjustmentPathCannotReturn() throws IOException {
+        Path sourceRoot = Paths.get("src", "main", "java");
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(sourceRoot)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                if (source.contains("ClaimAmountAdjustedEvent")
+                        || source.contains("ClaimAmountAdjustmentService")
+                        || source.contains("CLAIM_AMOUNT_ADJUSTMENT")
+                        || source.contains("adjustApprovedAmount(")) {
+                    violations.add(sourceRoot.relativize(file).toString());
+                }
+            }
+        }
+
+        assertThat(violations)
+                .as("Final claim amounts are append-only. Correct by reversing the full "
+                        + "financial cycle, editing NEEDS_CORRECTION, and approving a new cycle; "
+                        + "never restore an in-place amount-adjustment writer.")
+                .isEmpty();
     }
 }

@@ -1,74 +1,100 @@
 package com.waad.tba.modules.claim.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
 import com.waad.tba.modules.claim.entity.Claim;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialInvariantGuard;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialAdjudicationService;
+import com.waad.tba.modules.claim.service.finance.ClaimFinancialTotals;
+import com.waad.tba.modules.claim.service.finance.ClaimLimitSnapshotFactory;
+import com.waad.tba.modules.benefitpolicy.service.ClaimLimitSnapshotService;
+import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.common.exception.ResourceNotFoundException;
 
 import lombok.RequiredArgsConstructor;
 
 /**
- * Canonical finalizer for claim money. It is the only service allowed to turn
- * calculated line coverage into the persisted claim-level financial snapshot.
+ * Canonical finalizer for claim money -- COMMIT-AND-VALIDATE ONLY (finance-00
+ * step 4). Every financial number on the claim (approvedAmount,
+ * netProviderAmount, patientCoPay, refusedAmount, companyDiscountAmount) was
+ * already computed correctly per line by ClaimFinancialAdjudicationService and
+ * aggregated by ClaimMapper.calculateClaimTotals before this method ever
+ * runs. This method must never recompute any of them.
+ *
+ * Historically it did recompute them, through an independent deductible-based
+ * engine (CostCalculationService/AtomicFinancialService) that does not
+ * correspond to any real policy -- silently discarding the contract's
+ * discount-before/after-rejection timing and substituting a different
+ * patient-responsibility number. finance-00 characterization tests
+ * (ClaimCopayDiscountRejectionOrderingIntegrationTest) proved the exact
+ * wrong numbers that produced.
+ *
+ * Two protections from that old path are preserved here, not dropped:
+ *   1. The member row lock (now acquired directly, not via
+ *      AtomicFinancialService) -- prevents two concurrent claims for the
+ *      same member from both reading a stale "used" total and jointly
+ *      exceeding the annual policy ceiling.
+ *   2. The annual-limit check via BenefitPolicyCoverageService.validateAmountLimits
+ *      -- now validated against the claim's own correct approvedAmount
+ *      instead of a recomputed number.
  */
 @Service
 @RequiredArgsConstructor
 public class ClaimFinancialSnapshotService {
-    private static final BigDecimal HUNDRED = new BigDecimal("100");
 
-    private final AtomicFinancialService atomicFinancialService;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
+    private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
+    private final ClaimFinancialAdjudicationService financialAdjudicationService;
+    private final ClaimLimitSnapshotFactory limitSnapshotFactory;
+    private final ClaimLimitSnapshotService limitSnapshotService;
+    private final MemberRepository memberRepository;
 
     @Transactional
     public BigDecimal finalizeSnapshot(Claim claim) {
-        CostCalculationService.CostBreakdown breakdown =
-                atomicFinancialService.calculateCostsWithAtomicDeductible(claim);
+        if (claim.getMember() != null && claim.getMember().getId() != null) {
+            // Lock the member row so no concurrent claim for the same member can
+            // commit between this read and this transaction's own commit --
+            // otherwise two claims each individually within the annual ceiling
+            // could jointly exceed it.
+            Member lockedMember = memberRepository.findByIdWithLock(claim.getMember().getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Member", "id", claim.getMember().getId()));
 
-        BigDecimal requested = value(claim.getRequestedAmount());
-        BigDecimal refused = value(claim.getRefusedAmount());
-        BigDecimal accepted = requested.subtract(refused).max(BigDecimal.ZERO);
-        BigDecimal patient = value(breakdown.patientResponsibility()).min(accepted);
-        BigDecimal companyBeforeDiscount = accepted.subtract(patient);
-        BigDecimal discount = calculateDiscount(companyBeforeDiscount, claim.getAppliedDiscountPercent());
-        BigDecimal payable = companyBeforeDiscount.subtract(discount).max(BigDecimal.ZERO);
+            // The draft calculation is only a preview. Approval must resolve the
+            // balances again after locking this member, then derive every claim total
+            // from those freshly adjudicated canonical line results.
+            var adjudication = financialAdjudicationService.adjudicate(claim);
+            ClaimFinancialTotals.aggregate(claim);
 
-        if (claim.getMember() != null && claim.getMember().getBenefitPolicy() != null) {
-            // excludeClaimId = claim.getId(): this claim may already exist as a row (e.g. the
-            // direct-entry path saves it before finalizeSnapshot runs), so the "previously
-            // used" aggregation must not count this claim's own amount against itself.
-            benefitPolicyCoverageService.validateAmountLimits(
-                    claim.getMember(), claim.getMember().getBenefitPolicy(), payable, claim.getServiceDate(),
-                    claim.getId());
+            // GUARD 2 (finance-00 step 3): the approval gate. This is the LAST
+            // point before the caller flips the claim's status to APPROVED, and
+            // it re-checks the same identities GUARD 1 checked right after
+            // aggregation. If anything between aggregation and here rewrote the
+            // numbers, this is what catches it -- fail closed, not a warning.
+            claimFinancialInvariantGuard.assertConsistent(claim);
+
+            if (lockedMember.getBenefitPolicy() != null) {
+                // excludeClaimId = claim.getId(): this claim may already exist as a row
+                // (e.g. the direct-entry path saves it before finalizeSnapshot runs), so
+                // the "previously used" aggregation must not count this claim's own
+                // amount against itself.
+                benefitPolicyCoverageService.validateAmountLimits(
+                        lockedMember, lockedMember.getBenefitPolicy(), claim.getApprovedAmount(),
+                        claim.getServiceDate(), claim.getId());
+            }
+
+            // Append-only explanation rows are written before APPROVED and in the
+            // same transaction as the later bucket/provider ledger listeners.
+            limitSnapshotService.saveAll(limitSnapshotFactory.build(claim, adjudication));
+        } else {
+            claimFinancialInvariantGuard.assertConsistent(claim);
         }
 
-        claim.setApprovedAmount(scale(payable));
-        claim.setNetProviderAmount(scale(payable));
-        claim.setPatientCoPay(scale(patient));
-        claim.setRefusedAmount(scale(refused));
-        claim.setCompanyDiscountAmount(scale(discount));
-        claim.setDifferenceAmount(scale(requested.subtract(payable)));
-        claim.setDeductibleApplied(scale(value(breakdown.deductibleApplied()).min(patient)));
-        claim.setCoPayPercent(accepted.signum() == 0 ? BigDecimal.ZERO.setScale(2)
-                : patient.multiply(HUNDRED).divide(accepted, 2, RoundingMode.HALF_UP));
         claim.markCoverageSynced();
-        return payable;
-    }
-
-    private BigDecimal calculateDiscount(BigDecimal amount, BigDecimal percent) {
-        BigDecimal rate = value(percent);
-        return rate.signum() <= 0 ? BigDecimal.ZERO.setScale(2)
-                : amount.multiply(rate).divide(HUNDRED, 2, RoundingMode.HALF_UP).min(amount);
-    }
-
-    private static BigDecimal value(BigDecimal amount) {
-        return amount == null ? BigDecimal.ZERO : amount;
-    }
-
-    private static BigDecimal scale(BigDecimal amount) {
-        return value(amount).setScale(2, RoundingMode.HALF_UP);
+        return claim.getApprovedAmount();
     }
 }

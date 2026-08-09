@@ -9,6 +9,34 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface BenefitBucketConsumptionRepository extends JpaRepository<BenefitBucketConsumption, Long> {
+    boolean existsByClaimId(Long claimId);
+
+    interface BucketAmountBalanceProjection {
+        Long getBucketId();
+        LocalDate getPeriodStart();
+        LocalDate getPeriodEnd();
+        String getStatus();
+        BigDecimal getAmount();
+    }
+
+    @Query(value = """
+        select c.bucket_id as bucketId,
+               c.period_start as periodStart,
+               c.period_end as periodEnd,
+               c.status as status,
+               coalesce(sum(c.approved_amount), 0) as amount
+          from benefit_bucket_consumptions c
+         where c.member_id = :memberId
+           and c.bucket_id in (:bucketIds)
+           and c.status in ('COMMITTED', 'RESERVED')
+           and (:excludeClaimId is null or c.claim_id <> :excludeClaimId)
+         group by c.bucket_id, c.period_start, c.period_end, c.status
+        """, nativeQuery = true)
+    List<BucketAmountBalanceProjection> aggregateAmountBalances(
+            @Param("memberId") Long memberId,
+            @Param("bucketIds") java.util.Collection<Long> bucketIds,
+            @Param("excludeClaimId") Long excludeClaimId);
+
     /**
      * Fail-closed guard for legacy/partially deployed claims. An approved claim
      * with bucket-backed lines but without a committed ledger entry must never be

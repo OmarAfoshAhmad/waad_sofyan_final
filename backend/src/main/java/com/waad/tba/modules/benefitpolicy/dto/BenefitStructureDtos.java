@@ -40,6 +40,7 @@ public final class BenefitStructureDtos {
             @Min(1) Integer periodValue,
             @NotNull CountingMethod countingMethod,
             @NotNull ConsumptionBasis consumptionBasis,
+            @NotNull BenefitScopeType benefitScopeType,
             Long parentBucketId,
             Boolean shared,
             Boolean active) {}
@@ -47,7 +48,8 @@ public final class BenefitStructureDtos {
     public record BucketResponse(Long id, Long benefitGroupId, String code, String nameAr,
                                  EncounterType contextType, BigDecimal amountLimit, Integer timesLimit,
                                  Integer daysLimit, LimitPeriodType periodType, Integer periodValue, CountingMethod countingMethod,
-                                 ConsumptionBasis consumptionBasis, Long parentBucketId, boolean shared,
+                                 ConsumptionBasis consumptionBasis, BenefitScopeType benefitScopeType,
+                                 BeneficiaryScopeType beneficiaryScopeType, Long parentBucketId, boolean shared,
                                  boolean active) {}
 
     public record RuleBucketRequest(@NotNull Long bucketId, @Min(1) Integer consumptionOrder,

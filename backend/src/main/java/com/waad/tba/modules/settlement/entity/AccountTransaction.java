@@ -84,9 +84,8 @@ public class AccountTransaction {
     private Long referenceId;
 
     /**
-     * Optional secondary key completing referenceId for reference types whose
-     * natural key is (referenceId, version) rather than referenceId alone.
-     * Currently only CLAIM_AMOUNT_ADJUSTMENT, keyed by the claim's version.
+     * Financial calculation-cycle key completing referenceId for claim approval
+     * and reversal entries.
      */
     @Column(name = "reference_version")
     private Long referenceVersion;
@@ -131,8 +130,14 @@ public class AccountTransaction {
      * Create a CREDIT transaction (claim approved)
      */
     public static AccountTransaction createClaimApprovedCredit(
+            Long accountId, Long claimId, BigDecimal amount, BigDecimal balanceBefore, Long userId) {
+        return createClaimApprovedCredit(accountId, claimId, null, amount, balanceBefore, userId);
+    }
+
+    public static AccountTransaction createClaimApprovedCredit(
             Long accountId,
             Long claimId,
+            Long calculationVersion,
             BigDecimal amount,
             BigDecimal balanceBefore,
             Long userId) {
@@ -147,6 +152,7 @@ public class AccountTransaction {
                 .balanceAfter(balanceAfter)
                 .referenceType(ReferenceType.CLAIM_APPROVAL)
                 .referenceId(claimId)
+                .referenceVersion(calculationVersion)
                 .description(String.format("اعتماد مطالبة رقم %d - إضافة %s", claimId, amount))
                 .createdBy(userId)
                 .build();
@@ -242,39 +248,6 @@ public class AccountTransaction {
     }
 
     /**
-     * One immutable ledger entry for a change to an already-approved claim's
-     * amount. CREDIT when the claim's amount increased, DEBIT when it decreased —
-     * mirrors {@link com.waad.tba.modules.settlement.entity.ProviderAccount#adjustApprovedAmount}.
-     *
-     * @param claimVersion the claim's @Version after the change, forming the
-     *                     idempotency key (claimId, claimVersion) together with
-     *                     referenceId — a claim can be adjusted more than once, so
-     *                     claimId alone cannot distinguish adjustments.
-     */
-    public static AccountTransaction createClaimAmountAdjustment(
-            Long accountId, Long claimId, Long claimVersion, BigDecimal delta,
-            BigDecimal balanceBefore, Long userId) {
-
-        boolean isCredit = delta.signum() > 0;
-        BigDecimal amount = delta.abs();
-        BigDecimal balanceAfter = isCredit ? balanceBefore.add(amount) : balanceBefore.subtract(amount);
-
-        return AccountTransaction.builder()
-                .providerAccountId(accountId)
-                .transactionType(isCredit ? TransactionType.CREDIT : TransactionType.DEBIT)
-                .amount(amount)
-                .balanceBefore(balanceBefore)
-                .balanceAfter(balanceAfter)
-                .referenceType(ReferenceType.CLAIM_AMOUNT_ADJUSTMENT)
-                .referenceId(claimId)
-                .referenceVersion(claimVersion)
-                .description(String.format("تعديل مبلغ مطالبة رقم %d: %s%s",
-                        claimId, isCredit ? "+" : "-", amount))
-                .createdBy(userId)
-                .build();
-    }
-
-    /**
      * Create an ADJUSTMENT transaction (manual correction)
      */
     public static AccountTransaction createAdjustment(
@@ -337,8 +310,14 @@ public class AccountTransaction {
      * idempotency checks can find it by (CLAIM_REVERSAL, claimId).
      */
     public static AccountTransaction createClaimReversalDebit(
+            Long accountId, Long claimId, BigDecimal amount, BigDecimal balanceBefore, Long userId) {
+        return createClaimReversalDebit(accountId, claimId, null, amount, balanceBefore, userId);
+    }
+
+    public static AccountTransaction createClaimReversalDebit(
             Long accountId,
             Long claimId,
+            Long calculationVersion,
             BigDecimal amount,
             BigDecimal balanceBefore,
             Long userId) {
@@ -353,6 +332,7 @@ public class AccountTransaction {
                 .balanceAfter(balanceAfter)
                 .referenceType(ReferenceType.CLAIM_REVERSAL)
                 .referenceId(claimId)
+                .referenceVersion(calculationVersion)
                 .description(String.format("عكس اعتماد مطالبة مرفوضة رقم %d - خصم %s", claimId, amount))
                 .createdBy(userId)
                 .build();
@@ -420,17 +400,7 @@ public class AccountTransaction {
         PROVIDER_PAYMENT_REVERSAL("عكس دفعة مقدم خدمة"),
 
         /** Manual adjustment */
-        ADJUSTMENT("تسوية يدوية"),
-
-        /**
-         * A change to an already-approved claim's amount — CREDIT when it increased,
-         * DEBIT when it decreased. Never touches totalPaid; only totalApproved and
-         * runningBalance move. Distinct from ADJUSTMENT because a claim can
-         * legitimately be adjusted more than once: idempotency is keyed by
-         * (reference_id = claimId, reference_version = the claim's @Version after
-         * the change), not claimId alone.
-         */
-        CLAIM_AMOUNT_ADJUSTMENT("تعديل مبلغ مطالبة معتمدة");
+        ADJUSTMENT("تسوية يدوية");
 
         private final String arabicLabel;
 

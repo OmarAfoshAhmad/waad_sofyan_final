@@ -22,7 +22,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService;
 import com.waad.tba.modules.claim.dto.ClaimApproveDto;
 import com.waad.tba.modules.claim.dto.ClaimRejectDto;
 import com.waad.tba.modules.claim.dto.ClaimSettleDto;
@@ -61,7 +60,7 @@ class ClaimReviewServiceTest {
     @Mock
     private BenefitPolicyCoverageService benefitPolicyCoverageService;
     @Mock
-    private BenefitBucketLedgerService benefitBucketLedgerService;
+    private ClaimReversalOrchestrator claimReversalOrchestrator;
     @Mock
     private com.waad.tba.common.service.BusinessDaysCalculatorService businessDaysCalculator;
     @Mock
@@ -169,24 +168,30 @@ class ClaimReviewServiceTest {
 
         claimReviewService.requestCorrection(100L, "تصحيح البنود");
 
-        verify(benefitBucketLedgerService).reverseClaim(100L);
+        verify(claimReversalOrchestrator).reverseClaim(100L, 1L);
         verify(claimStateMachine).transition(claim, ClaimStatus.NEEDS_CORRECTION, reviewer);
-        verify(providerAccountService).debitOnClaimReversal(100L, 1L);
         assertThat(claim.getApprovedAmount()).isNull();
         assertThat(claim.getNetProviderAmount()).isNull();
         assertThat(claim.getReviewerComment()).isEqualTo("تصحيح البنود");
     }
 
     @Test
-    void requestCorrection_portalClaim_shouldRequireMedicalReviewFlow() {
+    void requestCorrection_portalClaim_shouldReverseAndOpenForResubmission() {
         claim.setStatus(ClaimStatus.APPROVED);
         claim.setSubmissionSource(ClaimSubmissionSource.PROVIDER_PORTAL);
+        claim.setApprovedAmount(new BigDecimal("800"));
+        claim.setNetProviderAmount(new BigDecimal("800"));
         when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
         when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
 
-        assertThatThrownBy(() -> claimReviewService.requestCorrection(100L, "تصحيح"))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("البوابة");
+        claimReviewService.requestCorrection(100L, "تصحيح");
+
+        verify(claimReversalOrchestrator).reverseClaim(100L, 1L);
+        verify(claimStateMachine).transition(claim, ClaimStatus.NEEDS_CORRECTION, reviewer);
+        assertThat(claim.getApprovedAmount()).isNull();
+        assertThat(claim.getNetProviderAmount()).isNull();
     }
 
     @Test

@@ -20,7 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.waad.tba.common.exception.BusinessRuleException;
-import com.waad.tba.common.exception.ClaimStateTransitionException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.service.ArchitecturalGuardService;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
@@ -53,7 +52,6 @@ import com.waad.tba.modules.preauthorization.service.PreAuthorizationService;
 import com.waad.tba.modules.visit.entity.Visit;
 import com.waad.tba.modules.visit.repository.VisitRepository;
 import com.waad.tba.modules.rbac.entity.User;
-import com.waad.tba.modules.settlement.event.ClaimAmountAdjustedEvent;
 import com.waad.tba.modules.settlement.event.ClaimApprovedEvent;
 import com.waad.tba.modules.settlement.event.ClaimReversalEvent;
 import com.waad.tba.security.AuthorizationService;
@@ -161,8 +159,8 @@ public class ClaimService {
 
     // Phase 12 (2026-03-13): God-Class Refactoring
     private final ClaimReviewService claimReviewService;
-    private final com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService benefitBucketLedgerService;
     private final ClaimFinancialSnapshotService financialSnapshotService;
+    private final ClaimFinancialHistoryGuard claimFinancialHistoryGuard;
 
     // Jakarta persistence for native cleanup (RESTRICT constraint bypass)
     private final jakarta.persistence.EntityManager em;
@@ -531,9 +529,8 @@ public class ClaimService {
         // ══════════════════════════════════════════════════════════════════════════
         // FINANCIAL CLOSURE: FINANCIAL SNAPSHOT IMMUTABILITY GUARD
         // ══════════════════════════════════════════════════════════════════════════
-        // After approval, financial fields are tracked. If changed, an adjustment event is fired.
-        BigDecimal oldApprovedAmount = claim.getApprovedAmount();
-        boolean wasFinanciallyLocked = isFinanciallyLocked(claim);
+        // Final financial snapshots are immutable. Corrections use the dedicated
+        // reversal path and a new calculation cycle; this method rejects final claims.
 
         // Phase 6: Check if status change is requested
         if (dto.getStatus() != null && dto.getStatus() != claim.getStatus()) {
@@ -596,21 +593,6 @@ public class ClaimService {
         Claim updatedClaim = claimRepository.save(claim);
         log.info("✅ Claim {} updated, status: {}", id, updatedClaim.getStatus());
 
-        // Check for financial delta if the claim was and still is financially locked
-        if (wasFinanciallyLocked && isFinanciallyLocked(updatedClaim) && 
-            oldApprovedAmount != null && updatedClaim.getApprovedAmount() != null) {
-            
-            if (oldApprovedAmount.compareTo(updatedClaim.getApprovedAmount()) != 0) {
-                log.info("💰 Claim {} approved amount changed from {} to {} — firing adjustment event", 
-                         id, oldApprovedAmount, updatedClaim.getApprovedAmount());
-                
-                eventPublisher.publishEvent(new ClaimAmountAdjustedEvent(
-                        this, updatedClaim.getId(), updatedClaim.getProviderId(),
-                        oldApprovedAmount, updatedClaim.getApprovedAmount(),
-                        currentUser != null ? currentUser.getId() : null, updatedClaim.getVersion()));
-            }
-        }
-
         return claimMapper.toViewDto(updatedClaim);
     }
 
@@ -656,8 +638,6 @@ public class ClaimService {
                     String.format("Cannot edit claim in %s status.",
                             claim.getStatus()));
         }
-
-        BigDecimal oldApprovedAmount = claim.getApprovedAmount();
 
         // Update data fields only
         if (dto.getDoctorName() != null) {
@@ -707,62 +687,10 @@ public class ClaimService {
                 && claim.getSubmissionSource() != com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL;
         if (internalCorrectionReapproval) {
             claim.setReviewerComment(null);
-            claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
-            log.info("✅ Internal claim {} corrected and re-approved", id);
         } else if (dto.getStatus() == ClaimStatus.APPROVED
                 && prevStatus == ClaimStatus.NEEDS_CORRECTION
                 && claim.getSubmissionSource() == com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL) {
             throw new BusinessRuleException("يجب إعادة إرسال مطالبة البوابة للمراجعة ولا يمكن اعتمادها من شاشة تعديل البيانات");
-        } else if (dto.getStatus() != null && claim.getStatus() == ClaimStatus.REJECTED) {
-            ClaimStatus newStatus = dto.getStatus();
-            if (newStatus == ClaimStatus.APPROVED) {
-                // Reset financial fields set to 0 during REJECTED so calculateFields()
-                // re-derives them
-                claim.setApprovedAmount(null);
-                claim.setPatientCoPay(null);
-                claim.setNetProviderAmount(null);
-                // مسح سبب الرفض عند إعادة القبول
-                claim.setReviewerComment(null);
-                // Use StateMachine for proper transition validation and audit
-                claimStateMachine.transition(claim, newStatus, currentUser);
-                log.info("↩️ REJECTED claim {} re-opened to APPROVED by admin via StateMachine", id);
-            } else if (newStatus == ClaimStatus.REJECTED) {
-                // Already REJECTED — skip StateMachine (self-transition on terminal state
-                // is not allowed). Just saving the updated data is sufficient.
-                log.debug("ℹ️ Claim {} stays REJECTED — skipping StateMachine self-transition", id);
-            }
-        } else if (dto.getStatus() != null && claim.getStatus() == ClaimStatus.APPROVED
-                && dto.getStatus() == ClaimStatus.REJECTED) {
-            // FIX #11 (Critical): مطالبة مقبولة يريد المراجع رفضها
-            // يجب استخدام StateMachine لفحص الصلاحيات + إطلاق ClaimReversalEvent لعكس القيد
-            // المالي
-            if (claim.getReviewerComment() == null || claim.getReviewerComment().isBlank()) {
-                throw new ClaimStateTransitionException(
-                        "Cannot reject claim without reviewer comment. Please provide rejection reason.");
-            }
-            // Use StateMachine — enforces role permission and business rules
-            claimStateMachine.transition(claim, ClaimStatus.REJECTED, currentUser);
-            log.info("🔴 APPROVED claim {} rejected via StateMachine by {}", id, currentUser.getEmail());
-        }
-
-        // Approved edits are a financial replacement, not a destructive rewrite:
-        // neutralize the old ledger rows before recalculating the same persisted lines.
-        boolean approvedLinesEdit = dto.getLines() != null && prevStatus == ClaimStatus.APPROVED
-                && claim.getStatus() == ClaimStatus.APPROVED;
-        if (approvedLinesEdit) {
-            Set<Long> persistedLineIds = claim.getLines().stream()
-                    .map(com.waad.tba.modules.claim.entity.ClaimLine::getId)
-                    .filter(Objects::nonNull)
-                    .collect(java.util.stream.Collectors.toSet());
-            Set<Long> submittedLineIds = dto.getLines().stream()
-                    .map(com.waad.tba.modules.claim.dto.ClaimLineDto::getId)
-                    .filter(Objects::nonNull)
-                    .collect(java.util.stream.Collectors.toSet());
-            if (!submittedLineIds.isEmpty() && !submittedLineIds.containsAll(persistedLineIds)) {
-                throw new BusinessRuleException(
-                        "لا يمكن حذف بند من مطالبة معتمدة لأنه مرتبط بسجل مالي. ارفض المطالبة أو أنشئ تسوية تصحيحية.");
-            }
-            benefitBucketLedgerService.reverseClaim(id);
         }
 
         // Line edits with backend contract re-pricing.
@@ -771,46 +699,23 @@ public class ClaimService {
             claimMapper.replaceClaimLinesForDraft(claim, dto.getLines());
         }
 
-        // Re-validate benefit-policy limits whenever this update produces a new/changed
-        // APPROVED amount (edited lines on an already-approved claim, or a
-        // NEEDS_CORRECTION -> APPROVED re-approval). Without this, a claim could be
-        // edited to a higher approved amount, or a corrected claim approved, with no
-        // check against the member's annual/per-member/per-family limits at all —
-        // createClaim's finalizeSnapshot only runs once, at initial creation.
-        // excludeClaimId = claim.getId(): this claim's OWN previously-approved amount
-        // must not count against itself in the "previously used" aggregation.
-        if ((approvedLinesEdit || internalCorrectionReapproval)
-                && claim.getMember() != null && claim.getMember().getBenefitPolicy() != null
-                && claim.getApprovedAmount() != null && claim.getApprovedAmount().compareTo(BigDecimal.ZERO) > 0) {
-            // Same PESSIMISTIC_WRITE member lock createClaim gets transitively via
-            // finalizeSnapshot -> AtomicFinancialService.calculateCostsWithAtomicDeductible.
-            // Without it, a concurrent createClaim/updateClaimData for the same member
-            // could both read the "previously used" sum before either commits, letting
-            // both edits pass validation and jointly exceed the limit.
-            memberRepository.findByIdWithLock(claim.getMember().getId());
-            benefitPolicyCoverageService.validateAmountLimits(
-                    claim.getMember(), claim.getMember().getBenefitPolicy(), claim.getApprovedAmount(),
-                    claim.getServiceDate(), claim.getId());
+        if (internalCorrectionReapproval) {
+            // A corrected direct-entry claim is a complete new financial cycle.
+            // Even a metadata-only correction gets new immutable ClaimLine rows;
+            // the prior rows remain attached to their historical limit snapshots.
+            if (dto.getLines() == null) {
+                claimMapper.recalculateForApproval(claim);
+            }
+            // Re-resolve balances under the member lock, re-adjudicate all lines,
+            // enforce invariants and append the new limit snapshots before the
+            // ClaimApprovedEvent commits every ledger through the single gate.
+            financialSnapshotService.finalizeSnapshot(claim);
+            claimStateMachine.transition(claim, ClaimStatus.APPROVED, currentUser);
+            log.info("✅ Internal claim {} corrected and re-approved", id);
         }
 
         // Save and return
         Claim updatedClaim = claimRepository.saveAndFlush(claim);
-        if (approvedLinesEdit || internalCorrectionReapproval) {
-            benefitBucketLedgerService.commitClaim(updatedClaim.getId());
-        }
-
-        if (approvedLinesEdit
-                && oldApprovedAmount != null
-                && updatedClaim.getApprovedAmount() != null
-                && oldApprovedAmount.compareTo(updatedClaim.getApprovedAmount()) != 0
-                && updatedClaim.getProviderId() != null) {
-            eventPublisher.publishEvent(new ClaimAmountAdjustedEvent(
-                    this, updatedClaim.getId(), updatedClaim.getProviderId(),
-                    oldApprovedAmount, updatedClaim.getApprovedAmount(),
-                    currentUser != null ? currentUser.getId() : null, updatedClaim.getVersion()));
-            log.info("📤 ClaimAmountAdjustedEvent published for edited approved claim {}: {} -> {}",
-                    updatedClaim.getId(), oldApprovedAmount, updatedClaim.getApprovedAmount());
-        }
         log.info("✅ Claim DATA updated: id={}", id);
 
         // M1: Fire ClaimApprovedEvent when admin re-approves a REJECTED claim
@@ -1477,25 +1382,6 @@ public class ClaimService {
         }
     }
 
-    /**
-     * Check if a claim is financially locked (APPROVED, BATCHED, or SETTLED).
-     * Financial amounts cannot be modified after approval.
-     */
-    private boolean isFinanciallyLocked(Claim claim) {
-        ClaimStatus status = claim.getStatus();
-        return status == ClaimStatus.APPROVED
-                || status == ClaimStatus.BATCHED
-                || status == ClaimStatus.SETTLED;
-    }
-
-    /**
-     * Validate that no financial fields are being changed for a locked claim.
-     * REMOVED: System now allows updates and fires ClaimAmountAdjustedEvent instead.
-     */
-    private void validateNoFinancialChanges(Claim claim, ClaimUpdateDto dto) {
-        // Validation removed to support post-approval delta sync.
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════════
     // RETURN FOR INFO (Added for complete workflow)
     // ═══════════════════════════════════════════════════════════════════════════════
@@ -1853,15 +1739,6 @@ public class ClaimService {
 
         claimRepository.save(claim);
 
-        // Keep the claim void and provider-account reversal atomic. The previous
-        // AFTER_COMMIT-only flow could leave an inactive claim with an unreversed
-        // provider balance when the second transaction failed.
-        if (wasApproved && claim.getProviderId() != null) {
-            providerAccountService.debitOnClaimReversal(
-                    claim.getId(),
-                    currentUser != null ? currentUser.getId() : null);
-        }
-
         // Record Medical Audit Log (PHASE 10 - Secure Auditing)
         medicalAuditLogService.record(AuditLogWriteRequest.builder()
                 .entityType(EntityType.CLAIM)
@@ -1876,9 +1753,8 @@ public class ClaimService {
         log.info("✅ Claim {} soft-deleted by {}. Reason: {}. Annual limits automatically restored.", id,
                 currentUser != null ? currentUser.getFullName() : "system", finalReason);
 
-        // Keep publishing the domain event for the benefit-bucket ledger. The
-        // provider-account listener is idempotent and will observe the reversal
-        // already committed in this transaction.
+        // The BEFORE_COMMIT listener invokes the single atomic reversal gate:
+        // buckets, provider account and immutable outbox succeed or roll back together.
         if (wasApproved && claim.getProviderId() != null) {
             log.info(
                     "📤 Claim {} was APPROVED before deletion — publishing ClaimReversalEvent to debit provider account",
@@ -1957,18 +1833,10 @@ public class ClaimService {
             throw new BusinessRuleException("يجب حذف المطالبة ناعماً أولاً قبل الحذف النهائي");
         }
 
-        // ── عكس القيد المالي إن لم يكن قد حُوِّل بعد (بيانات قديمة أو لأي سبب) ──
-        // يجب قبل حذف الكيان لأن debitOnClaimReversal يحتاج الـ claim للبحث عن
-        // providerId
-        if (claim.getProviderId() != null) {
-            try {
-                Long userId = currentUser != null ? currentUser.getId() : null;
-                providerAccountService.debitOnClaimReversal(claim.getId(), userId);
-                log.info("✅ Hard-delete reversal debit applied (or skipped if already done) for claim {}", id);
-            } catch (Exception e) {
-                log.warn("⚠️ Could not reverse provider account for hard-deleting claim {}: {}", id, e.getMessage());
-            }
-        }
+        // Financial history is append-only. A finalized claim may be voided and
+        // reversed, but never physically erased. Draft/no-history records remain
+        // eligible for administrative cleanup.
+        claimFinancialHistoryGuard.assertHardDeleteAllowed(id);
 
         em.createNativeQuery("DELETE FROM claim_audit_logs WHERE claim_id = :cid")
                 .setParameter("cid", id)

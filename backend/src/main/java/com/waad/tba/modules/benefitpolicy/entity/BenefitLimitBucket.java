@@ -12,6 +12,15 @@ import java.time.LocalDateTime;
         @UniqueConstraint(name = "uq_benefit_bucket_policy_code", columnNames = {"policy_id", "code"}))
 @Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
 public class BenefitLimitBucket {
+
+    /**
+     * STANDARD: a real, independent limit. POLICY_GENERAL_MIRROR: this bucket
+     * duplicates policy.annualLimit and must never be treated as an
+     * independent limit by any resolver -- see V146 and
+     * ApplicableLimitResolver.
+     */
+    public enum LimitRole { STANDARD, POLICY_GENERAL_MIRROR }
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "policy_id", nullable = false) private BenefitPolicy policy;
@@ -32,6 +41,14 @@ public class BenefitLimitBucket {
     @Enumerated(EnumType.STRING) @Column(name = "consumption_basis", nullable = false)
     @Builder.Default private ConsumptionBasis consumptionBasis = ConsumptionBasis.COMPANY_SHARE;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "parent_bucket_id") private BenefitLimitBucket parentBucket;
+    @Enumerated(EnumType.STRING) @Column(name = "limit_role", nullable = false, length = 30)
+    @Builder.Default private LimitRole limitRole = LimitRole.STANDARD;
+    /** Explicit medical meaning; never inferred from parent depth. Mirrors are excluded from resolution. */
+    @Enumerated(EnumType.STRING) @Column(name = "benefit_scope_type", length = 20)
+    private BenefitScopeType benefitScopeType;
+    /** Who shares the accumulator. FAMILY remains DB-disabled until its policy is implemented. */
+    @Enumerated(EnumType.STRING) @Column(name = "beneficiary_scope_type", nullable = false, length = 20)
+    @Builder.Default private BeneficiaryScopeType beneficiaryScopeType = BeneficiaryScopeType.MEMBER;
     @Column(nullable = false) @Builder.Default private boolean shared = false;
     @Column(nullable = false) @Builder.Default private boolean active = true;
     @Version private Long version;

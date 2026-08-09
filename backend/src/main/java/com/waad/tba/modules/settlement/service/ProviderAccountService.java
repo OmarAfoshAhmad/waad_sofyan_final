@@ -158,9 +158,7 @@ public class ProviderAccountService {
                 long approvalCount = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 long reversalCount = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
                 if (approvalCount > reversalCount) {
-                        throw new IllegalStateException(
-                                        "Claim " + claimId
-                                                        + " has an active (unreversed) credit. Cannot credit twice.");
+                        return transactionService.findLatestByReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 }
 
                 // 4. Get net amount to credit (already calculated by claim financial pipeline)
@@ -187,6 +185,10 @@ public class ProviderAccountService {
                 // already-net amount, causing underpayment to providers.
                 // ═══════════════════════════════════════════════════════════════════════
                 BigDecimal amount = companyApprovedShare;
+                Long calculationVersion = claim.getLines().stream()
+                                .map(line -> line.getCalculationVersion() == null ? 1L
+                                                : line.getCalculationVersion().longValue())
+                                .max(Long::compareTo).orElse(1L);
 
                 // Persist discount snapshot for legacy claims that lack it
                 if (claim.getAppliedDiscountPercent() == null) {
@@ -217,9 +219,7 @@ public class ProviderAccountService {
                 long approvalCountLocked = transactionService.countForReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 long reversalCountLocked = transactionService.countForReference(ReferenceType.CLAIM_REVERSAL, claimId);
                 if (approvalCountLocked > reversalCountLocked) {
-                        throw new IllegalStateException(
-                                        "Claim " + claimId
-                                                        + " has an active credit (concurrent request). Cannot credit twice.");
+                        return transactionService.findLatestByReference(ReferenceType.CLAIM_APPROVAL, claimId);
                 }
 
                 // 6. Validate account is active
@@ -239,6 +239,7 @@ public class ProviderAccountService {
                 AccountTransaction transaction = transactionService.createClaimApprovedCredit(
                                 account,
                                 claimId,
+                                calculationVersion,
                                 amount,
                                 balanceBefore,
                                 userId);
@@ -387,6 +388,11 @@ public class ProviderAccountService {
                 }
 
                 BigDecimal amount = creditTx.getAmount();
+                Long calculationVersion = creditTx.getReferenceVersion();
+                if (calculationVersion == null) {
+                        // Compatibility for immutable legacy approval rows written before V150.
+                        calculationVersion = 1L;
+                }
 
                 Long providerId = claimRepository.findById(claimId)
                                 .map(Claim::getProviderId)
@@ -422,19 +428,12 @@ public class ProviderAccountService {
                 accountRepository.save(account);
 
                 AccountTransaction tx = transactionService.createClaimReversalDebit(
-                                account, claimId, amount, balanceBefore, userId);
+                                account, claimId, calculationVersion, amount, balanceBefore, userId);
 
                 log.info("REVERSAL DEBIT: claim={}, provider={}, amount={}, newBalance={}",
                                 claimId, providerId, amount, account.getRunningBalance());
                 return tx;
         }
-
-        // Claim amount adjustments for already-approved claims are handled by
-        // ClaimAmountAdjustmentService — moved out (Phase 7.1). The prior version
-        // here called account.debit() when an approved amount decreased, which
-        // raised totalPaid as if a payment had occurred. See that class for the
-        // corrected accounting (totalApproved/runningBalance only) and the
-        // (claimId, claimVersion) idempotency key a bare claimId cannot provide.
 
         /**
          * Debit the provider account when a claim is individually settled (paid
