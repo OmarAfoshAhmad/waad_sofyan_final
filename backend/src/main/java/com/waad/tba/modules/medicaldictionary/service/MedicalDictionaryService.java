@@ -328,8 +328,10 @@ public class MedicalDictionaryService {
         int identicalCount = 0;
         int rejectedCount = 0;
 
+        LocalDate effectiveFrom = resolveAndValidateEffectiveFrom(contract, request.getEffectiveFrom());
         for (PriceListClassificationItem item : items) {
-            PriceListSessionDiffResponse.ItemDiff diff = buildPriceListDiffItem(contract, item, request.isOnlyReviewedItems());
+            PriceListSessionDiffResponse.ItemDiff diff = buildPriceListDiffItem(
+                    contract, item, request.isOnlyReviewedItems(), effectiveFrom);
             diffs.add(diff);
             switch (diff.getAction()) {
                 case "CREATE" -> createCount++;
@@ -363,18 +365,7 @@ public class MedicalDictionaryService {
                 .filter(c -> Boolean.TRUE.equals(c.getActive()))
                 .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
 
-        LocalDate effectiveFrom = request.getEffectiveFrom() != null
-                ? request.getEffectiveFrom()
-                : contract.getStartDate();
-        if (effectiveFrom == null) {
-            throw new IllegalArgumentException("تاريخ بداية تطبيق قائمة الأسعار مطلوب لأن العقد لا يملك تاريخ بداية");
-        }
-        if (contract.getStartDate() != null && effectiveFrom.isBefore(contract.getStartDate())) {
-            throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يسبق تاريخ بداية العقد");
-        }
-        if (contract.getEndDate() != null && effectiveFrom.isAfter(contract.getEndDate())) {
-            throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يكون بعد نهاية العقد");
-        }
+        LocalDate effectiveFrom = resolveAndValidateEffectiveFrom(contract, request.getEffectiveFrom());
 
         var currentUser = authorizationService.getCurrentUser();
         Long actorId = currentUser == null ? null : currentUser.getId();
@@ -421,7 +412,8 @@ public class MedicalDictionaryService {
                 continue;
             }
 
-            Optional<ProviderContractPricingItem> effectiveExisting = findExistingPrice(contract.getId(), item);
+            Optional<ProviderContractPricingItem> effectiveExisting = findExistingPrice(
+                    contract.getId(), item, effectiveFrom);
             if (effectiveExisting.isPresent() && pricingItemMatches(effectiveExisting.get(), item, category)) {
                 ProviderContractPricingItem current = effectiveExisting.get();
                 item.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
@@ -441,7 +433,9 @@ public class MedicalDictionaryService {
             if (effectiveExisting.isPresent()) {
                 ProviderContractPricingItem existing = effectiveExisting.get();
                 if (existing.getEffectiveFrom() == null || existing.getEffectiveFrom().isBefore(effectiveFrom)) {
-                    existing.setEffectiveTo(effectiveFrom.minusDays(1));
+                    // Price periods are half-open [from, to): the new version owns
+                    // effectiveFrom and the previous version ends immediately before it.
+                    existing.setEffectiveTo(effectiveFrom);
                     existing.setUpdatedBy(actorId == null ? null : actorId.toString());
                     providerContractPricingItemRepository.save(existing);
                     superseded++;
@@ -503,6 +497,22 @@ public class MedicalDictionaryService {
                 .build();
     }
 
+    private LocalDate resolveAndValidateEffectiveFrom(ProviderContract contract, LocalDate requestedEffectiveFrom) {
+        LocalDate effectiveFrom = requestedEffectiveFrom != null
+                ? requestedEffectiveFrom
+                : contract.getStartDate();
+        if (effectiveFrom == null) {
+            throw new IllegalArgumentException("تاريخ بداية تطبيق قائمة الأسعار مطلوب لأن العقد لا يملك تاريخ بداية");
+        }
+        if (contract.getStartDate() != null && effectiveFrom.isBefore(contract.getStartDate())) {
+            throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يسبق تاريخ بداية العقد");
+        }
+        if (contract.getEndDate() != null && effectiveFrom.isAfter(contract.getEndDate())) {
+            throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يكون بعد نهاية العقد");
+        }
+        return effectiveFrom;
+    }
+
     private String validatePostableItem(PriceListClassificationItem item, boolean onlyReviewedItems) {
         if (item.getProviderServiceName() == null || item.getProviderServiceName().isBlank()) {
             return "اسم خدمة المرفق مطلوب";
@@ -538,16 +548,17 @@ public class MedicalDictionaryService {
         return null;
     }
 
-    private Optional<ProviderContractPricingItem> findExistingPrice(Long contractId, PriceListClassificationItem item) {
+    private Optional<ProviderContractPricingItem> findExistingPrice(Long contractId,
+                                                                    PriceListClassificationItem item,
+                                                                    LocalDate effectiveDate) {
         String serviceCode = blankToNull(item.getProviderServiceCode());
         if (serviceCode != null) {
             Optional<ProviderContractPricingItem> byCode = providerContractPricingItemRepository
-                    .findByContractIdAndServiceCodeActiveTrue(contractId, serviceCode);
+                    .findEffectiveInContractByCode(contractId, serviceCode, effectiveDate);
             if (byCode.isPresent()) return byCode;
         }
-        return providerContractPricingItemRepository.findByContractIdAndServiceNameActiveTrue(
-                contractId,
-                item.getProviderServiceName());
+        return providerContractPricingItemRepository.findEffectiveInContractByName(
+                contractId, item.getProviderServiceName(), effectiveDate);
     }
 
     private Optional<ProviderContractPricingItem> findOwnedActivePostedPricingItem(PriceListClassificationItem item, Long contractId) {
@@ -561,7 +572,8 @@ public class MedicalDictionaryService {
 
     private PriceListSessionDiffResponse.ItemDiff buildPriceListDiffItem(ProviderContract contract,
                                                                          PriceListClassificationItem item,
-                                                                         boolean onlyReviewedItems) {
+                                                                         boolean onlyReviewedItems,
+                                                                         LocalDate effectiveDate) {
         String validationError = validatePostableItem(item, onlyReviewedItems);
         if (validationError != null) {
             return priceListDiff(item, "REJECTED", validationError, null, null);
@@ -579,7 +591,7 @@ public class MedicalDictionaryService {
 
         Optional<ProviderContractPricingItem> existing = postedPricingItem.isPresent()
                 ? postedPricingItem
-                : findExistingPrice(contract.getId(), item);
+                : findExistingPrice(contract.getId(), item, effectiveDate);
 
         if (existing.isEmpty()) {
             return priceListDiff(item, "CREATE", "خدمة جديدة ستضاف إلى عقد مقدم الخدمة", null, category);

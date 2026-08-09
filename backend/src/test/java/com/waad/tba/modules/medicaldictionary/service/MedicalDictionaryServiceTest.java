@@ -32,6 +32,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -115,7 +116,8 @@ class MedicalDictionaryServiceTest {
         when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract));
         when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(item));
         when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category));
-        when(providerContractPricingItemRepository.findByContractIdAndServiceNameActiveTrue(200L, "كشف طبي"))
+        when(providerContractPricingItemRepository.findEffectiveInContractByName(
+                200L, "كشف طبي", LocalDate.of(2026, 1, 1)))
                 .thenReturn(Optional.of(existingPrice));
 
         PriceListSessionDiffResponse diff = service.diffPriceListSessionWithContract(100L, postRequest());
@@ -140,7 +142,8 @@ class MedicalDictionaryServiceTest {
         when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract));
         when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(item));
         when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category));
-        when(providerContractPricingItemRepository.findByContractIdAndServiceNameActiveTrue(200L, "كشف طبي"))
+        when(providerContractPricingItemRepository.findEffectiveInContractByName(
+                200L, "كشف طبي", LocalDate.of(2026, 1, 1)))
                 .thenReturn(Optional.of(existingPrice));
 
         PriceListSessionDiffResponse diff = service.diffPriceListSessionWithContract(100L, postRequest());
@@ -223,6 +226,8 @@ class MedicalDictionaryServiceTest {
                 .contractCode("PC-001")
                 .provider(Provider.builder().id(5L).name("مرفق اختبار").licenseNumber("LIC-1").build())
                 .status(ProviderContract.ContractStatus.ACTIVE)
+                .startDate(LocalDate.of(2026, 1, 1))
+                .endDate(LocalDate.of(2026, 12, 31))
                 .active(true)
                 .currency("LYD")
                 .build();

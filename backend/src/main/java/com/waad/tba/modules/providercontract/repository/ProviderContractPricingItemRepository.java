@@ -175,7 +175,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
-                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
        Optional<ProviderContractPricingItem> findEffectivePricing(
                      @Param("providerId") Long providerId,
                      @Param("pricingItemId") Long pricingItemId,
@@ -217,7 +217,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
-                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
        Optional<ProviderContractPricingItem> findEffectivePricingByCode(
                      @Param("providerId") Long providerId,
                      @Param("serviceCode") String serviceCode,
@@ -238,7 +238,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
-                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
        Optional<ProviderContractPricingItem> findEffectiveEmployerPricingByCode(
                      @Param("providerId") Long providerId,
                      @Param("employerId") Long employerId,
@@ -259,7 +259,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
-                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
        Optional<ProviderContractPricingItem> findEffectiveGlobalPricingByCode(
                      @Param("providerId") Long providerId,
                      @Param("serviceCode") String serviceCode,
@@ -405,7 +405,7 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
                      "AND p.contract.startDate <= :date " +
                      "AND (p.contract.endDate IS NULL OR p.contract.endDate >= :date) " +
                      "AND (p.effectiveFrom IS NULL OR p.effectiveFrom <= :date) " +
-                     "AND (p.effectiveTo IS NULL OR p.effectiveTo >= :date)")
+                      "AND (p.effectiveTo IS NULL OR :date < p.effectiveTo)")
        List<ProviderContractPricingItem> findEffectivePricingByProvider(
                      @Param("providerId") Long providerId,
                      @Param("date") LocalDate date);

@@ -102,7 +102,8 @@ public class ProviderContractPricingItem {
     @Builder.Default
     private String currency = "LYD";
 
-    @Column(name = "effective_from")
+    @NotNull(message = "Effective-from date is required")
+    @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;
 
     @Column(name = "effective_to")
@@ -177,6 +178,12 @@ public class ProviderContractPricingItem {
     @PrePersist
     @PreUpdate
     public void calculateDiscountPercent() {
+        if (effectiveFrom == null && contract != null) {
+            // Historical callers created the first price together with its contract.
+            // The contract start is the only deterministic, auditable fallback;
+            // never use LocalDate.now() because that would rewrite historical meaning.
+            effectiveFrom = contract.getStartDate();
+        }
         if (basePrice != null && contractPrice != null && basePrice.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal discount = basePrice.subtract(contractPrice)
                     .divide(basePrice, 4, RoundingMode.HALF_UP)
@@ -207,7 +214,7 @@ public class ProviderContractPricingItem {
         }
 
         return !effectiveStart.isAfter(today) &&
-                (effectiveEnd == null || !effectiveEnd.isBefore(today));
+                (effectiveEnd == null || today.isBefore(effectiveEnd));
     }
 
     public BigDecimal getSavingsAmount() {
