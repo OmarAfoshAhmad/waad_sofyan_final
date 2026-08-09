@@ -1295,18 +1295,12 @@ public class ProviderPortalController {
     }
 
     /**
-     * Add a custom pricing item to the current provider's active contract.
-     * 
-     * SECURITY: Provider can only add pricing to their own active contract.
-     * 
-     * POST /api/v1/provider/my-contract/pricing
+     * Retired write path. New claim services must enter the governed medical-review workflow.
+     * Kept temporarily for binary compatibility while access is denied for every role.
      */
     @PostMapping("/my-contract/pricing")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MEDICAL_REVIEWER', 'DATA_ENTRY', 'PROVIDER_STAFF')")
-    @Operation(
-        summary = "Add custom service pricing to my active contract (Provider Portal)",
-        description = "Adds a custom service pricing item to the active contract of the current provider."
-    )
+    @PreAuthorize("denyAll()")
+    @Operation(hidden = true)
     public ResponseEntity<ApiResponse<MyContractServiceDto>> addMyContractPricing(
             @Valid @RequestBody ProviderContractPricingItemCreateDto dto,
             @RequestParam(value = "providerId", required = false) Long paramProviderId) {

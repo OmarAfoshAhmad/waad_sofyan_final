@@ -1989,25 +1989,6 @@ export default function ProviderClaimsSubmission() {
                                 );
                               }}
                             />
-                            {line.medicalCategoryId && (
-                              <Button
-                                size="small"
-                                onClick={() => handleOpenCustomServiceDialog(line.id)}
-                                sx={{
-                                  mt: 0.5,
-                                  fontSize: '0.75rem',
-                                  p: 0,
-                                  minWidth: 0,
-                                  alignSelf: 'flex-start',
-                                  textTransform: 'none',
-                                  fontWeight: 600,
-                                  color: 'primary.main',
-                                  '&:hover': { textDecoration: 'underline', bgcolor: 'transparent' }
-                                }}
-                              >
-                                + إضافة خدمة جديدة لقائمة الأسعار
-                              </Button>
-                            )}
                           </TableCell>
 
                           {/* 💡 Diagnosis Association column (New) */}

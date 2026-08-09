@@ -2356,7 +2356,6 @@ export default function ClaimBatchEntry() {
                       policyInfo={policyInfo}
                       visibleColumns={visibleColumns}
                       triggerConfirm={triggerConfirm}
-                      onOpenCustomServiceDialog={() => handleOpenCustomServiceDialog(line.id)}
                       onOpenClassificationReview={openClassificationReviewDialog}
                     />
                   ))}
