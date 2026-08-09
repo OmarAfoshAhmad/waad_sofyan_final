@@ -176,15 +176,22 @@ class ClaimReviewServiceTest {
     }
 
     @Test
-    void requestCorrection_portalClaim_shouldRequireMedicalReviewFlow() {
+    void requestCorrection_portalClaim_shouldReverseAndOpenForResubmission() {
         claim.setStatus(ClaimStatus.APPROVED);
         claim.setSubmissionSource(ClaimSubmissionSource.PROVIDER_PORTAL);
+        claim.setApprovedAmount(new BigDecimal("800"));
+        claim.setNetProviderAmount(new BigDecimal("800"));
         when(claimRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(claim));
         when(authorizationService.getCurrentUser()).thenReturn(reviewer);
+        when(claimRepository.save(any(Claim.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimMapper.toViewDto(any(Claim.class))).thenReturn(new ClaimViewDto());
 
-        assertThatThrownBy(() -> claimReviewService.requestCorrection(100L, "تصحيح"))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("البوابة");
+        claimReviewService.requestCorrection(100L, "تصحيح");
+
+        verify(claimReversalOrchestrator).reverseClaim(100L, 1L);
+        verify(claimStateMachine).transition(claim, ClaimStatus.NEEDS_CORRECTION, reviewer);
+        assertThat(claim.getApprovedAmount()).isNull();
+        assertThat(claim.getNetProviderAmount()).isNull();
     }
 
     @Test

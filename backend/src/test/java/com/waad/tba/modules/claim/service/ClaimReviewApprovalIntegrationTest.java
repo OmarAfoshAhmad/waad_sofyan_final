@@ -1,6 +1,7 @@
 package com.waad.tba.modules.claim.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -346,6 +347,12 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         // 8) Use the actual application correction command, not the internal
         // orchestrator. This must reverse every financial effect before the claim
         // becomes editable.
+        transactionTemplate.executeWithoutResult(ignored -> {
+            var portalClaim = claimRepository.findByIdForFinancialUpdate(claimId).orElseThrow();
+            portalClaim.setSubmissionSource(
+                    com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL);
+            claimRepository.saveAndFlush(portalClaim);
+        });
         transactionTemplate.executeWithoutResult(ignored ->
                 claimReviewService.requestCorrection(claimId, "تصحيح مالي اختباري"));
         var correction = claimRepository.findById(claimId).orElseThrow();
@@ -372,20 +379,37 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(reversedAccount.getTotalApproved()).isEqualByComparingTo("0.00");
         assertThat(reversedAccount.getRunningBalance()).isEqualByComparingTo("0.00");
 
-        // 9) Re-approve through the real trusted correction endpoint. The service,
-        // not this test, owns calculation-version advancement and snapshotting.
-        transactionTemplate.executeWithoutResult(ignored -> claimService.updateClaimData(
-                claimId,
-                ClaimDataUpdateDto.builder()
+        // 9) A portal actor may edit but may never jump from NEEDS_CORRECTION to
+        // APPROVED. It must submit, enter review, and receive a new reviewer decision.
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(ignored ->
+                claimService.updateClaimData(claimId, ClaimDataUpdateDto.builder()
                         .diagnosisCode("Z00.0")
                         .status(ClaimStatus.APPROVED)
+                        .build())))
+                .hasMessageContaining("يجب إعادة إرسال مطالبة البوابة");
+
+        ClaimViewDto correctedPortalClaim = transactionTemplate.execute(ignored ->
+                claimService.updateClaimData(claimId, ClaimDataUpdateDto.builder()
+                        .diagnosisCode("Z00.0")
                         .lines(List.of(ClaimLineDto.builder()
                                 .id(lineId)
                                 .medicalServiceId(service.getId())
                                 .quantity(2)
                                 .build()))
                         .build()));
-        assertThat(claimRepository.findById(claimId).orElseThrow().getStatus())
+        Long correctedLineId = correctedPortalClaim.getLines().get(0).getId();
+        transactionTemplate.executeWithoutResult(ignored -> claimService.submitClaim(claimId));
+        transactionTemplate.executeWithoutResult(ignored -> claimService.startReview(claimId));
+        transactionTemplate.executeWithoutResult(ignored -> claimReviewService.requestApproval(
+                claimId,
+                ClaimApproveDto.builder()
+                        .lineDecisions(List.of(LineDecision.builder()
+                                .lineId(correctedLineId)
+                                .decision(ClaimLineReviewDecision.APPROVE)
+                                .build()))
+                        .notes("Corrected portal claim reviewed again")
+                        .build()));
+        assertThat(awaitClaimStatus(claimId, ClaimStatus.APPROVED, ClaimStatus.REJECTED).getStatus())
                 .isEqualTo(ClaimStatus.APPROVED);
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
                 claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);

@@ -181,10 +181,6 @@ public class ClaimReviewService {
         if (reason == null || reason.isBlank()) {
             throw new BusinessRuleException("سبب إعادة فتح المطالبة للتصحيح مطلوب");
         }
-        if (claim.getSubmissionSource() == com.waad.tba.modules.claim.entity.ClaimSubmissionSource.PROVIDER_PORTAL) {
-            throw new BusinessRuleException("مطالبة البوابة تُعاد لمقدم الخدمة من شاشة المراجعة الطبية");
-        }
-
         ClaimStatus previousStatus = claim.getStatus();
         BigDecimal previousApprovedAmount = claim.getApprovedAmount();
         BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
