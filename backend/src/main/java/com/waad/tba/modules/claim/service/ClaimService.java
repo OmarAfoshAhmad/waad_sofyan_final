@@ -161,6 +161,7 @@ public class ClaimService {
     // Phase 12 (2026-03-13): God-Class Refactoring
     private final ClaimReviewService claimReviewService;
     private final ClaimFinancialSnapshotService financialSnapshotService;
+    private final ClaimFinancialHistoryGuard claimFinancialHistoryGuard;
 
     // Jakarta persistence for native cleanup (RESTRICT constraint bypass)
     private final jakarta.persistence.EntityManager em;
@@ -1863,18 +1864,10 @@ public class ClaimService {
             throw new BusinessRuleException("يجب حذف المطالبة ناعماً أولاً قبل الحذف النهائي");
         }
 
-        // ── عكس القيد المالي إن لم يكن قد حُوِّل بعد (بيانات قديمة أو لأي سبب) ──
-        // يجب قبل حذف الكيان لأن debitOnClaimReversal يحتاج الـ claim للبحث عن
-        // providerId
-        if (claim.getProviderId() != null) {
-            try {
-                Long userId = currentUser != null ? currentUser.getId() : null;
-                providerAccountService.debitOnClaimReversal(claim.getId(), userId);
-                log.info("✅ Hard-delete reversal debit applied (or skipped if already done) for claim {}", id);
-            } catch (Exception e) {
-                log.warn("⚠️ Could not reverse provider account for hard-deleting claim {}: {}", id, e.getMessage());
-            }
-        }
+        // Financial history is append-only. A finalized claim may be voided and
+        // reversed, but never physically erased. Draft/no-history records remain
+        // eligible for administrative cleanup.
+        claimFinancialHistoryGuard.assertHardDeleteAllowed(id);
 
         em.createNativeQuery("DELETE FROM claim_audit_logs WHERE claim_id = :cid")
                 .setParameter("cid", id)

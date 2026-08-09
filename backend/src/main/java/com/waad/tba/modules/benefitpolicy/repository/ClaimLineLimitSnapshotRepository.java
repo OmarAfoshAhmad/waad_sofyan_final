@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface ClaimLineLimitSnapshotRepository extends JpaRepository<ClaimLineLimitSnapshot, Long> {
 
+    boolean existsByClaimId(Long claimId);
+
     List<ClaimLineLimitSnapshot> findByClaimIdOrderByClaimLineIdAscConsumptionOrderAsc(Long claimId);
 
     List<ClaimLineLimitSnapshot> findByClaimLineIdAndCalculationVersion(Long claimLineId, Integer calculationVersion);

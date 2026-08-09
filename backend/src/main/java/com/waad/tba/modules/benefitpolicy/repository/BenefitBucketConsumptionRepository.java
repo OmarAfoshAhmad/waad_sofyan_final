@@ -9,6 +9,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface BenefitBucketConsumptionRepository extends JpaRepository<BenefitBucketConsumption, Long> {
+    boolean existsByClaimId(Long claimId);
+
     interface BucketAmountBalanceProjection {
         Long getBucketId();
         LocalDate getPeriodStart();
