@@ -4,7 +4,6 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.common.service.BusinessDaysCalculatorService;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService;
 import com.waad.tba.modules.audit.enums.AuditAction;
 import com.waad.tba.modules.audit.enums.AuditSource;
 import com.waad.tba.modules.audit.enums.EntityType;
@@ -62,7 +61,7 @@ public class ClaimReviewService {
     private final AuthorizationService authorizationService;
     private final ReviewerProviderIsolationService reviewerIsolationService;
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
-    private final BenefitBucketLedgerService benefitBucketLedgerService;
+    private final ClaimReversalOrchestrator claimReversalOrchestrator;
     private final ClaimStateMachine claimStateMachine;
     private final BusinessDaysCalculatorService businessDaysCalculator;
     private final ClaimAuditService claimAuditService;
@@ -190,11 +189,8 @@ public class ClaimReviewService {
         BigDecimal previousApprovedAmount = claim.getApprovedAmount();
         BigDecimal previousNetProviderAmount = claim.getNetProviderAmount();
 
-        benefitBucketLedgerService.reverseClaim(id);
-        if (claim.getProviderId() != null) {
-            providerAccountService.debitOnClaimReversal(
-                    id, currentUser != null ? currentUser.getId() : null);
-        }
+        claimReversalOrchestrator.reverseClaim(
+                id, currentUser != null ? currentUser.getId() : null);
         claim.setReviewerComment(reason.trim());
         claim.setReviewPaused(false);
         claim.setReviewPauseReason(null);

@@ -1853,15 +1853,6 @@ public class ClaimService {
 
         claimRepository.save(claim);
 
-        // Keep the claim void and provider-account reversal atomic. The previous
-        // AFTER_COMMIT-only flow could leave an inactive claim with an unreversed
-        // provider balance when the second transaction failed.
-        if (wasApproved && claim.getProviderId() != null) {
-            providerAccountService.debitOnClaimReversal(
-                    claim.getId(),
-                    currentUser != null ? currentUser.getId() : null);
-        }
-
         // Record Medical Audit Log (PHASE 10 - Secure Auditing)
         medicalAuditLogService.record(AuditLogWriteRequest.builder()
                 .entityType(EntityType.CLAIM)
@@ -1876,9 +1867,8 @@ public class ClaimService {
         log.info("✅ Claim {} soft-deleted by {}. Reason: {}. Annual limits automatically restored.", id,
                 currentUser != null ? currentUser.getFullName() : "system", finalReason);
 
-        // Keep publishing the domain event for the benefit-bucket ledger. The
-        // provider-account listener is idempotent and will observe the reversal
-        // already committed in this transaction.
+        // The BEFORE_COMMIT listener invokes the single atomic reversal gate:
+        // buckets, provider account and immutable outbox succeed or roll back together.
         if (wasApproved && claim.getProviderId() != null) {
             log.info(
                     "📤 Claim {} was APPROVED before deletion — publishing ClaimReversalEvent to debit provider account",

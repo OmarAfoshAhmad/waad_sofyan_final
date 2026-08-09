@@ -128,6 +128,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private FinancialOutboxEventRepository financialOutboxEventRepository;
     @Autowired private AccountTransactionRepository accountTransactionRepository;
     @Autowired private ClaimApprovalOrchestrator claimApprovalOrchestrator;
+    @Autowired private ClaimReversalOrchestrator claimReversalOrchestrator;
     @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private ClaimRepository claimRepository;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -338,5 +339,26 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(financialOutboxEventRepository
                 .findByAggregateTypeAndAggregateIdAndEventType(
                         "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE)).hasSize(1);
+
+        // 8) Financial reversal is one atomic, idempotent gate too. Replaying it
+        // cannot restore the ceiling twice, debit the provider twice, or emit a
+        // second durable reversal event.
+        transactionTemplate.executeWithoutResult(ignored -> {
+            claimReversalOrchestrator.reverseClaim(claimId, 1L);
+            claimReversalOrchestrator.reverseClaim(claimId, 1L);
+        });
+        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED)).isEmpty();
+        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.REVERSED)).hasSize(2);
+        assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
+                com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_REVERSAL,
+                claimId)).isEqualTo(1);
+        assertThat(financialOutboxEventRepository
+                .findByAggregateTypeAndAggregateIdAndEventType(
+                        "CLAIM", claimId, ClaimReversalOutboxService.EVENT_TYPE)).hasSize(1);
+        ProviderAccount reversedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
+        assertThat(reversedAccount.getTotalApproved()).isEqualByComparingTo("0.00");
+        assertThat(reversedAccount.getRunningBalance()).isEqualByComparingTo("0.00");
     }
 }

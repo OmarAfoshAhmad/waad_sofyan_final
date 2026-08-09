@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  * - تُستدعى من ClaimApprovalEventListener و ClaimReversalEventListener
  * - اعتماد المطالبة يشتغل قبل COMMIT داخل نفس المعاملة المالية
  * - MANDATORY يمنع إنشاء قيد مقدم خدمة خارج معاملة الاعتماد
- * - مسار العكس القديم ما زال مستقلاً مؤقتاً إلى أن تُبنى بوابة العكس الذرية
+ * - العكس يعمل قبل COMMIT داخل نفس معاملة تغيير حالة المطالبة
  *
  * عمليات:
  * creditForClaim() ← عند إضافة مطالبة معتمدة أو استعادتها
@@ -44,26 +44,13 @@ public class ClaimFinancialSyncService {
     }
 
     /**
-     * إضافة قيد مدين لحساب مقدم الخدمة عند حذف مطالبة معتمدة.
-     * يعمل في transaction مستقلة بعد commit الحذف مباشرة (synchronous).
-     *
-     * ملاحظة مهمة: الحذف تمّ بالفعل (AFTER_COMMIT). إذا فشل عكس الرصيد
-     * نسجّل تحذيراً للمراجعة اليدوية دون أن نوقف الحذف.
+     * عكس قيد مقدم الخدمة داخل نفس معاملة عكس المطالبة. لا يُسمح بابتلاع
+     * الأخطاء: فشل الحساب يُلغي عكس السقوف وتغيير الحالة معاً.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void reverseForClaim(Long claimId, Long userId) {
         log.info("🔄 [SYNC] reverseForClaim: claimId={}, userId={}", claimId, userId);
-        try {
-            providerAccountService.debitOnClaimReversal(claimId, userId);
-            log.info("✅ [SYNC] Provider account reversed for claim {}", claimId);
-        } catch (IllegalStateException e) {
-            // رصيد غير كافٍ أو حالة غير متوقعة — الحذف تمّ بالفعل، لا نُوقفه
-            log.warn("⚠️ [SYNC] Could not reverse provider account for claim {} (claim already deleted): {}",
-                    claimId, e.getMessage());
-        } catch (Exception e) {
-            // أي خطأ آخر — نسجّل ونتجاهل لأن الحذف لا يجب أن يُعاد
-            log.error("🚨 [SYNC] Unexpected error reversing provider account for claim {}: {}",
-                    claimId, e.getMessage(), e);
-        }
+        providerAccountService.debitOnClaimReversal(claimId, userId);
+        log.info("✅ [SYNC] Provider account reversal present for claim {}", claimId);
     }
 }

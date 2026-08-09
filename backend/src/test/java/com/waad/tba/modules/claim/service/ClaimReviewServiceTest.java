@@ -22,7 +22,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.benefitpolicy.service.BenefitBucketLedgerService;
 import com.waad.tba.modules.claim.dto.ClaimApproveDto;
 import com.waad.tba.modules.claim.dto.ClaimRejectDto;
 import com.waad.tba.modules.claim.dto.ClaimSettleDto;
@@ -61,7 +60,7 @@ class ClaimReviewServiceTest {
     @Mock
     private BenefitPolicyCoverageService benefitPolicyCoverageService;
     @Mock
-    private BenefitBucketLedgerService benefitBucketLedgerService;
+    private ClaimReversalOrchestrator claimReversalOrchestrator;
     @Mock
     private com.waad.tba.common.service.BusinessDaysCalculatorService businessDaysCalculator;
     @Mock
@@ -169,9 +168,8 @@ class ClaimReviewServiceTest {
 
         claimReviewService.requestCorrection(100L, "تصحيح البنود");
 
-        verify(benefitBucketLedgerService).reverseClaim(100L);
+        verify(claimReversalOrchestrator).reverseClaim(100L, 1L);
         verify(claimStateMachine).transition(claim, ClaimStatus.NEEDS_CORRECTION, reviewer);
-        verify(providerAccountService).debitOnClaimReversal(100L, 1L);
         assertThat(claim.getApprovedAmount()).isNull();
         assertThat(claim.getNetProviderAmount()).isNull();
         assertThat(claim.getReviewerComment()).isEqualTo("تصحيح البنود");
