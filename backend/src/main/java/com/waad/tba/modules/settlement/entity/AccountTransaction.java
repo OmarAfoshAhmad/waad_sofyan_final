@@ -131,8 +131,14 @@ public class AccountTransaction {
      * Create a CREDIT transaction (claim approved)
      */
     public static AccountTransaction createClaimApprovedCredit(
+            Long accountId, Long claimId, BigDecimal amount, BigDecimal balanceBefore, Long userId) {
+        return createClaimApprovedCredit(accountId, claimId, null, amount, balanceBefore, userId);
+    }
+
+    public static AccountTransaction createClaimApprovedCredit(
             Long accountId,
             Long claimId,
+            Long calculationVersion,
             BigDecimal amount,
             BigDecimal balanceBefore,
             Long userId) {
@@ -147,6 +153,7 @@ public class AccountTransaction {
                 .balanceAfter(balanceAfter)
                 .referenceType(ReferenceType.CLAIM_APPROVAL)
                 .referenceId(claimId)
+                .referenceVersion(calculationVersion)
                 .description(String.format("اعتماد مطالبة رقم %d - إضافة %s", claimId, amount))
                 .createdBy(userId)
                 .build();
@@ -337,8 +344,14 @@ public class AccountTransaction {
      * idempotency checks can find it by (CLAIM_REVERSAL, claimId).
      */
     public static AccountTransaction createClaimReversalDebit(
+            Long accountId, Long claimId, BigDecimal amount, BigDecimal balanceBefore, Long userId) {
+        return createClaimReversalDebit(accountId, claimId, null, amount, balanceBefore, userId);
+    }
+
+    public static AccountTransaction createClaimReversalDebit(
             Long accountId,
             Long claimId,
+            Long calculationVersion,
             BigDecimal amount,
             BigDecimal balanceBefore,
             Long userId) {
@@ -353,6 +366,7 @@ public class AccountTransaction {
                 .balanceAfter(balanceAfter)
                 .referenceType(ReferenceType.CLAIM_REVERSAL)
                 .referenceId(claimId)
+                .referenceVersion(calculationVersion)
                 .description(String.format("عكس اعتماد مطالبة مرفوضة رقم %d - خصم %s", claimId, amount))
                 .createdBy(userId)
                 .build();

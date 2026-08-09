@@ -185,6 +185,10 @@ public class ProviderAccountService {
                 // already-net amount, causing underpayment to providers.
                 // ═══════════════════════════════════════════════════════════════════════
                 BigDecimal amount = companyApprovedShare;
+                Long calculationVersion = claim.getLines().stream()
+                                .map(line -> line.getCalculationVersion() == null ? 1L
+                                                : line.getCalculationVersion().longValue())
+                                .max(Long::compareTo).orElse(1L);
 
                 // Persist discount snapshot for legacy claims that lack it
                 if (claim.getAppliedDiscountPercent() == null) {
@@ -235,6 +239,7 @@ public class ProviderAccountService {
                 AccountTransaction transaction = transactionService.createClaimApprovedCredit(
                                 account,
                                 claimId,
+                                calculationVersion,
                                 amount,
                                 balanceBefore,
                                 userId);
@@ -383,6 +388,11 @@ public class ProviderAccountService {
                 }
 
                 BigDecimal amount = creditTx.getAmount();
+                Long calculationVersion = creditTx.getReferenceVersion();
+                if (calculationVersion == null) {
+                        // Compatibility for immutable legacy approval rows written before V150.
+                        calculationVersion = 1L;
+                }
 
                 Long providerId = claimRepository.findById(claimId)
                                 .map(Claim::getProviderId)
@@ -418,7 +428,7 @@ public class ProviderAccountService {
                 accountRepository.save(account);
 
                 AccountTransaction tx = transactionService.createClaimReversalDebit(
-                                account, claimId, amount, balanceBefore, userId);
+                                account, claimId, calculationVersion, amount, balanceBefore, userId);
 
                 log.info("REVERSAL DEBIT: claim={}, provider={}, amount={}, newBalance={}",
                                 claimId, providerId, amount, account.getRunningBalance());

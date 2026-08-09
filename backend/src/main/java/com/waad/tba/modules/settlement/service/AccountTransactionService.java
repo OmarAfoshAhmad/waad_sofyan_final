@@ -51,19 +51,22 @@ public class AccountTransactionService {
     public AccountTransaction createClaimApprovedCredit(
             ProviderAccount account,
             Long claimId,
+            Long calculationVersion,
             BigDecimal amount,
             BigDecimal balanceBefore,
             Long userId) {
 
-        // Validate: no duplicate transaction for same claim
-        if (transactionRepository.existsByReferenceTypeAndReferenceId(ReferenceType.CLAIM_APPROVAL, claimId)) {
+        if (transactionRepository.existsByReferenceTypeAndReferenceIdAndReferenceVersion(
+                ReferenceType.CLAIM_APPROVAL, claimId, calculationVersion)) {
             throw new IllegalStateException(
-                    "Transaction already exists for claim " + claimId + ". Cannot credit twice.");
+                    "Approval transaction already exists for claim " + claimId
+                            + " calculation cycle " + calculationVersion + ".");
         }
 
         AccountTransaction transaction = AccountTransaction.createClaimApprovedCredit(
                 account.getId(),
                 claimId,
+                calculationVersion,
                 amount,
                 balanceBefore,
                 userId);
@@ -184,20 +187,35 @@ public class AccountTransactionService {
      */
     @Transactional
     public AccountTransaction createClaimReversalDebit(
+            ProviderAccount account, Long claimId, BigDecimal amount,
+            BigDecimal balanceBefore, Long userId) {
+        if (transactionRepository.existsByReferenceTypeAndReferenceId(ReferenceType.CLAIM_REVERSAL, claimId)) {
+            throw new IllegalStateException(
+                    "Reversal transaction already exists for legacy claim " + claimId + ".");
+        }
+        return createClaimReversalDebit(account, claimId, null, amount, balanceBefore, userId);
+    }
+
+    @Transactional
+    public AccountTransaction createClaimReversalDebit(
             ProviderAccount account,
             Long claimId,
+            Long calculationVersion,
             BigDecimal amount,
             BigDecimal balanceBefore,
             Long userId) {
 
-        if (transactionRepository.existsByReferenceTypeAndReferenceId(ReferenceType.CLAIM_REVERSAL, claimId)) {
+        if (transactionRepository.existsByReferenceTypeAndReferenceIdAndReferenceVersion(
+                ReferenceType.CLAIM_REVERSAL, claimId, calculationVersion)) {
             throw new IllegalStateException(
-                    "Reversal transaction already exists for claim " + claimId + ". Cannot reverse twice.");
+                    "Reversal transaction already exists for claim " + claimId
+                            + " calculation cycle " + calculationVersion + ".");
         }
 
         AccountTransaction transaction = AccountTransaction.createClaimReversalDebit(
                 account.getId(),
                 claimId,
+                calculationVersion,
                 amount,
                 balanceBefore,
                 userId);

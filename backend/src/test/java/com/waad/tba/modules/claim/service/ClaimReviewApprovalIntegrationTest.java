@@ -360,5 +360,27 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         ProviderAccount reversedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
         assertThat(reversedAccount.getTotalApproved()).isEqualByComparingTo("0.00");
         assertThat(reversedAccount.getRunningBalance()).isEqualByComparingTo("0.00");
+
+        // 9) A corrected calculation is a new financial cycle, not resurrection
+        // or mutation of the old one. Its new calculationVersion must allow one
+        // fresh approval while retaining all original and reversal history.
+        transactionTemplate.executeWithoutResult(ignored -> {
+            var corrected = claimRepository.findByIdForFinancialUpdate(claimId).orElseThrow();
+            corrected.getLines().forEach(line -> line.setCalculationVersion(
+                    (line.getCalculationVersion() == null ? 1 : line.getCalculationVersion()) + 1));
+            claimRepository.saveAndFlush(corrected);
+            claimApprovalOrchestrator.commitApprovedClaim(claimId, 1L);
+        });
+        assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
+                claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
+        assertThat(accountTransactionRepository.countByReferenceTypeAndReferenceId(
+                com.waad.tba.modules.settlement.entity.AccountTransaction.ReferenceType.CLAIM_APPROVAL,
+                claimId)).isEqualTo(2);
+        assertThat(financialOutboxEventRepository
+                .findByAggregateTypeAndAggregateIdAndEventType(
+                        "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE)).hasSize(2);
+        ProviderAccount reapprovedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
+        assertThat(reapprovedAccount.getTotalApproved()).isEqualByComparingTo("720.00");
+        assertThat(reapprovedAccount.getRunningBalance()).isEqualByComparingTo("720.00");
     }
 }
