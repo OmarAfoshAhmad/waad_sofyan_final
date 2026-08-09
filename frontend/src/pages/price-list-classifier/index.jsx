@@ -9,6 +9,11 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   FormControlLabel,
   Grid,
   LinearProgress,
@@ -33,10 +38,12 @@ import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import { useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
 import { getAllMedicalCategories } from 'services/api/medical-categories.service';
 import providersService from 'services/api/providers.service';
 import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
+import { useSnackbar } from 'notistack';
 
 const loadXlsx = async () => import('xlsx');
 
@@ -611,6 +618,8 @@ const downloadTemplate = async (categories = []) => {
 };
 
 export default function PriceListClassifierPage() {
+  const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [fileName, setFileName] = useState('');
   const [rawRows, setRawRows] = useState([]);
@@ -621,6 +630,7 @@ export default function PriceListClassifierPage() {
   const [approvingSynonyms, setApprovingSynonyms] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
   const [postingContract, setPostingContract] = useState(false);
+  const [postConfirm, setPostConfirm] = useState({ open: false, data: null, message: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
@@ -636,6 +646,14 @@ export default function PriceListClassifierPage() {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  useEffect(() => {
+    if (success) enqueueSnackbar(success, { variant: 'success' });
+  }, [success, enqueueSnackbar]);
+
+  useEffect(() => {
+    if (error) enqueueSnackbar(error, { variant: 'error' });
+  }, [error, enqueueSnackbar]);
 
   const items = useMemo(() => result?.items || [], [result?.items]);
   const selectedProviderId = useMemo(() => {
@@ -1162,21 +1180,52 @@ export default function PriceListClassifierPage() {
         `جديد: ${diff.createCount || 0}، تحديث: ${diff.updateCount || 0}، مطابق: ${diff.identicalCount || 0}\n` +
         `مرفوض أو يحتاج مراجعة: ${diff.rejectedCount || 0}\n\n` +
         'لن تُستبدل أسعار فعالة متعارضة تلقائياً. هل تريد المتابعة؟';
-      if (!window.confirm(message)) return;
+      setPostConfirm({
+        open: true,
+        message,
+        data: { savedId: saved.id, selectedItemIds, contract, effectiveFrom }
+      });
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || 'فشل ترحيل الخدمات المعتمدة إلى عقد مقدم الخدمة');
+    } finally {
+      setPostingContract(false);
+    }
+  };
 
-      const posted = await medicalDictionaryService.postPriceListClassificationSessionToContract(saved.id, {
-        contractId: contract.id,
-        effectiveFrom,
+  const executeConfirmedContractPost = async () => {
+    const data = postConfirm.data;
+    if (!data) return;
+    setPostConfirm({ open: false, data: null, message: '' });
+    setPostingContract(true);
+    setError('');
+    setSuccess('');
+    try {
+      const posted = await medicalDictionaryService.postPriceListClassificationSessionToContract(data.savedId, {
+        contractId: data.contract.id,
+        effectiveFrom: data.effectiveFrom,
         replaceEffectivePrices: false,
         onlyReviewedItems: true,
-        itemIds: selectedItemIds
+        itemIds: data.selectedItemIds
       });
-      setSuccess(
-        `تم الترحيل إلى العقد ${contract.contractCode || contract.id}: أُنشئ ${posted.created || 0}، حُدّث ${
-          posted.updated || 0
-        }، مطابق ${posted.skipped || 0}، ورُفض ${posted.rejected || 0}.`
-      );
-      setSessionInfo((current) => ({ ...(current || {}), backendSessionId: saved.id, backendStatus: posted.session?.status }));
+      const changed = (posted.created || 0) + (posted.updated || 0);
+      if (changed === 0 && (posted.skipped || 0) > 0 && (posted.rejected || 0) === 0) {
+        setSuccess(
+          `لم تُضف خدمات جديدة: الخدمات المحددة موجودة ومطابقة بالفعل في العقد ${data.contract.contractCode || data.contract.id}.`
+        );
+      } else {
+        setSuccess(
+          `اكتمل الترحيل إلى العقد ${data.contract.contractCode || data.contract.id}: أُنشئ ${posted.created || 0}، حُدّث ${
+            posted.updated || 0
+          }، موجود مسبقاً ${posted.skipped || 0}، ورُفض ${posted.rejected || 0}.`
+        );
+      }
+      setSessionInfo((current) => ({
+        ...(current || {}),
+        backendSessionId: data.savedId,
+        backendStatus: posted.session?.status
+      }));
+      await queryClient.invalidateQueries({ queryKey: ['provider-contracts'] });
+      await queryClient.invalidateQueries({ queryKey: ['provider-contract'] });
       setSelectedSourceKeys([]);
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || 'فشل ترحيل الخدمات المعتمدة إلى عقد مقدم الخدمة');
@@ -1397,9 +1446,6 @@ export default function PriceListClassifierPage() {
               : ''}
           </Typography>
         )}
-        {error && <Alert severity="error">{error}</Alert>}
-        {success && <Alert severity="success">{success}</Alert>}
-
         {result && (
           <Card>
             <CardContent>
@@ -1761,6 +1807,25 @@ export default function PriceListClassifierPage() {
           </Card>
         )}
       </Stack>
+      <Dialog
+        open={postConfirm.open}
+        onClose={() => !postingContract && setPostConfirm({ open: false, data: null, message: '' })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>تأكيد ترحيل الخدمات إلى العقد</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ whiteSpace: 'pre-line' }}>{postConfirm.message}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPostConfirm({ open: false, data: null, message: '' })} disabled={postingContract}>
+            إلغاء
+          </Button>
+          <Button variant="contained" color="success" onClick={executeConfirmedContractPost} disabled={postingContract}>
+            تأكيد الترحيل
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
