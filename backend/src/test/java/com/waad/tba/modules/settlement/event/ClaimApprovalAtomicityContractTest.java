@@ -1,6 +1,7 @@
 package com.waad.tba.modules.settlement.event;
 
 import com.waad.tba.modules.settlement.service.ClaimFinancialSyncService;
+import com.waad.tba.modules.claim.service.ClaimApprovalOutboxService;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,16 @@ class ClaimApprovalAtomicityContractTest {
     void providerCreditRequiresTheExistingApprovalTransaction() throws Exception {
         var method = ClaimFinancialSyncService.class
                 .getDeclaredMethod("creditForClaim", Long.class, Long.class);
+        var annotation = method.getAnnotation(Transactional.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.propagation()).isEqualTo(Propagation.MANDATORY);
+    }
+
+    @Test
+    void outboxWriteRequiresTheExistingApprovalTransaction() throws Exception {
+        var method = ClaimApprovalOutboxService.class
+                .getDeclaredMethod("record", Long.class, Long.class);
         var annotation = method.getAnnotation(Transactional.class);
 
         assertThat(annotation).isNotNull();

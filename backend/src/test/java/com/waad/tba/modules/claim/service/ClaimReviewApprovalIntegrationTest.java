@@ -29,6 +29,7 @@ import com.waad.tba.modules.benefitpolicy.enums.CountingMethod;
 import com.waad.tba.modules.benefitpolicy.enums.LimitPeriodType;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitBucketConsumptionRepository;
 import com.waad.tba.modules.benefitpolicy.repository.ClaimLineLimitSnapshotRepository;
+import com.waad.tba.modules.claim.repository.FinancialOutboxEventRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitGroupRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitLimitBucketRepository;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
@@ -122,6 +123,7 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
     @Autowired private BenefitRuleBucketRepository benefitRuleBucketRepository;
     @Autowired private BenefitBucketConsumptionRepository benefitBucketConsumptionRepository;
     @Autowired private ClaimLineLimitSnapshotRepository claimLineLimitSnapshotRepository;
+    @Autowired private FinancialOutboxEventRepository financialOutboxEventRepository;
     @Autowired private ClaimRepository claimRepository;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
@@ -306,5 +308,15 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
         ProviderAccount refreshedAccount = providerAccountRepository.findById(account.getId()).orElseThrow();
         assertThat(refreshedAccount.getTotalApproved()).isEqualByComparingTo("720.00");
         assertThat(refreshedAccount.getRunningBalance()).isEqualByComparingTo("720.00");
+
+        // 6) Durable integration event exists exactly once in the same committed
+        // financial cycle; external delivery may happen later without data loss.
+        var outbox = financialOutboxEventRepository
+                .findByAggregateTypeAndAggregateIdAndEventType(
+                        "CLAIM", claimId, ClaimApprovalOutboxService.EVENT_TYPE);
+        assertThat(outbox).hasSize(1);
+        assertThat(outbox.get(0).getCalculationVersion())
+                .isEqualTo(approved.getLines().get(0).getCalculationVersion());
+        assertThat(outbox.get(0).getPayload()).contains("\"approvedAmount\": 720.00");
     }
 }
