@@ -50,6 +50,14 @@ public class PriceListSessionSaveRequest {
         private String medicalCategoryCode;
         private String medicalCategoryName;
         private Integer confidence;
+        private Long dictionaryReleaseId;
+        private String dictionaryVersion;
+        private String dictionaryConceptCode;
+        private String classificationMethod;
+        private String classificationReason;
+        private String classificationExceptionType;
+        private Long classificationEvidenceId;
+        private Boolean classificationExcludePrecision;
         private String status;
         private BigDecimal price;
         private BigDecimal minPrice;

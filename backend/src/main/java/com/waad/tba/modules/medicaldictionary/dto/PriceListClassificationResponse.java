@@ -38,5 +38,18 @@ public class PriceListClassificationResponse {
         private MedicalDictionaryMatchResponse bestMatch;
         private List<MedicalDictionaryMatchResponse> matches;
         private boolean duplicateName;
+        private Long dictionaryReleaseId;
+        private String dictionaryVersion;
+        private String conceptCode;
+        private String categoryCode;
+        private String categoryName;
+        private String canonicalName;
+        private String matchMethod;
+        private BigDecimal confidenceValue;
+        private String reason;
+        private String exceptionType;
+        private boolean excludeFromPrecision;
+        private Long evidenceId;
+        private boolean postable;
     }
 }

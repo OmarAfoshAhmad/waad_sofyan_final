@@ -60,6 +60,31 @@ public class PriceListClassificationItem {
     @Column(name = "confidence")
     private Integer confidence;
 
+    @Column(name = "dictionary_release_id")
+    private Long dictionaryReleaseId;
+
+    @Column(name = "dictionary_version", length = 40)
+    private String dictionaryVersion;
+
+    @Column(name = "dictionary_concept_code", length = 100)
+    private String dictionaryConceptCode;
+
+    @Column(name = "classification_method", length = 80)
+    private String classificationMethod;
+
+    @Column(name = "classification_reason", length = 2000)
+    private String classificationReason;
+
+    @Column(name = "classification_exception_type", length = 100)
+    private String classificationExceptionType;
+
+    @Column(name = "classification_evidence_id")
+    private Long classificationEvidenceId;
+
+    @Column(name = "classification_exclude_precision", nullable = false)
+    @Builder.Default
+    private Boolean classificationExcludePrecision = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 40)
     @Builder.Default

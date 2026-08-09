@@ -1,6 +1,12 @@
 package com.waad.tba.modules.medicaldictionary.enums;
 
 public enum PriceListItemStatus {
+    AUTO_APPROVED,
+    STRONG_SUGGESTION,
+    REVIEW_REQUIRED,
+    SPLIT_REQUIRED,
+    QUARANTINED_NON_SERVICE,
+    EXCLUDED_COSMETIC,
     HIGH_CONFIDENCE,
     NEEDS_REVIEW,
     UNKNOWN,

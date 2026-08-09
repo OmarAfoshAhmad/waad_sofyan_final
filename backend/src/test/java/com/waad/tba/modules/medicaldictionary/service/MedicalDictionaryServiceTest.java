@@ -62,6 +62,8 @@ class MedicalDictionaryServiceTest {
     private MedicalAuditLogService medicalAuditLogService;
     @Mock
     private AuthorizationService authorizationService;
+    @Mock
+    private V50MedicalClassificationEngine v50ClassificationEngine;
 
     @Test
     void searchEntries_doesNotFailWhenLegacyEntryHasNoCategory() {
@@ -88,6 +90,7 @@ class MedicalDictionaryServiceTest {
                 providerContractPricingItemRepository,
                 medicalAuditLogService,
                 new MedicalDictionaryNormalizer(),
+                v50ClassificationEngine,
                 authorizationService
         );
 
@@ -162,6 +165,7 @@ class MedicalDictionaryServiceTest {
                 providerContractPricingItemRepository,
                 medicalAuditLogService,
                 new MedicalDictionaryNormalizer(),
+                v50ClassificationEngine,
                 authorizationService
         );
     }
@@ -192,7 +196,13 @@ class MedicalDictionaryServiceTest {
                 .medicalCategoryName("الكشوفات الطبية")
                 .canonicalName(serviceName)
                 .confidence(95)
-                .status(PriceListItemStatus.HIGH_CONFIDENCE)
+                .status(PriceListItemStatus.AUTO_APPROVED)
+                .dictionaryReleaseId(50L)
+                .dictionaryVersion("V50")
+                .dictionaryConceptCode("WAC-TEST")
+                .classificationMethod("EXACT_PROVIDER_CODE_SERVICE")
+                .classificationReason("مطابقة اختبارية موثقة")
+                .classificationEvidenceId(500L)
                 .minPrice(price)
                 .build();
     }

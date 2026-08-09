@@ -12,6 +12,8 @@ import java.util.List;
 @Data
 public class PriceListClassificationRequest {
 
+    private String providerName;
+
     @NotEmpty(message = "قائمة الخدمات مطلوبة")
     @Size(max = 1000, message = "الحد الأقصى للتصنيف في الطلب الواحد 1000 خدمة")
     @Valid
@@ -31,5 +33,11 @@ public class PriceListClassificationRequest {
         private BigDecimal maxPrice;
         private String priceLabel;
         private String sourceSheet;
+        private String secondaryName;
+        private List<String> alternateNames;
+        private String sectionName;
+        private List<String> sectionNames;
+        private String notes;
+        private String facilityName;
     }
 }

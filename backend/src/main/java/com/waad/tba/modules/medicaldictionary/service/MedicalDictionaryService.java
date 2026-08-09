@@ -46,6 +46,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -63,6 +64,7 @@ public class MedicalDictionaryService {
     private final ProviderContractPricingItemRepository providerContractPricingItemRepository;
     private final MedicalAuditLogService medicalAuditLogService;
     private final MedicalDictionaryNormalizer normalizer;
+    private final V50MedicalClassificationEngine v50ClassificationEngine;
     private final AuthorizationService authorizationService;
 
     @Transactional
@@ -170,12 +172,14 @@ public class MedicalDictionaryService {
                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
         List<PriceListClassificationResponse.Item> items = rows.stream()
-                .map(row -> classifyPriceListRow(row, normalizedCounts))
+                .map(row -> classifyPriceListRow(row, request.getProviderName(), normalizedCounts))
                 .toList();
 
-        int highConfidence = (int) items.stream().filter(item -> "HIGH_CONFIDENCE".equals(item.getStatus())).count();
-        int needsReview = (int) items.stream().filter(item -> "NEEDS_REVIEW".equals(item.getStatus())).count();
-        int unknown = (int) items.stream().filter(item -> "UNKNOWN".equals(item.getStatus())).count();
+        int highConfidence = (int) items.stream().filter(item -> "AUTO_APPROVED".equals(item.getStatus())).count();
+        int needsReview = (int) items.stream().filter(item -> Set.of(
+                "STRONG_SUGGESTION", "REVIEW_REQUIRED", "SPLIT_REQUIRED").contains(item.getStatus())).count();
+        int unknown = (int) items.stream().filter(item -> Set.of(
+                "QUARANTINED_NON_SERVICE", "EXCLUDED_COSMETIC").contains(item.getStatus())).count();
         int duplicates = (int) items.stream().filter(PriceListClassificationResponse.Item::isDuplicateName).count();
 
         return PriceListClassificationResponse.builder()
@@ -509,8 +513,27 @@ public class MedicalDictionaryService {
         if (resolveContractPrice(item) == null) {
             return "لا يمكن الترحيل دون سعر تعاقدي";
         }
-        if (onlyReviewedItems && (item.getStatus() == PriceListItemStatus.UNKNOWN || item.getStatus() == PriceListItemStatus.NEEDS_REVIEW)) {
-            return "البند يحتاج مراجعة قبل الترحيل";
+        if (item.getStatus() != PriceListItemStatus.AUTO_APPROVED
+                && item.getStatus() != PriceListItemStatus.MANUALLY_REVIEWED
+                && item.getStatus() != PriceListItemStatus.READY_TO_POST) {
+            return switch (item.getStatus()) {
+                case STRONG_SUGGESTION -> "النتيجة اقتراح فقط وتحتاج اعتماداً بشرياً قبل الترحيل";
+                case REVIEW_REQUIRED, NEEDS_REVIEW, UNKNOWN -> "البند يحتاج مراجعة قبل الترحيل";
+                case SPLIT_REQUIRED -> "البند يجمع أكثر من خدمة ويجب تقسيمه قبل الترحيل";
+                case QUARANTINED_NON_SERVICE -> "السطر ليس خدمة طبية ولا يجوز ترحيله إلى العقد";
+                case EXCLUDED_COSMETIC -> "الخدمة تجميلية مستبعدة ولا يجوز ترحيلها دون قرار يدوي صريح";
+                case HIGH_CONFIDENCE -> "هذا تصنيف قديم غير موثق بإصدار V50؛ أعد تصنيف السطر قبل الترحيل";
+                default -> "حالة البند لا تسمح بالترحيل";
+            };
+        }
+        if (item.getStatus() == PriceListItemStatus.AUTO_APPROVED
+                && (item.getDictionaryReleaseId() == null || item.getDictionaryVersion() == null
+                || item.getClassificationMethod() == null || item.getClassificationEvidenceId() == null)) {
+            return "التصنيف الآلي لا يحمل دليل V50 كاملاً؛ أعد تصنيف السطر";
+        }
+        if (item.getStatus() == PriceListItemStatus.MANUALLY_REVIEWED
+                && (item.getManualReviewNote() == null || item.getManualReviewNote().isBlank())) {
+            return "سبب الاعتماد اليدوي مطلوب قبل الترحيل";
         }
         return null;
     }
@@ -734,19 +757,34 @@ public class MedicalDictionaryService {
 
     private PriceListClassificationItem toPriceListItem(PriceListClassificationSession session, PriceListSessionSaveRequest.Item request) {
         PriceListItemStatus status = resolveItemStatus(request.getStatus(), request.getMedicalCategoryId(), request.getCanonicalName());
+        boolean manual = status == PriceListItemStatus.MANUALLY_REVIEWED;
+        V50ClassificationResult classified = manual ? null : v50ClassificationEngine.classify(new V50ClassificationInput(
+                request.getServiceName(), null, List.of(), request.getServiceCode(), request.getSourceSheet(),
+                List.of(), request.getMergeNotes(), session.getProviderName()));
+        MedicalCategory resolvedCategory = classified == null || classified.categoryCode().isBlank()
+                ? null : medicalCategoryRepository.findActiveByCode(classified.categoryCode()).orElse(null);
+        PriceListItemStatus persistedStatus = manual ? status : PriceListItemStatus.valueOf(classified.status().name());
         return PriceListClassificationItem.builder()
                 .session(session)
                 .rowNumber(request.getRowNumber())
                 .sourceSheet(blankToNull(request.getSourceSheet()))
                 .providerServiceCode(blankToNull(request.getServiceCode()))
                 .providerServiceName(request.getServiceName().trim())
-                .canonicalName(blankToNull(request.getCanonicalName()))
-                .dictionaryEntryId(request.getDictionaryEntryId())
-                .medicalCategoryId(request.getMedicalCategoryId())
-                .medicalCategoryCode(blankToNull(request.getMedicalCategoryCode()))
-                .medicalCategoryName(blankToNull(request.getMedicalCategoryName()))
-                .confidence(request.getConfidence())
-                .status(status)
+                .canonicalName(manual ? blankToNull(request.getCanonicalName()) : blankToNull(classified.unifiedAr().isBlank() ? classified.unifiedEn() : classified.unifiedAr()))
+                .dictionaryEntryId(manual ? request.getDictionaryEntryId() : null)
+                .medicalCategoryId(manual ? request.getMedicalCategoryId() : resolvedCategory == null ? null : resolvedCategory.getId())
+                .medicalCategoryCode(manual ? blankToNull(request.getMedicalCategoryCode()) : blankToNull(classified.categoryCode()))
+                .medicalCategoryName(manual ? blankToNull(request.getMedicalCategoryName()) : blankToNull(classified.categoryName()))
+                .confidence(manual ? request.getConfidence() : classified.confidence().movePointRight(2).intValue())
+                .dictionaryReleaseId(manual ? request.getDictionaryReleaseId() : classified.releaseId())
+                .dictionaryVersion(manual ? blankToNull(request.getDictionaryVersion()) : classified.dictionaryVersion())
+                .dictionaryConceptCode(manual ? blankToNull(request.getDictionaryConceptCode()) : blankToNull(classified.conceptCode()))
+                .classificationMethod(manual ? "MANUAL_REVIEW" : classified.matchMethod())
+                .classificationReason(manual ? blankToNull(request.getManualReviewNote()) : classified.reason())
+                .classificationExceptionType(manual ? blankToNull(request.getClassificationExceptionType()) : blankToNull(classified.exceptionType()))
+                .classificationEvidenceId(manual ? request.getClassificationEvidenceId() : classified.evidenceId())
+                .classificationExcludePrecision(manual ? Boolean.TRUE : classified.excludeFromPrecision())
+                .status(persistedStatus)
                 .price(request.getPrice())
                 .minPrice(request.getMinPrice() != null ? request.getMinPrice() : request.getPrice())
                 .maxPrice(request.getMaxPrice())
@@ -790,11 +828,13 @@ public class MedicalDictionaryService {
 
         for (PriceListClassificationItem item : items) {
             PriceListItemStatus status = item.getStatus();
-            if (status == PriceListItemStatus.HIGH_CONFIDENCE || status == PriceListItemStatus.MANUALLY_REVIEWED || status == PriceListItemStatus.READY_TO_POST) {
+            if (status == PriceListItemStatus.AUTO_APPROVED || status == PriceListItemStatus.HIGH_CONFIDENCE || status == PriceListItemStatus.MANUALLY_REVIEWED || status == PriceListItemStatus.READY_TO_POST) {
                 high++;
-            } else if (status == PriceListItemStatus.NEEDS_REVIEW) {
+            } else if (status == PriceListItemStatus.NEEDS_REVIEW || status == PriceListItemStatus.REVIEW_REQUIRED
+                    || status == PriceListItemStatus.STRONG_SUGGESTION || status == PriceListItemStatus.SPLIT_REQUIRED) {
                 review++;
-            } else if (status == PriceListItemStatus.UNKNOWN) {
+            } else if (status == PriceListItemStatus.UNKNOWN || status == PriceListItemStatus.QUARANTINED_NON_SERVICE
+                    || status == PriceListItemStatus.EXCLUDED_COSMETIC) {
                 unknown++;
             }
             if (Boolean.TRUE.equals(item.getDuplicateName()) || Boolean.TRUE.equals(item.getMergedDuplicate())) duplicate++;
@@ -921,6 +961,14 @@ public class MedicalDictionaryService {
                 .medicalCategoryCode(item.getMedicalCategoryCode())
                 .medicalCategoryName(item.getMedicalCategoryName())
                 .confidence(item.getConfidence())
+                .dictionaryReleaseId(item.getDictionaryReleaseId())
+                .dictionaryVersion(item.getDictionaryVersion())
+                .dictionaryConceptCode(item.getDictionaryConceptCode())
+                .classificationMethod(item.getClassificationMethod())
+                .classificationReason(item.getClassificationReason())
+                .classificationExceptionType(item.getClassificationExceptionType())
+                .classificationEvidenceId(item.getClassificationEvidenceId())
+                .classificationExcludePrecision(item.getClassificationExcludePrecision())
                 .status(item.getStatus())
                 .price(item.getPrice())
                 .minPrice(item.getMinPrice())
@@ -937,11 +985,14 @@ public class MedicalDictionaryService {
     }
 
     private PriceListClassificationResponse.Item classifyPriceListRow(PriceListClassificationRequest.Row row,
+                                                                       String requestProviderName,
                                                                        Map<String, Long> normalizedCounts) {
         String normalized = normalizer.normalize(row.getServiceName());
-        List<MedicalDictionaryMatchResponse> matches = match(row.getServiceName());
-        MedicalDictionaryMatchResponse best = matches.isEmpty() ? null : matches.get(0);
-        String status = resolveClassificationStatus(best);
+        V50ClassificationResult result = v50ClassificationEngine.classify(new V50ClassificationInput(
+                row.getServiceName(), row.getSecondaryName(), row.getAlternateNames(), row.getServiceCode(),
+                row.getSectionName(), row.getSectionNames(), row.getNotes(),
+                row.getFacilityName() == null || row.getFacilityName().isBlank() ? requestProviderName : row.getFacilityName()));
+        String status = result.status().name();
 
         return PriceListClassificationResponse.Item.builder()
                 .rowNumber(row.getRowNumber())
@@ -954,9 +1005,22 @@ public class MedicalDictionaryService {
                 .priceLabel(row.getPriceLabel())
                 .status(status)
                 .statusLabel(statusLabel(status))
-                .bestMatch(best)
-                .matches(matches)
+                .bestMatch(null)
+                .matches(List.of())
                 .duplicateName(normalizedCounts.getOrDefault(normalized, 0L) > 1)
+                .dictionaryReleaseId(result.releaseId())
+                .dictionaryVersion(result.dictionaryVersion())
+                .conceptCode(result.conceptCode())
+                .categoryCode(result.categoryCode())
+                .categoryName(result.categoryName())
+                .canonicalName(result.unifiedAr().isBlank() ? result.unifiedEn() : result.unifiedAr())
+                .matchMethod(result.matchMethod())
+                .confidenceValue(result.confidence())
+                .reason(result.reason())
+                .exceptionType(result.exceptionType())
+                .excludeFromPrecision(result.excludeFromPrecision())
+                .evidenceId(result.evidenceId())
+                .postable(result.mayPostToContract())
                 .build();
     }
 
@@ -968,6 +1032,12 @@ public class MedicalDictionaryService {
 
     private String statusLabel(String status) {
         return switch (status) {
+            case "AUTO_APPROVED" -> "معتمد آلياً بواسطة V50";
+            case "STRONG_SUGGESTION" -> "اقتراح قوي يحتاج اعتماداً بشرياً";
+            case "REVIEW_REQUIRED" -> "يحتاج مراجعة بشرية";
+            case "SPLIT_REQUIRED" -> "يجب تقسيم السطر إلى خدمات";
+            case "QUARANTINED_NON_SERVICE" -> "ليس خدمة طبية";
+            case "EXCLUDED_COSMETIC" -> "خدمة تجميلية مستبعدة";
             case "HIGH_CONFIDENCE" -> "مطابق بثقة عالية";
             case "NEEDS_REVIEW" -> "يحتاج مراجعة";
             default -> "غير معروف";
