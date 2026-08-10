@@ -202,25 +202,26 @@ public class WaadFinancialEngine {
 
         BigDecimal patientTotalResponsibility = scale2(patientCoverageShare.add(patientLimitExcess));
 
-        // S9: the discount applies to insurerGrossShare only -- never to the
-        // patient's share, never to patientLimitExcess (S9's explicit decision:
-        // the patient benefits from the contractual price, never from the
-        // insurer's additional discount).
-        BigDecimal providerContractDiscount = scale2(
-                insurerGrossShare.multiply(discountPercent).divide(HUNDRED, 2, RoundingMode.HALF_UP));
-        BigDecimal providerNetBeforeRejection = maxZero(scale2(insurerGrossShare.subtract(providerContractDiscount)));
-
-        // S11: the rejection amount, fixed single ordering (S10 abolishes any
-        // discount-before/after-rejection choice -- discount already applied above).
-        BigDecimal rejectionCandidate = input.fullyRejected() ? providerNetBeforeRejection : providerRejectedAmount;
-        if (rejectionCandidate.compareTo(providerNetBeforeRejection) > 0) {
+        // Canonical settlement order: explicit provider rejection is removed from
+        // the insurer share before the contractual discount is calculated. This
+        // prevents the insurer from taking a discount on an amount it has already
+        // refused and keeps settlement, claim and provider-account figures identical.
+        BigDecimal rejectionCandidate = input.fullyRejected() ? insurerGrossShare : providerRejectedAmount;
+        if (rejectionCandidate.compareTo(insurerGrossShare) > 0) {
             throw new IllegalArgumentException(
                     "FINANCIAL_CONSTITUTION S11/S24: providerRejectedAmount (" + rejectionCandidate
-                            + ") exceeds providerNetBeforeRejection (" + providerNetBeforeRejection
+                            + ") exceeds insurerGrossShare (" + insurerGrossShare
                             + "). Fail closed -- do not clamp silently.");
         }
         BigDecimal appliedRejection = scale2(rejectionCandidate);
-        BigDecimal insurerFinalPayment = maxZero(scale2(providerNetBeforeRejection.subtract(appliedRejection)));
+        // Kept under the historical column/result name for schema compatibility;
+        // its canonical meaning is now the discount base after rejection.
+        BigDecimal providerNetBeforeRejection = maxZero(scale2(insurerGrossShare.subtract(appliedRejection)));
+        BigDecimal providerContractDiscount = scale2(
+                providerNetBeforeRejection.multiply(discountPercent)
+                        .divide(HUNDRED, 2, RoundingMode.HALF_UP));
+        BigDecimal insurerFinalPayment = maxZero(
+                scale2(providerNetBeforeRejection.subtract(providerContractDiscount)));
 
         // S13: the invariant is checked explicitly, not just assumed correct
         // by construction -- a future rounding change or new component must

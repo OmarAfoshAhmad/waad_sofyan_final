@@ -158,7 +158,11 @@ public class ClaimMapper {
                 claim.setProviderContractId(resolvedContract.contract().getId());
                 claim.setContractTermsId(resolvedContract.terms().getId());
                 claim.setAppliedDiscountPercent(contractDiscountPercent);
-                claim.setDiscountBeforeRejection(resolvedContract.terms().getDiscountBeforeRejection());
+                // Canonical WAAD settlement policy is fixed: rejection first, then
+                // contractual discount. Keep the snapshot column for backward API/
+                // schema compatibility, but never let legacy term metadata select a
+                // second financial formula.
+                claim.setDiscountBeforeRejection(false);
                 claim.setFinancialCalculatedAt(LocalDateTime.now());
 
                 for (ClaimLineDto lineDto : lineDtos) {

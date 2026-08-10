@@ -117,7 +117,7 @@ const getFacilityShareAmount = (row) => {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 };
 
-// حصة التأمين قبل خصم العقد = حصة الشركة + نصيب المرفق.
+// حصة المرفق قبل التخفيض = حصة الشركة (قيمة التخفيض) + نصيب المرفق الصافي.
 // مُشتقة بالجمع فقط من قيمتين محفوظتين فعلياً على المطالبة — لا افتراض ولا نسبة
 // مخترعة. بحكم الثابت المالي الذي يفرضه الباك-إند (Claim.validateFinancialIdentity)
 // هذا يساوي دائماً: requestedAmount − patientCoPay − refusedAmount.
@@ -403,7 +403,7 @@ export default function ProviderAccountsList() {
       <tr>
         <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
         <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة التخفيض وقت الخدمة</th>
-        <th>المرفوض</th><th>حصة التأمين قبل خصم العقد</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
+        <th>المرفوض</th><th>حصة المرفق قبل التخفيض</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
       </tr>
     </thead>
     <tbody>${printRows}</tbody>
@@ -466,7 +466,7 @@ export default function ProviderAccountsList() {
       },
       {
         accessorKey: 'payableAmount',
-        header: 'حصة التأمين قبل التخفيض',
+        header: 'حصة المرفق قبل التخفيض',
         minWidth: '8rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
@@ -719,7 +719,7 @@ export default function ProviderAccountsList() {
                     أساس الحساب:
                   </Typography>
                   <Typography variant="caption" display="block">
-                    حصة التأمين قبل خصم العقد = خصم العقد + نصيب المرفق
+                    حصة المرفق قبل التخفيض = قيمة التخفيض + نصيب المرفق
                   </Typography>
                   <Typography variant="caption" display="block">
                     خصم العقد = ربح وعد الفعلي المحفوظ على كل مطالبة (وليس نسبة ثابتة)

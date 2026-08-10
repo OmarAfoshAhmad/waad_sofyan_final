@@ -161,8 +161,10 @@ insurerGrossShare    = limitCoveredBase - patientCoverageShare
 ## 9. الخصم التعاقدي
 
 ```
-providerContractDiscount   = insurerGrossShare × providerDiscountPercent
-providerNetBeforeRejection = insurerGrossShare - providerContractDiscount
+providerRejectedAmount     = explicit rejection against insurerGrossShare
+providerDiscountBase       = insurerGrossShare - providerRejectedAmount
+providerContractDiscount   = providerDiscountBase × providerDiscountPercent
+insurerFinalPayment        = providerDiscountBase - providerContractDiscount
 ```
 
 الخصم مسؤولية المرفق. ممنوع: تحميله للمستفيد، إضافته إلى حصة المستفيد، إعادة احتسابه
@@ -187,7 +189,7 @@ providerNetBeforeRejection = insurerGrossShare - providerContractDiscount
 **لم تعد هناك سياستان.** السياسة واحدة وثابتة:
 
 ```
-insurerGrossShare → providerContractDiscount → providerNetBeforeRejection → providerRejectedAmount
+insurerGrossShare → providerRejectedAmount → providerDiscountBase → providerContractDiscount → insurerFinalPayment
 ```
 
 يجب حذف الفرع المالي القديم من المحرك، وحذف اختباراته، وعدم الاحتفاظ به كـ feature flag
@@ -198,14 +200,15 @@ insurerGrossShare → providerContractDiscount → providerNetBeforeRejection �
 ## 11. المرفوض
 
 ```
-insurerFinalPayment = providerNetBeforeRejection - providerRejectedAmount
-0 ≤ providerRejectedAmount ≤ providerNetBeforeRejection
+providerDiscountBase = insurerGrossShare - providerRejectedAmount
+insurerFinalPayment  = providerDiscountBase - providerContractDiscount
+0 ≤ providerRejectedAmount ≤ insurerGrossShare
 ```
 
 المرفوض مسؤولية المرفق حصراً. ولا يُعيد حساب: `patientCoverageShare`، ولا
 `patientLimitExcess`، ولا `limitConsumption`. ولا يتحول إلى دين على المستفيد.
 
-إن تجاوز المرفوضُ صافيَ المرفق ⇒ **Fail Closed**، لا `providerNet` سالب ولا دفعة سالبة.
+إن تجاوز المرفوضُ حصةَ التأمين الإجمالية ⇒ **Fail Closed**، لا أساس تخفيض سالب ولا دفعة سالبة.
 
 ---
 
@@ -223,10 +226,10 @@ insurerFinalPayment = providerNetBeforeRejection - providerRejectedAmount
  9. تطبيق نسبة التغطية على limitCoveredBase فقط
 10. حساب patientCoverageShare
 11. حساب insurerGrossShare
-12. تطبيق الخصم التعاقدي على insurerGrossShare
-13. الوصول إلى providerNetBeforeRejection
-14. طرح providerRejectedAmount
-15. حساب insurerFinalPayment
+12. طرح providerRejectedAmount من insurerGrossShare
+13. الوصول إلى providerDiscountBase
+14. تطبيق الخصم التعاقدي على providerDiscountBase
+15. حساب insurerFinalPayment بعد التخفيض
 16. تسجيل limitConsumption
 17. تحديث الرصيد دون السماح بالقيم السالبة
 18. التحقق من ثبات المعادلة قبل الاعتماد
@@ -391,7 +394,7 @@ Original Claim → Reversal → New Calculation Version → Validation → Appro
 
 - `availableLimit < 0` أو `remainingLimit < 0` أو `limitConsumption < 0`
 - `patientLimitExcess < 0` أو `insurerFinalPayment < 0`
-- `providerRejectedAmount > providerNetBeforeRejection`
+- `providerRejectedAmount > insurerGrossShare`
 - `benefitEligibility == COVERED` مع `coveragePercent <= 0` (راجع §2)
 - `coveragePercent > 100`
 - فرق مالي غير مفسَّر (الثابت في §13 لا يتحقق)

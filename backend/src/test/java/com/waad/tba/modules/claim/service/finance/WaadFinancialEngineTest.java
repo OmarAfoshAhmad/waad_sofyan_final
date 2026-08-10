@@ -93,7 +93,7 @@ class WaadFinancialEngineTest {
         assertThat(r.patientCoverageShare()).isEqualByComparingTo("200.00");
         assertThat(r.insurerGrossShare()).isEqualByComparingTo("800.00");
         assertThat(r.providerContractDiscount()).isEqualByComparingTo("80.00");
-        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("720.00");
+        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("800.00");
         assertThat(r.insurerFinalPayment()).isEqualByComparingTo("720.00");
         assertThat(r.limitConsumption()).isEqualByComparingTo("1000.00");
         assertInvariant(r);
@@ -119,16 +119,31 @@ class WaadFinancialEngineTest {
     // ── S37 "Provider rejection" ────────────────────────────────────────────
 
     @Test
-    void providerRejection_subtractsFromNetAfterDiscountAndNeverTouchesThePatient() {
+    void providerRejection_isSubtractedBeforeDiscountAndNeverTouchesThePatient() {
         Result r = engine.evaluate(limited(
                 new BigDecimal("1000.00"), new BigDecimal("1000.00"), new BigDecimal("1000.00"),
                 80, new BigDecimal("10.00"), new BigDecimal("100.00"), false, 1));
 
-        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("720.00");
-        assertThat(r.insurerFinalPayment()).isEqualByComparingTo("620.00");
+        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("700.00");
+        assertThat(r.providerContractDiscount()).isEqualByComparingTo("70.00");
+        assertThat(r.insurerFinalPayment()).isEqualByComparingTo("630.00");
         assertThat(r.patientCoverageShare()).isEqualByComparingTo("200.00");
         assertThat(r.patientLimitExcess()).isEqualByComparingTo("0.00");
         assertThat(r.limitConsumption()).isEqualByComparingTo("1000.00");
+        assertInvariant(r);
+    }
+
+    @Test
+    void settlementRegression_refusalThenTenPercentDiscountProducesExpectedProviderNet() {
+        Result r = engine.evaluate(unlimited(
+                new BigDecimal("155.00"), new BigDecimal("155.00"),
+                75, new BigDecimal("10.00"), new BigDecimal("10.00"), false, 1));
+
+        assertThat(r.insurerGrossShare()).isEqualByComparingTo("116.25");
+        assertThat(r.providerRejectedAmount()).isEqualByComparingTo("10.00");
+        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("106.25");
+        assertThat(r.providerContractDiscount()).isEqualByComparingTo("10.63");
+        assertThat(r.insurerFinalPayment()).isEqualByComparingTo("95.62");
         assertInvariant(r);
     }
 
@@ -146,8 +161,9 @@ class WaadFinancialEngineTest {
                 new BigDecimal("500.00"), new BigDecimal("500.00"), new BigDecimal("500.00"),
                 100, new BigDecimal("10.00"), new BigDecimal("1.00"), true, 3));
 
-        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("450.00");
-        assertThat(r.providerRejectedAmount()).isEqualByComparingTo("450.00");
+        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("0.00");
+        assertThat(r.providerRejectedAmount()).isEqualByComparingTo("500.00");
+        assertThat(r.providerContractDiscount()).isEqualByComparingTo("0.00");
         assertThat(r.insurerFinalPayment()).isEqualByComparingTo("0.00");
         assertInvariant(r);
     }

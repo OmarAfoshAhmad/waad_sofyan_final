@@ -51,14 +51,14 @@ class WaadFinConstitutionGoldenTest {
         assertThat(r.patientCoverageShare()).isEqualByComparingTo("120.00");
         assertThat(r.patientTotalResponsibility()).isEqualByComparingTo("520.00");
         assertThat(r.insurerGrossShare()).isEqualByComparingTo("480.00");
-        assertThat(r.providerContractDiscount()).isEqualByComparingTo("48.00");
-        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("432.00");
+        assertThat(r.providerContractDiscount()).isEqualByComparingTo("43.00");
+        assertThat(r.providerNetBeforeRejection()).isEqualByComparingTo("430.00");
         assertThat(r.providerRejectedAmount()).isEqualByComparingTo("50.00");
-        assertThat(r.insurerFinalPayment()).isEqualByComparingTo("382.00");
+        assertThat(r.insurerFinalPayment()).isEqualByComparingTo("387.00");
         assertThat(r.limitConsumption()).isEqualByComparingTo("600.00");
         assertThat(r.bindingRemainingLimit()).isEqualByComparingTo("0.00");
 
-        // S13 invariant: 200 + 120 + 400 + 48 + 50 + 382 = 1200
+        // S13 invariant: 200 + 120 + 400 + 43 + 50 + 387 = 1200
         BigDecimal reconstructed = r.contractualPriceExcess()
                 .add(r.patientCoverageShare())
                 .add(r.patientLimitExcess())

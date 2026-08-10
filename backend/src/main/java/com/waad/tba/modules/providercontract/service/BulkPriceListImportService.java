@@ -476,7 +476,7 @@ public class BulkPriceListImportService {
                         .discountPercent(new BigDecimal("10.00"))
                         .startDate(LocalDate.now())
                         .active(true)
-                        .discountBeforeRejection(true)
+                        .discountBeforeRejection(false)
                         .currency("LYD")
                         .notes("تم إنشاؤه تلقائياً عند استيراد القائمة الموحدة")
                         .build();
