@@ -717,7 +717,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const [bulkSavingCoverage, setBulkSavingCoverage] = useState(false);
   const [categoryCoverageModalOpen, setCategoryCoverageModalOpen] = useState(false);
   const [individualLimitDialog, setIndividualLimitDialog] = useState({
-    open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD', periodValue: '1'
+    open: false,
+    rule: null,
+    amountLimit: '',
+    timesLimit: '',
+    daysLimit: '',
+    periodType: 'POLICY_PERIOD',
+    periodValue: '1'
   });
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   // Pagination state
@@ -855,7 +861,15 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     onSuccess: async () => {
       enqueueSnackbar('تم حفظ سقف المنفعة الفردي', { variant: 'success' });
       await queryClient.invalidateQueries({ queryKey: ['benefit-structure', policyId] });
-      setIndividualLimitDialog({ open: false, rule: null, amountLimit: '', timesLimit: '', daysLimit: '', periodType: 'POLICY_PERIOD', periodValue: '1' });
+      setIndividualLimitDialog({
+        open: false,
+        rule: null,
+        amountLimit: '',
+        timesLimit: '',
+        daysLimit: '',
+        periodType: 'POLICY_PERIOD',
+        periodValue: '1'
+      });
     },
     onError: (err) => enqueueSnackbar(err.response?.data?.message || 'تعذر حفظ سقف المنفعة', { variant: 'error' })
   });
@@ -863,8 +877,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
   const openIndividualLimit = useCallback((rule) => {
     const bucket = rule.individualLimitLink?.bucket;
     setIndividualLimitDialog({
-      open: true, rule, amountLimit: bucket?.amountLimit ?? '', timesLimit: bucket?.timesLimit ?? '',
-      daysLimit: bucket?.daysLimit ?? '', periodType: bucket?.periodType || 'POLICY_PERIOD', periodValue: String(bucket?.periodValue ?? 1)
+      open: true,
+      rule,
+      amountLimit: bucket?.amountLimit ?? '',
+      timesLimit: bucket?.timesLimit ?? '',
+      daysLimit: bucket?.daysLimit ?? '',
+      periodType: bucket?.periodType || 'POLICY_PERIOD',
+      periodValue: String(bucket?.periodValue ?? 1)
     });
   }, []);
 
@@ -992,16 +1011,19 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     setDeleteDialog({ open: true, rule });
   }, []);
 
-  const handleDeleteGroup = useCallback((rule) => {
-    const groupId = Number(String(rule.id).replace('group-', ''));
-    if (Number.isNaN(groupId)) {
-      enqueueSnackbar('تعذر تحديد رقم المجموعة للحذف', { variant: 'error' });
-      return;
-    }
-    // Delete only the shared group structure. Its member rules stay active and
-    // become standalone rows again after the structure query is refreshed.
-    setBulkDeleteDialog({ open: true, validIds: [], groupIds: [groupId] });
-  }, [enqueueSnackbar]);
+  const handleDeleteGroup = useCallback(
+    (rule) => {
+      const groupId = Number(String(rule.id).replace('group-', ''));
+      if (Number.isNaN(groupId)) {
+        enqueueSnackbar('تعذر تحديد رقم المجموعة للحذف', { variant: 'error' });
+        return;
+      }
+      // Delete only the shared group structure. Its member rules stay active and
+      // become standalone rows again after the structure query is refreshed.
+      setBulkDeleteDialog({ open: true, validIds: [], groupIds: [groupId] });
+    },
+    [enqueueSnackbar]
+  );
 
   const handleEditGroup = useCallback((rule) => {
     setFormModal({ open: true, data: rule, isEdit: true });
@@ -1019,7 +1041,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
 
     let validIds = [];
     let groupIds = [];
-    selectedRowIds.forEach(id => {
+    selectedRowIds.forEach((id) => {
       const strId = String(id);
       if (strId.startsWith('group-')) {
         const groupId = parseInt(strId.replace('group-', ''), 10);
@@ -1030,10 +1052,10 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     });
 
     validIds = [...new Set(validIds)];
-    
+
     // Filter out undefined just in case
-    validIds = validIds.filter(id => id !== undefined && id !== null);
-    groupIds = [...new Set(groupIds)].filter(id => id !== undefined && id !== null);
+    validIds = validIds.filter((id) => id !== undefined && id !== null);
+    groupIds = [...new Set(groupIds)].filter((id) => id !== undefined && id !== null);
 
     if (validIds.length === 0 && groupIds.length === 0) {
       enqueueSnackbar('الرجاء تحديد قواعد أو مجموعات فعلية للحذف', { variant: 'warning' });
@@ -1052,20 +1074,32 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         const hardDeleteIds = validIds.filter((id) => {
           const rule = rules.find((item) => String(item.id) === String(id));
           const deletedRaw = rule?.deleted;
-          return rule?.hardDeleteAllowed === true || rule?.hardDeleteAllowed === 1 || rule?.hardDeleteAllowed === '1' || String(rule?.hardDeleteAllowed).toLowerCase() === 'true';
+          return (
+            rule?.hardDeleteAllowed === true ||
+            rule?.hardDeleteAllowed === 1 ||
+            rule?.hardDeleteAllowed === '1' ||
+            String(rule?.hardDeleteAllowed).toLowerCase() === 'true'
+          );
         });
         const skipped = validIds.length - hardDeleteIds.length;
         if (hardDeleteIds.length === 0 && groupIds.length === 0) {
-          enqueueSnackbar('لا توجد قواعد محذوفة قابلة للحذف النهائي؛ المطالبات المالية الفعّالة أو المنافع المعطلة مالياً تم تخطيها', { variant: 'warning' });
+          enqueueSnackbar('لا توجد قواعد محذوفة قابلة للحذف النهائي؛ المطالبات المالية الفعّالة أو المنافع المعطلة مالياً تم تخطيها', {
+            variant: 'warning'
+          });
           return;
         }
         await Promise.all(hardDeleteIds.map((id) => hardDeletePolicyRule(policyId, id)));
         await Promise.all(groupIds.map((id) => deleteBenefitGroup(policyId, id)));
-        enqueueSnackbar(`تم حذف (${hardDeleteIds.length}) قاعدة و(${groupIds.length}) مجموعة مع إبقاء منافع المجموعات كقواعد مستقلة${skipped ? `، وتخطي (${skipped}) معطلة مالياً` : ''}`, { variant: 'success' });
+        enqueueSnackbar(
+          `تم حذف (${hardDeleteIds.length}) قاعدة و(${groupIds.length}) مجموعة مع إبقاء منافع المجموعات كقواعد مستقلة${skipped ? `، وتخطي (${skipped}) معطلة مالياً` : ''}`,
+          { variant: 'success' }
+        );
       } else {
         await Promise.all(validIds.map((id) => deletePolicyRule(policyId, id)));
         await Promise.all(groupIds.map((id) => deleteBenefitGroup(policyId, id)));
-        enqueueSnackbar(`تم نقل (${validIds.length}) قاعدة للسلة وحذف (${groupIds.length}) مجموعة؛ بقيت منافع المجموعات كقواعد مستقلة`, { variant: 'success' });
+        enqueueSnackbar(`تم نقل (${validIds.length}) قاعدة للسلة وحذف (${groupIds.length}) مجموعة؛ بقيت منافع المجموعات كقواعد مستقلة`, {
+          variant: 'success'
+        });
       }
       setSelectedRowIds([]);
       await refetchRules();
@@ -1179,32 +1213,44 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   {rule.nameAr}
                 </Typography>
                 <Stack spacing={0.5} sx={{ borderRight: '2px solid', borderColor: 'secondary.light', pr: 1 }}>
-                  {rule.groupMembers?.filter(member => {
-                    const deletedRaw = member.deleted;
-                    const rIsDeleted = deletedRaw === true || deletedRaw === 1 || deletedRaw === '1' || String(deletedRaw).toLowerCase() === 'true';
-                    return viewMode === 'DELETED' ? true : !rIsDeleted;
-                  }).map(member => {
-                    const memberCoverage = member.coveragePercent ?? member.effectiveCoveragePercent ?? policyDefaultCoveragePercent ?? 100;
-                    const individualLimit = member.individualLimitLink?.bucket;
-                    const limitParts = [];
-                    if (individualLimit?.amountLimit != null) limitParts.push(`${individualLimit.amountLimit} د.ل`);
-                    if (individualLimit?.timesLimit != null) limitParts.push(`${individualLimit.timesLimit} مرة`);
-                    if (individualLimit?.daysLimit != null) limitParts.push(`${individualLimit.daysLimit} يوم`);
-                    return (
-                      <Box
-                        key={member.id}
-                        sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, py: 0.25 }}
-                      >
-                        <Typography variant="caption" fontWeight={600}>
-                          {member.nameAr}
-                        </Typography>
-                        <Chip size="small" label={`${memberCoverage}%`} color={memberCoverage === 100 ? 'success' : 'warning'} sx={{ height: 20, fontSize: '0.68rem' }} />
-                        {limitParts.length > 0 && (
-                          <Chip size="small" variant="outlined" color="info" label={`سقف فردي: ${limitParts.join(' / ')}`} sx={{ height: 20, fontSize: '0.68rem' }} />
-                        )}
-                      </Box>
-                    );
-                  })}
+                  {rule.groupMembers
+                    ?.filter((member) => {
+                      const deletedRaw = member.deleted;
+                      const rIsDeleted =
+                        deletedRaw === true || deletedRaw === 1 || deletedRaw === '1' || String(deletedRaw).toLowerCase() === 'true';
+                      return viewMode === 'DELETED' ? true : !rIsDeleted;
+                    })
+                    .map((member) => {
+                      const memberCoverage =
+                        member.coveragePercent ?? member.effectiveCoveragePercent ?? policyDefaultCoveragePercent ?? 100;
+                      const individualLimit = member.individualLimitLink?.bucket;
+                      const limitParts = [];
+                      if (individualLimit?.amountLimit != null) limitParts.push(`${individualLimit.amountLimit} د.ل`);
+                      if (individualLimit?.timesLimit != null) limitParts.push(`${individualLimit.timesLimit} مرة`);
+                      if (individualLimit?.daysLimit != null) limitParts.push(`${individualLimit.daysLimit} يوم`);
+                      return (
+                        <Box key={member.id} sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, py: 0.25 }}>
+                          <Typography variant="caption" fontWeight={600}>
+                            {member.nameAr}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={`${memberCoverage}%`}
+                            color={memberCoverage === 100 ? 'success' : 'warning'}
+                            sx={{ height: 20, fontSize: '0.68rem' }}
+                          />
+                          {limitParts.length > 0 && (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color="info"
+                              label={`سقف فردي: ${limitParts.join(' / ')}`}
+                              sx={{ height: 20, fontSize: '0.68rem' }}
+                            />
+                          )}
+                        </Box>
+                      );
+                    })}
                 </Stack>
               </Stack>
             );
@@ -1231,11 +1277,13 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         case 'coveragePercent': {
           let value = rule.coveragePercent ?? rule.effectiveCoveragePercent;
           if (rule.groupSource && (value === null || value === undefined) && rule.groupMembers?.length > 0) {
-            const memberVal = rule.groupMembers.map(m => m.coveragePercent ?? m.effectiveCoveragePercent).find(v => v !== null && v !== undefined);
+            const memberVal = rule.groupMembers
+              .map((m) => m.coveragePercent ?? m.effectiveCoveragePercent)
+              .find((v) => v !== null && v !== undefined);
             if (memberVal !== undefined) value = memberVal;
           }
           if (value === null || value === undefined) {
-             value = policyDefaultCoveragePercent ?? 100;
+            value = policyDefaultCoveragePercent ?? 100;
           }
           const label = value == null ? 'غير محدد' : `${value}%`;
           const color = value === 0 ? 'error' : value === 100 ? 'success' : value == null ? 'default' : 'warning';
@@ -1259,14 +1307,37 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           const limit = rule.groupSource ? rule.bucket : rule.individualLimitLink?.bucket;
           if (!limit) {
             return (
-              <Chip size="small" color="error" variant="outlined" label="بلا سقف" onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />
+              <Chip
+                size="small"
+                color="error"
+                variant="outlined"
+                label="بلا سقف"
+                onClick={() => canEdit && openIndividualLimit(rule)}
+                sx={{ cursor: canEdit ? 'pointer' : 'default' }}
+              />
             );
           }
           if (limit.amountLimit == null) {
-             return <Chip size="small" color="info" variant="outlined" label="بلا سقف" onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default' }} />;
+            return (
+              <Chip
+                size="small"
+                color="info"
+                variant="outlined"
+                label="بلا سقف"
+                onClick={() => canEdit && openIndividualLimit(rule)}
+                sx={{ cursor: canEdit ? 'pointer' : 'default' }}
+              />
+            );
           }
           return (
-             <Chip size="small" color="info" variant="outlined" label={`${limit.amountLimit} د.ل`} onClick={() => canEdit && openIndividualLimit(rule)} sx={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600 }} />
+            <Chip
+              size="small"
+              color="info"
+              variant="outlined"
+              label={`${limit.amountLimit} د.ل`}
+              onClick={() => canEdit && openIndividualLimit(rule)}
+              sx={{ cursor: canEdit ? 'pointer' : 'default', fontWeight: 600 }}
+            />
           );
         }
         case 'limitPeriod': {
@@ -1311,9 +1382,18 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
             <Chip label="لا" size="small" variant="outlined" sx={FIXED_RULE_CHIP_SX.preApproval} />
           );
         case 'active':
-          if (rule.groupSource) return <Chip label={rule.isActive ? 'نشطة' : 'متوقفة'} size="small" color={rule.isActive ? 'secondary' : 'default'} variant="outlined" />;
+          if (rule.groupSource)
+            return (
+              <Chip
+                label={rule.isActive ? 'نشطة' : 'متوقفة'}
+                size="small"
+                color={rule.isActive ? 'secondary' : 'default'}
+                variant="outlined"
+              />
+            );
           if (rule.isDeleted) return <Chip label="محذوفة" size="small" color="error" variant="outlined" />;
-          if (viewMode === 'DELETED' && rule.isActive === false) return <Chip label="معطلة مالياً" size="small" color="warning" variant="outlined" />;
+          if (viewMode === 'DELETED' && rule.isActive === false)
+            return <Chip label="معطلة مالياً" size="small" color="warning" variant="outlined" />;
           return (
             <Tooltip title={rule.isActive ? 'إيقاف القاعدة مؤقتاً' : 'تنشيط القاعدة'}>
               <span>
@@ -1337,16 +1417,16 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
               <Stack direction="row" spacing={1} justifyContent="center">
                 <Tooltip title="تعديل المجموعة">
                   <span>
-                  <IconButton size="small" onClick={() => handleEditGroup(rule)} disabled={!canEdit}>
-                     <EditIcon fontSize="small" />
-                  </IconButton>
+                    <IconButton size="small" onClick={() => handleEditGroup(rule)} disabled={!canEdit}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
                   </span>
                 </Tooltip>
                 <Tooltip title="حذف المجموعة وسقفها المشترك مع إبقاء المنافع كقواعد مستقلة">
                   <span>
-                  <IconButton size="small" color="error" onClick={() => handleDeleteGroup(rule)} disabled={!canEdit}>
-                     <DeleteIcon fontSize="small" />
-                  </IconButton>
+                    <IconButton size="small" color="error" onClick={() => handleDeleteGroup(rule)} disabled={!canEdit}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </span>
                 </Tooltip>
               </Stack>
@@ -1380,23 +1460,37 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           }
           return (
             <Stack direction="row" spacing={1} justifyContent="center">
-               <Tooltip title="تعديل التغطية والحدود">
-                 <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)} disabled={!canEdit}>
-                   <EditIcon fontSize="small" />
-                 </IconButton>
-               </Tooltip>
-               <Tooltip title="نقل إلى سلة المحذوفات (حذف ناعم)">
-                 <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)} disabled={!canEdit}>
-                   <DeleteIcon fontSize="small" />
-                 </IconButton>
-               </Tooltip>
+              <Tooltip title="تعديل التغطية والحدود">
+                <IconButton size="small" color="primary" onClick={() => handleEditRule(rule)} disabled={!canEdit}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="نقل إلى سلة المحذوفات (حذف ناعم)">
+                <IconButton size="small" color="error" onClick={() => handleDeleteRule(rule)} disabled={!canEdit}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Stack>
           );
         default:
           return rule[column.id] ?? '-';
       }
     },
-    [handleToggleActive, onOpenStructure, structureLoadFailed, toggleMutation.isPending, canEdit, handleEditRule, handleDeleteRule, handleRestoreRule, handleDeleteGroup, handleEditGroup, openIndividualLimit, policyDefaultCoveragePercent, viewMode]
+    [
+      handleToggleActive,
+      onOpenStructure,
+      structureLoadFailed,
+      toggleMutation.isPending,
+      canEdit,
+      handleEditRule,
+      handleDeleteRule,
+      handleRestoreRule,
+      handleDeleteGroup,
+      handleEditGroup,
+      openIndividualLimit,
+      policyDefaultCoveragePercent,
+      viewMode
+    ]
   );
 
   const categoryMap = useMemo(() => {
@@ -1457,9 +1551,7 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       const individualLimit = individualLimitLink?.bucket || null;
       const groupBucketLinks = bucketLinks.filter((link) => !String(link.groupCode || '').startsWith('AUTO-BEN-'));
       const linkSearch = groupBucketLinks.map((link) => `${link.groupName || ''} ${link.bucket?.nameAr || ''}`).join(' ');
-      const linkedDaysLimits = bucketLinks
-        .map((link) => link.bucket?.daysLimit)
-        .filter((value) => value !== null && value !== undefined);
+      const linkedDaysLimits = bucketLinks.map((link) => link.bucket?.daysLimit).filter((value) => value !== null && value !== undefined);
       const uniqueDaysLimits = [...new Set(linkedDaysLimits)];
       const daysLimitLabel = uniqueDaysLimits.length > 0 ? uniqueDaysLimits.map((value) => `${value} يوم`).join('، ') : null;
       const searchable = `${code} ${nameAr} ${nameEn} ${typeLabel} ${parentNameAr} ${linkSearch}`.toLowerCase();
@@ -1504,38 +1596,57 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           const linkGroupId = link.bucket?.benefitGroupId ?? link.benefitGroupId;
           return bucketIds.has(Number(linkBucketId)) || Number(linkGroupId) === Number(group.id);
         });
-        const groupMembers = [...new Map(
-          memberLinks
-            .map((link) => benefitRowsByRuleId.get(String(link.ruleId)))
-            .filter(Boolean)
-            .map((member) => [String(member.id), member])
-        ).values()];
+        const groupMembers = [
+          ...new Map(
+            memberLinks
+              .map((link) => benefitRowsByRuleId.get(String(link.ruleId)))
+              .filter(Boolean)
+              .map((member) => [String(member.id), member])
+          ).values()
+        ];
         const memberNames = groupMembers.map((member) => member.medicalCategoryName || member.medicalServiceName || '');
         const bucketLinks = buckets.map((bucket) => ({ id: `group-bucket-${bucket.id}`, groupName: group.nameAr, bucket }));
         const days = buckets.map((bucket) => bucket.daysLimit).filter((value) => value != null);
         const primaryBucket = buckets.length > 0 ? buckets[0] : null;
-        const allMembersDeleted = groupMembers.length > 0 && groupMembers.every(m => {
-          const d = m.deleted;
-          return d === true || d === 1 || d === '1' || String(d).toLowerCase() === 'true';
-        });
+        const allMembersDeleted =
+          groupMembers.length > 0 &&
+          groupMembers.every((m) => {
+            const d = m.deleted;
+            return d === true || d === 1 || d === '1' || String(d).toLowerCase() === 'true';
+          });
 
         return {
-          id: `group-${group.id}`, code: group.code, nameAr: group.nameAr, nameEn: '-', parentNameAr: '-',
-          typeLabel: 'مجموعة منافع', encounterType: group.contextType, coveragePercent: null,
-          effectiveCoveragePercent: null, requiresPreApproval: !!group.requiresPreApproval,
-          bucketLinks, daysLimitLabel: days.length ? days.map((value) => `${value} يوم`).join('، ') : null,
-          amountLimit: primaryBucket?.amountLimit ?? null, timesLimit: primaryBucket?.timesLimit ?? null,
-          limitPeriod: primaryBucket?.periodType ?? null, limitPeriodValue: primaryBucket?.periodValue ?? null,
-          isLinked: memberLinks.length > 0 || bucketLinks.length > 0, isActive: group.active !== false, isDeleted: allMembersDeleted, groupSource: true,
-          groupMembers, bucket: primaryBucket,
-          searchable: `${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`.toLowerCase(), changedAt: group.updatedAt || null
+          id: `group-${group.id}`,
+          code: group.code,
+          nameAr: group.nameAr,
+          nameEn: '-',
+          parentNameAr: '-',
+          typeLabel: 'مجموعة منافع',
+          encounterType: group.contextType,
+          coveragePercent: null,
+          effectiveCoveragePercent: null,
+          requiresPreApproval: !!group.requiresPreApproval,
+          bucketLinks,
+          daysLimitLabel: days.length ? days.map((value) => `${value} يوم`).join('، ') : null,
+          amountLimit: primaryBucket?.amountLimit ?? null,
+          timesLimit: primaryBucket?.timesLimit ?? null,
+          limitPeriod: primaryBucket?.periodType ?? null,
+          limitPeriodValue: primaryBucket?.periodValue ?? null,
+          isLinked: memberLinks.length > 0 || bucketLinks.length > 0,
+          isActive: group.active !== false,
+          isDeleted: allMembersDeleted,
+          groupSource: true,
+          groupMembers,
+          bucket: primaryBucket,
+          searchable: `${group.code} ${group.nameAr} مجموعة منافع ${memberNames.join(' ')}`.toLowerCase(),
+          changedAt: group.updatedAt || null
         };
       });
-      
+
     // A rule linked to a visible, explicitly configured group is rendered only
     // beneath that group. AUTO-BEN links represent an individual cap and must not
     // remove an otherwise standalone rule from the root list.
-    const standaloneRules = benefitRows.filter(r => r.bucketLinks.length === 0);
+    const standaloneRules = benefitRows.filter((r) => r.bucketLinks.length === 0);
     return [...standaloneRules, ...groupRows];
   }, [rules, categoryMap, structureLinksByRuleId, benefitStructure.groups, benefitStructure.buckets, benefitStructure.links]);
 
@@ -1613,10 +1724,19 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
     [filteredRules, page, rowsPerPage]
   );
 
-  const activeRulesCount = useMemo(() => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive !== false).length, [normalizedRules]);
-  const disabledRulesCount = useMemo(() => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive === false).length, [normalizedRules]);
+  const activeRulesCount = useMemo(
+    () => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive !== false).length,
+    [normalizedRules]
+  );
+  const disabledRulesCount = useMemo(
+    () => normalizedRules.filter((rule) => !rule.isDeleted && rule.isActive === false).length,
+    [normalizedRules]
+  );
   const deletedRulesCount = useMemo(() => normalizedRules.filter((rule) => rule.isDeleted).length, [normalizedRules]);
-  const trashRulesCount = useMemo(() => normalizedRules.filter((rule) => rule.isDeleted || rule.isActive === false).length, [normalizedRules]);
+  const trashRulesCount = useMemo(
+    () => normalizedRules.filter((rule) => rule.isDeleted || rule.isActive === false).length,
+    [normalizedRules]
+  );
 
   const categoryRulesByCategoryId = useMemo(() => {
     const map = new Map();
@@ -1824,22 +1944,22 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
           </Stack>
         }
         secondary={
-            <Stack direction="row" spacing={1}>
-              {onOpenStructure && (
-                <Tooltip title="إدارة المجموعات والأوعية والروابط">
-                  <IconButton
-                    color="success"
-                    onClick={onOpenStructure}
-                    disabled={!canEdit}
-                    sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
-                  >
-                    <LinkIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
+          <Stack direction="row" spacing={1}>
+            {onOpenStructure && (
+              <Tooltip title="إدارة المجموعات والأوعية والروابط">
+                <IconButton
+                  color="success"
+                  onClick={onOpenStructure}
+                  disabled={!canEdit}
+                  sx={{ border: '1px solid', borderColor: 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
+                >
+                  <LinkIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
 
-              <Tooltip title="تطبيق قواعد من قالب قياسي أو نسخها من وثيقة شركة أخرى كما هي">
-                <span>
+            <Tooltip title="نسخ قواعد التغطية من وثيقة شركة أخرى كما هي">
+              <span>
                 <IconButton
                   color="primary"
                   onClick={handleOpenTemplateDialog}
@@ -1848,11 +1968,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 >
                   <AutoAwesomeIcon fontSize="small" />
                 </IconButton>
-                </span>
-              </Tooltip>
+              </span>
+            </Tooltip>
 
-              <Tooltip title={downloadingTemplate ? 'جاري تنزيل القالب...' : 'تنزيل القالب القياسي للمنافع والمجموعات'}>
-                <span>
+            <Tooltip title={downloadingTemplate ? 'جاري تنزيل القالب...' : 'تنزيل القالب القياسي للمنافع والمجموعات'}>
+              <span>
                 <IconButton
                   color="primary"
                   onClick={handleDownloadTemplate}
@@ -1861,11 +1981,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 >
                   {downloadingTemplate ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon fontSize="small" />}
                 </IconButton>
-                </span>
-              </Tooltip>
+              </span>
+            </Tooltip>
 
-              <Tooltip title="استيراد جماعي للمنافع والتغطيات من Excel">
-                <span>
+            <Tooltip title="استيراد جماعي للمنافع والتغطيات من Excel">
+              <span>
                 <IconButton
                   color="success"
                   onClick={() => setImportDialogOpen(true)}
@@ -1874,41 +1994,47 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                 >
                   <FileUploadIcon fontSize="small" />
                 </IconButton>
-                </span>
-              </Tooltip>
+              </span>
+            </Tooltip>
 
-              <Tooltip title="سلة المحذوفات">
-                <IconButton
-                  color={viewMode === 'DELETED' ? 'error' : 'default'}
-                  onClick={() => {
-                    setViewMode((current) => (current === 'DELETED' ? 'ACTIVE' : 'DELETED'));
-                    setPage(0);
-                  }}
-                  sx={{ border: '1px solid', borderColor: viewMode === 'DELETED' ? 'error.main' : 'divider', width: '2.25rem', height: '2.25rem', borderRadius: 1 }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+            <Tooltip title="سلة المحذوفات">
+              <IconButton
+                color={viewMode === 'DELETED' ? 'error' : 'default'}
+                onClick={() => {
+                  setViewMode((current) => (current === 'DELETED' ? 'ACTIVE' : 'DELETED'));
+                  setPage(0);
+                }}
+                sx={{
+                  border: '1px solid',
+                  borderColor: viewMode === 'DELETED' ? 'error.main' : 'divider',
+                  width: '2.25rem',
+                  height: '2.25rem',
+                  borderRadius: 1
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
 
-              <Tooltip title="إضافة منفعة / مجموعة">
-                <IconButton
-                  onClick={handleAddRule}
-                  disabled={!canEdit}
-                  sx={{
-                    border: '1px solid',
-                    borderColor: 'primary.main',
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    width: '2.25rem',
-                    height: '2.25rem',
-                    borderRadius: 1,
-                    '&:hover': { bgcolor: 'primary.dark' }
-                  }}
-                >
-                  <AddIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
+            <Tooltip title="إضافة منفعة / مجموعة">
+              <IconButton
+                onClick={handleAddRule}
+                disabled={!canEdit}
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'primary.main',
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  width: '2.25rem',
+                  height: '2.25rem',
+                  borderRadius: 1,
+                  '&:hover': { bgcolor: 'primary.dark' }
+                }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         }
       >
         {structureLoadFailed && (
@@ -1919,10 +2045,11 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
         {/* Editability Alert */}
         {!isDynamicallyEditable && (
           <Alert severity="warning" sx={{ mb: 2 }}>
-            هذه الوثيقة مقفلة مؤقتاً لأنها تحتوي على مطالبات أو موافقات مسبقة فعلية. لضمان سلامة العمليات المحاسبية، يرجى إنشاء إصدار جديد أو حذف المطالبات لتفعيل التعديل مرة أخرى.
+            هذه الوثيقة مقفلة مؤقتاً لأنها تحتوي على مطالبات أو موافقات مسبقة فعلية. لضمان سلامة العمليات المحاسبية، يرجى إنشاء إصدار جديد
+            أو حذف المطالبات لتفعيل التعديل مرة أخرى.
           </Alert>
         )}
-        
+
         {/* ── Filter bar ── */}
         <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap" sx={{ mb: '1.0rem' }}>
           <Chip
@@ -2054,32 +2181,99 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
       </MainCard>
 
       {/* Rule Form Modal */}
-      <Dialog open={individualLimitDialog.open} onClose={() => !individualLimitMutation.isPending && setIndividualLimitDialog((prev) => ({ ...prev, open: false }))} maxWidth="sm" fullWidth>
+      <Dialog
+        open={individualLimitDialog.open}
+        onClose={() => !individualLimitMutation.isPending && setIndividualLimitDialog((prev) => ({ ...prev, open: false }))}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>سقف المنفعة الفردي — {individualLimitDialog.rule?.nameAr}</DialogTitle>
         <DialogContent dividers>
-          <Alert severity="info" sx={{ mb: 2 }}>اترك جميع الحقول فارغة إذا كانت المنفعة بلا سقف فردي. سقف المجموعة والسقف السنوي سيبقيان مطبقين.</Alert>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            اترك جميع الحقول فارغة إذا كانت المنفعة بلا سقف فردي. سقف المجموعة والسقف السنوي سيبقيان مطبقين.
+          </Alert>
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="number" label="السقف المالي" value={individualLimitDialog.amountLimit} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, amountLimit: e.target.value }))} inputProps={{ min: 0 }} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="number" label="حد المرات" value={individualLimitDialog.timesLimit} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, timesLimit: e.target.value }))} inputProps={{ min: 0, step: 1 }} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth type="number" label="حد الأيام" value={individualLimitDialog.daysLimit} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, daysLimit: e.target.value }))} inputProps={{ min: 0, step: 1 }} /></Grid>
-            <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth select label="المدة الزمنية" value={individualLimitDialog.periodType} onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, periodType: e.target.value }))}>
-              <MenuItem value="PER_SERVICE">لكل خدمة</MenuItem><MenuItem value="PER_VISIT">لكل زيارة</MenuItem><MenuItem value="DAILY">يومي</MenuItem><MenuItem value="WEEKLY">أسبوعي</MenuItem><MenuItem value="MONTHLY">شهري</MenuItem><MenuItem value="QUARTERLY">ربع سنوي</MenuItem><MenuItem value="ANNUAL">سنوي</MenuItem><MenuItem value="CUSTOM_DAYS">كل عدد أيام</MenuItem><MenuItem value="CUSTOM_WEEKS">كل عدد أسابيع</MenuItem><MenuItem value="CUSTOM_MONTHS">كل عدد أشهر</MenuItem><MenuItem value="CUSTOM_YEARS">كل عدد سنوات</MenuItem><MenuItem value="POLICY_PERIOD">مدة الوثيقة</MenuItem><MenuItem value="LIFETIME">مدى الحياة</MenuItem>
-            </TextField></Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="السقف المالي"
+                value={individualLimitDialog.amountLimit}
+                onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, amountLimit: e.target.value }))}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="حد المرات"
+                value={individualLimitDialog.timesLimit}
+                onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, timesLimit: e.target.value }))}
+                inputProps={{ min: 0, step: 1 }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                type="number"
+                label="حد الأيام"
+                value={individualLimitDialog.daysLimit}
+                onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, daysLimit: e.target.value }))}
+                inputProps={{ min: 0, step: 1 }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                select
+                label="المدة الزمنية"
+                value={individualLimitDialog.periodType}
+                onChange={(e) => setIndividualLimitDialog((prev) => ({ ...prev, periodType: e.target.value }))}
+              >
+                <MenuItem value="PER_SERVICE">لكل خدمة</MenuItem>
+                <MenuItem value="PER_VISIT">لكل زيارة</MenuItem>
+                <MenuItem value="DAILY">يومي</MenuItem>
+                <MenuItem value="WEEKLY">أسبوعي</MenuItem>
+                <MenuItem value="MONTHLY">شهري</MenuItem>
+                <MenuItem value="QUARTERLY">ربع سنوي</MenuItem>
+                <MenuItem value="ANNUAL">سنوي</MenuItem>
+                <MenuItem value="CUSTOM_DAYS">كل عدد أيام</MenuItem>
+                <MenuItem value="CUSTOM_WEEKS">كل عدد أسابيع</MenuItem>
+                <MenuItem value="CUSTOM_MONTHS">كل عدد أشهر</MenuItem>
+                <MenuItem value="CUSTOM_YEARS">كل عدد سنوات</MenuItem>
+                <MenuItem value="POLICY_PERIOD">مدة الوثيقة</MenuItem>
+                <MenuItem value="LIFETIME">مدى الحياة</MenuItem>
+              </TextField>
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button disabled={individualLimitMutation.isPending} onClick={() => setIndividualLimitDialog((prev) => ({ ...prev, open: false }))}>إلغاء</Button>
-          <Button variant="contained" disabled={individualLimitMutation.isPending} onClick={() => individualLimitMutation.mutate({
-            ruleId: individualLimitDialog.rule.id,
-            payload: {
-              amountLimit: individualLimitDialog.amountLimit === '' ? null : Number(individualLimitDialog.amountLimit),
-              timesLimit: individualLimitDialog.timesLimit === '' ? null : Number(individualLimitDialog.timesLimit),
-              daysLimit: individualLimitDialog.daysLimit === '' ? null : Number(individualLimitDialog.daysLimit),
-              periodType: individualLimitDialog.periodType,
-              periodValue: individualLimitDialog.periodValue === '' ? 1 : Math.max(1, Number(individualLimitDialog.periodValue)),
-              countingMethod: 'EACH_UNIT'
+          <Button
+            disabled={individualLimitMutation.isPending}
+            onClick={() => setIndividualLimitDialog((prev) => ({ ...prev, open: false }))}
+          >
+            إلغاء
+          </Button>
+          <Button
+            variant="contained"
+            disabled={individualLimitMutation.isPending}
+            onClick={() =>
+              individualLimitMutation.mutate({
+                ruleId: individualLimitDialog.rule.id,
+                payload: {
+                  amountLimit: individualLimitDialog.amountLimit === '' ? null : Number(individualLimitDialog.amountLimit),
+                  timesLimit: individualLimitDialog.timesLimit === '' ? null : Number(individualLimitDialog.timesLimit),
+                  daysLimit: individualLimitDialog.daysLimit === '' ? null : Number(individualLimitDialog.daysLimit),
+                  periodType: individualLimitDialog.periodType,
+                  periodValue: individualLimitDialog.periodValue === '' ? 1 : Math.max(1, Number(individualLimitDialog.periodValue)),
+                  countingMethod: 'EACH_UNIT'
+                }
+              })
             }
-          })}>حفظ السقف</Button>
+          >
+            حفظ السقف
+          </Button>
         </DialogActions>
       </Dialog>
       <UnifiedCoverageModal
@@ -2268,25 +2462,36 @@ const BenefitPolicyRulesTab = ({ policyId, policyStatus, policyDefaultCoveragePe
                   تفاصيل الأخطاء:
                 </Typography>
                 <Table size="small" stickyHeader aria-label="تفاصيل أخطاء استيراد المنافع والتغطيات">
-                  <TableHead><TableRow>
-                    <TableCell>الصف</TableCell><TableCell>الحقل</TableCell><TableCell>القيمة المرفوضة</TableCell>
-                    <TableCell>سبب الرفض</TableCell><TableCell>كيفية المعالجة</TableCell>
-                  </TableRow></TableHead>
-                  <TableBody>{importResult.errors.map((err, idx) => {
-                    const message = err.messageAr || err.errorMessage || err.message || 'خطأ غير موضح من الخادم';
-                    const value = err.value ?? err.fieldValue ?? '—';
-                    const suggestion = err.errorType === 'LOOKUP_FAILED'
-                      ? 'استخدم رمزًا موجودًا في ورقة التصنيفات المرجعية أو في قائمة التصنيفات المعتمدة.'
-                      : err.errorType === 'INVALID_FORMAT'
-                        ? 'صحّح تنسيق الخلية وفق الوصف، ثم أعد رفع الملف.'
-                        : 'راجع الخلية المشار إليها وعدّلها وفق سبب الرفض.';
-                    return <TableRow key={`${err.rowNumber}-${err.fieldName}-${idx}`}>
-                      <TableCell>{err.rowNumber ?? '—'}</TableCell>
-                      <TableCell>{err.fieldName || err.columnName || '—'}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', direction: 'ltr' }}>{value}</TableCell>
-                      <TableCell>{message}</TableCell><TableCell>{suggestion}</TableCell>
-                    </TableRow>;
-                  })}</TableBody>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>الصف</TableCell>
+                      <TableCell>الحقل</TableCell>
+                      <TableCell>القيمة المرفوضة</TableCell>
+                      <TableCell>سبب الرفض</TableCell>
+                      <TableCell>كيفية المعالجة</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {importResult.errors.map((err, idx) => {
+                      const message = err.messageAr || err.errorMessage || err.message || 'خطأ غير موضح من الخادم';
+                      const value = err.value ?? err.fieldValue ?? '—';
+                      const suggestion =
+                        err.errorType === 'LOOKUP_FAILED'
+                          ? 'استخدم رمزًا موجودًا في ورقة التصنيفات المرجعية أو في قائمة التصنيفات المعتمدة.'
+                          : err.errorType === 'INVALID_FORMAT'
+                            ? 'صحّح تنسيق الخلية وفق الوصف، ثم أعد رفع الملف.'
+                            : 'راجع الخلية المشار إليها وعدّلها وفق سبب الرفض.';
+                      return (
+                        <TableRow key={`${err.rowNumber}-${err.fieldName}-${idx}`}>
+                          <TableCell>{err.rowNumber ?? '—'}</TableCell>
+                          <TableCell>{err.fieldName || err.columnName || '—'}</TableCell>
+                          <TableCell sx={{ fontFamily: 'monospace', direction: 'ltr' }}>{value}</TableCell>
+                          <TableCell>{message}</TableCell>
+                          <TableCell>{suggestion}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
                 </Table>
               </Box>
             )}
@@ -2419,4 +2624,3 @@ BenefitPolicyRulesTab.propTypes = {
 };
 
 export default BenefitPolicyRulesTab;
-
