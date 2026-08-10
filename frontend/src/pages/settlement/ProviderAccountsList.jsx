@@ -15,8 +15,8 @@ import {
   IconButton,
   TextField,
   MenuItem,
-  CircularProgress,
-  Divider
+  Autocomplete,
+  CircularProgress
 } from '@mui/material';
 import {
   ReceiptLong as ReceiptIcon,
@@ -142,8 +142,6 @@ export default function ProviderAccountsList() {
     status: 'ALL',
     providerId: '',
     employerId: '',
-    dateFrom: '',
-    dateTo: '',
     serviceDateFrom: '',
     serviceDateTo: ''
   });
@@ -152,8 +150,6 @@ export default function ProviderAccountsList() {
     status: 'ALL',
     providerId: '',
     employerId: '',
-    dateFrom: '',
-    dateTo: '',
     serviceDateFrom: '',
     serviceDateTo: ''
   });
@@ -202,8 +198,6 @@ export default function ProviderAccountsList() {
         status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
         providerId: appliedFilters.providerId || undefined,
         employerId: appliedFilters.employerId || undefined,
-        // ملاحظة: financial-summary لا يدعم createdDateFrom/To (قيد الـ backend)
-        // نُرسل فقط فلتر تاريخ الخدمة
         dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
         dateTo: formatDateParam(appliedFilters.serviceDateTo)
       }),
@@ -230,8 +224,6 @@ export default function ProviderAccountsList() {
         status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
         providerId: appliedFilters.providerId || undefined,
         employerId: appliedFilters.employerId || undefined,
-        createdDateFrom: formatDateParam(appliedFilters.dateFrom),
-        createdDateTo: formatDateParam(appliedFilters.dateTo),
         dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
         dateTo: formatDateParam(appliedFilters.serviceDateTo)
       };
@@ -311,15 +303,8 @@ export default function ProviderAccountsList() {
     setAppliedFilters({ ...filters });
   };
 
-  // للفلاتر غير التاريخية: تُطبَّق فوراً دون الحاجة لزر البحث
-  const applyFilterNow = (field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
-    setAppliedFilters((prev) => ({ ...prev, [field]: value }));
-    tableState.setPage(0);
-  };
-
   const clearFilters = () => {
-    const reset = { status: 'ALL', providerId: '', employerId: '', dateFrom: '', dateTo: '', serviceDateFrom: '', serviceDateTo: '' };
+    const reset = { status: 'ALL', providerId: '', employerId: '', serviceDateFrom: '', serviceDateTo: '' };
     setFilters(reset);
     setAppliedFilters(reset);
     tableState.setPage(0);
@@ -333,8 +318,6 @@ export default function ProviderAccountsList() {
         status: appliedFilters.status !== 'ALL' ? appliedFilters.status : undefined,
         providerId: appliedFilters.providerId || undefined,
         employerId: appliedFilters.employerId || undefined,
-        createdDateFrom: formatDateParam(appliedFilters.dateFrom),
-        createdDateTo: formatDateParam(appliedFilters.dateTo),
         dateFrom: formatDateParam(appliedFilters.serviceDateFrom),
         dateTo: formatDateParam(appliedFilters.serviceDateTo),
         page: 1,
@@ -351,7 +334,7 @@ export default function ProviderAccountsList() {
           'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
           'مقدم الخدمة': item.providerName || '',
           'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
-          'نسبة التخفيض (%)': getDiscountPercent(item),
+          'نسبة التخفيض وقت الخدمة (%)': getDiscountPercent(item),
           'آلية الخصم': getDiscountTiming(item).label,
           'المبلغ المرفوض': getRefusedAmount(item),
           'حصة التأمين قبل خصم العقد': getPayableAmount(item),
@@ -419,7 +402,7 @@ export default function ProviderAccountsList() {
     <thead>
       <tr>
         <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
-        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة التخفيض</th>
+        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة التخفيض وقت الخدمة</th>
         <th>المرفوض</th><th>حصة التأمين قبل خصم العقد</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
       </tr>
     </thead>
@@ -482,22 +465,22 @@ export default function ProviderAccountsList() {
         cell: ({ row }) => row.original.providerName || '-'
       },
       {
-        accessorKey: 'requestedAmount',
-        header: 'المبلغ الإجمالي (قبل)',
-        minWidth: '7.25rem',
+        accessorKey: 'payableAmount',
+        header: 'حصة التأمين قبل التخفيض',
+        minWidth: '8rem',
         align: 'center',
-        cell: ({ row }) => formatCurrency(row.original.requestedAmount)
+        cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
       },
       {
         accessorKey: 'providerDiscountPercent',
-        header: 'نسبة التخفيض',
+        header: 'نسبة التخفيض وقت الخدمة',
         minWidth: '7rem',
         align: 'center',
         cell: ({ row }) => {
           const discount = getDiscountPercent(row.original);
           const timing = getDiscountTiming(row.original);
           return (
-            <Tooltip title={timing.tooltip}>
+            <Tooltip title={`${timing.tooltip}. هذه هي النسبة المحفوظة وفق شروط العقد السارية في تاريخ الخدمة.`}>
               <Chip
                 label={`${discount}% (${timing.shortLabel})`}
                 size="small"
@@ -509,24 +492,6 @@ export default function ProviderAccountsList() {
         }
       },
       {
-        accessorKey: 'refusedAmount',
-        header: 'المبلغ المرفوض',
-        minWidth: '6.75rem',
-        align: 'center',
-        cell: ({ row }) => (
-          <Typography color="error.main" fontWeight="bold">
-            {formatCurrency(getRefusedAmount(row.original))}
-          </Typography>
-        )
-      },
-      {
-        accessorKey: 'payableAmount',
-        header: 'حصة التأمين قبل خصم العقد',
-        minWidth: '8rem',
-        align: 'center',
-        cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
-      },
-      {
         accessorKey: 'companyShare',
         header: 'حصة الشركة',
         minWidth: '6.5rem',
@@ -534,6 +499,17 @@ export default function ProviderAccountsList() {
         cell: ({ row }) => (
           <Typography color="warning.main" fontWeight="bold">
             {formatCurrency(getCompanyDiscountAmount(row.original))}
+          </Typography>
+        )
+      },
+      {
+        accessorKey: 'refusedAmount',
+        header: 'المبلغ المرفوض',
+        minWidth: '6.75rem',
+        align: 'center',
+        cell: ({ row }) => (
+          <Typography color="error.main" fontWeight="bold">
+            {formatCurrency(getRefusedAmount(row.original))}
           </Typography>
         )
       },
@@ -618,116 +594,50 @@ export default function ProviderAccountsList() {
                 isSummaryLoading
               )}
 
-              {/* فاصل بصري: ما يسبق هذا الخط هو أرقام المطالبة الخام، وما يليه توزيع
-                  "حصة التأمين قبل خصم العقد" بين خصم الشركة وصافي المرفق */}
-              <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderStyle: 'dashed' }} />
-
-              <Stack direction="row" spacing={1} sx={{ bgcolor: 'action.hover', borderRadius: 1, p: 0.5 }}>
-                {renderSummaryCard(
-                  'حصة الشركة',
-                  formatCurrency(totals.companyShare),
-                  <PaymentsIcon fontSize="small" color="warning" />,
-                  'warning.main',
-                  isSummaryLoading
-                )}
-                {renderSummaryCard(
-                  'حصة المرفق',
-                  formatCurrency(totals.facilityShare),
-                  <PaymentsIcon fontSize="small" color="success" />,
-                  'success.main',
-                  isSummaryLoading
-                )}
-              </Stack>
+              {renderSummaryCard(
+                'حصة الشركة',
+                formatCurrency(totals.companyShare),
+                <PaymentsIcon fontSize="small" color="warning" />,
+                'warning.main',
+                isSummaryLoading
+              )}
+              {renderSummaryCard(
+                'حصة المرفق',
+                formatCurrency(totals.facilityShare),
+                <PaymentsIcon fontSize="small" color="success" />,
+                'success.main',
+                isSummaryLoading
+              )}
             </Box>
           }
         />
 
         <MainCard sx={{ mt: -1.25 }}>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="nowrap" sx={{ overflowX: 'auto', pb: 0.5 }}>
-            <TextField
-              select
+            <Autocomplete
               size="small"
-              label="حالة المطالبة"
-              value={filters.status}
-              onChange={(e) => applyFilterNow('status', e.target.value)}
-              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
-              sx={{ minWidth: '9rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              size="small"
-              label="الوثيقة (جهة العمل)"
-              value={filters.employerId}
-              onChange={(e) => applyFilterNow('employerId', e.target.value)}
-              disabled={isEmployersLoading}
-              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
-              sx={{ minWidth: '10rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
-            >
-              <MenuItem value="">الكل</MenuItem>
-              {employerOptions.map((e) => (
-                <MenuItem key={e.id || e.value} value={e.id || e.value}>
-                  {e.name || e.nameAr || e.label || e.employerName || `وثيقة #${e.id || e.value}`}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              size="small"
-              label="مقدم الخدمة"
-              value={filters.providerId}
-              onChange={(e) => applyFilterNow('providerId', e.target.value)}
-              disabled={isProvidersLoading}
-              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20.0rem' } } } }}
-              sx={{ minWidth: '10rem', '& .MuiInputLabel-root': { fontSize: '0.75rem' }, '& .MuiInputBase-input': { fontSize: '0.75rem' } }}
-            >
-              <MenuItem value="">الكل</MenuItem>
-              {providerOptions.map((p) => (
-                <MenuItem key={p.id} value={p.id}>
-                  {p.name || `مقدم خدمة #${p.id}`}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <DatePicker
-              label="من إدخال المطالبة"
-              value={filters.dateFrom ? dayjs(filters.dateFrom) : null}
-              onChange={(newValue) =>
-                setFilters((prev) => ({ ...prev, dateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
-              }
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: {
-                    minWidth: '8.5rem',
-                    '& .MuiInputLabel-root': { fontSize: '0.75rem' },
-                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
-                  }
-                }
-              }}
+              options={employerOptions}
+              value={employerOptions.find((e) => String(e.id || e.value) === String(filters.employerId)) || null}
+              onChange={(_, option) => setFilters((prev) => ({ ...prev, employerId: option ? option.id || option.value : '' }))}
+              getOptionLabel={(e) => e.name || e.nameAr || e.label || e.employerName || `وثيقة #${e.id || e.value}`}
+              isOptionEqualToValue={(option, value) => String(option.id || option.value) === String(value.id || value.value)}
+              loading={isEmployersLoading}
+              noOptionsText="لا توجد وثائق مطابقة"
+              sx={{ minWidth: '13rem' }}
+              renderInput={(params) => <TextField {...params} label="الوثيقة (جهة العمل)" />}
             />
 
-            <DatePicker
-              label="إلى إدخال المطالبة"
-              value={filters.dateTo ? dayjs(filters.dateTo) : null}
-              onChange={(newValue) => setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))}
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: {
-                    minWidth: '8.5rem',
-                    '& .MuiInputLabel-root': { fontSize: '0.75rem' },
-                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
-                  }
-                }
-              }}
+            <Autocomplete
+              size="small"
+              options={providerOptions}
+              value={providerOptions.find((p) => String(p.id || p.value) === String(filters.providerId)) || null}
+              onChange={(_, option) => setFilters((prev) => ({ ...prev, providerId: option ? option.id || option.value : '' }))}
+              getOptionLabel={(p) => p.name || p.label || `مقدم خدمة #${p.id || p.value}`}
+              isOptionEqualToValue={(option, value) => String(option.id || option.value) === String(value.id || value.value)}
+              loading={isProvidersLoading}
+              noOptionsText="لا يوجد مقدم خدمة مطابق"
+              sx={{ minWidth: '13rem' }}
+              renderInput={(params) => <TextField {...params} label="مقدم الخدمة" />}
             />
 
             <DatePicker
@@ -742,7 +652,7 @@ export default function ProviderAccountsList() {
                   sx: {
                     minWidth: '8.5rem',
                     '& .MuiInputLabel-root': { fontSize: '0.75rem' },
-                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
+                    '& .MuiInputBase-input': { fontSize: '0.875rem' }
                   }
                 }
               }}
@@ -760,11 +670,27 @@ export default function ProviderAccountsList() {
                   sx: {
                     minWidth: '8.5rem',
                     '& .MuiInputLabel-root': { fontSize: '0.75rem' },
-                    '& .MuiInputBase-input': { fontSize: '0.75rem' }
+                    '& .MuiInputBase-input': { fontSize: '0.875rem' }
                   }
                 }
               }}
             />
+
+            <TextField
+              select
+              size="small"
+              label="حالة المطالبة"
+              value={filters.status}
+              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+              SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: '20rem' } } } }}
+              sx={{ minWidth: '9rem' }}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
 
             <Button
               variant="contained"
@@ -849,16 +775,6 @@ export default function ProviderAccountsList() {
           </Stack>
         </MainCard>
 
-        {(appliedFilters.dateFrom || appliedFilters.dateTo) && (
-          <Alert
-            severity="warning"
-            icon={false}
-            sx={{ py: 0.25, px: 1.5, fontSize: '0.72rem', '& .MuiAlert-message': { lineHeight: 1.5 } }}
-          >
-            ملاحظة: الإجماليات المالية (قبل / مرفوض / مستحق / مدفوع / غير مسوى) تعكس فلتر تاريخ الخدمة فقط — فلتر تاريخ الإدخال لا يُطبَّق
-            على الإجماليات (قيد الـ backend). العدد الكلي للمطالبات دقيق لجميع الفلاتر.
-          </Alert>
-        )}
         {isError && <Alert severity="error">{error?.message || 'تعذر جلب البيانات. يرجى المحاولة مجدداً.'}</Alert>}
 
         <MainCard content={false}>
