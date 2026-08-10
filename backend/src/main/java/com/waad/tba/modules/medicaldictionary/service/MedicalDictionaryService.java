@@ -433,12 +433,24 @@ public class MedicalDictionaryService {
                     contract.getId(), item, effectiveFrom);
             if (effectiveExisting.isPresent() && pricingItemMatches(effectiveExisting.get(), item, category)) {
                 ProviderContractPricingItem current = effectiveExisting.get();
+                boolean extendedToContractStart = current.getEffectiveFrom() != null
+                        && current.getEffectiveFrom().isAfter(effectiveFrom);
+                if (extendedToContractStart) {
+                    current.setEffectiveFrom(effectiveFrom);
+                    current.setUpdatedBy(actorId == null ? null : actorId.toString());
+                    providerContractPricingItemRepository.save(current);
+                }
                 item.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
                 item.setPostedPricingItemId(current.getId());
                 item.setPostedAt(LocalDateTime.now());
                 priceListItemRepository.save(item);
-                skipped++;
-                results.add(postResult(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current.getId()));
+                if (extendedToContractStart) {
+                    updated++;
+                    results.add(postResult(item, "UPDATED", "تم تمديد سريان السعر المطابق إلى بداية العقد", current.getId()));
+                } else {
+                    skipped++;
+                    results.add(postResult(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current.getId()));
+                }
                 continue;
             }
             if (effectiveExisting.isPresent() && !request.isReplaceEffectivePrices()) {
@@ -591,9 +603,16 @@ public class MedicalDictionaryService {
             Optional<ProviderContractPricingItem> byCode = providerContractPricingItemRepository
                     .findEffectiveInContractByCode(contractId, serviceCode, effectiveDate);
             if (byCode.isPresent()) return byCode;
+            Optional<ProviderContractPricingItem> futureByCode = providerContractPricingItemRepository
+                    .findFirstByContractIdAndActiveTrueAndServiceCodeIgnoreCaseAndEffectiveFromAfterOrderByEffectiveFromAsc(
+                            contractId, serviceCode, effectiveDate);
+            if (futureByCode.isPresent()) return futureByCode;
         }
-        return providerContractPricingItemRepository.findEffectiveInContractByName(
+        Optional<ProviderContractPricingItem> byName = providerContractPricingItemRepository.findEffectiveInContractByName(
                 contractId, item.getProviderServiceName(), effectiveDate);
+        return byName.isPresent() ? byName : providerContractPricingItemRepository
+                .findFirstByContractIdAndActiveTrueAndServiceNameIgnoreCaseAndEffectiveFromAfterOrderByEffectiveFromAsc(
+                        contractId, item.getProviderServiceName(), effectiveDate);
     }
 
     private String postingIdentity(PriceListClassificationItem item) {
@@ -640,6 +659,10 @@ public class MedicalDictionaryService {
         }
 
         ProviderContractPricingItem current = existing.get();
+        if (current.getEffectiveFrom() != null && current.getEffectiveFrom().isAfter(effectiveDate)
+                && pricingItemMatches(current, item, category)) {
+            return priceListDiff(item, "UPDATE", "سيُمدد سريان السعر المطابق إلى بداية العقد", current, category);
+        }
         if (pricingItemMatches(current, item, category)) {
             return priceListDiff(item, "IDENTICAL", "لا يوجد تغيير؛ السعر والتصنيف مطابقان لقائمة التنظيم", current, category);
         }

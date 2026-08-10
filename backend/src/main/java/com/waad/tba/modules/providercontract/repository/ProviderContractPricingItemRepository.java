@@ -118,6 +118,12 @@ public interface ProviderContractPricingItemRepository extends JpaRepository<Pro
            return findListByContractIdAndServiceNameActiveTrue(contractId, serviceName).stream().findFirst();
        }
 
+       Optional<ProviderContractPricingItem> findFirstByContractIdAndActiveTrueAndServiceCodeIgnoreCaseAndEffectiveFromAfterOrderByEffectiveFromAsc(
+                     Long contractId, String serviceCode, LocalDate effectiveFrom);
+
+       Optional<ProviderContractPricingItem> findFirstByContractIdAndActiveTrueAndServiceNameIgnoreCaseAndEffectiveFromAfterOrderByEffectiveFromAsc(
+                     Long contractId, String serviceName, LocalDate effectiveFrom);
+
        /**
         * Check if pricing exists for a service code in a contract (replaces
         * medicalServiceId check)

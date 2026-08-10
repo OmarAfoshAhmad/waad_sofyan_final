@@ -648,11 +648,11 @@ export default function PriceListClassifierPage() {
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
   useEffect(() => {
-    if (success) enqueueSnackbar(success, { variant: 'success' });
+    if (success) enqueueSnackbar(success, { variant: 'success', preventDuplicate: true });
   }, [success, enqueueSnackbar]);
 
   useEffect(() => {
-    if (error) enqueueSnackbar(error, { variant: 'error' });
+    if (error) enqueueSnackbar(error, { variant: 'error', preventDuplicate: true });
   }, [error, enqueueSnackbar]);
 
   const items = useMemo(() => result?.items || [], [result?.items]);
@@ -1160,8 +1160,10 @@ export default function PriceListClassifierPage() {
       }
       const contract = await getActiveContractByProvider(selectedProviderId);
       if (!contract?.id) throw new Error('لا يوجد عقد نشط لمقدم الخدمة المختار. أنشئ العقد أو فعّله أولاً.');
-      const today = new Date().toISOString().slice(0, 10);
-      const effectiveFrom = contract.startDate && contract.startDate > today ? contract.startDate : today;
+      // A classified base price list belongs to the contract period, not to the
+      // upload day; otherwise legitimate backdated claims inside the contract
+      // become unpriceable.
+      const effectiveFrom = contract.startDate;
       if (contract.endDate && effectiveFrom > contract.endDate) {
         throw new Error('انتهت مدة العقد النشط ولا يمكن إضافة أسعار جديدة إليه.');
       }

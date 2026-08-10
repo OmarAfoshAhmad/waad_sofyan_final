@@ -3,6 +3,7 @@ package com.waad.tba.modules.medicaldictionary.service;
 import com.waad.tba.modules.medicaldictionary.dto.MedicalDictionaryEntryResponse;
 import com.waad.tba.modules.medicaldictionary.dto.PriceListSessionDiffResponse;
 import com.waad.tba.modules.medicaldictionary.dto.PriceListSessionPostRequest;
+import com.waad.tba.modules.medicaldictionary.dto.PriceListSessionPostResponse;
 import com.waad.tba.modules.medicaldictionary.entity.MedicalDictionaryEntry;
 import com.waad.tba.modules.medicaldictionary.entity.PriceListClassificationItem;
 import com.waad.tba.modules.medicaldictionary.entity.PriceListClassificationSession;
@@ -200,6 +201,37 @@ class MedicalDictionaryServiceTest {
         assertThat(diff.getRejectedCount()).isEqualTo(1);
         assertThat(diff.getItems()).extracting(PriceListSessionDiffResponse.ItemDiff::getAction)
                 .containsExactly("CREATE", "REJECTED");
+    }
+
+    @Test
+    void postPriceListSessionToContract_extendsIdenticalFuturePriceBackToContractStart() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        MedicalCategory category = category();
+        ProviderContract contract = contract();
+        PriceListClassificationItem item = priceListItem("كشف طبي", new BigDecimal("100.00"));
+        ProviderContractPricingItem futurePrice = pricingItem(contract, category, "كشف طبي", new BigDecimal("100.00"));
+        futurePrice.setEffectiveFrom(LocalDate.of(2026, 8, 10));
+        PriceListSessionPostRequest request = postRequest();
+        request.setEffectiveFrom(contract.getStartDate());
+        request.setReplaceEffectivePrices(false);
+
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+        when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(item));
+        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category));
+        when(providerContractPricingItemRepository
+                .findFirstByContractIdAndActiveTrueAndServiceNameIgnoreCaseAndEffectiveFromAfterOrderByEffectiveFromAsc(
+                        200L, "كشف طبي", contract.getStartDate())).thenReturn(Optional.of(futurePrice));
+        when(providerContractPricingItemRepository.save(futurePrice)).thenReturn(futurePrice);
+        when(priceListSessionRepository.save(session)).thenReturn(session);
+
+        PriceListSessionPostResponse response = service.postPriceListSessionToContract(100L, request);
+
+        assertThat(response.getUpdated()).isEqualTo(1);
+        assertThat(response.getCreated()).isZero();
+        assertThat(futurePrice.getEffectiveFrom()).isEqualTo(contract.getStartDate());
+        assertThat(item.getPostedPricingItemId()).isEqualTo(futurePrice.getId());
     }
 
     @Test
