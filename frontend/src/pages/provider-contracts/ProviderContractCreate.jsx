@@ -20,7 +20,7 @@ import {
   Typography
 } from '@mui/material';
 import { ArrowBack, Save, Add as AddIcon } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 

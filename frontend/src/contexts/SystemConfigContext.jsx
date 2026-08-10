@@ -15,6 +15,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import PropTypes from 'prop-types';
 import featureFlagsService from 'services/api/featureFlags.service';
 import { useAuth, AUTH_STATUS } from 'contexts/AuthContext';
+import { DEFAULT_DATE_DISPLAY_FORMAT, setDateDisplayFormat } from 'utils/dateConfig';
 
 // ─── cache helpers ─────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ const DEFAULT_UI_CONFIG = {
   logoUrl: '',
   fontFamily: 'Tajawal',
   fontSizeBase: 14,
+  dateDisplayFormat: DEFAULT_DATE_DISPLAY_FORMAT,
   systemNameAr: 'نظام واعد الطبي',
   systemNameEn: 'TBA WAAD System'
 };
@@ -119,6 +121,10 @@ export function SystemConfigProvider({ children }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setDateDisplayFormat(uiConfig.dateDisplayFormat);
+  }, [uiConfig.dateDisplayFormat]);
 
   /** Force a cache-busting reload — updates ALL consumers (async, needs API round-trip) */
   const refresh = useCallback(() => {

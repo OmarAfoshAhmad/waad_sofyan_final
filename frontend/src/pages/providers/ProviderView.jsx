@@ -46,6 +46,7 @@ import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { useProviderDetails } from 'hooks/useProviders';
 import { providersService } from 'services/api';
 import axiosClient from 'utils/axios';
+import { formatDate } from 'utils/formatters';
 
 const fetchProviderServices = async (providerId) => {
   const res = await axiosClient.get(`/api/v1/providers/${providerId}/services`);
@@ -425,7 +426,7 @@ const ProviderView = () => {
                       تاريخ الإنشاء
                     </Typography>
                     <Typography variant="body1" fontWeight={500}>
-                      {provider?.createdAt ? new Date(provider.createdAt).toLocaleDateString('en-US') : '—'}
+                      {formatDate(provider?.createdAt)}
                     </Typography>
                   </Grid>
                   <Grid size={12}>
@@ -433,7 +434,7 @@ const ProviderView = () => {
                       آخر تحديث
                     </Typography>
                     <Typography variant="body1" fontWeight={500}>
-                      {provider?.updatedAt ? new Date(provider.updatedAt).toLocaleDateString('en-US') : '—'}
+                      {formatDate(provider?.updatedAt)}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -474,8 +475,8 @@ const ProviderView = () => {
                           contracts.map((contract) => (
                             <TableRow key={contract.id}>
                               <TableCell>{contract.contractCode || contract.contractNumber || `#${contract.id}`}</TableCell>
-                              <TableCell>{contract.startDate ? new Date(contract.startDate).toLocaleDateString('ar-LY') : '—'}</TableCell>
-                              <TableCell>{contract.endDate ? new Date(contract.endDate).toLocaleDateString('ar-LY') : '—'}</TableCell>
+                              <TableCell>{formatDate(contract.startDate)}</TableCell>
+                              <TableCell>{formatDate(contract.endDate)}</TableCell>
                               <TableCell>{contract.discountPercent ? `${contract.discountPercent}%` : '—'}</TableCell>
                               <TableCell>
                                 <Chip

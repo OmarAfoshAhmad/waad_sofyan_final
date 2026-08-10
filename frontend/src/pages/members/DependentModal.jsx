@@ -36,7 +36,7 @@ import {
   useMediaQuery,
   useTheme
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { Save as SaveIcon, Close as CloseIcon, CloudUpload as CloudUploadIcon } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { updateMember, addDependent, uploadPhoto, GENDERS, RELATIONSHIPS } from 'services/api/unified-members.service';

@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 import { Search as SearchIcon, CheckCircle as EligibleIcon, Cancel as IneligibleIcon, Person as PersonIcon } from '@mui/icons-material';
 import { MemberAvatar } from 'components/tba';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';

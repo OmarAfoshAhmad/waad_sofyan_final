@@ -60,6 +60,7 @@ import { useSnackbar } from 'notistack';
 import BulkPriceListImportDialog from './components/BulkPriceListImportDialog';
 import ProviderContractImportDialog from './components/ProviderContractImportDialog';
 import BulkEditContractsDialog from './components/BulkEditContractsDialog';
+import { formatDate } from 'utils/formatters';
 
 const QUERY_KEY = 'provider-contracts';
 const MODULE_NAME = 'provider-contracts';
@@ -68,19 +69,6 @@ const HEADER_ACTION_BUTTON_SX = {
   minWidth: '9.6875rem',
   whiteSpace: 'nowrap',
   flexShrink: 0
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-';
-  try {
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-  } catch {
-    return dateStr;
-  }
 };
 
 const formatPercent = (value) => {

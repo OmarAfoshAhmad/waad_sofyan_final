@@ -17,7 +17,7 @@ import {
   Typography
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import useAuth from 'hooks/useAuth';
 import paymentsService from 'services/api/payments.service';
 
@@ -134,7 +134,6 @@ const PaymentFormModal = ({ open, onClose, payment, summary, onSuccess }) => {
                   <DatePicker
                     {...field}
                     label="تاريخ الدفع"
-                    format="DD-MM-YYYY"
                     slotProps={{ textField: { size: 'small', fullWidth: true, error: !!errors.paymentDate } }}
                   />
                 )}

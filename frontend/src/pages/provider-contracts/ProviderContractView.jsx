@@ -111,6 +111,7 @@ import {
 } from 'services/api/provider-contracts.service';
 import { getAllMedicalCategories, getMedicalServicesByCategory } from 'services/api/medical-categories.service';
 import PricingImportReviewDialog from './components/PricingImportReviewDialog';
+import { formatDate } from 'utils/formatters';
 
 // Snackbar
 import { useSnackbar } from 'notistack';
@@ -122,19 +123,6 @@ import { useSnackbar } from 'notistack';
 /**
  * Format date for display
  */
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-';
-  try {
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-  } catch {
-    return dateStr;
-  }
-};
-
 /**
  * Format currency
  */

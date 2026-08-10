@@ -13,7 +13,7 @@ import {
   Stack,
   Typography
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { CONTRACT_STATUS_CONFIG, PRICING_MODEL_CONFIG } from 'services/api/provider-contracts.service';
 import dayjs from 'dayjs';
 

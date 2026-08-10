@@ -71,7 +71,7 @@ import {
   Search as SearchIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { TablePagination } from '@mui/material';
 import dayjs from 'dayjs';
 import { formatDate } from 'utils/formatters';

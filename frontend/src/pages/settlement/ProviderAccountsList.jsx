@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 
 // MUI
 import {
@@ -748,7 +748,6 @@ export default function ProviderAccountsList() {
               onChange={(newValue) =>
                 setFilters((prev) => ({ ...prev, dateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
               }
-              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
@@ -765,7 +764,6 @@ export default function ProviderAccountsList() {
               label="إلى إدخال المطالبة"
               value={filters.dateTo ? dayjs(filters.dateTo) : null}
               onChange={(newValue) => setFilters((prev) => ({ ...prev, dateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))}
-              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
@@ -784,7 +782,6 @@ export default function ProviderAccountsList() {
               onChange={(newValue) =>
                 setFilters((prev) => ({ ...prev, serviceDateFrom: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
               }
-              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',
@@ -803,7 +800,6 @@ export default function ProviderAccountsList() {
               onChange={(newValue) =>
                 setFilters((prev) => ({ ...prev, serviceDateTo: newValue?.isValid() ? newValue.format('YYYY-MM-DD') : '' }))
               }
-              format="DD-MM-YYYY"
               slotProps={{
                 textField: {
                   size: 'small',

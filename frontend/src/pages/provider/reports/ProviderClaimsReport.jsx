@@ -11,7 +11,7 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers';
+import DatePicker from 'components/common/SystemDatePicker';
 import MainCard from 'components/MainCard';
 import UnifiedPageHeader from 'components/UnifiedPageHeader';
 import { UnifiedMedicalTable } from 'components/common';

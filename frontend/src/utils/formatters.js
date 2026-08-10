@@ -14,6 +14,8 @@
  * @created 2026-01-03
  */
 
+import { formatDateParts } from './dateConfig';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -77,13 +79,16 @@ export const formatDate = (date) => {
   if (!date) return '-';
 
   try {
+    // Date-only ISO values are parsed locally to avoid shifting one day by timezone.
+    const iso = typeof date === 'string' && date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return formatDateParts({ year: iso[1], month: iso[2], day: iso[3] });
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return '-';
 
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
-    return `${day}-${month}-${year}`;
+    return formatDateParts({ day, month, year });
   } catch (error) {
     console.error('Date formatting error:', error);
     return '-';
@@ -108,15 +113,12 @@ export const formatDateTime = (date) => {
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return '-';
 
-    const formatted = new Intl.DateTimeFormat(LOCALE, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+    const formattedTime = new Intl.DateTimeFormat(LOCALE, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
     }).format(d);
-    return formatted.replace(/\//g, '-').replace(',', '');
+    return `${formatDateParts({ day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() })} ${formattedTime}`;
   } catch (error) {
     console.error('DateTime formatting error:', error);
     return '-';
@@ -135,9 +137,7 @@ export const formatDateLong = (date) => {
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return '-';
 
-    return new Intl.DateTimeFormat(LOCALE, {
-      dateStyle: 'long'
-    }).format(d);
+    return formatDateParts({ day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() });
   } catch (error) {
     console.error('Date long formatting error:', error);
     return '-';

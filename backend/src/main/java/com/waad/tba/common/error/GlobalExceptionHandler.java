@@ -468,6 +468,7 @@ public class GlobalExceptionHandler {
             case "SYSTEM_NAME_AR" -> "اسم النظام العربي";
             case "SYSTEM_NAME_EN" -> "اسم النظام الإنجليزي";
             case "FONT_FAMILY" -> "نوع الخط";
+            case "DATE_DISPLAY_FORMAT" -> "تنسيق عرض التاريخ";
             case "BENEFICIARY_NUMBER_FORMAT" -> "تنسيق رقم المستفيد";
             case "BENEFICIARY_NUMBER_PREFIX" -> "بادئة رقم المستفيد";
             default -> key;

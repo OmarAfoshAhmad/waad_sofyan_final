@@ -33,6 +33,7 @@ public class SettingsInitializationService {
     public static final String LOGO_URL_KEY = "LOGO_URL";
     public static final String FONT_FAMILY_KEY = "FONT_FAMILY";
     public static final String FONT_SIZE_BASE_KEY = "FONT_SIZE_BASE";
+    public static final String DATE_DISPLAY_FORMAT_KEY = "DATE_DISPLAY_FORMAT";
     public static final String SYSTEM_NAME_AR_KEY = "SYSTEM_NAME_AR";
     public static final String SYSTEM_NAME_EN_KEY = "SYSTEM_NAME_EN";
     public static final String PRIMARY_COLOR_KEY = "PRIMARY_COLOR";
@@ -175,6 +176,9 @@ public class SettingsInitializationService {
                 "Default UI font family", "UI", true, "");
         ensureDefaultSetting(FONT_SIZE_BASE_KEY, "14", SystemSetting.SettingValueType.INTEGER,
                 "Base UI font size in pixels", "UI", true, "min:10,max:20");
+        ensureDefaultSetting(DATE_DISPLAY_FORMAT_KEY, "dd/MM/yyyy", SystemSetting.SettingValueType.STRING,
+                "Date display format used across the user interface", "UI", true,
+                "enum:dd/MM/yyyy|dd-MM-yyyy|yyyy-MM-dd");
         ensureDefaultSetting(SYSTEM_NAME_AR_KEY, "نظام واعد الطبي", SystemSetting.SettingValueType.STRING,
                 "Arabic system display name", "UI", true, "");
         ensureDefaultSetting(SYSTEM_NAME_EN_KEY, "TBA WAAD System", SystemSetting.SettingValueType.STRING,

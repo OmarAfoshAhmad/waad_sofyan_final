@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 // MUI Components
 import { Grid, Button, CircularProgress, TextField, MenuItem, InputAdornment, Alert, Typography, Divider, Box, Stack } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 

@@ -30,7 +30,7 @@ import {
   Search as SearchIcon,
   Visibility as ViewIcon
 } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import dayjs from 'dayjs';
 
 import MainCard from 'components/MainCard';

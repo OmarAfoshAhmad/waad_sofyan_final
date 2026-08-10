@@ -41,6 +41,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
 import { formatCurrency } from 'utils/currency-formatter';
+import { formatDate } from 'utils/formatters';
 import { useSnackbar } from 'notistack';
 
 import {
@@ -599,9 +600,9 @@ const BenefitPolicyView = () => {
                 label="تاريخ البدء والانتهاء"
                 value={
                   <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <span dir="ltr">{policy?.startDate ? new Date(policy.startDate).toLocaleDateString('en-US') : 'غير متوفر'}</span>
+                    <span dir="ltr">{policy?.startDate ? formatDate(policy.startDate) : 'غير متوفر'}</span>
                     <span>-</span>
-                    <span dir="ltr">{policy?.endDate ? new Date(policy.endDate).toLocaleDateString('en-US') : 'غير متوفر'}</span>
+                    <span dir="ltr">{policy?.endDate ? formatDate(policy.endDate) : 'غير متوفر'}</span>
                   </Box>
                 }
                 icon={CalendarIcon}

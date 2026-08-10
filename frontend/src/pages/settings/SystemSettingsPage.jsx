@@ -50,6 +50,7 @@ const KEYS = {
   logoUrl: 'LOGO_URL',
   fontFamily: 'FONT_FAMILY',
   fontSizeBase: 'FONT_SIZE_BASE',
+  dateDisplayFormat: 'DATE_DISPLAY_FORMAT',
   claimSlaDays: 'CLAIM_SLA_DAYS',
   preApprovalSlaDays: 'PRE_APPROVAL_SLA_DAYS',
   claimBackdatedMonths: 'CLAIM_BACKDATED_MONTHS',
@@ -193,6 +194,7 @@ const SystemSettingsPage = () => {
     logoUrl: '',
     fontFamily: 'Tajawal',
     fontSizeBase: 14,
+    dateDisplayFormat: 'dd/MM/yyyy',
     // إعدادات المظهر — القيم الافتراضية (تُستبدل من backend في loadData)
     tableHeaderBg: ensureHash((visualSettings || {}).tableHeaderBg, '#E0F2F1'),
     tableHeaderText: ensureHash((visualSettings || {}).tableHeaderText, '#004D50'),
@@ -277,6 +279,7 @@ const SystemSettingsPage = () => {
         logoUrl: cleanStr(byKey.get(KEYS.logoUrl), company.logoUrl || ''),
         fontFamily: byKey.get(KEYS.fontFamily) || 'Tajawal',
         fontSizeBase: toInt(byKey.get(KEYS.fontSizeBase), 14),
+        dateDisplayFormat: byKey.get(KEYS.dateDisplayFormat) || 'dd/MM/yyyy',
         claimSlaDays: toInt(byKey.get(KEYS.claimSlaDays), 10),
         preApprovalSlaDays: toInt(byKey.get(KEYS.preApprovalSlaDays), 3),
         claimBackdatedMonths: toInt(byKey.get(KEYS.claimBackdatedMonths), 3),
@@ -377,6 +380,7 @@ const SystemSettingsPage = () => {
         saveSettingIfExists(KEYS.logoUrl, dataToSave.logoUrl),
         saveSettingIfExists(KEYS.fontFamily, dataToSave.fontFamily),
         saveSettingIfExists(KEYS.fontSizeBase, dataToSave.fontSizeBase),
+        saveSettingIfExists(KEYS.dateDisplayFormat, dataToSave.dateDisplayFormat),
         saveSettingIfExists(KEYS.claimSlaDays, dataToSave.claimSlaDays),
         saveSettingIfExists(KEYS.preApprovalSlaDays, dataToSave.preApprovalSlaDays),
         saveSettingIfExists(KEYS.claimBackdatedMonths, dataToSave.claimBackdatedMonths),
@@ -429,6 +433,7 @@ const SystemSettingsPage = () => {
         logoUrl: dataToSave.logoUrl || '',
         fontFamily: dataToSave.fontFamily,
         fontSizeBase: dataToSave.fontSizeBase,
+        dateDisplayFormat: dataToSave.dateDisplayFormat,
         systemNameAr: dataToSave.companyName,
         systemNameEn: dataToSave.companyName
       });
@@ -1193,6 +1198,23 @@ const SystemSettingsPage = () => {
                                 size="small"
                               />
                             </Box>
+                            <Stack spacing={0.5}>
+                              <Typography variant="subtitle2" color="text.secondary">
+                                تنسيق عرض التاريخ
+                              </Typography>
+                              <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                value={formData.dateDisplayFormat}
+                                onChange={updateField('dateDisplayFormat')}
+                                helperText="للعرض فقط؛ التخزين والتبادل يبقيان بصيغة ISO الآمنة"
+                              >
+                                <MenuItem value="dd/MM/yyyy">يوم/شهر/سنة — 31/12/2026</MenuItem>
+                                <MenuItem value="dd-MM-yyyy">يوم-شهر-سنة — 31-12-2026</MenuItem>
+                                <MenuItem value="yyyy-MM-dd">سنة-شهر-يوم — 2026-12-31</MenuItem>
+                              </TextField>
+                            </Stack>
                           </Stack>
                         </FieldGroup>
                       </Paper>

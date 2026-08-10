@@ -22,7 +22,7 @@ import {
   Typography
 } from '@mui/material';
 import { ArrowBack, Save, Edit as EditIcon } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import DatePicker from 'components/common/SystemDatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
@@ -416,7 +416,6 @@ const ProviderContractEdit = () => {
                       label="تاريخ سريان تعديل الخصم *"
                       value={formData.termsEffectiveFrom}
                       minDate={new Date()}
-                      format="dd-MM-yyyy"
                       onChange={handleDateChange('termsEffectiveFrom')}
                       slotProps={{
                         textField: {

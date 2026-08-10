@@ -18,6 +18,7 @@ public class UIConfigService {
     public static final String LOGO_URL_KEY = "LOGO_URL";
     public static final String FONT_FAMILY_KEY = "FONT_FAMILY";
     public static final String FONT_SIZE_BASE_KEY = "FONT_SIZE_BASE";
+    public static final String DATE_DISPLAY_FORMAT_KEY = "DATE_DISPLAY_FORMAT";
     public static final String SYSTEM_NAME_AR_KEY = "SYSTEM_NAME_AR";
     public static final String SYSTEM_NAME_EN_KEY = "SYSTEM_NAME_EN";
 
@@ -69,6 +70,10 @@ public class UIConfigService {
         return getSettingAsInt(FONT_SIZE_BASE_KEY, 14);
     }
 
+    public String getDateDisplayFormat() {
+        return getSetting(DATE_DISPLAY_FORMAT_KEY, "dd/MM/yyyy");
+    }
+
     public String getSystemNameAr() {
         return getSetting(SYSTEM_NAME_AR_KEY, "نظام واعد الطبي");
     }
@@ -109,6 +114,7 @@ public class UIConfigService {
                 getLogoUrl(),
                 getFontFamily(),
                 getFontSizeBase(),
+                getDateDisplayFormat(),
                 getSystemNameAr(),
                 getSystemNameEn());
     }
@@ -117,6 +123,7 @@ public class UIConfigService {
             String logoUrl,
             String fontFamily,
             int fontSizeBase,
+            String dateDisplayFormat,
             String systemNameAr,
             String systemNameEn) {
     }
