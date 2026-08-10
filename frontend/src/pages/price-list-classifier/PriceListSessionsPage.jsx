@@ -90,6 +90,7 @@ export default function PriceListSessionsPage() {
   const [postDialog, setPostDialog] = useState({
     open: false,
     sessions: [],
+    targets: [],
     contract: null,
     effectiveFrom: '',
     diffLoading: false,
@@ -188,8 +189,9 @@ export default function PriceListSessionsPage() {
       const contract = await loadLinkedActiveContract(session);
       const effectiveFrom = contract.startDate || '';
       setContractOptions([contract]);
-      setPostDialog({ open: true, sessions: [session], contract, effectiveFrom, diffLoading: false, diff: null, diffError: '' });
-      void loadPostDiff(contract, effectiveFrom, [session]);
+      const targets = [{ sessionId: session.id, contract, effectiveFrom }];
+      setPostDialog({ open: true, sessions: [session], targets, contract, effectiveFrom, diffLoading: false, diff: null, diffError: '' });
+      void loadPostDiff(contract, effectiveFrom, [session], targets);
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || 'تعذر تحديد العقد النشط لمقدم الخدمة.');
     } finally {
@@ -199,28 +201,46 @@ export default function PriceListSessionsPage() {
 
   const openBulkPostDialog = async () => {
     if (!postEligibleSessions.length) return;
-    const providerIds = [...new Set(postEligibleSessions.map((session) => Number(session.providerId)).filter(Boolean))];
-    if (providerIds.length !== 1) {
-      setError('الترحيل الجماعي مسموح لقوائم مقدم خدمة واحد فقط؛ حدّد قوائم كل مقدم خدمة على حدة.');
-      return;
-    }
     setContractsLoading(true);
     setError('');
     setSuccess('');
     try {
-      const contract = await loadLinkedActiveContract(postEligibleSessions[0]);
-      const effectiveFrom = contract.startDate || '';
-      setContractOptions([contract]);
+      const resolved = await Promise.all(
+        postEligibleSessions.map(async (session) => {
+          try {
+            const contract = await loadLinkedActiveContract(session);
+            return { session, contract, effectiveFrom: contract.startDate || '', error: null };
+          } catch (err) {
+            return { session, contract: null, effectiveFrom: '', error: err?.response?.data?.message || err?.message };
+          }
+        })
+      );
+      const valid = resolved.filter((item) => item.contract);
+      const failed = resolved.filter((item) => !item.contract);
+      if (!valid.length) throw new Error('لا توجد عقود نشطة مرتبطة بالقوائم المحددة.');
+      const targets = valid.map((item) => ({ sessionId: item.session.id, contract: item.contract, effectiveFrom: item.effectiveFrom }));
+      setContractOptions(valid.map((item) => item.contract));
       setPostDialog({
         open: true,
-        sessions: postEligibleSessions,
-        contract,
-        effectiveFrom,
+        sessions: valid.map((item) => item.session),
+        targets,
+        contract: null,
+        effectiveFrom: '',
         diffLoading: false,
         diff: null,
         diffError: ''
       });
-      void loadPostDiff(contract, effectiveFrom, postEligibleSessions);
+      if (failed.length) {
+        setError(
+          `تم استبعاد ${failed.length} قائمة لعدم وجود عقد نشط مرتبط: ${failed.map((item) => item.session.providerName || `#${item.session.id}`).join('، ')}`
+        );
+      }
+      void loadPostDiff(
+        null,
+        null,
+        valid.map((item) => item.session),
+        targets
+      );
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || 'تعذر تحديد العقد النشط لمقدم الخدمة.');
     } finally {
@@ -230,7 +250,16 @@ export default function PriceListSessionsPage() {
 
   const closePostDialog = () => {
     if (posting) return;
-    setPostDialog({ open: false, sessions: [], contract: null, effectiveFrom: '', diffLoading: false, diff: null, diffError: '' });
+    setPostDialog({
+      open: false,
+      sessions: [],
+      targets: [],
+      contract: null,
+      effectiveFrom: '',
+      diffLoading: false,
+      diff: null,
+      diffError: ''
+    });
   };
 
   const openDeleteDialog = (session) => {
@@ -251,16 +280,25 @@ export default function PriceListSessionsPage() {
     setDeleteDialog({ open: false, sessions: [] });
   };
 
-  const loadPostDiff = async (contract = postDialog.contract, effectiveFrom = postDialog.effectiveFrom, sessions = postDialog.sessions) => {
+  const loadPostDiff = async (
+    contract = postDialog.contract,
+    effectiveFrom = postDialog.effectiveFrom,
+    sessions = postDialog.sessions,
+    targets = postDialog.targets
+  ) => {
     const sessionsToPost = sessions || [];
-    if (!sessionsToPost.length || !contract?.id) return;
+    if (!sessionsToPost.length) return;
     setPostDialog((current) => ({ ...current, diffLoading: true, diff: null, diffError: '' }));
     try {
       const responses = [];
       for (const session of sessionsToPost) {
+        const target = targets?.find((item) => item.sessionId === session.id);
+        const targetContract = target?.contract || contract;
+        const targetEffectiveFrom = target?.effectiveFrom || effectiveFrom;
+        if (!targetContract?.id) throw new Error(`لا يوجد عقد نشط مرتبط بالقائمة #${session.id}`);
         const diff = await medicalDictionaryService.diffPriceListClassificationSessionWithContract(session.id, {
-          contractId: contract.id,
-          effectiveFrom: effectiveFrom || null,
+          contractId: targetContract.id,
+          effectiveFrom: targetEffectiveFrom || null,
           replaceEffectivePrices: false,
           onlyReviewedItems: true
         });
@@ -322,8 +360,8 @@ export default function PriceListSessionsPage() {
 
   const postSelectedSession = async () => {
     const sessionsToPost = postDialog.sessions || [];
-    if (!sessionsToPost.length || !postDialog.contract?.id) {
-      setError('اختر عقداً نشطاً قبل الترحيل.');
+    if (!sessionsToPost.length || (!postDialog.contract?.id && !postDialog.targets?.length)) {
+      setError('لا توجد عقود نشطة مرتبطة بالقوائم المحددة.');
       return;
     }
     if (postDialog.diff && !postDialog.diff.hasChanges) {
@@ -343,9 +381,12 @@ export default function PriceListSessionsPage() {
     try {
       for (const session of sessionsToPost) {
         try {
+          const target = postDialog.targets?.find((item) => item.sessionId === session.id);
+          const targetContract = target?.contract || postDialog.contract;
+          const targetEffectiveFrom = target?.effectiveFrom || postDialog.effectiveFrom;
           const response = await medicalDictionaryService.postPriceListClassificationSessionToContract(session.id, {
-            contractId: postDialog.contract.id,
-            effectiveFrom: postDialog.effectiveFrom || null,
+            contractId: targetContract.id,
+            effectiveFrom: targetEffectiveFrom || null,
             replaceEffectivePrices: false,
             onlyReviewedItems: true
           });
@@ -365,7 +406,7 @@ export default function PriceListSessionsPage() {
         setError(`تعذر ترحيل ${failedNames.length} قائمة: ${failedNames.join('، ')}`);
       }
       setSelectedIds((current) => current.filter((id) => !postedIds.includes(id)));
-      setPostDialog({ open: false, sessions: [], contract: null, effectiveFrom: '' });
+      setPostDialog({ open: false, sessions: [], targets: [], contract: null, effectiveFrom: '' });
       await loadSessions();
     } catch (err) {
       setError(err?.response?.data?.message || 'فشل ترحيل القائمة المصنفة إلى العقد');
@@ -632,50 +673,44 @@ export default function PriceListSessionsPage() {
               ) : (
                 <Typography fontWeight={800}>{postDialog.sessions[0]?.sessionName}</Typography>
               )}
-              <Autocomplete
-                options={contractOptions.filter((option) =>
-                  postDialog.sessions.every((session) => contractProviderId(option) === Number(session.providerId))
-                )}
-                loading={contractsLoading}
-                value={postDialog.contract}
-                disabled
-                onChange={(_, contract) => {
-                  const effectiveFrom = postDialog.effectiveFrom || contract?.startDate || '';
-                  setPostDialog((current) => ({
-                    ...current,
-                    contract,
-                    effectiveFrom,
-                    diff: null,
-                    diffError: ''
-                  }));
-                  if (contract?.id) {
-                    loadPostDiff(contract, effectiveFrom);
-                  }
-                }}
-                getOptionLabel={(option) =>
-                  option
-                    ? `${option.contractCode || `#${option.id}`} — ${option.provider?.name || 'مقدم خدمة غير محدد'} — ${
-                        option.pricingScopeLabel || option.pricingScope || ''
-                      }`
-                    : ''
-                }
-                isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
-                renderInput={(params) => <TextField {...params} label="العقد النشط المرتبط بمقدم الخدمة" />}
-              />
-              <TextField
-                type="date"
-                label="تاريخ نفاذ الأسعار"
-                value={postDialog.effectiveFrom}
-                onChange={(event) => {
-                  const effectiveFrom = event.target.value;
-                  setPostDialog((current) => ({ ...current, effectiveFrom, diff: null, diffError: '' }));
-                  if (postDialog.contract?.id) {
-                    loadPostDiff(postDialog.contract, effectiveFrom);
-                  }
-                }}
-                InputLabelProps={{ shrink: true }}
-              />
-              {postDialog.contract && (
+              {postDialog.sessions.length === 1 ? (
+                <>
+                  <Autocomplete
+                    options={contractOptions.filter((option) => contractProviderId(option) === Number(postDialog.sessions[0]?.providerId))}
+                    loading={contractsLoading}
+                    value={postDialog.contract}
+                    disabled
+                    getOptionLabel={(option) =>
+                      option
+                        ? `${option.contractCode || `#${option.id}`} — ${option.provider?.name || 'مقدم خدمة غير محدد'} — ${
+                            option.pricingScopeLabel || option.pricingScope || ''
+                          }`
+                        : ''
+                    }
+                    isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
+                    renderInput={(params) => <TextField {...params} label="العقد النشط المرتبط بمقدم الخدمة" />}
+                  />
+                  <TextField
+                    type="date"
+                    label="تاريخ نفاذ الأسعار"
+                    value={postDialog.effectiveFrom}
+                    onChange={(event) => {
+                      const nextEffectiveFrom = event.target.value;
+                      const targets = [
+                        { sessionId: postDialog.sessions[0].id, contract: postDialog.contract, effectiveFrom: nextEffectiveFrom }
+                      ];
+                      setPostDialog((current) => ({ ...current, targets, effectiveFrom: nextEffectiveFrom, diff: null, diffError: '' }));
+                      if (postDialog.contract?.id) loadPostDiff(postDialog.contract, nextEffectiveFrom, postDialog.sessions, targets);
+                    }}
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </>
+              ) : (
+                <Alert severity="success">
+                  سيُوجَّه كل مرفق تلقائياً إلى عقده العام النشط، ويُستخدم تاريخ بداية ذلك العقد كتاريخ نفاذ لأسعاره.
+                </Alert>
+              )}
+              {(postDialog.contract || postDialog.targets?.length > 0) && (
                 <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
                     <Typography fontWeight={900} sx={{ flex: 1 }}>
@@ -735,10 +770,15 @@ export default function PriceListSessionsPage() {
               variant="contained"
               color="success"
               startIcon={posting ? <CircularProgress size={18} /> : <PlaylistAddCheckIcon />}
-              disabled={posting || postDialog.diffLoading || !postDialog.contract || (postDialog.diff && !postDialog.diff.hasChanges)}
+              disabled={
+                posting ||
+                postDialog.diffLoading ||
+                (!postDialog.contract && !postDialog.targets?.length) ||
+                (postDialog.diff && !postDialog.diff.hasChanges)
+              }
               onClick={postSelectedSession}
             >
-              {postDialog.sessions.length > 1 ? 'ترحيل القوائم للعقد' : 'ترحيل للعقد'}
+              {postDialog.sessions.length > 1 ? 'ترحيل كل قائمة إلى عقد مرفقها' : 'ترحيل للعقد'}
             </Button>
           </DialogActions>
         </Dialog>
