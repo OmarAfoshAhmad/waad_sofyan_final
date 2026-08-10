@@ -12,6 +12,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.guard.DeletionGuard;
@@ -45,6 +46,7 @@ public class ProviderService {
     private final com.waad.tba.modules.providercontract.repository.ProviderContractRepository newProviderContractRepository;
     private final ProviderAllowedEmployerRepository providerAllowedEmployerRepository;
     private final ProviderAdminDocumentRepository providerAdminDocumentRepository;
+    private final EntityManager entityManager;
 
     /**
      * Get provider selector options with pagination
@@ -256,22 +258,7 @@ public class ProviderService {
             throw new BusinessRuleException("لا يمكن الحذف النهائي قبل النقل إلى سجل المحذوفات أولاً.");
         }
 
-        // Prevent hard delete while contracts still exist.
-        if (!newProviderContractRepository.findByProviderId(id).isEmpty()) {
-            throw new BusinessRuleException("لا يمكن الحذف النهائي لوجود عقود مرتبطة بمقدم الخدمة.");
-        }
-
-        // Remove partner mapping rows first to avoid FK violations.
-        providerAllowedEmployerRepository.deleteByProviderId(id);
-        providerAllowedEmployerRepository.flush();
-
-        try {
-            providerRepository.delete(provider);
-            providerRepository.flush();
-            log.info("Provider {} hard-deleted", id);
-        } catch (DataIntegrityViolationException ex) {
-            throw new BusinessRuleException("تعذر الحذف النهائي لوجود بيانات مرتبطة بمقدم الخدمة.");
-        }
+        deleteProviderAggregate(provider);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -323,30 +310,73 @@ public class ProviderService {
                 throw new BusinessRuleException("لا يمكن الحذف النهائي للمرفق [" + provider.getName() + "] قبل النقل إلى سجل المحذوفات.");
             }
 
-            // Get all contracts (active and inactive) for this provider to hard delete them
-            List<com.waad.tba.modules.providercontract.entity.ProviderContract> contracts = 
-                newProviderContractRepository.findByProviderId(id);
-            
-            for (com.waad.tba.modules.providercontract.entity.ProviderContract contract : contracts) {
-                if (contract.getActivePricingItemsCount() > 0) {
-                    throw new BusinessRuleException("المقدم [" + provider.getName() + "] يمتلك عقداً يحوي خدمات مسعرة ولا يمكن حذفه نهائياً.");
-                }
-                // Hard delete empty contract
-                newProviderContractRepository.delete(contract);
-            }
-            
-            newProviderContractRepository.flush();
-            providerAllowedEmployerRepository.deleteByProviderId(id);
-            providerAllowedEmployerRepository.flush();
-
-            try {
-                providerRepository.delete(provider);
-                providerRepository.flush();
-                log.info("Provider {} bulk hard-deleted", id);
-            } catch (DataIntegrityViolationException ex) {
-                throw new BusinessRuleException("تعذر الحذف النهائي للمرفق [" + provider.getName() + "] لوجود بيانات مرتبطة به.");
-            }
+            deleteProviderAggregate(provider);
         }
+    }
+
+    /**
+     * Deletes setup data as one aggregate, but never deletes financial or medical
+     * history. Users are disabled and unlinked so security audit records remain valid.
+     */
+    private void deleteProviderAggregate(Provider provider) {
+        Long id = provider.getId();
+        long claims = count("claims", id);
+        long preAuthorizations = count("pre_authorizations", id);
+        long payments = count("provider_payments", id);
+        long accountTransactions = ((Number) entityManager.createNativeQuery("""
+                SELECT COUNT(*) FROM account_transactions t
+                JOIN provider_accounts a ON a.id = t.provider_account_id
+                WHERE a.provider_id = :providerId
+                """).setParameter("providerId", id).getSingleResult()).longValue();
+
+        DeletionGuard.of("مقدم الخدمة " + provider.getName())
+                .check("مطالبات", claims)
+                .check("موافقات مسبقة", preAuthorizations)
+                .check("دفعات", payments)
+                .check("قيود مالية", accountTransactions)
+                .throwIfBlocked("لا يمكن حذف التاريخ الطبي أو المالي؛ عطّل المرفق بدلاً من الحذف النهائي.");
+
+        List<com.waad.tba.modules.providercontract.entity.ProviderContract> contracts =
+                newProviderContractRepository.findByProviderId(id);
+        List<Long> contractIds = contracts.stream().map(c -> c.getId()).toList();
+
+        // Configuration/setup rows: safe to remove because the history guards above are clear.
+        entityManager.createNativeQuery("UPDATE users SET provider_id = NULL, is_active = FALSE WHERE provider_id = :id")
+                .setParameter("id", id).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM medical_reviewer_providers WHERE provider_id = :id")
+                .setParameter("id", id).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM network_providers WHERE provider_id = :id")
+                .setParameter("id", id).executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM claim_pending_services WHERE provider_id = :id")
+                .setParameter("id", id).executeUpdate();
+        if (!contractIds.isEmpty()) {
+            entityManager.createNativeQuery("DELETE FROM service_specialty_insurance_map WHERE provider_id = :id OR contract_id IN (:ids)")
+                    .setParameter("id", id).setParameter("ids", contractIds).executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM provider_contract_terms WHERE contract_id IN (:ids)")
+                    .setParameter("ids", contractIds).executeUpdate();
+            newProviderContractRepository.deleteAll(contracts);
+            newProviderContractRepository.flush();
+        }
+        providerAllowedEmployerRepository.deleteByProviderId(id);
+        providerAllowedEmployerRepository.flush();
+        entityManager.createNativeQuery("DELETE FROM provider_accounts WHERE provider_id = :id")
+                .setParameter("id", id).executeUpdate();
+
+        try {
+            providerRepository.delete(provider);
+            providerRepository.flush();
+            log.info("Provider aggregate {} hard-deleted; linked users disabled and unlinked", id);
+        } catch (DataIntegrityViolationException ex) {
+            throw new BusinessRuleException("تعذر الحذف النهائي للمرفق [" + provider.getName()
+                    + "] لوجود سجل مرتبط غير مصنف؛ لم يُحذف أي جزء من بياناته.");
+        }
+    }
+
+    private long count(String table, Long providerId) {
+        // Table names are selected only by this class, never from user input.
+        return ((Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM " + table + " WHERE provider_id = :providerId")
+                .setParameter("providerId", providerId).getSingleResult()).longValue();
     }
 
     /**

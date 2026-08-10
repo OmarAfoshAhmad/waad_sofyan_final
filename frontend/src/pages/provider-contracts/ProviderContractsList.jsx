@@ -735,6 +735,7 @@ const ProviderContractsList = () => {
             emptyIcon={DescriptionIcon}
             emptyMessage="لا توجد عقود مسجلة لمقدمي الخدمة"
             enableRowSelection={true}
+            getRowKey={(row) => row.id}
             selectedRowIds={selectedIds}
             onRowSelectionChange={setSelectedIds}
             sx={{ flex: 1, minHeight: 0 }}

@@ -15,20 +15,31 @@ import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.entity.Provider.ProviderType;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.providercontract.dto.ProviderContractCreateDto;
+import com.waad.tba.modules.providercontract.dto.ProviderContractUpdateDto;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.PricingModel;
 import com.waad.tba.modules.providercontract.service.ProviderContractService;
 import com.waad.tba.modules.rbac.dto.UserCreateDto;
+import com.waad.tba.modules.rbac.dto.UserUpdateDto;
 import com.waad.tba.modules.rbac.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 /**
@@ -309,6 +320,7 @@ public class ProviderExcelTemplateService {
     // IMPORT PROCESSING
     // ═══════════════════════════════════════════════════════════════════════════
     
+    @Transactional(rollbackFor = Exception.class)
     public ExcelImportResult importFromExcel(MultipartFile file) {
         log.info("[ProviderImport] Starting import from file: {}", file.getOriginalFilename());
         
@@ -345,74 +357,35 @@ public class ProviderExcelTemplateService {
                     if (provider != null) {
                         boolean isUpdate = provider.getId() != null;
                         providerRepository.save(provider);
+
+                        ContractImportValues contractValues = parseContractValues(row, rowNum, columnIndices);
                         
                         if (isUpdate) {
                             summary.setUpdated(summary.getUpdated() + 1);
                             log.debug("[ProviderImport] Updated provider: {}", provider.getLicenseNumber());
+                            updateExistingContract(provider, contractValues);
+                            updateExistingProviderUsers(provider, row, columnIndices);
                         } else {
                             summary.setCreated(summary.getCreated() + 1);
                             log.debug("[ProviderImport] Created provider: {}", provider.getLicenseNumber());
                             
-                            // 1. Create a contract for the new provider
-                            try {
-                                String discountStr = getCellValue(row, columnIndices.get("discount"));
-                                String statusStr = getCellValue(row, columnIndices.get("status"));
-                                String startDateStr = getCellValue(row, columnIndices.get("start_date"));
-                                String durationStr = getCellValue(row, columnIndices.get("duration_months"));
-                                String discountTimingStr = getCellValue(row, columnIndices.get("discount_timing"));
-                                
-                                java.math.BigDecimal discount = new java.math.BigDecimal("10.00");
-                                if (discountStr != null && !discountStr.trim().isEmpty()) {
-                                    try {
-                                        discount = new java.math.BigDecimal(discountStr.trim());
-                                    } catch (NumberFormatException ignored) {}
-                                }
-                                
-                                boolean discountBeforeRejection = false; // Default to بعد المرفوض
-                                if (discountTimingStr != null && discountTimingStr.trim().equals("قبل المرفوض")) {
-                                    discountBeforeRejection = true;
-                                }
-                                
-                                ContractStatus cStatus = ContractStatus.ACTIVE;
-                                if (statusStr != null && !statusStr.trim().isEmpty()) {
-                                    String s = statusStr.trim().toUpperCase();
-                                    if (s.equals("مسودة") || s.equals("DRAFT")) cStatus = ContractStatus.DRAFT;
-                                    else if (s.equals("موقوف") || s.equals("SUSPENDED")) cStatus = ContractStatus.SUSPENDED;
-                                }
-
-                                java.time.LocalDate startDate = java.time.LocalDate.of(java.time.LocalDate.now().getYear(), 1, 1);
-                                if (startDateStr != null && !startDateStr.trim().isEmpty()) {
-                                    try {
-                                        startDate = java.time.LocalDate.parse(startDateStr.trim());
-                                    } catch (Exception ignored) {}
-                                }
-                                
-                                int durationMonths = 12;
-                                if (durationStr != null && !durationStr.trim().isEmpty()) {
-                                    try {
-                                        durationMonths = (int) Double.parseDouble(durationStr.trim());
-                                    } catch (NumberFormatException ignored) {}
-                                }
-                                java.time.LocalDate endDate = startDate.plusMonths(durationMonths).minusDays(1);
-
+                            // Create the contract in the same transaction as the provider and user.
+                            {
                                 ProviderContractCreateDto contractDto = ProviderContractCreateDto.builder()
                                         .providerId(provider.getId())
-                                        .status(cStatus)
+                                        .status(contractValues.status())
                                         .pricingModel(PricingModel.DISCOUNT)
-                                        .discountPercent(discount)
-                                        .discountBeforeRejection(discountBeforeRejection)
-                                        .startDate(startDate)
-                                        .endDate(endDate)
+                                        .discountPercent(contractValues.discount())
+                                        .discountBeforeRejection(contractValues.beforeRejection())
+                                        .startDate(contractValues.startDate())
+                                        .endDate(contractValues.endDate())
                                         .build();
                                 contractService.create(contractDto);
-                                log.debug("[ProviderImport] Created contract for provider: {} with status: {} and discount: {}", 
-                                    provider.getId(), cStatus, discount);
-                            } catch (Exception e) {
-                                log.error("[ProviderImport] Failed to create contract for provider: {}", provider.getId(), e);
+                                log.debug("[ProviderImport] Created contract for provider: {}", provider.getId());
                             }
 
                             // 2. Create a User for the new provider only when an explicit initial password is supplied.
-                            try {
+                            {
                                 String initialPassword = getCellValue(row, columnIndices.get("initial_password"));
                                 if (initialPassword == null || initialPassword.trim().isEmpty()) {
                                     log.info("[ProviderImport] Skipped automatic user creation for provider {} because initial_password is empty",
@@ -447,12 +420,13 @@ public class ProviderExcelTemplateService {
                                         .build();
                                 userService.create(userDto);
                                 log.debug("[ProviderImport] Created user {} for provider: {}", username, provider.getId());
-                            } catch (Exception e) {
-                                log.error("[ProviderImport] Failed to create user for provider: {}", provider.getId(), e);
                             }
                         }
                     } else {
                         summary.setRejected(summary.getRejected() + 1);
+                        String reason = errors.isEmpty() ? "بيانات الصف غير صالحة"
+                                : errors.get(errors.size() - 1).getMessageAr();
+                        throw new BusinessRuleException(reason);
                     }
                     
                 } catch (Exception e) {
@@ -464,6 +438,8 @@ public class ProviderExcelTemplateService {
                         .messageEn("Error processing row: " + e.getMessage())
                         .build());
                     summary.setFailed(summary.getFailed() + 1);
+                    throw new BusinessRuleException("فشل الصف " + (rowNum + 1)
+                            + "؛ أُلغي الاستيراد بالكامل دون حفظ جزئي: " + e.getMessage());
                 }
             }
             
@@ -515,6 +491,160 @@ public class ProviderExcelTemplateService {
         }
         return localPart + "@" + domain;
     }
+
+    private ContractImportValues parseContractValues(Row row, int rowNum, Map<String, Integer> columns) {
+        BigDecimal discount = parseDiscount(row, columns.get("discount"), rowNum);
+        boolean beforeRejection = parseDiscountTiming(getCellValue(row, columns.get("discount_timing")), rowNum);
+        ContractStatus status = parseContractStatus(getCellValue(row, columns.get("status")), rowNum);
+        LocalDate startDate = parseStartDate(row, columns.get("start_date"), rowNum);
+        int durationMonths = parseDuration(getCellValue(row, columns.get("duration_months")), rowNum);
+        return new ContractImportValues(discount, beforeRejection, status, startDate,
+                startDate.plusMonths(durationMonths).minusDays(1));
+    }
+
+    /** Excel stores a displayed 10% numeric cell as 0.10; preserve its displayed meaning. */
+    private BigDecimal parseDiscount(Row row, Integer columnIndex, int rowNum) {
+        if (columnIndex == null) return new BigDecimal("10.00");
+        Cell cell = row.getCell(columnIndex);
+        if (cell == null || cell.getCellType() == CellType.BLANK) return new BigDecimal("10.00");
+
+        try {
+            BigDecimal value;
+            CellType type = cell.getCellType() == CellType.FORMULA
+                    ? cell.getCachedFormulaResultType() : cell.getCellType();
+            if (type == CellType.NUMERIC) {
+                value = BigDecimal.valueOf(cell.getNumericCellValue());
+                String format = cell.getCellStyle() == null ? "" : cell.getCellStyle().getDataFormatString();
+                if (format != null && format.contains("%")) value = value.multiply(BigDecimal.valueOf(100));
+            } else {
+                String raw = getCellValue(row, columnIndex);
+                if (raw == null || raw.isBlank()) return new BigDecimal("10.00");
+                String normalized = normalizeText(raw).replace("٪", "%");
+                boolean percent = normalized.endsWith("%");
+                if (percent) normalized = normalized.substring(0, normalized.length() - 1).trim();
+                value = new BigDecimal(normalized.replace(',', '.'));
+            }
+            value = value.setScale(2, RoundingMode.HALF_UP);
+            if (value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new IllegalArgumentException("النسبة يجب أن تكون بين 0 و100");
+            }
+            return value;
+        } catch (RuntimeException ex) {
+            throw new BusinessRuleException("نسبة الخصم غير صحيحة في صف Excel " + (rowNum + 1)
+                    + ": " + getCellValue(row, columnIndex));
+        }
+    }
+
+    private boolean parseDiscountTiming(String raw, int rowNum) {
+        if (raw == null || raw.isBlank()) return false;
+        String value = normalizeText(raw).toUpperCase(Locale.ROOT);
+        if (Set.of("قبل المرفوض", "قبل", "BEFORE_REJECTION", "BEFORE").contains(value)) return true;
+        if (Set.of("بعد المرفوض", "بعد", "AFTER_REJECTION", "AFTER").contains(value)) return false;
+        throw new BusinessRuleException("آلية الخصم غير معروفة في صف Excel " + (rowNum + 1) + ": " + raw);
+    }
+
+    private ContractStatus parseContractStatus(String raw, int rowNum) {
+        if (raw == null || raw.isBlank()) return ContractStatus.ACTIVE;
+        String value = normalizeText(raw).toUpperCase(Locale.ROOT);
+        return switch (value) {
+            case "ACTIVE", "نشط" -> ContractStatus.ACTIVE;
+            case "DRAFT", "مسودة" -> ContractStatus.DRAFT;
+            case "SUSPENDED", "موقوف" -> ContractStatus.SUSPENDED;
+            default -> throw new BusinessRuleException("حالة العقد غير معروفة في صف Excel "
+                    + (rowNum + 1) + ": " + raw);
+        };
+    }
+
+    private LocalDate parseStartDate(Row row, Integer columnIndex, int rowNum) {
+        if (columnIndex == null) return LocalDate.of(LocalDate.now().getYear(), 1, 1);
+        Cell cell = row.getCell(columnIndex);
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return LocalDate.of(LocalDate.now().getYear(), 1, 1);
+        }
+        try {
+            if (cell.getCellType() == CellType.NUMERIC && org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+                return cell.getLocalDateTimeCellValue().toLocalDate();
+            }
+            String raw = normalizeText(getCellValue(row, columnIndex));
+            for (DateTimeFormatter formatter : List.of(DateTimeFormatter.ISO_LOCAL_DATE,
+                    DateTimeFormatter.ofPattern("dd/MM/yyyy"), DateTimeFormatter.ofPattern("dd-MM-yyyy"))) {
+                try { return LocalDate.parse(raw, formatter); } catch (DateTimeParseException ignored) { }
+            }
+        } catch (RuntimeException ignored) { }
+        throw new BusinessRuleException("تاريخ بداية العقد غير صحيح في صف Excel " + (rowNum + 1));
+    }
+
+    private int parseDuration(String raw, int rowNum) {
+        if (raw == null || raw.isBlank()) return 12;
+        try {
+            BigDecimal value = new BigDecimal(normalizeText(raw).replace(',', '.'));
+            int months = value.intValueExact();
+            if (months < 1 || months > 1200) throw new ArithmeticException();
+            return months;
+        } catch (RuntimeException ex) {
+            throw new BusinessRuleException("مدة العقد غير صحيحة في صف Excel " + (rowNum + 1) + ": " + raw);
+        }
+    }
+
+    private void updateExistingContract(Provider provider, ContractImportValues values) {
+        var page = contractService.findByProvider(provider.getId(), PageRequest.of(0, 2));
+        if (page.getTotalElements() != 1) {
+            throw new BusinessRuleException(page.isEmpty()
+                    ? "المرفق موجود ولكن لا يوجد عقد مرتبط به: " + provider.getName()
+                    : "للمرفق أكثر من عقد؛ يجب تحديد العقد يدويًا قبل الاستيراد: " + provider.getName());
+        }
+        var contract = page.getContent().get(0);
+        contractService.update(contract.getId(), ProviderContractUpdateDto.builder()
+                .pricingModel(PricingModel.DISCOUNT)
+                .discountPercent(values.discount())
+                .discountBeforeRejection(values.beforeRejection())
+                .termsEffectiveFrom(LocalDate.now().isAfter(values.startDate()) ? LocalDate.now() : values.startDate())
+                .termsChangeReason("تحديث ذري من قالب استيراد المرافق")
+                .startDate(values.startDate())
+                .endDate(values.endDate())
+                .build());
+        if (values.status() != contract.getStatus()) {
+            switch (values.status()) {
+                case ACTIVE -> contractService.activate(contract.getId());
+                case SUSPENDED -> contractService.suspend(contract.getId(), "تحديث ذري من قالب استيراد المرافق");
+                case DRAFT -> throw new BusinessRuleException(
+                        "لا يمكن إعادة عقد قائم إلى مسودة بواسطة الاستيراد: " + contract.getContractCode());
+                default -> throw new BusinessRuleException("حالة عقد غير مدعومة في استيراد المرافق");
+            }
+        }
+    }
+
+    private void updateExistingProviderUsers(Provider provider, Row row, Map<String, Integer> columns) {
+        List<com.waad.tba.modules.rbac.dto.UserResponseDto> users = userService.findByProviderId(provider.getId());
+        if (users.isEmpty()) {
+            throw new BusinessRuleException("المرفق موجود ولكن لا يوجد مستخدم مرتبط به: " + provider.getName());
+        }
+        String requestedUsername = getCellValue(row, columns.get("username"));
+        for (var user : users) {
+            String username = requestedUsername == null || requestedUsername.isBlank()
+                    ? user.getUsername() : requestedUsername.trim();
+            String email = provider.getEmail() == null || provider.getEmail().isBlank()
+                    ? generateProviderUserEmail(username, provider.getLicenseNumber()) : provider.getEmail().trim();
+            userService.update(user.getId(), UserUpdateDto.builder()
+                    .username(username)
+                    .fullName(provider.getName())
+                    .email(email)
+                    .phone(provider.getPhone())
+                    .active(true)
+                    .userType("PROVIDER_STAFF")
+                    .providerId(provider.getId())
+                    .build());
+        }
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? "" : value.replace('\u00A0', ' ')
+                .replaceAll("[\\u200E\\u200F\\u202A-\\u202E]", "")
+                .replaceAll("\\s+", " ").trim();
+    }
+
+    private record ContractImportValues(BigDecimal discount, boolean beforeRejection,
+                                        ContractStatus status, LocalDate startDate, LocalDate endDate) { }
 
     private Map<String, Integer> findColumnIndices(Row headerRow) {
         Map<String, Integer> indices = new HashMap<>();

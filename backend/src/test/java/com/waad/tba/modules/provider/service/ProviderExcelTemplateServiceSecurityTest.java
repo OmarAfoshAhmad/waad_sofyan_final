@@ -2,6 +2,7 @@ package com.waad.tba.modules.provider.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,7 +30,15 @@ import com.waad.tba.common.repository.SystemSettingRepository;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.provider.repository.ProviderRepository;
 import com.waad.tba.modules.providercontract.service.ProviderContractService;
+import com.waad.tba.modules.providercontract.dto.ProviderContractCreateDto;
+import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.rbac.dto.UserCreateDto;
+import com.waad.tba.modules.rbac.dto.UserUpdateDto;
+import com.waad.tba.modules.rbac.dto.UserResponseDto;
+import com.waad.tba.modules.providercontract.dto.ProviderContractResponseDto;
+import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
+import org.springframework.data.domain.PageImpl;
+import java.util.List;
 import com.waad.tba.modules.rbac.service.UserService;
 
 @ExtendWith(MockitoExtension.class)
@@ -114,6 +123,60 @@ class ProviderExcelTemplateServiceSecurityTest {
     }
 
     @Test
+    void providerImportReadsExcelTenPercentAsTenAndPreservesBeforeRejection() throws Exception {
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.empty());
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> {
+            Provider provider = invocation.getArgument(0);
+            provider.setId(100L);
+            return provider;
+        });
+
+        service.importFromExcel(buildExcelFileWithContractTerms(0.10, "0%", "قبل المرفوض"));
+
+        ArgumentCaptor<ProviderContractCreateDto> captor = ArgumentCaptor.forClass(ProviderContractCreateDto.class);
+        verify(contractService).create(captor.capture());
+        assertEquals(0, captor.getValue().getDiscountPercent().compareTo(new java.math.BigDecimal("10.00")));
+        assertTrue(captor.getValue().getDiscountBeforeRejection());
+    }
+
+    @Test
+    void providerImportFailsClosedInsteadOfKeepingProviderWithoutContract() throws Exception {
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.empty());
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> {
+            Provider provider = invocation.getArgument(0);
+            provider.setId(100L);
+            return provider;
+        });
+        when(contractService.create(any(ProviderContractCreateDto.class)))
+                .thenThrow(new BusinessRuleException("تعذر إنشاء العقد"));
+
+        BusinessRuleException error = assertThrows(BusinessRuleException.class,
+                () -> service.importFromExcel(buildExcelFile("StrongPass@2026")));
+        assertTrue(error.getMessage().contains("أُلغي الاستيراد بالكامل"));
+        verify(userService, never()).create(any(UserCreateDto.class));
+    }
+
+    @Test
+    void providerReimportUpdatesLinkedUserInsteadOfLeavingOldGeneratedEmail() throws Exception {
+        Provider existing = Provider.builder().id(100L).name("مستشفى الاختبار")
+                .licenseNumber("HOS-100").providerType(Provider.ProviderType.HOSPITAL).active(true).build();
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.of(existing));
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(contractService.findByProvider(org.mockito.ArgumentMatchers.eq(100L), any()))
+                .thenReturn(new PageImpl<>(List.of(ProviderContractResponseDto.builder()
+                        .id(500L).contractCode("CON-500").status(ContractStatus.ACTIVE).build())));
+        when(userService.findByProviderId(100L)).thenReturn(List.of(UserResponseDto.builder()
+                .id(700L).username("old@tpa").email("old@tpa.local").build()));
+
+        service.importFromExcel(buildExcelFile("", "new-provider@example.com"));
+
+        ArgumentCaptor<UserUpdateDto> captor = ArgumentCaptor.forClass(UserUpdateDto.class);
+        verify(userService).update(org.mockito.ArgumentMatchers.eq(700L), captor.capture());
+        assertEquals("new-provider@example.com", captor.getValue().getEmail());
+        assertEquals(100L, captor.getValue().getProviderId());
+    }
+
+    @Test
     void legacyProviderExcelEndpointAndHardcodedPasswordMustNotReturn() throws Exception {
         assertTrue(Files.notExists(Path.of(
                 "src/main/java/com/waad/tba/modules/provider/controller/ProviderExcelController.java")));
@@ -160,6 +223,33 @@ class ProviderExcelTemplateServiceSecurityTest {
                     "providers.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     output.toByteArray());
+        }
+    }
+
+    private MockMultipartFile buildExcelFileWithContractTerms(double discount, String format, String timing) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Data");
+            var header = sheet.createRow(0);
+            String[] headers = {"provider_name", "provider_type", "discount", "discount_timing", "status",
+                    "start_date", "duration_months"};
+            for (int i = 0; i < headers.length; i++) header.createCell(i).setCellValue(headers[i]);
+            sheet.createRow(1).createCell(0).setCellValue("example");
+            var row = sheet.createRow(2);
+            row.createCell(0).setCellValue("مستشفى الاختبار");
+            row.createCell(1).setCellValue("HOSPITAL");
+            var discountCell = row.createCell(2);
+            discountCell.setCellValue(discount);
+            var style = workbook.createCellStyle();
+            style.setDataFormat(workbook.createDataFormat().getFormat(format));
+            discountCell.setCellStyle(style);
+            row.createCell(3).setCellValue(timing);
+            row.createCell(4).setCellValue("ACTIVE");
+            row.createCell(5).setCellValue("01/01/2025");
+            row.createCell(6).setCellValue(24);
+            workbook.write(output);
+            return new MockMultipartFile("file", "providers.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", output.toByteArray());
         }
     }
 }
