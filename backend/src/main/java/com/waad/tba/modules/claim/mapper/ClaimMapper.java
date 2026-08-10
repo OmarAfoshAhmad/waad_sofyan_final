@@ -705,15 +705,34 @@ public class ClaimMapper {
                                 .build();
         }
 
-        private ProviderContractPricingItem resolvePricingItemForLine(
+        ProviderContractPricingItem resolvePricingItemForLine(
                         Long contractId,
                         LocalDate serviceDate,
                         Long explicitPricingItemId,
                         String serviceCode,
                         String serviceName) {
                 if (explicitPricingItemId != null) {
-                        return pricingItemRepository.findEffectiveInContractById(
-                                        contractId, explicitPricingItemId, serviceDate).orElse(null);
+                        var exactVersion = pricingItemRepository.findEffectiveInContractById(
+                                        contractId, explicitPricingItemId, serviceDate);
+                        if (exactVersion.isPresent()) {
+                                return exactVersion.get();
+                        }
+
+                        // A draft may retain the ID of an older price version after an
+                        // identical service price is versioned/reposted. Only recover when
+                        // that stale ID belongs to the SAME resolved contract; an ID from
+                        // another contract must remain fail-closed.
+                        var staleVersion = pricingItemRepository.findById(explicitPricingItemId).orElse(null);
+                        if (staleVersion == null || staleVersion.getContract() == null
+                                        || !contractId.equals(staleVersion.getContract().getId())) {
+                                return null;
+                        }
+                        if (!hasBusinessValue(serviceCode)) {
+                                serviceCode = staleVersion.getServiceCode();
+                        }
+                        if (!hasBusinessValue(serviceName)) {
+                                serviceName = staleVersion.getServiceName();
+                        }
                 }
 
                 if (!hasBusinessValue(serviceCode) && !hasBusinessValue(serviceName)) {

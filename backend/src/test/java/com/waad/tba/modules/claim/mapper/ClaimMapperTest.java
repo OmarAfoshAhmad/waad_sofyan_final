@@ -3,9 +3,12 @@ package com.waad.tba.modules.claim.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
+import java.time.LocalDate;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +29,8 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.provider.service.ProviderContractService;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.service.EffectiveProviderContractResolver;
+import com.waad.tba.modules.providercontract.entity.ProviderContract;
+import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
 
 /**
  * Regression test for the double-derivation bug: {@code toViewDto} used to
@@ -123,5 +128,39 @@ class ClaimMapperTest {
         ClaimViewDto dto = mapper.toViewDto(claim);
         assertThat(dto.getProviderDiscountPercent()).isNull();
         verify(effectiveContractResolver, never()).resolve(providerId, employerId, claim.getServiceDate());
+    }
+
+    @Test
+    void resolvesEffectiveReplacementForAStalePriceVersionInTheSameContract() {
+        LocalDate serviceDate = LocalDate.of(2026, 8, 10);
+        ProviderContract contract = ProviderContract.builder().id(3051L).build();
+        ProviderContractPricingItem stale = ProviderContractPricingItem.builder()
+                .id(37261L).contract(contract).serviceName("خزعة بمنظار").active(false).build();
+        ProviderContractPricingItem effective = ProviderContractPricingItem.builder()
+                .id(37264L).contract(contract).serviceName("خزعة بمنظار").active(true).build();
+
+        when(pricingItemRepository.findEffectiveInContractById(3051L, 37261L, serviceDate))
+                .thenReturn(Optional.empty());
+        when(pricingItemRepository.findById(37261L)).thenReturn(Optional.of(stale));
+        when(pricingItemRepository.findEffectiveInContractByName(3051L, "خزعة بمنظار", serviceDate))
+                .thenReturn(Optional.of(effective));
+
+        assertThat(mapper.resolvePricingItemForLine(3051L, serviceDate, 37261L, null, null))
+                .isSameAs(effective);
+    }
+
+    @Test
+    void neverRecoversAStalePriceVersionFromAnotherContract() {
+        LocalDate serviceDate = LocalDate.of(2026, 8, 10);
+        ProviderContract foreignContract = ProviderContract.builder().id(9999L).build();
+        ProviderContractPricingItem foreign = ProviderContractPricingItem.builder()
+                .id(88L).contract(foreignContract).serviceName("خزعة بمنظار").active(false).build();
+
+        when(pricingItemRepository.findEffectiveInContractById(3051L, 88L, serviceDate))
+                .thenReturn(Optional.empty());
+        when(pricingItemRepository.findById(88L)).thenReturn(Optional.of(foreign));
+
+        assertThat(mapper.resolvePricingItemForLine(3051L, serviceDate, 88L, null, "خزعة بمنظار"))
+                .isNull();
     }
 }
