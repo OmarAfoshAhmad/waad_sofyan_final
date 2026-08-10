@@ -15,7 +15,6 @@ import {
   IconButton,
   TextField,
   MenuItem,
-  Grid,
   CircularProgress,
   Divider
 } from '@mui/material';
@@ -28,9 +27,7 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
   Clear as ClearIcon,
-  InfoOutlined as InfoIcon,
-  CheckCircle as CheckCircleIcon,
-  WarningAmber as WarningIcon
+  InfoOutlined as InfoIcon
 } from '@mui/icons-material';
 
 // Project Components
@@ -125,22 +122,6 @@ const getFacilityShareAmount = (row) => {
 // مخترعة. بحكم الثابت المالي الذي يفرضه الباك-إند (Claim.validateFinancialIdentity)
 // هذا يساوي دائماً: requestedAmount − patientCoPay − refusedAmount.
 const getPayableAmount = (row) => getCompanyDiscountAmount(row) + getFacilityShareAmount(row);
-
-// تحقق مرئي من توازن اللقطة المالية للمطالبة — يعكس بالضبط الثابت الذي يفرضه
-// Claim.validateFinancialIdentity() في الباك-إند (بنفس هامش التسامح 0.05)، لكشف
-// أي مطالبة قديمة/شاذة سُجّلت قبل تفعيل هذا التحقق بدل الثقة الصامتة بالأرقام.
-const getBalanceCheck = (row) => {
-  const rawValues = [row?.requestedAmount, row?.patientCoPay, row?.refusedAmount, row?.companyDiscountAmount];
-  const facilityRaw = row?.netProviderAmount ?? row?.approvedAmount;
-  const complete = rawValues.every((value) => value !== null && value !== undefined) && facilityRaw !== null && facilityRaw !== undefined;
-  const values = [...rawValues, facilityRaw].map(Number);
-  const valid = complete && values.every(Number.isFinite) && values.every((value) => value >= 0);
-  const [requested = 0, patient = 0, refused = 0, discount = 0, facility = 0] = values;
-  const requestedCents = Math.round(requested * 100);
-  const componentsCents = [patient, refused, discount, facility].reduce((sum, value) => sum + Math.round(value * 100), 0);
-  const diffCents = Math.abs(requestedCents - componentsCents);
-  return { balanced: valid && diffCents <= 5, complete, valid, diff: diffCents / 100 };
-};
 
 const sortFieldMap = {
   claimNumber: 'id',
@@ -364,21 +345,19 @@ export default function ProviderAccountsList() {
       const allClaims = allData?.items || allData?.content || [];
       if (!allClaims.length) return;
       const exportRows = allClaims.map((item) => {
-        const balance = getBalanceCheck(item);
         return {
           'رقم المطالبة': item.claimNumber || `CLM-${item.id}`,
           'الوثيقة (جهة العمل)': item.employerName || '',
           'تاريخ الخدمة': item.visitDate || item.serviceDate || '',
           'مقدم الخدمة': item.providerName || '',
           'المبلغ الإجمالي (قبل)': Number(item.requestedAmount) || 0,
-          'نسبة الخصم التعاقدي (%)': getDiscountPercent(item),
+          'نسبة التخفيض (%)': getDiscountPercent(item),
           'آلية الخصم': getDiscountTiming(item).label,
           'المبلغ المرفوض': getRefusedAmount(item),
           'حصة التأمين قبل خصم العقد': getPayableAmount(item),
           'خصم العقد (ربح الشركة)': getCompanyDiscountAmount(item),
           'نصيب المرفق': getFacilityShareAmount(item),
-          الحالة: STATUS_LABELS[item.status] || item.status || '',
-          'مطابقة اللقطة المالية': balance.balanced ? 'متوازنة' : `⚠ فرق ${balance.diff.toFixed(2)} د.ل`
+          الحالة: STATUS_LABELS[item.status] || item.status || ''
         };
       });
       exportToExcel(exportRows, `مطالبات_مقدمي_الخدمة_${dayjs().format('YYYY-MM-DD')}`);
@@ -440,7 +419,7 @@ export default function ProviderAccountsList() {
     <thead>
       <tr>
         <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
-        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة الخصم</th>
+        <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة التخفيض</th>
         <th>المرفوض</th><th>حصة التأمين قبل خصم العقد</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
       </tr>
     </thead>
@@ -470,14 +449,14 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'claimNumber',
         header: 'رقم المطالبة',
-        minWidth: '8.125rem',
+        minWidth: '6.75rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{row.original.claimNumber || `CLM-${row.original.id}`}</Typography>
       },
       {
         accessorKey: 'employerName',
         header: 'الوثيقة',
-        minWidth: '10rem',
+        minWidth: '8.5rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography variant="body2" noWrap>
@@ -488,7 +467,7 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'serviceDate',
         header: 'تاريخ الخدمة',
-        minWidth: '7.8125rem',
+        minWidth: '6.75rem',
         align: 'center',
         cell: ({ row }) => {
           const value = row.original.visitDate || row.original.serviceDate;
@@ -498,21 +477,21 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'providerName',
         header: 'مقدم الخدمة',
-        minWidth: '11.25rem',
+        minWidth: '8.5rem',
         align: 'center',
         cell: ({ row }) => row.original.providerName || '-'
       },
       {
         accessorKey: 'requestedAmount',
         header: 'المبلغ الإجمالي (قبل)',
-        minWidth: '9.375rem',
+        minWidth: '7.25rem',
         align: 'center',
         cell: ({ row }) => formatCurrency(row.original.requestedAmount)
       },
       {
         accessorKey: 'providerDiscountPercent',
-        header: 'نسبة الخصم التعاقدي',
-        minWidth: '8.5rem',
+        header: 'نسبة التخفيض',
+        minWidth: '7rem',
         align: 'center',
         cell: ({ row }) => {
           const discount = getDiscountPercent(row.original);
@@ -532,7 +511,7 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'refusedAmount',
         header: 'المبلغ المرفوض',
-        minWidth: '8.4375rem',
+        minWidth: '6.75rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography color="error.main" fontWeight="bold">
@@ -543,14 +522,14 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'payableAmount',
         header: 'حصة التأمين قبل خصم العقد',
-        minWidth: '8.75rem',
+        minWidth: '8rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
       },
       {
         accessorKey: 'companyShare',
         header: 'حصة الشركة',
-        minWidth: '7.5rem',
+        minWidth: '6.5rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography color="warning.main" fontWeight="bold">
@@ -561,7 +540,7 @@ export default function ProviderAccountsList() {
       {
         accessorKey: 'facilityShare',
         header: 'نصيب المرفق',
-        minWidth: '8.125rem',
+        minWidth: '6.5rem',
         align: 'center',
         cell: ({ row }) => (
           <Typography color="success.main" fontWeight="bold">
@@ -570,34 +549,9 @@ export default function ProviderAccountsList() {
         )
       },
       {
-        accessorKey: 'balanceCheck',
-        header: 'مطابقة اللقطة',
-        minWidth: '6.25rem',
-        align: 'center',
-        enableSorting: false,
-        cell: ({ row }) => {
-          const balance = getBalanceCheck(row.original);
-          return balance.balanced ? (
-            <Tooltip title="اللقطة المالية متوازنة (المطلوب = التحمل + المرفوض + خصم العقد + نصيب المرفق)">
-              <CheckCircleIcon fontSize="small" color="success" />
-            </Tooltip>
-          ) : (
-            <Tooltip
-              title={
-                !balance.complete
-                  ? 'اللقطة المالية غير مكتملة — توجد قيمة مالية قديمة غير محفوظة، راجع المطالبة قبل التسوية'
-                  : `تعارض في اللقطة المالية بمقدار ${formatCurrency(balance.diff)} — راجع المطالبة قبل التسوية`
-              }
-            >
-              <WarningIcon fontSize="small" color="warning" />
-            </Tooltip>
-          );
-        }
-      },
-      {
         accessorKey: 'status',
         header: 'الحالة',
-        minWidth: '7.5rem',
+        minWidth: '6.5rem',
         align: 'center',
         cell: ({ row }) => {
           const status = row.original.status || 'DRAFT';
@@ -606,7 +560,7 @@ export default function ProviderAccountsList() {
               label={STATUS_LABELS[status] || status}
               color={STATUS_COLORS[status] || 'default'}
               size="small"
-              sx={{ minWidth: '7rem', justifyContent: 'center' }}
+              sx={{ minWidth: '5.75rem', justifyContent: 'center' }}
             />
           );
         }
@@ -848,7 +802,7 @@ export default function ProviderAccountsList() {
                     نصيب المرفق = صافي المستحق له بعد التحمل والمرفوض والخصم
                   </Typography>
                   <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
-                    عمود «مطابقة اللقطة» يقارن هذه الأرقام بالمبلغ الإجمالي للتحقق من عدم وجود تعارض.
+                    يتحقق النظام من توازن المبالغ داخلياً قبل اعتماد المطالبة.
                   </Typography>
                 </Box>
               }
