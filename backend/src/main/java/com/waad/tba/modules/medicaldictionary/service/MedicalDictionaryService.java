@@ -232,9 +232,15 @@ public class MedicalDictionaryService {
             return priceListSessionRepository.findById(request.getSessionId())
                     .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
         }
-        return priceListSessionRepository
-                .findFirstBySourceFingerprintAndStatusNotOrderByUpdatedAtDesc(sourceFingerprint, PriceListSessionStatus.POSTED_TO_CONTRACT)
-                .orElseGet(PriceListClassificationSession::new);
+        Optional<PriceListClassificationSession> existing = priceListSessionRepository
+                .findFirstBySourceFingerprintOrderByUpdatedAtDesc(sourceFingerprint);
+        if (existing.isEmpty()) return new PriceListClassificationSession();
+        PriceListClassificationSession session = existing.get();
+        if (session.getStatus() == PriceListSessionStatus.POSTED_TO_CONTRACT
+                || session.getPostedCount() != null && session.getPostedCount() > 0) {
+            throw new IllegalArgumentException("سبق حفظ هذه القائمة وترحيل جزء منها أو كلها؛ افتح الجلسة الموجودة بدلاً من إنشاء نسخة مكررة");
+        }
+        return session;
     }
 
     private String calculatePriceListFingerprint(PriceListSessionSaveRequest request) {
@@ -317,9 +323,7 @@ public class MedicalDictionaryService {
                 .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
         session = syncPostedPriceLinks(session);
 
-        ProviderContract contract = providerContractRepository.findById(request.getContractId())
-                .filter(c -> Boolean.TRUE.equals(c.getActive()))
-                .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
+        ProviderContract contract = resolveAndValidateTargetContract(session, request.getContractId());
 
         List<PriceListClassificationItem> items = resolveRequestedSessionItems(session.getId(), request);
         List<PriceListSessionDiffResponse.ItemDiff> diffs = new ArrayList<>();
@@ -367,9 +371,7 @@ public class MedicalDictionaryService {
                 .orElseThrow(() -> new IllegalArgumentException("جلسة تنظيم قائمة الأسعار غير موجودة"));
         session = syncPostedPriceLinks(session);
 
-        ProviderContract contract = providerContractRepository.findById(request.getContractId())
-                .filter(c -> Boolean.TRUE.equals(c.getActive()))
-                .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
+        ProviderContract contract = resolveAndValidateTargetContract(session, request.getContractId());
 
         LocalDate effectiveFrom = resolveAndValidateEffectiveFrom(contract, request.getEffectiveFrom());
 
@@ -540,6 +542,21 @@ public class MedicalDictionaryService {
             throw new IllegalArgumentException("تاريخ تطبيق القائمة لا يمكن أن يكون بعد نهاية العقد");
         }
         return effectiveFrom;
+    }
+
+    private ProviderContract resolveAndValidateTargetContract(PriceListClassificationSession session, Long contractId) {
+        ProviderContract contract = providerContractRepository.findById(contractId)
+                .filter(c -> Boolean.TRUE.equals(c.getActive()))
+                .filter(c -> c.getStatus() == ProviderContract.ContractStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException("عقد مقدم الخدمة غير موجود أو غير نشط"));
+        if (session.getProviderId() == null) {
+            throw new IllegalArgumentException("القائمة غير مرتبطة بمقدم خدمة؛ أعد فتح جلسة التنظيم وحدد مقدم الخدمة أولاً");
+        }
+        Long contractProviderId = contract.getProvider() == null ? null : contract.getProvider().getId();
+        if (!session.getProviderId().equals(contractProviderId)) {
+            throw new IllegalArgumentException("العقد المختار لا يخص مقدم الخدمة المرتبط بقائمة الأسعار");
+        }
+        return contract;
     }
 
     private List<PriceListClassificationItem> resolveRequestedSessionItems(Long sessionId,

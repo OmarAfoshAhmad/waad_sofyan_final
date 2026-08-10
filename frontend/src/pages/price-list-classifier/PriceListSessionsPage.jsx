@@ -32,7 +32,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useNavigate } from 'react-router-dom';
 import medicalDictionaryService from 'services/api/medical-dictionary.service';
-import { searchProviderContracts } from 'services/api/provider-contracts.service';
+import { getActiveContractByProvider } from 'services/api/provider-contracts.service';
 
 const STATUSES = [
   { value: 'ALL', label: 'كل الجلسات' },
@@ -62,8 +62,11 @@ const statusLabel = (status) => STATUSES.find((item) => item.value === status)?.
 
 const isPostedSession = (session) => session?.status === 'POSTED_TO_CONTRACT' || (session?.posted || 0) > 0;
 
-const isPostableSession = (session) =>
-  ['READY_TO_POST', 'POSTED_TO_CONTRACT'].includes(session?.status) && (session?.unknown || 0) === 0 && (session?.needsReview || 0) === 0;
+// Mixed sessions are intentionally postable: approved rows go to the contract,
+// while review/unknown/excluded rows remain in the review workflow.
+const isPostableSession = (session) => Number(session?.highConfidence || 0) > 0;
+
+const contractProviderId = (contract) => Number(contract?.provider?.id ?? contract?.providerId ?? 0) || null;
 
 const normalizePage = (response) => ({
   content: response?.content || response?.items || response?.data?.content || response?.data?.items || [],
@@ -147,19 +150,6 @@ export default function PriceListSessionsPage() {
     }
   };
 
-  const loadActiveContracts = async () => {
-    setContractsLoading(true);
-    try {
-      const response = await searchProviderContracts({ status: 'ACTIVE', page: 0, size: 80 });
-      const content = response?.content || response?.items || response?.data?.content || response?.data?.items || [];
-      setContractOptions(Array.isArray(content) ? content : []);
-    } catch {
-      setContractOptions([]);
-    } finally {
-      setContractsLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,10 +158,6 @@ export default function PriceListSessionsPage() {
   useEffect(() => {
     setPage(0);
   }, [query, status]);
-
-  useEffect(() => {
-    loadActiveContracts();
-  }, []);
 
   const toggleSessionSelection = (sessionId) => {
     setSelectedIds((current) => (current.includes(sessionId) ? current.filter((id) => id !== sessionId) : [...current, sessionId]));
@@ -187,25 +173,59 @@ export default function PriceListSessionsPage() {
     });
   };
 
-  const openPostDialog = (session) => {
-    setPostDialog({ open: true, sessions: [session], contract: null, effectiveFrom: '', diffLoading: false, diff: null, diffError: '' });
-    setError('');
-    setSuccess('');
+  const loadLinkedActiveContract = async (session) => {
+    if (!session?.providerId) throw new Error('القائمة غير مرتبطة بمقدم خدمة.');
+    const contract = await getActiveContractByProvider(session.providerId);
+    if (!contract?.id) throw new Error(`لا يوجد عقد عام نشط لمقدم الخدمة «${session.providerName || '-'}».`);
+    return contract;
   };
 
-  const openBulkPostDialog = () => {
-    if (!postEligibleSessions.length) return;
-    setPostDialog({
-      open: true,
-      sessions: postEligibleSessions,
-      contract: null,
-      effectiveFrom: '',
-      diffLoading: false,
-      diff: null,
-      diffError: ''
-    });
+  const openPostDialog = async (session) => {
+    setContractsLoading(true);
     setError('');
     setSuccess('');
+    try {
+      const contract = await loadLinkedActiveContract(session);
+      const effectiveFrom = contract.startDate || '';
+      setContractOptions([contract]);
+      setPostDialog({ open: true, sessions: [session], contract, effectiveFrom, diffLoading: false, diff: null, diffError: '' });
+      void loadPostDiff(contract, effectiveFrom, [session]);
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || 'تعذر تحديد العقد النشط لمقدم الخدمة.');
+    } finally {
+      setContractsLoading(false);
+    }
+  };
+
+  const openBulkPostDialog = async () => {
+    if (!postEligibleSessions.length) return;
+    const providerIds = [...new Set(postEligibleSessions.map((session) => Number(session.providerId)).filter(Boolean))];
+    if (providerIds.length !== 1) {
+      setError('الترحيل الجماعي مسموح لقوائم مقدم خدمة واحد فقط؛ حدّد قوائم كل مقدم خدمة على حدة.');
+      return;
+    }
+    setContractsLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const contract = await loadLinkedActiveContract(postEligibleSessions[0]);
+      const effectiveFrom = contract.startDate || '';
+      setContractOptions([contract]);
+      setPostDialog({
+        open: true,
+        sessions: postEligibleSessions,
+        contract,
+        effectiveFrom,
+        diffLoading: false,
+        diff: null,
+        diffError: ''
+      });
+      void loadPostDiff(contract, effectiveFrom, postEligibleSessions);
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || 'تعذر تحديد العقد النشط لمقدم الخدمة.');
+    } finally {
+      setContractsLoading(false);
+    }
   };
 
   const closePostDialog = () => {
@@ -231,8 +251,8 @@ export default function PriceListSessionsPage() {
     setDeleteDialog({ open: false, sessions: [] });
   };
 
-  const loadPostDiff = async (contract = postDialog.contract, effectiveFrom = postDialog.effectiveFrom) => {
-    const sessionsToPost = postDialog.sessions || [];
+  const loadPostDiff = async (contract = postDialog.contract, effectiveFrom = postDialog.effectiveFrom, sessions = postDialog.sessions) => {
+    const sessionsToPost = sessions || [];
     if (!sessionsToPost.length || !contract?.id) return;
     setPostDialog((current) => ({ ...current, diffLoading: true, diff: null, diffError: '' }));
     try {
@@ -399,37 +419,36 @@ export default function PriceListSessionsPage() {
         {success && <Alert severity="success">{success}</Alert>}
 
         {selectedIds.length > 0 && (
-          <Alert
-            severity="info"
-            action={
-              <Stack direction="row" spacing={1}>
-                <Button
-                  size="small"
-                  color="error"
-                  variant="outlined"
-                  disabled={!deleteEligibleSessions.length}
-                  onClick={openBulkDeleteDialog}
-                >
-                  حذف المحدد
-                </Button>
-                <Button
-                  size="small"
-                  color="success"
-                  variant="contained"
-                  disabled={!postEligibleSessions.length}
-                  onClick={openBulkPostDialog}
-                >
-                  ترحيل المحدد
-                </Button>
-                <Button size="small" onClick={() => setSelectedIds([])}>
-                  إلغاء التحديد
-                </Button>
-              </Stack>
-            }
-          >
-            تم تحديد {selectedIds.length} قائمة. القابل للحذف {deleteEligibleSessions.length}، والقابل للترحيل {postEligibleSessions.length}
-            . القوائم المرحلة أو التي تحتاج مراجعة لن تدخل في الإجراء الجماعي.
-          </Alert>
+          <MainCard contentSX={{ p: 1.5, bgcolor: 'primary.lighter' }}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems={{ xs: 'stretch', md: 'center' }}>
+              <Typography sx={{ flex: 1, fontWeight: 700 }}>
+                تم تحديد {selectedIds.length} قائمة — {postEligibleSessions.length} تحتوي خدمات معتمدة قابلة للترحيل. ستبقى بقية الخدمات في
+                قسم المراجعة.
+              </Typography>
+              <Button
+                color="error"
+                variant="outlined"
+                startIcon={<DeleteOutlineIcon />}
+                disabled={!deleteEligibleSessions.length}
+                onClick={openBulkDeleteDialog}
+                sx={{ minHeight: 40, minWidth: 135 }}
+              >
+                حذف المحدد
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<PlaylistAddCheckIcon />}
+                disabled={!postEligibleSessions.length}
+                onClick={openBulkPostDialog}
+                sx={{ minHeight: 40, minWidth: 145 }}
+              >
+                ترحيل المعتمد
+              </Button>
+              <Button variant="text" onClick={() => setSelectedIds([])} sx={{ minHeight: 40 }}>
+                إلغاء التحديد
+              </Button>
+            </Stack>
+          </MainCard>
         )}
 
         <MainCard contentSX={{ p: 0 }}>
@@ -549,7 +568,7 @@ export default function PriceListSessionsPage() {
                             onClick={() => openPostDialog(session)}
                             sx={{ minWidth: 90 }}
                           >
-                            {isPostedSession(session) ? 'تحديث' : 'ترحيل'}
+                            {isPostedSession(session) ? 'ترحيل المتبقي' : 'ترحيل المعتمد'}
                           </Button>
                         </Stack>
                       </TableCell>
@@ -614,9 +633,12 @@ export default function PriceListSessionsPage() {
                 <Typography fontWeight={800}>{postDialog.sessions[0]?.sessionName}</Typography>
               )}
               <Autocomplete
-                options={contractOptions}
+                options={contractOptions.filter((option) =>
+                  postDialog.sessions.every((session) => contractProviderId(option) === Number(session.providerId))
+                )}
                 loading={contractsLoading}
                 value={postDialog.contract}
+                disabled
                 onChange={(_, contract) => {
                   const effectiveFrom = postDialog.effectiveFrom || contract?.startDate || '';
                   setPostDialog((current) => ({
@@ -638,7 +660,7 @@ export default function PriceListSessionsPage() {
                     : ''
                 }
                 isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
-                renderInput={(params) => <TextField {...params} label="العقد النشط" placeholder="ابحث باسم مقدم الخدمة أو كود العقد" />}
+                renderInput={(params) => <TextField {...params} label="العقد النشط المرتبط بمقدم الخدمة" />}
               />
               <TextField
                 type="date"

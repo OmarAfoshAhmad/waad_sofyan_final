@@ -281,6 +281,54 @@ class MedicalDictionaryServiceTest {
                 .containsExactly("خدمة محددة");
     }
 
+    @Test
+    void diffPriceListSessionWithContract_rejectsContractOwnedByAnotherProvider() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        ProviderContract otherProviderContract = contract();
+        otherProviderContract.setProvider(Provider.builder().id(99L).name("مرفق آخر").licenseNumber("LIC-99").build());
+
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+        when(providerContractRepository.findById(200L)).thenReturn(Optional.of(otherProviderContract));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.diffPriceListSessionWithContract(100L, postRequest()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("لا يخص مقدم الخدمة");
+    }
+
+    @Test
+    void postPriceListSessionToContract_postsApprovedAndLeavesReviewItemsForReview() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        PriceListClassificationItem approved = priceListItem("خدمة معتمدة", new BigDecimal("100.00"));
+        PriceListClassificationItem review = priceListItem("خدمة تحتاج مراجعة", new BigDecimal("80.00"));
+        review.setId(2L);
+        review.setStatus(PriceListItemStatus.REVIEW_REQUIRED);
+        session.setItems(new ArrayList<>(List.of(approved, review)));
+
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+        when(providerContractRepository.findById(200L)).thenReturn(Optional.of(contract()));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(approved, review));
+        when(medicalCategoryRepository.findActiveById(10L)).thenReturn(Optional.of(category()));
+        when(providerContractPricingItemRepository.save(any(ProviderContractPricingItem.class))).thenAnswer(invocation -> {
+            ProviderContractPricingItem saved = invocation.getArgument(0);
+            saved.setId(301L);
+            return saved;
+        });
+        when(priceListSessionRepository.save(session)).thenReturn(session);
+
+        PriceListSessionPostResponse response = service.postPriceListSessionToContract(100L, postRequest());
+
+        assertThat(response.getCreated()).isEqualTo(1);
+        assertThat(response.getRejected()).isEqualTo(1);
+        assertThat(approved.getStatus()).isEqualTo(PriceListItemStatus.POSTED_TO_CONTRACT);
+        assertThat(review.getStatus()).isEqualTo(PriceListItemStatus.REVIEW_REQUIRED);
+        assertThat(session.getStatus()).isEqualTo(PriceListSessionStatus.NEEDS_REVIEW);
+        assertThat(session.getPostedCount()).isEqualTo(1);
+        assertThat(session.getNeedsReviewCount()).isEqualTo(1);
+    }
+
     private MedicalDictionaryService newService() {
         return new MedicalDictionaryService(
                 entryRepository,
@@ -310,6 +358,8 @@ class MedicalDictionaryServiceTest {
         return PriceListClassificationSession.builder()
                 .id(100L)
                 .sessionName("قائمة اختبار")
+                .providerId(5L)
+                .providerName("مرفق اختبار")
                 .status(PriceListSessionStatus.READY_TO_POST)
                 .build();
     }

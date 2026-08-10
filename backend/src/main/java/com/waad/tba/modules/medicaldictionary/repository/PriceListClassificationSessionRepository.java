@@ -9,7 +9,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PriceListClassificationSessionRepository extends JpaRepository<PriceListClassificationSession, Long> {
     Page<PriceListClassificationSession> findByStatus(PriceListSessionStatus status, Pageable pageable);
 
-    java.util.Optional<PriceListClassificationSession> findFirstBySourceFingerprintAndStatusNotOrderByUpdatedAtDesc(
-            String sourceFingerprint,
-            PriceListSessionStatus status);
+    java.util.Optional<PriceListClassificationSession> findFirstBySourceFingerprintOrderByUpdatedAtDesc(String sourceFingerprint);
 }
