@@ -4,12 +4,16 @@ import useSystemConfig from 'hooks/useSystemConfig';
 import { DEFAULT_DATE_DISPLAY_FORMAT, toDayjsDateDisplayFormat } from 'utils/dateConfig';
 
 /** The only DatePicker applications should use; display format comes from system settings. */
-const SystemDatePicker = ({ format, ...props }) => {
+const SystemDatePicker = ({ format, formatDialect = 'dayjs', ...props }) => {
   const { uiConfig } = useSystemConfig();
   const configuredFormat = format || uiConfig?.dateDisplayFormat || DEFAULT_DATE_DISPLAY_FORMAT;
-  return <MuiDatePicker {...props} format={toDayjsDateDisplayFormat(configuredFormat)} />;
+  const pickerFormat = formatDialect === 'date-fns' ? configuredFormat : toDayjsDateDisplayFormat(configuredFormat);
+  return <MuiDatePicker {...props} format={pickerFormat} />;
 };
 
-SystemDatePicker.propTypes = { format: PropTypes.string };
+SystemDatePicker.propTypes = {
+  format: PropTypes.string,
+  formatDialect: PropTypes.oneOf(['dayjs', 'date-fns'])
+};
 
 export default SystemDatePicker;

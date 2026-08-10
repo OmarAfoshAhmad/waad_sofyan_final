@@ -307,6 +307,7 @@ const ProviderContractCreate = () => {
             <Grid size={{ xs: 12, md: 3 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
+                  formatDialect="date-fns"
                   label="تاريخ البداية *"
                   value={formData.startDate}
                   onChange={handleDateChange('startDate')}
@@ -324,6 +325,7 @@ const ProviderContractCreate = () => {
             <Grid size={{ xs: 12, md: 3 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
+                  formatDialect="date-fns"
                   label="تاريخ النهاية *"
                   value={formData.endDate}
                   onChange={handleDateChange('endDate')}

@@ -316,6 +316,7 @@ const ProviderContractEdit = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
+                  formatDialect="date-fns"
                   label="تاريخ البداية *"
                   value={formData.startDate}
                   onChange={handleDateChange('startDate')}
@@ -333,6 +334,7 @@ const ProviderContractEdit = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
+                  formatDialect="date-fns"
                   label="تاريخ النهاية *"
                   value={formData.endDate}
                   onChange={handleDateChange('endDate')}
@@ -413,6 +415,7 @@ const ProviderContractEdit = () => {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <LocalizationProvider dateAdapter={AdapterDateFns}>
                     <DatePicker
+                      formatDialect="date-fns"
                       label="تاريخ سريان تعديل الخصم *"
                       value={formData.termsEffectiveFrom}
                       minDate={new Date()}
