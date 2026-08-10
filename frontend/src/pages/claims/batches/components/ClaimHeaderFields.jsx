@@ -1,4 +1,6 @@
 import { Typography, Autocomplete, TextField, Stack, FormControlLabel, Checkbox, Box, Alert, Button, Chip, Select, MenuItem } from '@mui/material';
+import dayjs from 'dayjs';
+import DatePicker from 'components/common/SystemDatePicker';
 
 const inlineSx = {
   '& .MuiInputBase-root': { fontSize: '0.9rem' },
@@ -145,20 +147,20 @@ export const ClaimHeaderFields = ({
             *
           </Typography>
         </Typography>
-        <TextField
-          fullWidth
-          size="small"
-          variant="standard"
-          type="date"
-          value={serviceDate || ''}
-          onChange={(e) => {
-            setServiceDate(e.target.value);
+        <DatePicker
+          value={serviceDate ? dayjs(serviceDate) : null}
+          onChange={(value) => {
+            setServiceDate(value?.isValid() ? value.format('YYYY-MM-DD') : '');
             setIsDirty(true);
           }}
-          error={showValidationErrors && !serviceDate}
-          sx={{
-            ...inlineSx,
-            '& input': { fontSize: '0.9rem' } // Force date input font size
+          slotProps={{
+            textField: {
+              fullWidth: true,
+              size: 'small',
+              variant: 'standard',
+              error: showValidationErrors && !serviceDate,
+              sx: { ...inlineSx, '& input': { fontSize: '0.9rem' } }
+            }
           }}
         />
       </Box>
