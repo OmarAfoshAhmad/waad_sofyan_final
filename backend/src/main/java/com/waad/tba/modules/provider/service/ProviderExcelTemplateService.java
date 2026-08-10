@@ -588,10 +588,22 @@ public class ProviderExcelTemplateService {
 
     private void updateExistingContract(Provider provider, ContractImportValues values) {
         var page = contractService.findByProvider(provider.getId(), PageRequest.of(0, 2));
+        if (page.isEmpty()) {
+            contractService.create(ProviderContractCreateDto.builder()
+                    .providerId(provider.getId())
+                    .status(values.status())
+                    .pricingModel(PricingModel.DISCOUNT)
+                    .discountPercent(values.discount())
+                    .discountBeforeRejection(values.beforeRejection())
+                    .startDate(values.startDate())
+                    .endDate(values.endDate())
+                    .build());
+            log.info("[ProviderImport] Repaired provider {} by creating its missing contract", provider.getId());
+            return;
+        }
         if (page.getTotalElements() != 1) {
-            throw new BusinessRuleException(page.isEmpty()
-                    ? "المرفق موجود ولكن لا يوجد عقد مرتبط به: " + provider.getName()
-                    : "للمرفق أكثر من عقد؛ يجب تحديد العقد يدويًا قبل الاستيراد: " + provider.getName());
+            throw new BusinessRuleException(
+                    "للمرفق أكثر من عقد؛ يجب تحديد العقد يدويًا قبل الاستيراد: " + provider.getName());
         }
         var contract = page.getContent().get(0);
         contractService.update(contract.getId(), ProviderContractUpdateDto.builder()
@@ -617,7 +629,23 @@ public class ProviderExcelTemplateService {
     private void updateExistingProviderUsers(Provider provider, Row row, Map<String, Integer> columns) {
         List<com.waad.tba.modules.rbac.dto.UserResponseDto> users = userService.findByProviderId(provider.getId());
         if (users.isEmpty()) {
-            throw new BusinessRuleException("المرفق موجود ولكن لا يوجد مستخدم مرتبط به: " + provider.getName());
+            String password = getCellValue(row, columns.get("initial_password"));
+            if (password == null || password.isBlank()) {
+                throw new BusinessRuleException("المرفق موجود ولكن لا يوجد مستخدم مرتبط به؛ أدخل كلمة المرور الابتدائية لإنشائه: "
+                        + provider.getName());
+            }
+            String requestedUsername = getCellValue(row, columns.get("username"));
+            String username = requestedUsername == null || requestedUsername.isBlank()
+                    ? provider.getLicenseNumber().toLowerCase(Locale.ROOT) + "@tpa"
+                    : requestedUsername.trim();
+            String email = provider.getEmail() == null || provider.getEmail().isBlank()
+                    ? generateProviderUserEmail(username, provider.getLicenseNumber()) : provider.getEmail().trim();
+            userService.create(UserCreateDto.builder()
+                    .username(username).password(password.trim()).fullName(provider.getName())
+                    .email(email).phone(provider.getPhone()).userType("PROVIDER_STAFF")
+                    .providerId(provider.getId()).build());
+            log.info("[ProviderImport] Repaired provider {} by creating its missing user", provider.getId());
+            return;
         }
         String requestedUsername = getCellValue(row, columns.get("username"));
         for (var user : users) {

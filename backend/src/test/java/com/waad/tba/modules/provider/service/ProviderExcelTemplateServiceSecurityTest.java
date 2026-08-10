@@ -177,6 +177,26 @@ class ProviderExcelTemplateServiceSecurityTest {
     }
 
     @Test
+    void providerReimportAtomicallyCreatesMissingContract() throws Exception {
+        Provider existing = Provider.builder().id(100L).name("مستشفى الاختبار")
+                .licenseNumber("HOS-100").providerType(Provider.ProviderType.HOSPITAL).active(true).build();
+        when(providerRepository.findByName("مستشفى الاختبار")).thenReturn(Optional.of(existing));
+        when(providerRepository.save(any(Provider.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(contractService.findByProvider(org.mockito.ArgumentMatchers.eq(100L), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        when(userService.findByProviderId(100L)).thenReturn(List.of(UserResponseDto.builder()
+                .id(700L).username("provider@tpa").email("provider@tpa.local").build()));
+
+        ExcelImportResult result = service.importFromExcel(buildExcelFile("", "provider@example.com"));
+
+        assertTrue(result.isSuccess());
+        ArgumentCaptor<ProviderContractCreateDto> contract = ArgumentCaptor.forClass(ProviderContractCreateDto.class);
+        verify(contractService).create(contract.capture());
+        assertEquals(100L, contract.getValue().getProviderId());
+        assertEquals(0, contract.getValue().getDiscountPercent().compareTo(new java.math.BigDecimal("10.00")));
+    }
+
+    @Test
     void legacyProviderExcelEndpointAndHardcodedPasswordMustNotReturn() throws Exception {
         assertTrue(Files.notExists(Path.of(
                 "src/main/java/com/waad/tba/modules/provider/controller/ProviderExcelController.java")));
