@@ -9,6 +9,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -47,6 +48,13 @@ public class ClaimDataUpdateDto {
      * Diagnosis Description - can be corrected by provider
      */
     private String diagnosisDescription;
+
+    /**
+     * Corrected date of service. It is financial input: contract terms, prices,
+     * policy eligibility and limits are all resolved again for this date before
+     * a reversed claim can be re-approved.
+     */
+    private LocalDate serviceDate;
 
     /**
      * Link to PreAuthorization (if applicable)

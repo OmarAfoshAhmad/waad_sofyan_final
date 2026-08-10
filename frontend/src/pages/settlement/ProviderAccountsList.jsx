@@ -117,11 +117,15 @@ const getFacilityShareAmount = (row) => {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 };
 
-// حصة المرفق قبل التخفيض = حصة الشركة (قيمة التخفيض) + نصيب المرفق الصافي.
-// مُشتقة بالجمع فقط من قيمتين محفوظتين فعلياً على المطالبة — لا افتراض ولا نسبة
-// مخترعة. بحكم الثابت المالي الذي يفرضه الباك-إند (Claim.validateFinancialIdentity)
-// هذا يساوي دائماً: requestedAmount − patientCoPay − refusedAmount.
-const getPayableAmount = (row) => getCompanyDiscountAmount(row) + getFacilityShareAmount(row);
+// «المعتمد قبل التخفيض» يتبع توقيت العقد المثبّت على المطالبة:
+// قبل المرفوض = الصافي + التخفيض + المرفوض؛ بعد المرفوض = الصافي + التخفيض
+// لأن المرفوض مطروح مسبقاً من المعتمد في الحالة الثانية.
+const getPayableAmount = (row) => {
+  const approvedBeforeDiscount = getCompanyDiscountAmount(row) + getFacilityShareAmount(row);
+  return row?.discountBeforeRejection === true
+    ? approvedBeforeDiscount + getRefusedAmount(row)
+    : approvedBeforeDiscount;
+};
 
 const sortFieldMap = {
   claimNumber: 'id',
@@ -337,7 +341,7 @@ export default function ProviderAccountsList() {
           'نسبة التخفيض وقت الخدمة (%)': getDiscountPercent(item),
           'آلية الخصم': getDiscountTiming(item).label,
           'المبلغ المرفوض': getRefusedAmount(item),
-          'حصة التأمين قبل خصم العقد': getPayableAmount(item),
+          'المعتمد قبل التخفيض': getPayableAmount(item),
           'خصم العقد (ربح الشركة)': getCompanyDiscountAmount(item),
           'نصيب المرفق': getFacilityShareAmount(item),
           الحالة: STATUS_LABELS[item.status] || item.status || ''
@@ -403,7 +407,7 @@ export default function ProviderAccountsList() {
       <tr>
         <th>#</th><th>رقم المطالبة</th><th>الوثيقة</th><th>تاريخ الخدمة</th>
         <th>مقدم الخدمة</th><th>الإجمالي (قبل)</th><th>نسبة التخفيض وقت الخدمة</th>
-        <th>المرفوض</th><th>حصة المرفق قبل التخفيض</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
+        <th>المرفوض</th><th>المعتمد قبل التخفيض</th><th>حصة الشركة</th><th>نصيب المرفق</th><th>الحالة</th>
       </tr>
     </thead>
     <tbody>${printRows}</tbody>
@@ -466,7 +470,7 @@ export default function ProviderAccountsList() {
       },
       {
         accessorKey: 'payableAmount',
-        header: 'حصة المرفق قبل التخفيض',
+        header: 'المعتمد قبل التخفيض',
         minWidth: '8rem',
         align: 'center',
         cell: ({ row }) => <Typography fontWeight="bold">{formatCurrency(getPayableAmount(row.original))}</Typography>
@@ -587,7 +591,7 @@ export default function ProviderAccountsList() {
                 isSummaryLoading
               )}
               {renderSummaryCard(
-                'حصة التأمين قبل خصم العقد',
+                'المعتمد قبل التخفيض',
                 formatCurrency(totals.payable),
                 <PaymentsIcon fontSize="small" color="secondary" />,
                 'secondary.main',
@@ -719,7 +723,10 @@ export default function ProviderAccountsList() {
                     أساس الحساب:
                   </Typography>
                   <Typography variant="caption" display="block">
-                    حصة المرفق قبل التخفيض = قيمة التخفيض + نصيب المرفق
+                    قبل المرفوض: المعتمد = الصافي + التخفيض + المرفوض
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    بعد المرفوض: المعتمد = الصافي + التخفيض (المرفوض مطروح مسبقاً)
                   </Typography>
                   <Typography variant="caption" display="block">
                     خصم العقد = ربح وعد الفعلي المحفوظ على كل مطالبة (وليس نسبة ثابتة)

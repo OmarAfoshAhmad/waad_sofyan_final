@@ -649,6 +649,10 @@ public class ClaimService {
         if (dto.getDiagnosisDescription() != null) {
             claim.setDiagnosisDescription(dto.getDiagnosisDescription());
         }
+        if (dto.getServiceDate() != null && !Objects.equals(claim.getServiceDate(), dto.getServiceDate())) {
+            claim.setServiceDate(dto.getServiceDate());
+            claim.markCoverageDirty();
+        }
         if (dto.getPreAuthorizationId() != null) {
             PreAuthorization preAuth = new PreAuthorization();
             preAuth.setId(dto.getPreAuthorizationId());

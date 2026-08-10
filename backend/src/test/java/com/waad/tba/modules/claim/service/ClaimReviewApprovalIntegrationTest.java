@@ -427,15 +427,20 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                         .build())))
                 .hasMessageContaining("يجب إعادة إرسال مطالبة البوابة");
 
+        LocalDate correctedServiceDate = LocalDate.now().minusDays(1);
         ClaimViewDto correctedPortalClaim = transactionTemplate.execute(ignored ->
                 claimService.updateClaimData(claimId, ClaimDataUpdateDto.builder()
                         .diagnosisCode("Z00.0")
+                        .serviceDate(correctedServiceDate)
                         .lines(List.of(ClaimLineDto.builder()
                                 .id(lineId)
                                 .medicalServiceId(service.getId())
                                 .quantity(2)
                                 .build()))
                         .build()));
+        assertThat(correctedPortalClaim.getServiceDate()).isEqualTo(correctedServiceDate);
+        assertThat(claimRepository.findById(claimId).orElseThrow().getServiceDate())
+                .isEqualTo(correctedServiceDate);
         Long correctedLineId = correctedPortalClaim.getLines().get(0).getId();
         transactionTemplate.executeWithoutResult(ignored -> claimService.submitClaim(claimId));
         transactionTemplate.executeWithoutResult(ignored -> claimService.startReview(claimId));
@@ -450,6 +455,8 @@ class ClaimReviewApprovalIntegrationTest extends PostgresIntegrationTestBase {
                         .build()));
         assertThat(awaitClaimStatus(claimId, ClaimStatus.APPROVED, ClaimStatus.REJECTED).getStatus())
                 .isEqualTo(ClaimStatus.APPROVED);
+        assertThat(claimRepository.findById(claimId).orElseThrow().getServiceDate())
+                .isEqualTo(correctedServiceDate);
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(
                 claimId, BenefitBucketConsumption.Status.COMMITTED)).hasSize(1);
         assertThat(benefitBucketConsumptionRepository.findByClaimIdAndStatus(

@@ -95,6 +95,10 @@ public class WaadFinancialEngine {
      *                                Fails closed outside this range.
      * @param providerDiscountPercent the provider contract's discount rate; must be
      *                                0-100 inclusive and non-null
+     * @param discountBeforeRejection true when the effective contract terms apply
+     *                                the discount to insurerGrossShare before the
+     *                                explicit rejection; false when rejection is
+     *                                removed first and only the remainder is discounted
      * @param providerRejectedAmount  a reviewer's rejection against
      *                                providerNetBeforeRejection; must be >= 0 and
      *                                non-null. Must also be
@@ -123,9 +127,19 @@ public class WaadFinancialEngine {
             BigDecimal bindingAvailableLimit,
             int coveragePercent,
             BigDecimal providerDiscountPercent,
+            boolean discountBeforeRejection,
             BigDecimal providerRejectedAmount,
             boolean fullyRejected,
             int quantity) {
+        /** Compatibility constructor: historical callers use after-rejection mode. */
+        public Input(BigDecimal requestedAmount, BigDecimal contractualPrice,
+                LimitMode limitMode, BigDecimal bindingAvailableLimit,
+                int coveragePercent, BigDecimal providerDiscountPercent,
+                BigDecimal providerRejectedAmount, boolean fullyRejected, int quantity) {
+            this(requestedAmount, contractualPrice, limitMode, bindingAvailableLimit,
+                    coveragePercent, providerDiscountPercent, false,
+                    providerRejectedAmount, fullyRejected, quantity);
+        }
     }
 
     /**
@@ -202,10 +216,6 @@ public class WaadFinancialEngine {
 
         BigDecimal patientTotalResponsibility = scale2(patientCoverageShare.add(patientLimitExcess));
 
-        // Canonical settlement order: explicit provider rejection is removed from
-        // the insurer share before the contractual discount is calculated. This
-        // prevents the insurer from taking a discount on an amount it has already
-        // refused and keeps settlement, claim and provider-account figures identical.
         BigDecimal rejectionCandidate = input.fullyRejected() ? insurerGrossShare : providerRejectedAmount;
         if (rejectionCandidate.compareTo(insurerGrossShare) > 0) {
             throw new IllegalArgumentException(
@@ -214,14 +224,28 @@ public class WaadFinancialEngine {
                             + "). Fail closed -- do not clamp silently.");
         }
         BigDecimal appliedRejection = scale2(rejectionCandidate);
-        // Kept under the historical column/result name for schema compatibility;
-        // its canonical meaning is now the discount base after rejection.
-        BigDecimal providerNetBeforeRejection = maxZero(scale2(insurerGrossShare.subtract(appliedRejection)));
-        BigDecimal providerContractDiscount = scale2(
-                providerNetBeforeRejection.multiply(discountPercent)
-                        .divide(HUNDRED, 2, RoundingMode.HALF_UP));
-        BigDecimal insurerFinalPayment = maxZero(
-                scale2(providerNetBeforeRejection.subtract(providerContractDiscount)));
+        BigDecimal approvedBeforeDiscount;
+        BigDecimal providerContractDiscount;
+        BigDecimal insurerFinalPayment;
+        if (input.fullyRejected()) {
+            approvedBeforeDiscount = ZERO;
+            providerContractDiscount = ZERO;
+            insurerFinalPayment = ZERO;
+        } else if (input.discountBeforeRejection()) {
+            approvedBeforeDiscount = insurerGrossShare;
+            providerContractDiscount = scale2(approvedBeforeDiscount.multiply(discountPercent)
+                    .divide(HUNDRED, 2, RoundingMode.HALF_UP));
+            insurerFinalPayment = maxZero(scale2(approvedBeforeDiscount
+                    .subtract(providerContractDiscount).subtract(appliedRejection)));
+        } else {
+            approvedBeforeDiscount = maxZero(scale2(insurerGrossShare.subtract(appliedRejection)));
+            providerContractDiscount = scale2(approvedBeforeDiscount.multiply(discountPercent)
+                    .divide(HUNDRED, 2, RoundingMode.HALF_UP));
+            insurerFinalPayment = maxZero(scale2(approvedBeforeDiscount.subtract(providerContractDiscount)));
+        }
+        // Historical schema name retained; canonical UI meaning: approved amount
+        // immediately before contractual discount, according to contract timing.
+        BigDecimal providerNetBeforeRejection = scale2(approvedBeforeDiscount);
 
         // S13: the invariant is checked explicitly, not just assumed correct
         // by construction -- a future rounding change or new component must

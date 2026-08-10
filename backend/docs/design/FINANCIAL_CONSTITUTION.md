@@ -161,10 +161,15 @@ insurerGrossShare    = limitCoveredBase - patientCoverageShare
 ## 9. الخصم التعاقدي
 
 ```
-providerRejectedAmount     = explicit rejection against insurerGrossShare
-providerDiscountBase       = insurerGrossShare - providerRejectedAmount
-providerContractDiscount   = providerDiscountBase × providerDiscountPercent
-insurerFinalPayment        = providerDiscountBase - providerContractDiscount
+approvedBeforeDiscount = discountBeforeRejection
+    ? insurerGrossShare
+    : insurerGrossShare - providerRejectedAmount
+
+providerContractDiscount = approvedBeforeDiscount × providerDiscountPercent
+
+insurerFinalPayment = discountBeforeRejection
+    ? approvedBeforeDiscount - providerContractDiscount - providerRejectedAmount
+    : approvedBeforeDiscount - providerContractDiscount
 ```
 
 الخصم مسؤولية المرفق. ممنوع: تحميله للمستفيد، إضافته إلى حصة المستفيد، إعادة احتسابه
@@ -184,24 +189,21 @@ insurerFinalPayment        = providerDiscountBase - providerContractDiscount
 
 ---
 
-## 10. إلغاء `discountBeforeRejection`
+## 10. توقيت التخفيض بحسب العقد
 
-**لم تعد هناك سياستان.** السياسة واحدة وثابتة:
+توجد سياستان صريحتان ومؤرختان في شروط العقد، وتُثبّت السياسة المختارة على المطالبة
+بحسب `serviceDate` حتى لا يغيّر تعديل العقد المطالبات السابقة:
 
 ```
-insurerGrossShare → providerRejectedAmount → providerDiscountBase → providerContractDiscount → insurerFinalPayment
+قبل المرفوض: insurerGrossShare → discount → rejection → final payment
+بعد المرفوض: insurerGrossShare → rejection → approvedBeforeDiscount → discount → final payment
 ```
-
-يجب حذف الفرع المالي القديم من المحرك، وحذف اختباراته، وعدم الاحتفاظ به كـ feature flag
-ولا كحقل ميت في `Input`/`Result`/DTO، وعدم تأجيل تنظيفه إلى مرحلة لاحقة.
 
 ---
 
 ## 11. المرفوض
 
 ```
-providerDiscountBase = insurerGrossShare - providerRejectedAmount
-insurerFinalPayment  = providerDiscountBase - providerContractDiscount
 0 ≤ providerRejectedAmount ≤ insurerGrossShare
 ```
 
@@ -226,10 +228,10 @@ insurerFinalPayment  = providerDiscountBase - providerContractDiscount
  9. تطبيق نسبة التغطية على limitCoveredBase فقط
 10. حساب patientCoverageShare
 11. حساب insurerGrossShare
-12. طرح providerRejectedAmount من insurerGrossShare
-13. الوصول إلى providerDiscountBase
-14. تطبيق الخصم التعاقدي على providerDiscountBase
-15. حساب insurerFinalPayment بعد التخفيض
+12. قراءة توقيت التخفيض المثبّت من شروط العقد السارية
+13. حساب approvedBeforeDiscount وفق التوقيت
+14. تطبيق الخصم التعاقدي على approvedBeforeDiscount
+15. حساب insurerFinalPayment دون طرح المرفوض مرتين
 16. تسجيل limitConsumption
 17. تحديث الرصيد دون السماح بالقيم السالبة
 18. التحقق من ثبات المعادلة قبل الاعتماد

@@ -30,10 +30,22 @@ public class MultiLineMultiBucketEngine {
             BigDecimal contractualPrice,
             int coveragePercent,
             BigDecimal providerDiscountPercent,
+            boolean discountBeforeRejection,
             BigDecimal providerRejectedAmount,
             boolean fullyRejected,
             int quantity,
-            LimitBalanceReader.BalanceSet balances) {}
+            LimitBalanceReader.BalanceSet balances) {
+        /** Compatibility constructor: historical callers use after-rejection mode. */
+        public LineInput(String lineKey, BigDecimal requestedAmount,
+                BigDecimal contractualPrice, int coveragePercent,
+                BigDecimal providerDiscountPercent, BigDecimal providerRejectedAmount,
+                boolean fullyRejected, int quantity,
+                LimitBalanceReader.BalanceSet balances) {
+            this(lineKey, requestedAmount, contractualPrice, coveragePercent,
+                    providerDiscountPercent, false, providerRejectedAmount,
+                    fullyRejected, quantity, balances);
+        }
+    }
 
     public record LimitAllocation(
             LimitBalanceReader.LimitBalance balance,
@@ -95,7 +107,8 @@ public class MultiLineMultiBucketEngine {
                     line.requestedAmount(), line.contractualPrice(),
                     limited ? WaadFinancialEngine.LimitMode.LIMITED : WaadFinancialEngine.LimitMode.UNLIMITED,
                     usableBinding, line.coveragePercent(), line.providerDiscountPercent(),
-                    line.providerRejectedAmount(), line.fullyRejected(), line.quantity()));
+                    line.discountBeforeRejection(), line.providerRejectedAmount(),
+                    line.fullyRejected(), line.quantity()));
 
             List<LimitAllocation> allocations = new ArrayList<>();
             BigDecimal consumption = limited ? financial.limitConsumption() : BigDecimal.ZERO;

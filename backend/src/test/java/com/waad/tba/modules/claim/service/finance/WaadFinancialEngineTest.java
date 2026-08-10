@@ -148,6 +148,30 @@ class WaadFinancialEngineTest {
     }
 
     @Test
+    void settlementTiming_contractControlsApprovedBeforeDiscountAndProviderNet() {
+        Input before = new Input(new BigDecimal("155.00"), new BigDecimal("155.00"),
+                LimitMode.UNLIMITED, null, 75, new BigDecimal("10.00"), true,
+                new BigDecimal("20.00"), false, 1);
+        Input after = new Input(new BigDecimal("155.00"), new BigDecimal("155.00"),
+                LimitMode.UNLIMITED, null, 75, new BigDecimal("10.00"), false,
+                new BigDecimal("20.00"), false, 1);
+
+        Result beforeResult = engine.evaluate(before);
+        assertThat(beforeResult.providerNetBeforeRejection()).isEqualByComparingTo("116.25");
+        assertThat(beforeResult.providerContractDiscount()).isEqualByComparingTo("11.63");
+        assertThat(beforeResult.providerRejectedAmount()).isEqualByComparingTo("20.00");
+        assertThat(beforeResult.insurerFinalPayment()).isEqualByComparingTo("84.62");
+        assertInvariant(beforeResult);
+
+        Result afterResult = engine.evaluate(after);
+        assertThat(afterResult.providerNetBeforeRejection()).isEqualByComparingTo("96.25");
+        assertThat(afterResult.providerContractDiscount()).isEqualByComparingTo("9.63");
+        assertThat(afterResult.providerRejectedAmount()).isEqualByComparingTo("20.00");
+        assertThat(afterResult.insurerFinalPayment()).isEqualByComparingTo("86.62");
+        assertInvariant(afterResult);
+    }
+
+    @Test
     void s11_rejectionExceedingNetBeforeRejectionFailsClosed() {
         assertThatThrownBy(() -> engine.evaluate(limited(
                 new BigDecimal("100.00"), new BigDecimal("100.00"), new BigDecimal("100.00"),

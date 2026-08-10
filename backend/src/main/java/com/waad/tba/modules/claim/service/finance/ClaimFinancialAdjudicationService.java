@@ -62,6 +62,7 @@ public class ClaimFinancialAdjudicationService {
             inputs.add(new MultiLineMultiBucketEngine.LineInput(
                     lineKey(line, index), requested, contractualTotal,
                     line.getCoveragePercentSnapshot(), zero(claim.getAppliedDiscountPercent()),
+                    Boolean.TRUE.equals(claim.getDiscountBeforeRejection()),
                     zero(line.getManualRefusedAmount()), Boolean.TRUE.equals(line.getRejected()),
                     quantity, balances));
         }

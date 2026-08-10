@@ -71,10 +71,8 @@ import com.waad.tba.support.PostgresIntegrationTestBase;
  * Claim.netProviderAmount verbatim -- see the 2026-05-01 double-deduction fix
  * documented there).
  *
- * WAAD-FIN-1.0 abolishes the historical discountBeforeRejection choice:
- * patient share is split first, explicit rejection is removed from insurer gross,
- * and the provider discount is applied to the remaining amount. The legacy flag may still be
- * present on old contract rows but must not change the canonical result.
+ * The effective dated contract terms choose whether discount is applied before
+ * or after explicit rejection. The chosen mode is snapshotted on the claim.
  */
 @SpringBootTest(classes = TbaWaadApplication.class)
 @ActiveProfiles("test")
@@ -192,22 +190,22 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void legacyBeforeFlagStillSubtractsRejectionBeforeDiscount() {
+    void beforeMode_discountsApprovedCoverageThenSubtractsRejection() {
         // gross=500, coverage=100% -> providerShare=500. reject 100.
-        // Canonical: base = 500-100 = 400; discount = 40; payable = 360.
+        // BEFORE: discount = 500*10% = 50; then rejection 100; payable = 350.
         ClaimViewDto claim = submitClaim(100, true, new BigDecimal("500.00"), new BigDecimal("100.00"));
 
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(claim.getRequestedAmount()).isEqualByComparingTo("500.00");
         assertThat(claim.getPatientCoPay()).isEqualByComparingTo("0.00");
         assertThat(claim.getRefusedAmount()).isEqualByComparingTo("100.00");
-        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("40.00");
-        assertThat(claim.getNetProviderAmount()).isEqualByComparingTo("360.00");
+        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("50.00");
+        assertThat(claim.getNetProviderAmount()).isEqualByComparingTo("350.00");
     }
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void legacyAfterFlagDoesNotChangeTheCanonicalDiscountThenRejectionOrder() {
+    void afterMode_removesRejectionThenDiscountsTheRemainder() {
         ClaimViewDto claim = submitClaim(100, false, new BigDecimal("500.00"), new BigDecimal("100.00"));
 
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
@@ -222,17 +220,17 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void legacyBeforeFlagWithCopay_usesRejectionBeforeDiscount() {
+    void beforeMode_withCopay_usesApprovedCoverageAsDiscountBase() {
         // gross=1000, coverage=80% -> patientShare=200, providerShare=800. reject 150.
-        // Canonical: base = 800-150 = 650; discount = 65; payable = 585.
+        // BEFORE: approved=800; discount=80; rejection=150; payable=570.
         ClaimViewDto claim = submitClaim(80, true, new BigDecimal("1000.00"), new BigDecimal("150.00"));
 
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
         assertThat(claim.getRequestedAmount()).isEqualByComparingTo("1000.00");
         assertThat(claim.getPatientCoPay()).isEqualByComparingTo("200.00");
         assertThat(claim.getRefusedAmount()).isEqualByComparingTo("150.00");
-        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("65.00");
-        assertThat(claim.getNetProviderAmount()).isEqualByComparingTo("585.00");
+        assertThat(claim.getCompanyDiscountAmount()).isEqualByComparingTo("80.00");
+        assertThat(claim.getNetProviderAmount()).isEqualByComparingTo("570.00");
 
         // The four components must reconstruct the gross exactly -- this is the
         // same identity the settlement screen relies on.
@@ -245,7 +243,7 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
 
     @Test
     @WithMockUser(username = "admin", roles = { "SUPER_ADMIN" })
-    void legacyAfterFlagWithCopayStillUsesTheCanonicalSingleOrder() {
+    void afterModeWithCopay_removesRejectionBeforeDiscount() {
         ClaimViewDto claim = submitClaim(80, false, new BigDecimal("1000.00"), new BigDecimal("150.00"));
 
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
@@ -394,17 +392,17 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
         assertThat(claim.getStatus()).isEqualTo(ClaimStatus.APPROVED);
 
         // What ClaimMapper actually computed and stored per line (correct,
-        // canonical rejection-before-discount order with the 100 rejection): 360.00.
+        // BEFORE contract timing with the 100 rejection): 350.00.
         var txTemplate = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
         BigDecimal correctNetFromLines = txTemplate.execute(status -> claimRepository.findById(claim.getId())
                 .orElseThrow()
                 .getLines().stream()
                 .map(l -> l.getCompanyShare() == null ? BigDecimal.ZERO : l.getCompanyShare())
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
-        assertThat(correctNetFromLines).isEqualByComparingTo("360.00");
+        assertThat(correctNetFromLines).isEqualByComparingTo("350.00");
 
         // The benefit bucket consumes the contractual settlement value (500),
-        // not the insurer's final payment (360).
+        // not the insurer's final payment (350).
         BigDecimal committedInLedger = benefitBucketConsumptionRepository
                 .findByClaimIdAndStatus(claim.getId(), BenefitBucketConsumption.Status.COMMITTED)
                 .stream()
@@ -417,7 +415,7 @@ class ClaimCopayDiscountRejectionOrderingIntegrationTest extends PostgresIntegra
         // this is finalizeSnapshot's own recomputation, not ClaimMapper's.
         BigDecimal actualClaimApprovedAmount = claim.getApprovedAmount();
 
-        assertThat(actualClaimApprovedAmount).isEqualByComparingTo("360.00");
+        assertThat(actualClaimApprovedAmount).isEqualByComparingTo("350.00");
         assertThat(committedInLedger).isNotEqualByComparingTo(actualClaimApprovedAmount);
     }
 }
