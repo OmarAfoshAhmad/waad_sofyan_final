@@ -31,6 +31,7 @@ temporary_dir="$(mktemp -d)"
 cookie_jar="${temporary_dir}/cookies.txt"
 seed_file="${temporary_dir}/WAAD_V50_DICTIONARY_RELEASE.json"
 login_file="${temporary_dir}/login.json"
+response_file="${temporary_dir}/response.json"
 cleanup() { rm -rf -- "${temporary_dir}"; }
 trap cleanup EXIT
 umask 077
@@ -50,15 +51,45 @@ ADMIN_IDENTIFIER="${admin_identifier}" ADMIN_PASSWORD="${admin_password}" python
   > "${login_file}"
 unset admin_password ADMIN_PASSWORD
 
-curl --fail-with-body --silent --show-error --cookie-jar "${cookie_jar}" \
+login_status="$(curl --silent --show-error --cookie-jar "${cookie_jar}" \
   --header 'Content-Type: application/json' --data-binary "@${login_file}" \
-  "${BASE_URL%/}/api/v1/auth/session/login" >/dev/null
+  --output "${response_file}" --write-out '%{http_code}' \
+  "${BASE_URL%/}/api/v1/auth/session/login")"
 rm -f -- "${login_file}"
+if [[ ! "${login_status}" =~ ^2 ]]; then
+  echo "Login failed with HTTP ${login_status}:" >&2
+  cat "${response_file}" >&2
+  echo >&2
+  exit 1
+fi
+
+# Session-authenticated mutations require Spring's synchronizer token. A safe
+# bootstrap GET issues the XSRF-TOKEN cookie; echo its decoded value in the
+# X-XSRF-TOKEN header on the subsequent multipart POST.
+bootstrap_status="$(curl --silent --show-error --cookie "${cookie_jar}" \
+  --cookie-jar "${cookie_jar}" --output "${response_file}" --write-out '%{http_code}' \
+  "${BASE_URL%/}/api/v1/auth/session/me")"
+if [[ ! "${bootstrap_status}" =~ ^2 ]]; then
+  echo "Session bootstrap failed with HTTP ${bootstrap_status}:" >&2
+  cat "${response_file}" >&2
+  echo >&2
+  exit 1
+fi
+xsrf_cookie="$(awk '$6 == "XSRF-TOKEN" { value=$7 } END { print value }' "${cookie_jar}")"
+[[ -n "${xsrf_cookie}" ]] || { echo "Server did not issue an XSRF-TOKEN cookie." >&2; exit 1; }
+xsrf_token="$(XSRF_COOKIE="${xsrf_cookie}" python3 -c 'import os,urllib.parse; print(urllib.parse.unquote(os.environ["XSRF_COOKIE"]))')"
 
 echo "Uploading and activating V50; this may take several minutes..."
-curl --fail-with-body --silent --show-error --cookie "${cookie_jar}" \
-  --form "file=@${seed_file};type=application/json" \
-  "${BASE_URL%/}/api/v1/medical-dictionary/releases/v50/import-and-activate" >/dev/null
+import_status="$(curl --silent --show-error --cookie "${cookie_jar}" \
+  --header "X-XSRF-TOKEN: ${xsrf_token}" --form "file=@${seed_file};type=application/json" \
+  --output "${response_file}" --write-out '%{http_code}' \
+  "${BASE_URL%/}/api/v1/medical-dictionary/releases/v50/import-and-activate")"
+if [[ ! "${import_status}" =~ ^2 ]]; then
+  echo "V50 import failed with HTTP ${import_status}:" >&2
+  cat "${response_file}" >&2
+  echo >&2
+  exit 1
+fi
 
 docker compose exec -T "${DB_SERVICE}" psql -U "${DB_USER}" -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "
 DO \$\$ DECLARE n integer; BEGIN
