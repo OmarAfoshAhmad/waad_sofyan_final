@@ -43,7 +43,6 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -252,7 +251,7 @@ class MedicalDictionaryServiceTest {
         }
         Pageable pageable = Pageable.ofSize(100);
 
-        when(priceListSessionRepository.searchSummaries(isNull(), isNull(), any(Pageable.class)))
+        when(priceListSessionRepository.findAll(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(sessions, pageable, 100));
 
         Page<?> result = service.listPriceListSessions(null, null, pageable);
