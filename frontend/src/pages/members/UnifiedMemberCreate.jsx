@@ -59,6 +59,7 @@ import { createPrincipalMember, uploadPhoto, GENDERS } from 'services/api/unifie
 import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
+import { MEMBER_FORM_MENU_PROPS, sanitizeMemberFieldValue, validateNationalNumber, validateLibyanPhone } from './member.shared';
 
 /**
  * Unified Member Create Component
@@ -66,15 +67,7 @@ import { openSnackbar } from 'api/snackbar';
 const UnifiedMemberCreate = () => {
   const navigate = useNavigate();
 
-  const menuProps = {
-    PaperProps: {
-      sx: {
-        '& .MuiMenuItem-root': { fontSize: '0.75rem' },
-        maxHeight: '18.75rem',
-        minWidth: '12.5rem' // Added for better visibility of long options
-      }
-    }
-  };
+  const menuProps = MEMBER_FORM_MENU_PROPS;
 
   // Loading & Error States
   const [loading, setLoading] = useState(false);
@@ -192,13 +185,9 @@ const UnifiedMemberCreate = () => {
 
     // 🛡️ SECURITY & UX: Input Restriction
     // Allow ONLY numbers for National ID and Phone
-    if ((field === 'nationalNumber' || field === 'phone' || field === 'employeeNumber') && typeof value === 'string') {
-      value = value.replace(/\D/g, ''); // Remove non-digits
-
-      // Limit Length
-      if (field === 'nationalNumber' && value.length > 12) return; // Max 12
-      if (field === 'phone' && value.length > 10) return; // Max 10
-    }
+    const sanitized = sanitizeMemberFieldValue(field, value);
+    if (!sanitized.accepted) return;
+    value = sanitized.value;
 
     if (field === 'employerOrganizationId') {
       handleEmployerChange(value);
@@ -278,17 +267,11 @@ const UnifiedMemberCreate = () => {
     }
 
     // 🛡️ SECURITY & DATA INTEGRITY VALIDATION
-    // 1. National ID: Must be exactly 12 digits
-    if (principalForm.nationalNumber && principalForm.nationalNumber.length !== 12) {
-      newErrors.nationalNumber = 'الرقم الوطني يجب أن يتكون من 12 خانة';
-    }
+    const nationalNumberError = validateNationalNumber(principalForm.nationalNumber);
+    if (nationalNumberError) newErrors.nationalNumber = nationalNumberError;
 
-    // 2. Phone Number: Libyan Format (091, 092, 093, 094, 095, 096)
-    if (principalForm.phone) {
-      if (!/^(091|092|094|093|095|096)\d{7}$/.test(principalForm.phone)) {
-        newErrors.phone = 'رقم الهاتف غير صحيح (يجب أن يبدأ بـ 09x ويتكون من 10 أرقام)';
-      }
-    }
+    const phoneError = validateLibyanPhone(principalForm.phone);
+    if (phoneError) newErrors.phone = phoneError;
 
     setErrors(newErrors);
 

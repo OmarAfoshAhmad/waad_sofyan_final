@@ -63,6 +63,13 @@ import {
 import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MemberAvatar } from '../../components/tba';
+import {
+  RELATIONSHIP_AR,
+  MEMBER_FORM_MENU_PROPS,
+  sanitizeMemberFieldValue,
+  validateNationalNumber,
+  validateLibyanPhone
+} from './member.shared';
 
 /**
  * Unified Member Edit Component
@@ -77,15 +84,7 @@ const UnifiedMemberEdit = () => {
     setTabValue(newValue);
   };
 
-  const menuProps = {
-    PaperProps: {
-      sx: {
-        '& .MuiMenuItem-root': { fontSize: '0.75rem' },
-        maxHeight: '18.75rem',
-        minWidth: '12.5rem'
-      }
-    }
-  };
+  const menuProps = MEMBER_FORM_MENU_PROPS;
 
   // Loading & States
   const [loading, setLoading] = useState(true);
@@ -130,11 +129,7 @@ const UnifiedMemberEdit = () => {
    */
   const getTabErrorCount = (index) => {
     if (index === 0) {
-      return (
-        (errors.fullName ? 1 : 0) +
-        (errors.nationalNumber ? 1 : 0) +
-        (errors.relationship ? 1 : 0)
-      );
+      return (errors.fullName ? 1 : 0) + (errors.nationalNumber ? 1 : 0) + (errors.relationship ? 1 : 0);
     }
     if (index === 1) {
       return errors.employerId ? 1 : 0;
@@ -219,11 +214,9 @@ const UnifiedMemberEdit = () => {
       value = eventOrValue;
     }
 
-    if ((field === 'nationalNumber' || field === 'phone' || field === 'employeeNumber') && typeof value === 'string') {
-      value = value.replace(/\D/g, '');
-      if (field === 'nationalNumber' && value.length > 12) return;
-      if (field === 'phone' && value.length > 10) return;
-    }
+    const sanitized = sanitizeMemberFieldValue(field, value);
+    if (!sanitized.accepted) return;
+    value = sanitized.value;
 
     setForm((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -271,13 +264,11 @@ const UnifiedMemberEdit = () => {
     if (isPrincipal && !form.employerId) newErrors.employerId = 'جهة العمل مطلوبة';
     if (!isPrincipal && !form.relationship) newErrors.relationship = 'صلة القرابة مطلوبة';
 
-    if (form.nationalNumber && form.nationalNumber.length !== 12) {
-      newErrors.nationalNumber = 'الرقم الوطني يجب أن يتكون من 12 خانة';
-    }
+    const nationalNumberError = validateNationalNumber(form.nationalNumber);
+    if (nationalNumberError) newErrors.nationalNumber = nationalNumberError;
 
-    if (form.phone && !/^(091|092|094|093|095|096)\d{7}$/.test(form.phone)) {
-      newErrors.phone = 'رقم الهاتف غير صحيح';
-    }
+    const phoneError = validateLibyanPhone(form.phone, { message: 'رقم الهاتف غير صحيح' });
+    if (phoneError) newErrors.phone = phoneError;
 
     setErrors(newErrors);
 
@@ -559,23 +550,7 @@ const UnifiedMemberEdit = () => {
                           >
                             {Object.entries(RELATIONSHIPS).map(([key, value]) => (
                               <MenuItem key={key} value={value}>
-                                {value === 'WIFE'
-                                  ? 'زوجة'
-                                  : value === 'HUSBAND'
-                                    ? 'زوج'
-                                    : value === 'SON'
-                                      ? 'ابن'
-                                      : value === 'DAUGHTER'
-                                        ? 'ابنة'
-                                        : value === 'FATHER'
-                                          ? 'أب'
-                                          : value === 'MOTHER'
-                                            ? 'أم'
-                                            : value === 'BROTHER'
-                                              ? 'أخ'
-                                              : value === 'SISTER'
-                                                ? 'أخت'
-                                                : value}
+                                {RELATIONSHIP_AR[value] || value}
                               </MenuItem>
                             ))}
                           </Select>
@@ -589,7 +564,12 @@ const UnifiedMemberEdit = () => {
                     <Grid size={{ xs: 12, md: 6 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel>حالة المستفيد</InputLabel>
-                        <Select value={form.status || 'ACTIVE'} label="حالة المستفيد" onChange={handleChange('status')} MenuProps={menuProps}>
+                        <Select
+                          value={form.status || 'ACTIVE'}
+                          label="حالة المستفيد"
+                          onChange={handleChange('status')}
+                          MenuProps={menuProps}
+                        >
                           <MenuItem value="ACTIVE">نشط</MenuItem>
                           <MenuItem value="SUSPENDED">موقوف</MenuItem>
                           <MenuItem value="PENDING">قيد المراجعة</MenuItem>
