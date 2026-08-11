@@ -202,12 +202,13 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Should throw exception if annual limit exceeded")
     void validateAmountLimits_Exceeded() {
-        // Arrange
-        when(claimRepository.sumApprovedAmountByMemberAndYear(anyLong(), anyInt(), anyList(), isNull()))
-                .thenReturn(new BigDecimal("9500.00")); // Spent 9500 of 10000
+        // Arrange -- WAAD-FIN-1.0 S4: the annual ceiling is checked against limit
+        // consumption (ClaimLine.limitConsumption), not approvedAmount.
+        when(claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(anyLong(), any(), any(), isNull()))
+                .thenReturn(new BigDecimal("9500.00")); // Consumed 9500 of 10000
 
         // Act & Assert
-        assertThrows(BusinessRuleException.class, () -> 
+        assertThrows(BusinessRuleException.class, () ->
             coverageService.validateAmountLimits(testMember, testPolicy, new BigDecimal("600.00"), LocalDate.now()));
     }
 
@@ -224,15 +225,15 @@ class BenefitPolicyCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("validateAmountLimits(excludeClaimId) must pass claimId to the annual-limit exclusion query")
+    @DisplayName("validateAmountLimits(excludeClaimId) must pass claimId to the annual-limit consumption query")
     void validateAmountLimits_PassesExcludeClaimIdToAnnualQuery() {
-        when(claimRepository.sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), eq(42L)))
+        when(claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(eq(1L), any(), any(), eq(42L)))
                 .thenReturn(new BigDecimal("60.00"));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(
                 testMember, testPolicy, new BigDecimal("100.00"), LocalDate.now(), 42L));
 
-        verify(claimRepository).sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), eq(42L));
+        verify(claimRepository).sumLimitConsumptionByMemberAndPeriodExcludingClaim(eq(1L), any(), any(), eq(42L));
     }
 
     @Test
@@ -269,11 +270,56 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Deprecated 4-arg overload must still work and imply no exclusion (null)")
     void validateAmountLimits_LegacyOverload_PassesNullExclude() {
-        when(claimRepository.sumApprovedAmountByMemberAndYear(eq(1L), anyInt(), anyList(), isNull()))
+        when(claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(eq(1L), any(), any(), isNull()))
                 .thenReturn(new BigDecimal("100.00"));
 
         assertDoesNotThrow(() -> coverageService.validateAmountLimits(
                 testMember, testPolicy, new BigDecimal("50.00"), LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("getLimitConsumedForYear queries the calendar-year window on the limit-consumption axis")
+    void getLimitConsumedForYear_QueriesCalendarYearWindow() {
+        when(claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
+                eq(1L), eq(LocalDate.of(2026, 1, 1)), eq(LocalDate.of(2026, 12, 31)), isNull()))
+                .thenReturn(new BigDecimal("345.00"));
+
+        BigDecimal consumed = coverageService.getLimitConsumedForYear(1L, 2026, null);
+
+        assertEquals(0, new BigDecimal("345.00").compareTo(consumed));
+    }
+
+    @Test
+    @DisplayName("Bulk getLimitConsumedForYear returns zero for every member the query didn't return a row for")
+    void getLimitConsumedForYear_Bulk_DefaultsMissingMembersToZero() {
+        when(claimRepository.sumLimitConsumptionByMembersAndPeriodExcludingClaim(
+                eq(java.util.Set.of(1L, 2L, 3L)), any(), any(), isNull()))
+                .thenReturn(java.util.List.of(
+                        row(1L, new BigDecimal("100.00")),
+                        row(3L, new BigDecimal("0.00"))));
+
+        var result = coverageService.getLimitConsumedForYear(java.util.Set.of(1L, 2L, 3L), 2026, null);
+
+        assertEquals(3, result.size());
+        assertEquals(0, new BigDecimal("100.00").compareTo(result.get(1L)));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.get(2L))); // never returned a row -- still present, zero
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.get(3L)));
+    }
+
+    @Test
+    @DisplayName("Bulk getLimitConsumedForYear never queries the database for an empty member set")
+    void getLimitConsumedForYear_Bulk_EmptyInputSkipsQuery() {
+        var result = coverageService.getLimitConsumedForYear(java.util.List.<Long>of(), 2026, null);
+
+        assertTrue(result.isEmpty());
+        verifyNoInteractions(claimRepository);
+    }
+
+    private com.waad.tba.modules.claim.projection.MemberLimitConsumptionProjection row(Long memberId, BigDecimal amount) {
+        return new com.waad.tba.modules.claim.projection.MemberLimitConsumptionProjection() {
+            @Override public Long getMemberId() { return memberId; }
+            @Override public BigDecimal getConsumedAmount() { return amount; }
+        };
     }
 
     private CoverageDecision coveredDecision(BenefitPolicyRule rule, Long categoryId) {

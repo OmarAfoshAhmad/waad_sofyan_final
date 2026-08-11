@@ -1,5 +1,6 @@
 package com.waad.tba.modules.member.service;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -601,38 +602,45 @@ public class UnifiedMemberService {
         // 3. Build response
         FamilyEligibilityResponseDto response = mapper.toFamilyEligibilityResponse(principal, dependents);
 
-        // 4. Populate financial details
+        // 4. Populate financial details -- ONE bulk read for principal + every
+        // dependent together (MemberFinancialSummaryService.getFinancialSummaries),
+        // not one query per family member. "usedAmount"/"remainingLimit" here are the
+        // WAAD-FIN-1.0 limit-consumption axis (limitConsumedAmount), never
+        // totalApproved -- see MemberFinancialSummaryDto's field docs for why the two
+        // are different numbers, and MEMBER_MODULE_CLOSURE_PLAN.md for the incident
+        // this axis previously caused (member window overstated remaining coverage).
         try {
-            var principalSummary = financialSummaryService.getFinancialSummary(principal.getId());
-            response.setAnnualLimit(principalSummary.getAnnualLimit());
-            response.setRemainingFamilyLimit(principalSummary.getRemainingCoverage());
+            List<Long> familyMemberIds = new ArrayList<>();
+            familyMemberIds.add(principal.getId());
+            if (response.getDependents() != null) {
+                response.getDependents().forEach(dep -> familyMemberIds.add(dep.getId()));
+            }
+            var summariesByMember = financialSummaryService.getFinancialSummaries(familyMemberIds);
 
-            // Map financial info to Principal DTO
-            if (response.getPrincipal() != null) {
-                response.getPrincipal().setAnnualLimit(principalSummary.getAnnualLimit());
-                response.getPrincipal().setUsedAmount(principalSummary.getTotalApproved());
-                response.getPrincipal().setRemainingLimit(principalSummary.getRemainingCoverage());
-                response.getPrincipal()
-                        .setUsagePercentage(principalSummary.getUtilizationPercent() != null
-                                ? principalSummary.getUtilizationPercent().doubleValue()
-                                : 0.0);
+            var principalSummary = summariesByMember.get(principal.getId());
+            if (principalSummary != null) {
+                response.setAnnualLimit(principalSummary.getAnnualLimit());
+                response.setRemainingFamilyLimit(principalSummary.getRemainingCoverage());
+
+                if (response.getPrincipal() != null) {
+                    response.getPrincipal().setAnnualLimit(principalSummary.getAnnualLimit());
+                    response.getPrincipal().setUsedAmount(principalSummary.getLimitConsumedAmount());
+                    response.getPrincipal().setRemainingLimit(principalSummary.getRemainingCoverage());
+                    response.getPrincipal().setUsagePercentage(toDouble(principalSummary.getUtilizationPercent()));
+                }
             }
 
-            // Map financial info to Dependents DTOs
             if (response.getDependents() != null) {
                 for (var depDto : response.getDependents()) {
-                    try {
-                        var depSummary = financialSummaryService.getFinancialSummary(depDto.getId());
-                        depDto.setAnnualLimit(depSummary.getAnnualLimit());
-                        depDto.setUsedAmount(depSummary.getTotalApproved());
-                        depDto.setRemainingLimit(depSummary.getRemainingCoverage());
-                        depDto.setUsagePercentage(depSummary.getUtilizationPercent() != null
-                                ? depSummary.getUtilizationPercent().doubleValue()
-                                : 0.0);
-                    } catch (Exception e) {
-                        log.warn("⚠️ Failed to load financial summary for dependent ID={}: {}", depDto.getId(),
-                                e.getMessage());
+                    var depSummary = summariesByMember.get(depDto.getId());
+                    if (depSummary == null) {
+                        log.warn("⚠️ No financial summary returned for dependent ID={}", depDto.getId());
+                        continue;
                     }
+                    depDto.setAnnualLimit(depSummary.getAnnualLimit());
+                    depDto.setUsedAmount(depSummary.getLimitConsumedAmount());
+                    depDto.setRemainingLimit(depSummary.getRemainingCoverage());
+                    depDto.setUsagePercentage(toDouble(depSummary.getUtilizationPercent()));
                 }
             }
         } catch (Exception e) {
@@ -645,6 +653,11 @@ public class UnifiedMemberService {
                 response.getEmployerOrgName() != null ? response.getEmployerOrgName() : "NONE");
 
         return response;
+    }
+
+    /** Null-safe BigDecimal-to-double conversion for the DTO's Double-typed percentage fields. */
+    private static double toDouble(BigDecimal value) {
+        return value != null ? value.doubleValue() : 0.0;
     }
 
     /**

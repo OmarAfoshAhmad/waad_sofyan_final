@@ -65,6 +65,11 @@ class ClaimFinancialSnapshotServiceTest {
                 .companyShare(new BigDecimal("648.00"))
                 .patientShare(new BigDecimal("180.00"))
                 .refusedAmount(new BigDecimal("172.00"))
+                // Deliberately distinct from companyShare: proves the ceiling check
+                // reads ClaimFinancialTotals.sumLimitConsumption (WAAD-FIN-1.0 S4's
+                // axis), not approvedAmount -- the two would be indistinguishable in
+                // this test if they happened to share a value.
+                .limitConsumption(new BigDecimal("700.00"))
                 .build();
     }
 
@@ -112,7 +117,7 @@ class ClaimFinancialSnapshotServiceTest {
         verify(memberRepository, times(1)).findByIdWithLock(10L);
         verify(claimFinancialInvariantGuard, times(1)).assertConsistent(claim);
         verify(benefitPolicyCoverageService, times(1)).validateAmountLimits(
-                eq(member), eq(member.getBenefitPolicy()), eq(new BigDecimal("648.00")),
+                eq(member), eq(member.getBenefitPolicy()), eq(new BigDecimal("700.00")),
                 eq(claim.getServiceDate()), eq(claim.getId()));
     }
 

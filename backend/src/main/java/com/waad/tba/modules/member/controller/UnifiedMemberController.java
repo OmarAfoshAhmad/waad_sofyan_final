@@ -1069,7 +1069,9 @@ public class UnifiedMemberController {
                 result.put("memberId", memberId);
                 result.put("memberName", summary.getFullName());
                 result.put("annualLimit", summary.getAnnualLimit());
-                result.put("usedAmount", summary.getTotalApproved());
+                // WAAD-FIN-1.0 S4: "used against the limit" is limitConsumedAmount, never
+                // totalApproved -- see MemberFinancialSummaryDto's field docs.
+                result.put("usedAmount", summary.getLimitConsumedAmount());
                 result.put("remainingLimit", summary.getRemainingCoverage());
                 result.put("usagePercentage", summary.getUtilizationPercent());
                 result.put("policyName", summary.getPolicyName());

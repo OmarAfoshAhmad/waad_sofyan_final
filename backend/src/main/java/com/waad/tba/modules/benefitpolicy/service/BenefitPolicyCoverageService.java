@@ -30,7 +30,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -547,7 +550,12 @@ public class BenefitPolicyCoverageService {
         // Check annual limit from BenefitPolicy
         BigDecimal annualLimit = benefitPolicy.getAnnualLimit();
         if (annualLimit != null && annualLimit.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal usedAmount = calculateUsedAmountForYear(member.getId(), serviceDate.getYear(), excludeClaimId);
+            // WAAD-FIN-1.0 S4: the ceiling tracks limit consumption
+            // (settlement value), not approvedAmount -- see getLimitConsumedForYear's
+            // javadoc. Callers must pass an amount on the same axis (see
+            // ClaimFinancialSnapshotService, which passes the claim's actual
+            // limitConsumption total, not its approvedAmount).
+            BigDecimal usedAmount = getLimitConsumedForYear(member.getId(), serviceDate.getYear(), excludeClaimId);
             BigDecimal remainingLimit = annualLimit.subtract(usedAmount);
 
             if (requestedAmount.compareTo(remainingLimit) > 0) {
@@ -754,19 +762,59 @@ public class BenefitPolicyCoverageService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Calculate used amount for a member in a specific year using DB aggregation.
-     * PERFORMANCE: O(1) query replaces loading all claims into memory.
+     * What the member's annual benefit limit has consumed this year -- the
+     * single source of truth for "used against the ceiling", for exactly one
+     * member. WAAD-FIN-1.0 S4: a limit consumes settlement value
+     * ({@code ClaimLine.limitConsumption}), never what the insurer ultimately
+     * paid ({@code Claim.approvedAmount}) -- those differ by construction
+     * whenever a limit, coverage split, contract discount, or rejection
+     * applied. Every caller that needs "how much of the annual limit is
+     * used" (the approval gate, the member window, family eligibility) must
+     * go through this method or {@link #getLimitConsumedForYear(Collection, int, Long)}
+     * -- never re-derive it from approvedAmount.
+     *
+     * @param memberId      the member whose consumption is being read
+     * @param year          the benefit year (annual limits reset on calendar years)
+     * @param excludeClaimId the claim currently being validated, if it already has a
+     *                       row (so it is not counted against its own prior usage);
+     *                       null when no such row exists yet
      */
-    private BigDecimal calculateUsedAmountForYear(Long memberId, int year) {
-        return calculateUsedAmountForYear(memberId, year, null);
+    public BigDecimal getLimitConsumedForYear(Long memberId, int year, Long excludeClaimId) {
+        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        LocalDate yearEnd = LocalDate.of(year, 12, 31);
+        return claimRepository.sumLimitConsumptionByMemberAndPeriodExcludingClaim(
+                memberId, yearStart, yearEnd, excludeClaimId);
     }
 
-    private BigDecimal calculateUsedAmountForYear(Long memberId, int year, Long excludeClaimId) {
-        List<com.waad.tba.modules.claim.entity.ClaimStatus> validStatuses = List.of(
-                com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED,
-                com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED,
-                com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED);
-        return claimRepository.sumApprovedAmountByMemberAndYear(memberId, year, validStatuses, excludeClaimId);
+    /**
+     * Bulk counterpart of {@link #getLimitConsumedForYear(Long, int, Long)} --
+     * one query for an entire family instead of one query per member, so
+     * reading a principal-plus-dependents window costs O(1) queries
+     * regardless of family size. Members with no consumption this year are
+     * present in the result with {@link BigDecimal#ZERO}, never absent --
+     * callers must not treat a missing key as "unknown" and a present zero
+     * key as "nothing used" differently.
+     *
+     * @param memberIds     every member whose consumption is being read together
+     * @param year          the benefit year (annual limits reset on calendar years)
+     * @param excludeClaimId the claim currently being validated, if it already has a
+     *                       row; null when no such row exists yet
+     */
+    public Map<Long, BigDecimal> getLimitConsumedForYear(Collection<Long> memberIds, int year, Long excludeClaimId) {
+        Map<Long, BigDecimal> byMember = new HashMap<>();
+        for (Long memberId : memberIds) {
+            byMember.put(memberId, BigDecimal.ZERO);
+        }
+        if (memberIds.isEmpty()) {
+            return byMember;
+        }
+        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        LocalDate yearEnd = LocalDate.of(year, 12, 31);
+        for (var row : claimRepository.sumLimitConsumptionByMembersAndPeriodExcludingClaim(
+                memberIds, yearStart, yearEnd, excludeClaimId)) {
+            byMember.put(row.getMemberId(), row.getConsumedAmount());
+        }
+        return byMember;
     }
 
     /**
@@ -806,7 +854,10 @@ public class BenefitPolicyCoverageService {
 
     /**
      * Get remaining coverage given an already-resolved policy (supports
-     * employer-level fallback).
+     * employer-level fallback). WAAD-FIN-1.0 S4: "remaining" is
+     * {@code annualLimit - consumed}, where consumed is limit consumption
+     * (settlement value), never approvedAmount -- see
+     * {@link #getLimitConsumedForYear(Long, int, Long)}.
      */
     public BigDecimal getRemainingCoverage(BenefitPolicy policy, Long memberId, LocalDate asOfDate) {
         if (policy == null) {
@@ -818,7 +869,7 @@ public class BenefitPolicyCoverageService {
             return null; // Unlimited or not configured
         }
 
-        BigDecimal used = calculateUsedAmountForYear(memberId, asOfDate.getYear());
+        BigDecimal used = getLimitConsumedForYear(memberId, asOfDate.getYear(), null);
         return annualLimit.subtract(used).max(BigDecimal.ZERO);
     }
 
