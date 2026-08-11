@@ -783,7 +783,7 @@ public class UnifiedMemberService {
             return new EmployerScopeFilter(false, employerId);
         }
 
-        static EmployerScopeFilter blocked() {
+        static EmployerScopeFilter blockedResult() {
             return new EmployerScopeFilter(true, null);
         }
     }
@@ -820,13 +820,13 @@ public class UnifiedMemberService {
         if (!authorizationService.canEmployerViewMembers(currentUser)) {
             log.warn("❌ EMPLOYER_ADMIN user {} attempted to {} members but feature VIEW_MEMBERS is disabled",
                     currentUser.getUsername(), action);
-            return EmployerScopeFilter.blocked();
+            return EmployerScopeFilter.blockedResult();
         }
 
         Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
         if (employerFilter == null) {
             log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
-            return EmployerScopeFilter.blocked();
+            return EmployerScopeFilter.blockedResult();
         }
 
         log.info("🔒 EMPLOYER_ADMIN filter applied: user={}, action={}, locked to employerId={}",
