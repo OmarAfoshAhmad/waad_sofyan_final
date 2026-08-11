@@ -87,7 +87,7 @@ const DependentModal = ({ open, onClose, dependent, principalId, onSave, existin
       if (isEditMode && dependent) {
         setFormData({
           fullName: dependent.fullName || dependent.nameAr || dependent.nameEn || '',
-          nationalNumber: dependent.nationalNumber || dependent.civilId || '',
+          nationalNumber: dependent.nationalNumber || '',
           birthDate: dependent.birthDate ? dayjs(dependent.birthDate) : null,
           gender: dependent.gender || '',
           relationship: dependent.relationship || '',

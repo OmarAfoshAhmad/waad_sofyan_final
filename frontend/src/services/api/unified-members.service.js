@@ -125,7 +125,7 @@ export const countMembers = async (filters = {}) => {
  *
  * @param {Object} criteria - Search criteria
  * @param {string} [criteria.fullName] - Full name search
- * @param {string} [criteria.civilId] - Civil ID filter
+ * @param {string} [criteria.nationalNumber] - National number filter
  * @param {string} [criteria.barcode] - Barcode filter
  * @param {string} [criteria.cardNumber] - Card number filter
  * @param {number} [criteria.organizationId] - Organization filter

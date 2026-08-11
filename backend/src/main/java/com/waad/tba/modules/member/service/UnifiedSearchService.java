@@ -162,7 +162,7 @@ public class UnifiedSearchService {
         }
 
         // Use the robust search method with JOIN FETCH to prevent 500 errors (LazyInitialization)
-        // This method also searches by civilId and cardNumber as fallback
+        // This method also searches by nationalNumber and cardNumber as fallback
         List<Member> members;
         if (employerId != null) {
             members = memberRepository.searchByEmployerId(name, employerId);

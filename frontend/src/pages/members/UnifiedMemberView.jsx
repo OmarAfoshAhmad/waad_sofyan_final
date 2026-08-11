@@ -908,7 +908,7 @@ const UnifiedMemberView = () => {
                                     />
                                   </TableCell>
                                   <TableCell align="center">{dep.cardNumber || '-'}</TableCell>
-                                  <TableCell align="center">{dep.nationalNumber || dep.civilId || '-'}</TableCell>
+                                  <TableCell align="center">{dep.nationalNumber || '-'}</TableCell>
                                   <TableCell align="center">
                                     {dep.gender === GENDERS.MALE ? 'ذكر' : dep.gender === GENDERS.FEMALE ? 'أنثى' : '-'}
                                   </TableCell>

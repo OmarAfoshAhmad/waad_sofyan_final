@@ -132,7 +132,6 @@ class MemberExcelImportServiceTest {
         });
 
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());
-        when(memberRepository.findByCivilId(anyString())).thenReturn(Optional.empty());
         when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
         when(cardNumberGeneratorService.generateUniqueForPrincipal(any(Member.class))).thenReturn("CARD-0001",
                 "CARD-0002");

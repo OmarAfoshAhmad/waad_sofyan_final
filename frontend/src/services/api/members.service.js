@@ -74,7 +74,6 @@ export const normalizeMemberRequest = (payload) => {
     'phone',
     'email',
     'address',
-    'civilId',
     'policyNumber',
     'benefitPolicyId',
     'startDate',
@@ -198,7 +197,7 @@ export const getMemberById = async (id) => {
  * @param {Object} payload - MemberCreateDto
  * @param {string} payload.name - Full name in Arabic (required) - will be normalized to fullName
  * @param {string} payload.name - Full name in English (optional) - will be normalized to fullName
- * @param {string} payload.civilId - Civil ID (OPTIONAL - can be null)
+ * @param {string} payload.nationalNumber - National number (OPTIONAL - can be null)
  * @param {string} payload.birthDate - Birth date yyyy-MM-dd (OPTIONAL)
  * @param {string} payload.gender - Gender: MALE, FEMALE, UNDEFINED (OPTIONAL)
  * @param {number} payload.employerId - Employer ID (required)
@@ -399,18 +398,6 @@ export const getMemberByCard = async (cardNumber) => {
  */
 export const getMemberByBarcode = async (barcode) => {
   const response = await axiosClient.get(`${BASE_URL}/barcode/${encodeURIComponent(barcode)}`);
-  return normalizeMemberResponse(unwrap(response));
-};
-
-/**
- * Get member by civil ID
- * Endpoint: GET /api/members/civil-id/{civilId}
- * Note: Civil ID is optional and NOT required for eligibility
- * @param {string} civilId - Civil ID
- * @returns {Promise<Object>} MemberViewDto
- */
-export const getMemberByCivilId = async (civilId) => {
-  const response = await axiosClient.get(`${BASE_URL}/civil-id/${encodeURIComponent(civilId)}`);
   return normalizeMemberResponse(unwrap(response));
 };
 
@@ -820,7 +807,6 @@ const membersService = {
   advancedSearchMembers,
   getMemberByCard,
   getMemberByBarcode,
-  getMemberByCivilId,
   // Import operations
   previewImport,
   executeImport,

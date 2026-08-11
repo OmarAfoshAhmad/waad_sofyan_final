@@ -28,7 +28,7 @@ public class ExcelMappingSuggestionDto {
 
     /**
      * Suggested Member field name
-     * Examples: "civilId", "fullName", "email", "phone", etc.
+     * Examples: "nationalNumber", "fullName", "email", "phone", etc.
      */
     private String suggestedField;
 

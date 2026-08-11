@@ -70,7 +70,7 @@ public class MemberImportRowProcessor {
         String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
         String fullName = parser.getFieldValue(row, fieldToColumnIndex, "fullName");
         String employerName = parser.getFieldValue(row, fieldToColumnIndex, "employer");
-        String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
+        String nationalNumber = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
         String membershipStatus = parser.getFieldValue(row, fieldToColumnIndex, "memberStatus");
 
         if (fullName == null || fullName.isBlank()) {
@@ -81,7 +81,7 @@ public class MemberImportRowProcessor {
             hasError = true;
         }
 
-        if (civilId == null || civilId.isBlank()) {
+        if (nationalNumber == null || nationalNumber.isBlank()) {
             rowWarnings.add("الرقم الوطني غير موجود - الحقل اختياري لكن يُفضّل إضافته");
             hasWarning = true;
         }
@@ -171,7 +171,7 @@ public class MemberImportRowProcessor {
             Member existingMember) {
 
         String fullName = parser.getFieldValue(row, fieldToColumnIndex, "fullName");
-        String civilId = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
+        String nationalNumber = parser.getFieldValue(row, fieldToColumnIndex, "nationalNumber");
         String policyNumber = parser.getFieldValue(row, fieldToColumnIndex, "policyNumber");
         String startDateStr = parser.getFieldValue(row, fieldToColumnIndex, "startDate");
         String memberStatusStr = parser.getFieldValue(row, fieldToColumnIndex, "memberStatus");
@@ -247,8 +247,8 @@ public class MemberImportRowProcessor {
         }
         member.setBarcode(member.getCardNumber());
 
-        if (civilId != null && !civilId.isBlank())
-            member.setNationalNumber(civilId);
+        if (nationalNumber != null && !nationalNumber.isBlank())
+            member.setNationalNumber(nationalNumber);
 
         // Optional fields
         String birthDateStr = parser.getFieldValue(row, fieldToColumnIndex, "birthDate");

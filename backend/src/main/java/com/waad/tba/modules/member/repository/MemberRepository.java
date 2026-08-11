@@ -29,8 +29,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @Query("SELECT DISTINCT m.employer.id FROM Member m")
        List<Long> findDistinctEmployerIds();
 
-       Optional<Member> findByCivilId(String civilId);
-
        Optional<Member> findByCardNumber(String cardNumber);
 
        @Query("SELECT m FROM Member m WHERE REPLACE(m.cardNumber, '-', '') = :cardNumber")
@@ -65,8 +63,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @Query("SELECT m FROM Member m WHERE m.status = :status AND m.active = true")
        List<com.waad.tba.modules.member.dto.MemberLightProjection> findAllActiveMembersLight(@Param("status") Member.MemberStatus status);
 
-       boolean existsByCivilId(String civilId);
-
        boolean existsByCardNumber(String cardNumber);
 
        boolean existsByFullNameIgnoreCaseAndEmployerIdAndActiveTrue(String fullName, Long employerOrgId);
@@ -75,8 +71,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
                      String fullName,
                      Long parentId,
                      Member.Relationship relationship);
-
-       boolean existsByCivilIdAndIdNot(String civilId, Long id);
 
        boolean existsByCardNumberAndIdNot(String cardNumber, Long id);
 
@@ -108,7 +102,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        @Query("SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE " +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                     "LOWER(m.civilId) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                     "LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
                      "LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :query, '%'))")
        List<Member> search(@Param("query") String query);
 
@@ -226,7 +220,7 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
         */
        @Query("SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE m.employer.id = :employerOrgId AND (" +
                      "LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-                     "LOWER(m.civilId) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                     "LOWER(m.nationalNumber) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
                      "LOWER(m.cardNumber) LIKE LOWER(CONCAT('%', :query, '%')))")
        List<Member> searchByEmployerId(@Param("query") String query, @Param("employerOrgId") Long employerOrgId);
 
@@ -317,11 +311,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        default List<Member> findByNameContainingIgnoreCaseAndEmployerId(String name, Long employerOrgId) {
               return findByNameContainingAndEmployerId(name, employerOrgId);
        }
-
-       /**
-        * Find member by civil ID and employer organization ID
-        */
-       Optional<Member> findByCivilIdAndEmployerId(String civilId, Long employerOrgId);
 
        /**
         * Find member by card number and employer organization ID

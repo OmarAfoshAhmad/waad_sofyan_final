@@ -152,7 +152,7 @@ public class UnifiedMemberController {
          * {
          *   "nameAr": "أحمد محمد",
          *   "nameEn": "Ahmed Mohammed",
-         *   "civilId": "28012345678",  // OPTIONAL
+         *   "nationalNumber": "28012345678",  // OPTIONAL
          *   "birthDate": "1990-05-15",
          *   "gender": "MALE",
          *   "organizationId": 1,
@@ -161,7 +161,7 @@ public class UnifiedMemberController {
          *     {
          *       "nameAr": "فاطمة أحمد",
          *       "nameEn": "Fatima Ahmed",
-         *       "civilId": "30012345679",  // OPTIONAL
+         *       "nationalNumber": "30012345679",  // OPTIONAL
          *       "birthDate": "1995-03-20",
          *       "gender": "FEMALE",
          *       "relationship": "SPOUSE"
@@ -189,7 +189,7 @@ public class UnifiedMemberController {
          *   "cardNumber": "000123",
          *   "nameAr": "أحمد محمد",
          *   "nameEn": "Ahmed Mohammed",
-         *   "civilId": "28012345678",
+         *   "nationalNumber": "28012345678",
          *   "birthDate": "1990-05-15",
          *   "gender": "MALE",
          *   "status": "PENDING",
@@ -217,8 +217,8 @@ public class UnifiedMemberController {
          * @return ResponseEntity with created MemberViewDto (includes Principal +
          *         Dependents)
          * @throws ValidationException if DTO validation fails
-         * @throws BusinessException   if business rules violated (e.g., duplicate Civil
-         *                             ID if provided)
+         * @throws BusinessException   if business rules violated (e.g., duplicate name
+         *                             within the same employer)
          */
         @PostMapping
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN')")
@@ -227,11 +227,11 @@ public class UnifiedMemberController {
                         "Supports inline creation of 0 to N Dependents. Each Dependent receives a Card Number with suffix (e.g., 000123-01). "
                         +
                         "Transaction-safe: all members created atomically or rolled back on error. " +
-                        "Civil ID is OPTIONAL for both Principal and Dependents.", requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = MemberCreateDto.class), examples = @ExampleObject(name = "Principal with Dependents", value = """
+                        "National number is OPTIONAL for both Principal and Dependents.", requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(mediaType = "application/json", schema = @Schema(implementation = MemberCreateDto.class), examples = @ExampleObject(name = "Principal with Dependents", value = """
                                         {
                                           "nameAr": "أحمد محمد",
                                           "nameEn": "Ahmed Mohammed",
-                                          "civilId": "28012345678",
+                                          "nationalNumber": "28012345678",
                                           "birthDate": "1990-05-15",
                                           "gender": "MALE",
                                           "organizationId": 1,
@@ -240,7 +240,7 @@ public class UnifiedMemberController {
                                             {
                                               "nameAr": "فاطمة أحمد",
                                               "nameEn": "Fatima Ahmed",
-                                              "civilId": "30012345679",
+                                              "nationalNumber": "30012345679",
                                               "birthDate": "1995-03-20",
                                               "gender": "FEMALE",
                                               "relationship": "SPOUSE"
@@ -465,7 +465,7 @@ public class UnifiedMemberController {
          * </p>
          * <ul>
          * <li>nameAr/nameEn: Partial name match (case-insensitive)</li>
-         * <li>civilId: Exact or partial Civil ID match</li>
+         * <li>nationalNumber: Exact or partial national number match</li>
          * <li>barcode: Exact or partial Barcode match</li>
          * <li>cardNumber: Exact or partial Card Number match</li>
          * <li>employerId: Employer filter</li>
@@ -473,10 +473,10 @@ public class UnifiedMemberController {
          * <li>status: Status filter</li>
          * <li>type: Member type filter</li>
          * </ul>
-         * 
+         *
          * @param nameAr          Arabic name filter
          * @param nameEn          English name filter
-         * @param civilId         Civil ID filter
+         * @param nationalNumber  National number filter
          * @param barcode         Barcode filter
          * @param cardNumber      Card Number filter
          * @param employerId      Employer filter
@@ -489,14 +489,14 @@ public class UnifiedMemberController {
          */
         @GetMapping("/search")
         @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'EMPLOYER_ADMIN', 'PROVIDER_STAFF', 'MEDICAL_REVIEWER')")
-        @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, Civil ID, Barcode, and Card Number. "
+        @Operation(summary = "Advanced Member search", description = "Searches Members using multiple criteria. Supports partial matching for names, national number, Barcode, and Card Number. "
                         +
                         "Combines filters with AND logic. Returns paginated results. " +
                         "Useful for finding specific members or filtering by complex criteria.", parameters = {
                                         @Parameter(name = "fullName", description = "Full name (searches both Arabic and English names)"),
                                         @Parameter(name = "nameAr", description = "Arabic name (partial match)"),
                                         @Parameter(name = "nameEn", description = "English name (partial match)"),
-                                        @Parameter(name = "civilId", description = "Civil ID (partial match)"),
+                                        @Parameter(name = "nationalNumber", description = "National number (partial match)"),
                                         @Parameter(name = "barcode", description = "Barcode (partial match)"),
                                         @Parameter(name = "cardNumber", description = "Card Number (partial match)"),
                                         @Parameter(name = "employerId", description = "Employer ID"),
@@ -513,7 +513,7 @@ public class UnifiedMemberController {
                         @RequestParam(name = "fullName", required = false) String fullName,
                         @RequestParam(name = "nameAr", required = false) String nameAr,
                         @RequestParam(name = "nameEn", required = false) String nameEn,
-                        @RequestParam(name = "civilId", required = false) String civilId,
+                        @RequestParam(name = "nationalNumber", required = false) String nationalNumber,
                         @RequestParam(name = "barcode", required = false) String barcode,
                         @RequestParam(name = "cardNumber", required = false) String cardNumber,
                         @RequestParam(name = "employerId", required = false) Long employerId,
@@ -526,8 +526,8 @@ public class UnifiedMemberController {
                         @RequestParam(name = "sort", defaultValue = "createdAt") String sort,
                         @RequestParam(name = "direction", defaultValue = "DESC") String direction) {
 
-                log.info("Searching Members: fullName={}, nameAr={}, civilId={}, barcode={}, cardNumber={}, deleted={}",
-                                fullName, nameAr, civilId, barcode, cardNumber, deleted);
+                log.info("Searching Members: fullName={}, nameAr={}, nationalNumber={}, barcode={}, cardNumber={}, deleted={}",
+                                fullName, nameAr, nationalNumber, barcode, cardNumber, deleted);
 
                 // If fullName is provided, use it for both nameAr and nameEn
                 String searchNameAr = (fullName != null && !fullName.trim().isEmpty()) ? fullName : nameAr;
@@ -536,7 +536,7 @@ public class UnifiedMemberController {
                 Pageable pageable = safePageRequest(page, size, sort, direction);
 
                 Page<MemberViewDto> results = unifiedMemberService.searchMembers(
-                                searchNameAr, searchNameEn, civilId, barcode, cardNumber,
+                                searchNameAr, searchNameEn, nationalNumber, barcode, cardNumber,
                                 employerId, benefitPolicyId, status, type, deleted, pageable);
 
                 log.info("Search completed: found {} results", results.getTotalElements());
@@ -655,7 +655,7 @@ public class UnifiedMemberController {
         public ResponseEntity<byte[]> downloadBeneficiariesPdf(
                         @RequestParam(name = "nameAr", required = false) String nameAr,
                         @RequestParam(name = "nameEn", required = false) String nameEn,
-                        @RequestParam(name = "civilId", required = false) String civilId,
+                        @RequestParam(name = "nationalNumber", required = false) String nationalNumber,
                         @RequestParam(name = "barcode", required = false) String barcode,
                         @RequestParam(name = "cardNumber", required = false) String cardNumber,
                         @RequestParam(name = "organizationId", required = false) Long organizationId,
@@ -671,7 +671,7 @@ public class UnifiedMemberController {
                 Pageable pageable = PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "id"));
 
                 Page<MemberViewDto> membersPage = unifiedMemberService.searchMembers(
-                                nameAr, nameEn, civilId, barcode, cardNumber,
+                                nameAr, nameEn, nationalNumber, barcode, cardNumber,
                                 organizationId, benefitPolicyId, status, type, false, pageable);
 
                 List<MemberViewDto> members = membersPage.getContent();
@@ -780,7 +780,7 @@ public class UnifiedMemberController {
          * <b>Updatable Fields:</b>
          * </p>
          * <ul>
-         * <li>Personal information (names, birth date, gender, Civil ID)</li>
+         * <li>Personal information (names, birth date, gender, national number)</li>
          * <li>Contact information (phone, email, address)</li>
          * <li>Organization/Benefit Policy (for Principals)</li>
          * <li>Relationship (for Dependents)</li>

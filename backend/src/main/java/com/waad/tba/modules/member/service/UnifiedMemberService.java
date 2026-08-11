@@ -993,7 +993,7 @@ public class UnifiedMemberService {
      * 
      * @param nameAr          Arabic name filter
      * @param nameEn          English name filter
-     * @param civilId         Civil ID filter
+     * @param nationalNumber  National number filter
      * @param barcode         Barcode filter
      * @param cardNumber      Card number filter
      * @param employerId      Employer filter
@@ -1011,7 +1011,7 @@ public class UnifiedMemberService {
     public Page<MemberViewDto> searchMembers(
             String nameAr,
             String nameEn,
-            String civilId,
+            String nationalNumber,
             String barcode,
             String cardNumber,
             Long employerId,
@@ -1021,11 +1021,11 @@ public class UnifiedMemberService {
             boolean deleted,
             Pageable pageable) {
 
-        log.info("Searching members: nameAr={}, civilId={}, barcode={}, cardNumber={}",
-                nameAr, civilId, barcode, cardNumber);
+        log.info("Searching members: nameAr={}, nationalNumber={}, barcode={}, cardNumber={}",
+                nameAr, nationalNumber, barcode, cardNumber);
 
         boolean hasNameSearch = hasText(nameAr) || hasText(nameEn);
-        boolean hasExactIdentifierSearch = hasText(civilId) || hasText(barcode) || hasText(cardNumber);
+        boolean hasExactIdentifierSearch = hasText(nationalNumber) || hasText(barcode) || hasText(cardNumber);
         if (hasNameSearch && !hasExactIdentifierSearch
                 && isShortTextSearch(nameAr) && isShortTextSearch(nameEn)) {
             log.info("Skipping member name search shorter than {} characters", MIN_MEMBER_TEXT_SEARCH_LENGTH);
@@ -1051,13 +1051,13 @@ public class UnifiedMemberService {
                             cb.like(cb.lower(root.get("fullName")), searchEn),
                             cb.like(cb.lower(root.get("cardNumber")), searchAr),
                             cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                            cb.like(root.get("civilId"), searchAr),
+                            cb.like(cb.lower(root.get("nationalNumber")), searchAr),
                             cb.like(root.get("barcode"), searchAr)));
                 } else {
                     predicates.add(cb.or(
                             cb.like(cb.lower(root.get("fullName")), searchAr),
                             cb.like(cb.lower(root.get("cardNumber")), searchAr),
-                            cb.like(root.get("civilId"), searchAr),
+                            cb.like(cb.lower(root.get("nationalNumber")), searchAr),
                             cb.like(root.get("barcode"), searchAr)));
                 }
             } else if (nameEn != null && !nameEn.trim().isEmpty()) {
@@ -1065,12 +1065,12 @@ public class UnifiedMemberService {
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("fullName")), searchEn),
                         cb.like(cb.lower(root.get("cardNumber")), searchEn),
-                        cb.like(root.get("civilId"), searchEn),
+                        cb.like(cb.lower(root.get("nationalNumber")), searchEn),
                         cb.like(root.get("barcode"), searchEn)));
             }
 
-            if (civilId != null && !civilId.trim().isEmpty()) {
-                predicates.add(cb.like(root.get("civilId"), "%" + civilId + "%"));
+            if (nationalNumber != null && !nationalNumber.trim().isEmpty()) {
+                predicates.add(cb.like(root.get("nationalNumber"), "%" + nationalNumber + "%"));
             }
 
             if (barcode != null && !barcode.trim().isEmpty()) {
