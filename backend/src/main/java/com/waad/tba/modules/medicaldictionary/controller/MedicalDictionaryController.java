@@ -109,10 +109,11 @@ public class MedicalDictionaryController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY', 'MEDICAL_REVIEWER')")
     public ResponseEntity<ApiResponse<Page<PriceListSessionSummaryResponse>>> listPriceListSessions(
             @RequestParam(required = false) PriceListSessionStatus status,
+            @RequestParam(required = false) String query,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100), Sort.by(Sort.Direction.DESC, "updatedAt"));
-        return ResponseEntity.ok(ApiResponse.success(service.listPriceListSessions(status, pageable)));
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 25), Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ResponseEntity.ok(ApiResponse.success(service.listPriceListSessions(status, query, pageable)));
     }
 
     @GetMapping("/price-lists/sessions/{sessionId}")

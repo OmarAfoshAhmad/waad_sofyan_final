@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalCategoryRepository;
@@ -37,6 +38,8 @@ class ProviderContractPricingItemServiceTest {
         private ProviderContractRepository contractRepository;
         @Mock
         private MedicalCategoryRepository medicalCategoryRepository;
+        @Mock
+        private ApplicationEventPublisher eventPublisher;
 
         @InjectMocks
         private ProviderContractPricingItemService pricingItemService;

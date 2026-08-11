@@ -21,6 +21,7 @@ import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import com.waad.tba.modules.provider.entity.Provider;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
+import com.waad.tba.modules.providercontract.event.ProviderPricingItemsDeactivatedEvent;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import com.waad.tba.security.AuthorizationService;
@@ -31,15 +32,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -235,26 +240,54 @@ class MedicalDictionaryServiceTest {
     }
 
     @Test
-    void listPriceListSessions_keepsManagedOrphanRemovalCollectionWhenRepairingStalePostLink() {
+    void listPriceListSessions_readsStoredSummariesWithoutLoadingItemsOrContractPrices() {
         MedicalDictionaryService service = newService();
         PriceListClassificationSession session = priceListSession();
-        List<PriceListClassificationItem> managedItems = new ArrayList<>();
-        PriceListClassificationItem stalePostedItem = priceListItem("كشف طبي", new BigDecimal("100.00"));
-        stalePostedItem.setSession(session);
-        stalePostedItem.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
-        stalePostedItem.setPostedPricingItemId(999L);
-        managedItems.add(stalePostedItem);
-        session.setItems(managedItems);
+        session.setTotalRows(3000);
+        session.setPostedCount(475);
+        Pageable pageable = Pageable.ofSize(20);
 
-        when(priceListSessionRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(session)));
-        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(stalePostedItem));
-        when(providerContractPricingItemRepository.existsByIdAndActiveTrue(999L)).thenReturn(false);
-        when(priceListSessionRepository.save(session)).thenReturn(session);
+        when(priceListSessionRepository.searchSummaries(isNull(), isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(session), pageable, 1));
 
-        service.listPriceListSessions(null, Pageable.ofSize(20));
+        Page<?> result = service.listPriceListSessions(null, null, pageable);
 
-        assertThat(session.getItems()).isSameAs(managedItems);
-        assertThat(stalePostedItem.getPostedPricingItemId()).isNull();
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verifyNoInteractions(priceListItemRepository, providerContractPricingItemRepository);
+    }
+
+    @Test
+    void listPriceListSessions_isDeclaredReadOnly() throws NoSuchMethodException {
+        Transactional transactional = MedicalDictionaryService.class
+                .getMethod("listPriceListSessions", PriceListSessionStatus.class, String.class, Pageable.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.readOnly()).isTrue();
+    }
+
+    @Test
+    void pricingDeactivation_updatesStoredSessionCountersInsideWritePath() {
+        MedicalDictionaryService service = newService();
+        PriceListClassificationSession session = priceListSession();
+        PriceListClassificationItem item = priceListItem("كشف طبي", new BigDecimal("100.00"));
+        item.setSession(session);
+        item.setStatus(PriceListItemStatus.POSTED_TO_CONTRACT);
+        item.setPostedPricingItemId(300L);
+        session.setItems(new ArrayList<>(List.of(item)));
+        session.setPostedCount(1);
+        session.setStatus(PriceListSessionStatus.POSTED_TO_CONTRACT);
+
+        when(priceListItemRepository.findByPostedPricingItemIdIn(Set.of(300L))).thenReturn(List.of(item));
+        when(priceListSessionRepository.findById(100L)).thenReturn(Optional.of(session));
+        when(priceListItemRepository.findBySession_IdOrderByRowNumberAscIdAsc(100L)).thenReturn(List.of(item));
+
+        service.handleProviderPricingItemsDeactivated(new ProviderPricingItemsDeactivatedEvent(Set.of(300L)));
+
+        assertThat(item.getPostedPricingItemId()).isNull();
+        assertThat(item.getStatus()).isEqualTo(PriceListItemStatus.HIGH_CONFIDENCE);
+        assertThat(session.getPostedCount()).isZero();
+        assertThat(session.getStatus()).isEqualTo(PriceListSessionStatus.READY_TO_POST);
     }
 
     @Test

@@ -24,6 +24,7 @@ import com.waad.tba.modules.audit.service.AuditLogWriteRequest;
 import com.waad.tba.modules.audit.service.MedicalAuditLogService;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
+import com.waad.tba.modules.providercontract.event.ProviderPricingItemsDeactivatedEvent;
 import com.waad.tba.modules.providercontract.enums.ClassificationStatus;
 import com.waad.tba.modules.providercontract.enums.ConfidenceLevel;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
@@ -34,6 +35,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.context.event.EventListener;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -46,6 +49,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -278,12 +282,15 @@ public class MedicalDictionaryService {
         }
     }
 
-    @Transactional
-    public Page<PriceListSessionSummaryResponse> listPriceListSessions(PriceListSessionStatus status, Pageable pageable) {
-        Page<PriceListClassificationSession> page = status == null
-                ? priceListSessionRepository.findAll(pageable)
-                : priceListSessionRepository.findByStatus(status, pageable);
-        return page.map(session -> toPriceListSessionSummaryResponse(syncPostedPriceLinks(session)));
+    @Transactional(readOnly = true)
+    public Page<PriceListSessionSummaryResponse> listPriceListSessions(
+            PriceListSessionStatus status,
+            String query,
+            Pageable pageable) {
+        String normalizedQuery = blankToNull(query);
+        Page<PriceListClassificationSession> page = priceListSessionRepository
+                .searchSummaries(status, normalizedQuery, pageable);
+        return page.map(this::toPriceListSessionSummaryResponse);
     }
 
     @Transactional
@@ -982,17 +989,7 @@ public class MedicalDictionaryService {
             boolean postedPriceStillExists = postedPricingItemId != null && providerContractPricingItemRepository.existsByIdAndActiveTrue(postedPricingItemId);
 
             if ((postedPricingItemId != null || markedAsPosted) && !postedPriceStillExists) {
-                item.setPostedPricingItemId(null);
-                item.setPostedAt(null);
-                if (item.getMedicalCategoryId() != null && resolveContractPrice(item) != null) {
-                    item.setStatus(item.getConfidence() != null && item.getConfidence() >= 85
-                            ? PriceListItemStatus.HIGH_CONFIDENCE
-                            : PriceListItemStatus.MANUALLY_REVIEWED);
-                } else if (item.getMedicalCategoryId() != null) {
-                    item.setStatus(PriceListItemStatus.NEEDS_REVIEW);
-                } else {
-                    item.setStatus(PriceListItemStatus.UNKNOWN);
-                }
+                restoreClassificationAfterPostedPriceRemoval(item);
                 changed = true;
             }
         }
@@ -1006,6 +1003,46 @@ public class MedicalDictionaryService {
         }
 
         return session;
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handleProviderPricingItemsDeactivated(ProviderPricingItemsDeactivatedEvent event) {
+        if (event == null || event.pricingItemIds() == null || event.pricingItemIds().isEmpty()) return;
+        List<PriceListClassificationItem> linkedItems = priceListItemRepository
+                .findByPostedPricingItemIdIn(event.pricingItemIds());
+        Set<Long> sessionIds = linkedItems.stream()
+                .map(PriceListClassificationItem::getSession)
+                .filter(Objects::nonNull)
+                .map(PriceListClassificationSession::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (Long sessionId : sessionIds) {
+            PriceListClassificationSession session = priceListSessionRepository.findById(sessionId)
+                    .orElseThrow(() -> new IllegalStateException("جلسة قائمة الأسعار المرتبطة بسعر العقد غير موجودة: " + sessionId));
+            List<PriceListClassificationItem> sessionItems = priceListItemRepository
+                    .findBySession_IdOrderByRowNumberAscIdAsc(sessionId);
+            sessionItems.stream()
+                    .filter(item -> event.pricingItemIds().contains(item.getPostedPricingItemId()))
+                    .forEach(this::restoreClassificationAfterPostedPriceRemoval);
+            recalculateSessionSummary(session, sessionItems);
+            priceListItemRepository.saveAll(sessionItems);
+            priceListSessionRepository.save(session);
+        }
+    }
+
+    private void restoreClassificationAfterPostedPriceRemoval(PriceListClassificationItem item) {
+        item.setPostedPricingItemId(null);
+        item.setPostedAt(null);
+        if (item.getMedicalCategoryId() != null && resolveContractPrice(item) != null) {
+            item.setStatus(item.getConfidence() != null && item.getConfidence() >= 85
+                    ? PriceListItemStatus.HIGH_CONFIDENCE
+                    : PriceListItemStatus.MANUALLY_REVIEWED);
+        } else if (item.getMedicalCategoryId() != null) {
+            item.setStatus(PriceListItemStatus.NEEDS_REVIEW);
+        } else {
+            item.setStatus(PriceListItemStatus.UNKNOWN);
+        }
     }
 
     private PriceListSessionResponse toPriceListSessionResponse(PriceListClassificationSession session, boolean includeItems) {

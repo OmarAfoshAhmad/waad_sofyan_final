@@ -7,6 +7,7 @@ import com.waad.tba.modules.providercontract.dto.*;
 import com.waad.tba.modules.providercontract.entity.ProviderContract;
 import com.waad.tba.modules.providercontract.entity.ProviderContract.ContractStatus;
 import com.waad.tba.modules.providercontract.entity.ProviderContractPricingItem;
+import com.waad.tba.modules.providercontract.event.ProviderPricingItemsDeactivatedEvent;
 import com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository;
 import com.waad.tba.modules.providercontract.repository.ProviderContractRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -39,6 +41,7 @@ public class ProviderContractPricingItemService {
     private final ProviderContractPricingItemRepository pricingRepository;
     private final ProviderContractRepository contractRepository;
     private final MedicalCategoryRepository medicalCategoryRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // READ OPERATIONS
@@ -348,6 +351,7 @@ public class ProviderContractPricingItemService {
 
         item.setActive(false);
         pricingRepository.save(item);
+        eventPublisher.publishEvent(new ProviderPricingItemsDeactivatedEvent(Set.of(item.getId())));
 
         log.info("Soft deleted pricing item: {}", id);
     }
@@ -375,6 +379,10 @@ public class ProviderContractPricingItemService {
             item.setActive(false);
             pricingRepository.save(item);
             count++;
+        }
+        if (!items.isEmpty()) {
+            eventPublisher.publishEvent(new ProviderPricingItemsDeactivatedEvent(
+                    items.stream().map(ProviderContractPricingItem::getId).collect(Collectors.toSet())));
         }
 
         log.info("Soft deleted {} pricing items for contract: {}", count, contractId);

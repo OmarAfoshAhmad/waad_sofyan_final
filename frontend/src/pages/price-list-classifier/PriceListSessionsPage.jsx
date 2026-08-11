@@ -101,16 +101,6 @@ export default function PriceListSessionsPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  const filteredSessions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter((session) =>
-      [session.sessionName, session.originalFileName, session.providerName, session.contractCode, session.status]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [sessions, query]);
-
   const totals = useMemo(
     () => ({
       ready: sessions.filter((s) => s.status === 'READY_TO_POST').length,
@@ -120,10 +110,7 @@ export default function PriceListSessionsPage() {
     [sessions]
   );
 
-  const pagedSessions = useMemo(
-    () => filteredSessions.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [filteredSessions, page, rowsPerPage]
-  );
+  const pagedSessions = sessions;
 
   const selectedSessions = useMemo(() => sessions.filter((session) => selectedIds.includes(session.id)), [sessions, selectedIds]);
 
@@ -138,12 +125,13 @@ export default function PriceListSessionsPage() {
     setLoading(true);
     setError('');
     try {
-      const params = { page: 0, size: 100 };
+      const params = { page, size: rowsPerPage };
       if (status !== 'ALL') params.status = status;
+      if (query.trim()) params.query = query.trim();
       const response = await medicalDictionaryService.listPriceListClassificationSessions(params);
-      const page = normalizePage(response);
-      setSessions(page.content);
-      setTotal(page.totalElements || page.content.length);
+      const resultPage = normalizePage(response);
+      setSessions(resultPage.content);
+      setTotal(resultPage.totalElements);
     } catch (err) {
       setError(err?.response?.data?.message || 'فشل تحميل جلسات تنظيم قوائم الأسعار');
     } finally {
@@ -152,13 +140,15 @@ export default function PriceListSessionsPage() {
   };
 
   useEffect(() => {
-    loadSessions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+    setPage(0);
+    setSelectedIds([]);
+  }, [query, status]);
 
   useEffect(() => {
-    setPage(0);
-  }, [query, status]);
+    const timeoutId = setTimeout(() => loadSessions(), 300);
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, query, page, rowsPerPage]);
 
   const toggleSessionSelection = (sessionId) => {
     setSelectedIds((current) => (current.includes(sessionId) ? current.filter((id) => id !== sessionId) : [...current, sessionId]));
@@ -436,9 +426,9 @@ export default function PriceListSessionsPage() {
         <MainCard contentSX={{ p: 2 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
             <Chip label={`الإجمالي ${total}`} />
-            <Chip color="info" label={`جاهزة ${totals.ready}`} />
-            <Chip color="success" label={`مرحلة ${totals.posted}`} />
-            <Chip color="warning" label={`تحتاج مراجعة ${totals.review}`} />
+            <Chip color="info" label={`جاهزة في الصفحة ${totals.ready}`} />
+            <Chip color="success" label={`مرحلة في الصفحة ${totals.posted}`} />
+            <Chip color="warning" label={`تحتاج مراجعة في الصفحة ${totals.review}`} />
             <TextField
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -615,7 +605,7 @@ export default function PriceListSessionsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!filteredSessions.length && (
+                  {!sessions.length && (
                     <TableRow>
                       <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                         لا توجد جلسات مطابقة.
@@ -627,8 +617,9 @@ export default function PriceListSessionsPage() {
             </TableContainer>
           )}
           <TablePagination
+            rowsPerPageOptions={[10, 20, 25]}
             component="div"
-            count={filteredSessions.length}
+            count={total}
             page={page}
             onPageChange={(e, newPage) => setPage(newPage)}
             rowsPerPage={rowsPerPage}
