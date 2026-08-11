@@ -942,23 +942,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("excludeClaimId") Long excludeClaimId);
 
         /**
-         * Calculate total approved amount for a member in a given year.
-         * Used for per-member annual limit validation.
-         * See sumApprovedAmountByFamilyAndYear javadoc for excludeClaimId/active rationale.
-         */
-        @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
-                        "WHERE c.member.id = :memberId " +
-                        "AND YEAR(c.serviceDate) = :year " +
-                        "AND c.active = true " +
-                        "AND c.status IN :statuses " +
-                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
-        java.math.BigDecimal sumApprovedAmountByMemberAndYear(
-                        @Param("memberId") Long memberId,
-                        @Param("year") int year,
-                        @Param("statuses") List<com.waad.tba.modules.claim.entity.ClaimStatus> statuses,
-                        @Param("excludeClaimId") Long excludeClaimId);
-
-        /**
          * Calculate total approved amount for a member across all years (lifetime).
          * Used for per-member lifetime limit validation.
          * DB-aggregated: avoids loading all claim entities into memory.
