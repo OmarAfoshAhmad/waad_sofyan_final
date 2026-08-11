@@ -30,28 +30,9 @@ import ClearIcon from '@mui/icons-material/Clear';
 import BusinessIcon from '@mui/icons-material/Business';
 import useAuth from 'hooks/useAuth';
 
-// Services
-import { getEmployerSelectors } from 'services/api/employers.service';
-
-// Module-level cache — shared across ALL instances to prevent duplicate API calls
-let _cachedSelectors = null;
-let _cachePromise = null;
-
-const getEmployerSelectorsCached = async () => {
-  if (_cachedSelectors) return _cachedSelectors;
-  if (_cachePromise) return _cachePromise;
-  _cachePromise = getEmployerSelectors()
-    .then((data) => {
-      _cachedSelectors = data;
-      _cachePromise = null;
-      return data;
-    })
-    .catch((err) => {
-      _cachePromise = null;
-      throw err;
-    });
-  return _cachePromise;
-};
+// Services -- shared cache also used by EmployerSelectField, so the employer
+// list is fetched once regardless of how many pickers are on screen.
+import { getEmployerSelectorsCached } from 'services/api/employers.service';
 
 // Context - for auto-connect mode
 import { useEmployerFilter } from 'contexts/EmployerFilterContext';

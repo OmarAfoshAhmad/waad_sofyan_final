@@ -55,9 +55,9 @@ import dayjs from 'dayjs';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
+import EmployerSelectField from 'components/tba/EmployerSelectField';
 import { createPrincipalMember, uploadPhoto, GENDERS } from 'services/api/unified-members.service';
 import { getEffectiveBenefitPolicy } from 'services/api/benefit-policies.service';
-import axiosClient from 'utils/axios';
 import { openSnackbar } from 'api/snackbar';
 import { MEMBER_FORM_MENU_PROPS, sanitizeMemberFieldValue, validateNationalNumber, validateLibyanPhone } from './member.shared';
 
@@ -113,7 +113,6 @@ const UnifiedMemberCreate = () => {
   }, [principalForm.isFastTrack, tabValue]);
 
   // Lookup Data
-  const [employers, setEmployers] = useState([]);
   const [benefitPolicies, setBenefitPolicies] = useState([]);
 
   /**
@@ -136,8 +135,6 @@ const UnifiedMemberCreate = () => {
 
   // Fetch lookup data
   useEffect(() => {
-    fetchEmployers();
-
     // Check for mode=fast-track in URL
     if (searchParams.get('mode') === 'fast-track') {
       setPrincipalForm((prev) => ({
@@ -148,22 +145,6 @@ const UnifiedMemberCreate = () => {
       }));
     }
   }, [searchParams]);
-
-  const fetchEmployers = async () => {
-    try {
-      // Use selectors endpoint for dropdown population - faster and lighter
-      const response = await axiosClient.get('/employers/selectors');
-      setEmployers(response.data?.data || []);
-    } catch (error) {
-      console.error('Error fetching employers:', error);
-      openSnackbar({
-        open: true,
-        message: 'خطأ في جلب جهات العمل',
-        variant: 'alert',
-        alert: { color: 'error' }
-      });
-    }
-  };
 
   const fetchBenefitPolicies = async () => {
     // Deleted as per user request: Policy linking moved to Contacts section
@@ -633,24 +614,13 @@ const UnifiedMemberCreate = () => {
                           />
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
-                          <FormControl fullWidth required error={!!errors.employerOrganizationId} size="small">
-                            <InputLabel id="employer-label">جهة العمل</InputLabel>
-                            <Select
-                              labelId="employer-label"
-                              value={principalForm.employerOrganizationId}
-                              onChange={handlePrincipalChange('employerOrganizationId')}
-                              label="جهة العمل"
-                            >
-                              <MenuItem value="">
-                                <em>اختر جهة العمل...</em>
-                              </MenuItem>
-                              {employers.map((emp) => (
-                                <MenuItem key={emp.id} value={emp.id}>
-                                  {emp.label}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
+                          <EmployerSelectField
+                            value={principalForm.employerOrganizationId}
+                            onChange={handlePrincipalChange('employerOrganizationId')}
+                            required
+                            error={!!errors.employerOrganizationId}
+                            size="small"
+                          />
                         </Grid>
                       </>
                     )}
@@ -747,32 +717,17 @@ const UnifiedMemberCreate = () => {
             {tabValue === 1 && (
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12 }}>
-                  <FormControl fullWidth required error={!!errors.employerOrganizationId} size="small">
-                    <InputLabel id="employer-label">جهة العمل</InputLabel>
-                    <Select
-                      labelId="employer-label"
-                      value={principalForm.employerOrganizationId}
-                      onChange={(e) => handlePrincipalChange('employerOrganizationId')(e)}
-                      label="جهة العمل"
-                      MenuProps={menuProps}
-                    >
-                      <MenuItem value="">
-                        <em>اختر جهة العمل...</em>
-                      </MenuItem>
-                      {Array.isArray(employers) &&
-                        employers.map((emp) => (
-                          <MenuItem key={emp.id} value={emp.id}>
-                            {emp.label}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                    {errors.employerOrganizationId && <FormHelperText>{errors.employerOrganizationId}</FormHelperText>}
-                    {principalForm.benefitPolicyName && (
-                      <FormHelperText sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                        تم الربط بالوثيقة: {principalForm.benefitPolicyName}
-                      </FormHelperText>
-                    )}
-                  </FormControl>
+                  <EmployerSelectField
+                    value={principalForm.employerOrganizationId}
+                    onChange={handlePrincipalChange('employerOrganizationId')}
+                    required
+                    error={!!errors.employerOrganizationId}
+                    helperText={
+                      errors.employerOrganizationId ||
+                      (principalForm.benefitPolicyName ? `تم الربط بالوثيقة: ${principalForm.benefitPolicyName}` : '')
+                    }
+                    size="small"
+                  />
                 </Grid>
 
                 {!principalForm.isFastTrack && (

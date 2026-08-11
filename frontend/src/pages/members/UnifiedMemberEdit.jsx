@@ -51,6 +51,7 @@ import dayjs from 'dayjs';
 
 import MainCard from 'components/MainCard';
 import ModernPageHeader from 'components/tba/ModernPageHeader';
+import EmployerSelectField from 'components/tba/EmployerSelectField';
 import {
   getMember,
   updateMember,
@@ -118,7 +119,6 @@ const UnifiedMemberEdit = () => {
   });
 
   // Lookup Data
-  const [employers, setEmployers] = useState([]);
   const [benefitPolicies, setBenefitPolicies] = useState([]);
   const [isPrincipal, setIsPrincipal] = useState(false);
   const [initialStatus, setInitialStatus] = useState('ACTIVE');
@@ -190,11 +190,7 @@ const UnifiedMemberEdit = () => {
 
   const fetchLookupData = async () => {
     try {
-      const [orgsRes, policiesRes] = await Promise.all([
-        axiosClient.get('/employers/selectors'),
-        axiosClient.get('/benefit-policies', { params: { size: 1000 } })
-      ]);
-      setEmployers(orgsRes.data?.data || []);
+      const policiesRes = await axiosClient.get('/benefit-policies', { params: { size: 1000 } });
       setBenefitPolicies(policiesRes.data?.data?.content || []);
     } catch (error) {
       console.error('Error fetching lookup data:', error);
@@ -685,20 +681,14 @@ const UnifiedMemberEdit = () => {
                 {isPrincipal ? (
                   <>
                     <Grid size={{ xs: 12 }}>
-                      <FormControl fullWidth required error={!!errors.employerId} size="small">
-                        <InputLabel>جهة العمل</InputLabel>
-                        <Select value={form.employerId} onChange={handleChange('employerId')} label="جهة العمل" MenuProps={menuProps}>
-                          <MenuItem value="">
-                            <em>اختر جهة العمل...</em>
-                          </MenuItem>
-                          {Array.isArray(employers) &&
-                            employers.map((emp) => (
-                              <MenuItem key={emp.id} value={emp.id}>
-                                {emp.label}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
+                      <EmployerSelectField
+                        value={form.employerId}
+                        onChange={handleChange('employerId')}
+                        required
+                        error={!!errors.employerId}
+                        helperText={errors.employerId}
+                        size="small"
+                      />
                     </Grid>
                     <Grid size={{ xs: 12, md: 4 }}>
                       <TextField

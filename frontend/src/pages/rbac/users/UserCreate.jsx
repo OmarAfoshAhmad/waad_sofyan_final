@@ -33,8 +33,8 @@ import { useTableRefresh } from 'contexts/TableRefreshContext';
 
 // Services & Constants
 import usersService from 'services/rbac/users.service';
-import employersService from 'services/api/employers.service';
 import { SystemRole, RoleDisplayNames } from 'constants/rbac';
+import EmployerSelectField from 'components/tba/EmployerSelectField';
 
 // Snackbar
 import { openSnackbar } from 'api/snackbar';
@@ -123,7 +123,6 @@ const UserCreate = () => {
     providerId: ''
   });
 
-  const [employers, setEmployers] = useState([]);
   const [providers, setProviders] = useState([]);
 
   const [errors, setErrors] = useState({});
@@ -138,15 +137,10 @@ const UserCreate = () => {
   useState(() => {
     const fetchSelectors = async () => {
       try {
-        const [empData, provData] = await Promise.all([
-          employersService.getEmployerSelectors().catch(() => []),
-          // use axiosClient directly if providersService doesn't expose getSelectors
-          import('utils/axios')
-            .then((m) => m.default.get('/providers/selector'))
-            .then((res) => res.data?.data?.items || res.data?.items || res.data?.data || res.data)
-            .catch(() => [])
-        ]);
-        setEmployers(empData || []);
+        const provData = await import('utils/axios')
+          .then((m) => m.default.get('/providers/selector'))
+          .then((res) => res.data?.data?.items || res.data?.items || res.data?.data || res.data)
+          .catch(() => []);
         setProviders(provData || []);
       } catch (err) {
         console.error('Failed to fetch selectors:', err);
@@ -403,22 +397,13 @@ const UserCreate = () => {
             {/* Employer Selection – Conditional for EMPLOYER_ADMIN */}
             {form.userType === SystemRole.EMPLOYER_ADMIN && (
               <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  select
-                  fullWidth
-                  label="جهة العمل (Employer)"
+                <EmployerSelectField
                   value={form.employerId}
-                  onChange={handleChange('employerId')}
+                  onChange={(employerId) => handleChange('employerId')({ target: { value: employerId } })}
                   error={!!errors.employerId}
                   helperText={errors.employerId || 'اختر جهة العمل المرتبطة بهذا المستخدم'}
                   required
-                >
-                  {employers.map((emp) => (
-                    <MenuItem key={emp.id} value={emp.id}>
-                      {emp.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                />
               </Grid>
             )}
 

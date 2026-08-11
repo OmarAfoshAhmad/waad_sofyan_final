@@ -705,6 +705,29 @@ export const getEmployerSelectors = async () => {
   }
 };
 
+// Module-level cache shared by every employer-picker component in the app
+// (EmployerFilterSelector, EmployerSelectField, ...) so the list is fetched
+// once regardless of how many pickers are mounted at once. Was previously
+// duplicated as a private cache inside EmployerFilterSelector.jsx alone.
+let _cachedEmployerSelectors = null;
+let _employerSelectorsPromise = null;
+
+export const getEmployerSelectorsCached = async () => {
+  if (_cachedEmployerSelectors) return _cachedEmployerSelectors;
+  if (_employerSelectorsPromise) return _employerSelectorsPromise;
+  _employerSelectorsPromise = getEmployerSelectors()
+    .then((data) => {
+      _cachedEmployerSelectors = data;
+      _employerSelectorsPromise = null;
+      return data;
+    })
+    .catch((err) => {
+      _employerSelectorsPromise = null;
+      throw err;
+    });
+  return _employerSelectorsPromise;
+};
+
 /**
  * Check if a code or name is already taken — used for live uniqueness feedback.
  * @param {'code'|'name'} field
@@ -881,6 +904,7 @@ const employersService = {
 
   // Additional Operations
   getEmployerSelectors,
+  getEmployerSelectorsCached,
   getEmployerCount,
   exportEmployers,
 
