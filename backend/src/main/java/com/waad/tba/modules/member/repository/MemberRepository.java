@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -91,6 +92,16 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy" })
        @Query("SELECT m FROM Member m WHERE m.active = true")
        Page<Member> findAll(Pageable pageable);
+
+       /**
+        * Overrides the default Specification+Sort overload to eagerly fetch
+        * employer (and benefitPolicy, same cost) via entity graph. Used only by
+        * {@code MemberExcelExportService} today -- without this, exporting N rows
+        * triggered N extra lazy-load queries just to read employer.getName().
+        */
+       @Override
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "employer", "benefitPolicy" })
+       List<Member> findAll(org.springframework.data.jpa.domain.Specification<Member> spec, Sort sort);
 
        @Query(value = "SELECT m FROM Member m LEFT JOIN FETCH m.employer LEFT JOIN FETCH m.benefitPolicy WHERE " +
                      "m.active = true AND (" +

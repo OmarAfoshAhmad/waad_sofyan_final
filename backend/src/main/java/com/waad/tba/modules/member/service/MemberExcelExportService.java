@@ -16,7 +16,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -47,6 +47,17 @@ public class MemberExcelExportService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final long DIRECT_EXPORT_MAX_ROWS = 50_000;
+    // Rows kept in memory at once before SXSSFWorkbook flushes them to a temp
+    // file; keeps memory flat regardless of export size instead of holding the
+    // whole workbook (up to 50k rows) in RAM like XSSFWorkbook did.
+    private static final int STREAMING_WINDOW_SIZE = 500;
+    // Fixed column widths (in POI's 1/256-of-a-character units) replace
+    // autoSizeColumn: SXSSFWorkbook can't auto-size flushed-out rows, and
+    // autoSizeColumn was itself an O(rows) pass per column on the old path.
+    private static final int[] COLUMN_WIDTHS = {
+            8 * 256, 28 * 256, 16 * 256, 16 * 256, 20 * 256, 26 * 256, 14 * 256,
+            13 * 256, 10 * 256, 14 * 256, 26 * 256, 14 * 256, 14 * 256, 18 * 256, 14 * 256
+    };
 
     /**
      * Export members to Excel with optional filters
@@ -83,37 +94,45 @@ public class MemberExcelExportService {
 
         log.info("📊 [Excel Export] Found {} members to export", members.size());
 
-        // Create Excel workbook
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-            Sheet sheet = workbook.createSheet("Members");
-            sheet.setRightToLeft(true); // Arabic RTL
+        // Streaming workbook: keeps only STREAMING_WINDOW_SIZE rows in memory at
+        // once (flushes the rest to a temp file), instead of building the entire
+        // workbook in RAM like XSSFWorkbook did -- matters once exports approach
+        // DIRECT_EXPORT_MAX_ROWS.
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(STREAMING_WINDOW_SIZE)) {
+            try {
+                Sheet sheet = workbook.createSheet("Members");
+                sheet.setRightToLeft(true); // Arabic RTL
 
-            // Create styles
-            CellStyle headerStyle = createHeaderStyle(workbook);
-            CellStyle dateStyle = createDateStyle(workbook);
-            CellStyle normalStyle = createNormalStyle(workbook);
+                for (int i = 0; i < COLUMN_WIDTHS.length; i++) {
+                    sheet.setColumnWidth(i, COLUMN_WIDTHS[i]);
+                }
 
-            // Create header row
-            createHeaderRow(sheet, headerStyle);
+                // Create styles
+                CellStyle headerStyle = createHeaderStyle(workbook);
+                CellStyle dateStyle = createDateStyle(workbook);
+                CellStyle normalStyle = createNormalStyle(workbook);
 
-            // Create data rows
-            int rowNum = 1;
-            for (Member member : members) {
-                createDataRow(sheet, rowNum++, member, dateStyle, normalStyle);
+                // Create header row
+                createHeaderRow(sheet, headerStyle);
+
+                // Create data rows
+                int rowNum = 1;
+                for (Member member : members) {
+                    createDataRow(sheet, rowNum++, member, dateStyle, normalStyle);
+                }
+
+                // Write to byte array
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                workbook.write(outputStream);
+
+                log.info("✅ [Excel Export] Export completed: {} rows", members.size());
+
+                return outputStream.toByteArray();
+            } finally {
+                // Deletes the temp file(s) SXSSFWorkbook wrote while streaming --
+                // required, unlike XSSFWorkbook, or they leak on every export.
+                workbook.dispose();
             }
-
-            // Auto-size columns
-            for (int i = 0; i < 15; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
-            // Write to byte array
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            workbook.write(outputStream);
-
-            log.info("✅ [Excel Export] Export completed: {} rows", members.size());
-
-            return outputStream.toByteArray();
         }
     }
 
