@@ -36,17 +36,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
         long countByPolicyId(@Param("policyId") Long policyId);
 
 
-        @Query("SELECT COALESCE(SUM(c.approvedAmount), 0) FROM Claim c " +
-                        "WHERE c.active = true AND c.member.id = :memberId " +
-                        "AND c.status IN (com.waad.tba.modules.claim.entity.ClaimStatus.APPROVED, com.waad.tba.modules.claim.entity.ClaimStatus.SETTLED, com.waad.tba.modules.claim.entity.ClaimStatus.BATCHED) " +
-                        "AND c.serviceDate BETWEEN :yearStart AND :yearEnd " +
-                        "AND (:excludeClaimId IS NULL OR c.id <> :excludeClaimId)")
-        java.math.BigDecimal sumApprovedAmountsByMemberAndYearExcludingClaim(
-                        @Param("memberId") Long memberId,
-                        @Param("yearStart") LocalDate yearStart,
-                        @Param("yearEnd") LocalDate yearEnd,
-                        @Param("excludeClaimId") Long excludeClaimId);
-
         /** WAAD-FIN-1.0: the policy ceiling consumes settlement value, not insurer payment. */
         @Query("SELECT COALESCE(SUM(cl.limitConsumption), 0) FROM ClaimLine cl " +
                         "WHERE cl.currentLine = true AND cl.claim.active = true AND cl.claim.member.id = :memberId " +
