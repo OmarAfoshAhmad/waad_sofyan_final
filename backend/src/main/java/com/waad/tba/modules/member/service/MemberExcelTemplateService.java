@@ -1083,6 +1083,23 @@ public class MemberExcelTemplateService {
 
     private boolean isDependentRow(Row row, Map<String, Integer> columnIndices) {
         String excelCardNumber = normalizeCardNumber(getCellValue(row, columnIndices.get("card_number")));
+        return isDependentCardNumber(excelCardNumber);
+    }
+
+    /**
+     * The single definition of "does this card number mark a dependent row" --
+     * a blank/absent card number means principal (its card is auto-generated),
+     * never dependent. Before this extraction, {@link #isDependentRow} and
+     * {@link #parseAndCreateMember} each recomputed this independently, and
+     * parseAndCreateMember's copy inverted the null-safety check
+     * (isPrincipalCardNumber(null) returns false, so the old
+     * "!isPrincipalCardNumber(...)" read a blank card number as a dependent).
+     * That made every row in a card_number-less file -- the simplest, most
+     * common import shape, since card_number is explicitly optional -- throw
+     * a NullPointerException a few lines later, silently caught and counted
+     * as a rejected row instead of surfaced as the system bug it was.
+     */
+    private boolean isDependentCardNumber(String excelCardNumber) {
         if (excelCardNumber == null || excelCardNumber.isBlank()) {
             return false;
         }
@@ -1132,7 +1149,7 @@ public class MemberExcelTemplateService {
             birthDate = getCellValueAsDate(row, birthDateIdx);
         }
 
-        boolean isDependent = !cardNumberGeneratorService.isPrincipalCardNumber(excelCardNumber);
+        boolean isDependent = isDependentCardNumber(excelCardNumber);
 
         Member.Relationship relationship = null;
         Member parent = null;
