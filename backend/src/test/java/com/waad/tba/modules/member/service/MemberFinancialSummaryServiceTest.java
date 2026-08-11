@@ -5,12 +5,13 @@ import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy.BenefitPolicyStatus;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
+import com.waad.tba.modules.member.dto.CoverageLimitsDto;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.medicaltaxonomy.entity.MedicalService;
 import com.waad.tba.modules.medicaltaxonomy.repository.MedicalServiceRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -176,5 +181,78 @@ class MemberFinancialSummaryServiceTest {
 
         assertThat(result).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(memberRepository, claimRepository, coverageService);
+    }
+
+    // ==================== getServiceCoverageLimits (member-closure Phase 4) ====================
+    // Times-used previously came from loading every claim for the member and counting matches in
+    // a Java loop; it now comes from one COUNT query (ClaimRepository.countServiceUsageForMemberAndYear).
+    // These tests pin the exact arithmetic and prove no claim entity is ever touched.
+
+    private Member plainMember(Long id) {
+        return Member.builder().id(id).fullName("Member " + id).build();
+    }
+
+    private MedicalService serviceWithCode(Long id, String code) {
+        return MedicalService.builder().id(id).code(code).name("Consultation").active(true).build();
+    }
+
+    @Test
+    @DisplayName("getServiceCoverageLimits reads times-used from a single COUNT query, not from loaded claims")
+    void getServiceCoverageLimits_TimesUsedComesFromCountQuery_NotFromLoadedClaims() {
+        Member member = plainMember(1L);
+        MedicalService svc = serviceWithCode(101L, "SVC-1");
+        when(memberRepository.findById(1L)).thenReturn(java.util.Optional.of(member));
+        when(medicalServiceRepository.findByCode("SVC-1")).thenReturn(java.util.Optional.of(svc));
+        when(coverageService.getCoverageForService(member, 101L)).thenReturn(java.util.Optional.of(
+                BenefitPolicyCoverageService.CoverageInfo.builder()
+                        .covered(true).coveragePercent(80).amountLimit(new BigDecimal("500.00")).timesLimit(3)
+                        .build()));
+        when(claimRepository.countServiceUsageForMemberAndYear(eq(1L), eq("SVC-1"), anyInt())).thenReturn(2L);
+
+        CoverageLimitsDto result = service.getServiceCoverageLimits(1L, "SVC-1");
+
+        assertThat(result.isCovered()).isTrue();
+        assertThat(result.getTimesUsed()).isEqualTo(2);
+        assertThat(result.getRemainingTimes()).isEqualTo(1); // 3 - 2
+        assertThat(result.isTimesLimitExceeded()).isFalse();
+        verify(claimRepository, never()).findByMemberId(anyLong());
+    }
+
+    @Test
+    @DisplayName("getServiceCoverageLimits marks the limit exceeded and clamps remaining at zero, never negative")
+    void getServiceCoverageLimits_TimesLimitExceeded_ClampsRemainingAtZero() {
+        Member member = plainMember(1L);
+        MedicalService svc = serviceWithCode(101L, "SVC-1");
+        when(memberRepository.findById(1L)).thenReturn(java.util.Optional.of(member));
+        when(medicalServiceRepository.findByCode("SVC-1")).thenReturn(java.util.Optional.of(svc));
+        when(coverageService.getCoverageForService(member, 101L)).thenReturn(java.util.Optional.of(
+                BenefitPolicyCoverageService.CoverageInfo.builder()
+                        .covered(true).coveragePercent(80).timesLimit(2).build()));
+        when(claimRepository.countServiceUsageForMemberAndYear(eq(1L), eq("SVC-1"), anyInt())).thenReturn(5L);
+
+        CoverageLimitsDto result = service.getServiceCoverageLimits(1L, "SVC-1");
+
+        assertThat(result.getTimesUsed()).isEqualTo(5);
+        assertThat(result.getRemainingTimes()).isZero();
+        assertThat(result.isTimesLimitExceeded()).isTrue();
+        assertThat(result.getWarningMessage()).contains("تجاوز الحد الأقصى");
+    }
+
+    @Test
+    @DisplayName("getServiceCoverageLimits skips the times-used query entirely when the service has no times limit")
+    void getServiceCoverageLimits_NoTimesLimit_SkipsCountQuery() {
+        Member member = plainMember(1L);
+        MedicalService svc = serviceWithCode(101L, "SVC-1");
+        when(memberRepository.findById(1L)).thenReturn(java.util.Optional.of(member));
+        when(medicalServiceRepository.findByCode("SVC-1")).thenReturn(java.util.Optional.of(svc));
+        when(coverageService.getCoverageForService(member, 101L)).thenReturn(java.util.Optional.of(
+                BenefitPolicyCoverageService.CoverageInfo.builder()
+                        .covered(true).coveragePercent(80).timesLimit(null).build()));
+
+        CoverageLimitsDto result = service.getServiceCoverageLimits(1L, "SVC-1");
+
+        assertThat(result.getTimesLimit()).isNull();
+        assertThat(result.isTimesLimitExceeded()).isFalse();
+        verify(claimRepository, never()).countServiceUsageForMemberAndYear(anyLong(), anyString(), anyInt());
     }
 }

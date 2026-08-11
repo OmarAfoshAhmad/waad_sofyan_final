@@ -81,6 +81,41 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
                         @Param("excludeClaimId") Long excludeClaimId);
 
         /**
+         * How many times a member has claimed a specific service in a given
+         * year -- replaces {@code MemberFinancialSummaryService
+         * .getServiceCoverageLimits}'s former pattern of loading every claim
+         * for the member and counting matches in a Java loop.
+         *
+         * {@code cl.currentLine = true} matters here specifically: without it,
+         * a claim that went through the correction cycle (V152 -- reopen for
+         * correction, new calculationVersion, re-approve) would have its
+         * superseded line(s) still attached to {@code claim.getLines()}
+         * alongside the current one, double-counting a single real visit as
+         * two uses. The prior Java-loop implementation iterated
+         * {@code claim.getLines()} directly with no such filter and had
+         * exactly this latent double-count bug; every other
+         * per-claim-line aggregate query in this repository already filters
+         * on {@code currentLine = true} for the same reason (see
+         * sumLimitConsumptionByMemberAndPeriodExcludingClaim above) -- this
+         * query brings the times-limit count in line with that established
+         * convention instead of leaving it as the one exception.
+         *
+         * Excludes REJECTED claims, matching the prior implementation
+         * exactly; every other status (including DRAFT/SUBMITTED/
+         * UNDER_REVIEW) still counts against the limit, which is unchanged
+         * behavior carried over as-is, not a new decision made here.
+         */
+        @Query("SELECT COUNT(cl) FROM ClaimLine cl " +
+                        "WHERE cl.currentLine = true AND cl.claim.active = true AND cl.claim.member.id = :memberId " +
+                        "AND cl.claim.status <> com.waad.tba.modules.claim.entity.ClaimStatus.REJECTED " +
+                        "AND cl.serviceCode = :serviceCode " +
+                        "AND YEAR(cl.claim.serviceDate) = :year")
+        long countServiceUsageForMemberAndYear(
+                        @Param("memberId") Long memberId,
+                        @Param("serviceCode") String serviceCode,
+                        @Param("year") int year);
+
+        /**
          * One row per member: every claim-history metric
          * {@code MemberFinancialSummaryService} needs, aggregated in the database
          * instead of loaded as entities and reduced in Java. Statuses/fields mirror

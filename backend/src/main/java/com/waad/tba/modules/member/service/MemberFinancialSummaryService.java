@@ -5,9 +5,6 @@ import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.benefitpolicy.service.BenefitPolicyCoverageService;
-import com.waad.tba.modules.claim.entity.Claim;
-import com.waad.tba.modules.claim.entity.ClaimLine;
-import com.waad.tba.modules.claim.entity.ClaimStatus;
 import com.waad.tba.modules.claim.projection.MemberFinancialAggregateProjection;
 import com.waad.tba.modules.claim.repository.ClaimRepository;
 import com.waad.tba.modules.member.dto.MemberFinancialSummaryDto;
@@ -261,18 +258,11 @@ public class MemberFinancialSummaryService {
 
     /**
      * Get Coverage Limits (times and amounts) for a specific service based on
-     * member's active policy.
-     *
-     * KNOWN FOLLOW-UP (out of scope for the member-window/claim-ceiling axis
-     * fix this class received in 2026.2): the times-limit branch below still
-     * loads every claim for the member and counts matches in Java, the same
-     * pattern {@link #getFinancialSummaries(Collection)} was rewritten to
-     * avoid. It was left alone here because "times used for one service
-     * code" is a service-level count, not a money aggregate -- it needs its
-     * own DB-side query (likely reusing whatever CoverageEngineService/
-     * BenefitBucketLimitService already track for times/days limits) rather
-     * than a copy of the money-aggregate query above. Track this before
-     * declaring the member module fully closed.
+     * member's active policy. Times-used is read via
+     * {@link ClaimRepository#countServiceUsageForMemberAndYear} -- a single
+     * COUNT query -- not by loading every claim for the member (the pattern
+     * {@link #getFinancialSummaries(Collection)} was rewritten to avoid;
+     * this method carried the same defect until member-closure Phase 4).
      *
      * @param memberId    Member ID
      * @param serviceCode Medical Service Code
@@ -312,23 +302,9 @@ public class MemberFinancialSummaryService {
 
         // If times limit exists, we must calculate historical usage
         if (timesLimit != null) {
-            List<Claim> claims = claimRepository.findByMemberId(memberId);
             int currentYear = LocalDate.now().getYear();
-
-            for (Claim c : claims) {
-                // Only consider claims from the current policy year and that are not rejected
-                if (c.getStatus() == ClaimStatus.REJECTED || c.getServiceDate() == null
-                        || c.getServiceDate().getYear() != currentYear) {
-                    continue;
-                }
-                if (c.getLines() != null) {
-                    for (ClaimLine line : c.getLines()) {
-                        if (serviceCode.equals(line.getServiceCode())) {
-                            timesUsed++;
-                        }
-                    }
-                }
-            }
+            timesUsed = (int) Math.min(Integer.MAX_VALUE,
+                    claimRepository.countServiceUsageForMemberAndYear(memberId, serviceCode, currentYear));
 
             remainingTimes = timesLimit - timesUsed;
             if (remainingTimes <= 0) {
