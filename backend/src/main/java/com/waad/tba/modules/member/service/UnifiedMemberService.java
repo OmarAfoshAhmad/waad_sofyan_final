@@ -770,14 +770,79 @@ public class UnifiedMemberService {
     }
 
     /**
+     * Outcome of {@link #resolveEmployerScopeFilter(Long, String)}:
+     * {@code blocked=true} means the caller must return its own empty result
+     * (Page.empty()/0) without querying at all -- an EMPLOYER_ADMIN with the
+     * VIEW_MEMBERS feature disabled, or with no employerId assigned, must
+     * never fall through to an unfiltered query. {@code employerId} is the
+     * filter to apply when not blocked; null means "no filter" (internal or
+     * financial roles), never "blocked".
+     */
+    private record EmployerScopeFilter(boolean blocked, Long employerId) {
+        static EmployerScopeFilter allowed(Long employerId) {
+            return new EmployerScopeFilter(false, employerId);
+        }
+
+        static EmployerScopeFilter blocked() {
+            return new EmployerScopeFilter(true, null);
+        }
+    }
+
+    /**
+     * Single source of the EMPLOYER_ADMIN employer-lock rule: an
+     * EMPLOYER_ADMIN can only ever see their own employer's members, no
+     * matter what employerId a request asks for. Before this method existed,
+     * getAllMembers, searchMembers and countMembers each carried their own
+     * copy of this logic -- countMembers' copy was explicitly commented
+     * "COPIED from getAllMembers", which is exactly the failure mode this
+     * extraction removes: a fourth caller (or an edit to one copy) could
+     * silently drift from the other two and leak cross-employer data.
+     *
+     * SECURITY (2026-01-16, unchanged by this extraction):
+     * - EMPLOYER_ADMIN: locked to their own employer; blocked entirely if the
+     *   VIEW_MEMBERS feature is disabled for them or they have no employerId.
+     * - Every other role: the requested employerId passes through unchanged
+     *   (null means "no filter", which is intentional for internal/financial
+     *   roles that are allowed to see across employers).
+     *
+     * @param requestedEmployerId the employerId the caller's request asked for
+     * @param action              a short participle for the warning log
+     *                            ("view", "search", "count") -- the only
+     *                            thing that ever varied between the three
+     *                            copies this replaces
+     */
+    private EmployerScopeFilter resolveEmployerScopeFilter(Long requestedEmployerId, String action) {
+        User currentUser = authorizationService.getCurrentUser();
+        if (currentUser == null || !authorizationService.isEmployerAdmin(currentUser)) {
+            return EmployerScopeFilter.allowed(requestedEmployerId);
+        }
+
+        if (!authorizationService.canEmployerViewMembers(currentUser)) {
+            log.warn("❌ EMPLOYER_ADMIN user {} attempted to {} members but feature VIEW_MEMBERS is disabled",
+                    currentUser.getUsername(), action);
+            return EmployerScopeFilter.blocked();
+        }
+
+        Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
+        if (employerFilter == null) {
+            log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
+            return EmployerScopeFilter.blocked();
+        }
+
+        log.info("🔒 EMPLOYER_ADMIN filter applied: user={}, action={}, locked to employerId={}",
+                currentUser.getUsername(), action, employerFilter);
+        return EmployerScopeFilter.allowed(employerFilter);
+    }
+
+    /**
      * Get all members with pagination and optional filters.
-     * 
+     *
      * @param pageable   Pagination info
      * @param employerId Optional employer filter
      * @param status     Optional status filter
      * @param type       Optional member type filter (PRINCIPAL/DEPENDENT)
      * @return Page of members
-     * 
+     *
      *         SECURITY (2026-01-16):
      *         - EMPLOYER_ADMIN: Automatically filtered to their employer only
      *         - Internal/financial roles: No automatic filter when explicitly allowed by endpoint/service checks
@@ -792,33 +857,11 @@ public class UnifiedMemberService {
         log.info("Fetching all members: page={}, size={}, employerId={}, status={}, type={}",
                 pageable.getPageNumber(), pageable.getPageSize(), employerId, status, type);
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // EMPLOYER_ADMIN SECURITY FILTER (2026-01-16)
-        // ═══════════════════════════════════════════════════════════════════════════
-        User currentUser = authorizationService.getCurrentUser();
-        Long effectiveEmployerId = employerId;
-
-        if (currentUser != null && authorizationService.isEmployerAdmin(currentUser)) {
-            // Check feature toggle
-            if (!authorizationService.canEmployerViewMembers(currentUser)) {
-                log.warn("❌ EMPLOYER_ADMIN user {} attempted to view members but feature VIEW_MEMBERS is disabled",
-                        currentUser.getUsername());
-                return Page.empty();
-            }
-
-            // EMPLOYER_ADMIN is LOCKED to their employer - override any provided filter
-            Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-            if (employerFilter == null) {
-                log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
-                return Page.empty();
-            }
-
-            effectiveEmployerId = employerFilter;
-            log.info("🔒 EMPLOYER_ADMIN filter applied: user={}, locked to employerId={}",
-                    currentUser.getUsername(), effectiveEmployerId);
+        EmployerScopeFilter scope = resolveEmployerScopeFilter(employerId, "view");
+        if (scope.blocked()) {
+            return Page.empty();
         }
-
-        final Long finalEmployerId = effectiveEmployerId;
+        final Long finalEmployerId = scope.employerId();
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -906,28 +949,11 @@ public class UnifiedMemberService {
     @Transactional(readOnly = true)
     public long countMembers(Long employerId, String status, String type) {
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // EMPLOYER_ADMIN SECURITY FILTER (COPIED from getAllMembers)
-        // ═══════════════════════════════════════════════════════════════════════════
-        User currentUser = authorizationService.getCurrentUser();
-        Long effectiveEmployerId = employerId;
-
-        if (currentUser != null && authorizationService.isEmployerAdmin(currentUser)) {
-            // Check feature toggle
-            if (!authorizationService.canEmployerViewMembers(currentUser)) {
-                return 0;
-            }
-
-            // EMPLOYER_ADMIN is LOCKED to their employer - override any provided filter
-            Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-            if (employerFilter == null) {
-                return 0;
-            }
-
-            effectiveEmployerId = employerFilter;
+        EmployerScopeFilter scope = resolveEmployerScopeFilter(employerId, "count");
+        if (scope.blocked()) {
+            return 0;
         }
-
-        final Long finalEmployerId = effectiveEmployerId;
+        final Long finalEmployerId = scope.employerId();
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -1006,33 +1032,11 @@ public class UnifiedMemberService {
             return Page.empty(pageable);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // EMPLOYER_ADMIN SECURITY FILTER (2026-01-16)
-        // ═══════════════════════════════════════════════════════════════════════════
-        User currentUser = authorizationService.getCurrentUser();
-        Long effectiveEmployerId = employerId;
-
-        if (currentUser != null && authorizationService.isEmployerAdmin(currentUser)) {
-            // Check feature toggle
-            if (!authorizationService.canEmployerViewMembers(currentUser)) {
-                log.warn("❌ EMPLOYER_ADMIN user {} attempted to search members but feature VIEW_MEMBERS is disabled",
-                        currentUser.getUsername());
-                return Page.empty();
-            }
-
-            // EMPLOYER_ADMIN is LOCKED to their employer - override any provided filter
-            Long employerFilter = authorizationService.getEmployerFilterForUser(currentUser);
-            if (employerFilter == null) {
-                log.warn("⚠️ EMPLOYER_ADMIN user {} has no employerId assigned", currentUser.getUsername());
-                return Page.empty();
-            }
-
-            effectiveEmployerId = employerFilter;
-            log.info("🔒 EMPLOYER_ADMIN search filter applied: user={}, locked to employerId={}",
-                    currentUser.getUsername(), effectiveEmployerId);
+        EmployerScopeFilter scope = resolveEmployerScopeFilter(employerId, "search");
+        if (scope.blocked()) {
+            return Page.empty();
         }
-
-        final Long finalEmployerId = effectiveEmployerId;
+        final Long finalEmployerId = scope.employerId();
 
         Specification<Member> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
