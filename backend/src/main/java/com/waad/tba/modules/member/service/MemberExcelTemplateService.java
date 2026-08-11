@@ -281,550 +281,15 @@ public class MemberExcelTemplateService {
                 return buildErrorResult(summary, errors, "Mandatory columns missing");
             }
 
-            Map<String, Employer> employerLookup = buildEmployerLookup();
+            ImportContext ctx = new ImportContext(sheet, columnIndices, selectedEmployer, summary, errors);
+            ctx.employerLookup = buildEmployerLookup();
+            ctx.usedCardNumbers = new HashSet<>(memberRepository.findAllCardNumbers());
+            summary.setTotalRows(ctx.lastRow - ctx.firstDataRow + 1);
+            countRowTypes(ctx);
 
-            // Cache per-employer principal names (DB) — for Pass 1 duplicate detection
-            Map<Long, Set<String>> existingPrincipalNamesCache = new HashMap<>();
-            // Cache per-employer dependent dedup keys "parentId::lowerName" (DB) — Pass 2
-            // Built from Object[] to avoid JPQL CONCAT type issues with Long in Hibernate 6
-            Map<Long, Set<String>> existingDependentKeysCache = new HashMap<>();
-
-            // card_number → saved Member (principals saved in pass 1)
-            Map<String, Member> importedPrincipalsCache = new HashMap<>();
-            // rowNum → saved Member — lets PASS-2 find the principal by row order (most reliable)
-            Map<Integer, Member> principalRowToMember = new HashMap<>();
-            Set<String> usedCardNumbers = new HashSet<>(memberRepository.findAllCardNumbers());
-            // In-file dedup keys:
-            // principals → "P::employerId::fullNameLower"
-            // dependents → "D::parentId::fullNameLower"
-            Set<String> inFileKeys = new HashSet<>();
-
-            final int BATCH_SIZE = 100;
-            int firstDataRow = 1;
-            int lastRow = sheet.getLastRowNum();
-            summary.setTotalRows(lastRow - firstDataRow + 1);
-
-            // Count row types for progress logging
-            int pass1Total = 0;
-            int pass2Total = 0;
-            for (int r = firstDataRow; r <= lastRow; r++) {
-                Row rr = sheet.getRow(r);
-                if (rr == null || parserService.isEmptyRow(rr))
-                    continue;
-                if (isDependentRow(rr, columnIndices))
-                    pass2Total++;
-                else
-                    pass1Total++;
-            }
-            log.info("[MemberImport] شروع — إجمالي: {} صف (رئيسيين: {}، تابعين: {})",
-                    summary.getTotalRows(), pass1Total, pass2Total);
-
-            // ══════════════════════════════════════════════════════════════
-            // PRE-PASS — Map each principal row to the card number its dependents expect.
-            //
-            // Excel structure (typical):
-            // Row N : Principal (employer filled, principal_card_number empty)
-            // Row N+1: Dependent (principal_card_number = JFZ..., relationship = ...)
-            // Row N+2: Dependent (same principal_card_number)
-            // Row N+3: Next Principal ...
-            //
-            // We scan in order. When we encounter a DEPENDENT row we note the
-            // principal_card_number it references and assign it to the most recent
-            // principal row we saw. This gives us the correct 1-to-1 mapping:
-            // principalRowNum → cardNumber
-            // ══════════════════════════════════════════════════════════════
-            Map<Integer, String> principalRowToCardNumber = new HashMap<>();
-            int lastSeenPrincipalRow = -1;
-
-            for (int rowNum = firstDataRow; rowNum <= lastRow; rowNum++) {
-                Row row = sheet.getRow(rowNum);
-                if (row == null || parserService.isEmptyRow(row))
-                    continue;
-
-                if (isDependentRow(row, columnIndices)) {
-                    // First dependent after a principal tells us that principal's card number
-                    if (lastSeenPrincipalRow != -1 && !principalRowToCardNumber.containsKey(lastSeenPrincipalRow)) {
-                        String pCard = null;
-                        Integer pCardIdx = columnIndices.get("principal_card_number");
-                        if (pCardIdx != null) {
-                            pCard = normalizeCardNumber(getCellValue(row, pCardIdx));
-                        }
-                        if ((pCard == null || pCard.isBlank()) && columnIndices.get("card_number") != null) {
-                            String excelCard = getCellValue(row, columnIndices.get("card_number"));
-                            if (excelCard != null && !excelCard.isBlank()) {
-                                String extracted = extractPrincipalCardNumber(excelCard);
-                                if (extracted != null && !extracted.equalsIgnoreCase(normalizeCardNumber(excelCard))) {
-                                    pCard = extracted;
-                                }
-                            }
-                        }
-                        if (pCard != null && !pCard.isBlank()) {
-                            principalRowToCardNumber.put(lastSeenPrincipalRow, pCard);
-                        }
-                    }
-                } else {
-                    lastSeenPrincipalRow = rowNum;
-                }
-            }
-
-            log.info("[MemberImport] PRE-PASS: {} صف رئيسي مرتبط برقم بطاقة",
-                    principalRowToCardNumber.size());
-
-            // ══════════════════════════════════════════════════════════════
-            // PASS 1 — PRINCIPALS ONLY
-            // ══════════════════════════════════════════════════════════════
-            List<Member> principalBatch = new ArrayList<>();
-            List<Integer> principalBatchRowNums = new ArrayList<>();
-            List<Member> updateBatch = new ArrayList<>();
-            Map<String, Member> existingPrincipalsByName = new HashMap<>();
-
-            if (selectedEmployer != null) {
-                log.info("[MemberImport] Pre-loading active principal members for employer Org ID: {}", selectedEmployer.getId());
-                List<Member> activePrincipals = memberRepository.findActivePrincipalsByEmployerId(selectedEmployer.getId());
-                for (Member p : activePrincipals) {
-                    if (p.getFullName() != null) {
-                        existingPrincipalsByName.put(normalizeText(p.getFullName()), p);
-                    }
-                }
-                log.info("[MemberImport] Pre-loaded {} active principal members from DB", existingPrincipalsByName.size());
-            }
-
-            // ── بناء خريطة البحث بالرقم لتجنب تكرار المفتاح ─────────────────────
-            Map<String, Member> existingPrincipalsByCardNumber = new HashMap<>();
-            for (Member p : existingPrincipalsByName.values()) {
-                if (p.getCardNumber() != null && !p.getCardNumber().isBlank()) {
-                    existingPrincipalsByCardNumber.put(p.getCardNumber().trim(), p);
-                }
-            }
-
-            int pass1Processed = 0;
-
-            log.info("[MemberImport] PASS-1 بدء — {} صف رئيسي للمعالجة", pass1Total);
-
-            for (int rowNum = firstDataRow; rowNum <= lastRow; rowNum++) {
-                Row row = sheet.getRow(rowNum);
-                if (row == null || parserService.isEmptyRow(row))
-                    continue;
-
-                // Skip dependent rows entirely in pass 1
-                if (isDependentRow(row, columnIndices))
-                    continue;
-
-                try {
-                    Member member = parseAndCreateMember(row, rowNum, columnIndices,
-                            employerLookup, importedPrincipalsCache, null, selectedEmployer, errors);
-
-                    if (member == null) {
-                        summary.setRejected(summary.getRejected() + 1);
-                        pass1Processed++;
-                        continue;
-                    }
-
-                    String fullNameLower = normalizeText(member.getFullName());
-                    Long rowEmployerId = member.getEmployer().getId();
-                    String inFileKey = "P::" + rowEmployerId + "::" + fullNameLower;
-
-                    if (inFileKeys.contains(inFileKey)) {
-                        summary.setSkipped(summary.getSkipped() + 1);
-                        summary.setPrincipalsSkipped(summary.getPrincipalsSkipped() + 1);
-                        pass1Processed++;
-                        continue;
-                    }
-
-                    if (existingPrincipalsByName.containsKey(fullNameLower)) {
-                        inFileKeys.add(inFileKey);
-                        Member existingPrincipal = existingPrincipalsByName.get(fullNameLower);
-                        String oldCardNumber = existingPrincipal.getCardNumber();
-                        if (oldCardNumber != null && !oldCardNumber.isBlank()) {
-                            importedPrincipalsCache.put(oldCardNumber, existingPrincipal);
-                        }
-
-                        // Determine the new clean format card number
-                        String targetCardNumber = member.getCardNumber();
-                        if (targetCardNumber == null || targetCardNumber.isBlank()) {
-                            targetCardNumber = principalRowToCardNumber.get(rowNum);
-                        }
-                        if (targetCardNumber == null || targetCardNumber.isBlank()) {
-                            targetCardNumber = cardNumberGeneratorService.generateUniqueForPrincipal(existingPrincipal);
-                        }
-
-                        // Update card number if changed and not already used
-                        if (!targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
-                            log.info("[MemberImport] Updating principal '{}' card number from '{}' to '{}'", 
-                                    existingPrincipal.getFullName(), oldCardNumber, targetCardNumber);
-                            existingPrincipal.setCardNumber(targetCardNumber);
-                        }
-
-                        // Update other fields if available in Excel
-                        if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
-                            existingPrincipal.setNationalNumber(member.getNationalNumber());
-                        }
-                        if (member.getBirthDate() != null) {
-                            existingPrincipal.setBirthDate(member.getBirthDate());
-                        }
-                        if (member.getGender() != null) {
-                            existingPrincipal.setGender(member.getGender());
-                        }
-                        if (member.getPhone() != null && !member.getPhone().isBlank()) {
-                            existingPrincipal.setPhone(member.getPhone());
-                        }
-                        if (member.getMaritalStatus() != null) {
-                            existingPrincipal.setMaritalStatus(member.getMaritalStatus());
-                        }
-
-                        updateBatch.add(existingPrincipal);
-
-                        if (updateBatch.size() >= BATCH_SIZE) {
-                            List<Member> savedList = memberRepository.saveAll(updateBatch);
-                            for (Member s : savedList) {
-                                usedCardNumbers.add(s.getCardNumber());
-                                importedPrincipalsCache.put(s.getCardNumber(), s);
-                                existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
-                            }
-                            summary.setUpdated(summary.getUpdated() + updateBatch.size());
-                            updateBatch.clear();
-                        }
-
-                        // سجّل الصف → الرئيسي حتى يجده PASS-2 بالترتيب
-                        principalRowToMember.put(rowNum, existingPrincipal);
-                        pass1Processed++;
-                        continue;
-                    }
-
-                    inFileKeys.add(inFileKey);
-
-                    // ── تحديث بالرقم إذا كان رقم البطاقة موجوداً في DB ─────────────────────
-                    String excelCardForCheck = member.getCardNumber();
-                    if (excelCardForCheck != null && !excelCardForCheck.isBlank()
-                            && existingPrincipalsByCardNumber.containsKey(excelCardForCheck)) {
-                        Member existingByCard = existingPrincipalsByCardNumber.get(excelCardForCheck);
-                        if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank())
-                            existingByCard.setNationalNumber(member.getNationalNumber());
-                        if (member.getBirthDate() != null)
-                            existingByCard.setBirthDate(member.getBirthDate());
-                        if (member.getGender() != null)
-                            existingByCard.setGender(member.getGender());
-                        if (member.getPhone() != null && !member.getPhone().isBlank())
-                            existingByCard.setPhone(member.getPhone());
-                        updateBatch.add(existingByCard);
-                        if (updateBatch.size() >= BATCH_SIZE) {
-                            List<Member> savedList = memberRepository.saveAll(updateBatch);
-                            for (Member s : savedList) {
-                                usedCardNumbers.add(s.getCardNumber());
-                                importedPrincipalsCache.put(s.getCardNumber(), s);
-                                existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
-                            }
-                            summary.setUpdated(summary.getUpdated() + updateBatch.size());
-                            updateBatch.clear();
-                        }
-                        // سجّل الصف → الرئيسي الموجود (تحديث بالرقم)
-                        principalRowToMember.put(rowNum, existingByCard);
-                        pass1Processed++;
-                        continue;
-                    }
-
-                    // Assign card number: prefer the value dependents already reference
-                    // (pre-pass), then fall back to auto-generate.
-                    if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
-                        String mappedCard = principalRowToCardNumber.get(rowNum);
-                        if (mappedCard != null && !usedCardNumbers.contains(mappedCard)) {
-                            member.setCardNumber(mappedCard);
-                        } else {
-                            // توليد رقم فريد مع مراعاة الأرقام المولّدة في نفس الدفعة (usedCardNumbers)
-                            member.setCardNumber(
-                                    generateUniqueCardNumberWithCache(member, usedCardNumbers));
-                        }
-                    }
-                    if (usedCardNumbers.contains(member.getCardNumber())) {
-                        summary.setSkipped(summary.getSkipped() + 1);
-                        summary.setPrincipalsSkipped(summary.getPrincipalsSkipped() + 1);
-                        pass1Processed++;
-                        continue;
-                    }
-                    // ── تسجيل الرقم فوراً لمنع التكرار داخل نفس الدفعة ───────────────────
-                    usedCardNumbers.add(member.getCardNumber());
-
-                    member.setBarcode(member.getCardNumber());
-                    principalBatch.add(member);
-                    principalBatchRowNums.add(rowNum);
-                    pass1Processed++;
-
-                    if (principalBatch.size() >= BATCH_SIZE) {
-                        List<Member> saved = memberRepository.saveAll(principalBatch);
-                        for (int i = 0; i < saved.size(); i++) {
-                            Member s = saved.get(i);
-                            usedCardNumbers.add(s.getCardNumber());
-                            importedPrincipalsCache.put(s.getCardNumber(), s);
-                            existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
-                            if (i < principalBatchRowNums.size()) {
-                                principalRowToMember.put(principalBatchRowNums.get(i), s);
-                            }
-                        }
-                        summary.setCreated(summary.getCreated() + saved.size());
-                        summary.setPrincipalsCreated(summary.getPrincipalsCreated() + saved.size());
-                        principalBatch.clear();
-                        principalBatchRowNums.clear();
-                        log.info("[MemberImport] PASS-1 تقدم — {}/{} رئيسي (أُنشئ {} حتى الآن)",
-                                pass1Processed, pass1Total, summary.getPrincipalsCreated());
-                    }
-                } catch (Exception e) {
-                    log.error("[MemberImport] PASS-1 خطأ صف {}: {}", rowNum, e.getMessage());
-                    errors.add(ImportError.builder()
-                            .rowNumber(rowNum - 1)
-                            .errorType(ErrorType.PROCESSING_ERROR)
-                            .messageAr("خطأ في معالجة الصف (رئيسي): " + e.getMessage())
-                            .messageEn("Error processing principal row: " + e.getMessage())
-                            .build());
-                    summary.setFailed(summary.getFailed() + 1);
-                    principalBatch.clear();
-                    pass1Processed++;
-                }
-            }
-
-            // Flush remaining updates
-            if (!updateBatch.isEmpty()) {
-                List<Member> savedList = memberRepository.saveAll(updateBatch);
-                for (Member s : savedList) {
-                    usedCardNumbers.add(s.getCardNumber());
-                    importedPrincipalsCache.put(s.getCardNumber(), s);
-                }
-                summary.setUpdated(summary.getUpdated() + updateBatch.size());
-                updateBatch.clear();
-            }
-
-            // Flush remaining principals
-            if (!principalBatch.isEmpty()) {
-                List<Member> saved = memberRepository.saveAll(principalBatch);
-                for (int i = 0; i < saved.size(); i++) {
-                    Member s = saved.get(i);
-                    usedCardNumbers.add(s.getCardNumber());
-                    importedPrincipalsCache.put(s.getCardNumber(), s);
-                    existingPrincipalsByName.put(normalizeText(s.getFullName()), s);
-                    if (i < principalBatchRowNums.size()) {
-                        principalRowToMember.put(principalBatchRowNums.get(i), s);
-                    }
-                }
-                summary.setCreated(summary.getCreated() + saved.size());
-                summary.setPrincipalsCreated(summary.getPrincipalsCreated() + saved.size());
-                principalBatch.clear();
-                principalBatchRowNums.clear();
-            }
-
-
-            log.info("[MemberImport] PASS-1 اكتمل — أُنشئ {} رئيسي، تُخطّي {} رئيسي",
-                    summary.getPrincipalsCreated(), summary.getPrincipalsSkipped());
-
-            // ══════════════════════════════════════════════════════════════
-            // PASS 2 — DEPENDENTS ONLY
-            // ══════════════════════════════════════════════════════════════
-            if (pass2Total > 0) {
-                List<Member> dependentBatch = new ArrayList<>();
-                int pass2Processed = 0;
-                Map<String, Integer> ordinalCounters = new HashMap<>();
-                log.info("[MemberImport] PASS-2 بدء — {} صف تابع للمعالجة", pass2Total);
-
-                Member lastSeenPrincipal = null;
-                for (int rowNum = firstDataRow; rowNum <= lastRow; rowNum++) {
-                    Row row = sheet.getRow(rowNum);
-                    if (parserService.isEmptyRow(row))
-                        continue;
-
-                    // Skip principal rows — already saved in pass 1
-                    if (!isDependentRow(row, columnIndices)) {
-                        String fullName = normalizeMemberName(getCellValue(row, columnIndices.get("full_name")));
-                        String excelCardNumber = normalizeCardNumber(getCellValue(row, columnIndices.get("card_number")));
-
-                        // 1) أسرع وأدق طريقة: خريطة الصف → الرئيسي المحفوظ في PASS-1
-                        lastSeenPrincipal = principalRowToMember.get(rowNum);
-
-                        // 2) بحث بالرقم في الكاش (احتياطي لو كان الرقم موجوداً في الملف)
-                        if (lastSeenPrincipal == null && excelCardNumber != null && !excelCardNumber.isBlank()) {
-                            lastSeenPrincipal = importedPrincipalsCache.get(excelCardNumber);
-                        }
-                        // 3) بحث بالاسم في الكاش
-                        if (lastSeenPrincipal == null && fullName != null && !fullName.isBlank()) {
-                            lastSeenPrincipal = existingPrincipalsByName.get(fullName.trim().toLowerCase());
-                        }
-                        // 4) بحث مباشر في DB (احتياطي أخير)
-                        if (lastSeenPrincipal == null && fullName != null && !fullName.isBlank()) {
-                            String employerName = getCellValue(row, columnIndices.get("employer"));
-                            Employer employer = findEmployerFuzzy(employerName, employerLookup);
-                            if (employer != null) {
-                                lastSeenPrincipal = memberRepository.findActivePrincipalByFullNameLowerAndEmployerId(
-                                        fullName.trim().toLowerCase(), employer.getId()).orElse(null);
-                                if (lastSeenPrincipal != null) {
-                                    existingPrincipalsByName.put(fullName.trim().toLowerCase(), lastSeenPrincipal);
-                                    importedPrincipalsCache.put(lastSeenPrincipal.getCardNumber(), lastSeenPrincipal);
-                                    principalRowToMember.put(rowNum, lastSeenPrincipal);
-                                }
-                            }
-                        }
-                        log.debug("[MemberImport] PASS-2: صف رئيسي {} → lastSeenPrincipal = {}",
-                                rowNum, lastSeenPrincipal != null ? lastSeenPrincipal.getFullName() + "/" + lastSeenPrincipal.getCardNumber() : "null");
-                        continue;
-                    }
-
-                    try {
-                        Member member = parseAndCreateMember(row, rowNum, columnIndices,
-                                employerLookup, importedPrincipalsCache, lastSeenPrincipal, selectedEmployer, errors);
-
-                        if (member == null) {
-                            summary.setRejected(summary.getRejected() + 1);
-                            pass2Processed++;
-                            continue;
-                        }
-
-                        String fullNameLower = normalizeText(member.getFullName());
-                        Long rowEmployerId = member.getEmployer().getId();
-                        Long parentId = member.getParent() != null ? member.getParent().getId() : null;
-                        String inFileKey = "D::" + parentId + "::" + fullNameLower;
-
-                        if (inFileKeys.contains(inFileKey)) {
-                            summary.setSkipped(summary.getSkipped() + 1);
-                            summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
-                            pass2Processed++;
-                            continue;
-                        }
-
-                        // DB duplicate check — uses Object[] to avoid JPQL CONCAT type mismatch
-                        Set<String> existingDepKeys = existingDependentKeysCache.computeIfAbsent(rowEmployerId,
-                                this::buildDependentKeySet);
-                        if (existingDepKeys.contains(parentId + "::" + fullNameLower)) {
-                            inFileKeys.add(inFileKey);
-                            
-                            // Load the existing dependent from the DB under this parent and with this name
-                            List<Member> parentDeps = memberRepository.findByParentId(parentId);
-                            Member existingDependent = parentDeps.stream()
-                                    .filter(d -> normalizeText(d.getFullName()).equals(fullNameLower))
-                                    .findFirst()
-                                    .orElse(null);
-                            
-                            if (existingDependent != null) {
-                                String oldCardNumber = existingDependent.getCardNumber();
-                                String targetCardNumber = member.getCardNumber();
-                                
-                                // If not specified in Excel, generate a clean hyphenless card number based on current parent's card
-                                if (targetCardNumber == null || targetCardNumber.isBlank()) {
-                                    targetCardNumber = cardNumberGeneratorService.generateForDependent(existingDependent.getParent(), existingDependent.getRelationship());
-                                }
-                                
-                                if (targetCardNumber != null && !targetCardNumber.equals(oldCardNumber) && !usedCardNumbers.contains(targetCardNumber)) {
-                                    log.info("[MemberImport] Updating dependent '{}' card number from '{}' to '{}'", 
-                                            existingDependent.getFullName(), oldCardNumber, targetCardNumber);
-                                    existingDependent.setCardNumber(targetCardNumber);
-                                }
-                                
-                                // Update other fields if available in Excel
-                                if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
-                                    existingDependent.setNationalNumber(member.getNationalNumber());
-                                }
-                                if (member.getBirthDate() != null) {
-                                    existingDependent.setBirthDate(member.getBirthDate());
-                                }
-                                if (member.getGender() != null) {
-                                    existingDependent.setGender(member.getGender());
-                                }
-                                if (member.getPhone() != null && !member.getPhone().isBlank()) {
-                                    existingDependent.setPhone(member.getPhone());
-                                }
-                                if (member.getMaritalStatus() != null) {
-                                    existingDependent.setMaritalStatus(member.getMaritalStatus());
-                                }
-                                
-                                memberRepository.save(existingDependent);
-                                usedCardNumbers.add(existingDependent.getCardNumber());
-                                summary.setUpdated(summary.getUpdated() + 1);
-                            }
-                            pass2Processed++;
-                            continue;
-                        }
-
-                        inFileKeys.add(inFileKey);
-                        // Keep cache fresh for within-session duplicates
-                        existingDepKeys.add(parentId + "::" + fullNameLower);
-
-                        if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
-                            // Use in-memory ordinal counter (seeded from DB once) instead of
-                            // generateForDependent which re-queries DB and sees stale batch counts
-                            Long pid = member.getParent().getId();
-                            Member.Relationship rel = member.getRelationship();
-                            String ordinalKey = pid + "::" + rel.name();
-                            int currentOrdinal = ordinalCounters.computeIfAbsent(ordinalKey,
-                                    k -> (int) memberRepository.countByParentIdAndRelationship(pid, rel));
-                            currentOrdinal++;
-                            ordinalCounters.put(ordinalKey, currentOrdinal);
-                            member.setCardNumber(member.getParent().getCardNumber()
-                                    + rel.getCardCode() + currentOrdinal);
-                        }
-                        if (usedCardNumbers.contains(member.getCardNumber())) {
-                            // Real collision (card already exists in DB or was assigned this session)
-                            // — bump ordinal until we find a free slot instead of dropping the record
-                            Long pid = member.getParent().getId();
-                            Member.Relationship rel = member.getRelationship();
-                            String ordinalKey = pid + "::" + rel.name();
-                            int ordinal = ordinalCounters.getOrDefault(ordinalKey, 0);
-                            String candidate;
-                            do {
-                                ordinal++;
-                                candidate = member.getParent().getCardNumber()
-                                        + rel.getCardCode() + ordinal;
-                            } while (usedCardNumbers.contains(candidate) && ordinal < 999);
-                            ordinalCounters.put(ordinalKey, ordinal);
-                            member.setCardNumber(candidate);
-                        }
-                        if (usedCardNumbers.contains(member.getCardNumber())) {
-                            // Truly exhausted — skip with a clear reason
-                            log.warn("[MemberImport] PASS-2 تعذّر توليد رقم بطاقة فريد للصف {} ({})",
-                                    rowNum, member.getFullName());
-                            summary.setSkipped(summary.getSkipped() + 1);
-                            summary.setDependentsSkipped(summary.getDependentsSkipped() + 1);
-                            pass2Processed++;
-                            continue;
-                        }
-                        usedCardNumbers.add(member.getCardNumber());
-
-                        // Use JPA proxy for parent FK — avoids detached entity merge issues
-                        if (member.getParent() != null && member.getParent().getId() != null) {
-                            member.setParent(memberRepository.getReferenceById(member.getParent().getId()));
-                        }
-
-                        dependentBatch.add(member);
-                        pass2Processed++;
-
-                        if (dependentBatch.size() >= BATCH_SIZE) {
-                            memberRepository.saveAll(dependentBatch);
-                            summary.setCreated(summary.getCreated() + dependentBatch.size());
-                            summary.setDependentsCreated(summary.getDependentsCreated() + dependentBatch.size());
-                            dependentBatch.clear();
-                            log.info("[MemberImport] PASS-2 تقدم — {}/{} تابع (أُنشئ {} حتى الآن)",
-                                    pass2Processed, pass2Total, summary.getDependentsCreated());
-                        }
-                    } catch (Exception e) {
-                        log.error("[MemberImport] PASS-2 خطأ صف {}: {}", rowNum, e.getMessage());
-                        errors.add(ImportError.builder()
-                                .rowNumber(rowNum - 1)
-                                .errorType(ErrorType.PROCESSING_ERROR)
-                                .messageAr("خطأ في معالجة الصف (تابع): " + e.getMessage())
-                                .messageEn("Error processing dependent row: " + e.getMessage())
-                                .build());
-                        summary.setFailed(summary.getFailed() + 1);
-                        dependentBatch.clear();
-                        pass2Processed++;
-                    }
-                }
-
-                // Flush remaining dependents
-                if (!dependentBatch.isEmpty()) {
-                    memberRepository.saveAll(dependentBatch);
-                    summary.setCreated(summary.getCreated() + dependentBatch.size());
-                    summary.setDependentsCreated(summary.getDependentsCreated() + dependentBatch.size());
-                    log.info("[MemberImport] PASS-2 دفعة نهائية — {} تابع", dependentBatch.size());
-                    dependentBatch.clear();
-                }
-
-                log.info("[MemberImport] PASS-2 اكتمل — أُنشئ {} تابع، تُخطّي {} تابع",
-                        summary.getDependentsCreated(), summary.getDependentsSkipped());
-            }
+            runPrePass(ctx);
+            runPass1(ctx);
+            runPass2(ctx);
 
             String messageAr = String.format(
                     "رئيسيون: أُنشئ %d، تُخطّي %d | تابعون: أُنشئ %d، تُخطّي %d | فشل %d",
@@ -854,6 +319,577 @@ public class MemberExcelTemplateService {
             log.error("[MemberImport] Import failed", e);
             throw new BusinessRuleException("فشل استيراد البيانات: " + e.getMessage());
         }
+    }
+
+    private static final int IMPORT_BATCH_SIZE = 100;
+
+    /**
+     * Mutable state threaded through the three import passes below. Every field here
+     * used to be a local variable inside the single ~600-line {@code importFromExcel}
+     * body; grouped into one object so the pass methods can share it without a long
+     * parameter list. Not a DTO -- an internal accumulator, so fields are accessed
+     * directly rather than through getters/setters.
+     */
+    private static final class ImportContext {
+        final Sheet sheet;
+        final Map<String, Integer> columnIndices;
+        final Employer selectedEmployer;
+        final ImportSummary summary;
+        final List<ImportError> errors;
+        final int firstDataRow = 1;
+        final int lastRow;
+
+        Map<String, Employer> employerLookup;
+        int pass1Total;
+        int pass2Total;
+
+        // card_number → saved Member (principals saved in PASS-1)
+        final Map<String, Member> importedPrincipalsCache = new HashMap<>();
+        // rowNum → saved Member -- lets PASS-2 find the principal by row order (most reliable)
+        final Map<Integer, Member> principalRowToMember = new HashMap<>();
+        Set<String> usedCardNumbers;
+        // In-file dedup keys: principals -> "P::employerId::fullNameLower", dependents -> "D::parentId::fullNameLower"
+        final Set<String> inFileKeys = new HashSet<>();
+        // Cache per-employer dependent dedup keys "parentId::lowerName" (DB) -- PASS-2.
+        // Built from Object[] to avoid JPQL CONCAT type issues with Long in Hibernate 6.
+        final Map<Long, Set<String>> existingDependentKeysCache = new HashMap<>();
+        // fullNameLower → existing principal Member (DB), populated in PASS-1, read again in PASS-2's lastSeenPrincipal fallback
+        final Map<String, Member> existingPrincipalsByName = new HashMap<>();
+        // principalRowNum → card number its dependents reference (PRE-PASS output, consumed in PASS-1)
+        final Map<Integer, String> principalRowToCardNumber = new HashMap<>();
+
+        ImportContext(Sheet sheet, Map<String, Integer> columnIndices, Employer selectedEmployer,
+                ImportSummary summary, List<ImportError> errors) {
+            this.sheet = sheet;
+            this.columnIndices = columnIndices;
+            this.selectedEmployer = selectedEmployer;
+            this.summary = summary;
+            this.errors = errors;
+            this.lastRow = sheet.getLastRowNum();
+        }
+    }
+
+    /** Counts principal vs. dependent rows up front, purely for progress logging and the PASS-2 skip guard. */
+    private void countRowTypes(ImportContext ctx) {
+        for (int r = ctx.firstDataRow; r <= ctx.lastRow; r++) {
+            Row rr = ctx.sheet.getRow(r);
+            if (rr == null || parserService.isEmptyRow(rr))
+                continue;
+            if (isDependentRow(rr, ctx.columnIndices))
+                ctx.pass2Total++;
+            else
+                ctx.pass1Total++;
+        }
+        log.info("[MemberImport] شروع — إجمالي: {} صف (رئيسيين: {}، تابعين: {})",
+                ctx.summary.getTotalRows(), ctx.pass1Total, ctx.pass2Total);
+    }
+
+    /**
+     * Maps each principal row to the card number its dependents expect.
+     *
+     * Excel structure (typical):
+     * Row N : Principal (employer filled, principal_card_number empty)
+     * Row N+1: Dependent (principal_card_number = JFZ..., relationship = ...)
+     * Row N+2: Dependent (same principal_card_number)
+     * Row N+3: Next Principal ...
+     *
+     * We scan in order. When we encounter a DEPENDENT row we note the
+     * principal_card_number it references and assign it to the most recent
+     * principal row we saw. This gives us the correct 1-to-1 mapping:
+     * principalRowNum → cardNumber
+     */
+    private void runPrePass(ImportContext ctx) {
+        int lastSeenPrincipalRow = -1;
+
+        for (int rowNum = ctx.firstDataRow; rowNum <= ctx.lastRow; rowNum++) {
+            Row row = ctx.sheet.getRow(rowNum);
+            if (row == null || parserService.isEmptyRow(row))
+                continue;
+
+            if (isDependentRow(row, ctx.columnIndices)) {
+                // First dependent after a principal tells us that principal's card number
+                if (lastSeenPrincipalRow != -1 && !ctx.principalRowToCardNumber.containsKey(lastSeenPrincipalRow)) {
+                    String pCard = null;
+                    Integer pCardIdx = ctx.columnIndices.get("principal_card_number");
+                    if (pCardIdx != null) {
+                        pCard = normalizeCardNumber(getCellValue(row, pCardIdx));
+                    }
+                    if ((pCard == null || pCard.isBlank()) && ctx.columnIndices.get("card_number") != null) {
+                        String excelCard = getCellValue(row, ctx.columnIndices.get("card_number"));
+                        if (excelCard != null && !excelCard.isBlank()) {
+                            String extracted = extractPrincipalCardNumber(excelCard);
+                            if (extracted != null && !extracted.equalsIgnoreCase(normalizeCardNumber(excelCard))) {
+                                pCard = extracted;
+                            }
+                        }
+                    }
+                    if (pCard != null && !pCard.isBlank()) {
+                        ctx.principalRowToCardNumber.put(lastSeenPrincipalRow, pCard);
+                    }
+                }
+            } else {
+                lastSeenPrincipalRow = rowNum;
+            }
+        }
+
+        log.info("[MemberImport] PRE-PASS: {} صف رئيسي مرتبط برقم بطاقة",
+                ctx.principalRowToCardNumber.size());
+    }
+
+    /** PASS 1 — creates/updates PRINCIPALS only; dependent rows are skipped entirely. */
+    private void runPass1(ImportContext ctx) {
+        List<Member> principalBatch = new ArrayList<>();
+        List<Integer> principalBatchRowNums = new ArrayList<>();
+        List<Member> updateBatch = new ArrayList<>();
+
+        if (ctx.selectedEmployer != null) {
+            log.info("[MemberImport] Pre-loading active principal members for employer Org ID: {}", ctx.selectedEmployer.getId());
+            List<Member> activePrincipals = memberRepository.findActivePrincipalsByEmployerId(ctx.selectedEmployer.getId());
+            for (Member p : activePrincipals) {
+                if (p.getFullName() != null) {
+                    ctx.existingPrincipalsByName.put(normalizeText(p.getFullName()), p);
+                }
+            }
+            log.info("[MemberImport] Pre-loaded {} active principal members from DB", ctx.existingPrincipalsByName.size());
+        }
+
+        // ── بناء خريطة البحث بالرقم لتجنب تكرار المفتاح ─────────────────────
+        Map<String, Member> existingPrincipalsByCardNumber = new HashMap<>();
+        for (Member p : ctx.existingPrincipalsByName.values()) {
+            if (p.getCardNumber() != null && !p.getCardNumber().isBlank()) {
+                existingPrincipalsByCardNumber.put(p.getCardNumber().trim(), p);
+            }
+        }
+
+        int pass1Processed = 0;
+
+        log.info("[MemberImport] PASS-1 بدء — {} صف رئيسي للمعالجة", ctx.pass1Total);
+
+        for (int rowNum = ctx.firstDataRow; rowNum <= ctx.lastRow; rowNum++) {
+            Row row = ctx.sheet.getRow(rowNum);
+            if (row == null || parserService.isEmptyRow(row))
+                continue;
+
+            // Skip dependent rows entirely in pass 1
+            if (isDependentRow(row, ctx.columnIndices))
+                continue;
+
+            try {
+                Member member = parseAndCreateMember(row, rowNum, ctx.columnIndices,
+                        ctx.employerLookup, ctx.importedPrincipalsCache, null, ctx.selectedEmployer, ctx.errors);
+
+                if (member == null) {
+                    ctx.summary.setRejected(ctx.summary.getRejected() + 1);
+                    pass1Processed++;
+                    continue;
+                }
+
+                String fullNameLower = normalizeText(member.getFullName());
+                Long rowEmployerId = member.getEmployer().getId();
+                String inFileKey = "P::" + rowEmployerId + "::" + fullNameLower;
+
+                if (ctx.inFileKeys.contains(inFileKey)) {
+                    ctx.summary.setSkipped(ctx.summary.getSkipped() + 1);
+                    ctx.summary.setPrincipalsSkipped(ctx.summary.getPrincipalsSkipped() + 1);
+                    pass1Processed++;
+                    continue;
+                }
+
+                if (ctx.existingPrincipalsByName.containsKey(fullNameLower)) {
+                    ctx.inFileKeys.add(inFileKey);
+                    Member existingPrincipal = ctx.existingPrincipalsByName.get(fullNameLower);
+                    String oldCardNumber = existingPrincipal.getCardNumber();
+                    if (oldCardNumber != null && !oldCardNumber.isBlank()) {
+                        ctx.importedPrincipalsCache.put(oldCardNumber, existingPrincipal);
+                    }
+
+                    // Determine the new clean format card number
+                    String targetCardNumber = member.getCardNumber();
+                    if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                        targetCardNumber = ctx.principalRowToCardNumber.get(rowNum);
+                    }
+                    if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                        targetCardNumber = cardNumberGeneratorService.generateUniqueForPrincipal(existingPrincipal);
+                    }
+
+                    // Update card number if changed and not already used
+                    if (!targetCardNumber.equals(oldCardNumber) && !ctx.usedCardNumbers.contains(targetCardNumber)) {
+                        log.info("[MemberImport] Updating principal '{}' card number from '{}' to '{}'",
+                                existingPrincipal.getFullName(), oldCardNumber, targetCardNumber);
+                        existingPrincipal.setCardNumber(targetCardNumber);
+                    }
+
+                    // Update other fields if available in Excel
+                    if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
+                        existingPrincipal.setNationalNumber(member.getNationalNumber());
+                    }
+                    if (member.getBirthDate() != null) {
+                        existingPrincipal.setBirthDate(member.getBirthDate());
+                    }
+                    if (member.getGender() != null) {
+                        existingPrincipal.setGender(member.getGender());
+                    }
+                    if (member.getPhone() != null && !member.getPhone().isBlank()) {
+                        existingPrincipal.setPhone(member.getPhone());
+                    }
+                    if (member.getMaritalStatus() != null) {
+                        existingPrincipal.setMaritalStatus(member.getMaritalStatus());
+                    }
+
+                    updateBatch.add(existingPrincipal);
+
+                    if (updateBatch.size() >= IMPORT_BATCH_SIZE) {
+                        List<Member> savedList = memberRepository.saveAll(updateBatch);
+                        for (Member s : savedList) {
+                            ctx.usedCardNumbers.add(s.getCardNumber());
+                            ctx.importedPrincipalsCache.put(s.getCardNumber(), s);
+                            ctx.existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                        }
+                        ctx.summary.setUpdated(ctx.summary.getUpdated() + updateBatch.size());
+                        updateBatch.clear();
+                    }
+
+                    // سجّل الصف → الرئيسي حتى يجده PASS-2 بالترتيب
+                    ctx.principalRowToMember.put(rowNum, existingPrincipal);
+                    pass1Processed++;
+                    continue;
+                }
+
+                ctx.inFileKeys.add(inFileKey);
+
+                // ── تحديث بالرقم إذا كان رقم البطاقة موجوداً في DB ─────────────────────
+                String excelCardForCheck = member.getCardNumber();
+                if (excelCardForCheck != null && !excelCardForCheck.isBlank()
+                        && existingPrincipalsByCardNumber.containsKey(excelCardForCheck)) {
+                    Member existingByCard = existingPrincipalsByCardNumber.get(excelCardForCheck);
+                    if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank())
+                        existingByCard.setNationalNumber(member.getNationalNumber());
+                    if (member.getBirthDate() != null)
+                        existingByCard.setBirthDate(member.getBirthDate());
+                    if (member.getGender() != null)
+                        existingByCard.setGender(member.getGender());
+                    if (member.getPhone() != null && !member.getPhone().isBlank())
+                        existingByCard.setPhone(member.getPhone());
+                    updateBatch.add(existingByCard);
+                    if (updateBatch.size() >= IMPORT_BATCH_SIZE) {
+                        List<Member> savedList = memberRepository.saveAll(updateBatch);
+                        for (Member s : savedList) {
+                            ctx.usedCardNumbers.add(s.getCardNumber());
+                            ctx.importedPrincipalsCache.put(s.getCardNumber(), s);
+                            ctx.existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                        }
+                        ctx.summary.setUpdated(ctx.summary.getUpdated() + updateBatch.size());
+                        updateBatch.clear();
+                    }
+                    // سجّل الصف → الرئيسي الموجود (تحديث بالرقم)
+                    ctx.principalRowToMember.put(rowNum, existingByCard);
+                    pass1Processed++;
+                    continue;
+                }
+
+                // Assign card number: prefer the value dependents already reference
+                // (pre-pass), then fall back to auto-generate.
+                if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
+                    String mappedCard = ctx.principalRowToCardNumber.get(rowNum);
+                    if (mappedCard != null && !ctx.usedCardNumbers.contains(mappedCard)) {
+                        member.setCardNumber(mappedCard);
+                    } else {
+                        // توليد رقم فريد مع مراعاة الأرقام المولّدة في نفس الدفعة (usedCardNumbers)
+                        member.setCardNumber(
+                                generateUniqueCardNumberWithCache(member, ctx.usedCardNumbers));
+                    }
+                }
+                if (ctx.usedCardNumbers.contains(member.getCardNumber())) {
+                    ctx.summary.setSkipped(ctx.summary.getSkipped() + 1);
+                    ctx.summary.setPrincipalsSkipped(ctx.summary.getPrincipalsSkipped() + 1);
+                    pass1Processed++;
+                    continue;
+                }
+                // ── تسجيل الرقم فوراً لمنع التكرار داخل نفس الدفعة ───────────────────
+                ctx.usedCardNumbers.add(member.getCardNumber());
+
+                member.setBarcode(member.getCardNumber());
+                principalBatch.add(member);
+                principalBatchRowNums.add(rowNum);
+                pass1Processed++;
+
+                if (principalBatch.size() >= IMPORT_BATCH_SIZE) {
+                    List<Member> saved = memberRepository.saveAll(principalBatch);
+                    for (int i = 0; i < saved.size(); i++) {
+                        Member s = saved.get(i);
+                        ctx.usedCardNumbers.add(s.getCardNumber());
+                        ctx.importedPrincipalsCache.put(s.getCardNumber(), s);
+                        ctx.existingPrincipalsByName.put(s.getFullName().trim().toLowerCase(), s);
+                        if (i < principalBatchRowNums.size()) {
+                            ctx.principalRowToMember.put(principalBatchRowNums.get(i), s);
+                        }
+                    }
+                    ctx.summary.setCreated(ctx.summary.getCreated() + saved.size());
+                    ctx.summary.setPrincipalsCreated(ctx.summary.getPrincipalsCreated() + saved.size());
+                    principalBatch.clear();
+                    principalBatchRowNums.clear();
+                    log.info("[MemberImport] PASS-1 تقدم — {}/{} رئيسي (أُنشئ {} حتى الآن)",
+                            pass1Processed, ctx.pass1Total, ctx.summary.getPrincipalsCreated());
+                }
+            } catch (Exception e) {
+                log.error("[MemberImport] PASS-1 خطأ صف {}: {}", rowNum, e.getMessage());
+                ctx.errors.add(ImportError.builder()
+                        .rowNumber(rowNum - 1)
+                        .errorType(ErrorType.PROCESSING_ERROR)
+                        .messageAr("خطأ في معالجة الصف (رئيسي): " + e.getMessage())
+                        .messageEn("Error processing principal row: " + e.getMessage())
+                        .build());
+                ctx.summary.setFailed(ctx.summary.getFailed() + 1);
+                principalBatch.clear();
+                pass1Processed++;
+            }
+        }
+
+        // Flush remaining updates
+        if (!updateBatch.isEmpty()) {
+            List<Member> savedList = memberRepository.saveAll(updateBatch);
+            for (Member s : savedList) {
+                ctx.usedCardNumbers.add(s.getCardNumber());
+                ctx.importedPrincipalsCache.put(s.getCardNumber(), s);
+            }
+            ctx.summary.setUpdated(ctx.summary.getUpdated() + updateBatch.size());
+            updateBatch.clear();
+        }
+
+        // Flush remaining principals
+        if (!principalBatch.isEmpty()) {
+            List<Member> saved = memberRepository.saveAll(principalBatch);
+            for (int i = 0; i < saved.size(); i++) {
+                Member s = saved.get(i);
+                ctx.usedCardNumbers.add(s.getCardNumber());
+                ctx.importedPrincipalsCache.put(s.getCardNumber(), s);
+                ctx.existingPrincipalsByName.put(normalizeText(s.getFullName()), s);
+                if (i < principalBatchRowNums.size()) {
+                    ctx.principalRowToMember.put(principalBatchRowNums.get(i), s);
+                }
+            }
+            ctx.summary.setCreated(ctx.summary.getCreated() + saved.size());
+            ctx.summary.setPrincipalsCreated(ctx.summary.getPrincipalsCreated() + saved.size());
+            principalBatch.clear();
+            principalBatchRowNums.clear();
+        }
+
+        log.info("[MemberImport] PASS-1 اكتمل — أُنشئ {} رئيسي، تُخطّي {} رئيسي",
+                ctx.summary.getPrincipalsCreated(), ctx.summary.getPrincipalsSkipped());
+    }
+
+    /** PASS 2 — creates/updates DEPENDENTS only; their principal is guaranteed to be in DB by now. */
+    private void runPass2(ImportContext ctx) {
+        if (ctx.pass2Total <= 0) {
+            return;
+        }
+
+        List<Member> dependentBatch = new ArrayList<>();
+        int pass2Processed = 0;
+        Map<String, Integer> ordinalCounters = new HashMap<>();
+        log.info("[MemberImport] PASS-2 بدء — {} صف تابع للمعالجة", ctx.pass2Total);
+
+        Member lastSeenPrincipal = null;
+        for (int rowNum = ctx.firstDataRow; rowNum <= ctx.lastRow; rowNum++) {
+            Row row = ctx.sheet.getRow(rowNum);
+            if (parserService.isEmptyRow(row))
+                continue;
+
+            // Skip principal rows — already saved in pass 1
+            if (!isDependentRow(row, ctx.columnIndices)) {
+                String fullName = normalizeMemberName(getCellValue(row, ctx.columnIndices.get("full_name")));
+                String excelCardNumber = normalizeCardNumber(getCellValue(row, ctx.columnIndices.get("card_number")));
+
+                // 1) أسرع وأدق طريقة: خريطة الصف → الرئيسي المحفوظ في PASS-1
+                lastSeenPrincipal = ctx.principalRowToMember.get(rowNum);
+
+                // 2) بحث بالرقم في الكاش (احتياطي لو كان الرقم موجوداً في الملف)
+                if (lastSeenPrincipal == null && excelCardNumber != null && !excelCardNumber.isBlank()) {
+                    lastSeenPrincipal = ctx.importedPrincipalsCache.get(excelCardNumber);
+                }
+                // 3) بحث بالاسم في الكاش
+                if (lastSeenPrincipal == null && fullName != null && !fullName.isBlank()) {
+                    lastSeenPrincipal = ctx.existingPrincipalsByName.get(fullName.trim().toLowerCase());
+                }
+                // 4) بحث مباشر في DB (احتياطي أخير)
+                if (lastSeenPrincipal == null && fullName != null && !fullName.isBlank()) {
+                    String employerName = getCellValue(row, ctx.columnIndices.get("employer"));
+                    Employer employer = findEmployerFuzzy(employerName, ctx.employerLookup);
+                    if (employer != null) {
+                        lastSeenPrincipal = memberRepository.findActivePrincipalByFullNameLowerAndEmployerId(
+                                fullName.trim().toLowerCase(), employer.getId()).orElse(null);
+                        if (lastSeenPrincipal != null) {
+                            ctx.existingPrincipalsByName.put(fullName.trim().toLowerCase(), lastSeenPrincipal);
+                            ctx.importedPrincipalsCache.put(lastSeenPrincipal.getCardNumber(), lastSeenPrincipal);
+                            ctx.principalRowToMember.put(rowNum, lastSeenPrincipal);
+                        }
+                    }
+                }
+                log.debug("[MemberImport] PASS-2: صف رئيسي {} → lastSeenPrincipal = {}",
+                        rowNum, lastSeenPrincipal != null ? lastSeenPrincipal.getFullName() + "/" + lastSeenPrincipal.getCardNumber() : "null");
+                continue;
+            }
+
+            try {
+                Member member = parseAndCreateMember(row, rowNum, ctx.columnIndices,
+                        ctx.employerLookup, ctx.importedPrincipalsCache, lastSeenPrincipal, ctx.selectedEmployer, ctx.errors);
+
+                if (member == null) {
+                    ctx.summary.setRejected(ctx.summary.getRejected() + 1);
+                    pass2Processed++;
+                    continue;
+                }
+
+                String fullNameLower = normalizeText(member.getFullName());
+                Long rowEmployerId = member.getEmployer().getId();
+                Long parentId = member.getParent() != null ? member.getParent().getId() : null;
+                String inFileKey = "D::" + parentId + "::" + fullNameLower;
+
+                if (ctx.inFileKeys.contains(inFileKey)) {
+                    ctx.summary.setSkipped(ctx.summary.getSkipped() + 1);
+                    ctx.summary.setDependentsSkipped(ctx.summary.getDependentsSkipped() + 1);
+                    pass2Processed++;
+                    continue;
+                }
+
+                // DB duplicate check — uses Object[] to avoid JPQL CONCAT type mismatch
+                Set<String> existingDepKeys = ctx.existingDependentKeysCache.computeIfAbsent(rowEmployerId,
+                        this::buildDependentKeySet);
+                if (existingDepKeys.contains(parentId + "::" + fullNameLower)) {
+                    ctx.inFileKeys.add(inFileKey);
+
+                    // Load the existing dependent from the DB under this parent and with this name
+                    List<Member> parentDeps = memberRepository.findByParentId(parentId);
+                    Member existingDependent = parentDeps.stream()
+                            .filter(d -> normalizeText(d.getFullName()).equals(fullNameLower))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (existingDependent != null) {
+                        String oldCardNumber = existingDependent.getCardNumber();
+                        String targetCardNumber = member.getCardNumber();
+
+                        // If not specified in Excel, generate a clean hyphenless card number based on current parent's card
+                        if (targetCardNumber == null || targetCardNumber.isBlank()) {
+                            targetCardNumber = cardNumberGeneratorService.generateForDependent(existingDependent.getParent(), existingDependent.getRelationship());
+                        }
+
+                        if (targetCardNumber != null && !targetCardNumber.equals(oldCardNumber) && !ctx.usedCardNumbers.contains(targetCardNumber)) {
+                            log.info("[MemberImport] Updating dependent '{}' card number from '{}' to '{}'",
+                                    existingDependent.getFullName(), oldCardNumber, targetCardNumber);
+                            existingDependent.setCardNumber(targetCardNumber);
+                        }
+
+                        // Update other fields if available in Excel
+                        if (member.getNationalNumber() != null && !member.getNationalNumber().isBlank()) {
+                            existingDependent.setNationalNumber(member.getNationalNumber());
+                        }
+                        if (member.getBirthDate() != null) {
+                            existingDependent.setBirthDate(member.getBirthDate());
+                        }
+                        if (member.getGender() != null) {
+                            existingDependent.setGender(member.getGender());
+                        }
+                        if (member.getPhone() != null && !member.getPhone().isBlank()) {
+                            existingDependent.setPhone(member.getPhone());
+                        }
+                        if (member.getMaritalStatus() != null) {
+                            existingDependent.setMaritalStatus(member.getMaritalStatus());
+                        }
+
+                        memberRepository.save(existingDependent);
+                        ctx.usedCardNumbers.add(existingDependent.getCardNumber());
+                        ctx.summary.setUpdated(ctx.summary.getUpdated() + 1);
+                    }
+                    pass2Processed++;
+                    continue;
+                }
+
+                ctx.inFileKeys.add(inFileKey);
+                // Keep cache fresh for within-session duplicates
+                existingDepKeys.add(parentId + "::" + fullNameLower);
+
+                if (member.getCardNumber() == null || member.getCardNumber().isBlank()) {
+                    // Use in-memory ordinal counter (seeded from DB once) instead of
+                    // generateForDependent which re-queries DB and sees stale batch counts
+                    Long pid = member.getParent().getId();
+                    Member.Relationship rel = member.getRelationship();
+                    String ordinalKey = pid + "::" + rel.name();
+                    int currentOrdinal = ordinalCounters.computeIfAbsent(ordinalKey,
+                            k -> (int) memberRepository.countByParentIdAndRelationship(pid, rel));
+                    currentOrdinal++;
+                    ordinalCounters.put(ordinalKey, currentOrdinal);
+                    member.setCardNumber(member.getParent().getCardNumber()
+                            + rel.getCardCode() + currentOrdinal);
+                }
+                if (ctx.usedCardNumbers.contains(member.getCardNumber())) {
+                    // Real collision (card already exists in DB or was assigned this session)
+                    // — bump ordinal until we find a free slot instead of dropping the record
+                    Long pid = member.getParent().getId();
+                    Member.Relationship rel = member.getRelationship();
+                    String ordinalKey = pid + "::" + rel.name();
+                    int ordinal = ordinalCounters.getOrDefault(ordinalKey, 0);
+                    String candidate;
+                    do {
+                        ordinal++;
+                        candidate = member.getParent().getCardNumber()
+                                + rel.getCardCode() + ordinal;
+                    } while (ctx.usedCardNumbers.contains(candidate) && ordinal < 999);
+                    ordinalCounters.put(ordinalKey, ordinal);
+                    member.setCardNumber(candidate);
+                }
+                if (ctx.usedCardNumbers.contains(member.getCardNumber())) {
+                    // Truly exhausted — skip with a clear reason
+                    log.warn("[MemberImport] PASS-2 تعذّر توليد رقم بطاقة فريد للصف {} ({})",
+                            rowNum, member.getFullName());
+                    ctx.summary.setSkipped(ctx.summary.getSkipped() + 1);
+                    ctx.summary.setDependentsSkipped(ctx.summary.getDependentsSkipped() + 1);
+                    pass2Processed++;
+                    continue;
+                }
+                ctx.usedCardNumbers.add(member.getCardNumber());
+
+                // Use JPA proxy for parent FK — avoids detached entity merge issues
+                if (member.getParent() != null && member.getParent().getId() != null) {
+                    member.setParent(memberRepository.getReferenceById(member.getParent().getId()));
+                }
+
+                dependentBatch.add(member);
+                pass2Processed++;
+
+                if (dependentBatch.size() >= IMPORT_BATCH_SIZE) {
+                    memberRepository.saveAll(dependentBatch);
+                    ctx.summary.setCreated(ctx.summary.getCreated() + dependentBatch.size());
+                    ctx.summary.setDependentsCreated(ctx.summary.getDependentsCreated() + dependentBatch.size());
+                    dependentBatch.clear();
+                    log.info("[MemberImport] PASS-2 تقدم — {}/{} تابع (أُنشئ {} حتى الآن)",
+                            pass2Processed, ctx.pass2Total, ctx.summary.getDependentsCreated());
+                }
+            } catch (Exception e) {
+                log.error("[MemberImport] PASS-2 خطأ صف {}: {}", rowNum, e.getMessage());
+                ctx.errors.add(ImportError.builder()
+                        .rowNumber(rowNum - 1)
+                        .errorType(ErrorType.PROCESSING_ERROR)
+                        .messageAr("خطأ في معالجة الصف (تابع): " + e.getMessage())
+                        .messageEn("Error processing dependent row: " + e.getMessage())
+                        .build());
+                ctx.summary.setFailed(ctx.summary.getFailed() + 1);
+                dependentBatch.clear();
+                pass2Processed++;
+            }
+        }
+
+        // Flush remaining dependents
+        if (!dependentBatch.isEmpty()) {
+            memberRepository.saveAll(dependentBatch);
+            ctx.summary.setCreated(ctx.summary.getCreated() + dependentBatch.size());
+            ctx.summary.setDependentsCreated(ctx.summary.getDependentsCreated() + dependentBatch.size());
+            log.info("[MemberImport] PASS-2 دفعة نهائية — {} تابع", dependentBatch.size());
+            dependentBatch.clear();
+        }
+
+        log.info("[MemberImport] PASS-2 اكتمل — أُنشئ {} تابع، تُخطّي {} تابع",
+                ctx.summary.getDependentsCreated(), ctx.summary.getDependentsSkipped());
     }
 
     /**
