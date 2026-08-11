@@ -276,6 +276,13 @@ public class Member {
     @Column(name = "updated_by")
     private String updatedBy;
 
+    // @Builder.Default is required here, not decorative: Lombok's @Builder
+    // ignores plain field initializers, so without it every member created
+    // via Member.builder() (the pattern used everywhere in this codebase)
+    // got kinshipVerified=null in the INSERT -- overriding V67's DB-level
+    // DEFAULT FALSE, since Hibernate sends an explicit NULL rather than
+    // omitting the column. Only the no-args constructor path ever saw false.
+    @Builder.Default
     @Column(name = "kinship_verified")
     private Boolean kinshipVerified = false;
 
