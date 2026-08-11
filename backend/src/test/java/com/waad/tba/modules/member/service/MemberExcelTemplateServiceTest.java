@@ -3,6 +3,8 @@ package com.waad.tba.modules.member.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
@@ -56,9 +58,14 @@ class MemberExcelTemplateServiceTest {
     @Mock
     private BarcodeGeneratorService barcodeGeneratorService;
     @Mock
-    private CardNumberGeneratorService cardNumberGeneratorService;
-    @Mock
     private BenefitPolicyRepository benefitPolicyRepository;
+
+    // Real instance (not @Mock) wrapping the mocked repository: the dependent-linking
+    // tests exercise real card-number regex logic (isPrincipalCardNumber,
+    // extractBaseCardNumber, generateForDependent's suffix format), which a bare mock
+    // would fake into always-false/null and hide the exact bug this class was built to
+    // catch (see class javadoc).
+    private CardNumberGeneratorService cardNumberGeneratorService;
 
     private MemberExcelTemplateService service;
     private Employer employer;
@@ -68,6 +75,7 @@ class MemberExcelTemplateServiceTest {
         // Real, dependency-free parser -- same convention MemberExcelImportServiceTest
         // uses for MemberImportParser: parsing itself is part of what's under test.
         ExcelParserService parserService = new ExcelParserService();
+        cardNumberGeneratorService = spy(new CardNumberGeneratorService(memberRepository));
 
         service = new MemberExcelTemplateService(
                 templateService, parserService, memberRepository, employerRepository,
@@ -84,11 +92,11 @@ class MemberExcelTemplateServiceTest {
                 .thenReturn(java.util.Optional.of(activePolicy));
         when(memberRepository.findAllCardNumbers()).thenReturn(List.of());
         when(memberRepository.findActivePrincipalsByEmployerId(anyLong())).thenReturn(List.of());
-        // A card number with no digits-only "principal" shape is treated as blank/absent
-        // by isDependentRow's caller when the cell itself is blank -- rows in these tests
-        // never populate card_number, so every row is a principal row.
-        when(cardNumberGeneratorService.generateUniqueForPrincipal(any(Member.class)))
-                .thenReturn("CARD-0001", "CARD-0002", "CARD-0003");
+        // Only the principal-generation entry point is stubbed (it would otherwise hit
+        // real employer/date-based logic not relevant here); isPrincipalCardNumber,
+        // extractBaseCardNumber and generateForDependent run for real on the spy.
+        doReturn("CARD0001", "CARD0002", "CARD0003")
+                .when(cardNumberGeneratorService).generateUniqueForPrincipal(any(Member.class));
         when(memberRepository.saveAll(any())).thenAnswer(invocation -> {
             List<Member> batch = invocation.getArgument(0);
             long nextId = 500L;
@@ -156,6 +164,71 @@ class MemberExcelTemplateServiceTest {
 
         assertThat(result.getSummary().getTotalRows()).isZero();
         assertThat(result.getSummary().getCreated()).isZero();
+    }
+
+    @Test
+    @DisplayName("A dependent row referencing its principal's card number is linked via the in-session cache")
+    void importFromExcel_dependentRowWithPrincipalCardReference_createsLinkedDependent() {
+        MockMultipartFile file = buildExcelFile(List.of(
+                new String[] { "full_name", "employer", "card_number" },
+                new String[] { "Ali Hasan", "EMP1", "" },
+                new String[] { "Sami Hasan", "EMP1", "CARD0001S1" }));
+
+        ExcelImportResult result = service.importFromExcel(file, employer.getId());
+
+        assertThat(result.getErrors()).isEmpty();
+        assertThat(result.getSummary().getPrincipalsCreated()).isEqualTo(1);
+        assertThat(result.getSummary().getDependentsCreated()).isEqualTo(1);
+        assertThat(result.getSummary().getRejected()).isZero();
+    }
+
+    @Test
+    @DisplayName("A dependent row whose base card number resolves to nothing falls back to the immediately preceding principal row")
+    void importFromExcel_dependentRowWithUnresolvableBaseCard_fallsBackToLastSeenPrincipal() {
+        // "ZZZZ9S1" extracts to base "ZZZZ9", which matches neither the in-session cache
+        // nor the DB (both unstubbed/empty) -- only the lastSeenPrincipal fallback can
+        // resolve this row, since it directly follows the principal row in the file.
+        MockMultipartFile file = buildExcelFile(List.of(
+                new String[] { "full_name", "employer", "card_number" },
+                new String[] { "Ali Hasan", "EMP1", "" },
+                new String[] { "Sami Hasan", "EMP1", "ZZZZ9S1" }));
+
+        ExcelImportResult result = service.importFromExcel(file, employer.getId());
+
+        assertThat(result.getErrors()).isEmpty();
+        assertThat(result.getSummary().getDependentsCreated()).isEqualTo(1);
+        assertThat(result.getSummary().getRejected()).isZero();
+    }
+
+    @Test
+    @DisplayName("Two dependent rows under the same principal with the same name: the second is skipped as an in-file duplicate")
+    void importFromExcel_duplicateDependentInFile_skipsSecondOccurrence() {
+        MockMultipartFile file = buildExcelFile(List.of(
+                new String[] { "full_name", "employer", "card_number" },
+                new String[] { "Ali Hasan", "EMP1", "" },
+                new String[] { "Sami Hasan", "EMP1", "CARD0001S1" },
+                new String[] { "Sami Hasan", "EMP1", "CARD0001S2" }));
+
+        ExcelImportResult result = service.importFromExcel(file, employer.getId());
+
+        assertThat(result.getSummary().getDependentsCreated()).isEqualTo(1);
+        assertThat(result.getSummary().getDependentsSkipped()).isEqualTo(1);
+        assertThat(result.getSummary().getSkipped()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("A dependent row with no resolvable principal (first row in file, unknown base card) is rejected with a clear error")
+    void importFromExcel_dependentRowWithNoResolvablePrincipal_isRejected() {
+        MockMultipartFile file = buildExcelFile(List.of(
+                new String[] { "full_name", "employer", "card_number" },
+                new String[] { "Orphan Dependent", "EMP1", "ZZZZ9S1" }));
+
+        ExcelImportResult result = service.importFromExcel(file, employer.getId());
+
+        assertThat(result.getSummary().getRejected()).isEqualTo(1);
+        assertThat(result.getErrors())
+                .anyMatch(error -> "card_number".equals(error.getColumnName())
+                        && error.getMessageEn().contains("Principal member not found for dependent"));
     }
 
     private MockMultipartFile buildExcelFile(List<String[]> rows) {
