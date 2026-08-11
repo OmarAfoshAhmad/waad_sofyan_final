@@ -31,8 +31,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, JpaSpecif
 
        Optional<Member> findByCivilId(String civilId);
 
-       Optional<Member> findByNationalNumber(String nationalNumber);
-
        Optional<Member> findByCardNumber(String cardNumber);
 
        @Query("SELECT m FROM Member m WHERE REPLACE(m.cardNumber, '-', '') = :cardNumber")
