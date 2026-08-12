@@ -65,29 +65,18 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         log.info("[Eligibility] Starting check - RequestID: {}, MemberID: {}, ServiceDate: {}",
                 requestId, request.getMemberId(), request.getServiceDate());
 
+        // context stays null if buildContext itself throws (e.g. before a
+        // member/policy could even be resolved) -- in that case there is
+        // nothing meaningful to audit, and that is logged explicitly below
+        // rather than silently skipped.
+        EligibilityContext context = null;
+        EligibilityResult result;
         try {
-            // Build context
-            EligibilityContext context = buildContext(request, requestId);
-
-            // Evaluate rules
-            EligibilityResult result = evaluateRules(context, startTime);
-
-            // Log to audit -- own transaction, can never affect the decision above
-            boolean audited = auditRecorder.record(context, result);
-            if (!audited) {
-                result = result.toBuilder().auditRecorded(false).build();
-            }
-
-            log.info("[Eligibility] Check complete - RequestID: {}, Eligible: {}, Status: {}, Time: {}ms",
-                    requestId, result.isEligible(), result.getStatus(), result.getProcessingTimeMs());
-
-            return result;
-
+            context = buildContext(request, requestId);
+            result = evaluateRules(context, startTime);
         } catch (Exception e) {
             log.error("[Eligibility] Error during check - RequestID: {}, Error: {}", requestId, e.getMessage(), e);
-
-            // Return system error result
-            return EligibilityResult.notEligible(
+            result = EligibilityResult.notEligible(
                     requestId,
                     null,
                     List.of(EligibilityResult.ReasonDetail.from(
@@ -96,6 +85,23 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
                     System.currentTimeMillis() - startTime,
                     0);
         }
+
+        // Every exit from this method -- eligible, ineligible, or the
+        // SYSTEM_ERROR result built above -- passes through here.
+        boolean audited;
+        if (context != null) {
+            audited = auditRecorder.record(context, result);
+        } else {
+            audited = false;
+            log.error("[Eligibility][AUDIT_LOG_FAILURE] No context was built (failed before member/policy "
+                    + "resolution) - requestId={} cannot be audited", requestId);
+        }
+        result = result.toBuilder().auditRecorded(audited).build();
+
+        log.info("[Eligibility] Check complete - RequestID: {}, Eligible: {}, Status: {}, Time: {}ms, Audited: {}",
+                requestId, result.isEligible(), result.getStatus(), result.getProcessingTimeMs(), audited);
+
+        return result;
     }
 
     @Override
@@ -106,13 +112,25 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         log.info("[Eligibility] Internal check - RequestID: {}, MemberID: {}",
                 context.getRequestId(), context.getMemberId());
 
-        EligibilityResult result = evaluateRules(context, startTime);
+        EligibilityResult result;
+        try {
+            result = evaluateRules(context, startTime);
+        } catch (Exception e) {
+            log.error("[Eligibility] Error during internal check - RequestID: {}, Error: {}",
+                    context.getRequestId(), e.getMessage(), e);
+            result = EligibilityResult.notEligible(
+                    context.getRequestId(),
+                    null,
+                    List.of(EligibilityResult.ReasonDetail.from(
+                            EligibilityReason.SYSTEM_ERROR,
+                            e.getMessage())),
+                    System.currentTimeMillis() - startTime,
+                    0);
+        }
 
         // Log to audit -- own transaction, can never affect the decision above
         boolean audited = auditRecorder.record(context, result);
-        if (!audited) {
-            result = result.toBuilder().auditRecorded(false).build();
-        }
+        result = result.toBuilder().auditRecorded(audited).build();
 
         return result;
     }

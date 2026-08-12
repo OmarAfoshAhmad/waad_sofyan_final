@@ -77,16 +77,20 @@ public class EligibilityResult {
 
     /**
      * Whether the audit trail record for this decision was actually persisted.
-     * The eligibility decision itself is never lost or altered because the
-     * audit write failed (e.g. a transient DB issue) -- this flag lets callers
-     * that need a guaranteed audit trail (or monitoring) detect that gap
-     * instead of assuming every decision is traceable. See
-     * EligibilityAuditRecorder, which persists in its own REQUIRES_NEW
-     * transaction specifically so an audit-write failure can never roll back
-     * or hide the eligibility result it's describing.
+     * Defaults to FALSE deliberately -- fail closed. A factory method or a
+     * new code path that forgets to call EligibilityAuditRecorder (or returns
+     * a result before it runs) must never be able to claim an audit trail
+     * exists just because it never said otherwise; absence of proof of a
+     * successful write must read as "not audited," not "audited." Only
+     * EligibilityEngineServiceImpl is allowed to flip this to true, and only
+     * after EligibilityAuditRecorder.record() has actually returned true. The
+     * eligibility decision itself is never lost or altered because the audit
+     * write failed (e.g. a transient DB issue) -- this flag exists purely so
+     * callers that need a guaranteed audit trail (or monitoring) can detect
+     * that gap instead of assuming every decision is traceable.
      */
     @Builder.Default
-    private final boolean auditRecorded = true;
+    private final boolean auditRecorded = false;
 
     // ============================================
     // Nested Classes
