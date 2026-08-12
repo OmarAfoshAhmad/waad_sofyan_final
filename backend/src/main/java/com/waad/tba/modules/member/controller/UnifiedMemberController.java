@@ -32,6 +32,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -599,7 +600,9 @@ public class UnifiedMemberController {
          * }
          * </pre>
          * 
-         * @param barcode Principal's Barcode (WAHA-YYYY-NNNNNN format)
+         * @param barcode     Principal's Barcode (WAHA-YYYY-NNNNNN format)
+         * @param serviceDate Optional date to check eligibility against; defaults to
+         *                    today when omitted
          * @return ResponseEntity with FamilyEligibilityResponseDto containing Principal
          *         and Dependents
          * @throws NotFoundException if Barcode not found
@@ -611,9 +614,10 @@ public class UnifiedMemberController {
                         +
                         "This is the PRIMARY eligibility check method in the unified architecture. " +
                         "Only Principal members have Barcodes (Dependents do not). " +
-                        "Returns eligibility status for each family member based on 7-condition eligibility rules. " +
+                        "Returns real-time eligibility status for each family member from the eligibility engine. " +
                         "Used by Providers to verify which family members can receive services.", parameters = {
-                                        @Parameter(name = "barcode", description = "Principal's Barcode in WAHA-YYYY-NNNNNN format (e.g., WAHA-2026-000123)", required = true, example = "WAHA-2026-000123")
+                                        @Parameter(name = "barcode", description = "Principal's Barcode in WAHA-YYYY-NNNNNN format (e.g., WAHA-2026-000123)", required = true, example = "WAHA-2026-000123"),
+                                        @Parameter(name = "serviceDate", description = "Date to check eligibility against (defaults to today)", example = "2026-08-12")
                         })
         @ApiResponses(value = {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Family eligibility retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = FamilyEligibilityResponseDto.class))),
@@ -621,11 +625,12 @@ public class UnifiedMemberController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Barcode format invalid or belongs to Dependent (Dependents do not have Barcodes)", content = @Content(mediaType = "application/json"))
         })
         public ResponseEntity<FamilyEligibilityResponseDto> checkEligibility(
-                        @PathVariable("barcode") String barcode) {
+                        @PathVariable("barcode") String barcode,
+                        @RequestParam(name = "serviceDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) java.time.LocalDate serviceDate) {
 
-                log.info("Checking family eligibility: barcode={}", barcode);
+                log.info("Checking family eligibility: barcode={}, serviceDate={}", barcode, serviceDate);
 
-                FamilyEligibilityResponseDto response = unifiedMemberService.checkEligibility(barcode);
+                FamilyEligibilityResponseDto response = unifiedMemberService.checkEligibility(barcode, serviceDate);
 
                 log.info("Eligibility check completed: barcode={}, totalMembers={}, eligibleMembers={}",
                                 barcode, response.getTotalFamilyMembers(), response.getEligibleMembersCount());

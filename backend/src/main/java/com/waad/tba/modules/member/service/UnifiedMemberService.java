@@ -18,8 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.common.exception.ResourceNotFoundException;
 import com.waad.tba.modules.eligibility.domain.EligibilityResult;
-import com.waad.tba.modules.eligibility.dto.EligibilityCheckRequest;
-import com.waad.tba.modules.eligibility.service.EligibilityEngineService;
+import com.waad.tba.modules.eligibility.service.FamilyEligibilityService;
 import com.waad.tba.modules.employer.entity.Employer;
 import com.waad.tba.modules.employer.repository.EmployerRepository;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
@@ -84,7 +83,7 @@ public class UnifiedMemberService {
     private final MemberFinancialSummaryService financialSummaryService;
     private final JdbcTemplate jdbcTemplate;
     private final AuditLogService auditLogService;
-    private final EligibilityEngineService eligibilityEngineService;
+    private final FamilyEligibilityService familyEligibilityService;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -558,15 +557,21 @@ public class UnifiedMemberService {
 
     /**
      * Check family eligibility by barcode (principal's barcode).
-     * 
+     *
      * Returns principal + all dependents for selection.
-     * 
-     * @param barcode Principal member's barcode
+     *
+     * @param barcode     Principal member's barcode
+     * @param serviceDate Date to check eligibility against; defaults to today
+     *                    when null (matches the previous hardcoded behavior,
+     *                    but now callers -- e.g. checking eligibility for a
+     *                    backdated visit -- can override it, the same way
+     *                    modules/eligibility.FamilyEligibilityService always
+     *                    could).
      * @return Family eligibility response
      */
     @Transactional(readOnly = true)
-    public FamilyEligibilityResponseDto checkFamilyEligibility(String barcode) {
-        log.info("🔍 Checking family eligibility for barcode: {}", barcode);
+    public FamilyEligibilityResponseDto checkFamilyEligibility(String barcode, LocalDate serviceDate) {
+        log.info("🔍 Checking family eligibility for barcode: {}, serviceDate: {}", barcode, serviceDate);
 
         // 1. Find principal by barcode
         Member principal = memberRepository.findByBarcode(barcode)
@@ -578,74 +583,24 @@ public class UnifiedMemberService {
                     "Invalid state: Dependent member has barcode. Only principals should have barcodes.");
         }
 
-        // 🔍 Debug logging for employer organization
-        log.info("📋 Member details: id={}, fullName={}, active={}, eligibilityStatus={}",
-                principal.getId(), principal.getFullName(), principal.getActive(), principal.getEligibilityStatus());
+        // 2. Resolve family + evaluate eligibility through the SAME orchestrator
+        // modules/eligibility.FamilyEligibilityService uses for its own
+        // memberId-based endpoint (evaluateFamily). Previously this method had
+        // its own independent copy of this loop -- one endpoint resolved the
+        // family by barcode and always used today's date, the other by member
+        // id with a caller-supplied date, and each ran its own engine-calling
+        // loop. Now there is exactly one "evaluate this family" implementation;
+        // this method only resolves barcode -> principal and maps the shared
+        // result into its own response DTO shape.
+        FamilyEligibilityService.FamilyGroup family = familyEligibilityService.resolveFamily(principal);
+        List<Member> dependents = family.dependents();
+        Map<Long, EligibilityResult> eligibilityByMemberId =
+                familyEligibilityService.evaluateFamily(family.principal(), dependents, serviceDate);
 
-        if (principal.getEmployer() != null) {
-            log.info("✅ Employer: id={}, name={}",
-                    principal.getEmployer().getId(),
-                    principal.getEmployer().getName());
-        } else {
-            log.warn("⚠️ Member ID={} has NO Employer! This will cause eligibility failure.",
-                    principal.getId());
-        }
-
-        if (principal.getBenefitPolicy() != null) {
-            log.info("✅ Benefit Policy: id={}, name={}, status={}",
-                    principal.getBenefitPolicy().getId(),
-                    principal.getBenefitPolicy().getName(),
-                    principal.getBenefitPolicy().getStatus());
-        } else {
-            log.warn("⚠️ Member ID={} has NO Benefit Policy assigned.", principal.getId());
-        }
-
-        // 2. Load all dependents
-        List<Member> dependents = memberRepository.findByParentId(principal.getId());
-
-        // 3. Real-time eligibility per family member via the canonical engine
-        // (EligibilityEngineService -- the same one FamilyEligibilityService in
-        // modules/eligibility uses). Previously this endpoint computed its own
-        // shallow active+cachedEligibilityFlag+hasEmployer check and never
-        // consulted the real coverage-rules engine, so this "PRIMARY eligibility
-        // check method" (per this endpoint's own API docs) could report a member
-        // eligible whom the engine would actually reject (exhausted limit,
-        // inactive policy, etc.) -- and disagree with modules/eligibility's
-        // FamilyEligibilityService, which DOES call the engine, for the same
-        // member. Fails closed per member: an engine error marks that one
-        // member not-eligible with a system-error reason rather than defaulting
-        // the whole family check to a false "eligible".
-        LocalDate today = LocalDate.now();
-        Map<Long, EligibilityResult> eligibilityByMemberId = new HashMap<>();
-        List<Member> allFamilyMembers = new ArrayList<>();
-        allFamilyMembers.add(principal);
-        allFamilyMembers.addAll(dependents);
-        for (Member member : allFamilyMembers) {
-            EligibilityResult result;
-            try {
-                result = eligibilityEngineService.checkEligibility(EligibilityCheckRequest.of(member.getId(), today));
-            } catch (Exception e) {
-                log.error("💥 Eligibility engine failed for member ID={}: {}", member.getId(), e.getMessage(), e);
-                result = EligibilityResult.notEligible(
-                        java.util.UUID.randomUUID().toString(),
-                        null,
-                        List.of(EligibilityResult.ReasonDetail.builder()
-                                .code("SYSTEM_ERROR")
-                                .messageAr("حدث خطأ أثناء التحقق من الأهلية")
-                                .messageEn("Error during eligibility check")
-                                .details(e.getMessage())
-                                .hardFailure(true)
-                                .build()),
-                        0L,
-                        0);
-            }
-            eligibilityByMemberId.put(member.getId(), result);
-        }
-
-        // 4. Build response
+        // 3. Build response
         FamilyEligibilityResponseDto response = mapper.toFamilyEligibilityResponse(principal, dependents, eligibilityByMemberId);
 
-        // 5. Populate financial details -- ONE bulk read for principal + every
+        // 4. Populate financial details -- ONE bulk read for principal + every
         // dependent together (MemberFinancialSummaryService.getFinancialSummaries),
         // not one query per family member. "usedAmount"/"remainingLimit" here are the
         // WAAD-FIN-1.0 limit-consumption axis (limitConsumedAmount), never
@@ -816,7 +771,13 @@ public class UnifiedMemberService {
      */
     @Transactional(readOnly = true)
     public FamilyEligibilityResponseDto checkEligibility(String barcode) {
-        return checkFamilyEligibility(barcode);
+        return checkFamilyEligibility(barcode, null);
+    }
+
+    /** Alias for checkFamilyEligibility(barcode, serviceDate) for controller compatibility. */
+    @Transactional(readOnly = true)
+    public FamilyEligibilityResponseDto checkEligibility(String barcode, LocalDate serviceDate) {
+        return checkFamilyEligibility(barcode, serviceDate);
     }
 
     /**

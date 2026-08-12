@@ -332,12 +332,28 @@ public class UnifiedMemberMapper {
         boolean principalHasEmployer = principal.getEmployer() != null;
 
         int eligibleCount = 0;
-        if (isEligible(eligibilityByMemberId, principal.getId())) {
-            eligibleCount++;
-        }
-        for (Member dependent : dependents) {
-            if (isEligible(eligibilityByMemberId, dependent.getId())) {
+        Map<Long, String> ineligibilityReasonsAr = new java.util.HashMap<>();
+        java.util.Set<Long> systemErrorMemberIds = new java.util.HashSet<>();
+        List<Member> allMembers = new java.util.ArrayList<>(dependents.size() + 1);
+        allMembers.add(principal);
+        allMembers.addAll(dependents);
+        for (Member member : allMembers) {
+            EligibilityResult result = eligibilityByMemberId.get(member.getId());
+            if (result != null && result.isEligible()) {
                 eligibleCount++;
+                continue;
+            }
+            // Not eligible (or no result at all -- fails closed): record why, and
+            // whether it's a genuine rule denial vs. the engine call itself
+            // failing, so the frontend can tell "this member isn't covered" apart
+            // from "we couldn't verify this member, try again" rather than
+            // presenting both identically as a plain denial.
+            if (result != null && result.getReasons() != null && !result.getReasons().isEmpty()) {
+                var firstReason = result.getReasons().get(0);
+                ineligibilityReasonsAr.put(member.getId(), firstReason.getMessageAr());
+                if ("SYSTEM_ERROR".equals(firstReason.getCode())) {
+                    systemErrorMemberIds.add(member.getId());
+                }
             }
         }
 
@@ -365,12 +381,8 @@ public class UnifiedMemberMapper {
                         principal.getBenefitPolicy() != null ? principal.getBenefitPolicy().getStatus().name() : null)
                 .employerOrgId(principal.getEmployer() != null ? principal.getEmployer().getId() : null)
                 .employerOrgName(principal.getEmployer() != null ? principal.getEmployer().getName() : null)
+                .ineligibilityReasonsAr(ineligibilityReasonsAr)
+                .systemErrorMemberIds(systemErrorMemberIds)
                 .build();
-    }
-
-    /** Fails closed: a member with no engine result (should never happen) counts as not eligible. */
-    private boolean isEligible(Map<Long, EligibilityResult> eligibilityByMemberId, Long memberId) {
-        EligibilityResult result = eligibilityByMemberId.get(memberId);
-        return result != null && result.isEligible();
     }
 }
