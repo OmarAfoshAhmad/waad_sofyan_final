@@ -272,6 +272,100 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         assertThat(memberRepository.findByCardNumber(sharedCard).stream().count()).isEqualTo(1);
     }
 
+    /**
+     * Same race as above, but with employerId left null on both requests
+     * (the file carries its own "employer" column instead of a single
+     * selected employer). Proves the idempotency/uniqueness guard uses
+     * NULLS NOT DISTINCT semantics -- a plain UNIQUE index would let
+     * unlimited COMPLETED rows share (employer_id=NULL, file_hash=X) since
+     * Postgres treats NULL as distinct from NULL by default.
+     */
+    @Test
+    void concurrentUploadsWithNullEmployerId_onlyOneSucceedsNoDuplicates() throws Exception {
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        newPolicy(employer, s);
+
+        String sharedCard = "RACENULL" + s;
+        MockMultipartFile fileA = excel(List.of(HEADER,
+                new String[] { "Racer A " + s, employer.getName(), "RNA" + s, "2026-01-01", sharedCard }));
+        MockMultipartFile fileB = excel(List.of(HEADER,
+                new String[] { "Racer B " + s, employer.getName(), "RNB" + s, "2026-01-01", sharedCard }));
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch startGate = new CountDownLatch(1);
+
+        Callable<Boolean> taskA = () -> {
+            startGate.await();
+            try {
+                importService.executeImport(fileA, "batch-race-null-a-" + s, null, null, 0, false);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        };
+        Callable<Boolean> taskB = () -> {
+            startGate.await();
+            try {
+                importService.executeImport(fileB, "batch-race-null-b-" + s, null, null, 0, false);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        };
+
+        Future<Boolean> futureA = pool.submit(taskA);
+        Future<Boolean> futureB = pool.submit(taskB);
+        startGate.countDown();
+
+        boolean succeededA = futureA.get(60, TimeUnit.SECONDS);
+        boolean succeededB = futureB.get(60, TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(succeededA ^ succeededB).as("exactly one of the two concurrent null-employerId imports should succeed").isTrue();
+        assertThat(memberRepository.findByCardNumber(sharedCard).stream().count()).isEqualTo(1);
+    }
+
+    /**
+     * The identical file re-submitted with a DIFFERENT benefit policy is a
+     * genuinely different operation and must actually re-execute (applying
+     * the new policy), never be short-circuited as "already imported" --
+     * proves the idempotency key covers benefitPolicyId, not just file
+     * bytes + employer.
+     */
+    @Test
+    void sameFileDifferentBenefitPolicy_isNotTreatedAsDuplicateAndAppliesTheNewPolicy() throws Exception {
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policyA = newPolicy(employer, s + "-a");
+        BenefitPolicy policyB = newPolicy(employer, s + "-b");
+
+        MockMultipartFile file = excel(List.of(
+                HEADER,
+                new String[] { "Scoped " + s, employer.getName(), "NS" + s, "2026-01-01", "CARDS" + s }));
+
+        MemberImportResultDto first = importService.executeImport(file, "batch-scope-a-" + s, employer.getId(), policyA.getId(), 0, false);
+        assertThat(first.getStatus()).isEqualTo("COMPLETED");
+        assertThat(first.getCreatedCount()).isEqualTo(1);
+        Member afterFirst = memberRepository.findByCardNumber("CARDS" + s).orElseThrow();
+        assertThat(afterFirst.getBenefitPolicy().getId()).isEqualTo(policyA.getId());
+
+        // Same file bytes, same employer, DIFFERENT policy -- must NOT be
+        // recognized as the same import.
+        MemberImportResultDto second = importService.executeImport(file, "batch-scope-b-" + s, employer.getId(), policyB.getId(), 0, false);
+
+        assertThat(second.getMessage()).doesNotContain("batch-scope-a-" + s);
+        // A genuinely different scope resolves the existing card number and
+        // updates it in place (same pipeline behavior as any other re-import
+        // of a known card number) -- the important assertion is that policy B
+        // was actually applied, proving this run really executed rather than
+        // being echoed from the first run's stale result.
+        Member afterSecond = memberRepository.findByCardNumber("CARDS" + s).orElseThrow();
+        assertThat(afterSecond.getBenefitPolicy().getId()).isEqualTo(policyB.getId());
+
+        assertThat(importLogRepository.findByImportBatchId("batch-scope-b-" + s)).isPresent();
+    }
+
     @Test
     void dependentRowBeforePrincipalRow_stillLinksCorrectly() throws Exception {
         String s = randomSuffix();

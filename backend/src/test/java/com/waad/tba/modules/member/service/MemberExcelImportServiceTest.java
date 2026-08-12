@@ -127,7 +127,7 @@ class MemberExcelImportServiceTest {
         when(employerRepository.findByCode(eq("BAD"))).thenReturn(Optional.empty());
 
         when(importLogRepository.findByImportBatchId(anyString())).thenReturn(Optional.empty());
-        when(importLogRepository.findByEmployerIdAndFileHashAndStatus(any(), anyString(), eq(MemberImportLog.ImportStatus.COMPLETED)))
+        when(importLogRepository.findByImportScopeHashAndStatus(anyString(), eq(MemberImportLog.ImportStatus.COMPLETED)))
                 .thenReturn(Optional.empty());
         when(importLogRepository.save(any(MemberImportLog.class))).thenAnswer(invocation -> {
             MemberImportLog log = invocation.getArgument(0);
@@ -146,7 +146,7 @@ class MemberExcelImportServiceTest {
         when(importLogRepository.findById(anyLong())).thenAnswer(invocation ->
                 Optional.of(MemberImportLog.builder().id(invocation.getArgument(0)).importBatchId("test-batch")
                         .startedAt(LocalDateTime.now()).build()));
-        when(auditRecorder.markStarted(anyString(), any(), anyLong(), anyString(), any(), any(), any()))
+        when(auditRecorder.markStarted(anyString(), any(), anyLong(), anyString(), anyString(), any(), any(), any()))
                 .thenReturn(100L);
 
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());

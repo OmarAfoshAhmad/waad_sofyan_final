@@ -53,16 +53,27 @@ public class MemberImportLog {
     private Long fileSizeBytes;
 
     /**
-     * SHA-256 of the uploaded file's bytes. Combined with employerId and a
-     * partial unique index (status = 'COMPLETED'), lets a re-submission of the
-     * exact same file for the same employer be recognized as already done
-     * instead of silently re-imported -- see V167.
+     * SHA-256 of the uploaded file's bytes alone (metadata / diagnostics).
+     * Uniqueness is NOT enforced on this column directly -- see
+     * importScopeHash, which is what the file_hash feeds into.
      */
     @Column(name = "file_hash", length = 64)
     private String fileHash;
 
     @Column(name = "employer_id")
     private Long employerId;
+
+    /**
+     * Fingerprint of every input that changes an import's outcome: fileHash
+     * + employerId + benefitPolicyId + resolvedHeaderRowNumber +
+     * clearOldMembers. A partial unique index on this column (status =
+     * 'COMPLETED') is what actually enforces idempotency -- see V167 for why
+     * fileHash + employerId alone was insufficient (NULL employerId,
+     * different benefit policy/header row/clearOldMembers all change the
+     * outcome and must NOT be folded into "the same import").
+     */
+    @Column(name = "import_scope_hash", length = 64)
+    private String importScopeHash;
 
     // Statistics
     @Builder.Default

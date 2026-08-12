@@ -302,13 +302,29 @@ public class MemberExcelImportService {
         byte[] fileBytes = file.getBytes();
         String fileHash = sha256Hex(fileBytes);
 
-        // Idempotency fast-path: this exact file was already fully imported
-        // for this employer -- don't re-process it.
+        int resolvedHeaderRowNumber;
+        try (InputStream probeIs = new java.io.ByteArrayInputStream(fileBytes); Workbook probeWorkbook = new XSSFWorkbook(probeIs)) {
+            Sheet probeSheet = probeWorkbook.getSheetAt(0);
+            resolvedHeaderRowNumber = headerRowNumber != null ? Math.max(0, headerRowNumber) : mapper.detectHeaderRowNumber(probeSheet);
+        }
+
+        // Fingerprints EVERY input that changes what this import actually
+        // does -- not just the file bytes. The same file re-submitted with a
+        // different benefit policy, a different header row, or a different
+        // clearOldMembers choice is a genuinely different operation and must
+        // NOT be recognized as "already done" -- see V167's header comment.
+        boolean clearOldMembersFlag = Boolean.TRUE.equals(clearOldMembers);
+        String importScopeHash = sha256Hex((fileHash + "|" + employerId + "|" + benefitPolicyId + "|"
+                + resolvedHeaderRowNumber + "|" + clearOldMembersFlag).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        // Idempotency fast-path: this exact logical import (same file AND
+        // same employer/policy/header-row/clearOldMembers) already completed
+        // -- don't re-process it.
         Optional<MemberImportLog> alreadyCompleted =
-                importLogRepository.findByEmployerIdAndFileHashAndStatus(employerId, fileHash, MemberImportLog.ImportStatus.COMPLETED);
+                importLogRepository.findByImportScopeHashAndStatus(importScopeHash, MemberImportLog.ImportStatus.COMPLETED);
         if (alreadyCompleted.isPresent()) {
             MemberImportLog previous = alreadyCompleted.get();
-            log.info("[MemberImport] Identical file already imported as batch {} -- returning idempotent result", previous.getImportBatchId());
+            log.info("[MemberImport] Identical import already completed as batch {} -- returning idempotent result", previous.getImportBatchId());
             return MemberImportResultDto.builder()
                     .batchId(previous.getImportBatchId()).status(previous.getStatus().name())
                     .totalProcessed(previous.getTotalRows() != null ? previous.getTotalRows() : 0)
@@ -318,7 +334,8 @@ public class MemberExcelImportService {
                     .errorCount(previous.getErrorCount() != null ? previous.getErrorCount() : 0)
                     .completedAt(previous.getCompletedAt())
                     .errors(new ArrayList<>())
-                    .message("هذا الملف مطابق لملف مستورد سابقاً بالكامل (الدفعة " + previous.getImportBatchId() + ") - لم تُعَد المعالجة")
+                    .message("هذا الاستيراد مطابق تماماً (نفس الملف وجهة العمل ووثيقة المنافع وخيارات الاستيراد) لعملية سابقة اكتملت بالكامل (الدفعة "
+                            + previous.getImportBatchId() + ") - لم تُعَد المعالجة")
                     .build();
         }
 
@@ -327,7 +344,7 @@ public class MemberExcelImportService {
 
         User currentUser = authorizationService.getCurrentUser();
         Long importLogId = auditRecorder.markStarted(batchId, file.getOriginalFilename(), file.getSize(), fileHash,
-                employerId, currentUser != null ? currentUser.getId() : null,
+                importScopeHash, employerId, currentUser != null ? currentUser.getId() : null,
                 currentUser != null ? currentUser.getUsername() : null);
 
         importErrorRepository.deleteByImportLogId(importLogId);
@@ -339,7 +356,6 @@ public class MemberExcelImportService {
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
             int physicalLastRow = sheet.getLastRowNum();
-            int resolvedHeaderRowNumber = headerRowNumber != null ? Math.max(0, headerRowNumber) : mapper.detectHeaderRowNumber(sheet);
             int totalRows = Math.max(0, physicalLastRow - resolvedHeaderRowNumber);
 
             Row headerRow = sheet.getRow(resolvedHeaderRowNumber);
@@ -385,14 +401,23 @@ public class MemberExcelImportService {
                     }
 
                     member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
-                } catch (Exception parseFailure) {
-                    // Expected/business-level row failure -- record and move
-                    // on. Nothing has been saved for this row yet, so no
-                    // rollback is needed and no other row is affected.
+                } catch (BusinessRuleException | IllegalArgumentException parseFailure) {
+                    // Expected/business-level row failure ONLY -- both types
+                    // are thrown exclusively by rowProcessor/parser validation
+                    // (missing field, unresolved employer/policy, an
+                    // unrecognized member_status value), never by a
+                    // persistence call. Nothing has been saved for this row
+                    // yet, so recording it and moving on cannot lose or
+                    // corrupt anything already written. Any OTHER exception
+                    // (DataAccessException, PersistenceException,
+                    // IllegalStateException, NPE, ...) is deliberately NOT
+                    // caught here -- it is a technical fault, not a row's bad
+                    // data, and must abort the whole batch like a save
+                    // failure does.
                     errorCount++;
                     String rowJson = rowToJson(row, columnIndexToName);
                     auditRecorder.recordRowError(importLogId, rowNum, parseFailure.getMessage(), rowJson);
-                    errors.add(ImportErrorDetailDto.builder().rowNumber(rowNum).errorType("SYSTEM").message(parseFailure.getMessage()).build());
+                    errors.add(ImportErrorDetailDto.builder().rowNumber(rowNum).errorType("VALIDATION").message(parseFailure.getMessage()).build());
                     continue;
                 }
 
@@ -432,10 +457,11 @@ public class MemberExcelImportService {
             importLog.setErrorCount(errorCount);
             importLog.setEmployerId(employerId);
             importLog.setFileHash(fileHash);
+            importLog.setImportScopeHash(importScopeHash);
             importLog.markCompleted();
             // Same transaction as the member writes above: if a concurrent
-            // identical-file import already completed and grabbed the unique
-            // (employerId, fileHash) slot, THIS statement fails here and rolls
+            // identical import already completed and grabbed the unique
+            // import_scope_hash slot, THIS statement fails here and rolls
             // back every member this transaction just wrote, together with it.
             importLogRepository.saveAndFlush(importLog);
 

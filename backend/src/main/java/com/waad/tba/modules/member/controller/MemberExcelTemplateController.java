@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.waad.tba.common.dto.ApiResponse;
-import com.waad.tba.common.excel.dto.ExcelImportResult;
 import com.waad.tba.modules.member.dto.ExcelColumnDetectionDto;
 import com.waad.tba.modules.member.dto.MemberImportPreviewDto;
 import com.waad.tba.modules.member.dto.MemberImportResultDto;
@@ -88,50 +87,13 @@ public class MemberExcelTemplateController {
             .body(excelData);
     }
     
-    /**
-     * Import members from Excel file
-     * 
-     * POST /api/members/import
-     */
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DATA_ENTRY')")
-    @Operation(
-        summary = "Import Members from Excel",
-        description = "Imports members from a system-generated Excel template. " +
-                     "Only creates new members (no updates in Phase 1). " +
-                     "Card numbers are auto-generated. Employer lookup is mandatory."
-    )
-    public ResponseEntity<ApiResponse<ExcelImportResult>> importMembers(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "employerId", required = false) Long employerId,
-            @RequestParam(value = "clearOldMembers", required = false, defaultValue = "false") Boolean clearOldMembers
-    ) {
-        log.info("[MemberImport] Import requested: {}, employerId: {}, clearOldMembers: {}", file.getOriginalFilename(), employerId, clearOldMembers);
-        
-        if (Boolean.TRUE.equals(clearOldMembers)) {
-            importService.clearOldMembersForFile(file, employerId, null);
-        }
-        
-        ExcelImportResult result = templateService.importFromExcel(file, employerId);
-        
-        log.info("[MemberImport] Import completed - Created: {}, Rejected: {}, Failed: {}",
-            result.getSummary().getCreated(),
-            result.getSummary().getRejected(),
-            result.getSummary().getFailed());
-        
-        if (result.isSuccess()) {
-            return ResponseEntity.ok(ApiResponse.success(result.getMessageEn(), result));
-        } else {
-            // FIX: Return 200 OK even for validation errors so frontend can display the error report
-            return ResponseEntity.ok()
-                .body(ApiResponse.<ExcelImportResult>builder()
-                    .status("error")
-                    .message(result.getMessageEn())
-                    .data(result)
-                    .timestamp(java.time.LocalDateTime.now())
-                    .build());
-        }
-    }
+    // Import members from Excel: the non-atomic direct POST /import route
+    // (MemberExcelTemplateService.importFromExcel) has been removed --
+    // it was never called by the frontend (which always uses /preview then
+    // /execute, below), had no other caller anywhere in the codebase, and
+    // could not be brought up to the same atomicity/audit/idempotency
+    // standard as the live pipeline without maintaining two parallel import
+    // engines. Use POST .../preview then POST .../execute instead.
 
     // ==================== COLUMN DETECTION ====================
 

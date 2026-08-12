@@ -45,12 +45,13 @@ public class MemberImportAuditRecorder {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long markStarted(String batchId, String fileName, long fileSizeBytes, String fileHash,
-            Long employerId, Long userId, String username) {
+            String importScopeHash, Long employerId, Long userId, String username) {
         MemberImportLog log = importLogRepository.findByImportBatchId(batchId)
                 .orElseGet(() -> MemberImportLog.builder().importBatchId(batchId).build());
         log.setFileName(fileName);
         log.setFileSizeBytes(fileSizeBytes);
         log.setFileHash(fileHash);
+        log.setImportScopeHash(importScopeHash);
         log.setEmployerId(employerId);
         log.setImportedByUserId(userId);
         log.setImportedByUsername(username != null ? username : "system");
@@ -59,11 +60,18 @@ public class MemberImportAuditRecorder {
         return log.getId();
     }
 
+    /**
+     * Records an EXPECTED, row-level validation failure (bad/missing data,
+     * an unresolvable reference) -- never called for a technical/persistence
+     * failure, which propagates out of the main transaction instead. Error
+     * type is VALIDATION, not SYSTEM: this is data the row itself supplied
+     * being rejected, not an infrastructure fault.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordRowError(Long importLogId, int rowNumber, String message, String rowJson) {
         try {
             MemberImportLog log = importLogRepository.getReferenceById(importLogId);
-            importErrorRepository.save(MemberImportError.systemError(log, rowNumber, message, rowJson));
+            importErrorRepository.save(MemberImportError.validationError(log, rowNumber, "row", message, rowJson));
         } catch (Exception e) {
             // Never let a diagnostic write break the import itself.
             log.error("[MemberImport][AUDIT_LOG_FAILURE] Failed to record row error for importLogId={}, row={}: {}",

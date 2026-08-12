@@ -23,14 +23,11 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
     Optional<MemberImportLog> findByImportBatchId(String importBatchId);
 
     /**
-     * Idempotency lookup: has this exact file already been fully imported for
-     * this employer? employerId may be null (file-level employer column, no
-     * single selected employer) -- Spring Data's derived query treats a null
-     * parameter as "IS NULL", which correctly matches the partial unique
-     * index's semantics from V167.
+     * Idempotency lookup: has this exact logical import (same file bytes AND
+     * the same employer/benefitPolicy/headerRow/clearOldMembers choices --
+     * see MemberImportLog.importScopeHash) already completed?
      */
-    Optional<MemberImportLog> findByEmployerIdAndFileHashAndStatus(
-            Long employerId, String fileHash, ImportStatus status);
+    Optional<MemberImportLog> findByImportScopeHashAndStatus(String importScopeHash, ImportStatus status);
     
     /**
      * Find by user with pagination
