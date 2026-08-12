@@ -52,6 +52,18 @@ public class MemberImportLog {
     @Column(name = "file_size_bytes")
     private Long fileSizeBytes;
 
+    /**
+     * SHA-256 of the uploaded file's bytes. Combined with employerId and a
+     * partial unique index (status = 'COMPLETED'), lets a re-submission of the
+     * exact same file for the same employer be recognized as already done
+     * instead of silently re-imported -- see V167.
+     */
+    @Column(name = "file_hash", length = 64)
+    private String fileHash;
+
+    @Column(name = "employer_id")
+    private Long employerId;
+
     // Statistics
     @Builder.Default
     @Column(name = "total_rows")

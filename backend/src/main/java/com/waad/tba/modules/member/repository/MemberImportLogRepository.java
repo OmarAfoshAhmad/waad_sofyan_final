@@ -21,6 +21,16 @@ public interface MemberImportLogRepository extends JpaRepository<MemberImportLog
      * Find by batch ID
      */
     Optional<MemberImportLog> findByImportBatchId(String importBatchId);
+
+    /**
+     * Idempotency lookup: has this exact file already been fully imported for
+     * this employer? employerId may be null (file-level employer column, no
+     * single selected employer) -- Spring Data's derived query treats a null
+     * parameter as "IS NULL", which correctly matches the partial unique
+     * index's semantics from V167.
+     */
+    Optional<MemberImportLog> findByEmployerIdAndFileHashAndStatus(
+            Long employerId, String fileHash, ImportStatus status);
     
     /**
      * Find by user with pagination

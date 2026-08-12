@@ -75,6 +75,7 @@ public class MemberExcelImportService {
     private final MemberImportMapper mapper;
     private final MemberImportRowProcessor rowProcessor;
     private final BarcodeGeneratorService barcodeGeneratorService;
+    private final MemberImportAuditRecorder auditRecorder;
 
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
@@ -259,6 +260,34 @@ public class MemberExcelImportService {
         }
     }
 
+    /**
+     * Executes the import as ONE atomic write: PASS structure is a single
+     * scan (this pipeline doesn't split principals/dependents into two
+     * passes the way MemberExcelTemplateService does, but the same rule
+     * applies) inside one @Transactional method, and never returns a
+     * success DTO built from counts that didn't actually commit.
+     *
+     * Row-level failures are split into two different kinds, handled two
+     * different ways:
+     * - Parsing/business errors (processRowForImport rejecting a row, a
+     *   malformed card number, etc.) are EXPECTED per-row outcomes: caught
+     *   here, recorded via auditRecorder.recordRowError (its own
+     *   REQUIRES_NEW transaction, so the diagnostic survives even if
+     *   something else later aborts the whole batch), and the loop moves on
+     *   to the next row without touching anything already buffered.
+     * - A persistence failure from memberRepository.save/saveAll is a
+     *   TECHNICAL failure (e.g. a unique constraint collision) and is NOT
+     *   caught here -- it propagates out of this @Transactional method,
+     *   rolling back every member this batch has written so far, exactly as
+     *   required: a technical save failure cancels the whole batch, not just
+     *   the offending row.
+     *
+     * The import log's COMPLETED finalization happens as the LAST statement
+     * of this same transaction (not via the audit recorder's REQUIRES_NEW
+     * path) so a successful import and its "done" record commit together --
+     * see MemberImportAuditRecorder's Javadoc for why splitting that
+     * specific write out would reopen a duplicate-import race.
+     */
     @org.springframework.transaction.annotation.Transactional
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws Exception {
         log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}, clearOldMembers={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId, clearOldMembers);
@@ -270,30 +299,48 @@ public class MemberExcelImportService {
         MemberImportPreviewDto previewGuard = parseAndPreview(file, null, headerRowNumber, employerId);
         if (previewGuard.getValidRows() <= 0) throw new BusinessRuleException("لا يوجد صفوف صالحة للاستيراد");
 
+        byte[] fileBytes = file.getBytes();
+        String fileHash = sha256Hex(fileBytes);
+
+        // Idempotency fast-path: this exact file was already fully imported
+        // for this employer -- don't re-process it.
+        Optional<MemberImportLog> alreadyCompleted =
+                importLogRepository.findByEmployerIdAndFileHashAndStatus(employerId, fileHash, MemberImportLog.ImportStatus.COMPLETED);
+        if (alreadyCompleted.isPresent()) {
+            MemberImportLog previous = alreadyCompleted.get();
+            log.info("[MemberImport] Identical file already imported as batch {} -- returning idempotent result", previous.getImportBatchId());
+            return MemberImportResultDto.builder()
+                    .batchId(previous.getImportBatchId()).status(previous.getStatus().name())
+                    .totalProcessed(previous.getTotalRows() != null ? previous.getTotalRows() : 0)
+                    .createdCount(previous.getCreatedCount() != null ? previous.getCreatedCount() : 0)
+                    .updatedCount(0)
+                    .skippedCount(previous.getSkippedCount() != null ? previous.getSkippedCount() : 0)
+                    .errorCount(previous.getErrorCount() != null ? previous.getErrorCount() : 0)
+                    .completedAt(previous.getCompletedAt())
+                    .errors(new ArrayList<>())
+                    .message("هذا الملف مطابق لملف مستورد سابقاً بالكامل (الدفعة " + previous.getImportBatchId() + ") - لم تُعَد المعالجة")
+                    .build();
+        }
+
         Employer defaultEmployer = employerId != null ? employerRepository.findById(employerId).orElseThrow(() -> new BusinessRuleException("صاحب العمل غير موجود")) : null;
         BenefitPolicy benefitPolicy = benefitPolicyId != null ? benefitPolicyRepository.findById(benefitPolicyId).orElseThrow(() -> new BusinessRuleException("وثيقة المنافع غير موجودة")) : null;
 
         User currentUser = authorizationService.getCurrentUser();
-        MemberImportLog importLog = importLogRepository.findByImportBatchId(batchId).orElseGet(() -> MemberImportLog.builder().importBatchId(batchId).build());
+        Long importLogId = auditRecorder.markStarted(batchId, file.getOriginalFilename(), file.getSize(), fileHash,
+                employerId, currentUser != null ? currentUser.getId() : null,
+                currentUser != null ? currentUser.getUsername() : null);
 
-        importLog.setFileName(file.getOriginalFilename());
-        importLog.setFileSizeBytes(file.getSize());
-        importLog.setImportedByUserId(currentUser != null ? currentUser.getId() : null);
-        importLog.setImportedByUsername(currentUser != null ? currentUser.getUsername() : "system");
-        importLog.markStarted();
-        importLog = importLogRepository.save(importLog);
-
-        importErrorRepository.deleteByImportLogId(importLog.getId());
+        importErrorRepository.deleteByImportLogId(importLogId);
 
         List<ImportErrorDetailDto> errors = new ArrayList<>();
         List<Member> memberBuffer = new ArrayList<>();
         int totalProcessed = 0, createdCount = 0, skippedCount = 0, errorCount = 0;
 
-        try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
+        try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
             int physicalLastRow = sheet.getLastRowNum();
             int resolvedHeaderRowNumber = headerRowNumber != null ? Math.max(0, headerRowNumber) : mapper.detectHeaderRowNumber(sheet);
-            importLog.setTotalRows(Math.max(0, physicalLastRow - resolvedHeaderRowNumber));
+            int totalRows = Math.max(0, physicalLastRow - resolvedHeaderRowNumber);
 
             Row headerRow = sheet.getRow(resolvedHeaderRowNumber);
             Map<Integer, String> columnIndexToName = new HashMap<>();
@@ -313,13 +360,15 @@ public class MemberExcelImportService {
                 totalProcessed++;
                 int rowNum = rowIndex - resolvedHeaderRowNumber;
 
+                Member member;
+                Member parent;
                 try {
                     String cardNumber = parser.getFieldValue(row, fieldToColumnIndex, "cardNumber");
                     CardInfo cardInfo = parseCardNumber(cardNumber);
                     Relationship relationship = cardInfo.relationship;
                     String parentCardNumber = cardInfo.parentCardNumber;
 
-                    Member parent = null;
+                    parent = null;
                     if (parentCardNumber != null) {
                         String parentCardKey = parentCardNumber.trim().toUpperCase();
                         parent = memberCache.get(parentCardKey);
@@ -335,39 +384,60 @@ public class MemberExcelImportService {
                         existingMember = memberCache.get(cardKey);
                     }
 
-                    Member member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
-                    if (parent == null) {
-                        member = memberRepository.save(member);
-                        if (member.getCardNumber() != null) {
-                            memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
-                        }
-                    } else {
-                        memberBuffer.add(member);
-                        if (member.getCardNumber() != null) {
-                            memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
-                        }
-                    }
-
-                    createdCount++;
-                    importLog.incrementCreated();
-                    if (memberBuffer.size() >= BATCH_SIZE) {
-                        memberRepository.saveAll(memberBuffer);
-                        memberBuffer.clear();
-                    }
-                } catch (Exception e) {
+                    member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
+                } catch (Exception parseFailure) {
+                    // Expected/business-level row failure -- record and move
+                    // on. Nothing has been saved for this row yet, so no
+                    // rollback is needed and no other row is affected.
                     errorCount++;
-                    importLog.incrementError();
                     String rowJson = rowToJson(row, columnIndexToName);
-                    importErrorRepository.save(MemberImportError.systemError(importLog, rowNum, e.getMessage(), rowJson));
-                    errors.add(ImportErrorDetailDto.builder().rowNumber(rowNum).errorType("SYSTEM").message(e.getMessage()).build());
+                    auditRecorder.recordRowError(importLogId, rowNum, parseFailure.getMessage(), rowJson);
+                    errors.add(ImportErrorDetailDto.builder().rowNumber(rowNum).errorType("SYSTEM").message(parseFailure.getMessage()).build());
+                    continue;
+                }
+
+                // Persistence calls below are intentionally NOT wrapped in
+                // try/catch: a technical failure here (e.g. a unique
+                // constraint collision) must abort the entire transaction,
+                // not just this row.
+                if (parent == null) {
+                    member = memberRepository.save(member);
+                    if (member.getCardNumber() != null) {
+                        memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
+                    }
+                } else {
+                    memberBuffer.add(member);
+                    if (member.getCardNumber() != null) {
+                        memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
+                    }
+                }
+
+                createdCount++;
+                if (memberBuffer.size() >= BATCH_SIZE) {
+                    memberRepository.saveAll(memberBuffer);
+                    memberBuffer.clear();
                 }
             }
             if (!memberBuffer.isEmpty()) memberRepository.saveAll(memberBuffer);
 
+            // Force any deferred persistence failure to surface HERE, inside
+            // this try block, before the import log is finalized as COMPLETED --
+            // not after, at an implicit commit-time flush the caller never sees.
+            memberRepository.flush();
+
+            MemberImportLog importLog = importLogRepository.findById(importLogId)
+                    .orElseThrow(() -> new IllegalStateException("Import log vanished mid-import: " + importLogId));
+            importLog.setTotalRows(totalRows);
             importLog.setCreatedCount(createdCount);
             importLog.setErrorCount(errorCount);
+            importLog.setEmployerId(employerId);
+            importLog.setFileHash(fileHash);
             importLog.markCompleted();
-            importLogRepository.save(importLog);
+            // Same transaction as the member writes above: if a concurrent
+            // identical-file import already completed and grabbed the unique
+            // (employerId, fileHash) slot, THIS statement fails here and rolls
+            // back every member this transaction just wrote, together with it.
+            importLogRepository.saveAndFlush(importLog);
 
             return MemberImportResultDto.builder()
                     .batchId(batchId).status(importLog.getStatus().name()).totalProcessed(totalProcessed)
@@ -377,9 +447,26 @@ public class MemberExcelImportService {
                     .errors(errors).message(String.format("تم استيراد %d عضو بنجاح، %d أخطاء", createdCount, errorCount))
                     .build();
         } catch (Exception e) {
-            importLog.markFailed(e.getMessage());
-            importLogRepository.save(importLog);
+            log.error("[MemberImport] فشل الحفظ، تراجع كامل عن الدفعة: {}", e.getMessage(), e);
+            // REQUIRES_NEW: durably records the failure even though this
+            // method's own transaction is about to roll back every member it
+            // wrote.
+            auditRecorder.markFailed(importLogId, e.getMessage());
             throw e;
+        }
+    }
+
+    private String sha256Hex(byte[] bytes) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(bytes);
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 

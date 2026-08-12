@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -73,6 +74,8 @@ class MemberExcelImportServiceTest {
     private ClaimRepository claimRepository;
     @Mock
     private PreAuthorizationRepository preAuthorizationRepository;
+    @Mock
+    private MemberImportAuditRecorder auditRecorder;
 
     @InjectMocks
     private MemberExcelImportService service;
@@ -100,6 +103,7 @@ class MemberExcelImportServiceTest {
                 mapper,
                 rowProcessor,
                 barcodeGeneratorService,
+                auditRecorder,
                 visitRepository,
                 claimRepository,
                 preAuthorizationRepository);
@@ -123,6 +127,8 @@ class MemberExcelImportServiceTest {
         when(employerRepository.findByCode(eq("BAD"))).thenReturn(Optional.empty());
 
         when(importLogRepository.findByImportBatchId(anyString())).thenReturn(Optional.empty());
+        when(importLogRepository.findByEmployerIdAndFileHashAndStatus(any(), anyString(), eq(MemberImportLog.ImportStatus.COMPLETED)))
+                .thenReturn(Optional.empty());
         when(importLogRepository.save(any(MemberImportLog.class))).thenAnswer(invocation -> {
             MemberImportLog log = invocation.getArgument(0);
             if (log.getId() == null) {
@@ -130,6 +136,18 @@ class MemberExcelImportServiceTest {
             }
             return log;
         });
+        when(importLogRepository.saveAndFlush(any(MemberImportLog.class))).thenAnswer(invocation -> {
+            MemberImportLog log = invocation.getArgument(0);
+            if (log.getId() == null) {
+                log.setId(100L);
+            }
+            return log;
+        });
+        when(importLogRepository.findById(anyLong())).thenAnswer(invocation ->
+                Optional.of(MemberImportLog.builder().id(invocation.getArgument(0)).importBatchId("test-batch")
+                        .startedAt(LocalDateTime.now()).build()));
+        when(auditRecorder.markStarted(anyString(), any(), anyLong(), anyString(), any(), any(), any()))
+                .thenReturn(100L);
 
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());
         when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
