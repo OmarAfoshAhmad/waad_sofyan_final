@@ -19,7 +19,7 @@ import java.util.List;
  * @version 2025.1
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 public class EligibilityResult {
 
     // ============================================
@@ -74,6 +74,19 @@ public class EligibilityResult {
      * Snapshot of data at the time of the check
      */
     private final EligibilitySnapshot snapshot;
+
+    /**
+     * Whether the audit trail record for this decision was actually persisted.
+     * The eligibility decision itself is never lost or altered because the
+     * audit write failed (e.g. a transient DB issue) -- this flag lets callers
+     * that need a guaranteed audit trail (or monitoring) detect that gap
+     * instead of assuming every decision is traceable. See
+     * EligibilityAuditRecorder, which persists in its own REQUIRES_NEW
+     * transaction specifically so an audit-write failure can never roll back
+     * or hide the eligibility result it's describing.
+     */
+    @Builder.Default
+    private final boolean auditRecorded = true;
 
     // ============================================
     // Nested Classes

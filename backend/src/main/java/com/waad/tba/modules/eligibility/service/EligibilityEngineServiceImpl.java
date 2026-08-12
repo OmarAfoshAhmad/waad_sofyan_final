@@ -3,8 +3,6 @@ package com.waad.tba.modules.eligibility.service;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.eligibility.domain.*;
 import com.waad.tba.modules.eligibility.dto.EligibilityCheckRequest;
-import com.waad.tba.modules.eligibility.entity.EligibilityCheck;
-import com.waad.tba.modules.eligibility.repository.EligibilityCheckRepository;
 import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.repository.MemberRepository;
 import com.waad.tba.modules.provider.entity.Provider;
@@ -49,7 +47,7 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
     // Repositories
     private final MemberRepository memberRepository;
     private final ProviderRepository providerRepository;
-    private final EligibilityCheckRepository eligibilityCheckRepository;
+    private final EligibilityAuditRecorder auditRecorder;
     private final BenefitPolicyCoverageService coverageService;
 
     // Security
@@ -74,8 +72,11 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
             // Evaluate rules
             EligibilityResult result = evaluateRules(context, startTime);
 
-            // Log to audit
-            saveAuditLog(context, result);
+            // Log to audit -- own transaction, can never affect the decision above
+            boolean audited = auditRecorder.record(context, result);
+            if (!audited) {
+                result = result.toBuilder().auditRecorded(false).build();
+            }
 
             log.info("[Eligibility] Check complete - RequestID: {}, Eligible: {}, Status: {}, Time: {}ms",
                     requestId, result.isEligible(), result.getStatus(), result.getProcessingTimeMs());
@@ -107,8 +108,11 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
 
         EligibilityResult result = evaluateRules(context, startTime);
 
-        // Log to audit
-        saveAuditLog(context, result);
+        // Log to audit -- own transaction, can never affect the decision above
+        boolean audited = auditRecorder.record(context, result);
+        if (!audited) {
+            result = result.toBuilder().auditRecorded(false).build();
+        }
 
         return result;
     }
@@ -361,92 +365,6 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
         }
 
         return builder.build();
-    }
-
-    /**
-     * Save audit log
-     */
-    @Transactional
-    protected void saveAuditLog(EligibilityContext context, EligibilityResult result) {
-        try {
-            EligibilityCheck check = EligibilityCheck.builder()
-                    .requestId(context.getRequestId())
-                    .checkTimestamp(context.getCheckTimestamp())
-                    // Input
-                    .memberId(context.getMemberId())
-                    .policyId(context.getBenefitPolicyId()) // Using benefitPolicyId as the policy reference
-                    .providerId(context.getProviderId())
-                    .serviceDate(context.getServiceDate())
-                    .serviceCode(context.getServiceCode())
-                    // Result
-                    .eligible(result.isEligible())
-                    .status(result.getStatus().name())
-                    .reasons(convertReasonsToJson(result.getReasons()))
-                    // Snapshot
-                    .memberName(result.getSnapshot() != null ? result.getSnapshot().getMemberName() : null)
-                    .memberCivilId(result.getSnapshot() != null ? result.getSnapshot().getMemberCivilId() : null)
-                    .memberStatus(result.getSnapshot() != null ? result.getSnapshot().getMemberStatus() : null)
-                    .policyNumber(result.getSnapshot() != null ? result.getSnapshot().getPolicyNumber() : null)
-                    .policyStatus(result.getSnapshot() != null ? result.getSnapshot().getPolicyStatus() : null)
-                    .policyStartDate(result.getSnapshot() != null ? result.getSnapshot().getCoverageStart() : null)
-                    .policyEndDate(result.getSnapshot() != null ? result.getSnapshot().getCoverageEnd() : null)
-                    .employerId(result.getSnapshot() != null ? result.getSnapshot().getEmployerId() : null)
-                    .employerName(result.getSnapshot() != null ? result.getSnapshot().getEmployerName() : null)
-                    // Security
-                    .checkedByUserId(context.getCheckedByUserId())
-                    .checkedByUsername(context.getCheckedByUsername())
-                    .companyScopeId(context.getCompanyScopeId())
-                    .ipAddress(context.getIpAddress())
-                    .userAgent(context.getUserAgent())
-                    // Metrics
-                    .processingTimeMs((int) result.getProcessingTimeMs())
-                    .rulesEvaluated(result.getRulesEvaluated())
-                    .build();
-
-            eligibilityCheckRepository.save(check);
-            log.debug("[Eligibility] Audit log saved - RequestID: {}", context.getRequestId());
-
-        } catch (Exception e) {
-            // Don't fail the eligibility check if audit logging fails
-            log.error("[Eligibility] Failed to save audit log: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Convert reasons list to JSON string
-     */
-    private String convertReasonsToJson(List<EligibilityResult.ReasonDetail> reasons) {
-        if (reasons == null || reasons.isEmpty()) {
-            return "[]";
-        }
-
-        try {
-            // Simple JSON array construction
-            StringBuilder sb = new StringBuilder("[");
-            for (int i = 0; i < reasons.size(); i++) {
-                EligibilityResult.ReasonDetail r = reasons.get(i);
-                if (i > 0)
-                    sb.append(",");
-                sb.append("{");
-                sb.append("\"code\":\"").append(escape(r.getCode())).append("\",");
-                sb.append("\"messageAr\":\"").append(escape(r.getMessageAr())).append("\",");
-                sb.append("\"details\":\"").append(escape(r.getDetails())).append("\"");
-                sb.append("}");
-            }
-            sb.append("]");
-            return sb.toString();
-        } catch (Exception e) {
-            return "[]";
-        }
-    }
-
-    private String escape(String s) {
-        if (s == null)
-            return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r");
     }
 
     /**
