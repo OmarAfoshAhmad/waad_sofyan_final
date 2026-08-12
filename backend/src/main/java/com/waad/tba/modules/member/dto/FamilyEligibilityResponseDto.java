@@ -105,6 +105,21 @@ public class FamilyEligibilityResponseDto {
     @Schema(description = "Total remaining family limit", example = "42000.00")
     private java.math.BigDecimal remainingFamilyLimit;
 
+    /**
+     * Whether the financial limit fields above ({@link #annualLimit},
+     * {@link #remainingFamilyLimit}) were successfully computed. False means
+     * a financial lookup failed and those fields are stale/absent -- the
+     * caller must not treat a null/zero remainingFamilyLimit as "no limit
+     * left" in that case. Previously this failure was silently swallowed and
+     * the response returned as if financial data were simply zero.
+     */
+    @Schema(description = "False if financial limit data could not be retrieved (fields above are unreliable)", example = "true")
+    @Builder.Default
+    private Boolean financialDataAvailable = true;
+
+    @Schema(description = "Arabic explanation when financialDataAvailable is false", example = "تعذر جلب بيانات السقف المالي")
+    private String financialDataError;
+
     // ==================== HELPER METHODS ====================
 
     /**

@@ -1,10 +1,12 @@
 package com.waad.tba.modules.member.mapper;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
+import com.waad.tba.modules.eligibility.domain.EligibilityResult;
 import com.waad.tba.modules.member.dto.DependentMemberDto;
 import com.waad.tba.modules.member.dto.DependentViewDto;
 import com.waad.tba.modules.member.dto.FamilyEligibilityResponseDto;
@@ -303,8 +305,22 @@ public class UnifiedMemberMapper {
 
     /**
      * Convert Principal + Dependents to FamilyEligibilityResponseDto.
+     *
+     * @param eligibilityByMemberId Real-time eligibility engine results
+     *                              (see EligibilityEngineService), one per
+     *                              family member, keyed by member id. This
+     *                              is now the single source of truth for the
+     *                              "eligible" decision -- previously this
+     *                              method computed its own shallow
+     *                              active+cachedFlag+hasEmployer check that
+     *                              never consulted the real coverage rules
+     *                              engine, so a member the engine would
+     *                              reject (e.g. exhausted limit, inactive
+     *                              policy) could still be reported eligible
+     *                              here.
      */
-    public FamilyEligibilityResponseDto toFamilyEligibilityResponse(Member principal, List<Member> dependents) {
+    public FamilyEligibilityResponseDto toFamilyEligibilityResponse(
+            Member principal, List<Member> dependents, Map<Long, EligibilityResult> eligibilityByMemberId) {
         // Convert principal
         MemberViewDto principalDto = toViewDto(principal);
 
@@ -313,22 +329,18 @@ public class UnifiedMemberMapper {
                 .map(this::toDependentViewDto)
                 .collect(Collectors.toList());
 
-        // Count eligible members - safely handle null values
-        int eligibleCount = 0;
-        boolean principalActive = Boolean.TRUE.equals(principal.getActive());
-        boolean principalEligible = Boolean.TRUE.equals(principal.getEligibilityStatus());
         boolean principalHasEmployer = principal.getEmployer() != null;
 
-        // Principal is eligible if active, eligible status is true, and has employer
-        if (principalActive && principalEligible && principalHasEmployer) {
+        int eligibleCount = 0;
+        if (isEligible(eligibilityByMemberId, principal.getId())) {
             eligibleCount++;
         }
+        for (Member dependent : dependents) {
+            if (isEligible(eligibilityByMemberId, dependent.getId())) {
+                eligibleCount++;
+            }
+        }
 
-        eligibleCount += (int) dependents.stream()
-                .filter(d -> Boolean.TRUE.equals(d.getActive()) && Boolean.TRUE.equals(d.getEligibilityStatus()))
-                .count();
-
-        // Determine eligibility - also check if principal has employer
         boolean eligible = eligibleCount > 0 && principalHasEmployer;
         String message;
         if (!principalHasEmployer) {
@@ -354,5 +366,11 @@ public class UnifiedMemberMapper {
                 .employerOrgId(principal.getEmployer() != null ? principal.getEmployer().getId() : null)
                 .employerOrgName(principal.getEmployer() != null ? principal.getEmployer().getName() : null)
                 .build();
+    }
+
+    /** Fails closed: a member with no engine result (should never happen) counts as not eligible. */
+    private boolean isEligible(Map<Long, EligibilityResult> eligibilityByMemberId, Long memberId) {
+        EligibilityResult result = eligibilityByMemberId.get(memberId);
+        return result != null && result.isEligible();
     }
 }

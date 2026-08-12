@@ -43,6 +43,7 @@ class UnifiedMemberPhotoSecurityTest {
     @Mock private MemberFinancialSummaryService financialSummaryService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private AuditLogService auditLogService;
+    @Mock private com.waad.tba.modules.eligibility.service.EligibilityEngineService eligibilityEngineService;
 
     private UnifiedMemberService service;
     private User currentUser;
@@ -60,7 +61,8 @@ class UnifiedMemberPhotoSecurityTest {
                 providerService,
                 financialSummaryService,
                 jdbcTemplate,
-                auditLogService);
+                auditLogService,
+                eligibilityEngineService);
         currentUser = mock(User.class);
         when(authorizationService.requireCurrentUser()).thenReturn(currentUser);
     }
