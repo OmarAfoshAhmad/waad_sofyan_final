@@ -95,12 +95,12 @@ class MemberExcelImportServiceTest {
         MemberImportParser parser = new MemberImportParser();
         MemberImportMapper mapper = new MemberImportMapper(parser);
         MemberPolicyResolver policyResolverForStatus = new MemberPolicyResolver(
-                policyAssignmentRepository, benefitPolicyRepository);
+                policyAssignmentRepository, benefitPolicyRepository, memberRepository);
         MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
                 memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
                 statusTransitionJdbcTemplate, policyResolverForStatus);
         MemberPolicyResolver memberPolicyResolver = new MemberPolicyResolver(
-                policyAssignmentRepository, benefitPolicyRepository);
+                policyAssignmentRepository, benefitPolicyRepository, memberRepository);
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
                 parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
                 cardNumberGeneratorService, statusTransitionService);
@@ -172,6 +172,8 @@ class MemberExcelImportServiceTest {
         when(policyAssignmentRepository.findByMemberIdAndAssignmentEndDateIsNull(anyLong()))
                 .thenReturn(Optional.empty());
         when(policyAssignmentRepository.save(any(com.waad.tba.modules.member.entity.MemberPolicyAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(policyAssignmentRepository.saveAndFlush(any(com.waad.tba.modules.member.entity.MemberPolicyAssignment.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
         when(cardNumberGeneratorService.generateUniqueForPrincipal(any(Member.class))).thenReturn("CARD-0001",

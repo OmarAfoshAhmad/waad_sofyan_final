@@ -72,7 +72,8 @@ class UnifiedMemberServiceSecurityTest {
                         jdbcTemplate,
                         new com.waad.tba.modules.member.service.MemberPolicyResolver(
                                 org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
-                                org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class)));
+                                org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
+                                memberRepository));
 
         service = new UnifiedMemberService(
                 memberRepository,
@@ -90,7 +91,8 @@ class UnifiedMemberServiceSecurityTest {
                 statusTransitionService,
                 new com.waad.tba.modules.member.service.MemberPolicyResolver(
                         org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
-                        org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class)));
+                        org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class),
+                        memberRepository));
     }
 
     @Test

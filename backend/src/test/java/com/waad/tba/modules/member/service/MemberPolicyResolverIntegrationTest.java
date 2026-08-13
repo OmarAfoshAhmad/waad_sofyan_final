@@ -248,4 +248,179 @@ class MemberPolicyResolverIntegrationTest extends PostgresIntegrationTestBase {
         assertThat(resolver.resolveFor(member, backdated).orElseThrow().getPolicyCode())
                 .isEqualTo(eligibilityResult.getSnapshot().getPolicyNumber());
     }
+
+    // -- Condition 1: the POLICY itself must be in force, not just the assignment --
+
+    @Test
+    void aPolicyThatExpiredBeforeTheServiceDateIsRejectedEvenWithAnOpenAssignment() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        // Expired six months ago, but the assignment below is left open-ended --
+        // the normal state, since assignments only close when a new one starts.
+        BenefitPolicy expired = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().minusYears(2), LocalDate.now().minusMonths(6));
+        Member member = newMember(employer, expired, s);
+        resolver.assignPolicy(member, expired, LocalDate.now().minusYears(2),
+                "assign", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+
+        assertThat(resolver.resolveFor(member, LocalDate.now()))
+                .as("an open assignment must not extend an expired policy")
+                .isEmpty();
+    }
+
+    @Test
+    void aPolicyStartingAfterTheServiceDateIsRejected() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy future = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().plusMonths(2), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, future, s);
+        resolver.assignPolicy(member, future, LocalDate.now().minusMonths(1),
+                "early assign", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+
+        assertThat(resolver.resolveFor(member, LocalDate.now()))
+                .as("the policy had not started on the service date")
+                .isEmpty();
+    }
+
+    @Test
+    void thePolicyStartDayIsAcceptedAndTheDayAfterItsEndDateIsNot() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        LocalDate start = LocalDate.now().minusMonths(3);
+        LocalDate end = LocalDate.now().minusDays(1);
+        BenefitPolicy policy = newPolicy(employer, s, new BigDecimal("10000"), start, end);
+        Member member = newMember(employer, policy, s);
+        resolver.assignPolicy(member, policy, start, "assign", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+
+        // BenefitPolicy.isEffectiveOn is inclusive on BOTH ends (unlike the
+        // assignment range, which is half-open) -- asserted here so the two
+        // different conventions stay explicit rather than assumed.
+        assertThat(resolver.resolveFor(member, start)).as("start day is covered").isPresent();
+        assertThat(resolver.resolveFor(member, end)).as("end day is covered").isPresent();
+        assertThat(resolver.resolveFor(member, end.plusDays(1)))
+                .as("the day after the policy ends is not covered").isEmpty();
+    }
+
+    @Test
+    void financialCallersGetAClearFailureRatherThanAnEmptyOptional() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy expired = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().minusYears(2), LocalDate.now().minusMonths(6));
+        Member member = newMember(employer, expired, s);
+        resolver.assignPolicy(member, expired, LocalDate.now().minusYears(2),
+                "assign", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+
+        assertThatThrownBy(() -> resolver.resolveForOrFail(member, LocalDate.now()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("\u0644\u0627 \u062a\u0648\u062c\u062f \u0648\u062b\u064a\u0642\u0629 \u0645\u0646\u0627\u0641\u0639 \u0633\u0627\u0631\u064a\u0629");
+    }
+
+    // -- Condition 5: concurrency and error translation --
+
+    @Test
+    void concurrentAssignmentsForTheSameMemberProduceExactlyOneWinnerAndNoOverlap() throws Exception {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy first = newPolicy(employer, s + "-1", new BigDecimal("10000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        BenefitPolicy a = newPolicy(employer, s + "-a", new BigDecimal("20000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        BenefitPolicy b = newPolicy(employer, s + "-b", new BigDecimal("30000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, first, s);
+        resolver.assignPolicy(member, first, LocalDate.now().minusMonths(6),
+                "original", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+        Long memberId = member.getId();
+        LocalDate from = LocalDate.now();
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.CountDownLatch gate = new java.util.concurrent.CountDownLatch(1);
+
+        java.util.concurrent.Callable<Boolean> taskA = () -> {
+            gate.await();
+            try {
+                Member fresh = memberRepository.findById(memberId).orElseThrow();
+                resolver.assignPolicy(fresh, a, from, "concurrent A", PolicyAssignmentSource.MANUAL, 1L);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        };
+        java.util.concurrent.Callable<Boolean> taskB = () -> {
+            gate.await();
+            try {
+                Member fresh = memberRepository.findById(memberId).orElseThrow();
+                resolver.assignPolicy(fresh, b, from, "concurrent B", PolicyAssignmentSource.MANUAL, 1L);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        };
+
+        var f1 = pool.submit(taskA);
+        var f2 = pool.submit(taskB);
+        gate.countDown();
+        boolean ok1 = f1.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        boolean ok2 = f2.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(ok1 ^ ok2).as("exactly one concurrent assignment may win").isTrue();
+
+        // And whatever happened, no member may end up with two periods covering
+        // the same day -- the invariant the exclusion constraint guarantees.
+        long openCount = assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(memberId).stream()
+                .filter(x -> x.getAssignmentEndDate() == null).count();
+        assertThat(openCount).isEqualTo(1);
+    }
+
+    @Test
+    void aRefusedAssignmentReportsABusinessMessageWithoutLeakingSql() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy a = newPolicy(employer, s + "-a", new BigDecimal("10000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, a, s);
+        resolver.assignPolicy(member, a, LocalDate.now().minusMonths(6),
+                "assign", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+
+        BenefitPolicy other = newPolicy(employer, s + "-o", new BigDecimal("20000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+
+        // An effective date at or before the current assignment's start is
+        // refused with a business rule before it can even reach the constraint.
+        assertThatThrownBy(() -> resolver.assignPolicy(member, other, LocalDate.now().minusYears(1),
+                "backdated", PolicyAssignmentSource.MANUAL, 1L))
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(e.getMessage())
+                        .as("must not leak SQL or constraint names to the user")
+                        .doesNotContain("gist").doesNotContain("SQL").doesNotContain("constraint"));
+    }
+
+    @Test
+    void reassigningTheSamePolicyIsIdempotentAndCreatesNoSecondRow() {
+        String s = suffix();
+        Employer employer = newEmployer(s);
+        BenefitPolicy policy = newPolicy(employer, s, new BigDecimal("10000"),
+                LocalDate.now().minusYears(1), LocalDate.now().plusYears(1));
+        Member member = newMember(employer, policy, s);
+        resolver.assignPolicy(member, policy, LocalDate.now().minusMonths(6),
+                "assign", PolicyAssignmentSource.MANUAL, 1L);
+        memberRepository.saveAndFlush(member);
+        int before = assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(member.getId()).size();
+
+        resolver.assignPolicy(member, policy, LocalDate.now(),
+                "same policy again", PolicyAssignmentSource.MANUAL, 1L);
+
+        assertThat(assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(member.getId()))
+                .as("re-assigning the policy already in force must not create a second row")
+                .hasSize(before);
+    }
 }

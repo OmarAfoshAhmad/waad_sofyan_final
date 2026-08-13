@@ -368,7 +368,13 @@ public class UnifiedMemberService {
         if (dto.getRelationship() != null && dto.getRelationship() != member.getRelationship()) {
             violations.add("صلة القرابة (relationship): تغيير البناء الأسري عملية مستقلة (غير متاحة عبر هذا المسار)");
         }
-        if (dto.getCardNumber() != null && !dto.getCardNumber().equals(member.getCardNumber())) {
+        // Normalized comparison: a blank string means "not supplied" (not "clear
+        // the card number"), and surrounding whitespace is a representation
+        // difference, not an edit. Comparing raw strings here would reject a
+        // request that changes nothing -- the exact false positive that makes a
+        // guard like this get disabled instead of fixed.
+        String submittedCard = normalizeForComparison(dto.getCardNumber());
+        if (submittedCard != null && !submittedCard.equals(normalizeForComparison(member.getCardNumber()))) {
             violations.add("رقم البطاقة (cardNumber): هوية نظامية مرتبطة بالباركود، تغييرها عملية مستقلة مدقَّقة"
                     + " (غير متاحة عبر هذا المسار)");
         }
@@ -378,6 +384,15 @@ public class UnifiedMemberService {
                     "لا يمكن تعديل الحقول الحساسة التالية عبر التعديل العام:\n- "
                             + String.join("\n- ", violations));
         }
+    }
+
+    /** null and blank both mean "not supplied"; whitespace is not an edit. */
+    private static String normalizeForComparison(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

@@ -47,6 +47,8 @@ class MemberUpdateSensitiveFieldGuardIntegrationTest extends PostgresIntegration
     @Autowired private EmployerRepository employerRepository;
     @Autowired private BenefitPolicyRepository policyRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository assignmentRepository;
+    @Autowired private com.waad.tba.modules.member.repository.MemberStatusHistoryRepository statusHistoryRepository;
 
     private static String suffix() {
         return UUID.randomUUID().toString().substring(0, 8);
@@ -216,5 +218,49 @@ class MemberUpdateSensitiveFieldGuardIntegrationTest extends PostgresIntegration
                 .hasMessageContaining("حالة العضوية")
                 .hasMessageContaining("جهة العمل")
                 .hasMessageContaining("رقم البطاقة");
+    }
+
+    /**
+     * The "reject on CHANGE, not on presence" compromise is only safe if an
+     * unchanged echo is genuinely inert. Proves it writes nothing at all: no
+     * new policy assignment, no new status history row, and no @Version bump
+     * on the member -- so a form that round-trips current values cannot
+     * quietly generate audit noise or lose a concurrent edit.
+     */
+    @Test
+    @WithMockUser(username = "admin")
+    void echoingCurrentValuesCreatesNoAssignmentNoHistoryAndNoVersionBump() {
+        ensureAdmin();
+        Fixture f = newMember(suffix());
+        Long id = f.member().getId();
+
+        Member before = memberRepository.findById(id).orElseThrow();
+        Long versionBefore = before.getVersion();
+        int assignmentsBefore = assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(id).size();
+        int historyBefore = statusHistoryRepository.findByMemberIdOrderByChangedAtDesc(id).size();
+
+        MemberUpdateDto dto = new MemberUpdateDto();
+        dto.setEmployerId(f.employer().getId());
+        dto.setBenefitPolicyId(f.policy().getId());
+        dto.setStatus(before.getStatus());
+        dto.setActive(before.getActive());
+        // Whitespace around an unchanged card number is a representation
+        // difference, not an edit -- normalized comparison must accept it.
+        dto.setCardNumber("  " + before.getCardNumber() + "  ");
+
+        memberService.updateMember(id, dto);
+
+        Member after = memberRepository.findById(id).orElseThrow();
+        assertThat(after.getVersion())
+                .as("an update that changes nothing must not bump the optimistic-lock version")
+                .isEqualTo(versionBefore);
+        assertThat(assignmentRepository.findByMemberIdOrderByAssignmentStartDateDesc(id))
+                .as("no policy assignment may be created by an unchanged echo")
+                .hasSize(assignmentsBefore);
+        assertThat(statusHistoryRepository.findByMemberIdOrderByChangedAtDesc(id))
+                .as("no status history row may be created by an unchanged echo")
+                .hasSize(historyBefore);
+        assertThat(after.getStatus()).isEqualTo(before.getStatus());
+        assertThat(after.getBenefitPolicy().getId()).isEqualTo(f.policy().getId());
     }
 }
