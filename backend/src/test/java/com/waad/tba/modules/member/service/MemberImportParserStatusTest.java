@@ -28,7 +28,7 @@ class MemberImportParserStatusTest {
     @Test
     void rejectsUnknownStatusInsteadOfSilentlyActivatingMember() {
         assertThatThrownBy(() -> parser.parseMemberStatus("غير معروفة"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(MemberImportRowValidationException.class)
                 .hasMessageContaining("حالة عضوية غير معروفة");
     }
 }

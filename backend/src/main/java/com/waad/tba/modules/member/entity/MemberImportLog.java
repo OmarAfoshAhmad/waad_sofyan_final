@@ -67,10 +67,10 @@ public class MemberImportLog {
      * Fingerprint of every input that changes an import's outcome: fileHash
      * + employerId + benefitPolicyId + resolvedHeaderRowNumber +
      * clearOldMembers. A partial unique index on this column (status =
-     * 'COMPLETED') is what actually enforces idempotency -- see V167 for why
-     * fileHash + employerId alone was insufficient (NULL employerId,
-     * different benefit policy/header row/clearOldMembers all change the
-     * outcome and must NOT be folded into "the same import").
+     * 'COMPLETED') is what actually enforces idempotency -- see V168 for why
+     * V167's original fileHash + employerId key was insufficient (NULL
+     * employerId, different benefit policy/header row/clearOldMembers all
+     * change the outcome and must NOT be folded into "the same import").
      */
     @Column(name = "import_scope_hash", length = 64)
     private String importScopeHash;

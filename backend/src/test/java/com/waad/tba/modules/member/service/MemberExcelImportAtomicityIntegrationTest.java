@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -37,6 +38,8 @@ import com.waad.tba.modules.member.entity.Member;
 import com.waad.tba.modules.member.entity.MemberImportLog;
 import com.waad.tba.modules.member.repository.MemberImportLogRepository;
 import com.waad.tba.modules.member.repository.MemberRepository;
+import com.waad.tba.modules.rbac.entity.User;
+import com.waad.tba.modules.rbac.repository.UserRepository;
 import com.waad.tba.support.PostgresIntegrationTestBase;
 
 /**
@@ -83,10 +86,19 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
     @Autowired private MemberImportLogRepository importLogRepository;
     @Autowired private EmployerRepository employerRepository;
     @Autowired private BenefitPolicyRepository benefitPolicyRepository;
+    @Autowired private UserRepository userRepository;
 
     private Employer newEmployer(String suffix) {
         return employerRepository.save(Employer.builder()
                 .name("Import Atomicity Co " + suffix).code("IMP-" + suffix).active(true).build());
+    }
+
+    /** clearOldMembers requires a SUPER_ADMIN in the security context -- see
+     * MemberExcelImportService.assertCurrentUserCanClearOldMembers. */
+    private void ensureSuperAdminUser() {
+        userRepository.findByUsername("admin").orElseGet(() -> userRepository.save(
+                User.builder().username("admin").password("password").fullName("System Admin")
+                        .email("admin@waad.ly").userType("SUPER_ADMIN").active(true).build()));
     }
 
     private BenefitPolicy newPolicy(Employer employer, String suffix) {
@@ -387,5 +399,94 @@ class MemberExcelImportAtomicityIntegrationTest extends PostgresIntegrationTestB
         Member dependent = memberRepository.findByCardNumber("CARDE" + s + "S1").orElseThrow();
         assertThat(dependent.getParent()).isNotNull();
         assertThat(dependent.getParent().getId()).isEqualTo(principal.getId());
+    }
+
+    /**
+     * Regression test for the ordering bug found on review: clearOldMembers
+     * used to run BEFORE the idempotency check, so a duplicate submission of
+     * a clearOldMembers=true import would delete members again and THEN find
+     * the scope hash already COMPLETED -- committing the delete with no
+     * re-import to replace it. clearOldMembers now runs AFTER the idempotent
+     * short-circuit, so a duplicate submission must do nothing at all: if it
+     * still ran clearOldMembers on the second call, it would delete the
+     * principal the FIRST call just created (that principal has no
+     * visits/claims/preauths of its own, so it's exactly the kind of "old
+     * member with no movements" clearOldMembers targets).
+     */
+    @Test
+    @WithMockUser(username = "admin")
+    void clearOldMembersIdempotentResubmission_doesNotDeleteOrReimport() throws Exception {
+        ensureSuperAdminUser();
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        newPolicy(employer, s);
+
+        // A pre-existing member with no financial movements -- clearOldMembers
+        // will delete this on the FIRST call.
+        Member preExisting = memberRepository.save(Member.builder()
+                .fullName("Stale Member " + s).employer(employer)
+                .cardNumber("STALE" + s).barcode("STALE" + s).active(false).build());
+
+        MockMultipartFile file = excel(List.of(
+                HEADER,
+                new String[] { "Fresh Principal " + s, employer.getName(), "NF" + s, "2026-01-01", "FRESH" + s }));
+
+        MemberImportResultDto first = importService.executeImport(
+                file, "batch-clear-1-" + s, employer.getId(), null, 0, true);
+        assertThat(first.getStatus()).isEqualTo("COMPLETED");
+        assertThat(memberRepository.findById(preExisting.getId())).as("stale member deleted by the first, real clearOldMembers run").isEmpty();
+        Member freshFromFirstCall = memberRepository.findByCardNumber("FRESH" + s).orElseThrow();
+
+        // Identical resubmission (same file, same employer, same
+        // clearOldMembers=true). Must be recognized as already done and do
+        // NOTHING -- in particular, must NOT delete the principal the first
+        // call just created.
+        MemberImportResultDto second = importService.executeImport(
+                file, "batch-clear-2-" + s, employer.getId(), null, 0, true);
+
+        assertThat(second.getMessage()).contains("batch-clear-1-" + s);
+        Member freshAfterSecondCall = memberRepository.findByCardNumber("FRESH" + s).orElseThrow();
+        assertThat(freshAfterSecondCall.getId()).as("the SAME row from call 1, never deleted and never re-created")
+                .isEqualTo(freshFromFirstCall.getId());
+        assertThat(memberRepository.findAllCardNumbers()).as("no duplicate rows exist for this employer")
+                .containsOnlyOnce("FRESH" + s);
+    }
+
+    /**
+     * clearOldMembers's delete and the new import's writes must be one
+     * atomic unit: if the import fails technically partway through, the
+     * delete must roll back along with everything else -- the old members
+     * must NOT end up permanently gone with nothing successfully imported to
+     * replace them.
+     */
+    @Test
+    @WithMockUser(username = "admin")
+    void clearOldMembersThenTechnicalFailure_rollsBackTheDeleteAndAllNewMembers() throws Exception {
+        ensureSuperAdminUser();
+        String s = randomSuffix();
+        Employer employer = newEmployer(s);
+        newPolicy(employer, s);
+
+        Member preExisting = memberRepository.save(Member.builder()
+                .fullName("Stale Member " + s).employer(employer)
+                .cardNumber("STALE2" + s).barcode("STALE2" + s).active(false).build());
+
+        doThrow(new DataIntegrityViolationException("simulated unique constraint violation"))
+                .when(memberRepository)
+                .saveAll(argThat((List<Member> batch) -> batch != null
+                        && batch.stream().anyMatch(m -> ("Doomed Child " + s).equals(m.getFullName()))));
+
+        MockMultipartFile file = excel(List.of(
+                HEADER,
+                new String[] { "Doomed Principal " + s, employer.getName(), "DP" + s, "2026-01-01", "DOOM" + s },
+                new String[] { "Doomed Child " + s, employer.getName(), "DC" + s, "2026-01-01", "DOOM" + s + "S1" }));
+
+        assertThatThrownBy(() -> importService.executeImport(file, "batch-clear-fail-" + s, employer.getId(), null, 0, true))
+                .isInstanceOf(Exception.class);
+
+        assertThat(memberRepository.findById(preExisting.getId())).as("delete rolled back -- stale member restored")
+                .isPresent();
+        assertThat(memberRepository.findByCardNumber("DOOM" + s)).as("new principal rolled back too").isEmpty();
+        assertThat(memberRepository.findByCardNumber("DOOM" + s + "S1")).as("new dependent rolled back too").isEmpty();
     }
 }

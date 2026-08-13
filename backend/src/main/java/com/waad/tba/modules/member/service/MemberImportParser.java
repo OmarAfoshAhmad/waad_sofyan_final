@@ -187,7 +187,7 @@ public class MemberImportParser {
             case "موقوف", "معلق", "suspended", "blocked" -> MemberStatus.SUSPENDED;
             case "منتهي", "ملغي", "terminated", "inactive" -> MemberStatus.TERMINATED;
             case "قيد المراجعه", "قيد المراجعة", "pending" -> MemberStatus.PENDING;
-            default -> throw new IllegalArgumentException("حالة عضوية غير معروفة: " + value);
+            default -> throw new MemberImportRowValidationException("حالة عضوية غير معروفة: " + value);
         };
     }
 

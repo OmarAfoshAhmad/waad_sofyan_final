@@ -292,9 +292,16 @@ public class MemberExcelImportService {
     public MemberImportResultDto executeImport(MultipartFile file, String batchId, Long employerId, Long benefitPolicyId, Integer headerRowNumber, Boolean clearOldMembers) throws Exception {
         log.info("📥 Executing member import: batchId={}, file={}, employer={}, policy={}, clearOldMembers={}", batchId, file.getOriginalFilename(), employerId, benefitPolicyId, clearOldMembers);
 
-        if (Boolean.TRUE.equals(clearOldMembers)) {
-            clearOldMembersForFile(file, employerId, headerRowNumber);
-        }
+        // clearOldMembers is deliberately NOT run here, before the
+        // idempotency check below. Doing so previously meant: a completed
+        // clearOldMembers=true import, re-submitted with the identical
+        // scope, would delete the old members again, THEN find the scope
+        // hash already COMPLETED and return early -- committing the delete
+        // with no re-import to replace it. It now runs after the idempotent
+        // short-circuit, inside the same transaction as the member writes
+        // (see below), so a duplicate submission does nothing at all, and a
+        // genuine clearOldMembers run rolls back together with the rest of
+        // this transaction if anything downstream fails.
 
         MemberImportPreviewDto previewGuard = parseAndPreview(file, null, headerRowNumber, employerId);
         if (previewGuard.getValidRows() <= 0) throw new BusinessRuleException("لا يوجد صفوف صالحة للاستيراد");
@@ -354,6 +361,14 @@ public class MemberExcelImportService {
         int totalProcessed = 0, createdCount = 0, skippedCount = 0, errorCount = 0;
 
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
+            // Runs INSIDE this transaction, after the idempotency
+            // short-circuit above -- a duplicate submission never reaches
+            // here, and a genuine clear+reimport rolls back together with
+            // everything below if any later row fails technically.
+            if (Boolean.TRUE.equals(clearOldMembers)) {
+                clearOldMembersForFile(file, employerId, headerRowNumber);
+            }
+
             Sheet sheet = workbook.getSheetAt(0);
             int physicalLastRow = sheet.getLastRowNum();
             int totalRows = Math.max(0, physicalLastRow - resolvedHeaderRowNumber);
@@ -401,19 +416,21 @@ public class MemberExcelImportService {
                     }
 
                     member = rowProcessor.processRowForImport(row, rowNum, fieldToColumnIndex, defaultEmployer, benefitPolicy, parent, relationship, existingMember);
-                } catch (BusinessRuleException | IllegalArgumentException parseFailure) {
-                    // Expected/business-level row failure ONLY -- both types
-                    // are thrown exclusively by rowProcessor/parser validation
-                    // (missing field, unresolved employer/policy, an
-                    // unrecognized member_status value), never by a
+                } catch (MemberImportRowValidationException parseFailure) {
+                    // Expected/business-level row failure ONLY -- this exact
+                    // type is thrown exclusively by rowProcessor/parser
+                    // validation (missing field, unresolved employer/policy,
+                    // an unrecognized member_status value), never by a
                     // persistence call. Nothing has been saved for this row
                     // yet, so recording it and moving on cannot lose or
-                    // corrupt anything already written. Any OTHER exception
-                    // (DataAccessException, PersistenceException,
-                    // IllegalStateException, NPE, ...) is deliberately NOT
-                    // caught here -- it is a technical fault, not a row's bad
-                    // data, and must abort the whole batch like a save
-                    // failure does.
+                    // corrupt anything already written. A plain
+                    // IllegalArgumentException is deliberately NOT caught
+                    // here (unlike an earlier version of this catch) -- it
+                    // can just as easily indicate a programming bug as bad
+                    // row data. Any other exception (DataAccessException,
+                    // PersistenceException, IllegalStateException, NPE, ...)
+                    // is a technical fault and must abort the whole batch
+                    // like a save failure does.
                     errorCount++;
                     String rowJson = rowToJson(row, columnIndexToName);
                     auditRecorder.recordRowError(importLogId, rowNum, parseFailure.getMessage(), rowJson);

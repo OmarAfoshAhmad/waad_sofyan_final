@@ -11,7 +11,6 @@ import java.util.Set;
 import org.apache.poi.ss.usermodel.Row;
 import org.springframework.stereotype.Component;
 
-import com.waad.tba.common.exception.BusinessRuleException;
 import com.waad.tba.modules.benefitpolicy.entity.BenefitPolicy;
 import com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository;
 import com.waad.tba.modules.employer.entity.Employer;
@@ -178,7 +177,7 @@ public class MemberImportRowProcessor {
         MemberStatus importedStatus = parser.parseMemberStatus(memberStatusStr);
 
         if (fullName == null || fullName.isBlank()) {
-            throw new BusinessRuleException("الصف " + rowNum + ": الاسم الكامل مطلوب");
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": الاسم الكامل مطلوب");
         }
 
         Employer rowEmployer = resolveEmployerForRow(row, rowNum, fieldToColumnIndex, defaultEmployer);
@@ -309,22 +308,22 @@ public class MemberImportRowProcessor {
 
     BenefitPolicy resolveAndValidatePolicy(BenefitPolicy selectedPolicy, Employer employer, int rowNum) {
         if (employer == null) {
-            throw new BusinessRuleException("الصف " + rowNum + ": تعذر تحديد جهة العمل لربط وثيقة المنافع");
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": تعذر تحديد جهة العمل لربط وثيقة المنافع");
         }
 
         BenefitPolicy resolved = selectedPolicy != null
                 ? selectedPolicy
                 : benefitPolicyRepository
                         .findActiveEffectivePolicyForEmployer(employer.getId(), LocalDate.now())
-                        .orElseThrow(() -> new BusinessRuleException(
+                        .orElseThrow(() -> new MemberImportRowValidationException(
                                 "الصف " + rowNum + ": لا توجد وثيقة منافع فعالة لجهة العمل " + employer.getName()));
 
         if (resolved.getEmployer() == null || !employer.getId().equals(resolved.getEmployer().getId())) {
-            throw new BusinessRuleException(
+            throw new MemberImportRowValidationException(
                     "الصف " + rowNum + ": وثيقة المنافع المختارة لا تتبع جهة عمل المستفيد");
         }
         if (!resolved.isEffectiveOn(LocalDate.now())) {
-            throw new BusinessRuleException(
+            throw new MemberImportRowValidationException(
                     "الصف " + rowNum + ": وثيقة المنافع المختارة غير فعالة في تاريخ الاستيراد");
         }
         return resolved;
@@ -336,7 +335,7 @@ public class MemberImportRowProcessor {
         if (employerNameOrCode == null || employerNameOrCode.isBlank()) {
             if (defaultEmployer != null)
                 return defaultEmployer;
-            throw new BusinessRuleException("الصف " + rowNum + ": جهة العمل مطلوبة");
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": جهة العمل مطلوبة");
         }
 
         String normalized = employerNameOrCode.trim();
@@ -345,7 +344,7 @@ public class MemberImportRowProcessor {
         if (resolvedOptional.isEmpty()) {
             if (defaultEmployer != null)
                 return defaultEmployer;
-            throw new BusinessRuleException("الصف " + rowNum + ": جهة العمل غير موجودة: " + normalized);
+            throw new MemberImportRowValidationException("الصف " + rowNum + ": جهة العمل غير موجودة: " + normalized);
         }
 
         return resolvedOptional.get();
