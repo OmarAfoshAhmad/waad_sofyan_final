@@ -53,6 +53,7 @@ import java.util.List;
 public class PreAuthorizationService {
 
     private final PreAuthorizationRepository preAuthorizationRepository;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final ProviderRepository providerRepository;
     private final MemberRepository memberRepository;
     private final com.waad.tba.modules.providercontract.repository.ProviderContractPricingItemRepository pricingItemRepository;
@@ -728,11 +729,25 @@ public class PreAuthorizationService {
 
             // Validate coverage if member has benefit policy
             Member member = memberRepository.findById(preAuth.getMemberId()).orElse(null);
-            if (member != null && member.getBenefitPolicy() != null) {
+            if (member != null) {
+                // The EXPECTED SERVICE DATE decides the policy -- not the
+                // request date, and never today. A pre-authorization is a
+                // decision about a future service, so it must be evaluated
+                // against the policy that will apply when that service
+                // happens. Falling back to requestDate (or worse, now())
+                // silently approved against the wrong policy whenever the two
+                // straddled a policy change. Missing expectedServiceDate fails
+                // closed rather than being guessed.
+                if (preAuth.getExpectedServiceDate() == null) {
+                    throw new BusinessRuleException(
+                            "تاريخ الخدمة المتوقع مطلوب لاعتماد الموافقة المسبقة: "
+                                    + "لا يمكن تحديد الوثيقة والسقوف بدونه");
+                }
+                LocalDate decisionDate = preAuth.getExpectedServiceDate();
+                var policyOnServiceDate = memberPolicyResolver.resolveForOrFail(member, decisionDate);
                 try {
                     benefitPolicyCoverageService.validateAmountLimits(
-                            member, member.getBenefitPolicy(), approvedAmount,
-                            preAuth.getRequestDate() != null ? preAuth.getRequestDate() : LocalDate.now());
+                            member, policyOnServiceDate, approvedAmount, decisionDate);
                     log.debug("✅ BenefitPolicy amount validation passed");
                 } catch (Exception e) {
                     log.error("❌ BenefitPolicy coverage validation failed: {}", e.getMessage());

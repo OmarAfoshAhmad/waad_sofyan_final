@@ -50,6 +50,7 @@ import lombok.RequiredArgsConstructor;
 public class ClaimFinancialSnapshotService {
 
     private final BenefitPolicyCoverageService benefitPolicyCoverageService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final ClaimFinancialInvariantGuard claimFinancialInvariantGuard;
     private final ClaimFinancialAdjudicationService financialAdjudicationService;
     private final ClaimLimitSnapshotFactory limitSnapshotFactory;
@@ -79,7 +80,12 @@ public class ClaimFinancialSnapshotService {
             // numbers, this is what catches it -- fail closed, not a warning.
             claimFinancialInvariantGuard.assertConsistent(claim);
 
-            if (lockedMember.getBenefitPolicy() != null) {
+            // Resolved by the claim's SERVICE DATE. The approval gate must
+            // validate against the limits that were in force then, and the
+            // limit snapshot written below must record that same policy.
+            var policyOnServiceDate = memberPolicyResolver
+                    .resolveFor(lockedMember, claim.getServiceDate()).orElse(null);
+            if (policyOnServiceDate != null) {
                 // excludeClaimId = claim.getId(): this claim may already exist as a row
                 // (e.g. the direct-entry path saves it before finalizeSnapshot runs), so
                 // the "previously used" aggregation must not count this claim's own
@@ -93,7 +99,7 @@ public class ClaimFinancialSnapshotService {
                 // "remaining limit" figure disagreeing with what the engine itself
                 // already capped each line to.
                 benefitPolicyCoverageService.validateAmountLimits(
-                        lockedMember, lockedMember.getBenefitPolicy(), ClaimFinancialTotals.sumLimitConsumption(claim),
+                        lockedMember, policyOnServiceDate, ClaimFinancialTotals.sumLimitConsumption(claim),
                         claim.getServiceDate(), claim.getId());
             }
 

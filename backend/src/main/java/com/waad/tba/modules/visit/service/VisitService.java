@@ -187,7 +187,15 @@ public class VisitService {
         Member member = memberRepository.findById(dto.getMemberId())
                 .orElseThrow(() -> new ResourceNotFoundException("Member", "id", dto.getMemberId()));
 
-        LocalDate visitDate = dto.getVisitDate() != null ? dto.getVisitDate() : LocalDate.now();
+        // The visit date is the DECISION date for everything downstream --
+        // policy resolution, coverage, limits. Defaulting it to today silently
+        // made "when this was entered" stand in for "when it happened", which
+        // is the same class of defect as resolving a policy by today's pointer.
+        if (dto.getVisitDate() == null) {
+            throw new BusinessRuleException(
+                    "تاريخ الزيارة مطلوب: لا يمكن تحديد التغطية والسقوف بدون تاريخ الخدمة الفعلي");
+        }
+        LocalDate visitDate = dto.getVisitDate();
 
         if (member.getBenefitPolicy() != null) {
             benefitPolicyCoverageService.validateCanCreateClaim(member, visitDate);

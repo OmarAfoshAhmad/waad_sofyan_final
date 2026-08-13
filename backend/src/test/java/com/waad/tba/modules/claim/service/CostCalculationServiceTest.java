@@ -39,6 +39,9 @@ class CostCalculationServiceTest {
     @Mock
     private BenefitPolicyCoverageService benefitPolicyCoverageService;
 
+    @Mock
+    private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
+
     @InjectMocks
     private CostCalculationService costCalculationService;
 
@@ -63,10 +66,21 @@ class CostCalculationServiceTest {
         testClaim = Claim.builder()
                 .id(1L)
                 .member(testMember)
+                // A service date is now REQUIRED for any costing: the benefit
+                // year and the policy both derive from it, and the service no
+                // longer falls back to the clock.
+                .serviceDate(java.time.LocalDate.now())
                 .requestedAmount(new BigDecimal("500.00"))
                 .providerName("Hospital A")
                 .lines(new ArrayList<>())
                 .build();
+
+        // The service now resolves the policy by the claim's SERVICE DATE
+        // through MemberPolicyResolver instead of reading the member's
+        // current pointer, so the resolver must answer for these fixtures.
+        org.mockito.Mockito.lenient().when(memberPolicyResolver.resolveFor(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.of(testPolicy));
     }
 
     @Test
@@ -207,8 +221,10 @@ class CostCalculationServiceTest {
         Map<Long, Integer> coverageMap = new HashMap<>();
         coverageMap.put(101L, 90); // 10% copay
         coverageMap.put(102L, 70); // 30% copay
+        // The date argument was isNull() before: coverage was being looked up
+        // with NO service date at all. It now receives the claim's real date.
         when(benefitPolicyCoverageService.batchGetCoveragePercentsByCategory(
-                any(), anyList(), eq(com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT), isNull()))
+                any(), anyList(), eq(com.waad.tba.modules.providercontract.enums.EncounterType.OUTPATIENT), any()))
                 .thenReturn(coverageMap);
 
         // Act

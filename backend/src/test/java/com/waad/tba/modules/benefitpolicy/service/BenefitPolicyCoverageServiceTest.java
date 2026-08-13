@@ -195,6 +195,10 @@ class BenefitPolicyCoverageServiceTest {
         org.mockito.Mockito.when(memberPolicyResolver.resolveFor(org.mockito.ArgumentMatchers.eq(testMember),
                 org.mockito.ArgumentMatchers.any()))
                 .thenReturn(java.util.Optional.of(testPolicy));
+        // validateClaimCoverage now takes the policy from resolveForOrFail too.
+        org.mockito.Mockito.when(memberPolicyResolver.resolveForOrFail(org.mockito.ArgumentMatchers.eq(testMember),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(testPolicy);
         var input = BenefitPolicyCoverageService.ServiceCoverageInput.builder()
                 .serviceName("خدمة مكتوبة يدويا")
                 .amount(new BigDecimal("100.00"))

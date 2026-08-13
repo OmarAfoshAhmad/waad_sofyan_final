@@ -6,6 +6,7 @@ import com.waad.tba.modules.benefitpolicy.service.EffectiveLimitResolver;
 import com.waad.tba.modules.benefitpolicy.service.LimitBalanceReader;
 import com.waad.tba.modules.claim.entity.Claim;
 import com.waad.tba.modules.claim.entity.ClaimLine;
+import com.waad.tba.modules.member.service.MemberPolicyResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ClaimFinancialAdjudicationService {
     private final BenefitPolicyRepository policyRepository;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final EffectiveLimitResolver effectiveLimitResolver;
     private final LimitBalanceReader balanceReader;
     private final MultiLineMultiBucketEngine multiLineEngine;
@@ -118,14 +120,15 @@ public class ClaimFinancialAdjudicationService {
         }
     }
 
+    /**
+     * The policy that applied ON THE SERVICE DATE. This used to return the
+     * member's current pointer whenever one existed, consulting the date only
+     * as a fallback -- so a backdated claim was adjudicated against today's
+     * limits and coverage percentages. Fails closed: an unresolvable policy
+     * stops adjudication rather than flowing on as null.
+     */
     private BenefitPolicy resolvePolicy(Claim claim, LocalDate date) {
-        if (claim.getMember().getBenefitPolicy() != null) return claim.getMember().getBenefitPolicy();
-        if (claim.getMember().getEmployer() == null) {
-            throw new IllegalStateException("MEMBER_POLICY_NOT_FOUND: member=" + claim.getMember().getId());
-        }
-        return policyRepository.findActiveEffectivePolicyForEmployer(
-                claim.getMember().getEmployer().getId(), date).orElseThrow(() ->
-                new IllegalStateException("MEMBER_POLICY_NOT_FOUND: member=" + claim.getMember().getId()));
+        return memberPolicyResolver.resolveForOrFail(claim.getMember(), date);
     }
 
     private String lineKey(ClaimLine line, int index) {

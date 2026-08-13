@@ -37,13 +37,17 @@ class BenefitBucketLedgerServiceTest {
     private BenefitBucketLedgerService service;
     private BenefitPolicy policy;
     private BenefitLimitBucket bucket;
+    private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private Claim claim;
     private ClaimLine line;
 
     @BeforeEach
     void setUp() {
+        memberPolicyResolver = org.mockito.Mockito.mock(
+                com.waad.tba.modules.member.service.MemberPolicyResolver.class);
         service = new BenefitBucketLedgerService(
-                claimRepository, benefitPolicyRepository, ruleBucketRepository, bucketRepository, consumptionRepository);
+                claimRepository, memberPolicyResolver, benefitPolicyRepository, ruleBucketRepository,
+                bucketRepository, consumptionRepository);
 
         policy = BenefitPolicy.builder()
                 .id(1L)
@@ -83,6 +87,8 @@ class BenefitBucketLedgerServiceTest {
                 .build();
         BenefitRuleBucket link = BenefitRuleBucket.builder().bucket(bucket).build();
 
+        lenient().when(memberPolicyResolver.resolveFor(any(Member.class), any(LocalDate.class)))
+                .thenReturn(Optional.of(policy));
         lenient().when(claimRepository.findById(20L)).thenReturn(Optional.of(claim));
         lenient().when(ruleBucketRepository.findByRuleIdOrderByConsumptionOrder(50L))
                 .thenReturn(List.of(link));
@@ -116,11 +122,16 @@ class BenefitBucketLedgerServiceTest {
     @Test
     @DisplayName("وثيقة جهة العمل تُستخدم في الدفتر عندما لا توجد وثيقة مباشرة للمستفيد")
     void employerPolicyFallbackIsCommitted() {
-        Employer employer = Employer.builder().id(5L).build();
+        // The ledger no longer resolves the policy itself -- it asks
+        // MemberPolicyResolver for the policy in force on the claim's SERVICE
+        // DATE, and any employer-level fallback now lives there (and is tested
+        // in MemberPolicyResolverIntegrationTest against a real database). What
+        // this test still pins is that the ledger commits a consumption row for
+        // whatever the resolver returns, including for a member whose own
+        // pointer is null.
         claim.getMember().setBenefitPolicy(null);
-        claim.getMember().setEmployer(employer);
-        when(benefitPolicyRepository.findActiveEffectivePolicyForEmployer(
-                eq(5L), eq(LocalDate.of(2026, 7, 20))))
+        claim.getMember().setEmployer(Employer.builder().id(5L).build());
+        when(memberPolicyResolver.resolveFor(any(Member.class), eq(LocalDate.of(2026, 7, 20))))
                 .thenReturn(Optional.of(policy));
 
         service.commitClaim(20L);

@@ -21,6 +21,7 @@ public class EffectiveLimitResolver {
     private final ApplicableLimitResolver applicableLimitResolver;
     private final MemberRepository memberRepository;
     private final List<LimitSourceProvider> sourceProviders;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
 
     public record EffectiveLimit(
             ApplicableLimitResolver.ApplicableLimitDefinition definition,
@@ -29,16 +30,41 @@ public class EffectiveLimitResolver {
             Long sourceEmployerId,
             Long sourceMemberId) {}
 
+    /**
+     * The identity check here is deliberately against the policy that applied
+     * to the member ON serviceDate, never against members.benefit_policy_id.
+     *
+     * This guard used to compare the caller's policyId with the member's
+     * CURRENT pointer -- which meant that the moment callers started passing a
+     * correctly date-resolved historical policy, every backdated claim would
+     * be rejected with MEMBER_POLICY_MISMATCH. The guard was actively
+     * preventing the fix it sat next to: it enforced "the member is on this
+     * policy today", when the question is "was the member on this policy on
+     * the service date".
+     *
+     * serviceDate is required for the same reason -- defaulting it to today
+     * inside a limit calculation would reintroduce the same defect silently.
+     */
     @Transactional(readOnly = true)
     public List<EffectiveLimit> resolve(Long policyId, Long benefitRuleId, Long memberId,
                                         LocalDate serviceDate, EncounterType encounterType) {
         if (policyId == null) throw new IllegalArgumentException("policyId is required");
         if (memberId == null) throw new IllegalArgumentException("memberId is required");
+        if (serviceDate == null) {
+            throw new IllegalArgumentException("serviceDate is required: a limit cannot be resolved "
+                    + "without the date it applies to");
+        }
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalStateException("MEMBER_NOT_FOUND: id=" + memberId));
-        if (member.getBenefitPolicy() == null || !policyId.equals(member.getBenefitPolicy().getId())) {
+
+        var policyOnServiceDate = memberPolicyResolver.resolveFor(member, serviceDate)
+                .orElseThrow(() -> new IllegalStateException(
+                        "MEMBER_POLICY_NOT_RESOLVED: member id=" + memberId
+                                + " had no effective benefit policy on " + serviceDate));
+        if (!policyId.equals(policyOnServiceDate.getId())) {
             throw new IllegalStateException("MEMBER_POLICY_MISMATCH: member id=" + memberId
-                    + " is not assigned to policy id=" + policyId);
+                    + " was on policy id=" + policyOnServiceDate.getId() + " on " + serviceDate
+                    + ", not policy id=" + policyId);
         }
 
         List<LimitSourceProvider> ordered = sourceProviders.stream()

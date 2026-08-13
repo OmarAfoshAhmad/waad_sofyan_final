@@ -312,7 +312,8 @@ public class BenefitPolicyCoverageService {
         // First validate policy is active
         validateMemberHasActivePolicy(member, serviceDate);
 
-        BenefitPolicy policy = member.getBenefitPolicy();
+        // The SERVICE DATE's policy, not the member's current pointer.
+        BenefitPolicy policy = memberPolicyResolver.resolveForOrFail(member, serviceDate);
         List<ServiceCoverageResult> serviceResults = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
@@ -820,7 +821,10 @@ public class BenefitPolicyCoverageService {
      * use getRemainingCoverage(BenefitPolicy, Long, LocalDate) instead.
      */
     public BigDecimal getRemainingCoverage(Member member, LocalDate asOfDate) {
-        BenefitPolicy policy = member.getBenefitPolicy();
+        // "Remaining as of a date" must be measured against the policy that
+        // applied on that date -- reading the current pointer would restate a
+        // past balance using today's annual limit.
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, asOfDate).orElse(null);
         return getRemainingCoverage(policy, member.getId(), asOfDate);
     }
 

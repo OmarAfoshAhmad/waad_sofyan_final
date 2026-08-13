@@ -31,6 +31,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class BenefitBucketLedgerService {
     private final ClaimRepository claimRepository;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
     private final BenefitPolicyRepository benefitPolicyRepository;
     private final BenefitRuleBucketRepository ruleBucketRepository;
     private final BenefitLimitBucketRepository bucketRepository;
@@ -67,7 +68,13 @@ public class BenefitBucketLedgerService {
             log.warn("Skipping benefit ledger for claim {}: claim has no member", claimId);
             return;
         }
-        LocalDate serviceDate = claim.getServiceDate() == null ? LocalDate.now() : claim.getServiceDate();
+        if (claim.getServiceDate() == null) {
+            // The ledger posts consumption against a dated bucket. Substituting
+            // today would charge the wrong period's bucket without any trace.
+            throw new IllegalStateException(
+                    "CLAIM_SERVICE_DATE_REQUIRED: claim " + claimId + " has no service date");
+        }
+        LocalDate serviceDate = claim.getServiceDate();
         BenefitPolicy policy = resolvePolicy(claim, serviceDate);
         if (policy == null) {
             log.warn("Skipping benefit ledger for claim {}: no effective member/employer policy", claimId);
@@ -144,12 +151,13 @@ public class BenefitBucketLedgerService {
         }
     }
 
+    /**
+     * The policy that applied ON THE SERVICE DATE -- the ledger must post
+     * consumption against the bucket that was actually in force then, not
+     * whichever policy the member points at today.
+     */
     private BenefitPolicy resolvePolicy(Claim claim, LocalDate serviceDate) {
-        BenefitPolicy direct = claim.getMember().getBenefitPolicy();
-        if (direct != null) return direct;
-        if (claim.getMember().getEmployer() == null) return null;
-        return benefitPolicyRepository.findActiveEffectivePolicyForEmployer(
-                claim.getMember().getEmployer().getId(), serviceDate).orElse(null);
+        return memberPolicyResolver.resolveFor(claim.getMember(), serviceDate).orElse(null);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
