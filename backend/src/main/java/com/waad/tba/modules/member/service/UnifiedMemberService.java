@@ -29,6 +29,7 @@ import com.waad.tba.modules.member.dto.MemberCreateDto;
 import com.waad.tba.modules.member.dto.MemberUpdateDto;
 import com.waad.tba.modules.member.dto.MemberViewDto;
 import com.waad.tba.modules.member.entity.Member;
+import com.waad.tba.modules.member.entity.PolicyAssignmentSource;
 import com.waad.tba.modules.member.entity.StatusSource;
 import com.waad.tba.modules.member.mapper.UnifiedMemberMapper;
 import com.waad.tba.modules.member.repository.MemberRepository;
@@ -86,6 +87,7 @@ public class UnifiedMemberService {
     private final AuditLogService auditLogService;
     private final FamilyEligibilityService familyEligibilityService;
     private final MemberStatusTransitionService statusTransitionService;
+    private final MemberPolicyResolver memberPolicyResolver;
 
     /**
      * Create a PRINCIPAL member (optionally with dependents inline).
@@ -159,6 +161,7 @@ public class UnifiedMemberService {
 
         // 4. Save principal
         principal = memberRepository.save(principal);
+        recordInitialPolicyAssignment(principal, "تعيين وثيقة عند إنشاء المستفيد");
         log.info("✅ Created PRINCIPAL member ID={}, barcode={}, cardNumber={}, employer={}",
                 principal.getId(), principal.getBarcode(), principal.getCardNumber(),
                 principal.getEmployer() != null ? principal.getEmployer().getName() : "NONE");
@@ -300,10 +303,33 @@ public class UnifiedMemberService {
 
         // 4. Save
         dependent = memberRepository.save(dependent);
+        recordInitialPolicyAssignment(dependent, "تعيين وثيقة عند إنشاء التابع (موروثة من الموظف الرئيسي)");
         log.info("✅ Created DEPENDENT member ID={}, cardNumber={}, relationship={}",
                 dependent.getId(), dependent.getCardNumber(), dependent.getRelationship());
 
         return dependent;
+    }
+
+    /**
+     * Records the assignment row that makes a newly-created member's policy
+     * resolvable BY DATE (MemberPolicyResolver), not just via the denormalized
+     * members.benefit_policy_id pointer. Without this a new member would have
+     * a pointer but no dated assignment, and every dated resolution would fall
+     * through to the resolver's legacy-gap warning path.
+     *
+     * Start date is the member's own start date when known, else today --
+     * never earlier, so a new member never appears to have been covered before
+     * they existed.
+     */
+    private void recordInitialPolicyAssignment(Member member, String reason) {
+        if (member.getBenefitPolicy() == null) {
+            return;
+        }
+        User currentUser = authorizationService.getCurrentUser();
+        memberPolicyResolver.assignPolicy(member, member.getBenefitPolicy(),
+                member.getStartDate() != null ? member.getStartDate() : LocalDate.now(),
+                reason, PolicyAssignmentSource.MANUAL,
+                currentUser != null ? currentUser.getId() : null);
     }
 
     /**

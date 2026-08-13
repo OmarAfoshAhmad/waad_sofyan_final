@@ -56,6 +56,8 @@ class BenefitPolicyCoverageServiceTest {
     private AuthorizationService authorizationService;
     @Mock
     private CoverageDecisionService coverageDecisionService;
+    @Mock
+    private com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
 
     @InjectMocks
     private BenefitPolicyCoverageService coverageService;
@@ -93,6 +95,8 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Should validate active policy successfully")
     void validateMemberHasActivePolicy_Success() {
+        org.mockito.Mockito.when(memberPolicyResolver.resolveFor(testMember, LocalDate.now()))
+                .thenReturn(java.util.Optional.of(testPolicy));
         assertDoesNotThrow(() -> coverageService.validateMemberHasActivePolicy(testMember, LocalDate.now()));
     }
 
@@ -100,7 +104,9 @@ class BenefitPolicyCoverageServiceTest {
     @DisplayName("Should throw exception when member has no policy and auto-resolve fails")
     void validateMemberHasActivePolicy_NoPolicy() {
         testMember.setBenefitPolicy(null);
-        
+        org.mockito.Mockito.when(memberPolicyResolver.resolveFor(testMember, LocalDate.now()))
+                .thenReturn(java.util.Optional.empty());
+
         assertThrows(BusinessRuleException.class, () -> 
             coverageService.validateMemberHasActivePolicy(testMember, LocalDate.now()));
     }
@@ -186,6 +192,9 @@ class BenefitPolicyCoverageServiceTest {
     @Test
     @DisplayName("Free-text service without canonical ID must never receive policy default coverage")
     void validateClaimCoverage_FreeTextServiceFailsClosed() {
+        org.mockito.Mockito.when(memberPolicyResolver.resolveFor(org.mockito.ArgumentMatchers.eq(testMember),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.of(testPolicy));
         var input = BenefitPolicyCoverageService.ServiceCoverageInput.builder()
                 .serviceName("خدمة مكتوبة يدويا")
                 .amount(new BigDecimal("100.00"))

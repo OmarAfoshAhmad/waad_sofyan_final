@@ -77,6 +77,8 @@ public class MemberExcelImportService {
     private final BarcodeGeneratorService barcodeGeneratorService;
     private final MemberImportAuditRecorder auditRecorder;
     private final MemberStatusTransitionService statusTransitionService;
+    private final MemberPolicyResolver memberPolicyResolver;
+    private final com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
 
     private final VisitRepository visitRepository;
     private final ClaimRepository claimRepository;
@@ -359,6 +361,10 @@ public class MemberExcelImportService {
 
         List<ImportErrorDetailDto> errors = new ArrayList<>();
         List<Member> memberBuffer = new ArrayList<>();
+        // Every member this import created or updated, so their dated policy
+        // assignments can be recorded once at the end -- in ONE bulk lookup
+        // rather than a per-row query.
+        List<Member> processedMembers = new ArrayList<>();
         int totalProcessed = 0, createdCount = 0, skippedCount = 0, errorCount = 0;
 
         try (InputStream is = new java.io.ByteArrayInputStream(fileBytes); Workbook workbook = new XSSFWorkbook(is)) {
@@ -454,6 +460,7 @@ public class MemberExcelImportService {
                         memberCache.put(member.getCardNumber().trim().toUpperCase(), member);
                     }
                 }
+                processedMembers.add(member);
 
                 createdCount++;
                 if (memberBuffer.size() >= BATCH_SIZE) {
@@ -467,6 +474,8 @@ public class MemberExcelImportService {
             // this try block, before the import log is finalized as COMPLETED --
             // not after, at an implicit commit-time flush the caller never sees.
             memberRepository.flush();
+
+            recordPolicyAssignmentsForImport(processedMembers);
 
             MemberImportLog importLog = importLogRepository.findById(importLogId)
                     .orElseThrow(() -> new IllegalStateException("Import log vanished mid-import: " + importLogId));
@@ -497,6 +506,39 @@ public class MemberExcelImportService {
             // wrote.
             auditRecorder.markFailed(importLogId, e.getMessage());
             throw e;
+        }
+    }
+
+    /**
+     * Records a dated policy assignment for every imported member that has a
+     * policy but no assignment yet, so their policy is resolvable BY DATE
+     * (MemberPolicyResolver) and not only through the denormalized
+     * members.benefit_policy_id pointer.
+     *
+     * Deliberately one bulk query for the whole batch plus inserts only for
+     * the members that actually need one -- a per-member lookup here would
+     * turn a 30k-row import into 30k extra queries.
+     */
+    private void recordPolicyAssignmentsForImport(List<Member> processedMembers) {
+        List<Member> withPolicy = processedMembers.stream()
+                .filter(m -> m.getId() != null && m.getBenefitPolicy() != null)
+                .toList();
+        if (withPolicy.isEmpty()) {
+            return;
+        }
+        Set<Long> alreadyAssigned = new HashSet<>(policyAssignmentRepository.findMemberIdsWithAnyAssignment(
+                withPolicy.stream().map(Member::getId).toList()));
+
+        User currentUser = authorizationService.getCurrentUser();
+        Long actingUserId = currentUser != null ? currentUser.getId() : null;
+        for (Member member : withPolicy) {
+            if (alreadyAssigned.contains(member.getId())) {
+                continue;
+            }
+            memberPolicyResolver.assignPolicy(member, member.getBenefitPolicy(),
+                    member.getStartDate() != null ? member.getStartDate() : java.time.LocalDate.now(),
+                    "تعيين وثيقة عبر استيراد Excel", com.waad.tba.modules.member.entity.PolicyAssignmentSource.IMPORT,
+                    actingUserId);
         }
     }
 

@@ -81,6 +81,7 @@ public class BenefitPolicyCoverageService {
     private final MedicalCategoryRepository categoryRepository;
     private final AuthorizationService authorizationService;
     private final CoverageDecisionService coverageDecisionService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ARCHITECTURAL CONSTANTS
@@ -101,58 +102,29 @@ public class BenefitPolicyCoverageService {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Validate that member has an active, effective benefit policy.
-     * 
-     * AUTO-RESOLVE (Permanent Fix - 2026-02-24):
-     * If member has no assigned policy, automatically resolve from employer's
-     * active effective policy and persist it. This handles Excel-imported members
-     * who may not have had their policy assigned during import.
-     * 
+     * Validate that the member had an active, effective benefit policy ON THE
+     * SERVICE DATE.
+     *
+     * Resolution goes through MemberPolicyResolver -- the same single answer
+     * the eligibility engine uses -- so the same member and the same date can
+     * never yield one policy here and a different one there.
+     *
+     * This method previously read member.getBenefitPolicy() and, when that was
+     * null, looked a policy up by serviceDate and then PERSISTED it onto the
+     * member (a validation path silently rewriting state), with an extra
+     * "pick the latest active policy" guess for internal staff that was also
+     * persisted. Processing a single backdated claim for a policy-less member
+     * therefore decided that member's stored policy permanently. Resolution is
+     * now pure; changing a member's policy is an explicit, audited assignment
+     * (MemberPolicyResolver.assignPolicy).
+     *
      * @param member      The member
      * @param serviceDate The date of service
-     * @throws BusinessRuleException if no valid policy exists
+     * @throws BusinessRuleException if no valid policy applied on that date
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public void validateMemberHasActivePolicy(Member member, LocalDate serviceDate) {
-        BenefitPolicy policy = member.getBenefitPolicy();
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // AUTO-RESOLVE: If member has no policy, try to find from employer
-        // ═══════════════════════════════════════════════════════════════════════
-        if (policy == null && member.getEmployer() != null) {
-            log.info("🔄 Member {} has no policy assigned. Auto-resolving from employer '{}'...",
-                    member.getFullName(), member.getEmployer().getName());
-
-            var resolvedOpt = policyRepository
-                    .findActiveEffectivePolicyForEmployer(member.getEmployer().getId(), serviceDate);
-
-            // Fallback for internal staff: Try finding ANY active policy regardless of date
-            // for backlog entry
-            if (resolvedOpt.isEmpty()) {
-                User currentUser = authorizationService.getCurrentUser();
-                if (currentUser != null && authorizationService.isInternalStaff(currentUser)) {
-                    log.info(
-                            "🔍 No date-matched policy found for backlog. Searching for any active policy for employer...");
-                    List<BenefitPolicy> allActive = policyRepository.findByEmployerIdAndStatusAndActiveTrue(
-                            member.getEmployer().getId(), BenefitPolicyStatus.ACTIVE);
-                    if (!allActive.isEmpty()) {
-                        // Pick the latest created one
-                        policy = allActive.get(allActive.size() - 1);
-                        log.info("✅ Best-effort resolution: using latest active policy '{}' for backlog entry",
-                                policy.getName());
-                    }
-                }
-            } else {
-                policy = resolvedOpt.get();
-            }
-
-            if (policy != null) {
-                member.setBenefitPolicy(policy);
-                memberRepository.save(member);
-                log.info("✅ Auto-resolved and saved policy '{}' for member '{}'",
-                        policy.getName(), member.getFullName());
-            }
-        }
+        BenefitPolicy policy = memberPolicyResolver.resolveFor(member, serviceDate).orElse(null);
 
         if (policy == null) {
             throw new BusinessRuleException(

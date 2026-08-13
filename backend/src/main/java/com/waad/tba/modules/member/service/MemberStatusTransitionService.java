@@ -304,7 +304,12 @@ public class MemberStatusTransitionService {
                 .build());
 
         String idList = allIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-        jdbcTemplate.update("DELETE FROM member_policy_assignments WHERE member_id IN (" + idList + ")");
+        // member_policy_assignments is deliberately NOT deleted here: like
+        // member_status_history (V170), it is an append-only record that must
+        // survive the member row it describes -- it carries its own identity
+        // snapshot and has no member FK, so leaving it does not block the
+        // delete. Deleting it would also fail outright against V171's
+        // append-only trigger.
         jdbcTemplate.update("DELETE FROM member_deductibles WHERE member_id IN (" + idList + ")");
 
         if (wasPrincipal) {

@@ -77,6 +77,8 @@ class MemberExcelImportServiceTest {
     @Mock
     private MemberImportAuditRecorder auditRecorder;
     @Mock
+    private com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository policyAssignmentRepository;
+    @Mock
     private com.waad.tba.modules.member.repository.MemberStatusHistoryRepository statusHistoryRepository;
     @Mock
     private com.waad.tba.modules.member.repository.MemberHardDeleteAuditRepository hardDeleteAuditRepository;
@@ -95,6 +97,8 @@ class MemberExcelImportServiceTest {
         MemberStatusTransitionService statusTransitionService = new MemberStatusTransitionService(
                 memberRepository, statusHistoryRepository, hardDeleteAuditRepository, benefitPolicyRepository,
                 statusTransitionJdbcTemplate);
+        MemberPolicyResolver memberPolicyResolver = new MemberPolicyResolver(
+                policyAssignmentRepository, benefitPolicyRepository);
         MemberImportRowProcessor rowProcessor = new MemberImportRowProcessor(
                 parser, employerRepository, benefitPolicyRepository, barcodeGeneratorService,
                 cardNumberGeneratorService, statusTransitionService);
@@ -114,6 +118,8 @@ class MemberExcelImportServiceTest {
                 barcodeGeneratorService,
                 auditRecorder,
                 statusTransitionService,
+                memberPolicyResolver,
+                policyAssignmentRepository,
                 visitRepository,
                 claimRepository,
                 preAuthorizationRepository);
@@ -160,6 +166,11 @@ class MemberExcelImportServiceTest {
                 .thenReturn(100L);
 
         doNothing().when(importErrorRepository).deleteByImportLogId(anyLong());
+        when(policyAssignmentRepository.findMemberIdsWithAnyAssignment(any())).thenReturn(List.of());
+        when(policyAssignmentRepository.findByMemberIdAndAssignmentEndDateIsNull(anyLong()))
+                .thenReturn(Optional.empty());
+        when(policyAssignmentRepository.save(any(com.waad.tba.modules.member.entity.MemberPolicyAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(barcodeGeneratorService.generateForPrincipal()).thenReturn("WAD-2026-00000001", "WAD-2026-00000002");
         when(cardNumberGeneratorService.generateUniqueForPrincipal(any(Member.class))).thenReturn("CARD-0001",
                 "CARD-0002");

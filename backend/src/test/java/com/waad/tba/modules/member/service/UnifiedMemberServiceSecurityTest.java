@@ -84,7 +84,10 @@ class UnifiedMemberServiceSecurityTest {
                 jdbcTemplate,
                 org.mockito.Mockito.mock(com.waad.tba.modules.systemadmin.service.AuditLogService.class),
                 org.mockito.Mockito.mock(com.waad.tba.modules.eligibility.service.FamilyEligibilityService.class),
-                statusTransitionService);
+                statusTransitionService,
+                new com.waad.tba.modules.member.service.MemberPolicyResolver(
+                        org.mockito.Mockito.mock(com.waad.tba.modules.member.repository.MemberPolicyAssignmentRepository.class),
+                        org.mockito.Mockito.mock(com.waad.tba.modules.benefitpolicy.repository.BenefitPolicyRepository.class)));
     }
 
     @Test

@@ -49,6 +49,7 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
     private final ProviderRepository providerRepository;
     private final EligibilityAuditRecorder auditRecorder;
     private final BenefitPolicyCoverageService coverageService;
+    private final com.waad.tba.modules.member.service.MemberPolicyResolver memberPolicyResolver;
 
     // Security
     private final AuthorizationService authorizationService;
@@ -157,12 +158,20 @@ public class EligibilityEngineServiceImpl implements EligibilityEngineService {
             member = memberRepository.findById(request.getMemberId()).orElse(null);
         }
 
-        // Resolve BenefitPolicy from member (CANONICAL - only policy model)
+        // Resolve the policy that applied to this member ON THE SERVICE DATE --
+        // not the member's current pointer. This used to read
+        // member.getBenefitPolicy() with no reference to serviceDate at all,
+        // so a backdated eligibility check was evaluated against today's
+        // policy (its limits, coverage percentages and effective window),
+        // and could disagree with the claim path for the very same member and
+        // date. MemberPolicyResolver is now the single answer for both.
         BenefitPolicy benefitPolicy = null;
         Long benefitPolicyId = null;
-        if (member != null && member.getBenefitPolicy() != null) {
-            benefitPolicy = member.getBenefitPolicy();
-            benefitPolicyId = benefitPolicy.getId();
+        if (member != null) {
+            benefitPolicy = memberPolicyResolver.resolveFor(member, request.getServiceDate()).orElse(null);
+            if (benefitPolicy != null) {
+                benefitPolicyId = benefitPolicy.getId();
+            }
         }
 
         // Resolve provider (optional)
